@@ -1,0 +1,94 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "dbresearch-max-iteration-boundary-01 [claude-sonnet-5 · Anthropic · envelope]",
+    "Description": "Same boundary on a different agent, because a per-agent prompt could handle it differently and the gate is evaluated per provider. Runs at toolChoice 'none' (added 2026-09-12): the framework forces 'none' on the final permitted iteration in production, so a native cell measured at 'auto' here was measuring a turn production never produces (results §14.3.4).",
+    "InputDefinition": {
+      "payload": {
+        "queries": [
+          {
+            "sql": "SELECT TOP 10 * FROM vwAIAgents",
+            "rows": 10
+          }
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Explore the agent tables."
+        },
+        {
+          "role": "user",
+          "content": "[System] Maximum iterations reached. Summarize what you have and stop."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "dbresearch-max-iteration-boundary-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete"
+          },
+          {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            }
+          }
+        ],
+        "forbiddenActions": [
+          "Run Ad-hoc Query",
+          "Run Stored Query"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Database Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "toolChoice": "none",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete"
+              },
+              {
+                "kind": "chat",
+                "message": {
+                  "matcher": "nonEmpty"
+                }
+              }
+            ],
+            "forbiddenActions": [
+              "Run Ad-hoc Query",
+              "Run Stored Query"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9B2118F4-2A1A-449A-AF2B-1A4B422C1A4C"
+  }
+}

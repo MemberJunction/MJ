@@ -101,10 +101,52 @@ describe('Diagnostics', () => {
     });
   });
 
-  describe('LastInstall', () => {
-    it('should be undefined by default', () => {
+  describe('AddCheck with Code and Scope', () => {
+    it('should default Scope to install and synthesize Code from Name', () => {
       const diag = new Diagnostics(environment);
-      expect(diag.LastInstall).toBeUndefined();
+      diag.AddCheck({ Name: 'Node.js Version', Status: 'pass', Message: 'v22.11.0' });
+      expect(diag.Checks[0].Scope).toBe('install');
+      expect(diag.Checks[0].Code).toBe('NODE_JS_VERSION');
+    });
+
+    it('should preserve provided Code, Scope, Evidence, and Remediation', () => {
+      const diag = new Diagnostics(environment);
+      diag.AddCheck({
+        Name: 'AI Provider',
+        Code: 'AI_PROVIDER_MISSING',
+        Scope: 'ai',
+        Status: 'warn',
+        Message: 'No keys found',
+        Evidence: { keysChecked: ['OPENAI_API_KEY'] },
+        Remediation: { Type: 'manual', SafeToAutoApply: false },
+      });
+      expect(diag.Checks[0].Code).toBe('AI_PROVIDER_MISSING');
+      expect(diag.Checks[0].Scope).toBe('ai');
+      expect(diag.Checks[0].Evidence).toEqual({ keysChecked: ['OPENAI_API_KEY'] });
+      expect(diag.Checks[0].Remediation?.Type).toBe('manual');
+    });
+  });
+
+  describe('toJSON', () => {
+    it('should return a structured object with summary, checks, and failures', () => {
+      const diag = new Diagnostics(environment);
+      diag.AddCheck({ Name: 'Pass Check', Status: 'pass', Message: 'OK' });
+      diag.AddCheck({ Name: 'Warn Check', Status: 'warn', Message: 'Warn' });
+      diag.AddCheck({ Name: 'Fail Check', Status: 'fail', Message: 'Fail' });
+
+      const json = diag.toJSON();
+      expect(json.Summary).toEqual({
+        Passed: 1,
+        Warnings: 1,
+        Failures: 1,
+        Total: 3,
+        HasFailures: true,
+      });
+      expect(json.Environment).toBe(environment);
+      expect(Array.isArray(json.Checks)).toBe(true);
+      expect(Array.isArray(json.Failures)).toBe(true);
+      expect(Array.isArray(json.Warnings)).toBe(true);
     });
   });
 });
+

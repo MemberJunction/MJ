@@ -20,7 +20,9 @@
  *
  * @module phases/ConfigurePhase
  * @see InstallConfig — the full configuration interface.
- * @see InstallConfigDefaults — default values for auto-mode.
+ * @see InstallConfigDefaults — pre-`configure` defaults read by earlier
+ *   phases; most fields prompted for here are not in that set, and in
+ *   `--yes` mode each prompt resolves to its own default instead.
  */
 
 import path from 'node:path';
@@ -300,9 +302,9 @@ export class ConfigurePhase {
     config.DatabaseHost = config.DatabaseHost ?? await this.promptInput(
       emitter, 'db-host', 'Database server hostname:', 'localhost', yes
     );
-    config.DatabasePort = config.DatabasePort ?? parseInt(await this.promptInput(
-      emitter, 'db-port', 'Database server port:', '1433', yes
-    ), 10);
+    config.DatabasePort = config.DatabasePort ?? await this.promptPort(
+      emitter, 'db-port', 'Database server port:', 1433, yes
+    );
     config.DatabaseName = config.DatabaseName ?? await this.promptInput(
       emitter, 'db-name', 'Database name:', 'MemberJunction', yes
     );
@@ -327,12 +329,12 @@ export class ConfigurePhase {
     );
 
     // Ports
-    config.APIPort = config.APIPort ?? parseInt(await this.promptInput(
-      emitter, 'api-port', 'GraphQL API port:', '4000', yes
-    ), 10);
-    config.ExplorerPort = config.ExplorerPort ?? parseInt(await this.promptInput(
-      emitter, 'explorer-port', 'Explorer UI port:', '4200', yes
-    ), 10);
+    config.APIPort = config.APIPort ?? await this.promptPort(
+      emitter, 'api-port', 'GraphQL API port:', 4000, yes
+    );
+    config.ExplorerPort = config.ExplorerPort ?? await this.promptPort(
+      emitter, 'explorer-port', 'Explorer UI port:', 4200, yes
+    );
 
     // Auth provider
     if (!config.AuthProvider) {
@@ -1205,6 +1207,27 @@ ${versionSection}${newUserSection}  output: [],
         Resolve: resolve,
       });
     });
+  }
+
+  /**
+   * Emit a text input prompt for a port number and return it parsed, falling
+   * back to `defaultValue` when the answer is not a positive integer.
+   *
+   * These prompts used to be dead code — a default was always applied before
+   * `ConfigurePhase` could ask — so a non-numeric answer here never had a
+   * chance to write `DB_PORT=NaN` to `.env`. The `--yes`-mode fix (#4562) made
+   * them live, so an unguarded `parseInt` is now reachable from real input.
+   */
+  private async promptPort(
+    emitter: InstallerEventEmitter,
+    id: string,
+    message: string,
+    defaultValue: number,
+    yes: boolean
+  ): Promise<number> {
+    const answer = await this.promptInput(emitter, id, message, String(defaultValue), yes);
+    const parsed = parseInt(answer, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultValue;
   }
 
   /**

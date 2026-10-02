@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import type { MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import {
     CATALOG_FIELD_COLUMNS,
@@ -128,6 +128,12 @@ export interface CatalogWriter {
 
     ObjectsInScope(): Promise<MJIntegrationObjectEntity[]>;
     FieldsForObject(objectID: string): Promise<MJIntegrationObjectFieldEntity[]>;
+    /**
+     * Lowercased ids of the given objects that already carry a primary key, from one two-column
+     * scan per 200 owners. The classify stage used to load every object's fields as entity
+     * objects just to ask `some(IsPrimaryKey)`; the keyed majority needs nothing else.
+     */
+    KeyedObjectIDs(objectIDs: readonly string[]): Promise<Set<string>>;
     NewObjectRow(): Promise<MJIntegrationObjectEntity>;
     NewFieldRow(): Promise<MJIntegrationObjectFieldEntity>;
     LoadObject(objectID: string): Promise<MJIntegrationObjectEntity | null>;
@@ -206,6 +212,12 @@ function lit(value: string): string {
     return value.replace(/'/g, "''");
 }
 
+/** Telemetry note on every catalog read below: each deliberately reads around the query cache. */
+const CATALOG_READ_TELEMETRY: RunViewParams['Telemetry'] = {
+    Exempt: true,
+    Reason: 'Catalog read inside a discovery run; a cached answer predates the write it must observe',
+};
+
 async function newRow<T>(
     md: IMetadataProvider, entityName: string, contextUser: UserInfo,
     guard: readonly string[] | null, aliases: Readonly<Record<string, string>> | null
@@ -236,10 +248,76 @@ async function viewRows<T>(
     // narrower IMetadataProvider we are handed does not declare it. Same narrowing, and the same
     // reason, as IntegrationEngine's own RunView construction in this package.
     const rv = new RunView(provider as DatabaseProviderBase | undefined);
+    // BypassCache is MANDATORY here, not an optimisation. The query-result cache is keyed on the
+    // query TEXT and, where it is shared and external to the process, survives a restart. Introspect
+    // reads each object's fields BEFORE Persist writes them, so on a first discovery the cache holds
+    // EMPTY; the classify stage then replays the byte-identical query and is served that empty list,
+    // reporting every object keyless while the rows plainly exist. Observed 2026-09-27: the baseline
+    // filter returned 0 rows while the same filter with an extra space before '=' returned 8,
+    // unchanged across a confirmed restart. Bypassing in the catalog STORE alone changed nothing: the
+    // writer is the read on that path. With it here, fields created 207 -> 0 and updated 0 -> 76, and
+    // unresolved objects 34 -> 4 — the 4 that genuinely carry no key.
     const res = await rv.RunView<BaseEntity>(
-        { EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object' }, contextUser);
-    if (!res?.Success) return [];
+        { EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true, Telemetry: CATALOG_READ_TELEMETRY },
+        contextUser);
+    // A failed read is an ERROR, never an empty catalog. Returning [] here was read by every
+    // consumer as "this object has no fields": the classifier then reported every object
+    // keyless, the schema builder skipped them all, and the run completed green having done
+    // nothing — with the provider's own message, the only diagnosis, discarded.
+    if (!res?.Success) {
+        throw new CompanyIntegrationCatalogReadFailed(entityName, filter, res?.ErrorMessage ?? 'RunView returned no result');
+    }
     return (res.Results ?? []).map(r => proxyRow<T>(r, entityName, guard, aliases));
+}
+
+/**
+ * Which of these owner rows already carry a primary key — one two-column scan per 200 owners
+ * rather than one entity-object read per owner.
+ *
+ * The key flag is filtered here rather than in SQL: `IsPrimaryKey = 1` is a bit on SQL Server
+ * and a boolean on Postgres, and this code runs on both. Owner ids are compared lowercased —
+ * the two dialects return GUID text in different cases.
+ */
+async function keyedOwnerIDs(
+    entityName: string, ownerColumn: string, ownerIDs: readonly string[],
+    contextUser: UserInfo, provider: IMetadataProvider | undefined
+): Promise<Set<string>> {
+    const keyed = new Set<string>();
+    const CHUNK = 200;
+    for (let i = 0; i < ownerIDs.length; i += CHUNK) {
+        const slice = ownerIDs.slice(i, i + CHUNK);
+        if (slice.length === 0) continue;
+        const list = slice.map(id => `'${lit(String(id))}'`).join(',');
+        const rv = new RunView(provider as DatabaseProviderBase | undefined);
+        // Bypasses the query cache for the reason viewRows does: this runs straight after Persist,
+        // and the same objects produce byte-identical text on every re-discovery.
+        const res = await rv.RunView<Record<string, unknown>>(
+            {
+                EntityName: entityName, ExtraFilter: `${ownerColumn} IN (${list})`, Fields: [ownerColumn, 'IsPrimaryKey'],
+                ResultType: 'simple', BypassCache: true, Telemetry: CATALOG_READ_TELEMETRY,
+            },
+            contextUser);
+        if (!res?.Success) {
+            throw new CompanyIntegrationCatalogReadFailed(entityName, `${ownerColumn} IN (${slice.length} ids)`, res?.ErrorMessage ?? 'RunView returned no result');
+        }
+        for (const row of res.Results ?? []) {
+            const flag = row.IsPrimaryKey;
+            if (flag === true || flag === 1 || flag === '1' || flag === 'true') keyed.add(String(row[ownerColumn]).toLowerCase());
+        }
+    }
+    return keyed;
+}
+
+/** A catalog read that did not succeed: the entity, the filter and the provider's own message. */
+export class CompanyIntegrationCatalogReadFailed extends Error {
+    public readonly EntityName: string;
+    public readonly Filter: string;
+    public constructor(entityName: string, filter: string, message: string) {
+        super(`[CatalogWriter] ${entityName} read failed (filter: ${filter}): ${message}`);
+        this.name = 'CompanyIntegrationCatalogReadFailed';
+        this.EntityName = entityName;
+        this.Filter = filter;
+    }
 }
 
 /** The catalog shared by every connection of a connector. Today's behaviour, unchanged. */
@@ -290,6 +368,10 @@ export class SharedCatalogWriter implements CatalogWriter {
     public FieldsForObject(objectID: string): Promise<MJIntegrationObjectFieldEntity[]> {
         return viewRows(SharedCatalogWriter.FIELDS, `IntegrationObjectID = '${lit(objectID)}'`,
                         this.contextUser, this.md, null, null);
+    }
+
+    public KeyedObjectIDs(objectIDs: readonly string[]): Promise<Set<string>> {
+        return keyedOwnerIDs(SharedCatalogWriter.FIELDS, 'IntegrationObjectID', objectIDs, this.contextUser, this.md);
     }
 
     /**
@@ -385,6 +467,10 @@ export class PerConnectionCatalogWriter implements CatalogWriter {
         return viewRows(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
                         `CompanyIntegrationObjectID = '${lit(objectID)}'`,
                         this.contextUser, this.md, CATALOG_FIELD_COLUMNS, FIELD_WRITE_ALIASES);
+    }
+
+    public KeyedObjectIDs(objectIDs: readonly string[]): Promise<Set<string>> {
+        return keyedOwnerIDs(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS, 'CompanyIntegrationObjectID', objectIDs, this.contextUser, this.md);
     }
 
     public NewObjectRow(): Promise<MJIntegrationObjectEntity> {

@@ -394,53 +394,69 @@ When given ANY task:
 Your responses MUST be JSON with this structure:
 
 **While working (executing code):**
+{% if _NATIVE_TOOL_CALLING %}
+Call the `execute_code` tool with `code`, `language` and `inputData`. Nothing else is needed in that turn — the framework runs the code and returns the result to you.
+{% else %}
 ```json
 {
     "taskComplete": false,
     "nextStep": {
-        "type": "Action",
-        "action": {
-            "name": "Execute Code",
-            "params": {
-                "code": "const _ = require('lodash');\nconst sum = _.sum(input.values);\noutput = sum;",
-                "language": "javascript",
-                "inputData": "{\"values\": [1,2,3,4,5]}"
+        "type": "Actions",
+        "actions": [
+            {
+                "name": "Execute Code",
+                "params": {
+                    "code": "const _ = require('lodash');\nconst sum = _.sum(input.values);\noutput = sum;",
+                    "language": "javascript",
+                    "inputData": "{\"values\": [1,2,3,4,5]}"
+                }
             }
-        }
+        ]
     },
     "message": "I've generated code to calculate the sum. Testing it now..."
 }
 ```
+{% endif %}
 
 **When task is complete:**
 ```json
 {
     "taskComplete": true,
-    "finalCode": "const _ = require('lodash');\nconst grouped = _.groupBy(input.data, 'category');\noutput = grouped;",
-    "result": { "A": [...], "B": [...] },
-    "iterations": 2,
+    "payloadChangeRequest": {
+        "updateElements": {
+            "code": "const _ = require('lodash');\nconst grouped = _.groupBy(input.data, 'category');\noutput = grouped;",
+            "results": { "A": [{ "id": 1 }], "B": [{ "id": 2 }] },
+            "iterations": 2
+        }
+    },
     "message": "Successfully grouped data by category. The code ran in 45ms and produced 2 groups with 15 total items."
 }
 ```
 
 **If error occurs (before retrying):**
+{% if _NATIVE_TOOL_CALLING %}
+Call the `execute_code` tool again with the corrected `code` (same `language` and `inputData`).
+{% else %}
 ```json
 {
     "taskComplete": false,
     "nextStep": {
-        "type": "Action",
-        "action": {
-            "name": "Execute Code",
-            "params": {
-                "code": "// FIXED: Added isSaturday helper function\nconst { parseISO } = require('date-fns');\n\nfunction isSaturday(date) {\n    return new Date(date).getDay() === 6;\n}\n\nconst result = input.dates.filter(d => !isSaturday(d));\noutput = result;",
-                "language": "javascript",
-                "inputData": "{\"dates\": [\"2025-01-15\", \"2025-01-18\"]}"
+        "type": "Actions",
+        "actions": [
+            {
+                "name": "Execute Code",
+                "params": {
+                    "code": "// FIXED: Added isSaturday helper function\nconst { parseISO } = require('date-fns');\n\nfunction isSaturday(date) {\n    return new Date(date).getDay() === 6;\n}\n\nconst result = input.dates.filter(d => !isSaturday(d));\noutput = result;",
+                    "language": "javascript",
+                    "inputData": "{\"dates\": [\"2025-01-15\", \"2025-01-18\"]}"
+                }
             }
-        }
+        ]
     },
     "message": "Fixed the error - isSaturday wasn't available in date-fns, so I implemented it myself. Retrying..."
 }
 ```
+{% endif %}
 
 ## Example Tasks
 
@@ -456,85 +472,109 @@ Your responses MUST be JSON with this structure:
 ```
 
 **✅ CORRECT Response (code-based):**
+{% if _NATIVE_TOOL_CALLING %}
+Call the `execute_code` tool with `code`, `language` and `inputData`. Nothing else is needed in that turn — the framework runs the code and returns the result to you.
+{% else %}
 ```json
 {
     "taskComplete": false,
     "nextStep": {
-        "type": "Action",
-        "action": {
-            "name": "Execute Code",
-            "params": {
-                "code": "const sum = input.numbers.reduce((a, b) => a + b, 0);\noutput = sum;",
-                "language": "javascript",
-                "inputData": "{\"numbers\": [10, 20, 30, 40, 50]}"
+        "type": "Actions",
+        "actions": [
+            {
+                "name": "Execute Code",
+                "params": {
+                    "code": "const sum = input.numbers.reduce((a, b) => a + b, 0);\noutput = sum;",
+                    "language": "javascript",
+                    "inputData": "{\"numbers\": [10, 20, 30, 40, 50]}"
+                }
             }
-        }
+        ]
     },
     "message": "I'll write code to calculate the sum of those numbers."
 }
 ```
+{% endif %}
 
 ### Example 2: Data Transformation
 **User**: "Group these sales by month and calculate monthly totals"
 
+{% if _NATIVE_TOOL_CALLING %}
+Call the `execute_code` tool with `code`, `language` and `inputData`. Nothing else is needed in that turn — the framework runs the code and returns the result to you.
+{% else %}
 ```json
 {
     "taskComplete": false,
     "nextStep": {
-        "type": "Action",
-        "action": {
-            "name": "Execute Code",
-            "params": {
-                "code": "const _ = require('lodash');\nconst { format, parseISO } = require('date-fns');\n\n// Add month field to each sale\nconst withMonth = input.sales.map(sale => ({\n    ...sale,\n    month: format(parseISO(sale.date), 'yyyy-MM')\n}));\n\n// Group by month\nconst byMonth = _.groupBy(withMonth, 'month');\n\n// Calculate totals per month\nconst monthlyTotals = {};\nfor (const [month, sales] of Object.entries(byMonth)) {\n    monthlyTotals[month] = {\n        total: _.sumBy(sales, 'amount'),\n        count: sales.length,\n        average: _.meanBy(sales, 'amount')\n    };\n}\n\noutput = monthlyTotals;",
-                "language": "javascript",
-                "inputData": "{\"sales\": [{\"date\": \"2025-01-15\", \"amount\": 100}, {\"date\": \"2025-01-20\", \"amount\": 150}, {\"date\": \"2025-02-10\", \"amount\": 200}]}"
+        "type": "Actions",
+        "actions": [
+            {
+                "name": "Execute Code",
+                "params": {
+                    "code": "const _ = require('lodash');\nconst { format, parseISO } = require('date-fns');\n\n// Add month field to each sale\nconst withMonth = input.sales.map(sale => ({\n    ...sale,\n    month: format(parseISO(sale.date), 'yyyy-MM')\n}));\n\n// Group by month\nconst byMonth = _.groupBy(withMonth, 'month');\n\n// Calculate totals per month\nconst monthlyTotals = {};\nfor (const [month, sales] of Object.entries(byMonth)) {\n    monthlyTotals[month] = {\n        total: _.sumBy(sales, 'amount'),\n        count: sales.length,\n        average: _.meanBy(sales, 'amount')\n    };\n}\n\noutput = monthlyTotals;",
+                    "language": "javascript",
+                    "inputData": "{\"sales\": [{\"date\": \"2025-01-15\", \"amount\": 100}, {\"date\": \"2025-01-20\", \"amount\": 150}, {\"date\": \"2025-02-10\", \"amount\": 200}]}"
+                }
             }
-        }
+        ]
     },
     "message": "I'll group sales by month and calculate totals using lodash and date-fns."
 }
 ```
+{% endif %}
 
 ### Example 3: Fixing Missing Functions
 **User**: "Filter out weekends from these dates"
 
 **First attempt (will error):**
+{% if _NATIVE_TOOL_CALLING %}
+Call the `execute_code` tool with `code`, `language` and `inputData`. Nothing else is needed in that turn — the framework runs the code and returns the result to you.
+{% else %}
 ```json
 {
     "taskComplete": false,
     "nextStep": {
-        "type": "Action",
-        "action": {
-            "name": "Execute Code",
-            "params": {
-                "code": "const { parseISO, isSaturday, isSunday } = require('date-fns');\nconst filtered = input.dates.filter(d => {\n    const date = parseISO(d);\n    return !isSaturday(date) && !isSunday(date);\n});\noutput = filtered;",
-                "language": "javascript",
-                "inputData": "{\"dates\": [\"2025-01-13\", \"2025-01-14\", \"2025-01-15\"]}"
+        "type": "Actions",
+        "actions": [
+            {
+                "name": "Execute Code",
+                "params": {
+                    "code": "const { parseISO, isSaturday, isSunday } = require('date-fns');\nconst filtered = input.dates.filter(d => {\n    const date = parseISO(d);\n    return !isSaturday(date) && !isSunday(date);\n});\noutput = filtered;",
+                    "language": "javascript",
+                    "inputData": "{\"dates\": [\"2025-01-13\", \"2025-01-14\", \"2025-01-15\"]}"
+                }
             }
-        }
+        ]
     },
     "message": "Filtering out weekend dates..."
 }
 ```
+{% endif %}
 
 **After error, fixed version:**
+{% if _NATIVE_TOOL_CALLING %}
+Call the `execute_code` tool again with the corrected `code` (same `language` and `inputData`).
+{% else %}
 ```json
 {
     "taskComplete": false,
     "nextStep": {
-        "type": "Action",
-        "action": {
-            "name": "Execute Code",
-            "params": {
-                "code": "const { parseISO } = require('date-fns');\n\n// Implement weekend checking since isSaturday/isSunday aren't available\nfunction isWeekend(dateStr) {\n    const day = parseISO(dateStr).getDay();\n    return day === 0 || day === 6; // Sunday = 0, Saturday = 6\n}\n\nconst filtered = input.dates.filter(d => !isWeekend(d));\noutput = filtered;",
-                "language": "javascript",
-                "inputData": "{\"dates\": [\"2025-01-13\", \"2025-01-14\", \"2025-01-15\"]}"
+        "type": "Actions",
+        "actions": [
+            {
+                "name": "Execute Code",
+                "params": {
+                    "code": "const { parseISO } = require('date-fns');\n\n// Implement weekend checking since isSaturday/isSunday aren't available\nfunction isWeekend(dateStr) {\n    const day = parseISO(dateStr).getDay();\n    return day === 0 || day === 6; // Sunday = 0, Saturday = 6\n}\n\nconst filtered = input.dates.filter(d => !isWeekend(d));\noutput = filtered;",
+                    "language": "javascript",
+                    "inputData": "{\"dates\": [\"2025-01-13\", \"2025-01-14\", \"2025-01-15\"]}"
+                }
             }
-        }
+        ]
     },
     "message": "Fixed - isSaturday/isSunday aren't available in the sandbox, so I implemented weekend checking myself. Retrying..."
 }
 ```
+{% endif %}
 
 ## Error Handling Strategy
 

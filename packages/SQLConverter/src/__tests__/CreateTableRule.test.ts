@@ -1,16 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { CreateTableRule } from '../rules/CreateTableRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new CreateTableRule();
 
 function convert(sql: string): string {
-  const context = createConversionContext('tsql', 'postgres');
+  const context = CreateConversionContext('tsql', 'postgres');
   return rule.PostProcess!(sql, sql, context);
 }
 
-function convertWithContext(sql: string): { result: string; context: ReturnType<typeof createConversionContext> } {
-  const context = createConversionContext('tsql', 'postgres');
+function convertWithContext(sql: string): { result: string; context: ReturnType<typeof CreateConversionContext> } {
+  const context = CreateConversionContext('tsql', 'postgres');
   const result = rule.PostProcess!(sql, sql, context);
   return { result, context };
 }

@@ -3,7 +3,13 @@
  * cell formatting and the in-memory cached-entity filter / focus-show.
  */
 import { describe, it, expect } from 'vitest';
-import { FormatFKCell, FilterCachedFKRows } from '../field/fk-search-utils';
+import {
+  FormatFKCell,
+  FilterCachedFKRows,
+  RankByPrefix,
+  EscapeSqlLikeValue,
+  QuoteSqlIdList,
+} from '../field/fk-search-utils';
 
 describe('FormatFKCell', () => {
   it('returns empty string for null and undefined', () => {
@@ -19,6 +25,36 @@ describe('FormatFKCell', () => {
   it('formats Date as a locale date string', () => {
     const d = new Date('2024-01-15T00:00:00Z');
     expect(FormatFKCell(d)).toBe(d.toLocaleDateString());
+  });
+
+  describe('a date-only column is a calendar day, not an instant (MJ#4210)', () => {
+    // Pinned to New York: a `date` column arrives as UTC midnight, and a local-zone formatter
+    // lands on the previous day for every reader west of Greenwich. At Greenwich this is invisible.
+    const AT = (tz: string, fn: () => void) => {
+      const original = process.env.TZ;
+      process.env.TZ = tz;
+      try {
+        fn();
+      } finally {
+        process.env.TZ = original;
+      }
+    };
+
+    it('renders a date column as its stored day when given its SQL type', () => {
+      AT('America/New_York', () => {
+        const shown = FormatFKCell(new Date('2026-11-20T00:00:00.000Z'), 'date');
+        expect(shown, `got ${shown}`).toContain('20');
+        expect(shown).not.toContain('19');
+      });
+    });
+
+    it('keeps a timestamp column, or a cell of unknown type, in local time', () => {
+      AT('America/New_York', () => {
+        const instant = new Date('2026-11-20T02:00:00.000Z');
+        expect(FormatFKCell(instant, 'datetimeoffset')).toContain('19');
+        expect(FormatFKCell(instant)).toContain('19');
+      });
+    });
   });
 
   it('stringifies numbers and strings', () => {
@@ -81,5 +117,64 @@ describe('FilterCachedFKRows — non-empty query', () => {
     const numbered = [{ name: 100 }, { name: 200 }] as unknown as Row[];
     const result = FilterCachedFKRows(numbered, '20', 50, (r) => (r as { name: number }).name);
     expect(result).toHaveLength(1);
+  });
+});
+
+describe('RankByPrefix', () => {
+  const rows = [
+    { Values: { Name: 'Executive Summary Report' } },
+    { Values: { Name: 'Summit Ticket' } },
+    { Values: { Name: 'summer camp' } },
+  ];
+
+  it('puts starts-with matches before contains matches, alphabetical within a tier', () => {
+    expect(RankByPrefix(rows, 'sum', 'Name').map((r) => r.Values.Name)).toEqual([
+      'summer camp',
+      'Summit Ticket',
+      'Executive Summary Report',
+    ]);
+  });
+
+  it('leaves order alphabetical for an empty query', () => {
+    expect(RankByPrefix(rows, '', 'Name').map((r) => r.Values.Name)).toEqual([
+      'Executive Summary Report',
+      'summer camp',
+      'Summit Ticket',
+    ]);
+  });
+
+  it('does not mutate the input', () => {
+    const original = rows.map((r) => r.Values.Name);
+    RankByPrefix(rows, 'sum', 'Name');
+    expect(rows.map((r) => r.Values.Name)).toEqual(original);
+  });
+
+  it('treats a row missing the name field as an empty name rather than throwing', () => {
+    const withGap = [{ Values: { Other: 'x' } }, { Values: { Name: 'Summit' } }];
+    expect(RankByPrefix(withGap, 'sum', 'Name').map((r) => r.Values.Name)).toEqual(['Summit', undefined]);
+  });
+});
+
+describe('EscapeSqlLikeValue', () => {
+  it('doubles quotes and brackets LIKE wildcards', () => {
+    expect(EscapeSqlLikeValue(`O'Neil 100% [a]_b`)).toBe(`O''Neil 100[%] [[]a][_]b`);
+  });
+
+  it('leaves ordinary text alone', () => {
+    expect(EscapeSqlLikeValue('Northwind Institute')).toBe('Northwind Institute');
+  });
+});
+
+describe('QuoteSqlIdList', () => {
+  it('quotes and joins, dropping blanks and case-insensitive duplicates', () => {
+    expect(QuoteSqlIdList(['a', 'B', '  ', 'A'])).toBe(`'a','B'`);
+  });
+
+  it('doubles quotes inside a value', () => {
+    expect(QuoteSqlIdList([`O'Neil`])).toBe(`'O''Neil'`);
+  });
+
+  it('returns an empty string for no usable ids', () => {
+    expect(QuoteSqlIdList([])).toBe('');
   });
 });

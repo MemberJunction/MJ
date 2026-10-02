@@ -20,7 +20,7 @@ import { RunView, LogError, LogStatus, type UserInfo, type IMetadataProvider } f
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { DOMINANCE_THRESHOLD_DEFAULT, type FeatureImportance, type LeakageGuard } from '@memberjunction/predictive-studio-core';
 
-import { detectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
+import { DetectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
 import { ModelScoringActionGenerator } from './model-scoring-action-generator';
 import type {
   IModelPromotionGate,
@@ -133,7 +133,7 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
   ): Promise<{ flagged: boolean; topFeature?: string; topShare?: number }> {
     const importance = this.parseJson<FeatureImportance>(model.FeatureImportance, {});
     const threshold = await this.resolveThreshold(model.PipelineID, contextUser, provider);
-    const dominance = detectSingleFeatureDominance(importance, threshold);
+    const dominance = DetectSingleFeatureDominance(importance, threshold);
     return { flagged: dominance.Dominant, topFeature: dominance.TopFeature, topShare: dominance.TopShare };
   }
 

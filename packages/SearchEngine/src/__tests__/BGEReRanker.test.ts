@@ -23,7 +23,7 @@ vi.mock('@xenova/transformers', () => ({
     env: { allowLocalModels: true, cacheDir: '/tmp/cache' },
 }));
 
-import { BGEReRanker, __resetBGEPipelineCacheForTests } from '../rerankers/BGEReRanker';
+import { BGEReRanker, ResetBGEPipelineCacheForTests } from '../rerankers/BGEReRanker';
 import type { SearchResultItem } from '../generic/search.types';
 import type { UserInfo } from '@memberjunction/core';
 
@@ -48,7 +48,7 @@ describe('BGEReRanker', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        __resetBGEPipelineCacheForTests();
+        ResetBGEPipelineCacheForTests();
         mockPipelineFactory.mockResolvedValue(mockPipelineFn);
     });
 

@@ -68,7 +68,7 @@ export interface IFeatureDataAccess {
    * entity). Returns a {@link FetchRowsResult} — never throws for logical
    * read failures (mirrors `RunView`'s non-throwing contract).
    */
-  fetchRows(params: FetchRowsParams): Promise<FetchRowsResult>;
+  fetchRows(params: FetchRowsParams): Promise<FetchRowsResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Fetch a persisted, version-pinned embedding vector for a single record of
@@ -83,7 +83,7 @@ export interface IFeatureDataAccess {
    * @param embeddingModelRef pinned embedding-model id/name (part of model lineage)
    * @param dims expected dimensionality
    */
-  fetchEmbedding(entity: string, recordId: string, embeddingModelRef: string, dims: number): Promise<number[] | null>;
+  fetchEmbedding(entity: string, recordId: string, embeddingModelRef: string, dims: number): Promise<number[] | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

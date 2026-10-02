@@ -77,11 +77,16 @@ export class LibraryRegistry {
   /**
    * Get library definition by name
    */
-  static getLibrary(name: string): LibraryDefinition | undefined {
+  static GetLibrary(name: string): LibraryDefinition | undefined {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
     return this.libraries.get(name?.trim().toLowerCase());
+  }
+
+  /** @deprecated Use {@link GetLibrary}. */
+  static getLibrary(name: string): LibraryDefinition | undefined {
+    return this.GetLibrary(name);
   }
 
   /**
@@ -90,7 +95,7 @@ export class LibraryRegistry {
    * @param version Optional version (uses default if not specified)
    * @returns CDN URL or undefined if library/version not found
    */
-  static getCdnUrl(name: string, version?: string): string | undefined {
+  static GetCdnUrl(name: string, version?: string): string | undefined {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
@@ -101,14 +106,24 @@ export class LibraryRegistry {
     return library.versions[targetVersion]?.cdnUrl;
   }
 
+  /** @deprecated Use {@link GetCdnUrl}. */
+  static getCdnUrl(name: string, version?: string): string | undefined {
+    return this.GetCdnUrl(name, version);
+  }
+
   /**
    * Check if a library is approved
    */
-  static isApproved(name: string): boolean {
+  static IsApproved(name: string): boolean {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
     return this.libraries.has(name?.trim().toLowerCase());
+  }
+
+  /** @deprecated Use {@link IsApproved}. */
+  static isApproved(name: string): boolean {
+    return this.IsApproved(name);
   }
 
   /**
@@ -116,7 +131,7 @@ export class LibraryRegistry {
    * For now, just returns exact match or default
    * TODO: Implement proper semver resolution
    */
-  static resolveVersion(name: string, versionPattern?: string): string | undefined {
+  static ResolveVersion(name: string, versionPattern?: string): string | undefined {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
@@ -135,15 +150,25 @@ export class LibraryRegistry {
     return library.defaultVersion;
   }
 
+  /** @deprecated Use {@link ResolveVersion}. */
+  static resolveVersion(name: string, versionPattern?: string): string | undefined {
+    return this.ResolveVersion(name, versionPattern);
+  }
+
   /**
    * Add a library to the registry (for future extensibility)
    * This would typically be called during app initialization
    * with libraries loaded from a database
    */
-  static registerLibrary(definition: LibraryDefinition): void {
+  static RegisterLibrary(definition: LibraryDefinition): void {
     if (!this._configured)
       throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
 
     this.libraries.set(definition.name?.trim().toLowerCase(), definition);
+  }
+
+  /** @deprecated Use {@link RegisterLibrary}. */
+  static registerLibrary(definition: LibraryDefinition): void {
+    return this.RegisterLibrary(definition);
   }
 }

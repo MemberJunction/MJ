@@ -1,0 +1,45 @@
+{
+  "id": "dbresearch-adhoc-query-01",
+  "agent": "Database Research Agent",
+  "description": "Mid-loop: entity metadata already retrieved; the next decision must be to run the query, not to look the entity up again.",
+  "tags": [
+    "mid-loop-action",
+    "param-fidelity"
+  ],
+  "input": {
+    "payload": {
+      "databaseResearch": {
+        "entitiesFound": [
+          "MJ: AI Agents"
+        ],
+        "queries": []
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "How many AI agents are active, grouped by type?"
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Get Entity Details succeeded. Entity 'MJ: AI Agents' base view [__mj].vwAIAgents; columns include ID, Name, TypeID, Status."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Run Ad-hoc Query",
+        "params": {
+          "Query": {
+            "matcher": "regex",
+            "pattern": "SELECT[\\s\\S]+FROM[\\s\\S]+GROUP\\s+BY",
+            "flags": "i"
+          }
+        }
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

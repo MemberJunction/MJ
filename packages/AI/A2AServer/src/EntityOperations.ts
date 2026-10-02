@@ -3,9 +3,9 @@ import { UserCache } from "@memberjunction/generic-database-provider";
 import { a2aServerSettings } from './config.js';
 
 export interface OperationResult {
-    success: boolean;
-    result?: any;
-    errorMessage?: string;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
+    result?: any;  // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
 }
 
 export interface OperationParameters {
@@ -47,7 +47,7 @@ export class EntityOperations {
      * @param entityName The entity name to find
      * @returns The entity info or null if not found
      */
-    public findEntity(entityName: string): EntityInfo | null {
+    public FindEntity(entityName: string): EntityInfo | null {
         if (!entityName) return null;
         
         return this.provider.Entities.find(e => 
@@ -56,12 +56,17 @@ export class EntityOperations {
         ) || null;
     }
 
+    /** @deprecated Use {@link FindEntity}. */
+    public findEntity(entityName: string): EntityInfo | null {
+        return this.FindEntity(entityName);
+    }
+
     /**
      * Converts an entity object to JSON
      * @param record The entity record to convert
      * @returns JSON representation of the entity
      */
-    public async convertEntityObjectToJSON(record: BaseEntity): Promise<any> {
+    public async ConvertEntityObjectToJSON(record: BaseEntity): Promise<any> {
         const output = await record.GetDataObjectJSON({
             includeRelatedEntityData: false,
             oldValues: false,
@@ -71,6 +76,11 @@ export class EntityOperations {
             relatedEntityList: [],
         });
         return output;
+    }
+
+    /** @deprecated Use {@link ConvertEntityObjectToJSON}. */
+    public async convertEntityObjectToJSON(record: BaseEntity): Promise<any> {
+        return this.ConvertEntityObjectToJSON(record);
     }
 
     /**
@@ -100,9 +110,9 @@ export class EntityOperations {
      * @param parameters Parameters containing primary key values
      * @returns The operation result
      */
-    public async getEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+    public async GetEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
         try {
-            const entity = this.findEntity(entityName);
+            const entity = this.FindEntity(entityName);
             if (!entity) {
                 return { 
                     success: false, 
@@ -115,7 +125,7 @@ export class EntityOperations {
             
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
             if (loaded) {
-                const result = await this.convertEntityObjectToJSON(record);
+                const result = await this.ConvertEntityObjectToJSON(record);
                 return { success: true, result };
             } else {
                 return { success: false, errorMessage: "Record not found" };
@@ -128,15 +138,20 @@ export class EntityOperations {
         }
     }
 
+    /** @deprecated Use {@link GetEntity}. */
+    public async getEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        return this.GetEntity(entityName, parameters);
+    }
+
     /**
      * Creates a new entity record
      * @param entityName The name of the entity
      * @param parameters Field values for the new record
      * @returns The operation result
      */
-    public async createEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+    public async CreateEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
         try {
-            const entity = this.findEntity(entityName);
+            const entity = this.FindEntity(entityName);
             if (!entity) {
                 return { 
                     success: false, 
@@ -149,7 +164,7 @@ export class EntityOperations {
             
             const success = await record.Save();
             if (success) {
-                const result = await this.convertEntityObjectToJSON(record);
+                const result = await this.ConvertEntityObjectToJSON(record);
                 return { success: true, result };
             } else {
                 return { success: false, errorMessage: "Failed to create record" };
@@ -162,15 +177,20 @@ export class EntityOperations {
         }
     }
 
+    /** @deprecated Use {@link CreateEntity}. */
+    public async createEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        return this.CreateEntity(entityName, parameters);
+    }
+
     /**
      * Updates an existing entity record
      * @param entityName The name of the entity
      * @param parameters Parameters containing primary key and fields to update
      * @returns The operation result
      */
-    public async updateEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+    public async UpdateEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
         try {
-            const entity = this.findEntity(entityName);
+            const entity = this.FindEntity(entityName);
             if (!entity) {
                 return { 
                     success: false, 
@@ -193,7 +213,7 @@ export class EntityOperations {
                 const success = await record.Save();
                 
                 if (success) {
-                    const result = await this.convertEntityObjectToJSON(record);
+                    const result = await this.ConvertEntityObjectToJSON(record);
                     return { success: true, result };
                 } else {
                     return { success: false, errorMessage: "Failed to update record" };
@@ -209,15 +229,20 @@ export class EntityOperations {
         }
     }
 
+    /** @deprecated Use {@link UpdateEntity}. */
+    public async updateEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        return this.UpdateEntity(entityName, parameters);
+    }
+
     /**
      * Deletes an entity record
      * @param entityName The name of the entity
      * @param parameters Parameters containing primary key values
      * @returns The operation result
      */
-    public async deleteEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+    public async DeleteEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
         try {
-            const entity = this.findEntity(entityName);
+            const entity = this.FindEntity(entityName);
             if (!entity) {
                 return { 
                     success: false, 
@@ -248,15 +273,20 @@ export class EntityOperations {
         }
     }
 
+    /** @deprecated Use {@link DeleteEntity}. */
+    public async deleteEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        return this.DeleteEntity(entityName, parameters);
+    }
+
     /**
      * Queries an entity
      * @param entityName The name of the entity
      * @param parameters Query parameters (extraFilter, orderBy, fields)
      * @returns The operation result
      */
-    public async queryEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+    public async QueryEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
         try {
-            const entity = this.findEntity(entityName);
+            const entity = this.FindEntity(entityName);
             if (!entity) {
                 return { 
                     success: false, 
@@ -281,12 +311,17 @@ export class EntityOperations {
         }
     }
 
+    /** @deprecated Use {@link QueryEntity}. */
+    public async queryEntity(entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        return this.QueryEntity(entityName, parameters);
+    }
+
     /**
      * Parses a command from text content
      * @param textContent The text content to parse
      * @returns Parsed operation details
      */
-    public parseCommandFromText(textContent: string): { operation: string, entityName: string, parameters: OperationParameters } {
+    public ParseCommandFromText(textContent: string): { operation: string, entityName: string, parameters: OperationParameters } {
         let operation = 'unknown';
         let entityName = '';
         const parameters: OperationParameters = {};
@@ -335,6 +370,11 @@ export class EntityOperations {
         return { operation, entityName, parameters };
     }
 
+    /** @deprecated Use {@link ParseCommandFromText}. */
+    public parseCommandFromText(textContent: string): { operation: string, entityName: string, parameters: OperationParameters } {
+        return this.ParseCommandFromText(textContent);
+    }
+
     /**
      * Processes an operation on an entity
      * @param operation The operation to perform (get, create, update, delete, query)
@@ -342,22 +382,22 @@ export class EntityOperations {
      * @param parameters The operation parameters
      * @returns The operation result
      */
-    public async processOperation(operation: string, entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+    public async ProcessOperation(operation: string, entityName: string, parameters: OperationParameters): Promise<OperationResult> {
         switch(operation) {
             case 'get':
-                return await this.getEntity(entityName, parameters);
+                return await this.GetEntity(entityName, parameters);
                 
             case 'create':
-                return await this.createEntity(entityName, parameters);
+                return await this.CreateEntity(entityName, parameters);
                 
             case 'update':
-                return await this.updateEntity(entityName, parameters);
+                return await this.UpdateEntity(entityName, parameters);
                 
             case 'delete':
-                return await this.deleteEntity(entityName, parameters);
+                return await this.DeleteEntity(entityName, parameters);
                 
             case 'query':
-                return await this.queryEntity(entityName, parameters);
+                return await this.QueryEntity(entityName, parameters);
                 
             default:
                 return { 
@@ -365,5 +405,10 @@ export class EntityOperations {
                     errorMessage: `Unsupported operation: ${operation}` 
                 };
         }
+    }
+
+    /** @deprecated Use {@link ProcessOperation}. */
+    public async processOperation(operation: string, entityName: string, parameters: OperationParameters): Promise<OperationResult> {
+        return this.ProcessOperation(operation, entityName, parameters);
     }
 }

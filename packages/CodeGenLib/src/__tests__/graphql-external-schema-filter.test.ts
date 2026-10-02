@@ -12,12 +12,13 @@ const configState: { entityPackageName: string | Record<string, string> } = {
 
 vi.mock('../Config/config', () => ({
     mjCoreSchema: '__mj',
-    resolveEntityPackageName: (schema: string) => {
+    ResolveEntityPackageName: (schema: string) => {
         const epn = configState.entityPackageName;
         if (typeof epn === 'string') return epn;
         const hit = Object.keys(epn).find((k) => k.toLowerCase() === schema.toLowerCase());
         return hit ? epn[hit] : 'mj_generatedentities';
     },
+    get resolveEntityPackageName() { return this.ResolveEntityPackageName; },
 }));
 
 import { GraphQLServerGeneratorBase } from '../Misc/graphql_server_codegen';

@@ -19,73 +19,118 @@ export class TitleService {
   /**
    * Set the base application title (e.g., "MemberJunction" or "Skip")
    */
-  setBaseTitle(title: string): void {
+  SetBaseTitle(title: string): void {
     this.baseTitle = title;
     this.updateTitle();
+  }
+
+  /** @deprecated Use {@link SetBaseTitle}. */
+  setBaseTitle(title: string): void {
+    return this.SetBaseTitle(title);
   }
 
   /**
    * Get the current base title
    */
-  getBaseTitle(): string {
+  GetBaseTitle(): string {
     return this.baseTitle;
+  }
+
+  /** @deprecated Use {@link GetBaseTitle}. */
+  getBaseTitle(): string {
+    return this.GetBaseTitle();
   }
 
   /**
    * Set the current app name (e.g., "Sales", "Marketing")
    * Pass null to clear the app context
    */
-  setAppName(appName: string | null): void {
+  SetAppName(appName: string | null): void {
     this.currentAppName = appName;
     this.updateTitle();
+  }
+
+  /** @deprecated Use {@link SetAppName}. */
+  setAppName(appName: string | null): void {
+    return this.SetAppName(appName);
   }
 
   /**
    * Get the current app name
    */
-  getAppName(): string | null {
+  GetAppName(): string | null {
     return this.currentAppName;
+  }
+
+  /** @deprecated Use {@link GetAppName}. */
+  getAppName(): string | null {
+    return this.GetAppName();
   }
 
   /**
    * Set the current resource/page name (e.g., "Accounts", "Contact: John Doe")
    * Pass null to show only the app name
    */
-  setResourceName(resourceName: string | null): void {
+  SetResourceName(resourceName: string | null): void {
     this.currentResourceName = resourceName;
     this.updateTitle();
+  }
+
+  /** @deprecated Use {@link SetResourceName}. */
+  setResourceName(resourceName: string | null): void {
+    return this.SetResourceName(resourceName);
   }
 
   /**
    * Get the current resource name
    */
-  getResourceName(): string | null {
+  GetResourceName(): string | null {
     return this.currentResourceName;
+  }
+
+  /** @deprecated Use {@link GetResourceName}. */
+  getResourceName(): string | null {
+    return this.GetResourceName();
   }
 
   /**
    * Set both app and resource in one call
    */
-  setContext(appName: string | null, resourceName: string | null): void {
+  SetContext(appName: string | null, resourceName: string | null): void {
     this.currentAppName = appName;
     this.currentResourceName = resourceName;
     this.updateTitle();
   }
 
+  /** @deprecated Use {@link SetContext}. */
+  setContext(appName: string | null, resourceName: string | null): void {
+    return this.SetContext(appName, resourceName);
+  }
+
   /**
    * Reset to just the base title
    */
-  reset(): void {
+  Reset(): void {
     this.currentAppName = null;
     this.currentResourceName = null;
     this.updateTitle();
   }
 
+  /** @deprecated Use {@link Reset}. */
+  reset(): void {
+    return this.Reset();
+  }
+
   /**
    * Get the full current title
    */
-  getFullTitle(): string {
+  GetFullTitle(): string {
     return this.buildTitle();
+  }
+
+  /** @deprecated Use {@link GetFullTitle}. */
+  getFullTitle(): string {
+    return this.GetFullTitle();
   }
 
   /**

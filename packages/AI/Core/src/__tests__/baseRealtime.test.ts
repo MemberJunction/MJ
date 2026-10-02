@@ -10,6 +10,7 @@ import {
     RealtimeSessionError,
     ClientRealtimeSessionConfig,
     REALTIME_SHARED_CONFIG_KEYS,
+    ExtractToolSchedulingHint,
 } from '../generic/baseRealtime';
 import { IsTranscriptContinuation } from '../generic/transcriptContinuation';
 
@@ -438,3 +439,61 @@ describe('IsTranscriptContinuation', () => {
         expect(IsTranscriptContinuation('Yes, do the first one.', 'Yes, do the second one instead.')).toBe(false);
     });
 });
+
+describe('ExtractToolSchedulingHint', () => {
+    it('normalizes SILENT, WHEN_IDLE, INTERRUPT, and INTERRUPTED', () => {
+        expect(ExtractToolSchedulingHint({ scheduling: 'SILENT' }, 't1')).toBe('silent');
+        expect(ExtractToolSchedulingHint({ scheduling: 'WHEN_IDLE' }, 't2')).toBe('whenIdle');
+        expect(ExtractToolSchedulingHint({ scheduling: 'INTERRUPT' }, 't3')).toBe('interrupt');
+        expect(ExtractToolSchedulingHint({ scheduling: 'INTERRUPTED' }, 't4')).toBe('interrupt');
+        // Case-insensitive and trimmed
+        expect(ExtractToolSchedulingHint({ scheduling: '  silent  ' }, 't5')).toBe('silent');
+    });
+
+    it('prefers __mj_scheduling over legacy scheduling and strips both keys in-place', () => {
+        const payload: Record<string, unknown> = {
+            __mj_scheduling: 'INTERRUPT',
+            scheduling: 'SILENT',
+            result: 'some_data',
+        };
+        const hint = ExtractToolSchedulingHint(payload, 'my_tool');
+        expect(hint).toBe('interrupt');
+        expect(payload['result']).toBe('some_data');
+        expect(payload['__mj_scheduling']).toBeUndefined();
+        expect(payload['scheduling']).toBeUndefined();
+    });
+
+    it('strips legacy scheduling when present alone', () => {
+        const payload: Record<string, unknown> = {
+            scheduling: 'WHEN_IDLE',
+            data: 123,
+        };
+        const hint = ExtractToolSchedulingHint(payload, 'tool2');
+        expect(hint).toBe('whenIdle');
+        expect(payload['data']).toBe(123);
+        expect(payload['scheduling']).toBeUndefined();
+    });
+
+    it('returns undefined when no scheduling key is present', () => {
+        const payload = { a: 1 };
+        expect(ExtractToolSchedulingHint(payload, 'no_sched')).toBeUndefined();
+        expect(payload).toEqual({ a: 1 });
+    });
+
+    it('warns and returns undefined on unrecognized scheduling value', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const payload = { scheduling: 'BOGUS_SCHED', foo: 'bar' };
+            const hint = ExtractToolSchedulingHint(payload, 'bad_tool', 'TestLogger');
+            expect(hint).toBeUndefined();
+            expect(payload['foo']).toBe('bar');
+            expect(payload['scheduling']).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(
+                expect.stringContaining('[TestLogger] Unrecognized function scheduling value "BOGUS_SCHED" for tool "bad_tool".')
+            );
+        } finally {
+            warn.mockRestore();
+        }
+    });
+});
+

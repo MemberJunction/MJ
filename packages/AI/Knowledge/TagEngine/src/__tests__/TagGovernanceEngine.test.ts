@@ -67,6 +67,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 vi.mock('@memberjunction/ai-prompts', () => ({
     AIModelRunner: class {},
+    AIEmbeddingRunner: class {},
     AIPromptRunner: class {
         async ExecutePrompt() {
             return { success: true, result: { taxonomy: [] }, errorMessage: null };

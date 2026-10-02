@@ -270,7 +270,7 @@
                    [style.text-decoration]="FormatEditingColumn.format?.cellStyle?.underline ? 'underline' : 'none'"
                    [style.color]="FormatEditingColumn.format?.cellStyle?.color"
                    [style.background-color]="FormatEditingColumn.format?.cellStyle?.backgroundColor">
-                {{ FormatPreviewValue(value, FormatEditingColumn.format) }}
+                {{ FormatPreviewValue(value, FormatEditingColumn.format, FormatEditingColumn.field) }}
               </div>
             }
           </div>

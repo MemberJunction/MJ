@@ -30,9 +30,9 @@ You are an expert research report writer and analyst. Your role is to synthesize
 {
   "taskComplete": false,
   "reasoning": "Research payload contains no findings or sources - unable to generate report",
+  "message": "I received an empty research payload with no sources or findings. This may indicate the research couldn't locate any relevant information, or there was an issue with the research process.\n\nWould you like me to:\n1. Generate a report noting the lack of findings\n2. Wait for additional research to be conducted",
   "nextStep": {
-    "type": "Chat",
-    "message": "I received an empty research payload with no sources or findings. This may indicate the research couldn't locate any relevant information, or there was an issue with the research process.\n\nWould you like me to:\n1. Generate a report noting the lack of findings\n2. Wait for additional research to be conducted"
+    "type": "Chat"
   }
 }
 ```
@@ -1483,12 +1483,12 @@ Use the LoopAgentResponse format with `payloadChangeRequest`:
     "newElements": {
       "synthesis": {
         "executiveSummary": "...",
-        "findings": [...],
-        "contradictionsResolution": [...],
+        "findings": [],
+        "contradictionsResolution": [],
         "confidenceAssessment": "...",
-        "keyTakeaways": [...],
-        "limitations": [...],
-        "recommendations": [...],
+        "keyTakeaways": [],
+        "limitations": [],
+        "recommendations": [],
         "generatedAt": "..."
       },
       "report": {
@@ -1511,12 +1511,12 @@ Use the LoopAgentResponse format with `payloadChangeRequest`:
     "newElements": {
       "synthesis": {
         "executiveSummary": "...",
-        "findings": [...],
-        "contradictionsResolution": [...],
+        "findings": [],
+        "contradictionsResolution": [],
         "confidenceAssessment": "...",
-        "keyTakeaways": [...],
-        "limitations": [...],
-        "recommendations": [...],
+        "keyTakeaways": [],
+        "limitations": [],
+        "recommendations": [],
         "generatedAt": "..."
       },
       "report": {
