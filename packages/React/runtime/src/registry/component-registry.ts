@@ -30,7 +30,12 @@ export class ComponentRegistry {
   private registry: Map<string, RegistryEntry>;
   private config: RegistryConfig;
   private cleanupTimer?: NodeJS.Timeout | number;
-  public readonly registryId: string;
+  public readonly RegistryId: string;
+
+  /** @deprecated Use {@link RegistryId}. */
+  public get registryId(): string {
+    return this.RegistryId;
+  }
   
   /**
    * Creates a new ComponentRegistry instance
@@ -39,7 +44,7 @@ export class ComponentRegistry {
   constructor(config?: Partial<RegistryConfig>) {
     this.config = { ...DEFAULT_REGISTRY_CONFIG, ...config };
     this.registry = new Map();
-    this.registryId = `component-registry-${Date.now()}`;
+    this.RegistryId = `component-registry-${Date.now()}`;
     
     // Start cleanup timer if configured
     if (this.config.cleanupInterval > 0) {
@@ -61,7 +66,7 @@ export class ComponentRegistry {
    * @param tags - Optional tags for categorization
    * @returns The registered component's metadata
    */
-  register(
+  Register(
     name: string,
     component: ComponentObject,
     namespace: string = 'Global',
@@ -100,6 +105,18 @@ export class ComponentRegistry {
     return metadata;
   }
 
+  /** @deprecated Use {@link Register}. */
+  register(
+    name: string,
+    component: ComponentObject,
+    namespace: string = 'Global',
+    version: string = 'v1',
+    contentHash?: string,
+    tags?: string[]
+  ): ComponentMetadata {
+    return this.Register(name, component, namespace, version, contentHash, tags);
+  }
+
   /**
    * Gets a component from the registry
    * @param name - Component name
@@ -111,7 +128,7 @@ export class ComponentRegistry {
    *   (existing behavior).
    * @returns The component object if found, undefined otherwise
    */
-  get(name: string, namespace: string = 'Global', version?: string, contentHash?: string): ComponentObject | undefined {
+  Get(name: string, namespace: string = 'Global', version?: string, contentHash?: string): ComponentObject | undefined {
     const id = this.resolveLookupKey(name, namespace, version, contentHash);
 
     if (!id) return undefined;
@@ -127,6 +144,11 @@ export class ComponentRegistry {
     return undefined;
   }
 
+  /** @deprecated Use {@link Get}. */
+  get(name: string, namespace: string = 'Global', version?: string, contentHash?: string): ComponentObject | undefined {
+    return this.Get(name, namespace, version, contentHash);
+  }
+
   /**
    * Checks if a component exists in the registry
    * @param name - Component name
@@ -135,9 +157,14 @@ export class ComponentRegistry {
    * @param contentHash - Optional content fingerprint (see {@link get})
    * @returns true if the component exists
    */
-  has(name: string, namespace: string = 'Global', version?: string, contentHash?: string): boolean {
+  Has(name: string, namespace: string = 'Global', version?: string, contentHash?: string): boolean {
     const id = this.resolveLookupKey(name, namespace, version, contentHash);
     return id ? this.registry.has(id) : false;
+  }
+
+  /** @deprecated Use {@link Has}. */
+  has(name: string, namespace: string = 'Global', version?: string, contentHash?: string): boolean {
+    return this.Has(name, namespace, version, contentHash);
   }
 
   /**
@@ -148,10 +175,15 @@ export class ComponentRegistry {
    * @param contentHash - Optional content fingerprint (see {@link get})
    * @returns true if the component was removed
    */
-  unregister(name: string, namespace: string = 'Global', version?: string, contentHash?: string): boolean {
+  Unregister(name: string, namespace: string = 'Global', version?: string, contentHash?: string): boolean {
     const id = this.resolveLookupKey(name, namespace, version, contentHash);
     if (!id) return false;
     return this.registry.delete(id);
+  }
+
+  /** @deprecated Use {@link Unregister}. */
+  unregister(name: string, namespace: string = 'Global', version?: string, contentHash?: string): boolean {
+    return this.Unregister(name, namespace, version, contentHash);
   }
 
   /**
@@ -159,7 +191,7 @@ export class ComponentRegistry {
    * @param namespace - Namespace to query
    * @returns Array of components in the namespace
    */
-  getNamespace(namespace: string): ComponentMetadata[] {
+  GetNamespace(namespace: string): ComponentMetadata[] {
     const components: ComponentMetadata[] = [];
     
     for (const entry of this.registry.values()) {
@@ -171,13 +203,18 @@ export class ComponentRegistry {
     return components;
   }
 
+  /** @deprecated Use {@link GetNamespace}. */
+  getNamespace(namespace: string): ComponentMetadata[] {
+    return this.GetNamespace(namespace);
+  }
+
   /**
    * Gets all components in a namespace and version as a map
    * @param namespace - Namespace to query (default: 'Global')
    * @param version - Version to query (default: 'v1')
    * @returns Object mapping component names to component objects
    */
-  getAll(namespace: string = 'Global', version: string = 'v1'): Record<string, ComponentObject> {
+  GetAll(namespace: string = 'Global', version: string = 'v1'): Record<string, ComponentObject> {
     const components: Record<string, ComponentObject> = {};
     
     for (const entry of this.registry.values()) {
@@ -189,11 +226,16 @@ export class ComponentRegistry {
     return components;
   }
 
+  /** @deprecated Use {@link GetAll}. */
+  getAll(namespace: string = 'Global', version: string = 'v1'): Record<string, ComponentObject> {
+    return this.GetAll(namespace, version);
+  }
+
   /**
    * Gets all registered namespaces
    * @returns Array of unique namespace names
    */
-  getNamespaces(): string[] {
+  GetNamespaces(): string[] {
     const namespaces = new Set<string>();
     
     for (const entry of this.registry.values()) {
@@ -203,12 +245,17 @@ export class ComponentRegistry {
     return Array.from(namespaces);
   }
 
+  /** @deprecated Use {@link GetNamespaces}. */
+  getNamespaces(): string[] {
+    return this.GetNamespaces();
+  }
+
   /**
    * Gets components by tags
    * @param tags - Tags to search for
    * @returns Array of components matching any of the tags
    */
-  getByTags(tags: string[]): ComponentMetadata[] {
+  GetByTags(tags: string[]): ComponentMetadata[] {
     const components: ComponentMetadata[] = [];
     
     for (const entry of this.registry.values()) {
@@ -220,6 +267,11 @@ export class ComponentRegistry {
     return components;
   }
 
+  /** @deprecated Use {@link GetByTags}. */
+  getByTags(tags: string[]): ComponentMetadata[] {
+    return this.GetByTags(tags);
+  }
+
   /**
    * Decrements reference count for a component
    * @param name - Component name
@@ -227,7 +279,7 @@ export class ComponentRegistry {
    * @param version - Component version
    * @param contentHash - Optional content fingerprint (see {@link get})
    */
-  release(name: string, namespace: string = 'Global', version?: string, contentHash?: string): void {
+  Release(name: string, namespace: string = 'Global', version?: string, contentHash?: string): void {
     const id = this.resolveLookupKey(name, namespace, version, contentHash);
     if (!id) return;
 
@@ -237,11 +289,21 @@ export class ComponentRegistry {
     }
   }
 
+  /** @deprecated Use {@link Release}. */
+  release(name: string, namespace: string = 'Global', version?: string, contentHash?: string): void {
+    return this.Release(name, namespace, version, contentHash);
+  }
+
   /**
    * Clears all components from the registry
    */
-  clear(): void {
+  Clear(): void {
     this.registry.clear();
+  }
+
+  /** @deprecated Use {@link Clear}. */
+  clear(): void {
+    return this.Clear();
   }
 
   /**
@@ -249,7 +311,7 @@ export class ComponentRegistry {
    * @param namespace - Namespace to clear (default: 'Global')
    * @returns Number of components removed
    */
-  clearNamespace(namespace: string = 'Global'): number {
+  ClearNamespace(namespace: string = 'Global'): number {
     const toRemove: string[] = [];
     for (const [key, entry] of this.registry) {
       if (entry.metadata.namespace === namespace) {
@@ -262,22 +324,37 @@ export class ComponentRegistry {
     return toRemove.length;
   }
 
+  /** @deprecated Use {@link ClearNamespace}. */
+  clearNamespace(namespace: string = 'Global'): number {
+    return this.ClearNamespace(namespace);
+  }
+
   /**
    * Force clear all components and reset registry
    * Used for development/testing scenarios
    */
-  forceClear(): void {
+  ForceClear(): void {
     this.stopCleanupTimer();
     this.registry.clear();
     console.log('🧹 Registry force cleared - all components removed');
+  }
+
+  /** @deprecated Use {@link ForceClear}. */
+  forceClear(): void {
+    return this.ForceClear();
   }
 
   /**
    * Gets the current size of the registry
    * @returns Number of registered components
    */
-  size(): number {
+  Size(): number {
     return this.registry.size;
+  }
+
+  /** @deprecated Use {@link Size}. */
+  size(): number {
+    return this.Size();
   }
 
   /**
@@ -285,7 +362,7 @@ export class ComponentRegistry {
    * @param force - Force cleanup regardless of reference count
    * @returns Number of components removed
    */
-  cleanup(force: boolean = false): number {
+  Cleanup(force: boolean = false): number {
     const toRemove: string[] = [];
     const now = Date.now();
 
@@ -306,11 +383,16 @@ export class ComponentRegistry {
     return toRemove.length;
   }
 
+  /** @deprecated Use {@link Cleanup}. */
+  cleanup(force: boolean = false): number {
+    return this.Cleanup(force);
+  }
+
   /**
    * Gets registry statistics
    * @returns Object containing registry stats
    */
-  getStats(): {
+  GetStats(): {
     totalComponents: number;
     namespaces: number;
     totalRefCount: number;
@@ -335,21 +417,37 @@ export class ComponentRegistry {
 
     return {
       totalComponents: this.registry.size,
-      namespaces: this.getNamespaces().length,
+      namespaces: this.GetNamespaces().length,
       totalRefCount,
       oldestComponent: oldest,
       newestComponent: newest
     };
   }
 
+  /** @deprecated Use {@link GetStats}. */
+  getStats(): {
+    totalComponents: number;
+    namespaces: number;
+    totalRefCount: number;
+    oldestComponent?: Date;
+    newestComponent?: Date;
+  } {
+    return this.GetStats();
+  }
+
   /**
    * Destroys the registry and cleans up resources
    */
-  destroy(): void {
+  Destroy(): void {
     this.stopCleanupTimer();
-    this.clear();
+    this.Clear();
     // Clean up any resources associated with this registry
-    resourceManager.cleanupComponent(this.registryId);
+    resourceManager.cleanupComponent(this.RegistryId);
+  }
+
+  /** @deprecated Use {@link Destroy}. */
+  destroy(): void {
+    return this.Destroy();
   }
 
   /**
@@ -454,9 +552,9 @@ export class ComponentRegistry {
    */
   private startCleanupTimer(): void {
     this.cleanupTimer = resourceManager.setInterval(
-      this.registryId,
+      this.RegistryId,
       () => {
-        this.cleanup();
+        this.Cleanup();
       },
       this.config.cleanupInterval,
       { purpose: 'component-registry-cleanup' }
@@ -468,7 +566,7 @@ export class ComponentRegistry {
    */
   private stopCleanupTimer(): void {
     if (this.cleanupTimer) {
-      resourceManager.clearInterval(this.registryId, this.cleanupTimer as number);
+      resourceManager.clearInterval(this.RegistryId, this.cleanupTimer as number);
       this.cleanupTimer = undefined;
     }
   }

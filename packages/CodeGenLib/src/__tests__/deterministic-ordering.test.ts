@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ordinalCompare } from '@memberjunction/global';
-import { sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
+import { SortBySequenceAndCreatedAt, SortRelatedEntities } from '../Misc/util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { globSync } from 'glob';
@@ -38,7 +38,7 @@ describe('deterministic-ordering (T8)', () => {
                 { Sequence: 5, Name: 'First', ID: 'id-0' },
             ];
 
-            const sorted = sortBySequenceAndCreatedAt(items);
+            const sorted = SortBySequenceAndCreatedAt(items);
             expect(sorted.map(s => `${s.Sequence}:${s.Name}:${s.ID}`)).toEqual([
                 '5:First:id-0',
                 '10:Alpha:id-3',
@@ -54,8 +54,8 @@ describe('deterministic-ordering (T8)', () => {
                 { Sequence: 1, Name: 'B', ID: '2' },
             ];
 
-            const sorted1 = sortBySequenceAndCreatedAt(items);
-            const sorted2 = sortBySequenceAndCreatedAt([...items].reverse());
+            const sorted1 = SortBySequenceAndCreatedAt(items);
+            const sorted2 = SortBySequenceAndCreatedAt([...items].reverse());
 
             expect(sorted1).toEqual(sorted2);
         });
@@ -69,7 +69,7 @@ describe('deterministic-ordering (T8)', () => {
                 { Sequence: 10, RelatedEntity: 'Accounts', RelatedEntityJoinField: 'AccountID_A', ID: 'r-1a' },
             ];
 
-            const sorted = sortRelatedEntities(rels);
+            const sorted = SortRelatedEntities(rels);
             expect(sorted.map(r => r.ID)).toEqual(['r-1a', 'r-1b', 'r-2']);
         });
     });

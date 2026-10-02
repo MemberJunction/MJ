@@ -731,6 +731,36 @@ describe('OpenAIRealtime', () => {
             } as RealtimeServerEvent);
             expect(fn).not.toHaveBeenCalled();
         });
+
+        it('clears every registered callback-handler field on Close, mirroring Gemini/ElevenLabs', async () => {
+            // A handler closure typically captures the caller's dispatch/UI context. If Close()
+            // left these set, that context would stay reachable for as long as the caller happens
+            // to retain the closed session object — the gap this test guards against.
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            session.OnOutput(vi.fn());
+            session.OnTranscript(vi.fn());
+            session.OnToolCall(vi.fn());
+            session.OnInterruption(vi.fn());
+            session.OnUsage(vi.fn());
+            session.OnError(vi.fn());
+            session.OnClose(vi.fn());
+
+            await session.Close();
+
+            const handlerFields = [
+                'outputHandler',
+                'transcriptHandler',
+                'toolCallHandler',
+                'interruptionHandler',
+                'usageHandler',
+                'errorHandler',
+                'closeHandler',
+            ] as const;
+            const privateSession = session as unknown as Record<(typeof handlerFields)[number], unknown>;
+            for (const field of handlerFields) {
+                expect(privateSession[field]).toBeUndefined();
+            }
+        });
     });
 });
 

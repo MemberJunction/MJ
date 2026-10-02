@@ -6,8 +6,8 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
-import { validateEnumParam, boundNameList } from '../../shared/agent-tool-validation';
-import { findByIdOrError, findByIdOrNameOrError } from '../agent-tool-helpers';
+import { ValidateEnumParam, BoundNameList } from '../../shared/agent-tool-validation';
+import { FindByIdOrError, FindByIdOrNameOrError } from '../agent-tool-helpers';
 import {
   ActionResultClass,
   actionResultColor,
@@ -56,11 +56,38 @@ interface ExecutionTrend {
 })
 export class ActionExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   public isLoading = true;
-  public executions: MJActionExecutionLogEntity[] = [];
-  public filteredExecutions: MJActionExecutionLogEntity[] = [];
-  public actions: Map<string, MJActionEntity> = new Map();
+  public Executions: MJActionExecutionLogEntity[] = [];
+
+  /** @deprecated Use {@link Executions}. */
+  public get executions(): MJActionExecutionLogEntity[] {
+    return this.Executions;
+  }
+  /** @deprecated Use {@link Executions}. */
+  public set executions(value: MJActionExecutionLogEntity[]) {
+    this.Executions = value;
+  }
+  public FilteredExecutions: MJActionExecutionLogEntity[] = [];
+
+  /** @deprecated Use {@link FilteredExecutions}. */
+  public get filteredExecutions(): MJActionExecutionLogEntity[] {
+    return this.FilteredExecutions;
+  }
+  /** @deprecated Use {@link FilteredExecutions}. */
+  public set filteredExecutions(value: MJActionExecutionLogEntity[]) {
+    this.FilteredExecutions = value;
+  }
+  public Actions: Map<string, MJActionEntity> = new Map();
+
+  /** @deprecated Use {@link Actions}. */
+  public get actions(): Map<string, MJActionEntity> {
+    return this.Actions;
+  }
+  /** @deprecated Use {@link Actions}. */
+  public set actions(value: Map<string, MJActionEntity>) {
+    this.Actions = value;
+  }
   
-  public metrics: ExecutionMetrics = {
+  public Metrics: ExecutionMetrics = {
     totalExecutions: 0,
     successfulExecutions: 0,
     failedExecutions: 0,
@@ -70,19 +97,82 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     currentlyRunning: 0
   };
 
-  public executionTrends: ExecutionTrend[] = [];
-  
-  public searchTerm$ = new BehaviorSubject<string>('');
-  public selectedResult$ = new BehaviorSubject<string>('all');
-  public selectedTimeRange$ = new BehaviorSubject<string>('7days');
-  public selectedAction$ = new BehaviorSubject<string>('all');
+  /** @deprecated Use {@link Metrics}. */
+  public get metrics(): ExecutionMetrics {
+    return this.Metrics;
+  }
+  /** @deprecated Use {@link Metrics}. */
+  public set metrics(value: ExecutionMetrics) {
+    this.Metrics = value;
+  }
 
-  public timeRangeOptions = [
+  public ExecutionTrends: ExecutionTrend[] = [];
+
+  /** @deprecated Use {@link ExecutionTrends}. */
+  public get executionTrends(): ExecutionTrend[] {
+    return this.ExecutionTrends;
+  }
+  /** @deprecated Use {@link ExecutionTrends}. */
+  public set executionTrends(value: ExecutionTrend[]) {
+    this.ExecutionTrends = value;
+  }
+  
+  public SearchTerm$ = new BehaviorSubject<string>('');
+
+  /** @deprecated Use {@link SearchTerm$}. */
+  public get searchTerm$() {
+    return this.SearchTerm$;
+  }
+  /** @deprecated Use {@link SearchTerm$}. */
+  public set searchTerm$(value) {
+    this.SearchTerm$ = value;
+  }
+  public SelectedResult$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedResult$}. */
+  public get selectedResult$() {
+    return this.SelectedResult$;
+  }
+  /** @deprecated Use {@link SelectedResult$}. */
+  public set selectedResult$(value) {
+    this.SelectedResult$ = value;
+  }
+  public SelectedTimeRange$ = new BehaviorSubject<string>('7days');
+
+  /** @deprecated Use {@link SelectedTimeRange$}. */
+  public get selectedTimeRange$() {
+    return this.SelectedTimeRange$;
+  }
+  /** @deprecated Use {@link SelectedTimeRange$}. */
+  public set selectedTimeRange$(value) {
+    this.SelectedTimeRange$ = value;
+  }
+  public SelectedAction$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedAction$}. */
+  public get selectedAction$() {
+    return this.SelectedAction$;
+  }
+  /** @deprecated Use {@link SelectedAction$}. */
+  public set selectedAction$(value) {
+    this.SelectedAction$ = value;
+  }
+
+  public TimeRangeOptions = [
     { text: 'Last 24 Hours', value: '24hours' },
     { text: 'Last 7 Days', value: '7days' },
     { text: 'Last 30 Days', value: '30days' },
     { text: 'Last 90 Days', value: '90days' }
   ];
+
+  /** @deprecated Use {@link TimeRangeOptions}. */
+  public get timeRangeOptions() {
+    return this.TimeRangeOptions;
+  }
+  /** @deprecated Use {@link TimeRangeOptions}. */
+  public set timeRangeOptions(value) {
+    this.TimeRangeOptions = value;
+  }
 
   /**
    * The visible result filter. `Failed` and `Error` were two separate options that both
@@ -105,13 +195,18 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
    * {@link RESULT_FILTER_CLASSES}. Those two must agree: every offered value has to select
    * something.
    */
-  public get resultOptions(): ReadonlyArray<{ text: string; value: string }> {
+  public get ResultOptions(): ReadonlyArray<{ text: string; value: string }> {
     return ActionExecutionMonitoringComponent.RESULT_OPTIONS;
+  }
+
+  /** @deprecated Use {@link ResultOptions}. */
+  public get resultOptions(): ReadonlyArray<{ text: string; value: string }> {
+    return this.ResultOptions;
   }
 
   /**
    * Which outcome class each accepted filter value selects. `Failed` and `Error` deliberately
-   * map to the same class — see {@link resultOptions}.
+   * map to the same class — see {@link ResultOptions}.
    */
   private static readonly RESULT_FILTER_CLASSES: Readonly<Record<string, ActionResultClass | undefined>> = {
     Success: 'success',
@@ -120,9 +215,18 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     Running: 'running',
   };
 
-  public actionOptions: Array<{text: string; value: string}> = [
+  public ActionOptions: Array<{text: string; value: string}> = [
     { text: 'All Actions', value: 'all' }
   ];
+
+  /** @deprecated Use {@link ActionOptions}. */
+  public get actionOptions(): Array<{text: string; value: string}> {
+    return this.ActionOptions;
+  }
+  /** @deprecated Use {@link ActionOptions}. */
+  public set actionOptions(value: Array<{text: string; value: string}>) {
+    this.ActionOptions = value;
+  }
 
   /** Allowed result-filter values (mirrors `resultOptions`). */
   private readonly resultFilterValues = ['all', 'Success', 'Failed', 'Error', 'Running'] as const;
@@ -158,10 +262,10 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
 
   private setupFilters(): void {
     combineLatest([
-      this.searchTerm$.pipe(debounceTime(300), distinctUntilChanged()),
-      this.selectedResult$.pipe(distinctUntilChanged()),
-      this.selectedTimeRange$.pipe(distinctUntilChanged()),
-      this.selectedAction$.pipe(distinctUntilChanged())
+      this.SearchTerm$.pipe(debounceTime(300), distinctUntilChanged()),
+      this.SelectedResult$.pipe(distinctUntilChanged()),
+      this.SelectedTimeRange$.pipe(distinctUntilChanged()),
+      this.SelectedAction$.pipe(distinctUntilChanged())
     ]).pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
@@ -193,26 +297,26 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   private publishAgentContext(): void {
     this.navigationService.SetAgentContext(this, {
       // Execution metrics
-      TotalExecutionCount: this.metrics.totalExecutions,
-      SuccessfulExecutionCount: this.metrics.successfulExecutions,
-      FailedExecutionCount: this.metrics.failedExecutions,
-      CurrentlyRunningCount: this.metrics.currentlyRunning,
-      ExecutionsTodayCount: this.metrics.executionsToday,
-      ExecutionsThisWeekCount: this.metrics.executionsThisWeek,
-      AverageDurationSeconds: this.metrics.averageDuration,
-      OverallSuccessRate: this.getSuccessRate(),
+      TotalExecutionCount: this.Metrics.totalExecutions,
+      SuccessfulExecutionCount: this.Metrics.successfulExecutions,
+      FailedExecutionCount: this.Metrics.failedExecutions,
+      CurrentlyRunningCount: this.Metrics.currentlyRunning,
+      ExecutionsTodayCount: this.Metrics.executionsToday,
+      ExecutionsThisWeekCount: this.Metrics.executionsThisWeek,
+      AverageDurationSeconds: this.Metrics.averageDuration,
+      OverallSuccessRate: this.GetSuccessRate(),
       // What's in view after filtering
-      FilteredExecutionCount: this.filteredExecutions.length,
-      VisibleActionNames: boundNameList(this.distinctVisibleActionNames()),
+      FilteredExecutionCount: this.FilteredExecutions.length,
+      VisibleActionNames: BoundNameList(this.distinctVisibleActionNames()),
       // Filter / search state
-      CurrentSearchTerm: this.searchTerm$.value,
-      CurrentResultFilter: this.selectedResult$.value,
-      CurrentTimeRangeFilter: this.selectedTimeRange$.value,
-      CurrentActionFilter: this.selectedAction$.value,
+      CurrentSearchTerm: this.SearchTerm$.value,
+      CurrentResultFilter: this.SelectedResult$.value,
+      CurrentTimeRangeFilter: this.SelectedTimeRange$.value,
+      CurrentActionFilter: this.SelectedAction$.value,
       // Mode + selection (id + action NAME + result)
       ToolMode: this.currentToolMode(),
       SelectedExecutionId: this.selectedExecution?.ID ?? null,
-      SelectedExecutionActionName: this.selectedExecution ? this.getActionName(this.selectedExecution.ActionID!) : null,
+      SelectedExecutionActionName: this.selectedExecution ? this.GetActionName(this.selectedExecution.ActionID!) : null,
       SelectedExecutionResult: this.selectedExecution?.ResultCode ?? null,
     });
   }
@@ -221,8 +325,8 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   private distinctVisibleActionNames(): string[] {
     const seen = new Set<string>();
     const names: string[] = [];
-    for (const e of this.filteredExecutions) {
-      const name = this.actions.get(e.ActionID!)?.Name;
+    for (const e of this.FilteredExecutions) {
+      const name = this.Actions.get(e.ActionID!)?.Name;
       if (name && !seen.has(name)) {
         seen.add(name);
         names.push(name);
@@ -263,7 +367,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
         Handler: async (params) => {
           const term = typeof params['searchTerm'] === 'string' ? params['searchTerm'] : '';
-          this.onSearchChange(term);
+          this.OnSearchChange(term);
           return { Success: true };
         },
       },
@@ -272,9 +376,9 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         Description: 'Filter executions by result outcome, not by literal result code. Allowed: all, Success, Failed, Error (an alias for Failed), Running.',
         ParameterSchema: { type: 'object', properties: { result: { type: 'string', enum: [...this.resultFilterValues] } }, required: ['result'] },
         Handler: async (params) => {
-          const v = validateEnumParam(params['result'], this.resultFilterValues, 'result');
+          const v = ValidateEnumParam(params['result'], this.resultFilterValues, 'result');
           if (!v.ok) return v.result;
-          this.onResultFilterChange(v.value);
+          this.OnResultFilterChange(v.value);
           return { Success: true };
         },
       },
@@ -283,9 +387,9 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         Description: 'Filter executions by time range. Allowed: 24hours, 7days, 30days, 90days.',
         ParameterSchema: { type: 'object', properties: { timeRange: { type: 'string', enum: [...this.timeRangeValues] } }, required: ['timeRange'] },
         Handler: async (params) => {
-          const v = validateEnumParam(params['timeRange'], this.timeRangeValues, 'timeRange');
+          const v = ValidateEnumParam(params['timeRange'], this.timeRangeValues, 'timeRange');
           if (!v.ok) return v.result;
-          this.onTimeRangeChange(v.value);
+          this.OnTimeRangeChange(v.value);
           return { Success: true };
         },
       },
@@ -299,12 +403,12 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
             return { Success: false, ErrorMessage: 'A non-empty action id or name is required (use "all" to clear).' };
           }
           if (raw.trim().toLowerCase() === 'all') {
-            this.onActionFilterChange('all');
+            this.OnActionFilterChange('all');
             return { Success: true };
           }
-          const found = findByIdOrNameOrError(raw, Array.from(this.actions.values()), 'action');
+          const found = FindByIdOrNameOrError(raw, Array.from(this.Actions.values()), 'action');
           if (!found.ok) return found.result;
-          this.onActionFilterChange(found.value.ID);
+          this.OnActionFilterChange(found.value.ID);
           return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
         },
       },
@@ -313,7 +417,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         Description: 'Reset all execution-monitor filters (result, time range, action) to their defaults.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.resetFilters();
+          this.ResetFilters();
           return { Success: true };
         },
       },
@@ -322,7 +426,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         Description: 'Reload the execution monitoring data (logs, metrics, trends).',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.refreshData();
+          this.RefreshData();
           return { Success: true };
         },
       },
@@ -337,10 +441,10 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         Description: 'Select an execution-log entry by its id and open its detail record (view-only run history). Selecting it reveals the detail tools.',
         ParameterSchema: { type: 'object', properties: { executionId: { type: 'string' } }, required: ['executionId'] },
         Handler: async (params) => {
-          const found = findByIdOrError(params['executionId'], this.filteredExecutions.length ? this.filteredExecutions : this.executions, 'execution');
+          const found = FindByIdOrError(params['executionId'], this.FilteredExecutions.length ? this.FilteredExecutions : this.Executions, 'execution');
           if (!found.ok) return found.result;
           this.selectExecution(found.value);
-          return { Success: true, Data: { Id: found.value.ID, ActionName: this.getActionName(found.value.ActionID!) } };
+          return { Success: true, Data: { Id: found.value.ID, ActionName: this.GetActionName(found.value.ActionID!) } };
         },
       },
     ];
@@ -355,7 +459,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
           if (!this.selectedExecution) return { Success: false, ErrorMessage: 'No execution is currently selected.' };
-          this.openExecution(this.selectedExecution);
+          this.OpenExecution(this.selectedExecution);
           return { Success: true };
         },
       },
@@ -366,8 +470,8 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         Handler: async () => {
           const actionId = this.selectedExecution?.ActionID;
           if (!actionId) return { Success: false, ErrorMessage: 'No execution is selected, or it has no associated action.' };
-          this.openAction(actionId);
-          return { Success: true, Data: { ActionName: this.getActionName(actionId) } };
+          this.OpenAction(actionId);
+          return { Success: true, Data: { ActionName: this.GetActionName(actionId) } };
         },
       },
       {
@@ -387,7 +491,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     this.selectedExecution = execution;
     this.syncAgentToolsForMode();
     this.publishAgentContext();
-    this.openExecution(execution);
+    this.OpenExecution(execution);
   }
 
   /** Clear the execution selection (re-scopes tools back to list mode). */
@@ -420,7 +524,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       const executions = executionsResult.Results as MJActionExecutionLogEntity[];
       const actions = actionsResult.Results as MJActionEntity[];
 
-      this.executions = executions;
+      this.Executions = executions;
       this.populateActionsMap(actions);
       this.buildActionOptions(actions);
       this.calculateMetrics();
@@ -438,14 +542,14 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   }
 
   private populateActionsMap(actions: MJActionEntity[]): void {
-    this.actions.clear();
+    this.Actions.clear();
     actions.forEach(action => {
-      this.actions.set(action.ID, action);
+      this.Actions.set(action.ID, action);
     });
   }
 
   private buildActionOptions(actions: MJActionEntity[]): void {
-    this.actionOptions = [
+    this.ActionOptions = [
       { text: 'All Actions', value: 'all' },
       ...actions.map(action => ({
         text: action.Name,
@@ -459,29 +563,29 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    this.metrics = {
-      totalExecutions: this.executions.length,
+    this.Metrics = {
+      totalExecutions: this.Executions.length,
       // Classified, not string-compared. The writer emits UPPER_SNAKE (`SUCCESS`,
       // `RUNTIME_ERROR`, …) while these comparisons looked for Title Case, so a database of
       // successful runs reported 0 successes and 0 failures — beside rows that rendered
       // green, because the colour helpers lowercased and these did not.
-      successfulExecutions: this.executions.filter(e => classifyActionResultCode(e.ResultCode) === 'success').length,
-      failedExecutions: this.executions.filter(e => classifyActionResultCode(e.ResultCode) === 'failure').length,
+      successfulExecutions: this.Executions.filter(e => classifyActionResultCode(e.ResultCode) === 'success').length,
+      failedExecutions: this.Executions.filter(e => classifyActionResultCode(e.ResultCode) === 'failure').length,
       averageDuration: this.calculateAverageDuration(),
-      executionsToday: this.executions.filter(e => 
+      executionsToday: this.Executions.filter(e => 
         new Date(e.StartedAt!) >= today
       ).length,
-      executionsThisWeek: this.executions.filter(e => 
+      executionsThisWeek: this.Executions.filter(e => 
         new Date(e.StartedAt!) >= weekAgo
       ).length,
-      currentlyRunning: this.executions.filter(e =>
+      currentlyRunning: this.Executions.filter(e =>
         classifyActionResultCode(e.ResultCode) === 'running' || !e.EndedAt
       ).length
     };
   }
 
   private calculateAverageDuration(): number {
-    const completedExecutions = this.executions.filter(e => 
+    const completedExecutions = this.Executions.filter(e => 
       e.StartedAt && e.EndedAt
     );
     
@@ -515,7 +619,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     });
 
     // Populate trends with execution data
-    this.executions.forEach(execution => {
+    this.Executions.forEach(execution => {
       if (!execution.StartedAt) return;
       
       const date = new Date(execution.StartedAt).toISOString().split('T')[0];
@@ -532,14 +636,14 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       }
     });
 
-    this.executionTrends = Array.from(trends.values());
+    this.ExecutionTrends = Array.from(trends.values());
   }
 
   private applyFilters(): void {
-    let filtered = [...this.executions];
+    let filtered = [...this.Executions];
 
     // Apply time range filter
-    const timeRange = this.selectedTimeRange$.value;
+    const timeRange = this.SelectedTimeRange$.value;
     if (timeRange !== 'all') {
       const cutoffDate = this.getTimeRangeCutoff(timeRange);
       filtered = filtered.filter(e => 
@@ -548,7 +652,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     }
 
     // Apply result filter
-    const result = this.selectedResult$.value;
+    const result = this.SelectedResult$.value;
     if (result !== 'all') {
       const wanted = ActionExecutionMonitoringComponent.RESULT_FILTER_CLASSES[result];
       if (wanted === 'running') {
@@ -562,16 +666,16 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     }
 
     // Apply action filter
-    const actionId = this.selectedAction$.value;
+    const actionId = this.SelectedAction$.value;
     if (actionId !== 'all') {
       filtered = filtered.filter(e => UUIDsEqual(e.ActionID, actionId));
     }
 
     // Apply search filter
-    const searchTerm = this.searchTerm$.value.toLowerCase();
+    const searchTerm = this.SearchTerm$.value.toLowerCase();
     if (searchTerm) {
       filtered = filtered.filter(e => {
-        const action = this.actions.get(e.ActionID!);
+        const action = this.Actions.get(e.ActionID!);
         return (
           action?.Name.toLowerCase().includes(searchTerm) ||
           e.ResultCode?.toLowerCase().includes(searchTerm) ||
@@ -580,7 +684,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       });
     }
 
-    this.filteredExecutions = filtered;
+    this.FilteredExecutions = filtered;
   }
 
   private getTimeRangeCutoff(timeRange: string): Date {
@@ -599,20 +703,40 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     }
   }
 
+  public OnSearchChange(searchTerm: string): void {
+    this.SearchTerm$.next(searchTerm);
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
   public onSearchChange(searchTerm: string): void {
-    this.searchTerm$.next(searchTerm);
+    return this.OnSearchChange(searchTerm);
   }
 
+  public OnResultFilterChange(result: string): void {
+    this.SelectedResult$.next(result);
+  }
+
+  /** @deprecated Use {@link OnResultFilterChange}. */
   public onResultFilterChange(result: string): void {
-    this.selectedResult$.next(result);
+    return this.OnResultFilterChange(result);
   }
 
+  public OnTimeRangeChange(timeRange: string): void {
+    this.SelectedTimeRange$.next(timeRange);
+  }
+
+  /** @deprecated Use {@link OnTimeRangeChange}. */
   public onTimeRangeChange(timeRange: string): void {
-    this.selectedTimeRange$.next(timeRange);
+    return this.OnTimeRangeChange(timeRange);
   }
 
+  public OnActionFilterChange(actionId: string): void {
+    this.SelectedAction$.next(actionId);
+  }
+
+  /** @deprecated Use {@link OnActionFilterChange}. */
   public onActionFilterChange(actionId: string): void {
-    this.selectedAction$.next(actionId);
+    return this.OnActionFilterChange(actionId);
   }
 
   // ───── Filter-popover plumbing for the [actions] slot ─────
@@ -624,7 +748,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         type: 'dropdown',
         label: 'Time range',
         icon: 'fa-solid fa-clock',
-        options: this.timeRangeOptions
+        options: this.TimeRangeOptions
       },
       {
         key: 'result',
@@ -633,7 +757,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         icon: 'fa-solid fa-circle-info',
         // Copied because FilterFieldConfig.options is a mutable array and the source list is
         // a shared constant — the panel must not be able to reorder it for every instance.
-        options: [...this.resultOptions]
+        options: [...this.ResultOptions]
       },
       {
         key: 'action',
@@ -641,64 +765,98 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         label: 'Action',
         icon: 'fa-solid fa-bolt',
         filterable: true,
-        options: this.actionOptions
+        options: this.ActionOptions
       }
     ];
   }
   public get FilterValues(): Record<string, unknown> {
     return {
-      timeRange: this.selectedTimeRange$.value,
-      result: this.selectedResult$.value,
-      action: this.selectedAction$.value
+      timeRange: this.SelectedTimeRange$.value,
+      result: this.SelectedResult$.value,
+      action: this.SelectedAction$.value
     };
   }
   public get ActiveFilterCount(): number {
     let n = 0;
-    if (this.selectedTimeRange$.value !== '7days') n++;
-    if (this.selectedResult$.value !== 'all') n++;
-    if (this.selectedAction$.value !== 'all') n++;
+    if (this.SelectedTimeRange$.value !== '7days') n++;
+    if (this.SelectedResult$.value !== 'all') n++;
+    if (this.SelectedAction$.value !== 'all') n++;
     return n;
   }
-  public onFilterValuesChange(v: Record<string, unknown>): void {
+  public OnFilterValuesChange(v: Record<string, unknown>): void {
     const next = (v ?? {}) as { timeRange?: string; result?: string; action?: string };
-    if ((next.timeRange ?? '7days') !== this.selectedTimeRange$.value) {
-      this.onTimeRangeChange(next.timeRange ?? '7days');
+    if ((next.timeRange ?? '7days') !== this.SelectedTimeRange$.value) {
+      this.OnTimeRangeChange(next.timeRange ?? '7days');
     }
-    if ((next.result ?? 'all') !== this.selectedResult$.value) {
-      this.onResultFilterChange(next.result ?? 'all');
+    if ((next.result ?? 'all') !== this.SelectedResult$.value) {
+      this.OnResultFilterChange(next.result ?? 'all');
     }
-    if ((next.action ?? 'all') !== this.selectedAction$.value) {
-      this.onActionFilterChange(next.action ?? 'all');
+    if ((next.action ?? 'all') !== this.SelectedAction$.value) {
+      this.OnActionFilterChange(next.action ?? 'all');
     }
-  }
-  public resetFilters(): void {
-    if (this.selectedTimeRange$.value !== '7days') this.onTimeRangeChange('7days');
-    if (this.selectedResult$.value !== 'all') this.onResultFilterChange('all');
-    if (this.selectedAction$.value !== 'all') this.onActionFilterChange('all');
   }
 
-  public openExecution(execution: MJActionExecutionLogEntity): void {
+  /** @deprecated Use {@link OnFilterValuesChange}. */
+  public onFilterValuesChange(v: Record<string, unknown>): void {
+    return this.OnFilterValuesChange(v);
+  }
+  public ResetFilters(): void {
+    if (this.SelectedTimeRange$.value !== '7days') this.OnTimeRangeChange('7days');
+    if (this.SelectedResult$.value !== 'all') this.OnResultFilterChange('all');
+    if (this.SelectedAction$.value !== 'all') this.OnActionFilterChange('all');
+  }
+
+  /** @deprecated Use {@link ResetFilters}. */
+  public resetFilters(): void {
+    return this.ResetFilters();
+  }
+
+  public OpenExecution(execution: MJActionExecutionLogEntity): void {
     this.navigationService.OpenEntityRecord('MJ: Action Execution Logs', CompositeKey.FromID(execution.ID));
   }
 
+  /** @deprecated Use {@link OpenExecution}. */
+  public openExecution(execution: MJActionExecutionLogEntity): void {
+    return this.OpenExecution(execution);
+  }
+
+  public OpenAction(actionId: string): void {
+    this.navigationService.OpenEntityRecord('MJ: Actions', CompositeKey.FromID(actionId));
+  }
+
+  /** @deprecated Use {@link OpenAction}. */
   public openAction(actionId: string): void {
-    const key = CompositeKey.FromID(actionId);
-    this.navigationService.OpenEntityRecord('MJ: Actions', key);
+    return this.OpenAction(actionId);
   }
 
+  public GetActionName(actionId: string): string {
+    return this.Actions.get(actionId)?.Name || `Action ${actionId}`;
+  }
+
+  /** @deprecated Use {@link GetActionName}. */
   public getActionName(actionId: string): string {
-    return this.actions.get(actionId)?.Name || `Action ${actionId}`;
+    return this.GetActionName(actionId);
   }
 
-  public getResultColor(resultCode: string | null): 'success' | 'warning' | 'error' | 'info' {
+  public GetResultColor(resultCode: string | null): 'success' | 'warning' | 'error' | 'info' {
     return actionResultColor(resultCode);
   }
 
-  public getResultIcon(resultCode: string | null): string {
+  /** @deprecated Use {@link GetResultColor}. */
+  public getResultColor(resultCode: string | null): 'success' | 'warning' | 'error' | 'info' {
+    return this.GetResultColor(resultCode);
+  }
+
+  public GetResultIcon(resultCode: string | null): string {
     return actionResultIcon(resultCode);
   }
 
-  public getDuration(execution: MJActionExecutionLogEntity): string {
+  /** @deprecated Use {@link GetResultIcon}. */
+  public getResultIcon(resultCode: string | null): string {
+    return this.GetResultIcon(resultCode);
+  }
+
+  public GetDuration(execution: MJActionExecutionLogEntity): string {
     if (!execution.StartedAt || !execution.EndedAt) {
       return execution.EndedAt ? 'Unknown' : 'Running';
     }
@@ -712,37 +870,72 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     return `${Math.round(duration / 3600)}h`;
   }
 
+  /** @deprecated Use {@link GetDuration}. */
+  public getDuration(execution: MJActionExecutionLogEntity): string {
+    return this.GetDuration(execution);
+  }
+
   /**
    * Successes as a share of SETTLED runs — see {@link actionSuccessRate}. Dividing by
    * `totalExecutions` put still-running and unrecognised-code rows in the denominator, which
    * drags the rate down for reasons that are not failures.
    */
-  public getSuccessRate(): number {
-    return actionSuccessRate(this.executions.map(e => e.ResultCode));
+  public GetSuccessRate(): number {
+    return actionSuccessRate(this.Executions.map(e => e.ResultCode));
   }
 
-  public refreshData(): void {
+  /** @deprecated Use {@link GetSuccessRate}. */
+  public getSuccessRate(): number {
+    return this.GetSuccessRate();
+  }
+
+  public RefreshData(): void {
     this.loadData();
   }
 
+  /** @deprecated Use {@link RefreshData}. */
+  public refreshData(): void {
+    return this.RefreshData();
+  }
+
   // Metric card click handlers
-  public onTotalExecutionsClick(): void {
+  public OnTotalExecutionsClick(): void {
     // Reset filters to show all executions
-    this.selectedResult$.next('all');
-    this.selectedTimeRange$.next('7days');
-    this.selectedAction$.next('all');
+    this.SelectedResult$.next('all');
+    this.SelectedTimeRange$.next('7days');
+    this.SelectedAction$.next('all');
   }
 
+  /** @deprecated Use {@link OnTotalExecutionsClick}. */
+  public onTotalExecutionsClick(): void {
+    return this.OnTotalExecutionsClick();
+  }
+
+  public OnSuccessRateClick(): void {
+    this.SelectedResult$.next('Success');
+  }
+
+  /** @deprecated Use {@link OnSuccessRateClick}. */
   public onSuccessRateClick(): void {
-    this.selectedResult$.next('Success');
+    return this.OnSuccessRateClick();
   }
 
+  public OnFailedExecutionsClick(): void {
+    this.SelectedResult$.next('Failed');
+  }
+
+  /** @deprecated Use {@link OnFailedExecutionsClick}. */
   public onFailedExecutionsClick(): void {
-    this.selectedResult$.next('Failed');
+    return this.OnFailedExecutionsClick();
   }
 
+  public OnRunningExecutionsClick(): void {
+    this.SelectedResult$.next('Running');
+  }
+
+  /** @deprecated Use {@link OnRunningExecutionsClick}. */
   public onRunningExecutionsClick(): void {
-    this.selectedResult$.next('Running');
+    return this.OnRunningExecutionsClick();
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {

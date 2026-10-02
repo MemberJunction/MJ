@@ -63,6 +63,8 @@ export * from './lib/recycle-bin/events/recycle-bin-events';
 // Utilities
 export * from './lib/utils/highlight.util';
 export * from './lib/utils/record.util';
+export * from './lib/utils/aggregate-field.util';
+export * from './lib/utils/export-column.util';
 
 // View-Type Plugin Architecture (contracts, engine, built-in descriptors)
 export * from './lib/view-types';

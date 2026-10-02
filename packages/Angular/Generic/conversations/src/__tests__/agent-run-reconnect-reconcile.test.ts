@@ -1,32 +1,30 @@
 /**
- * @fileoverview A run that finishes while the socket is down must be reconciled on reconnect.
+ * @fileoverview A run that finishes while the socket is down must be reconciled on reconnect —
+ * including a message the client already gave up on and marked Error.
  *
- * ## What was actually wrong
+ * ## What this pins
  *
- * Nothing needed building. A reconciler
- * (`ConversationChatAreaComponent.detectAndReconcileAgentRuns`) and a server-side heartbeat
- * (`packages/AI/Agents/src/agent-run-watchdog.ts`) both already existed. Neither was
- * REACHABLE after a socket drop:
+ * The reconnect trigger itself belongs to the liveness supervisor (MJ #4222):
+ * `ConversationsRuntime.Instance.Liveness.ReconciliationRequired$` emits `socket-reconnected` /
+ * `stream-reconnected`, and the chat area answers with one coalesced `ReconcileNow` pass. That pass
+ * re-reads run rows for In-Progress messages only, which leaves two gaps after a transport outage:
  *
- *  - the reconciler had exactly ONE caller, inside the conversation-*load* path, so the only
- *    way to trigger it was to navigate away and back;
- *  - the polling fallback fires on a FALLING edge (`hadActiveAgents && !hasActiveAgents`), and
- *    `AgentStateService` stops polling itself once a cycle returns no active runs — so if the
- *    client never saw the run go active, the edge never came;
- *  - `ConversationStreaming.getConnectionStatus$()` — which emits
- *    `connected → error/disconnected → reconnecting → connected` around a drop — had **zero
- *    subscribers anywhere in the repo**.
+ *  - a message the client marked **Error** (e.g. on a socket timeout) while the server went on to
+ *    complete the run is never corrected — `correctStaleErrorMessages` judges it against the run
+ *    map, and nothing refreshed that message's run;
+ *  - rows written while the socket was down never reach the window, because their events were
+ *    dropped.
  *
- * So the message displayed "running" indefinitely. The fix subscribes to that observable.
+ * So a TRANSPORT reconnect, when any AI message is unsettled (In-Progress or Error), re-reads the
+ * newest window page and rebuilds the peripherals before the usual run refresh and reconcile. The
+ * other supervisor reasons keep next's narrow refresh only.
  *
- * Both halves are pinned here off the prototype (no constructor/TestBed), in the style of
- * agent-awaiting-feedback.test.ts: the transition rule that decides whether to act, and the
- * catch-up itself.
+ * Driven off the prototype (no constructor/TestBed), in the style of chat-area-reconcile.test.ts:
+ * the real `ReconcileNow` → `reconcileOnce` path runs against stubbed collaborators.
  */
 import '@angular/compiler'; // JIT support — the component import evaluates Angular decorators in vitest's node env
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
-import type { StreamingConnectionStatus } from '../lib/services/conversation-streaming.service';
 
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
 
@@ -36,242 +34,236 @@ function detail(id: string, role: 'AI' | 'User', status: string): MJConversation
     return { ID: id, ConversationID: CONVERSATION_ID, Role: role, Status: status } as unknown as MJConversationDetailEntity;
 }
 
-interface TransitionHarness {
-    /** Feed one status emission; returns whether the component decided to reconcile. */
-    feed(status: StreamingConnectionStatus): boolean;
+interface Harness {
+    component: ConversationChatAreaComponent;
+    open: Record<string, unknown>;
+    /** Every collaborator call, in order. */
+    calls: string[];
+    peripheralLoadTokens: Array<number | undefined>;
 }
 
-function buildTransitionHarness(): TransitionHarness {
-    const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
-    Object.assign(component as unknown as Record<string, unknown>, {
-        streamConnected: false,
-        streamHasConnected: false,
-    });
-    const decide = (
-        component as unknown as { onStreamConnectionStatus(s: StreamingConnectionStatus): boolean }
-    ).onStreamConnectionStatus.bind(component);
-    return { feed: decide };
-}
-
-describe('onStreamConnectionStatus — reconnect, not first connect', () => {
-    it('does not reconcile on the FIRST connect', () => {
-        const harness = buildTransitionHarness();
-        // The BehaviorSubject starts at 'disconnected', then initialize() emits 'connected'.
-        expect(harness.feed('disconnected')).toBe(false);
-        expect(harness.feed('connected')).toBe(false);
-    });
-
-    it('reconciles when the socket comes back after an error', () => {
-        const harness = buildTransitionHarness();
-        harness.feed('connected');
-        expect(harness.feed('error')).toBe(false);
-        expect(harness.feed('reconnecting')).toBe(false);
-        expect(harness.feed('connected')).toBe(true);
-    });
-
-    it('reconciles after a clean disconnect too', () => {
-        const harness = buildTransitionHarness();
-        harness.feed('connected');
-        harness.feed('disconnected');
-        harness.feed('reconnecting');
-        expect(harness.feed('connected')).toBe(true);
-    });
-
-    it('does not reconcile on a duplicate "connected" with no drop in between', () => {
-        // A BehaviorSubject replaying its current value must not trigger a catch-up.
-        const harness = buildTransitionHarness();
-        harness.feed('connected');
-        expect(harness.feed('connected')).toBe(false);
-        expect(harness.feed('connected')).toBe(false);
-    });
-
-    it('reconciles on EVERY subsequent reconnect, not just the first', () => {
-        const harness = buildTransitionHarness();
-        harness.feed('connected');
-        for (let i = 0; i < 3; i++) {
-            harness.feed('error');
-            harness.feed('reconnecting');
-            expect(harness.feed('connected')).toBe(true);
-        }
-    });
-
-    it('never reconciles on a non-connected status', () => {
-        const harness = buildTransitionHarness();
-        harness.feed('connected');
-        for (const status of ['error', 'disconnected', 'reconnecting'] as StreamingConnectionStatus[]) {
-            expect(harness.feed(status)).toBe(false);
-        }
-    });
-});
-
-interface ReconcileHarness {
-    run(): Promise<void>;
-    refreshCalls: number;
-    peripheralCalls: Array<{ conversationId: string; loadToken: number | undefined }>;
-    reconcileCalls: Array<{ conversationId: string; loadToken: number }>;
-    messagesAfter(): MJConversationDetailEntity[];
-    lastLoadedConversationId(): string | null;
-}
-
-function buildReconcileHarness(options: {
-    messages: MJConversationDetailEntity[];
+function buildHarness(options: {
+    messages: MJConversationDetailEntity[] | undefined;
     refreshed?: MJConversationDetailEntity[];
-    conversationId?: string | null;
-    /** Simulates another conversation being selected mid-refresh. */
+    /** Simulates another conversation being selected while the window refresh is awaited. */
     invalidateDuringRefresh?: boolean;
-    /** Makes the reconciler throw, to check the catch-up cannot break the live conversation. */
-    reconcilerThrows?: boolean;
-}): ReconcileHarness {
-    const state = {
-        refreshCalls: 0,
-        peripheralCalls: [] as Array<{ conversationId: string; loadToken: number | undefined }>,
-        reconcileCalls: [] as Array<{ conversationId: string; loadToken: number }>,
-    };
-    const refreshed = options.refreshed ?? options.messages;
+    /** Makes the window refresh reject, to check the pass cannot break the live conversation. */
+    refreshThrows?: boolean;
+    /** Replaces the run-row refresh, e.g. with a gate that holds a pass open. */
+    refreshRuns?: () => Promise<void>;
+}): Harness {
+    const calls: string[] = [];
+    const peripheralLoadTokens: Array<number | undefined> = [];
+    const refreshed = options.refreshed ?? options.messages ?? [];
 
     const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
-    Object.assign(component as unknown as Record<string, unknown>, {
-        _conversationId: options.conversationId === undefined ? CONVERSATION_ID : options.conversationId,
-        messages: options.messages,
-        currentUser: { ID: 'user-1' },
-        conversationLoadToken: 7,
-        lastLoadedConversationId: CONVERSATION_ID,
-        windowStore: {
-            RefreshLatest: async (): Promise<void> => {
-                state.refreshCalls++;
-                if (options.invalidateDuringRefresh) {
-                    // A different conversation was selected while we awaited the refresh.
-                    (component as unknown as { conversationLoadToken: number }).conversationLoadToken = 99;
-                }
-            },
-            GetSnapshot: () => ({ Details: refreshed }),
-        },
-        loadPeripheralData: async (conversationId: string, _snapshot: unknown, loadToken?: number): Promise<void> => {
-            state.peripheralCalls.push({ conversationId, loadToken });
-        },
-        detectAndReconcileAgentRuns: async (conversationId: string, loadToken: number): Promise<void> => {
-            state.reconcileCalls.push({ conversationId, loadToken });
-            if (options.reconcilerThrows) {
-                throw new Error('reconcile blew up');
+    const open = component as unknown as Record<string, unknown>;
+
+    open.conversationId = CONVERSATION_ID;
+    open.currentUser = { ID: 'user-1' };
+    open.conversationLoadToken = 7;
+    open.lastLoadedConversationId = CONVERSATION_ID;
+    open.messages = options.messages;
+    open.isActiveConversationLoad = vi.fn((_c: string, token: number) => token === open.conversationLoadToken);
+    open.windowStore = {
+        RefreshLatest: vi.fn(async (): Promise<void> => {
+            calls.push('window');
+            if (options.refreshThrows) {
+                throw new Error('network down');
             }
-        },
-        cdr: { detectChanges: vi.fn() },
+            if (options.invalidateDuringRefresh) {
+                open.conversationLoadToken = 99;
+            }
+        }),
+        GetSnapshot: () => ({ Details: refreshed }),
+    };
+    open.loadPeripheralData = vi.fn(async (_c: string, _s: unknown, loadToken?: number): Promise<void> => {
+        calls.push('peripherals');
+        peripheralLoadTokens.push(loadToken);
+    });
+    open.refreshAgentRunsForInProgress = vi.fn(options.refreshRuns ?? (async (): Promise<void> => {
+        calls.push('runs');
+    }));
+    open.detectAndReconcileAgentRuns = vi.fn(async (): Promise<void> => {
+        calls.push('reconcile');
     });
 
-    const run = (component as unknown as { reconcileAfterStreamReconnect(): Promise<void> })
-        .reconcileAfterStreamReconnect.bind(component);
-
-    return {
-        run,
-        get refreshCalls() { return state.refreshCalls; },
-        get peripheralCalls() { return state.peripheralCalls; },
-        get reconcileCalls() { return state.reconcileCalls; },
-        messagesAfter: () => (component as unknown as { messages: MJConversationDetailEntity[] }).messages,
-        lastLoadedConversationId: () => (component as unknown as { lastLoadedConversationId: string | null }).lastLoadedConversationId,
-    };
+    return { component, open, calls, peripheralLoadTokens };
 }
 
-describe('reconcileAfterStreamReconnect — the catch-up', () => {
-    it('reconciles when an AI message is still showing In-Progress', async () => {
-        const harness = buildReconcileHarness({
-            messages: [detail('d-user', 'User', 'Complete'), detail('d-ai', 'AI', 'In-Progress')],
+afterEach(() => vi.restoreAllMocks());
+
+describe('ReconcileNow on a transport reconnect — the catch-up', () => {
+    for (const reason of ['socket-reconnected', 'stream-reconnected']) {
+        it(`re-reads the window and rebuilds peripherals BEFORE the run refresh and reconcile (${reason})`, async () => {
+            // The reconcile decides from the run map. Reconciling before the map is rebuilt from a
+            // fresh read compares stale rows against themselves and concludes nothing changed.
+            const h = buildHarness({
+                messages: [detail('d-user', 'User', 'Complete'), detail('d-ai', 'AI', 'In-Progress')],
+            });
+
+            await h.component.ReconcileNow(reason);
+
+            expect(h.calls).toEqual(['window', 'peripherals', 'runs', 'reconcile']);
+            expect(h.peripheralLoadTokens).toEqual([7]);
         });
+    }
 
-        await harness.run();
-
-        expect(harness.reconcileCalls).toEqual([{ conversationId: CONVERSATION_ID, loadToken: 7 }]);
-    });
-
-    it('re-reads the window BEFORE reconciling — order is load-bearing', async () => {
-        // detectAndReconcileAgentRuns compares message status against agentRunsByDetailId,
-        // which is a snapshot taken when the window loaded. Reconciling without refreshing it
-        // compares the stale rows against themselves and always concludes nothing changed.
-        const harness = buildReconcileHarness({
+    it('adopts the refreshed window as the message list', async () => {
+        const h = buildHarness({
             messages: [detail('d-ai', 'AI', 'In-Progress')],
-            refreshed: [detail('d-ai', 'AI', 'Complete')],
+            refreshed: [detail('d-ai', 'AI', 'Complete'), detail('d-new', 'AI', 'Complete')],
         });
 
-        await harness.run();
+        await h.component.ReconcileNow('stream-reconnected');
 
-        expect(harness.refreshCalls).toBe(1);
-        expect(harness.peripheralCalls).toHaveLength(1);
-        expect(harness.reconcileCalls).toHaveLength(1);
-        expect(harness.messagesAfter().map(m => m.Status)).toEqual(['Complete']);
+        const after = h.open.messages as MJConversationDetailEntity[];
+        expect(after.map(m => m.ID)).toEqual(['d-ai', 'd-new']);
     });
 
     it('clears lastLoadedConversationId so loadPeripheralData does not short-circuit', async () => {
         // loadPeripheralData returns immediately when it has already run for this conversation;
-        // without clearing the marker the refreshed agent runs would never reach the maps.
-        const harness = buildReconcileHarness({ messages: [detail('d-ai', 'AI', 'In-Progress')] });
+        // without clearing the marker the refreshed agent runs would never reach the run map.
+        const h = buildHarness({ messages: [detail('d-ai', 'AI', 'In-Progress')] });
 
-        await harness.run();
+        await h.component.ReconcileNow('socket-reconnected');
 
-        expect(harness.lastLoadedConversationId()).toBeNull();
+        expect(h.open.lastLoadedConversationId).toBeNull();
     });
 
-    it('also reconciles a message the client marked Error — the server may have completed it', async () => {
-        const harness = buildReconcileHarness({ messages: [detail('d-ai', 'AI', 'Error')] });
+    it('also refreshes for a message the client marked Error — the server may have completed it', async () => {
+        const h = buildHarness({ messages: [detail('d-ai', 'AI', 'Error')] });
 
-        await harness.run();
+        await h.component.ReconcileNow('stream-reconnected');
 
-        expect(harness.reconcileCalls).toHaveLength(1);
+        expect(h.calls).toEqual(['window', 'peripherals', 'runs', 'reconcile']);
     });
 
-    it('does nothing at all when every message has settled', async () => {
-        const harness = buildReconcileHarness({
+    it('skips the window read when every message has settled, and still reconciles', async () => {
+        const h = buildHarness({
             messages: [detail('d-user', 'User', 'Complete'), detail('d-ai', 'AI', 'Complete')],
         });
 
-        await harness.run();
+        await h.component.ReconcileNow('socket-reconnected');
 
-        expect(harness.refreshCalls).toBe(0);
-        expect(harness.reconcileCalls).toEqual([]);
+        expect(h.calls).toEqual(['runs', 'reconcile']);
     });
 
-    it('ignores an In-Progress USER message — only agent runs are reconciled', async () => {
-        const harness = buildReconcileHarness({ messages: [detail('d-user', 'User', 'In-Progress')] });
+    it('ignores an In-Progress USER message — only agent replies are unsettled', async () => {
+        const h = buildHarness({ messages: [detail('d-user', 'User', 'In-Progress')] });
 
-        await harness.run();
+        await h.component.ReconcileNow('stream-reconnected');
 
-        expect(harness.refreshCalls).toBe(0);
+        expect(h.calls).toEqual(['runs', 'reconcile']);
     });
 
-    it('does nothing when no conversation is loaded', async () => {
-        const harness = buildReconcileHarness({
-            messages: [detail('d-ai', 'AI', 'In-Progress')],
-            conversationId: null,
+    for (const reason of ['tab-visible', 'browser-online', 'message-liveness', 'completion-for-unloaded-message']) {
+        it(`keeps the narrow refresh only for a non-transport trigger (${reason})`, async () => {
+            // These fire far more often than a reconnect, and the transport was not down.
+            const h = buildHarness({ messages: [detail('d-ai', 'AI', 'Error')] });
+
+            await h.component.ReconcileNow(reason);
+
+            expect(h.calls).toEqual(['runs', 'reconcile']);
         });
+    }
 
-        await harness.run();
-
-        expect(harness.refreshCalls).toBe(0);
-        expect(harness.reconcileCalls).toEqual([]);
-    });
-
-    it('abandons the catch-up when the user switches conversation mid-refresh', async () => {
-        const harness = buildReconcileHarness({
+    it('abandons the pass when the user switches conversation mid-refresh', async () => {
+        const h = buildHarness({
             messages: [detail('d-ai', 'AI', 'In-Progress')],
             invalidateDuringRefresh: true,
         });
 
-        await harness.run();
+        await h.component.ReconcileNow('socket-reconnected');
 
-        expect(harness.refreshCalls).toBe(1);
-        // Writing the old conversation's peripherals onto the new one is the bug the
+        // Writing the old conversation's peripherals or repairs onto the new one is the bug the
         // load-token check exists to prevent.
-        expect(harness.peripheralCalls).toEqual([]);
-        expect(harness.reconcileCalls).toEqual([]);
+        expect(h.calls).toEqual(['window']);
     });
 
-    it('swallows a failed catch-up rather than breaking the live conversation', async () => {
-        // The polling fallback and the next conversation load remain; a rejected promise here
-        // would surface as an unhandled rejection from a `void`-ed call in a subscription.
-        const harness = buildReconcileHarness({
+    it('swallows a failed window refresh rather than breaking the live conversation', async () => {
+        const h = buildHarness({
             messages: [detail('d-ai', 'AI', 'In-Progress')],
-            reconcilerThrows: true,
+            refreshThrows: true,
         });
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-        await expect(harness.run()).resolves.toBeUndefined();
-        expect(harness.reconcileCalls).toHaveLength(1);
+        await expect(h.component.ReconcileNow('stream-reconnected')).resolves.toBeUndefined();
+        expect(consoleError).toHaveBeenCalled();
+    });
+
+    it('consumes the request: a later non-transport pass does not refresh the window again', async () => {
+        const h = buildHarness({ messages: [detail('d-ai', 'AI', 'In-Progress')] });
+
+        await h.component.ReconcileNow('socket-reconnected');
+        h.calls.length = 0;
+        await h.component.ReconcileNow('tab-visible');
+
+        expect(h.calls).toEqual(['runs', 'reconcile']);
+    });
+});
+
+describe('ReconcileNow coalescing keeps a reconnect that arrives mid-pass', () => {
+    it('runs the window refresh in the follow-up pass even when a later reason replaced it', async () => {
+        // ReconcileNow folds mid-pass requests into ONE follow-up carrying the LAST reason. A wake
+        // from sleep produces a reconnect and a tab-visible together; if the follow-up were keyed
+        // on its reason alone, the tab-visible would erase the reconnect's window refresh.
+        const gates: Array<() => void> = [];
+        const h = buildHarness({
+            messages: [detail('d-ai', 'AI', 'In-Progress')],
+            refreshRuns: async () => {
+                h.calls.push('runs');
+                await new Promise<void>(resolve => gates.push(resolve));
+            },
+        });
+        const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+
+        const first = h.component.ReconcileNow('message-liveness');
+        await settle();
+        const second = h.component.ReconcileNow('socket-reconnected');
+        const third = h.component.ReconcileNow('tab-visible');
+
+        gates.shift()?.();
+        await settle();
+        gates.shift()?.();
+        await Promise.all([first, second, third]);
+
+        expect(h.calls).toEqual(['runs', 'reconcile', 'window', 'peripherals', 'runs', 'reconcile']);
+    });
+});
+
+describe('ReconcileNow corrects a stale Error after a reconnect, end to end', () => {
+    it('completes an Error message whose run the server finished while the socket was down', async () => {
+        // The real run-refresh and reconcile run here; only I/O is stubbed. The run map still holds
+        // the pre-outage `Running` row. Only the window re-read brings the `Completed` row in, and
+        // only then can correctStaleErrorMessages repair the message.
+        const message = detail('d-ai', 'AI', 'Error');
+        const staleRun = { ID: 'run-1', ConversationDetailID: 'd-ai', Status: 'Running' };
+        const freshRun = { ID: 'run-1', ConversationDetailID: 'd-ai', Status: 'Completed' };
+
+        const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
+        const open = component as unknown as Record<string, unknown>;
+        open.conversationId = CONVERSATION_ID;
+        open.currentUser = { ID: 'user-1' };
+        open.conversationLoadToken = 7;
+        open.lastLoadedConversationId = CONVERSATION_ID;
+        open.messages = [message];
+        open.AgentRunsByDetailId = new Map([['d-ai', staleRun]]);
+        open.isActiveConversationLoad = vi.fn(() => true);
+        open.windowStore = {
+            RefreshLatest: vi.fn(async () => {}),
+            GetSnapshot: () => ({ Details: [message], AgentRunsByDetailId: new Map([['d-ai', freshRun]]) }),
+        };
+        // Stands in for the real rebuild: copy the snapshot's runs into the component's map.
+        open.loadPeripheralData = vi.fn(async (_c: string, snapshot: { AgentRunsByDetailId: Map<string, unknown> }) => {
+            open.AgentRunsByDetailId = new Map(snapshot.AgentRunsByDetailId);
+        });
+        const handleMessageCompletion = vi.fn(async () => {});
+        open.handleMessageCompletion = handleMessageCompletion;
+
+        await component.ReconcileNow('stream-reconnected');
+
+        expect(handleMessageCompletion).toHaveBeenCalledTimes(1);
+        expect(handleMessageCompletion).toHaveBeenCalledWith(message, 'run-1', CONVERSATION_ID, 7);
     });
 });

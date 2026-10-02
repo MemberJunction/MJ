@@ -1,21 +1,26 @@
-import { Component, Input, OnInit, AfterViewInit, ViewChild, ElementRef, OnChanges, SimpleChanges, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy, ViewEncapsulation } from '@angular/core';
 import * as d3 from 'd3';
 
 export interface HeatmapData {
-  agent: string;
-  model: string;
-  avgTime: number;
-  successRate: number;
-  value?: number; // Computed performance score
+  agent: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  model: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  avgTime: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  successRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  value?: number; // Computed performance score — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface HeatmapConfig {
-  width?: number;
-  height?: number;
-  margin?: { top: number; right: number; bottom: number; left: number };
-  colorScheme?: string[];
-  showTooltip?: boolean;
-  animationDuration?: number;
+  width?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  height?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  margin?: { top: number; right: number; bottom: number; left: number };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  colorScheme?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  showTooltip?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  animationDuration?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+}
+
+/** Agent and model names are record data; they must not be interpreted as markup in the tooltip. */
+function escapeHtml(value: string): string {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 }
 
 @Component({
@@ -27,12 +32,15 @@ export interface HeatmapConfig {
         <h4 class="chart-title">{{ title || 'Agent vs Model Performance' }}</h4>
         <div class="chart-controls">
           <div class="metric-selector">
-            <label>Metric:</label>
-            <select [(ngModel)]="selectedMetric" (change)="updateChart()">
-              <option value="performance">Performance Score</option>
-              <option value="avgTime">Avg Execution Time</option>
-              <option value="successRate">Success Rate</option>
-            </select>
+            <mj-dropdown
+              AriaLabel="Heatmap metric"
+              [Data]="MetricOptions"
+              TextField="Text"
+              ValueField="Value"
+              [ValuePrimitive]="true"
+              [ngModel]="SelectedMetric"
+              (ngModelChange)="OnMetricChange($event)"
+            ></mj-dropdown>
           </div>
         </div>
       </div>
@@ -43,27 +51,31 @@ export interface HeatmapConfig {
       </div>
       
       <div class="chart-legend">
-        <div class="legend-title">{{ getLegendTitle() }}</div>
+        <div class="legend-title">{{ GetLegendTitle() }}</div>
         <div class="legend-gradient" #legendGradient></div>
         <div class="legend-labels">
-          <span class="legend-min">{{ formatLegendValue(minValue) }}</span>
-          <span class="legend-max">{{ formatLegendValue(maxValue) }}</span>
+          <span class="legend-min">{{ FormatLegendValue(MinValue) }}</span>
+          <span class="legend-max">{{ FormatLegendValue(MaxValue) }}</span>
         </div>
       </div>
     </div>
   `,
+  // ViewEncapsulation.None: the SVG nodes are created by D3 at runtime and never carry Angular's
+  // emulated-encapsulation attribute, so every selector is rooted at the host tag instead of
+  // reaching them with ::ng-deep.
+  encapsulation: ViewEncapsulation.None,
   styles: [`
-    .performance-heatmap {
+    app-performance-heatmap .performance-heatmap {
       background: var(--mj-bg-surface);
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-radius: var(--mj-radius-md);
+      box-shadow: var(--mj-shadow-sm);
       padding: 20px;
       height: 100%;
       display: flex;
       flex-direction: column;
     }
 
-    .chart-header {
+    app-performance-heatmap .chart-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -72,60 +84,48 @@ export interface HeatmapConfig {
       gap: 12px;
     }
 
-    .chart-title {
+    app-performance-heatmap .chart-title {
       margin: 0;
       font-size: 16px;
       font-weight: 600;
       color: var(--mj-text-primary);
     }
 
-    .chart-controls {
+    app-performance-heatmap .chart-controls {
       display: flex;
       gap: 16px;
       align-items: center;
     }
 
-    .metric-selector {
+    app-performance-heatmap .metric-selector {
       display: flex;
       align-items: center;
       gap: 8px;
       font-size: 12px;
     }
 
-    .metric-selector label {
-      color: var(--mj-text-muted);
-      font-weight: 500;
-    }
-
-    .metric-selector select {
-      padding: 4px 8px;
-      border: 1px solid var(--mj-border-default);
-      border-radius: 4px;
-      font-size: 11px;
-      background: var(--mj-bg-surface);
-    }
-
-    .chart-container {
+            app-performance-heatmap .chart-container {
       flex: 1;
       position: relative;
       overflow: hidden;
       min-height: 200px;
     }
 
-    .chart-tooltip {
+    app-performance-heatmap .chart-tooltip {
       position: absolute;
-      background: rgba(0, 0, 0, 0.85);
-      color: var(--mj-text-inverse);
-      padding: 10px 12px;
-      border-radius: 4px;
-      font-size: 12px;
+      background: var(--mj-bg-surface-elevated);
+      color: var(--mj-text-primary);
+      border: 1px solid var(--mj-border-default);
+      box-shadow: var(--mj-shadow-md);
+      padding: var(--mj-space-2) var(--mj-space-3);
+      border-radius: var(--mj-radius-sm);
+      font-size: var(--mj-text-xs);
       pointer-events: none;
-      z-index: 1000;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      z-index: var(--mj-z-tooltip);
       max-width: 250px;
     }
 
-    .chart-legend {
+    app-performance-heatmap .chart-legend {
       margin-top: 16px;
       display: flex;
       align-items: center;
@@ -133,20 +133,20 @@ export interface HeatmapConfig {
       font-size: 11px;
     }
 
-    .legend-title {
+    app-performance-heatmap .legend-title {
       color: var(--mj-text-muted);
       font-weight: 500;
       white-space: nowrap;
     }
 
-    .legend-gradient {
+    app-performance-heatmap .legend-gradient {
       flex: 1;
       height: 16px;
       border-radius: 8px;
       position: relative;
     }
 
-    .legend-labels {
+    app-performance-heatmap .legend-labels {
       display: flex;
       justify-content: space-between;
       min-width: 80px;
@@ -155,42 +155,42 @@ export interface HeatmapConfig {
     }
 
     /* Chart styles */
-    :host ::ng-deep .heatmap-cell {
+    app-performance-heatmap .heatmap-cell {
       stroke: var(--mj-bg-surface);
       stroke-width: 1;
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
-    :host ::ng-deep .heatmap-cell:hover {
+    app-performance-heatmap .heatmap-cell:hover {
       stroke: var(--mj-text-primary);
       stroke-width: 2;
     }
 
-    :host ::ng-deep .axis {
+    app-performance-heatmap .axis {
       font-size: 10px;
       color: var(--mj-text-muted);
     }
 
-    :host ::ng-deep .axis path {
+    app-performance-heatmap .axis path {
       stroke: var(--mj-border-default);
     }
 
-    :host ::ng-deep .axis .tick line {
+    app-performance-heatmap .axis .tick line {
       stroke: var(--mj-border-default);
     }
 
-    :host ::ng-deep .axis .tick text {
+    app-performance-heatmap .axis .tick text {
       fill: var(--mj-text-muted);
     }
 
-    :host ::ng-deep .axis-label {
+    app-performance-heatmap .axis-label {
       font-size: 11px;
       font-weight: 500;
       fill: var(--mj-text-primary);
     }
 
-    .no-data {
+    app-performance-heatmap .no-data {
       flex: 1;
       display: flex;
       flex-direction: column;
@@ -200,38 +200,110 @@ export interface HeatmapConfig {
       gap: 12px;
     }
 
-    .no-data i {
+    app-performance-heatmap .no-data i {
       font-size: 32px;
       color: var(--mj-border-default);
     }
 
     @media (max-width: 768px) {
-      .chart-header {
+      app-performance-heatmap .chart-header {
         flex-direction: column;
         align-items: flex-start;
       }
       
-      .chart-legend {
+      app-performance-heatmap .chart-legend {
         flex-direction: column;
         align-items: flex-start;
         gap: 8px;
       }
       
-      .legend-gradient {
+      app-performance-heatmap .legend-gradient {
         width: 100%;
         max-width: 200px;
       }
     }
   `]
 })
-export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
-  @Input() data: HeatmapData[] = [];
-  @Input() title?: string;
-  @Input() config: HeatmapConfig = {};
+export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnDestroy {
+  private _data: HeatmapData[] = [];
+  private _config: HeatmapConfig = {};
+  private viewReady = false;
 
-  @ViewChild('chartSvg', { static: true }) chartSvg!: ElementRef<SVGElement>;
-  @ViewChild('tooltip', { static: true }) tooltip!: ElementRef<HTMLDivElement>;
-  @ViewChild('legendGradient', { static: true }) legendGradient!: ElementRef<HTMLDivElement>;
+  @Input() set Data(value: HeatmapData[]) {
+    this._data = value ?? [];
+    // Derive the bound legend values (MinValue/MaxValue) now, before the view is checked;
+    // only the D3 drawing has to wait for the view.
+    this.processData();
+    if (this.viewReady) {
+      this.UpdateChart();
+    }
+  }
+  get Data(): HeatmapData[] {
+    return this._data;
+  }
+
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: HeatmapData[]) {
+    this.Data = value;
+  }
+  /** @deprecated Use {@link Data}. */
+  get data(): HeatmapData[] {
+    return this.Data;
+  }
+  @Input() title?: string;
+  @Input() set config(value: HeatmapConfig) {
+    this._config = value ?? {};
+    this.applyConfig();
+    if (this.viewReady) {
+      this.UpdateChart();
+    }
+  }
+  get config(): HeatmapConfig {
+    return this._config;
+  }
+
+  readonly MetricOptions = [
+    { Text: 'Performance Score', Value: 'performance' },
+    { Text: 'Avg Execution Time', Value: 'avgTime' },
+    { Text: 'Success Rate', Value: 'successRate' },
+  ];
+
+  OnMetricChange(metric: string): void {
+    this.SelectedMetric = metric;
+    this.processData();
+    this.UpdateChart();
+  }
+
+  @ViewChild('chartSvg', { static: true }) ChartSvg!: ElementRef<SVGElement>;
+
+  /** @deprecated Use {@link ChartSvg}. */
+  get chartSvg(): ElementRef<SVGElement> {
+    return this.ChartSvg;
+  }
+  /** @deprecated Use {@link ChartSvg}. */
+  set chartSvg(value: ElementRef<SVGElement>) {
+    this.ChartSvg = value;
+  }
+  @ViewChild('tooltip', { static: true }) Tooltip!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link Tooltip}. */
+  get tooltip(): ElementRef<HTMLDivElement> {
+    return this.Tooltip;
+  }
+  /** @deprecated Use {@link Tooltip}. */
+  set tooltip(value: ElementRef<HTMLDivElement>) {
+    this.Tooltip = value;
+  }
+  @ViewChild('legendGradient', { static: true }) LegendGradient!: ElementRef<HTMLDivElement>;
+
+  /** @deprecated Use {@link LegendGradient}. */
+  get legendGradient(): ElementRef<HTMLDivElement> {
+    return this.LegendGradient;
+  }
+  /** @deprecated Use {@link LegendGradient}. */
+  set legendGradient(value: ElementRef<HTMLDivElement>) {
+    this.LegendGradient = value;
+  }
 
   private svg!: d3.Selection<SVGElement, unknown, null, undefined>;
   private width = 0;
@@ -243,8 +315,8 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
 
   private getColorScheme(): string[] {
     const style = getComputedStyle(document.documentElement);
-    const surface = style.getPropertyValue('--mj-bg-surface').trim() || '#ffffff';
-    const brandPrimary = style.getPropertyValue('--mj-brand-primary').trim() || '#0076b6';
+    const surface = style.getPropertyValue('--mj-bg-surface').trim();
+    const brandPrimary = style.getPropertyValue('--mj-brand-primary').trim();
     // Build a 9-stop scale from surface white through brand primary to dark brand
     const toSurface = d3.interpolateRgb(surface, brandPrimary);
     const toDark = d3.interpolateRgb(brandPrimary, d3.rgb(brandPrimary).darker(2).formatHex());
@@ -262,12 +334,66 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
   
   // Data processing
-  selectedMetric = 'performance';
-  processedData: HeatmapData[] = [];
-  uniqueAgents: string[] = [];
-  uniqueModels: string[] = [];
-  minValue = 0;
-  maxValue = 1;
+  SelectedMetric = 'performance';
+
+  /** @deprecated Use {@link SelectedMetric}. */
+  get selectedMetric() {
+    return this.SelectedMetric;
+  }
+  /** @deprecated Use {@link SelectedMetric}. */
+  set selectedMetric(value) {
+    this.SelectedMetric = value;
+  }
+  ProcessedData: HeatmapData[] = [];
+
+  /** @deprecated Use {@link ProcessedData}. */
+  get processedData(): HeatmapData[] {
+    return this.ProcessedData;
+  }
+  /** @deprecated Use {@link ProcessedData}. */
+  set processedData(value: HeatmapData[]) {
+    this.ProcessedData = value;
+  }
+  UniqueAgents: string[] = [];
+
+  /** @deprecated Use {@link UniqueAgents}. */
+  get uniqueAgents(): string[] {
+    return this.UniqueAgents;
+  }
+  /** @deprecated Use {@link UniqueAgents}. */
+  set uniqueAgents(value: string[]) {
+    this.UniqueAgents = value;
+  }
+  UniqueModels: string[] = [];
+
+  /** @deprecated Use {@link UniqueModels}. */
+  get uniqueModels(): string[] {
+    return this.UniqueModels;
+  }
+  /** @deprecated Use {@link UniqueModels}. */
+  set uniqueModels(value: string[]) {
+    this.UniqueModels = value;
+  }
+  MinValue = 0;
+
+  /** @deprecated Use {@link MinValue}. */
+  get minValue() {
+    return this.MinValue;
+  }
+  /** @deprecated Use {@link MinValue}. */
+  set minValue(value) {
+    this.MinValue = value;
+  }
+  MaxValue = 1;
+
+  /** @deprecated Use {@link MaxValue}. */
+  get maxValue() {
+    return this.MaxValue;
+  }
+  /** @deprecated Use {@link MaxValue}. */
+  set maxValue(value) {
+    this.MaxValue = value;
+  }
 
   ngOnInit() {
     this.applyConfig();
@@ -275,19 +401,8 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
 
   ngAfterViewInit() {
     this.initChart();
-    this.processData();
-    this.updateChart();
-  }
-
-  ngOnChanges(changes: SimpleChanges) {
-    if (changes['data'] && !changes['data'].firstChange) {
-      this.processData();
-      this.updateChart();
-    }
-    if (changes['config'] && !changes['config'].firstChange) {
-      this.applyConfig();
-      this.updateChart();
-    }
+    this.viewReady = true;
+    this.UpdateChart();
   }
 
   ngOnDestroy() {
@@ -300,30 +415,30 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private initChart() {
-    this.svg = d3.select(this.chartSvg.nativeElement);
+    this.svg = d3.select(this.ChartSvg.nativeElement);
     this.initLegend();
     
     // Set up responsive behavior
-    d3.select(window).on('resize.heatmap', () => this.updateChart());
+    d3.select(window).on('resize.heatmap', () => this.UpdateChart());
   }
 
   private processData() {
-    if (!this.data || this.data.length === 0) {
-      this.processedData = [];
-      this.uniqueAgents = [];
-      this.uniqueModels = [];
+    if (!this.Data || this.Data.length === 0) {
+      this.ProcessedData = [];
+      this.UniqueAgents = [];
+      this.UniqueModels = [];
       return;
     }
 
     // Calculate performance scores and process data
-    this.processedData = this.data.map(d => ({
+    this.ProcessedData = this.Data.map(d => ({
       ...d,
       value: this.calculatePerformanceScore(d)
     }));
 
     // Get unique agents and models
-    this.uniqueAgents = Array.from(new Set(this.processedData.map(d => d.agent))).sort();
-    this.uniqueModels = Array.from(new Set(this.processedData.map(d => d.model))).sort();
+    this.UniqueAgents = Array.from(new Set(this.ProcessedData.map(d => d.agent))).sort();
+    this.UniqueModels = Array.from(new Set(this.ProcessedData.map(d => d.model))).sort();
 
     // Update value range based on selected metric
     this.updateValueRange();
@@ -331,7 +446,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
 
   private calculatePerformanceScore(data: HeatmapData): number {
     // Normalize avgTime (lower is better, scale 0-1)
-    const maxTime = Math.max(...this.data.map(d => d.avgTime));
+    const maxTime = Math.max(...this.Data.map(d => d.avgTime));
     const normalizedTime = maxTime > 0 ? 1 - (data.avgTime / maxTime) : 1;
     
     // Success rate is already 0-1
@@ -344,30 +459,30 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   private updateValueRange() {
     let values: number[];
     
-    switch (this.selectedMetric) {
+    switch (this.SelectedMetric) {
       case 'avgTime':
-        values = this.processedData.map(d => d.avgTime);
+        values = this.ProcessedData.map(d => d.avgTime);
         break;
       case 'successRate':
-        values = this.processedData.map(d => d.successRate);
+        values = this.ProcessedData.map(d => d.successRate);
         break;
       case 'performance':
       default:
-        values = this.processedData.map(d => d.value || 0);
+        values = this.ProcessedData.map(d => d.value || 0);
         break;
     }
 
-    this.minValue = Math.min(...values);
-    this.maxValue = Math.max(...values);
+    this.MinValue = Math.min(...values);
+    this.MaxValue = Math.max(...values);
 
     // Ensure reasonable range
-    if (this.minValue === this.maxValue) {
-      this.maxValue = this.minValue + 1;
+    if (this.MinValue === this.MaxValue) {
+      this.MaxValue = this.MinValue + 1;
     }
   }
 
-  updateChart() {
-    if (!this.processedData || this.processedData.length === 0) {
+  UpdateChart() {
+    if (!this.ProcessedData || this.ProcessedData.length === 0) {
       this.svg.selectAll('*').remove();
       return;
     }
@@ -378,10 +493,15 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
     this.updateLegend();
   }
 
+  /** @deprecated Use {@link UpdateChart}. */
+  updateChart() {
+    return this.UpdateChart();
+  }
+
   private calculateDimensions() {
-    const container = this.chartSvg.nativeElement.parentElement!;
+    const container = this.ChartSvg.nativeElement.parentElement!;
     this.width = (this.config.width || container.clientWidth) - this.margin.left - this.margin.right;
-    this.height = (this.config.height || Math.max(300, this.uniqueAgents.length * 30 + 100)) - this.margin.top - this.margin.bottom;
+    this.height = (this.config.height || Math.max(300, this.UniqueAgents.length * 30 + 100)) - this.margin.top - this.margin.bottom;
     
     this.svg
       .attr('width', this.width + this.margin.left + this.margin.right)
@@ -394,22 +514,22 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
 
     // Create scales
     const xScale = d3.scaleBand()
-      .domain(this.uniqueModels)
+      .domain(this.UniqueModels)
       .range([0, this.width])
       .padding(0.05);
 
     const yScale = d3.scaleBand()
-      .domain(this.uniqueAgents)
+      .domain(this.UniqueAgents)
       .range([0, this.height])
       .padding(0.05);
 
     const colorScale = d3.scaleSequential()
-      .domain([this.minValue, this.maxValue])
+      .domain([this.MinValue, this.MaxValue])
       .interpolator(d3.interpolateBlues);
 
     // Draw cells
     const cells = g.selectAll('.heatmap-cell')
-      .data(this.processedData)
+      .data(this.ProcessedData)
       .enter().append('rect')
       .attr('class', 'heatmap-cell')
       .attr('x', d => xScale(d.model) || 0)
@@ -434,9 +554,9 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
     this.drawAxes(g, xScale, yScale);
 
     // Add value labels on cells (for smaller datasets)
-    if (this.processedData.length <= 50) {
+    if (this.ProcessedData.length <= 50) {
       g.selectAll('.cell-label')
-        .data(this.processedData)
+        .data(this.ProcessedData)
         .enter().append('text')
         .attr('class', 'cell-label')
         .attr('x', d => (xScale(d.model) || 0) + xScale.bandwidth() / 2)
@@ -485,7 +605,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private getMetricValue(data: HeatmapData): number {
-    switch (this.selectedMetric) {
+    switch (this.SelectedMetric) {
       case 'avgTime':
         return data.avgTime;
       case 'successRate':
@@ -497,17 +617,19 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private getTextColor(backgroundColor: string): string {
-    // Convert color to RGB and calculate luminance
-    const rgb = d3.rgb(backgroundColor);
-    const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+    const luminance = (color: string): number => {
+      const rgb = d3.rgb(color);
+      return (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+    };
     const style = getComputedStyle(document.documentElement);
-    const darkText = style.getPropertyValue('--mj-text-primary').trim() || '#1e293b';
-    const lightText = style.getPropertyValue('--mj-text-inverse').trim() || '#ffffff';
-    return luminance > 0.5 ? darkText : lightText;
+    const primary = style.getPropertyValue('--mj-text-primary').trim();
+    const inverse = style.getPropertyValue('--mj-text-inverse').trim();
+    const bg = luminance(backgroundColor);
+    return Math.abs(luminance(primary) - bg) >= Math.abs(luminance(inverse) - bg) ? primary : inverse;
   }
 
   private formatCellValue(value: number): string {
-    switch (this.selectedMetric) {
+    switch (this.SelectedMetric) {
       case 'avgTime':
         return `${(value / 1000).toFixed(1)}s`;
       case 'successRate':
@@ -519,10 +641,10 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private showTooltip(event: MouseEvent, data: HeatmapData) {
-    const tooltip = d3.select(this.tooltip.nativeElement);
+    const tooltip = d3.select(this.Tooltip.nativeElement);
     
     const content = `
-      <div><strong>${data.agent} × ${data.model}</strong></div>
+      <div><strong>${escapeHtml(data.agent)} × ${escapeHtml(data.model)}</strong></div>
       <div>Performance Score: ${(data.value || 0).toFixed(3)}</div>
       <div>Success Rate: ${(data.successRate * 100).toFixed(1)}%</div>
       <div>Avg Time: ${(data.avgTime / 1000).toFixed(2)}s</div>
@@ -536,13 +658,13 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   }
 
   private hideTooltip() {
-    d3.select(this.tooltip.nativeElement)
+    d3.select(this.Tooltip.nativeElement)
       .style('display', 'none');
   }
 
   private initLegend() {
     // Create gradient for legend
-    const gradient = d3.select(this.legendGradient.nativeElement)
+    const gradient = d3.select(this.LegendGradient.nativeElement)
       .append('svg')
       .attr('width', '100%')
       .attr('height', '100%')
@@ -560,7 +682,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
         .attr('stop-color', color);
     });
 
-    d3.select(this.legendGradient.nativeElement)
+    d3.select(this.LegendGradient.nativeElement)
       .select('svg')
       .append('rect')
       .attr('width', '100%')
@@ -570,27 +692,27 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
 
   private updateLegend() {
     // Update gradient colors based on current color scale
-    const gradient = d3.select(this.legendGradient.nativeElement)
+    const gradient = d3.select(this.LegendGradient.nativeElement)
       .select('linearGradient');
 
     gradient.selectAll('stop').remove();
 
     const colorScale = d3.scaleSequential()
-      .domain([this.minValue, this.maxValue])
+      .domain([this.MinValue, this.MaxValue])
       .interpolator(d3.interpolateBlues);
 
     // Create 10 color stops
     for (let i = 0; i <= 10; i++) {
       const t = i / 10;
-      const value = this.minValue + t * (this.maxValue - this.minValue);
+      const value = this.MinValue + t * (this.MaxValue - this.MinValue);
       gradient.append('stop')
         .attr('offset', `${t * 100}%`)
         .attr('stop-color', colorScale(value));
     }
   }
 
-  getLegendTitle(): string {
-    switch (this.selectedMetric) {
+  GetLegendTitle(): string {
+    switch (this.SelectedMetric) {
       case 'avgTime':
         return 'Execution Time';
       case 'successRate':
@@ -601,8 +723,13 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
     }
   }
 
-  formatLegendValue(value: number): string {
-    switch (this.selectedMetric) {
+  /** @deprecated Use {@link GetLegendTitle}. */
+  getLegendTitle(): string {
+    return this.GetLegendTitle();
+  }
+
+  FormatLegendValue(value: number): string {
+    switch (this.SelectedMetric) {
       case 'avgTime':
         return `${(value / 1000).toFixed(1)}s`;
       case 'successRate':
@@ -611,5 +738,10 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
       default:
         return value.toFixed(2);
     }
+  }
+
+  /** @deprecated Use {@link FormatLegendValue}. */
+  formatLegendValue(value: number): string {
+    return this.FormatLegendValue(value);
   }
 }

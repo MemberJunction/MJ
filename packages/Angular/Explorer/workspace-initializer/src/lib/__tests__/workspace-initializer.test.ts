@@ -14,8 +14,8 @@
  *    `classifyError` calls `this.authBase.classifyError(err)` — so any error that reached
  *    the token-expiry branch died with "this.authBase.classifyError is not a function";
  *  - one asserted a `ResourceTypes` TypeError classifies as `no_roles`, which the service
- *    has never done (`isNoUserRolesError` matches only the literal
- *    "does not have read permissions on User Roles"). That assertion is corrected below to
+ *    has never done (`isNoUserRolesError` matches only the
+ *    "does not have read permissions on (MJ: )User Roles" text). That assertion is corrected below to
  *    what the code actually does, and deliberately NOT implemented as a new heuristic.
  *
  * The stubs are now real objects (see {@link buildService}).
@@ -137,10 +137,21 @@ describe('WorkspaceInitializerService.classifyError', () => {
     expect(result.shouldRetry).toBe(false);
   });
 
+  it('should classify a failed boot caused by the MJ: User Roles permission as no_roles (#4887)', () => {
+    // SetupGraphQLClient rejects with the metadata download's failure appended to its own message.
+    const err = new Error(
+      'SetupGraphQLClient: no entity metadata was loaded from http://localhost:4000/ — the metadata download failed or returned nothing: ' +
+      'User a@b.com does not have read permissions on MJ: User Roles'
+    );
+    const result = service.classifyError(err);
+    expect(result.type).toBe('no_roles');
+    expect(result.shouldRetry).toBe(false);
+  });
+
   it('classifies a ResourceTypes TypeError as unknown — there is no such heuristic', () => {
     // This assertion originally expected `no_roles`. It never ran, and the service has never
-    // had a ResourceTypes branch: `isNoUserRolesError` matches only the literal
-    // "does not have read permissions on User Roles". Pinned as-is rather than inventing a
+    // had a ResourceTypes branch: `isNoUserRolesError` matches only the
+    // "does not have read permissions on (MJ: )User Roles" text. Pinned as-is rather than inventing a
     // heuristic off a never-executed expectation — a TypeError about a missing property is not
     // reliable evidence of a permissions problem.
     const err = new Error("Cannot read properties of undefined (reading 'ResourceTypes')");
@@ -148,6 +159,8 @@ describe('WorkspaceInitializerService.classifyError', () => {
     expect(result.type).toBe('unknown');
     expect(result.shouldRetry).toBe(false);
   });
+
+  // An empty-graph boot now rejects in SetupGraphQLClient carrying the real cause, which the "MJ: User Roles" case above covers.
 
   it('should classify access denied error', () => {
     const err = new Error("You don't have access to this application");

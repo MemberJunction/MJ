@@ -55,14 +55,19 @@ export class AngularAdapterService {
    * Safe to call multiple times — the underlying initialize() deduplicates.
    * Does not block: returns immediately, initialization continues in background.
    */
-  preload(): void {
+  Preload(): void {
     // Phase 1: Inject browser preload hints for CDN scripts
     LibraryLoader.preloadCoreScripts();
 
     // Phase 2: Fire-and-forget full initialization (script execution + runtime setup)
-    this.initialize().catch(err => {
+    this.Initialize().catch(err => {
       console.warn('React runtime preload failed (will retry on demand):', err);
     });
+  }
+
+  /** @deprecated Use {@link Preload}. */
+  preload(): void {
+    return this.Preload();
   }
 
   /**
@@ -72,7 +77,7 @@ export class AngularAdapterService {
    * @param options Optional options including debug flag
    * @returns Promise resolving when runtime is ready
    */
-  async initialize(
+  async Initialize(
     config?: LibraryConfiguration,
     additionalLibraries?: ExternalLibraryConfig[],
     options?: { debug?: boolean }
@@ -96,6 +101,15 @@ export class AngularAdapterService {
     }
 
     return;
+  }
+
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(
+    config?: LibraryConfiguration,
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
+  ): Promise<void> {
+    return this.Initialize(config, additionalLibraries, options);
   }
 
   private async doInitialize(
@@ -137,55 +151,80 @@ export class AngularAdapterService {
    * Get the component compiler
    * @returns Component compiler instance
    */
-  getCompiler(): ComponentCompiler {
+  GetCompiler(): ComponentCompiler {
     if (!this.runtime) {
       throw new Error('React runtime not initialized. Call initialize() first.');
     }
     return this.runtime.compiler;
   }
 
+  /** @deprecated Use {@link GetCompiler}. */
+  getCompiler(): ComponentCompiler {
+    return this.GetCompiler();
+  }
+
   /**
    * Get the component registry
    * @returns Component registry instance
    */
-  getRegistry(): ComponentRegistry {
+  GetRegistry(): ComponentRegistry {
     if (!this.runtime) {
       throw new Error('React runtime not initialized. Call initialize() first.');
     }
     return this.runtime.registry;
   }
 
+  /** @deprecated Use {@link GetRegistry}. */
+  getRegistry(): ComponentRegistry {
+    return this.GetRegistry();
+  }
+
   /**
    * Get the component resolver
    * @returns Component resolver instance
    */
-  getResolver(): ComponentResolver {
+  GetResolver(): ComponentResolver {
     if (!this.runtime) {
       throw new Error('React runtime not initialized. Call initialize() first.');
     }
     return this.runtime.resolver;
   }
 
+  /** @deprecated Use {@link GetResolver}. */
+  getResolver(): ComponentResolver {
+    return this.GetResolver();
+  }
+
   /**
    * Get the runtime context
    * @returns Runtime context with React and libraries
    */
-  getRuntimeContext(): RuntimeContext {
+  GetRuntimeContext(): RuntimeContext {
     if (!this.runtimeContext) {
       throw new Error('React runtime not initialized. Call initialize() first.');
     }
     return this.runtimeContext;
   }
 
+  /** @deprecated Use {@link GetRuntimeContext}. */
+  getRuntimeContext(): RuntimeContext {
+    return this.GetRuntimeContext();
+  }
+
   /**
    * Get the unified component manager
    * @returns Component manager instance
    */
-  getComponentManager(): ComponentManager {
+  GetComponentManager(): ComponentManager {
     if (!this.runtime) {
       throw new Error('React runtime not initialized. Call initialize() first.');
     }
     return this.runtime.manager;
+  }
+
+  /** @deprecated Use {@link GetComponentManager}. */
+  getComponentManager(): ComponentManager {
+    return this.GetComponentManager();
   }
 
 
@@ -194,7 +233,7 @@ export class AngularAdapterService {
    * @param options - Compilation options
    * @returns Promise resolving to compilation result
    */
-  async compileComponent(options: CompileOptions) {
+  async CompileComponent(options: CompileOptions) {
     // Validate options before initialization
     if (!options) {
       throw new Error(
@@ -222,7 +261,7 @@ export class AngularAdapterService {
       );
     }
 
-    await this.initialize();
+    await this.Initialize();
     
     // Apply default styles if not provided — bridge the host's live MJ theme
     // (--mj-* tokens) so compiled components match the active theme, including
@@ -235,6 +274,11 @@ export class AngularAdapterService {
     return this.runtime!.compiler.compile(optionsWithDefaults);
   }
 
+  /** @deprecated Use {@link CompileComponent}. */
+  async compileComponent(options: CompileOptions) {
+    return this.CompileComponent(options);
+  }
+
   /**
    * Register a component in the registry
    * @param name - Component name
@@ -243,7 +287,7 @@ export class AngularAdapterService {
    * @param version - Component version
    * @returns Component metadata
    */
-  registerComponent(
+  RegisterComponent(
     name: string,
     component: any,
     namespace: string = 'Global',
@@ -255,6 +299,16 @@ export class AngularAdapterService {
     return this.runtime.registry.register(name, component, namespace, version);
   }
 
+  /** @deprecated Use {@link RegisterComponent}. */
+  registerComponent(
+    name: string,
+    component: any,
+    namespace: string = 'Global',
+    version: string = 'v1'
+  ) {
+    return this.RegisterComponent(name, component, namespace, version);
+  }
+
   /**
    * Get a component from the registry
    * @param name - Component name
@@ -262,33 +316,48 @@ export class AngularAdapterService {
    * @param version - Component version
    * @returns Component if found
    */
-  getComponent(name: string, namespace: string = 'Global', version?: string) {
+  GetComponent(name: string, namespace: string = 'Global', version?: string) {
     if (!this.runtime) {
       throw new Error('React runtime not initialized. Call initialize() first.');
     }
     return this.runtime.registry.get(name, namespace, version);
   }
 
+  /** @deprecated Use {@link GetComponent}. */
+  getComponent(name: string, namespace: string = 'Global', version?: string) {
+    return this.GetComponent(name, namespace, version);
+  }
+
   /**
    * Check if runtime is initialized
    * @returns true if initialized
    */
-  isInitialized(): boolean {
+  IsInitialized(): boolean {
     return !!this.runtime && !!this.runtimeContext;
+  }
+
+  /** @deprecated Use {@link IsInitialized}. */
+  isInitialized(): boolean {
+    return this.IsInitialized();
   }
 
   /**
    * Get runtime version
    * @returns Runtime version string
    */
-  getVersion(): string {
+  GetVersion(): string {
     return this.runtime?.version || 'unknown';
+  }
+
+  /** @deprecated Use {@link GetVersion}. */
+  getVersion(): string {
+    return this.GetVersion();
   }
 
   /**
    * Clean up resources
    */
-  destroy(): void {
+  Destroy(): void {
     if (this.runtime) {
       this.runtime.registry.destroy();
       this.runtime = undefined;
@@ -299,12 +368,22 @@ export class AngularAdapterService {
     this.initializationPromise = undefined;
   }
 
+  /** @deprecated Use {@link Destroy}. */
+  destroy(): void {
+    return this.Destroy();
+  }
+
   /**
    * Get Babel instance for direct use
    * @returns Babel instance
    */
-  getBabel(): any {
+  GetBabel(): any {
     return this.runtimeContext?.libraries?.Babel || (window as any).Babel;
+  }
+
+  /** @deprecated Use {@link GetBabel}. */
+  getBabel(): any {
+    return this.GetBabel();
   }
 
   /**
@@ -313,8 +392,8 @@ export class AngularAdapterService {
    * @param filename - Optional filename for better error messages
    * @returns Transpiled JavaScript code
    */
-  transpileJSX(code: string, filename?: string): string {
-    const babel = this.getBabel();
+  TranspileJSX(code: string, filename?: string): string {
+    const babel = this.GetBabel();
     if (!babel) {
       throw new Error('Babel not loaded. Initialize the runtime first.');
     }
@@ -328,5 +407,10 @@ export class AngularAdapterService {
     } catch (error: any) {
       throw new Error(`Failed to transpile JSX: ${error.message}`);
     }
+  }
+
+  /** @deprecated Use {@link TranspileJSX}. */
+  transpileJSX(code: string, filename?: string): string {
+    return this.TranspileJSX(code, filename);
   }
 }

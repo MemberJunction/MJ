@@ -2,33 +2,33 @@ import fs from 'fs';
 import path from 'path';
 
 export interface LogEntry {
-  timestamp: string;
-  level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR' | 'SUCCESS' | 'TRACE';
-  category: 'SYSTEM' | 'AGENT' | 'TOOL' | 'AI_MODEL' | 'DECISION' | 'USER' | 'DATABASE';
-  message: string;
-  data?: any;
-  duration?: number;
-  stepNumber?: number;
+  timestamp: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  level: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR' | 'SUCCESS' | 'TRACE';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  category: 'SYSTEM' | 'AGENT' | 'TOOL' | 'AI_MODEL' | 'DECISION' | 'USER' | 'DATABASE';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  message: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  data?: any;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  duration?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  stepNumber?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ExecutionSummary {
-  executionId: string;
-  command: string;
-  startTime: string;
-  endTime?: string;
-  duration?: number;
-  status: 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
-  agentName?: string;
-  actionName?: string;
-  userPrompt?: string;
-  totalSteps: number;
-  successfulSteps: number;
-  failedSteps: number;
-  toolsUsed: string[];
-  subAgentsUsed: string[];
-  aiModelCalls: number;
-  errors: string[];
-  finalResult?: any;
+  executionId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  command: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  startTime: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  endTime?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  duration?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  agentName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  actionName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  userPrompt?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalSteps: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  successfulSteps: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  failedSteps: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  toolsUsed: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  subAgentsUsed: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  aiModelCalls: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  errors: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  finalResult?: any;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class ExecutionLogger {
@@ -73,7 +73,7 @@ export class ExecutionLogger {
     };
 
     // Log session start
-    this.log('INFO', 'SYSTEM', `Execution started: ${command}`, {
+    this.Log('INFO', 'SYSTEM', `Execution started: ${command}`, {
       executionId: this.executionId,
       agentName,
       actionName,
@@ -81,7 +81,7 @@ export class ExecutionLogger {
     });
   }
 
-  public log(level: LogEntry['level'], category: LogEntry['category'], message: string, data?: any, duration?: number): void {
+  public Log(level: LogEntry['level'], category: LogEntry['category'], message: string, data?: any, duration?: number): void {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
@@ -97,7 +97,12 @@ export class ExecutionLogger {
     this.writeLogEntry(entry);
   }
 
-  public logStep(level: LogEntry['level'], category: LogEntry['category'], stepName: string, data?: any, duration?: number): void {
+  /** @deprecated Use {@link Log}. */
+  public log(level: LogEntry['level'], category: LogEntry['category'], message: string, data?: any, duration?: number): void {
+    return this.Log(level, category, message, data, duration);
+  }
+
+  public LogStep(level: LogEntry['level'], category: LogEntry['category'], stepName: string, data?: any, duration?: number): void {
     this.stepCounter++;
     this.summary.totalSteps++;
     
@@ -107,11 +112,16 @@ export class ExecutionLogger {
       this.summary.failedSteps++;
     }
 
-    this.log(level, category, `Step ${this.stepCounter}: ${stepName}`, data, duration);
+    this.Log(level, category, `Step ${this.stepCounter}: ${stepName}`, data, duration);
   }
 
-  public logAgentExecution(agentName: string, phase: string, data?: any, duration?: number): void {
-    this.log('DEBUG', 'AGENT', `Agent execution - ${agentName}: ${phase}`, {
+  /** @deprecated Use {@link LogStep}. */
+  public logStep(level: LogEntry['level'], category: LogEntry['category'], stepName: string, data?: any, duration?: number): void {
+    return this.LogStep(level, category, stepName, data, duration);
+  }
+
+  public LogAgentExecution(agentName: string, phase: string, data?: any, duration?: number): void {
+    this.Log('DEBUG', 'AGENT', `Agent execution - ${agentName}: ${phase}`, {
       agentName,
       phase,
       executionData: data,
@@ -119,12 +129,17 @@ export class ExecutionLogger {
     }, duration);
   }
 
-  public logError(error: string | Error, category: LogEntry['category'] = 'SYSTEM', context?: any): void {
+  /** @deprecated Use {@link LogAgentExecution}. */
+  public logAgentExecution(agentName: string, phase: string, data?: any, duration?: number): void {
+    return this.LogAgentExecution(agentName, phase, data, duration);
+  }
+
+  public LogError(error: string | Error, category: LogEntry['category'] = 'SYSTEM', context?: any): void {
     const errorMessage = error instanceof Error ? error.message : error;
     const errorStack = error instanceof Error ? error.stack : undefined;
     
     this.summary.errors.push(errorMessage);
-    this.log('ERROR', category, errorMessage, {
+    this.Log('ERROR', category, errorMessage, {
       stack: errorStack,
       context,
       step: this.stepCounter,
@@ -133,7 +148,12 @@ export class ExecutionLogger {
     });
   }
 
-  public finalize(status: 'SUCCESS' | 'FAILED' | 'CANCELLED', finalResult?: any, error?: string): void {
+  /** @deprecated Use {@link LogError}. */
+  public logError(error: string | Error, category: LogEntry['category'] = 'SYSTEM', context?: any): void {
+    return this.LogError(error, category, context);
+  }
+
+  public Finalize(status: 'SUCCESS' | 'FAILED' | 'CANCELLED', finalResult?: any, error?: string): void {
     this.summary.endTime = new Date().toISOString();
     this.summary.duration = new Date(this.summary.endTime).getTime() - new Date(this.summary.startTime).getTime();
     this.summary.status = status;
@@ -144,7 +164,7 @@ export class ExecutionLogger {
     }
 
     // Final log entry
-    this.log('INFO', 'SYSTEM', `Execution completed with status: ${status}`, {
+    this.Log('INFO', 'SYSTEM', `Execution completed with status: ${status}`, {
       duration: this.summary.duration,
       finalResult,
       error
@@ -167,16 +187,36 @@ export class ExecutionLogger {
                      '='.repeat(80) + '\n');
   }
 
-  public getExecutionId(): string {
+  /** @deprecated Use {@link Finalize}. */
+  public finalize(status: 'SUCCESS' | 'FAILED' | 'CANCELLED', finalResult?: any, error?: string): void {
+    return this.Finalize(status, finalResult, error);
+  }
+
+  public GetExecutionId(): string {
     return this.executionId;
   }
 
-  public getLogFilePath(): string {
+  /** @deprecated Use {@link GetExecutionId}. */
+  public getExecutionId(): string {
+    return this.GetExecutionId();
+  }
+
+  public GetLogFilePath(): string {
     return this.logFilePath;
   }
 
-  public getSummaryFilePath(): string {
+  /** @deprecated Use {@link GetLogFilePath}. */
+  public getLogFilePath(): string {
+    return this.GetLogFilePath();
+  }
+
+  public GetSummaryFilePath(): string {
     return this.summaryFilePath;
+  }
+
+  /** @deprecated Use {@link GetSummaryFilePath}. */
+  public getSummaryFilePath(): string {
+    return this.GetSummaryFilePath();
   }
 
   private updateSummaryFromLog(entry: LogEntry): void {
@@ -229,6 +269,11 @@ export class ExecutionLogger {
   }
 }
 
-export function createExecutionLogger(command: string, agentName?: string, actionName?: string, userPrompt?: string): ExecutionLogger {
+export function CreateExecutionLogger(command: string, agentName?: string, actionName?: string, userPrompt?: string): ExecutionLogger {
   return new ExecutionLogger(command, agentName, actionName, userPrompt);
+}
+
+/** @deprecated Use {@link CreateExecutionLogger}. */
+export function createExecutionLogger(command: string, agentName?: string, actionName?: string, userPrompt?: string): ExecutionLogger {
+  return CreateExecutionLogger(command, agentName, actionName, userPrompt);
 }

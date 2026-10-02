@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T117 - Home Quick Access Sidebar Toggle",
+    "Description": "Exercises toggleSidebar() and the hasSidebarContent-gated quick-access sidebar (Notifications/Favorites/Recents) plus the FAB toggle — a distinct collapsible-panel behavior separate from the always-visible favorites/recent render test.",
+    "InputDefinition": "{\n  \"goal\": \"You are already logged in at http://localhost:4200. Go to the Home landing page (Home icon/logo or application switcher dropdown). Look for the Quick Access toggle — a fixed circular button with a bolt icon (bottom/side of the page). Click it to open the right-hand 'Quick Access' sidebar, which shows sections like Notifications, Favorites, and Recent (or a compact 'No quick access items' empty state if you have none). Then click the sidebar's close (x) button and verify the sidebar collapses back. Success is opening and closing the Quick Access sidebar; if the FAB is absent because there is no quick-access content, seeing the Home page render cleanly with no sidebar is an acceptable pass. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Clicking the Quick Access bolt button opens the right sidebar showing Favorites/Recent/Notifications sections OR a valid 'No quick access items' empty state (or the FAB is legitimately absent when there is no content)\",\n    \"Clicking the sidebar close (x) collapses the sidebar again\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,home",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "ED3E804B-2189-4D65-8DBA-FB60D2C2B4BD"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.934Z",
+    "checksum": "0990b4448442f4e20309625707382c50fe88444a26d501e83ffa6e1e35fa6448"
+  }
+}

@@ -17,6 +17,14 @@ import { StartupValidationService } from '@memberjunction/ng-explorer-core';
 import { WorkspaceEnvironment, WorkspaceInitResult, WorkspaceInitError } from '../models/workspace-types';
 import { lastValueFrom } from 'rxjs';
 
+/**
+ * The server's permission error for a user who cannot read their own roles. The entity is named
+ * `MJ: User Roles` since v5 (older servers say `User Roles`). SetupGraphQLClient appends it to its
+ * own message when the boot's metadata download fails for that reason (#4887). Intentionally
+ * duplicated in ng-bootstrap's MJInitializationService, which classifies the same boot error.
+ */
+const NO_USER_ROLES_PERMISSION_TEXT = /does not have read permissions on (MJ: )?User Roles/;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -33,7 +41,7 @@ export class WorkspaceInitializerService {
    * Initialize workspace with authenticated user
    * Replaces all the logic from AppComponent.handleLogin()
    */
-  async initializeWorkspace(
+  async InitializeWorkspace(
     token: string,
     userInfo: StandardUserInfo,
     environment: WorkspaceEnvironment
@@ -117,7 +125,7 @@ export class WorkspaceInitializerService {
       if (err?.response?.errors) {
         console.error('[Workspace] GraphQL errors:', JSON.stringify(err.response.errors, null, 2));
       }
-      const error = this.classifyError(err);
+      const error = this.ClassifyError(err);
       console.error('[Workspace] Classified as:', error.type, '-', error.message);
       return {
         success: false,
@@ -126,11 +134,20 @@ export class WorkspaceInitializerService {
     }
   }
 
+  /** @deprecated Use {@link InitializeWorkspace}. */
+  async initializeWorkspace(
+    token: string,
+    userInfo: StandardUserInfo,
+    environment: WorkspaceEnvironment
+  ): Promise<WorkspaceInitResult> {
+    return this.InitializeWorkspace(token, userInfo, environment);
+  }
+
   /**
    * Classify errors into actionable types
    * Replaces AppComponent error handling logic
    */
-  classifyError(err: any): WorkspaceInitError {
+  ClassifyError(err: any): WorkspaceInitError {
     // Check for no-roles error first (highest priority)
     if (this.isNoUserRolesError(err)) {
       // Add the validation issue through the service
@@ -183,6 +200,11 @@ export class WorkspaceInitializerService {
       userMessage: 'An unexpected error occurred. Please try again.',
       shouldRetry: false
     };
+  }
+
+  /** @deprecated Use {@link ClassifyError}. */
+  classifyError(err: any): WorkspaceInitError {
+    return this.ClassifyError(err);
   }
 
   /**
@@ -402,14 +424,13 @@ export class WorkspaceInitializerService {
       if (err.response && Array.isArray(err.response.errors)) {
         return err.response.errors.some((e: any) =>
           e && e.message && typeof e.message === 'string' &&
-          e.message.includes('does not have read permissions on User Roles')
+          NO_USER_ROLES_PERMISSION_TEXT.test(e.message)
         );
       }
 
       // Check for error message directly on the error object
       if (err.message && typeof err.message === 'string') {
-        const message = err.message;
-        return message.includes('does not have read permissions on User Roles');
+        return NO_USER_ROLES_PERMISSION_TEXT.test(err.message);
       }
 
       // Check for nested error object
@@ -499,7 +520,7 @@ export class WorkspaceInitializerService {
    * Handle authentication retry with backoff
    * Replaces AppComponent.handleAuthRetry() logic
    */
-  async handleAuthRetry(error: WorkspaceInitError, currentPath: string): Promise<boolean> {
+  async HandleAuthRetry(error: WorkspaceInitError, currentPath: string): Promise<boolean> {
     if (!error.shouldRetry) {
       return false;
     }
@@ -520,5 +541,10 @@ export class WorkspaceInitializerService {
     }
 
     return false;
+  }
+
+  /** @deprecated Use {@link HandleAuthRetry}. */
+  async handleAuthRetry(error: WorkspaceInitError, currentPath: string): Promise<boolean> {
+    return this.HandleAuthRetry(error, currentPath);
   }
 }

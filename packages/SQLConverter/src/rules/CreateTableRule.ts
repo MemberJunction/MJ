@@ -6,7 +6,7 @@
  * Also tracks column types in ConversionContext for downstream INSERT boolean casting.
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, removeNPrefix, QuoteConstraintNames, convertJsonFunctions } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, RemoveCollate, RemoveNPrefix, QuoteConstraintNames, ConvertJsonFunctions } from './ExpressionHelpers.js';
 
 export class CreateTableRule implements IConversionRule {
   Name = 'CreateTableRule';
@@ -38,7 +38,7 @@ export class CreateTableRule implements IConversionRule {
     result = this.convertBracketedTypes(result);
 
     // Phase 2: Identifier conversion (brackets → quotes)
-    result = convertIdentifiers(result);
+    result = ConvertIdentifiers(result);
 
     // Phase 3: Unbracketed type conversions (broad word-boundary patterns)
     result = this.convertUnbracketedTypes(result);
@@ -63,7 +63,7 @@ export class CreateTableRule implements IConversionRule {
     // After identifier quoting, ISJSON(col) = 1 in a CHECK body becomes
     // "ISJSON"(col) = 1, which is not a PG function. convertJsonFunctions
     // accepts both bare and quoted forms.
-    result = convertJsonFunctions(result);
+    result = ConvertJsonFunctions(result);
 
     // Remove ON [PRIMARY] / ON "PRIMARY" filegroup clause
     result = result.replace(/\)\s*ON\s+\[?PRIMARY\]?\s*;?/gi, ');');
@@ -74,7 +74,7 @@ export class CreateTableRule implements IConversionRule {
     result = result.replace(/\bTEXTIMAGE_ON\s+\[?\w+\]?/gi, '');
     // Remove WITH (PAD_INDEX = ...) etc.
     result = result.replace(/\bWITH\s*\(\s*PAD_INDEX\s*=\s*\w+[^)]*\)/gi, '');
-    result = removeCollate(result);
+    result = RemoveCollate(result);
 
     // Phase 6: Cleanup
     result = result.replace(/ {2,}/g, ' ');
@@ -381,7 +381,7 @@ export class CreateTableRule implements IConversionRule {
     sql = sql.replace(/DEFAULT\s+\(+(-?\d+(?:\.\d+)?)\)+/g, 'DEFAULT $1');
 
     // Remove N prefix from remaining string literals
-    sql = removeNPrefix(sql);
+    sql = RemoveNPrefix(sql);
 
     return sql;
   }

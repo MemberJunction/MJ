@@ -39,16 +39,24 @@ ENV PATH="/opt/mssql-tools18/bin:$PATH"
 
 WORKDIR /app
 
+# The monorepo is pnpm (package.json pins packageManager). corepack ships with node 24
+# and the playwright image, so this activates the pinned pnpm without a global install.
+RUN corepack enable
+
 # Copy package manifests and source
-COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+# pnpm workspace manifests. pnpm-workspace.yaml is load-bearing (linkWorkspacePackages,
+# onlyBuiltDependencies) and patches/ carries the type-graphql patch, so both must be
+# present before install or dependencies resolve from the registry instead of the workspace.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY patches/ ./patches/
 COPY packages/ ./packages/
 COPY metadata/ ./metadata/
 COPY migrations/ ./migrations/
 COPY Demos/AssociationDB/ ./Demos/AssociationDB/
 
-RUN npm install
+RUN pnpm install --frozen-lockfile
 
-RUN npm run build:api
+RUN pnpm run build:api
 
 # Copy MJ config (same one MJAPI uses)
 COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs

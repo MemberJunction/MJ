@@ -33,14 +33,24 @@ const { mockRunViewFn, mockEntities, mockLogError } = vi.hoisted(() => {
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
-    const withDefaultPK = (e: (typeof mockEntities)[number] | undefined) =>
-        e ? { ...e, PrimaryKeys: e.PrimaryKeys ?? [{ Name: 'ID' }] } : undefined;
+    // `HasSearchFields` is derived the way the real EntityInfo computes it
+    // (`_Fields.some(f => f.IncludeInUserSearchAPI)`), as EntitySearchProvider.test.ts does: the
+    // provider's scope builder skips any entity without it.
+    const withDerived = (e: (typeof mockEntities)[number] | undefined) =>
+        e
+            ? {
+                  ...e,
+                  PrimaryKeys: e.PrimaryKeys ?? [{ Name: 'ID' }],
+                  HasSearchFields: e.Fields.some(f => f.IncludeInUserSearchAPI),
+              }
+            : undefined;
+    const allWithDerived = () => mockEntities.map(e => withDerived(e)!);
     class MockMetadata {
-        get Entities() { return mockEntities; }
-        EntityByName(name: string) { return withDefaultPK(mockEntities.find(e => e.Name === name)); }
+        get Entities() { return allWithDerived(); }
+        EntityByName(name: string) { return withDerived(mockEntities.find(e => e.Name === name)); }
         static Provider = {
-            get Entities() { return mockEntities; },
-            EntityByName(name: string) { return withDefaultPK(mockEntities.find(e => e.Name === name)); },
+            get Entities() { return allWithDerived(); },
+            EntityByName(name: string) { return withDerived(mockEntities.find(e => e.Name === name)); },
         };
     }
     class MockRunView {

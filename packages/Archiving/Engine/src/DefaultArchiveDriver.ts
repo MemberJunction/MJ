@@ -24,7 +24,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * always archives — the intent is a full record snapshot, not field stripping.
      */
     public ShouldArchiveRecord(context: ArchiveRecordContext): boolean {
-        const fieldsToCheck = this.GetFieldsToCheck(context);
+        const fieldsToCheck = this.getFieldsToCheck(context);
 
         // If no specific fields are configured but ArchiveFullRecord is true,
         // always archive — the intent is a full record snapshot, not field stripping
@@ -58,12 +58,12 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
                 versionStamp
             );
 
-            const writeResult = await this.WriteDocumentToStorage(context, storagePath, document);
+            const writeResult = await this.writeDocumentToStorage(context, storagePath, document);
             if (!writeResult.Success) {
                 return writeResult;
             }
 
-            const postArchiveResult = await this.ApplyPostArchiveAction(context);
+            const postArchiveResult = await this.applyPostArchiveAction(context);
             if (!postArchiveResult.Success) {
                 return postArchiveResult;
             }
@@ -96,8 +96,8 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
                 return { Success: false, ErrorMessage: 'No StoragePath on ArchiveRunDetail', RestoredFields: [] };
             }
 
-            const document = await this.ReadDocumentFromStorage(context, storagePath);
-            const restoredFields = await this.ApplyArchivedFieldsToRecord(context, document);
+            const document = await this.readDocumentFromStorage(context, storagePath);
+            const restoredFields = await this.applyArchivedFieldsToRecord(context, document);
 
             return {
                 Success: true,
@@ -122,7 +122,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * Determines which fields to check for the "should archive" decision.
      * Uses SkipIfAllNullFields if configured, otherwise all active field names.
      */
-    private GetFieldsToCheck(context: ArchiveRecordContext): string[] {
+    private getFieldsToCheck(context: ArchiveRecordContext): string[] {
         if (context.FieldConfig.SkipIfAllNullFields && context.FieldConfig.SkipIfAllNullFields.length > 0) {
             return context.FieldConfig.SkipIfAllNullFields;
         }
@@ -138,7 +138,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     /**
      * Serializes the archive document and writes it to storage.
      */
-    private async WriteDocumentToStorage(
+    private async writeDocumentToStorage(
         context: ArchiveRecordContext,
         storagePath: string,
         document: ArchiveDocument
@@ -167,7 +167,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     /**
      * Resolves the effective archive mode from the entity config or parent config.
      */
-    private ResolveMode(context: ArchiveRecordContext): string {
+    private resolveMode(context: ArchiveRecordContext): string {
         return (context.ConfigEntity.Get('Mode') as string | null)
             ?? (context.Config.Get('DefaultMode') as string)
             ?? 'StripFields';
@@ -176,16 +176,16 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     /**
      * Applies the appropriate post-archive action based on the resolved mode.
      */
-    private async ApplyPostArchiveAction(
+    private async applyPostArchiveAction(
         context: ArchiveRecordContext
     ): Promise<{ Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string }> {
-        const mode = this.ResolveMode(context);
+        const mode = this.resolveMode(context);
 
         switch (mode) {
             case 'StripFields':
-                return this.NullifyArchivedFields(context);
+                return this.nullifyArchivedFields(context);
             case 'HardDelete':
-                return this.HardDeleteRecord(context);
+                return this.hardDeleteRecord(context);
             case 'ArchiveOnly':
                 return { Success: true, StoragePath: null, BytesArchived: 0 };
             default:
@@ -206,12 +206,12 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * Sets all configured archive fields to their empty value on the source record and saves it.
      * Uses null for nullable columns and empty string for NOT NULL string columns.
      */
-    private async NullifyArchivedFields(
+    private async nullifyArchivedFields(
         context: ArchiveRecordContext
     ): Promise<{ Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string }> {
         for (const fieldConfig of context.FieldConfig.Fields) {
             if (fieldConfig.IsActive !== false) {
-                const emptyValue = this.GetEmptyValueForField(context, fieldConfig.FieldName);
+                const emptyValue = this.getEmptyValueForField(context, fieldConfig.FieldName);
                 context.Record.Set(fieldConfig.FieldName, emptyValue);
             }
         }
@@ -233,7 +233,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * Returns the appropriate empty value for a field based on its nullability.
      * NOT NULL string fields get empty string; nullable fields get null.
      */
-    private GetEmptyValueForField(context: ArchiveRecordContext, fieldName: string): string | null {
+    private getEmptyValueForField(context: ArchiveRecordContext, fieldName: string): string | null {
         const fieldInfo = context.Record.EntityInfo.FieldByName(fieldName);
         if (fieldInfo && !fieldInfo.AllowsNull) {
             return '';
@@ -250,10 +250,10 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * Automatically cascades to dependent (child) records via FK relationships
      * discovered from entity metadata, archiving each child to storage before deleting it.
      */
-    private async HardDeleteRecord(
+    private async hardDeleteRecord(
         context: ArchiveRecordContext
     ): Promise<{ Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string }> {
-        const cascadeResult = await this.ArchiveAndDeleteDependentRecords(context);
+        const cascadeResult = await this.archiveAndDeleteDependentRecords(context);
         if (!cascadeResult.Success) {
             return cascadeResult;
         }
@@ -276,12 +276,12 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * per entity to storage, then deletes all records leaf-first. This batched
      * approach dramatically reduces storage API calls compared to per-record writes.
      */
-    private async ArchiveAndDeleteDependentRecords(
+    private async archiveAndDeleteDependentRecords(
         context: ArchiveRecordContext
     ): Promise<{ Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string }> {
         // 1. Collect all dependent records depth-first (leaves first in the resulting array)
         const collectedRecords: BaseEntity[] = [];
-        await this.CollectDependentsDepthFirst(context.Record, context.ContextUser, collectedRecords, new Set<string>());
+        await this.collectDependentsDepthFirst(context.Record, context.ContextUser, collectedRecords, new Set<string>());
 
         if (collectedRecords.length === 0) {
             return { Success: true, StoragePath: null, BytesArchived: 0 };
@@ -290,7 +290,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
         LogStatus(`HardDelete cascade: collected ${collectedRecords.length} dependent record(s) across ${new Set(collectedRecords.map(r => r.EntityInfo.Name)).size} entity type(s)`);
 
         // 2. Batch-archive: group records by entity name and write one file per entity
-        const archiveResult = await this.BatchArchiveDependents(collectedRecords, context);
+        const archiveResult = await this.batchArchiveDependents(collectedRecords, context);
         if (!archiveResult.Success) {
             return archiveResult;
         }
@@ -317,7 +317,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * respects FK constraints. Uses a visited set to prevent infinite loops
      * from circular references.
      */
-    private async CollectDependentsDepthFirst(
+    private async collectDependentsDepthFirst(
         parentRecord: BaseEntity,
         contextUser: UserInfo,
         collected: BaseEntity[],
@@ -338,11 +338,11 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
             const joinField = rel.RelatedEntityJoinField;
             if (!childEntityName || !joinField) continue;
 
-            const childRecords = await this.LoadChildRecords(childEntityName, joinField, parentRecord.PrimaryKey.Values(), contextUser);
+            const childRecords = await this.loadChildRecords(childEntityName, joinField, parentRecord.PrimaryKey.Values(), contextUser);
 
             for (const child of childRecords) {
                 // Recurse into grandchildren first (depth-first)
-                await this.CollectDependentsDepthFirst(child, contextUser, collected, visited);
+                await this.collectDependentsDepthFirst(child, contextUser, collected, visited);
                 // Then add this child (so it appears after its own dependents)
                 const childKey = `${child.EntityInfo.ID}:${child.PrimaryKey.Values()}`;
                 if (!visited.has(childKey)) {
@@ -359,7 +359,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * of that entity type in a single JSON array, dramatically reducing
      * the number of storage API calls.
      */
-    private async BatchArchiveDependents(
+    private async batchArchiveDependents(
         records: BaseEntity[],
         context: ArchiveRecordContext
     ): Promise<{ Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string }> {
@@ -421,7 +421,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     /**
      * Loads all records from a child entity that reference a parent record via a join field.
      */
-    private async LoadChildRecords(
+    private async loadChildRecords(
         entityName: string,
         joinField: string,
         parentRecordId: string,
@@ -450,7 +450,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     /**
      * Reads and parses an archive document from storage.
      */
-    private async ReadDocumentFromStorage(context: RestoreRecordContext, storagePath: string): Promise<ArchiveDocument> {
+    private async readDocumentFromStorage(context: RestoreRecordContext, storagePath: string): Promise<ArchiveDocument> {
         const buffer = await context.StorageDriver.GetObject({ fullPath: storagePath });
         const jsonContent = buffer.toString('utf8');
         return JSON.parse(jsonContent) as ArchiveDocument;
@@ -459,7 +459,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
     /**
      * Applies the archived field values from the document back onto the entity record and saves.
      */
-    private async ApplyArchivedFieldsToRecord(
+    private async applyArchivedFieldsToRecord(
         context: RestoreRecordContext,
         document: ArchiveDocument
     ): Promise<string[]> {

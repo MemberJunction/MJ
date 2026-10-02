@@ -63,7 +63,7 @@ export class AnalysisOrchestrator {
   /**
    * Execute the full analysis workflow
    */
-  public async execute(): Promise<OrchestratorResult> {
+  public async Execute(): Promise<OrchestratorResult> {
     let db: DatabaseConnection | undefined;
     try {
       // Create run folder
@@ -192,7 +192,7 @@ export class AnalysisOrchestrator {
 
         const triggerAnalysis = DiscoveryTriggerAnalyzer.analyzeSchemas(state.schemas);
 
-        if (triggerAnalysis.shouldRun) {
+        if (triggerAnalysis.ShouldRun) {
           const isResume = state.phases?.keyDetection?.progress != null;
           if (isResume) {
             this.onProgress('Resuming incomplete relationship discovery', {
@@ -204,19 +204,19 @@ export class AnalysisOrchestrator {
           } else {
             this.onProgress('Relationship discovery triggered', {
               reason: triggerAnalysis.reason,
-              tablesWithoutPK: triggerAnalysis.details.tablesWithoutPK,
-              actualFKs: triggerAnalysis.details.totalFKs,
-              expectedMinFKs: triggerAnalysis.details.expectedMinFKs
+              tablesWithoutPK: triggerAnalysis.Details.tablesWithoutPK,
+              actualFKs: triggerAnalysis.Details.totalFKs,
+              expectedMinFKs: triggerAnalysis.Details.expectedMinFKs
             });
           }
 
           const discoveryEngine = new DiscoveryEngine({
-            driver,
-            config: this.config.analysis.relationshipDiscovery,
-            aiConfig: this.config.ai,
+            Driver: driver,
+            Config: this.config.analysis.relationshipDiscovery,
+            AiConfig: this.config.ai,
             schemas: state.schemas,
-            onProgress: this.onProgress,
-            onCheckpoint: async (phase) => {
+            OnProgress: this.onProgress,
+            OnCheckpoint: async (phase) => {
               state.phases.keyDetection = phase;
               discoveryEngine.applyDiscoveriesToState(state, phase);
               stateManager.updateSummary(state);
@@ -239,18 +239,18 @@ export class AnalysisOrchestrator {
           );
 
           // Save to new phases structure
-          state.phases.keyDetection = discoveryResult.phase;
+          state.phases.keyDetection = discoveryResult.Phase;
 
           // Apply discovered relationships to schema
-          discoveryEngine.applyDiscoveriesToState(state, discoveryResult.phase);
+          discoveryEngine.applyDiscoveriesToState(state, discoveryResult.Phase);
 
           // Merge column statistics into schema columns
-          discoveryResult.statsCache.mergeIntoSchemas(state.schemas);
+          discoveryResult.StatsCache.mergeIntoSchemas(state.schemas);
 
           this.onProgress('Relationship discovery complete', {
-            primaryKeysDiscovered: discoveryResult.phase.discovered.primaryKeys.length,
-            foreignKeysDiscovered: discoveryResult.phase.discovered.foreignKeys.length,
-            tokensUsed: discoveryResult.phase.tokenBudget.used,
+            primaryKeysDiscovered: discoveryResult.Phase.discovered.primaryKeys.length,
+            foreignKeysDiscovered: discoveryResult.Phase.discovered.foreignKeys.length,
+            tokensUsed: discoveryResult.Phase.tokenBudget.used,
             guardrailsReached: discoveryResult.guardrailsReached,
             totalSchemas: state.schemas.length
           });
@@ -409,17 +409,21 @@ export class AnalysisOrchestrator {
       if (this.config.analysis.organicKeyDetection?.enabled) {
         this.onProgress('Running organic-key detection');
         try {
-          const detector = new OrganicKeyDetector(this.config.analysis.organicKeyDetection, this.config.ai);
+          const detector = new OrganicKeyDetector(
+            this.config.analysis.organicKeyDetection,
+            this.config.ai,
+            this.config.database.provider,
+          );
           const okResult = await detector.detect(state, {
-            onProgress: (msg) => this.onProgress(msg),
+            OnProgress: (msg) => this.onProgress(msg),
           });
           state.organicKeyClusters = okResult.clusters;
-          state.phases.organicKeyDetection = okResult.phase;
+          state.phases.organicKeyDetection = okResult.Phase;
           organicKeyOutput = okResult.output;
           this.onProgress('Organic-key detection complete', {
-            clustersFound: okResult.summary.clustersFound,
-            clustersEmitted: okResult.summary.clustersEmitted,
-            outputKeys: okResult.summary.outputKeys,
+            clustersFound: okResult.Summary.clustersFound,
+            clustersEmitted: okResult.Summary.clustersEmitted,
+            outputKeys: okResult.Summary.outputKeys,
           });
         } catch (err) {
           // Non-fatal — organic-key detection is optional enrichment. Log and continue.
@@ -445,7 +449,7 @@ export class AnalysisOrchestrator {
 
       // Generate additionalSchemaInfo.json for CodeGen soft FK/PK + organic key support
       const schemaInfoGen = new AdditionalSchemaInfoGenerator();
-      const schemaInfo = schemaInfoGen.generate(state, { organicKeys: organicKeyOutput });
+      const schemaInfo = schemaInfoGen.generate(state, { OrganicKeys: organicKeyOutput });
       const schemaInfoPath = path.join(runFolder, 'additionalSchemaInfo.json');
       await fs.writeFile(schemaInfoPath, schemaInfo, 'utf-8');
 
@@ -477,6 +481,11 @@ export class AnalysisOrchestrator {
         message: (error as Error).message
       };
     }
+  }
+
+  /** @deprecated Use {@link Execute}. */
+  public async execute(): Promise<OrchestratorResult> {
+    return this.Execute();
   }
 
   /**
@@ -709,18 +718,18 @@ export class AnalysisOrchestrator {
     try {
       const result = await generator.generateQueries(state.schemas);
 
-      if (result.success) {
+      if (result.Success) {
         // Phase already updated in state by generator - just report progress
         this.onProgress('Sample queries generated', {
-          total: result.summary.totalQueriesGenerated,
-          validated: result.summary.queriesValidated,
-          tokens: result.summary.tokensUsed,
-          cost: result.summary.estimatedCost
+          total: result.Summary.totalQueriesGenerated,
+          validated: result.Summary.queriesValidated,
+          tokens: result.Summary.tokensUsed,
+          cost: result.Summary.estimatedCost
         });
       } else {
         // Phase already marked as failed in state by generator
         this.onProgress('Sample query generation failed', {
-          error: result.errorMessage
+          error: result.ErrorMessage
         });
       }
     } catch (error) {

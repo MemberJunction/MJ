@@ -22,8 +22,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Personas&Name=StyleDescriptors"
           },
           "sync": {
-            "lastModified": "2026-09-11T18:26:12.826Z",
-            "checksum": "abe0726ecf454566fd61386b19bf6e8949eefa217a1e9fa7f491026992907102"
+            "lastModified": "2026-09-13T20:06:59.228Z",
+            "checksum": "ddb6a38093de1cc098134ca9f8b25a08b91f6d1f5abd76cfc33e3fbb3bb795f0"
           }
         }
       ]

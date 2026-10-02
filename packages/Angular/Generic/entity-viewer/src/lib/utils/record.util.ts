@@ -5,8 +5,13 @@ import { ViewGridState } from '../types';
  * Build a CompositeKey from a plain record using EntityInfo PK fields.
  * Works with both plain objects (from ResultType: 'simple') and BaseEntity instances.
  */
-export function buildCompositeKey(record: Record<string, unknown>, entityInfo: EntityInfo): CompositeKey {
+export function BuildCompositeKey(record: Record<string, unknown>, entityInfo: EntityInfo): CompositeKey {
     return CompositeKey.FromEntityRecord(entityInfo, record);
+}
+
+/** @deprecated Use {@link BuildCompositeKey}. */
+export function buildCompositeKey(record: Record<string, unknown>, entityInfo: EntityInfo): CompositeKey {
+    return BuildCompositeKey(record, entityInfo);
 }
 
 /**
@@ -17,8 +22,13 @@ export function buildCompositeKey(record: Record<string, unknown>, entityInfo: E
  * record does not carry the primary-key column(s), `ToConcatenatedString` renders the missing
  * value as the literal text and returns the constant `"ID|undefined"` for every row.
  */
+export function BuildPkString(record: Record<string, unknown>, entityInfo: EntityInfo): string {
+    return BuildCompositeKey(record, entityInfo).ToConcatenatedString();
+}
+
+/** @deprecated Use {@link BuildPkString}. */
 export function buildPkString(record: Record<string, unknown>, entityInfo: EntityInfo): string {
-    return buildCompositeKey(record, entityInfo).ToConcatenatedString();
+    return BuildPkString(record, entityInfo);
 }
 
 /**
@@ -70,7 +80,7 @@ export function buildUsablePkString(record: Record<string, unknown>, entityInfo:
  * ones as copies — the host's own array and objects are never mutated. A name matching no field is
  * left alone for the existing validation to reject.
  */
-export function canonicalizeColumnFields<T extends { field: string }>(
+export function CanonicalizeColumnFields<T extends { field: string }>(
     entityInfo: EntityInfo,
     columns: readonly T[],
 ): T[] {
@@ -80,11 +90,19 @@ export function canonicalizeColumnFields<T extends { field: string }>(
     });
 }
 
+/** @deprecated Use {@link CanonicalizeColumnFields}. */
+export function canonicalizeColumnFields<T extends { field: string }>(
+    entityInfo: EntityInfo,
+    columns: readonly T[],
+): T[] {
+    return CanonicalizeColumnFields(entityInfo, columns);
+}
+
 /**
  * Compute the Fields array to request from RunView based on EntityInfo and optional grid state.
  * Includes: PK fields, NameField, visible display fields, and timestamp fields.
  */
-export function computeFieldsList(
+export function ComputeFieldsList(
     entityInfo: EntityInfo,
     gridState?: ViewGridState | null,
     hostColumnFields?: readonly string[] | null,
@@ -179,4 +197,13 @@ export function computeFieldsList(
     }
 
     return Array.from(fields);
+}
+
+/** @deprecated Use {@link ComputeFieldsList}. */
+export function computeFieldsList(
+    entityInfo: EntityInfo,
+    gridState?: ViewGridState | null,
+    hostColumnFields?: readonly string[] | null,
+): string[] {
+    return ComputeFieldsList(entityInfo, gridState, hostColumnFields);
 }

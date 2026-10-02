@@ -1,20 +1,20 @@
 /**
  * Data hook for the new-conversation "agent rail" — the horizontal strip of
  * selectable AI agents shown when composing a new conversation. Wraps the
- * `loadAgents` service (RunView over the `AI Agents` entity) and decorates
+ * `LoadAgents` service (RunView over the `AI Agents` entity) and decorates
  * each option with presentation metadata (avatar color + initial letter).
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useMJ } from '@/providers/mj-provider';
-import { loadAgents, type AgentOption } from '@/data/services/agents';
-import { colorForAgent } from '@/theme/tokens';
+import { LoadAgents, type AgentOption } from '@/data/services/agents';
+import { ColorForAgent } from '@/theme/tokens';
 
 /**
  * A loaded agent option augmented with UI chrome for the rail: a stable
  * per-agent avatar `color` (derived from the name) and an uppercase `initial`
  * used as the avatar glyph.
  */
-export type AgentChip = AgentOption & { color: string; initial: string };
+export type AgentChip = AgentOption & { color: string; initial: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * Loads active top-level agents for the new-conversation agent rail and maps
@@ -22,7 +22,7 @@ export type AgentChip = AgentOption & { color: string; initial: string };
  * reaches `ready`; before then `agents` is `null` so the caller can render a
  * placeholder.
  *
- * Side effects: calls the `loadAgents` service (RunView on `AI Agents`) and
+ * Side effects: calls the `LoadAgents` service (RunView on `AI Agents`) and
  * stores the result in local component state.
  *
  * @returns An object with:
@@ -31,7 +31,7 @@ export type AgentChip = AgentOption & { color: string; initial: string };
  *  - `error`: the last fetch error, or `null`.
  *  - `refresh`: manually re-run the load (no-op unless MJ is `ready`).
  */
-export function useAgents() {
+export function UseAgents() {
     const { status } = useMJ();
     const [agents, setAgents] = useState<AgentChip[] | null>(null);
     const [loading, setLoading] = useState(false);
@@ -42,10 +42,10 @@ export function useAgents() {
         setLoading(true);
         setError(null);
         try {
-            const list = await loadAgents();
+            const list = await LoadAgents();
             setAgents(list.map((a) => ({
                 ...a,
-                color: colorForAgent(a.name),
+                color: ColorForAgent(a.name),
                 initial: (a.name.trim().charAt(0) || 'A').toUpperCase(),
             })));
         } catch (e) {
@@ -58,4 +58,9 @@ export function useAgents() {
     useEffect(() => { void refresh(); }, [refresh]);
 
     return { agents, loading, error, refresh };
+}
+
+/** @deprecated Use {@link UseAgents}. */
+export function useAgents() {
+    return UseAgents();
 }

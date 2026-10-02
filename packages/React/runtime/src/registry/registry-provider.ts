@@ -9,29 +9,29 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * Metadata about a component from a registry
  */
 export interface RegistryComponentMetadata {
-  name: string;
-  namespace: string;
-  version: string;
-  description: string;
-  title?: string;
-  type?: string;
-  status?: string;
-  properties?: ComponentSpec['properties'];
-  events?: ComponentSpec['events'];
-  libraries?: ComponentSpec['libraries'];
-  dependencies?: ComponentSpec['dependencies'];
-  sourceRegistryID?: string | null;
-  isLocal: boolean;
-  lastFetched?: Date;
-  cacheDuration?: number;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  namespace: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  version: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  description: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  title?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  type?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  properties?: ComponentSpec['properties'];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  events?: ComponentSpec['events'];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  libraries?: ComponentSpec['libraries'];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dependencies?: ComponentSpec['dependencies'];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  sourceRegistryID?: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  isLocal: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  lastFetched?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cacheDuration?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Response from fetching a component from a registry
  */
 export interface RegistryComponentResponse {
-  metadata: RegistryComponentMetadata;
-  spec: ComponentSpec;
+  metadata: RegistryComponentMetadata;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  spec: ComponentSpec;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -41,7 +41,7 @@ export interface RegistryProvider {
   /**
    * Name of the registry provider
    */
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   
   /**
    * Fetch a component from the registry
@@ -50,7 +50,7 @@ export interface RegistryProvider {
    * @param version - Component version (optional, defaults to latest)
    * @returns Component metadata and specification
    */
-  fetchComponent(
+  fetchComponent(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     name: string,
     namespace: string,
     version?: string
@@ -63,7 +63,7 @@ export interface RegistryProvider {
    * @param version - Component version (optional)
    * @returns True if component exists
    */
-  componentExists?(
+  componentExists?(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     name: string,
     namespace: string,
     version?: string
@@ -75,7 +75,7 @@ export interface RegistryProvider {
    * @param namespace - Component namespace
    * @returns Array of available versions
    */
-  getComponentVersions?(
+  getComponentVersions?(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     name: string,
     namespace: string
   ): Promise<string[]>;
@@ -85,35 +85,35 @@ export interface RegistryProvider {
  * Search filters for registry queries
  */
 export interface RegistrySearchFilters {
-  type?: string;
-  status?: string;
-  namespace?: string;
-  query?: string;
-  limit?: number;
-  offset?: number;
+  type?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  namespace?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  query?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  limit?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  offset?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Dependency information for a component
  */
 export interface ComponentDependencyInfo {
-  name: string;
-  namespace: string;
-  version?: string;
-  isRequired: boolean;
-  location: 'embedded' | 'registry';
-  sourceRegistryID?: string | null;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  namespace: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  version?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  isRequired: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  location: 'embedded' | 'registry';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  sourceRegistryID?: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Tree structure for dependency resolution
  */
 export interface DependencyTree {
-  componentId: string;
-  name?: string;
-  namespace?: string;
-  version?: string;
-  dependencies?: DependencyTree[];
-  circular?: boolean;
-  totalCount?: number;
+  componentId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  name?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  namespace?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  version?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dependencies?: DependencyTree[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  circular?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalCount?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
