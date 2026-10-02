@@ -1,5 +1,5 @@
 import type { UserInfo } from '@memberjunction/core';
-import { IsValidUUID } from '@memberjunction/global';
+import { IsValidUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 /** `name`, `id`, `name@1.2.0`, or `id@version-id`. */
@@ -20,17 +20,17 @@ export function ResolveRubricRef(
     ref: string,
 ): { rubricId: string; versionId?: string } | { error: string } {
     const parsed = ParseRubricRef(ref);
-    const rubric = rubrics.find(row => row.id === parsed.rubric || row.name === parsed.rubric);
+    const rubric = rubrics.find(row => UUIDsEqual(row.id, parsed.rubric) || row.name === parsed.rubric);
     if (!rubric) return { error: `Rubric "${parsed.rubric}" was not found.` };
     if (!parsed.version) return { rubricId: rubric.id };
     const parts = parsed.version.split('.');
     if (parts.length === 3 && parts.every(part => /^\d+$/.test(part))) {
         const [major, minor, patch] = parts.map(Number);
-        const match = versions.find(row => row.rubricId === rubric.id && row.major === major && row.minor === minor && row.patch === patch);
+        const match = versions.find(row => UUIDsEqual(row.rubricId, rubric.id) && row.major === major && row.minor === minor && row.patch === patch);
         if (!match) return { error: `Version ${parsed.version} was not found on ${rubric.name}.` };
         return { rubricId: rubric.id, versionId: match.id };
     }
-    const byId = versions.find(row => row.id === parsed.version && row.rubricId === rubric.id);
+    const byId = versions.find(row => UUIDsEqual(row.id, parsed.version) && UUIDsEqual(row.rubricId, rubric.id));
     if (!byId) return { error: `Version "${parsed.version}" was not found on ${rubric.name}.` };
     return { rubricId: rubric.id, versionId: byId.id };
 }
@@ -94,7 +94,7 @@ export function ValidateSnapshot(version: { nodes?: { id?: string; key?: string;
             if (typeof node.weight !== 'number' || !Number.isFinite(node.weight) || node.weight < 0) errors.push(`${key}: weight must be a number that is at least 0.`);
             if (node.isGate && (typeof node.gateMinimumScore !== 'number' || node.gateMinimumScore < 0 || node.gateMinimumScore > 1)) errors.push(`${key}: a gate needs a minimum from 0 to 1.`);
         }
-        if (node.parentId && !nodes.some(other => other.id === node.parentId)) errors.push(`${key}: parent is not in the file.`);
+        if (node.parentId && !nodes.some(other => UUIDsEqual(other.id, node.parentId))) errors.push(`${key}: parent is not in the file.`);
         else if (node.parentId && parentIsDescendant(nodes, node)) errors.push(`${key}: parent is its own descendant.`);
     }
     return errors;
@@ -106,13 +106,14 @@ export function validateSnapshot(version: { nodes?: { id?: string; key?: string;
 }
 
 function parentIsDescendant(nodes: { id?: string; parentId?: string | null }[], node: { id?: string; parentId?: string | null }): boolean {
-    const byId = new Map(nodes.filter(item => item.id).map(item => [item.id as string, item]));
+    const byId = new Map(nodes.filter(item => item.id).map(item => [NormalizeUUID(item.id), item]));
     const seen = new Set<string>();
     let current = node.parentId ?? null;
     while (current) {
-        if (current === node.id || seen.has(current)) return true;
-        seen.add(current);
-        current = byId.get(current)?.parentId ?? null;
+        const key = NormalizeUUID(current);
+        if (UUIDsEqual(current, node.id) || seen.has(key)) return true;
+        seen.add(key);
+        current = byId.get(key)?.parentId ?? null;
     }
     return false;
 }
@@ -154,7 +155,7 @@ export function SnapshotFromRows(
             maxValue: scale.MaxValue == null ? null : Number(scale.MaxValue),
             step: scale.Step == null ? null : Number(scale.Step),
             higherIsBetter: scale.HigherIsBetter !== false && scale.HigherIsBetter !== 0,
-            levels: levels.filter(level => String(level.ScaleID) === String(scale.ID)).map(level => ({
+            levels: levels.filter(level => UUIDsEqual(level.ScaleID == null ? null : String(level.ScaleID), scale.ID == null ? null : String(scale.ID))).map(level => ({
                 id: String(level.ID),
                 label: String(level.Label ?? ''),
                 value: Number(level.Value ?? 0),
@@ -212,7 +213,7 @@ export async function LookupRubricOverride(ref: string, user: UserInfo): Promise
     RequireViewSuccess(found, 'MJ: Rubrics');
     const rubrics = ((found.Results ?? []) as Record<string, unknown>[]).map(row => ({ id: String(row.ID), name: String(row.Name) }));
     let versions: { id: string; rubricId: string; major: number; minor: number; patch: number }[] = [];
-    const rubric = rubrics.find(row => row.id === parsed.rubric || row.name === parsed.rubric);
+    const rubric = rubrics.find(row => UUIDsEqual(row.id, parsed.rubric) || row.name === parsed.rubric);
     if (parsed.version && rubric) {
         const rows = await view.RunView({
             EntityName: 'MJ: Rubric Versions',

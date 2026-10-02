@@ -28,6 +28,7 @@ describe('rubric CLI', () => {
         expect(ParseRubricRef('Reply check')).toEqual({ rubric: 'Reply check' });
         expect(ResolveRubricRef(rubrics, versions, 'Reply check@1.2.0')).toEqual({ rubricId: 'rubric-1', versionId: 'version-1' });
         expect(ResolveRubricRef(rubrics, versions, 'rubric-1@version-1')).toEqual({ rubricId: 'rubric-1', versionId: 'version-1' });
+        expect(ResolveRubricRef(rubrics, versions, 'RUBRIC-1@VERSION-1')).toEqual({ rubricId: 'rubric-1', versionId: 'version-1' });
         expect(ResolveRubricRef(rubrics, versions, 'Missing')).toEqual({ error: 'Rubric "Missing" was not found.' });
     });
 

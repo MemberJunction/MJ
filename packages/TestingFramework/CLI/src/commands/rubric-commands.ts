@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { RubricVersionDiff, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { providerRubricEngine } from '@memberjunction/rubrics';
 import { FormatVersionDiff, ParseRubricRef, RequireViewSuccess, RubricIdentityFilter, SnapshotFromRows, ValidateSnapshot } from './rubric-cli';
@@ -61,11 +62,11 @@ export class RubricCommands {
     private async version(ref: string, user: UserInfo): Promise<{ rubric: Record<string, unknown>; version: Record<string, unknown> }> {
         const parsed = ParseRubricRef(ref);
         const rubrics = await this.rows('MJ: Rubrics', RubricIdentityFilter(parsed.rubric), user);
-        const rubric = rubrics.find(row => String(row.ID) === parsed.rubric || String(row.Name) === parsed.rubric);
+        const rubric = rubrics.find(row => UUIDsEqual(row.ID == null ? null : String(row.ID), parsed.rubric) || String(row.Name) === parsed.rubric);
         if (!rubric) throw new Error(`Rubric "${parsed.rubric}" was not found.`);
         const versions = await this.rows('MJ: Rubric Versions', `RubricID='${String(rubric.ID).replace(/'/g, "''")}'`, user);
         const version = parsed.version
-            ? versions.find(row => `${row.MajorVersion}.${row.MinorVersion}.${row.PatchVersion}` === parsed.version || String(row.ID) === parsed.version)
+            ? versions.find(row => `${row.MajorVersion}.${row.MinorVersion}.${row.PatchVersion}` === parsed.version || UUIDsEqual(row.ID == null ? null : String(row.ID), parsed.version))
             : versions.filter(row => String(row.Status) === 'Published').sort((left, right) => Number(right.MajorVersion) - Number(left.MajorVersion) || Number(right.MinorVersion) - Number(left.MinorVersion) || Number(right.PatchVersion) - Number(left.PatchVersion))[0];
         if (!version) throw new Error(`Version ${parsed.version ?? 'published'} was not found on ${rubric.Name}.`);
         return { rubric, version };

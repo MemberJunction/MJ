@@ -80,6 +80,25 @@ describe('rubric judge calibration', () => {
         const judged = CalibrationOracles(swapped, { minSampleSize: 2, perCriterion: { facts: { minWeightedKappa: 0.5 } } });
         expect(judged.oracles[0].message.startsWith('facts:')).toBe(true);
         expect(judged.oracles[0].passed).toBe(false);
+        const folded = CalibrationPairs({
+            versions: [{ id: 'Version', major: 1 }],
+            levels: [
+                { id: 'low', scaleId: 'Scale', sequence: 1 },
+                { id: 'high', scaleId: 'scale', sequence: 2 },
+            ],
+            criteria: [{ id: 'Criterion-Row', key: 'facts' }],
+            evaluations: [
+                { id: 'Human-1', subjectId: 'one', versionId: 'version', evaluatorType: 'Human', status: 'Submitted' },
+                { id: 'AI-1', subjectId: 'one', versionId: 'version', evaluatorType: 'AIPrompt', status: 'Submitted' },
+            ],
+            scores: [
+                { evaluationId: 'human-1', criterionId: 'criterion-row', normalizedScore: 1, scaleLevelId: 'HIGH' },
+                { evaluationId: 'ai-1', criterionId: 'criterion-row', normalizedScore: 0, scaleLevelId: 'low' },
+            ],
+        });
+        expect(folded).toHaveLength(1);
+        expect(folded[0].criterionId).toBe('facts');
+        expect(folded[0].major).toBe(1);
     });
 
     it('returns InsufficientData below the default sample of 20', () => {

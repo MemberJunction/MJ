@@ -48,6 +48,15 @@ describe('rubric version publish', () => {
         });
         const errors = ValidateRubricTree(draft).errors.join(' ');
         expect(errors).toMatch(/no scale/);
+        const linked = version({
+            nodes: [
+                { id: 'Parent', key: 'group', name: 'Group', nodeType: 'Group', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
+                { id: 'Child', key: 'clarity', name: 'Clarity', nodeType: 'Criterion', parentId: 'parent', scaleId: 'SCALE', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 1 },
+            ],
+        });
+        const linkedErrors = ValidateRubricTree(linked).errors.join(' ');
+        expect(linkedErrors).not.toMatch(/missing parent/);
+        expect(linkedErrors).not.toMatch(/not on this version/);
         expect(errors).toMatch(/missing parent/);
         expect(errors).toMatch(/no minimum/);
         expect(errors).toMatch(/cycle/);
@@ -172,6 +181,12 @@ describe('rubric evaluation submit', () => {
         expect(scored.evaluation.scoringEngineVersion).toBe('1.0');
         expect(scored.scores[0].normalizedScore).toBe(direct.nodes[0].normalizedScore);
         expect(scored.evaluation.submittedAt).toBeInstanceOf(Date);
+        const folded = SubmitEvaluation({
+            version: draft,
+            versionStatus: 'Published',
+            scores: [{ criterionId: 'A', scaleLevelId: 'HIGH' }],
+        });
+        expect(folded.evaluation.normalizedScore).toBe(scored.evaluation.normalizedScore);
     });
 
     it('allows Retired only when the superseded evaluation used that same version', () => {

@@ -1,4 +1,4 @@
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import { providerRubricEngine } from '@memberjunction/rubrics';
 import { BaseTestDriver } from './BaseTestDriver';
@@ -79,7 +79,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
         }
         const freshIds = new Set<string>();
         for (const [subjectId, major] of needed) {
-            const created = await this.scoreSubject(input, subjectId, subjects.find(subject => subject.recordID === subjectId)?.entity ?? '', versionRows, major, context);
+            const created = await this.scoreSubject(input, subjectId, subjects.find(subject => UUIDsEqual(subject.recordID, subjectId))?.entity ?? '', versionRows, major, context);
             if (created) freshIds.add(created);
         }
         const refreshed = ((await view.RunView({

@@ -1,19 +1,20 @@
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { OracleResult } from '@memberjunction/testing-engine-base';
 
 /** Rank a scale's levels by sequence into indexes 0..n-1. n is every level on the scale. */
 export function RankLevels(levels: { id: string; scaleId: string; sequence: number }[]): { indexByLevel: Map<string, number>; countByScale: Map<string, number> } {
     const byScale = new Map<string, { id: string; sequence: number }[]>();
     for (const level of levels) {
-        const list = byScale.get(level.scaleId) ?? [];
+        const list = byScale.get(NormalizeUUID(level.scaleId)) ?? [];
         list.push(level);
-        byScale.set(level.scaleId, list);
+        byScale.set(NormalizeUUID(level.scaleId), list);
     }
     const indexByLevel = new Map<string, number>();
     const countByScale = new Map<string, number>();
     for (const [scaleId, list] of byScale) {
         const ordered = [...list].sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
-        countByScale.set(scaleId, ordered.length);
-        ordered.forEach((level, index) => indexByLevel.set(level.id, index));
+        countByScale.set(NormalizeUUID(scaleId), ordered.length);
+        ordered.forEach((level, index) => indexByLevel.set(NormalizeUUID(level.id), index));
     }
     return { indexByLevel, countByScale };
 }
@@ -31,25 +32,25 @@ export function CalibrationPairs(input: {
     levels: { id: string; scaleId: string; sequence: number }[];
     criteria: { id: string; key: string }[];
 }): CalibrationPair[] {
-    const majorByVersion = new Map(input.versions.map(row => [row.id, row.major]));
-    const keyByCriterion = new Map(input.criteria.map(row => [row.id, row.key || row.id]));
-    const levelById = new Map(input.levels.map(level => [level.id, level]));
+    const majorByVersion = new Map(input.versions.map(row => [NormalizeUUID(row.id), row.major]));
+    const keyByCriterion = new Map(input.criteria.map(row => [NormalizeUUID(row.id), row.key || row.id]));
+    const levelById = new Map(input.levels.map(level => [NormalizeUUID(level.id), level]));
     const { indexByLevel, countByScale } = RankLevels(input.levels);
     const buckets = new Map<string, { subjectId: string; criterionId: string; major: number; human?: { level: number; score: number; categories: number }; ai?: { level: number; score: number; categories: number } }>();
     for (const score of input.scores) {
         if (score.normalizedScore == null) continue;
-        const evaluation = input.evaluations.find(row => row.id === score.evaluationId);
+        const evaluation = input.evaluations.find(row => UUIDsEqual(row.id, score.evaluationId));
         if (!evaluation || evaluation.status !== 'Submitted') continue;
         const side = evaluation.evaluatorType === 'Human' ? 'human' : (evaluation.evaluatorType === 'AIPrompt' || evaluation.evaluatorType === 'Agent') ? 'ai' : null;
         if (!side) continue;
-        const criterionId = keyByCriterion.get(score.criterionId) || score.criterionId;
+        const criterionId = keyByCriterion.get(NormalizeUUID(score.criterionId)) || score.criterionId;
         if (!criterionId) continue;
-        const major = majorByVersion.get(evaluation.versionId) ?? 0;
+        const major = majorByVersion.get(NormalizeUUID(evaluation.versionId)) ?? 0;
         const id = `${evaluation.subjectId}|${major}|${criterionId}`;
         const bucket = buckets.get(id) ?? { subjectId: evaluation.subjectId, criterionId, major };
-        const levelRow = score.scaleLevelId == null ? undefined : levelById.get(score.scaleLevelId);
-        const level = levelRow ? (indexByLevel.get(levelRow.id) ?? 0) : (score.normalizedScore >= 0.5 ? 1 : 0);
-        const categories = levelRow ? Math.max(2, countByScale.get(levelRow.scaleId) ?? 2) : 2;
+        const levelRow = score.scaleLevelId == null ? undefined : levelById.get(NormalizeUUID(score.scaleLevelId));
+        const level = levelRow ? (indexByLevel.get(NormalizeUUID(levelRow.id)) ?? 0) : (score.normalizedScore >= 0.5 ? 1 : 0);
+        const categories = levelRow ? Math.max(2, countByScale.get(NormalizeUUID(levelRow.scaleId)) ?? 2) : 2;
         bucket[side] = { level, score: score.normalizedScore, categories };
         buckets.set(id, bucket);
     }

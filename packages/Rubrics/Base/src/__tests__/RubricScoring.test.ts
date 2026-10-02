@@ -63,6 +63,8 @@ describe('RubricScoring', () => {
         expect(result.outcome).toBe('BelowThreshold');
         expect(result.passed).toBe(false);
         expect(result.scoringEngineVersion).toBe('1.0');
+        const folded = score([leaf({ id: 'A', key: 'a' })], [{ criterionId: 'a', scaleLevelId: 'HIGH' }]);
+        expect(folded.normalizedScore).toBe(1);
     });
 
     it('maps a numeric answer across the scale and inverts when lower is better', () => {

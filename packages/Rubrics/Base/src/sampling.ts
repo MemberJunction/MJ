@@ -1,7 +1,9 @@
+import { NormalizeUUID } from '@memberjunction/global';
+
 /** Stable bucket 0..9999 for a run id. The same id always lands in the same bucket. */
 export function SampleBucket(runId: string): number {
     let hash = 0;
-    for (const char of runId) hash = Math.imul(hash, 31) + char.charCodeAt(0);
+    for (const char of NormalizeUUID(runId)) hash = Math.imul(hash, 31) + char.charCodeAt(0);
     return (hash >>> 0) % 10000;
 }
 

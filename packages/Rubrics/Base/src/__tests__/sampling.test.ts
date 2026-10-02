@@ -7,6 +7,7 @@ describe('browser-safe sampling', () => {
         expect(KeepSample('run-1', 1)).toBe(true);
         expect(KeepSample('run-1', bucket / 10000)).toBe(false);
         expect(KeepSample('run-1', (bucket + 1) / 10000)).toBe(true);
+        expect(SampleBucket('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')).toBe(SampleBucket('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'));
     });
 
     it('joins a score to its agent and rubric, then measures a drop', () => {

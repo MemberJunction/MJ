@@ -1,3 +1,4 @@
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { RubricScoring, type RubricAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 export interface SupersedeTarget {
@@ -121,18 +122,18 @@ export function ValidateEvaluationScores(input: SubmitEvaluationInput): void {
     } else if (input.versionStatus !== 'Published') {
         throw new RubricEvaluationError('A new evaluation must pin a Published version.');
     }
-    const nodes = new Map(input.version.nodes.map(node => [node.id, node]));
-    const scales = new Map(input.version.scales.map(scale => [scale.id, scale]));
+    const nodes = new Map(input.version.nodes.map(node => [NormalizeUUID(node.id), node]));
+    const scales = new Map(input.version.scales.map(scale => [NormalizeUUID(scale.id), scale]));
     for (const score of input.scores) {
         if (score.isComputed) throw new RubricEvaluationError('Computed score rows are written by the server.');
-        const node = nodes.get(score.criterionId);
+        const node = nodes.get(NormalizeUUID(score.criterionId));
         if (!node) throw new RubricEvaluationError(`Score ${score.criterionId} is not a criterion of this version.`);
         if (node.nodeType !== 'Criterion') throw new RubricEvaluationError(`${node.key} is a group. The server writes its score.`);
-        const scale = node.scaleId ? scales.get(node.scaleId) : undefined;
+        const scale = node.scaleId ? scales.get(NormalizeUUID(node.scaleId)) : undefined;
         if (score.scaleLevelId && scale?.scaleType !== 'Levels') {
             throw new RubricEvaluationError(`${node.key} does not use a levels scale.`);
         }
-        if (score.scaleLevelId && scale && !scale.levels.some(level => level.id === score.scaleLevelId)) {
+        if (score.scaleLevelId && scale && !scale.levels.some(level => UUIDsEqual(level.id, score.scaleLevelId))) {
             throw new RubricEvaluationError(`${node.key} is not on a level of its scale.`);
         }
         if (score.rawValue !== undefined && score.rawValue !== null && scale?.scaleType !== 'Numeric') {
@@ -192,7 +193,7 @@ export function SubmitEvaluation(input: SubmitEvaluationInput): { evaluation: Pe
             effectiveWeight: node.effectiveWeight,
             overallContribution: node.overallContribution,
             gateFailed: node.gateFailed,
-            isComputed: input.version.nodes.find(item => item.id === node.id)?.nodeType === 'Group',
+            isComputed: input.version.nodes.find(item => UUIDsEqual(item.id, node.id))?.nodeType === 'Group',
         })),
     };
 }

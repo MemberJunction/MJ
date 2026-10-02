@@ -1,3 +1,4 @@
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { HighestNonDraftVersion, RubricVersionDiff, SnapshotFromRows, sha256Hex, type RubricNodeSnapshot, type RubricVersionSnapshot, type VersionBump } from '@memberjunction/rubrics-base';
 
 export class RubricPublishError extends Error {
@@ -41,13 +42,13 @@ export interface PublishResult {
 export function ValidateRubricTree(version: RubricVersionSnapshot): { errors: string[]; warnings: PublishWarning[] } {
     const errors: string[] = [];
     const warnings: PublishWarning[] = [];
-    const byId = new Map(version.nodes.map(node => [node.id, node]));
+    const byId = new Map(version.nodes.map(node => [NormalizeUUID(node.id), node]));
     const keys = new Set<string>();
-    const childrenOf = (id: string) => version.nodes.filter(item => item.parentId === id);
+    const childrenOf = (id: string) => version.nodes.filter(item => UUIDsEqual(item.parentId, id));
     for (const node of version.nodes) {
         if (keys.has(node.key)) errors.push(`Duplicate key ${node.key}.`);
         keys.add(node.key);
-        if (node.parentId && !byId.has(node.parentId)) errors.push(`${node.key} points at a missing parent.`);
+        if (node.parentId && !byId.has(NormalizeUUID(node.parentId))) errors.push(`${node.key} points at a missing parent.`);
         if (node.nodeType === 'Criterion' && !node.scaleId) errors.push(`${node.key} is a criterion with no scale.`);
         if (node.nodeType === 'Criterion' && childrenOf(node.id).length > 0) {
             errors.push(`${node.key} is a criterion with children, so a child gate is ignored.`);
@@ -55,7 +56,7 @@ export function ValidateRubricTree(version: RubricVersionSnapshot): { errors: st
         if (node.nodeType === 'Group' && childrenOf(node.id).length === 0) {
             errors.push(`${node.key} is an empty group.`);
         }
-        if (node.scaleId && !version.scales.some(scale => scale.id === node.scaleId)) {
+        if (node.scaleId && !version.scales.some(scale => UUIDsEqual(scale.id, node.scaleId))) {
             errors.push(`${node.key} names a scale that is not on this version.`);
         }
         if (node.isGate && (node.gateMinimumScore === undefined || node.gateMinimumScore === null)) {
@@ -249,16 +250,17 @@ async function rows(run: RowRun, entityName: string, filter: string): Promise<un
 }
 
 function hasCycle(nodes: RubricNodeSnapshot[]): boolean {
-    const byId = new Map(nodes.map(node => [node.id, node]));
+    const byId = new Map(nodes.map(node => [NormalizeUUID(node.id), node]));
     const state = new Map<string, 'visiting' | 'done'>();
     const visit = (id: string): boolean => {
-        const mark = state.get(id);
+        const key = NormalizeUUID(id);
+        const mark = state.get(key);
         if (mark === 'visiting') return true;
         if (mark === 'done') return false;
-        state.set(id, 'visiting');
-        const parentId = byId.get(id)?.parentId;
-        if (parentId && byId.has(parentId) && visit(parentId)) return true;
-        state.set(id, 'done');
+        state.set(key, 'visiting');
+        const parentId = byId.get(key)?.parentId;
+        if (parentId && byId.has(NormalizeUUID(parentId)) && visit(parentId)) return true;
+        state.set(key, 'done');
         return false;
     };
     return nodes.some(node => visit(node.id));

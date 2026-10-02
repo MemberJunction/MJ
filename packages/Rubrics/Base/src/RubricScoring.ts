@@ -1,3 +1,4 @@
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type {
     NotApplicablePolicy,
     RollupMethod,
@@ -69,11 +70,11 @@ interface Calc {
 export class RubricScoring {
     public static Compute(input: RubricScoreInput): RubricScoreResult {
         const version = input.version;
-        const answers = new Map(input.answers.map(answer => [answer.criterionId, answer]));
-        const scales = new Map(version.scales.map(scale => [scale.id, scale]));
+        const answers = new Map(input.answers.map(answer => [NormalizeUUID(answer.criterionId), answer]));
+        const scales = new Map(version.scales.map(scale => [NormalizeUUID(scale.id), scale]));
         const byParent = new Map<string | null, RubricNodeSnapshot[]>();
         for (const node of version.nodes) {
-            const parentId = node.parentId ?? null;
+            const parentId = node.parentId == null || node.parentId === '' ? null : NormalizeUUID(node.parentId);
             const list = byParent.get(parentId) ?? [];
             list.push(node);
             byParent.set(parentId, list);
@@ -127,9 +128,9 @@ export class RubricScoring {
         scales: Map<string, RubricScaleSnapshot>,
     ): Calc {
         if (node.nodeType === 'Criterion') {
-            return RubricScoring.scoreLeaf(node, answers.get(node.id), version, scales);
+            return RubricScoring.scoreLeaf(node, answers.get(NormalizeUUID(node.id)), version, scales);
         }
-        const children = (byParent.get(node.id) ?? []).map(child =>
+        const children = (byParent.get(NormalizeUUID(node.id)) ?? []).map(child =>
             RubricScoring.scoreNode(child, byParent, answers, version, scales));
         const included = children.filter(child => child.included && child.score !== null);
         const score = included.length === 0 ? null : RubricScoring.combine(included, node.rollupMethod ?? 'WeightedMean');
@@ -232,12 +233,12 @@ export class RubricScoring {
         answer: RubricAnswer,
         scales: Map<string, RubricScaleSnapshot>,
     ): number {
-        const scale = node.scaleId ? scales.get(node.scaleId) : undefined;
+        const scale = node.scaleId ? scales.get(NormalizeUUID(node.scaleId)) : undefined;
         if (!scale) {
             throw new RubricValidationError(`${node.name} has no scale.`);
         }
         if (scale.scaleType === 'Levels') {
-            const level = scale.levels.find(item => item.id === answer.scaleLevelId);
+            const level = scale.levels.find(item => UUIDsEqual(item.id, answer.scaleLevelId));
             if (!level) {
                 throw new RubricValidationError(`${node.name} is not on a level of its scale.`);
             }
