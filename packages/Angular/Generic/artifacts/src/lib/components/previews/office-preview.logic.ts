@@ -26,7 +26,7 @@ export interface WorkbookShim {
 
 /** The minimum of mammoth this code uses. */
 export interface MammothModuleShim {
-  convertToHtml(input: { arrayBuffer: ArrayBuffer }): Promise<{ value: string; messages?: { message: string }[] }>;
+  convertToHtml(input: { arrayBuffer: ArrayBuffer; buffer?: Uint8Array }): Promise<{ value: string; messages?: { message: string }[] }>;
 }
 
 /** Fetches a URL as bytes, failing on a non-2xx status. */
@@ -47,7 +47,11 @@ export async function ConvertDocxToHtml(
   mammoth: MammothModuleShim,
   warn: (message: string) => void = (m) => console.warn('[DocxPreview] mammoth:', m),
 ): Promise<string> {
-  const result = await mammoth.convertToHtml({ arrayBuffer });
+  // mammoth's browser build reads `arrayBuffer`; its node build (what a jsdom test resolves) reads `buffer`. Give both
+  // where a Buffer exists, so the same code runs in the browser and under test.
+  const input: { arrayBuffer: ArrayBuffer; buffer?: Uint8Array } = { arrayBuffer };
+  if (typeof Buffer !== 'undefined') input.buffer = Buffer.from(arrayBuffer);
+  const result = await mammoth.convertToHtml(input);
   for (const m of result.messages ?? []) warn(m.message);
   return result.value;
 }
