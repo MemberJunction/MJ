@@ -33,7 +33,7 @@
  * `instanceof BaseEntity` assertion would pass for the wrong reason. So the replay rewrites the
  * `Note` TEXT to a marker and asserts the marker is present — proving the event actually
  * committed. It also moves `__mj_UpdatedAt` forward, as any real save does: an engine skips a
- * payload whose (primary key, `__mj_UpdatedAt`) pairs match what it holds (plan item 1.3), so a
+ * payload whose (primary key, `__mj_UpdatedAt`) pairs match what it holds, so a
  * text change with an unchanged stamp — which real traffic never produces — would be skipped.
  * `__mj_CreatedAt`, the value under test, stays exactly as captured, still a string.
  *

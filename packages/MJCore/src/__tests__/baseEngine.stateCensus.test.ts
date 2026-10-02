@@ -4,7 +4,7 @@ import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
 import { IMetadataProvider, RunViewResult } from '../generic/interfaces';
 
 /**
- * BaseEngine.GetStateCensus (plan N6, item 1.6): a read-only snapshot of the rows an engine holds
+ * BaseEngine.GetStateCensus: a read-only snapshot of the rows an engine holds
  * and the state it derived from them, comparable across processes.
  */
 

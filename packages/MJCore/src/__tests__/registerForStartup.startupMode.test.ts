@@ -151,7 +151,7 @@ describe('StartupManager startup modes', () => {
         expect(LocalCacheManager.Instance.IsInitialized).toBe(true);
     });
 
-    it('initializes LocalCacheManager with the cache settings the host passes (plan N5)', async () => {
+    it('initializes LocalCacheManager with the cache settings the host passes', async () => {
         registerFakeEngine('SyncEngine');
         await StartupManager.Instance.Startup(false, undefined, provider, { mode: 'task', cacheManagerConfig: { maxSizeBytes: 12345, verboseLogging: true } });
         expect(LocalCacheManager.Instance.Config.maxSizeBytes).toBe(12345);

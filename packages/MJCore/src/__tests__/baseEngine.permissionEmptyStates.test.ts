@@ -6,7 +6,7 @@ import { GetGlobalObjectStore } from '@memberjunction/global';
 
 /**
  * The two ways a BaseEngine config ends up "loaded" while holding nothing because of a permission
- * answer (plan F7, item 1.4 — these paths had no tests):
+ * answer:
  *
  *  - `CheckPermissionsOrSkipAll` — one unreadable entity skips every entity config, marks them
  *    loaded and permission-denied; getters throw PermissionConstrainedError.

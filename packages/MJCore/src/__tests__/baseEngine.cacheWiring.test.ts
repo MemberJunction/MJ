@@ -8,9 +8,9 @@ import { IMetadataProvider, RunViewResult } from '../generic/interfaces';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 
 /**
- *  - N10: degradations are logged at a level production keeps.
- *  - F3:  a peer's cache payload never fills a config the current user cannot read.
- *  - F4:  an engine that loaded before LocalCacheManager was initialized still registers its
+ *  - degradations are logged at a level production keeps.
+ *  - a peer's cache payload never fills a config the current user cannot read.
+ *  - an engine that loaded before LocalCacheManager was initialized still registers its
  *         cross-server callbacks once initialization happens.
  */
 
@@ -59,7 +59,7 @@ function resetSingletons(): void {
     delete store['___SINGLETON__LocalCacheManager'];
 }
 
-describe('LogWarning (N10)', () => {
+describe('LogWarning', () => {
     afterEach(() => {
         SetProductionStatus(false);
         vi.restoreAllMocks();
@@ -78,7 +78,7 @@ describe('LogWarning (N10)', () => {
     });
 });
 
-describe('OnExternalCacheChange permission guard (F3)', () => {
+describe('OnExternalCacheChange permission guard', () => {
     let engine: WiringEngine;
 
     beforeEach(() => {
@@ -112,7 +112,7 @@ describe('OnExternalCacheChange permission guard (F3)', () => {
     });
 });
 
-describe('deferred cache-callback registration (F4)', () => {
+describe('deferred cache-callback registration', () => {
     beforeEach(() => {
         resetSingletons();
     });

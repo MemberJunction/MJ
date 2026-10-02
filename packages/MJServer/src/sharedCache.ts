@@ -62,7 +62,7 @@ export function ResolveSharedCacheTTLSeconds(configured: number | undefined, env
 /**
  * The shared cache the environment asks for (`REDIS_URL`, `REDIS_KEY_PREFIX`, `REDIS_TTL_SECONDS`),
  * or null. Built before the database provider so metadata and startup engines use it from the
- * first read (plan N1).
+ * first read.
  */
 export function CreateSharedCacheFromEnvironment(settings: CacheSettingsConfig | undefined, env: NodeJS.ProcessEnv = process.env): RedisLocalStorageProvider | null {
     if (!env.REDIS_URL) {
@@ -76,7 +76,7 @@ export function CreateSharedCacheFromEnvironment(settings: CacheSettingsConfig |
     });
 }
 
-/** `LocalCacheManager` settings from `cacheSettings` in mj.config.cjs (plan N5). */
+/** `LocalCacheManager` settings from `cacheSettings` in mj.config.cjs. */
 /**
  * The warm-up lease MJAPI hands to `StartupManager`, in milliseconds (plan — it used to
  * be a constant no host could change).

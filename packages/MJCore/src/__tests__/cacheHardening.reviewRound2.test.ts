@@ -54,11 +54,14 @@ describe('#19 — both cache-write funnels compute the same stamp', () => {
 
 describe('#18 — an expired slot is invalidated once, then forgotten', () => {
     /**
-     * The review asked for the local index to be pruned against the shared group. It must not be:
-     * a slot the group no longer lists is one that expired while peers may still hold its rows in
-     * memory, and the next save's invalidation is what tells them to reload (F9). What must not
-     * happen is that notice repeating on every later save — and it does not, because invalidating
-     * drops the fingerprint from the index. These two tests pin both halves.
+     * The local index must NOT be pruned against the shared group.
+     *
+     * A slot the group no longer lists is one that expired while peers may still hold its rows in
+     * memory, and the next save's invalidation is what tells them to reload. Pruning would drop the
+     * fingerprint and with it that notice.
+     *
+     * The notice must also not repeat on every later save, and does not: invalidating removes the
+     * fingerprint from the index. Both halves are covered below.
      */
     let manager: LocalCacheManager;
     let storage: MockCacheStorageProvider & { Group: string[] };

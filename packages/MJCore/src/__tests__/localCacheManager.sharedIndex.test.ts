@@ -1,5 +1,5 @@
 /**
- * LocalCacheManager on a storage provider shared between processes (plan N3, item 1.2).
+ * LocalCacheManager on a storage provider shared between processes.
  *
  * Every RunView slot write names its entity as the storage index group, so a shared provider
  * (Redis) can tell any process which slots exist for an entity. On a save, the manager reads that
@@ -190,7 +190,7 @@ describe('LocalCacheManager — provider without a shared index', () => {
     });
 });
 
-describe('LocalCacheManager registry on a store shared across processes (plan N2, item 2.2)', () => {
+describe('LocalCacheManager registry on a store shared across processes', () => {
     /** Shared store: records every key written, and can hold a registry another server left behind. */
     class SharedStore extends SharedIndexStore {
         public readonly SharedAcrossProcesses = true;
@@ -238,7 +238,7 @@ describe('LocalCacheManager registry on a store shared across processes (plan N2
     });
 });
 
-describe('LocalCacheManager.SetStorageProvider with the provider already in use (plan N1)', () => {
+describe('LocalCacheManager.SetStorageProvider with the provider already in use', () => {
     it('does not migrate or rewrite anything', async () => {
         resetLocalCacheManager();
         const store = new SharedIndexStore();
@@ -254,7 +254,7 @@ describe('LocalCacheManager.SetStorageProvider with the provider already in use 
 });
 
 
-describe('LocalCacheManager — cross-process lock for in-place rewrites (plan N7)', () => {
+describe('LocalCacheManager — cross-process lock for in-place rewrites', () => {
     class LockingStore extends SharedIndexStore {
         public Locked: string[] = [];
         public FailLock = false;
@@ -300,14 +300,14 @@ describe('LocalCacheManager — cross-process lock for in-place rewrites (plan N
 });
 
 /**
- * F9, the half that only held for whichever process FILLED the slot.
+ * Notifying peers after a slot expires, which otherwise only worked for the process that filled it.
  *
  * An engine loads its rows once and never reads its slot again — by design. The slot is a boot
  * shortcut and a propagation channel, not a read-through cache. Correctness comes from events.
  *
- * Giving slots a finite TTL (this branch) created a window the events cannot cross. When a slot
+ * A finite slot TTL creates a window those events cannot cross. When a slot
  * expires under running replicas, a later save finds nothing to rewrite and publishes nothing, so
- * every peer engine keeps serving what it loaded. F9's fix was to invalidate a slot that cannot be
+ * every peer engine keeps serving what it loaded. The fix was to invalidate a slot that cannot be
  * maintained, which publishes `removed` and makes peers reload — but that only fires if the saving
  * process still has the fingerprint in its index, and a process only had it there if it WROTE the
  * slot. A server that booted warm read the slot instead, and a read indexed nothing. Behind a load
@@ -315,7 +315,7 @@ describe('LocalCacheManager — cross-process lock for in-place rewrites (plan N
  *
  * So the warm read is indexed too: it is the only trace a process has of a slot it did not write.
  */
-describe('F9 — a warm read is enough to notify peers later', () => {
+describe('a warm read is enough to notify peers later', () => {
     let manager: LocalCacheManager;
     let store: SharedIndexStore;
 

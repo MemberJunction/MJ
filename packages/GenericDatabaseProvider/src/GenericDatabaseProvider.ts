@@ -6412,7 +6412,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Cache maintenance for the saves inside a transaction waits for the outermost settle: one
      * rewrite per cached slot on commit instead of one per save, and nothing written for work that
-     * is rolled back (plan N11).
+     * is rolled back.
      *
      * The batch is opened HERE, on the raw primitive, not only in
      * `DatabaseProviderBase.BeginEntityTransaction` — 41 call sites across the repo use

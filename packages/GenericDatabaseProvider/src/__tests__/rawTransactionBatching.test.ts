@@ -196,16 +196,13 @@ describe('a rollback for a begin that never happened', () => {
     });
 
     /**
-     * The shape: a nested begin whose savepoint fails, and a caller that rolls back in its catch —
-     * how the seventeen generated cascade-delete overrides are written. The batch is opened only
-     * after a begin SUCCEEDS, so that rollback closes a level it did not open.
+     * A nested begin whose savepoint fails, with the caller rolling back in its catch — the shape
+     * the generated cascade-delete overrides are written in. A batch is opened only after a begin
+     * succeeds, so that rollback closes a level it never opened.
      *
-     * These tests pin the INVARIANT (opens and closes stay paired, and a rollback with nothing open
-     * is inert); they are not a regression pin. Both pass with the level counter removed, because
-     * `EntityEventBatchSet.Close` already returns null when the owner has no batch. The review
-     * expected the outer unit of work to be left un-batched here; it is not — and where the outer
-     * batch does close, that is correct, because the same rollback rolled the OUTER transaction
-     * back at the physical level (depth was 1).
+     * The invariant covered here is that opens and closes stay paired and a rollback with nothing
+     * open is inert. Where the outer batch does close, that is correct: the same rollback rolled the
+     * outer transaction back physically, since depth was 1.
      */
     class SavepointFailsProvider extends TxProvider {
         public FailSavepoint = false;

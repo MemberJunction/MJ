@@ -396,7 +396,7 @@ const setupComplete$ = new ReplaySubject(1);
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
 
-  // Shared cache first (plan N1): the database provider loads metadata and startup engines through
+  // Shared cache first: the database provider loads metadata and startup engines through
   // it, so the first server to start fills it and later servers read it instead of each querying
   // the database and broadcasting what they loaded. Subscribed before engines load so they hear
   // other servers while they start.

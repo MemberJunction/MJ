@@ -1,28 +1,29 @@
 /**
- * cache-fleet-baseline.ts — fleet-shaped measurement rig for the engine/cache investigation.
- * SCRATCH TOOL. Findings graduate into checks
- * under src/checks/; this file is not part of any suite and never runs in CI.
+ * cache-fleet-baseline.ts — fleet-shaped measurement rig for the shared cache.
+ *
+ * SCRATCH TOOL: findings graduate into checks under src/checks/. This file is not part of any suite
+ * and never runs in CI, so nothing catches it when it breaks.
  *
  * Spawns R replica processes (rigs/lib/cache-fleet-replica.ts), each booting exactly the way
  * MJAPI/Skip boot, against ONE database (DB_DATABASE from .env, forced to mj_test_2 here) and ONE
  * private Redis (started on port 16380 unless --redis=<url> is given), then runs:
  *
- *   boot     E1 boot storm · E5 rebuild cost · E6 registry traffic · E4 convergence census
- *   latency  E2 save on A → first seen on B..R (p50/p95/max over --trials)
- *   stale    E3 (a) raw-SQL writer (b) CLI-shaped in-memory writer, lazy engine read, fresh-boot heal
- *   sweep    3.1  raw SQL change with the engine sweep on (--sweep-ms) → time until every replica has it
- *   burst    N11  one replica saves --burst notes in a row, then deletes them → slot writes and peer work
- *                 (--burst-mode=serial|transaction: record by record, or the whole burst in one transaction)
- *   race     N7   two replicas save notes at the same moment → do engines and the slot agree with the DB?
- *   snapshot F11  one replica saves its metadata snapshot (what a metadata refresh does) → what peers receive
- *   expiry   1.2  an engine's slot expires under running replicas → a later save must still reach
- *                 them; per-entity index sets shrink back once their slots expire
- *   users  a user created / given a role / deactivated on replica 0 must reach the other
- *                 replicas' UserCache without a restart and without an opted-in poll, and must NOT
- *                 reach a replica whose cache is not shared (the control)
- *   cli-ops  the REAL `mj` binary (sync push / migrate / codegen, with REDIS_URL set) runs while
- *                 every replica reads continuously → reader failures, convergence, reloads, and a
- *                 replica booting mid-command (--ops=push,push-metadata,migrate,codegen; default push)
+ *   boot      boot storm, rebuild cost, registry traffic, convergence census
+ *   latency   save on A → first seen on B..R (p50/p95/max over --trials)
+ *   stale     (a) raw-SQL writer (b) CLI-shaped in-memory writer, lazy engine read, fresh-boot heal
+ *   sweep     raw SQL change with the engine sweep on (--sweep-ms) → time until every replica has it
+ *   burst     one replica saves --burst notes in a row, then deletes them → slot writes and peer work
+ *             (--burst-mode=serial|transaction: record by record, or the whole burst in one transaction)
+ *   race      two replicas save notes at the same moment → do engines and the slot agree with the DB?
+ *   snapshot  one replica saves its metadata snapshot (what a metadata refresh does) → what peers receive
+ *   expiry    an engine's slot expires under running replicas → a later save must still reach them;
+ *             per-entity index sets shrink back once their slots expire
+ *   users     a user created / given a role / deactivated on replica 0 must reach the other replicas'
+ *             UserCache without a restart and without an opted-in poll, and must NOT reach a replica
+ *             whose cache is not shared (the control)
+ *   cli-ops   the REAL `mj` binary (sync push / migrate / codegen, with REDIS_URL set) runs while every
+ *             replica reads continuously → reader failures, convergence, reloads, and a replica
+ *             booting mid-command (--ops=push,push-metadata,migrate,codegen; default push)
  *
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/cache-fleet-baseline.ts \
  *       --replicas=3 --phases=boot,latency,stale --trials=20 [--redis=redis://localhost:6379] [--ttl=<seconds>]
@@ -57,12 +58,12 @@ const LOG_DIR = argv.get('logdir') ?? path.resolve(path.dirname(OUT), 'cache-fle
 const DB_DATABASE = argv.get('db') ?? 'mj_test_2';
 /** Passed to every replica's RedisLocalStorageProvider as defaultTTLSeconds; unset = provider default. */
 const TTL_ARG = argv.get('ttl');
-/** redis-first (MJAPI since plan N1) or legacy (engines load in memory, then swap). */
+/** redis-first (MJAPI since) or legacy (engines load in memory, then swap). */
 const BOOT_MODE = argv.get('boot') ?? 'redis-first';
 /** ms between replica starts in the boot phase; 0 = all at once (the cold herd). */
 const STAGGER_MS = Number(argv.get('stagger') ?? '0');
 const BURST = Number(argv.get('burst') ?? '100');
-/** serial = one save after another; transaction = the whole burst in one transaction (plan N11). */
+/** serial = one save after another; transaction = the whole burst in one transaction. */
 const BURST_MODE = argv.get('burst-mode') ?? 'serial';
 const REPLICA_NODE_ENV = process.env.NODE_ENV ?? 'production';
 /** Engine sweep interval for the sweep phase. */

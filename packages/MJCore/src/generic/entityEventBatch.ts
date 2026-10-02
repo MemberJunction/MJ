@@ -1,5 +1,5 @@
 /**
- * @fileoverview Bookkeeping for entity-event batches (plan N11).
+ * @fileoverview Bookkeeping for entity-event batches.
  *
  * A bulk unit of work — N saves to one entity inside a transaction — used to rewrite every cached
  * slot for that entity N times, and on a shared cache publish the whole slot N times to every

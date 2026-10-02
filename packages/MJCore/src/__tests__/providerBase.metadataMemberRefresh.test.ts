@@ -447,7 +447,7 @@ describe('ProviderBase - single-flight metadata reload', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Metadata change notices from other servers (plan F11)
+// Metadata change notices from other servers
 // ---------------------------------------------------------------------------
 describe('ProviderBase — metadata change notices from other servers', () => {
     class NoticeTestProvider extends MemberRefreshTestProvider {

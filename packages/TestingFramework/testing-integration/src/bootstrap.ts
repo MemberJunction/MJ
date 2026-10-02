@@ -115,7 +115,7 @@ async function setupSqlServerProvider(
 
     const config = new SQLServerProviderConfigData(pool, db.Schema);
     if (opts.SharedStorage) {
-        config.LocalStorageProvider = storage; // shared store from the first read (plan N1)
+        config.LocalStorageProvider = storage; // shared store from the first read
     }
     const provider = await setupSQLServerClient(config);
     await UserCache.Instance.Refresh(provider);
@@ -147,7 +147,7 @@ async function setupPostgreSQLProvider(
         1 // checkRefreshIntervalSeconds > 0 → load metadata on Config
     );
     if (opts.SharedStorage) {
-        pgConfig.LocalStorageProvider = storage; // shared store from the first read (plan N1)
+        pgConfig.LocalStorageProvider = storage; // shared store from the first read
     }
     await provider.Config(pgConfig);
     SetProvider(provider as unknown as IMetadataProvider);

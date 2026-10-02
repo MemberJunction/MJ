@@ -76,7 +76,7 @@ import { EntityVectorSyncer } from '../models/entityVectorSync';
 import type { EmbeddingData } from '../generic/vectorSync.types';
 
 /**
- * The existence read before saving Entity Record Documents bypasses the cache (plan F13).
+ * The existence read before saving Entity Record Documents bypasses the cache.
  *
  * It is a find-or-create read, so a cached answer could miss a document that already exists and
  * create a duplicate. Its `RecordID IN (…)` filter is also different for every batch, so each batch

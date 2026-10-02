@@ -7,7 +7,7 @@ import { CacheChangedEvent } from '../generic/localCacheManager';
 
 /**
  * Skipping cross-server payloads that carry the rows an engine already holds (plan Idea C,
- * item 1.3).
+ *).
  *
  * A replica warming its cache republishes every config it loads, and almost all of those payloads
  * are identical to what each peer holds. Applying one costs a materialization and a derived-state
@@ -185,7 +185,7 @@ describe('BaseEngine.OnExternalCacheChange — identical payloads', () => {
     });
 });
 
-describe('BaseEngine.OnExternalCacheChange — bursts (plan N11, receive side)', () => {
+describe('BaseEngine.OnExternalCacheChange — bursts — receive side', () => {
     function version(n: number): CacheChangedEvent {
         return payload([{ ID: 'A1', Name: `v${n}`, __mj_UpdatedAt: `2026-10-0${n}T00:00:00.000Z` }]);
     }

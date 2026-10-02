@@ -263,7 +263,7 @@ export interface EnginePropertyCensus {
 
 /**
  * A read-only snapshot of an engine's state — the rows it holds and the state it derived from
- * them. Row counts alone cannot show a broken engine (the incident behind plan N6 had every
+ * them. Row counts alone cannot show a broken engine (the incident behind  had every
  * count correct and every derived collection empty), so the census carries both.
  */
 export interface EngineStateCensus {
@@ -1774,7 +1774,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         const entity = event.baseEntity;
         // Inside a batch the cache manager records this change and rewrites every slot indexed for
-        // the entity — this config's included — once, when the batch closes (plan N11).
+        // the entity — this config's included — once, when the batch closes.
         if (LocalCacheManager.Instance.IsBatchingEntityEvents(entity?.ProviderToUse)) {
             return;
         }
@@ -2383,7 +2383,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const generation = this.beginConfigRefresh(config.PropertyName);
                     // A burst of payloads for one slot usually arrives together. Let the rest of the
                     // burst claim its generations first, so only the newest payload is materialized
-                    // instead of every one of them (plan N11, receive side).
+                    // instead of every one of them (receive side).
                     await yieldToEventLoop();
                     if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
                         return;

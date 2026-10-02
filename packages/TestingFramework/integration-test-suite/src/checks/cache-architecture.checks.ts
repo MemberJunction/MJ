@@ -23,7 +23,7 @@ import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-int
 const TAG = '(mj-integration-test — safe to delete)';
 
 /**
- * Entities read on a schedule with a filter that embeds the current time (plan N4). Each poll would
+ * Entities read on a schedule with a filter that embeds the current time. Each poll would
  * otherwise mint a new, never-read cache key and publish it to every peer. They are opted out of
  * caching in metadata/entities/.caching-scheduled-poll-entities.json.
  */
@@ -142,7 +142,7 @@ function hashesOf(census: EngineStateCensus): Record<string, string | null> {
 export const CacheArchitectureChecks: NamedCheck[] = [
     {
         Id: 'cache-architecture.CA1',
-        Name: 'CA1: entities polled with a time-varying filter are opted out of caching (plan N4)',
+        Name: 'CA1: entities polled with a time-varying filter are opted out of caching',
         Fn: async (ctx): Promise<void> => {
             for (const name of POLLED_ENTITIES) {
                 const entity = ctx.Provider.EntityByName(name);
@@ -158,7 +158,7 @@ export const CacheArchitectureChecks: NamedCheck[] = [
     {
         Id: 'cache-architecture.CA2',
         RequiresMutation: true,
-        Name: 'CA2: repeated User Routine dispatcher sweeps write no RunView cache slot (plan F2 / 1.1)',
+        Name: 'CA2: repeated User Routine dispatcher sweeps write no RunView cache slot',
         Fn: async (ctx): Promise<void> => {
             const entityName = 'MJ: User Routines';
             const indexBefore = LocalCacheManager.Instance.GetFingerprintsForEntity(entityName).size;
@@ -180,7 +180,7 @@ export const CacheArchitectureChecks: NamedCheck[] = [
     },
     {
         Id: 'cache-architecture.CA3',
-        Name: 'CA3: the engine state census reports derived state that row counts cannot show (plan N6 / 1.6)',
+        Name: 'CA3: the engine state census reports derived state that row counts cannot show',
         Fn: async (ctx): Promise<void> => {
             const engine = AIEngineBase.Instance;
             await engine.Config(false, ctx.User);
@@ -220,7 +220,7 @@ export const CacheArchitectureChecks: NamedCheck[] = [
     {
         Id: 'cache-architecture.CA4',
         RequiresMutation: true,
-        Name: 'CA4: a transaction updates cached slots once, on commit, and never with rolled-back rows (plan N11)',
+        Name: 'CA4: a transaction updates cached slots once, on commit, and never with rolled-back rows',
         Fn: async (ctx): Promise<void> => {
             const fingerprint = await seedPrivateNotesSlot(ctx);
             const provider = (await newNote(ctx, 'CA4 provider probe')).ProviderToUse;

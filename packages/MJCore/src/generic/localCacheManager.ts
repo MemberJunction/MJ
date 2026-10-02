@@ -445,7 +445,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     /** Logged once when a local TTL is configured against a shared store. See {@link runEvictionSweep}. */
     private _sharedTTLWarned = false;
 
-    /** Open entity-event batches (plan N11). See {@link BeginEntityEventBatch}. */
+    /** Open entity-event batches. See {@link BeginEntityEventBatch}. */
     private _entityEventBatches = new EntityEventBatchSet();
 
     private readonly REGISTRY_KEY = '__MJ_CACHE_REGISTRY__';
@@ -1080,7 +1080,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // process wrote that the group no longer lists is one that expired or was cleared
             // elsewhere — and peers may still be holding its rows in memory. Keeping it means the
             // next save invalidates it, which is what publishes the `removed` those peers reload
-            // on (plan F9, pinned by localCacheManager.sharedIndex.test.ts). The invalidation then
+            // on (pinned by localCacheManager.sharedIndex.test.ts). The invalidation then
             // drops it from the index, so that costs one notice per slot, once — not per save.
             // Reviewed as and rejected on that evidence
             for (const fp of shared) {
@@ -1219,7 +1219,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     // ========================================================================
-    // ENTITY-EVENT BATCHES (plan N11)
+    // ENTITY-EVENT BATCHES
     // ========================================================================
 
     /**
@@ -2761,9 +2761,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * defect: the slot is a boot shortcut and a propagation channel, and correctness comes from
      * events. Giving slots a finite expiry opened a window those events could not cross. When a
      * slot expires under running replicas, a save finds nothing to rewrite and publishes nothing,
-     * so every peer engine keeps serving what it loaded (plan F9).
+     * so every peer engine keeps serving what it loaded.
      *
-     * F9's fix — invalidate a slot that cannot be maintained, which publishes `removed` — only
+     * The fix — invalidate a slot that cannot be maintained, which publishes `removed` — only
      * fires if the saving process still holds the fingerprint, and only the process that WROTE the
      * slot did. A server that booted warm read it instead, and a read indexed nothing; behind a
      * load balancer, which server takes the save is arbitrary. A warm read is the only trace such a
