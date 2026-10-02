@@ -160,6 +160,12 @@ export interface RedisProviderConfig {
 export type CachePublishMode = 'full' | 'notice' | 'none';
 
 /**
+ * Receives a message published on a named channel. May be async; a thrown error or rejected
+ * promise is logged and does not stop the other handlers on the channel.
+ */
+export type ChannelMessageHandler = (message: string) => void | Promise<void>;
+
+/**
  * Default category used when none is specified in storage operations.
  * @internal
  */
@@ -393,9 +399,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     private _eventEmitter: EventEmitter = new EventEmitter();
     private _subscriberConnected: boolean = false;
     /** Fully-qualified channel name -> handlers registered via {@link SubscribeToChannel}. */
-    private _channelHandlers: Map<string, Set<(message: string) => void>> = new Map();
+    private _channelHandlers: Map<string, Set<ChannelMessageHandler>> = new Map();
     /** Fully-qualified channel name -> the subscribe still in flight, shared by concurrent callers. */
-    private _pendingChannelSubscribes: Map<string, Promise<Set<(message: string) => void>>> = new Map();
+    private _pendingChannelSubscribes: Map<string, Promise<Set<ChannelMessageHandler>>> = new Map();
+    /** The subscriber start-up in flight or completed, shared by every caller of {@link StartListening}. */
+    private _listening: Promise<void> | null = null;
     private _config: RedisProviderConfig;
 
     /**
@@ -1072,11 +1080,15 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * category tracking. Prefer the `ILocalStorageProvider` methods for
      * standard operations.
      *
+     * For pub/sub, use {@link PublishMessage}, {@link PublishMessageAndWait} and
+     * {@link SubscribeToChannel} instead: they share the provider's subscriber connection and
+     * namespace channels with the key prefix.
+     *
      * @example
      * ```typescript
-     * // Use for Redis-specific commands like pub/sub, streams, etc.
+     * // Use for Redis-specific commands the provider does not wrap, such as streams
      * const client = provider.Client;
-     * await client.publish('cache-invalidation', 'entity:Users');
+     * await client.xadd('audit-events', '*', 'type', 'login');
      * ```
      */
     public get Client(): Redis {
@@ -1111,10 +1123,12 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             this._subscriber = null;
             this._subscriberConnected = false;
         }
+        this._listening = null;
 
         // Remove all event listeners
         this._eventEmitter.removeAllListeners();
         this._channelHandlers.clear();
+        this._pendingChannelSubscribes.clear();
 
         try {
             await this._client.quit();
@@ -1225,7 +1239,8 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * a client in subscribe mode cannot execute other commands).
      *
      * Must be called explicitly after construction. No-op if `enablePubSub` is `false`
-     * in the config, or if already listening.
+     * in the config. Concurrent and repeated calls share one start-up; if it fails, the
+     * subscriber is discarded and the next call starts a fresh one.
      *
      * @example
      * ```typescript
@@ -1249,26 +1264,55 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             return;
         }
 
-        if (this._subscriber) {
-            // Already listening
-            return;
+        if (!this._listening) {
+            const listening = this.openSubscriber();
+            this._listening = listening;
+            listening.catch(() => {
+                if (this._listening === listening) {
+                    this._listening = null;
+                }
+            });
         }
+        return this._listening;
+    }
 
-        this._subscriber = this.createSubscriberClient();
+    /**
+     * Creates the subscriber connection and subscribes it to the cache-invalidation channel.
+     *
+     * The message listener is attached before subscribing, so nothing that arrives is missed. On
+     * failure the connection is closed and cleared: a subscriber left in place would read as
+     * "already listening" to every later caller while delivering nothing.
+     */
+    private async openSubscriber(): Promise<void> {
+        const subscriber = this.createSubscriberClient();
+        this._subscriber = subscriber;
         this.setupSubscriberEventHandlers();
-
-        await this._subscriber.subscribe(this._pubSubChannel);
-        if (this._enableLogging) {
-            LogStatus(`Redis pub/sub: subscribed to channel "${this._pubSubChannel}"`);
-        }
-
-        this._subscriber.on('message', (channel: string, message: string) => {
+        subscriber.on('message', (channel: string, message: string) => {
             if (channel === this._pubSubChannel) {
                 this.handlePubSubMessage(message);
                 return;
             }
             this.dispatchChannelMessage(channel, message);
         });
+
+        try {
+            await subscriber.subscribe(this._pubSubChannel);
+        } catch (err) {
+            this.discardSubscriber(subscriber);
+            throw err;
+        }
+        if (this._enableLogging) {
+            LogStatus(`Redis pub/sub: subscribed to channel "${this._pubSubChannel}"`);
+        }
+    }
+
+    /** Closes a subscriber that failed to start, and clears it if it is still the current one. */
+    private discardSubscriber(subscriber: Redis): void {
+        subscriber.disconnect();
+        if (this._subscriber === subscriber) {
+            this._subscriber = null;
+            this._subscriberConnected = false;
+        }
     }
 
     /**
@@ -1406,19 +1450,22 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     /**
      * Publishes an arbitrary message on a named channel. Fire-and-forget: the promise is not
      * awaited and a failure is logged rather than raised, so a caller on a hot path is never
-     * blocked or broken by the message bus.
+     * blocked or broken by the message bus. Does nothing when pub/sub is disabled.
+     *
+     * Use {@link PublishMessageAndWait} when the caller needs to know whether the message went out.
      *
      * The channel is namespaced with the provider's key prefix, so several applications can share
      * one Redis without hearing each other.
      *
      * @param channel Logical channel name (unprefixed).
      * @param payload Message body. Serialize before calling — this layer is shape-agnostic.
+     * @throws If `channel` is the name reserved for cache invalidation.
      */
     public PublishMessage(channel: string, payload: string): void {
+        const fullChannel = this.qualifyChannel(channel);
         if (!this._enablePubSub) {
             return;
         }
-        const fullChannel = this.qualifyChannel(channel);
         this._client.publish(fullChannel, payload).catch((err) => {
             if (this._enableLogging) {
                 LogError(`Redis pub/sub publish failed on "${fullChannel}": ${(err as Error).message}`);
@@ -1427,27 +1474,64 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
+     * Publishes a message on a named channel and waits for Redis to accept it.
+     *
+     * Use this instead of {@link PublishMessage} when the caller must report honestly whether the
+     * message went out — for example, telling a user whether a cancellation reached the server
+     * running their request.
+     *
+     * While the connection is down the publish waits for it to come back rather than failing, so a
+     * caller that needs a deadline should race it against a timeout.
+     *
+     * @param channel Logical channel name (unprefixed), namespaced as in {@link PublishMessage}.
+     * @param payload Message body. Serialize before calling — this layer is shape-agnostic.
+     * @returns The number of subscribers that received the message, across every process sharing
+     *          the Redis — including this one, if it subscribes to the same channel. Zero means the
+     *          message was published but nobody was listening.
+     * @throws If pub/sub is disabled, if `channel` is reserved, or if Redis rejects the publish.
+     */
+    public async PublishMessageAndWait(channel: string, payload: string): Promise<number> {
+        const fullChannel = this.qualifyChannel(channel);
+        if (!this._enablePubSub) {
+            throw new Error(`Redis pub/sub: cannot publish on "${channel}" — the provider was created without enablePubSub`);
+        }
+        return this._client.publish(fullChannel, payload);
+    }
+
+    /**
      * Registers a handler for messages on a named channel, starting the subscriber if needed.
+     *
+     * When pub/sub is disabled this registers nothing and returns an inert unsubscribe; check
+     * {@link IsPubSubEnabled} to tell that apart from a live subscription.
      *
      * No echo suppression happens here — this layer does not know the payload shape. A publisher
      * that needs it must stamp its own origin on the message and check it in the handler.
      *
-     * @returns A function that removes this handler.
+     * Redis does not replay messages, so anything published while the subscriber is disconnected
+     * is never delivered.
+     *
+     * @param channel Logical channel name (unprefixed), namespaced as in {@link PublishMessage}.
+     * @param handler Called with each message body. May be async.
+     * @returns A function that removes this handler. When the last handler on a channel is
+     *          removed, the provider unsubscribes from it in Redis.
+     * @throws If `channel` is reserved, or if Redis rejects the subscribe.
      */
-    public async SubscribeToChannel(channel: string, handler: (message: string) => void): Promise<() => void> {
+    public async SubscribeToChannel(channel: string, handler: ChannelMessageHandler): Promise<() => void> {
+        const fullChannel = this.qualifyChannel(channel);
         if (!this._enablePubSub) {
             return () => undefined;
         }
 
         await this.StartListening();
-        const fullChannel = this.qualifyChannel(channel);
-
         const handlers = await this.channelHandlersFor(fullChannel);
         handlers.add(handler);
 
-        return () => {
-            handlers.delete(handler);
-        };
+        return () => this.removeChannelHandler(fullChannel, handlers, handler);
+    }
+
+    /** Whether the provider was created with `enablePubSub`. When false, the channel methods do nothing. */
+    public get IsPubSubEnabled(): boolean {
+        return this._enablePubSub;
     }
 
     /**
@@ -1457,7 +1541,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * starting its own would publish its own handler set, and the last to finish would replace
      * the others' sets, so their handlers would never receive a message.
      */
-    private channelHandlersFor(fullChannel: string): Promise<Set<(message: string) => void>> {
+    private channelHandlersFor(fullChannel: string): Promise<Set<ChannelMessageHandler>> {
         const existing = this._channelHandlers.get(fullChannel);
         if (existing) {
             return Promise.resolve(existing);
@@ -1481,14 +1565,40 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * channel is subscribed — registering handlers against a channel Redis is not listening on,
      * with nothing surfaced.
      */
-    private async subscribeChannel(fullChannel: string): Promise<Set<(message: string) => void>> {
-        await this._subscriber?.subscribe(fullChannel);
-        const handlers = new Set<(message: string) => void>();
+    private async subscribeChannel(fullChannel: string): Promise<Set<ChannelMessageHandler>> {
+        if (!this._subscriber) {
+            throw new Error(`Redis pub/sub: cannot subscribe to "${fullChannel}" — the subscriber is not running`);
+        }
+        await this._subscriber.subscribe(fullChannel);
+        const handlers = new Set<ChannelMessageHandler>();
         this._channelHandlers.set(fullChannel, handlers);
         if (this._enableLogging) {
             LogStatus(`Redis pub/sub: subscribed to channel "${fullChannel}"`);
         }
         return handlers;
+    }
+
+    /**
+     * Removes one handler, and unsubscribes the channel in Redis when it was the last.
+     *
+     * Safe to call more than once. A handler set that is no longer the channel's current one
+     * belongs to a subscription already released, so it never triggers a second unsubscribe. A
+     * subscribe that arrives while the unsubscribe is in flight is queued behind it on the same
+     * connection, so the channel ends up subscribed.
+     */
+    private removeChannelHandler(fullChannel: string, handlers: Set<ChannelMessageHandler>, handler: ChannelMessageHandler): void {
+        if (!handlers.delete(handler) || handlers.size > 0) {
+            return;
+        }
+        if (this._channelHandlers.get(fullChannel) !== handlers) {
+            return;
+        }
+        this._channelHandlers.delete(fullChannel);
+        this._subscriber?.unsubscribe(fullChannel).catch((err) => {
+            if (this._enableLogging) {
+                LogError(`Redis pub/sub unsubscribe failed on "${fullChannel}": ${(err as Error).message}`);
+            }
+        });
     }
 
     /** Routes an inbound message to the handlers registered for its channel. @internal */
@@ -1498,19 +1608,41 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             return;
         }
         for (const handler of handlers) {
-            try {
-                handler(message);
-            } catch (err) {
-                if (this._enableLogging) {
-                    LogError(`Redis pub/sub handler for "${channel}" threw: ${(err as Error).message}`);
-                }
-            }
+            this.invokeChannelHandler(channel, handler, message);
         }
     }
 
-    /** Namespaces a channel with the provider's key prefix. @internal */
+    /**
+     * Runs one handler, containing a throw or a rejected promise so the other handlers still run.
+     *
+     * Failures are logged even when `enableLogging` is off: that setting quiets connection noise,
+     * and a failing handler is a defect in the consumer that would otherwise vanish.
+     */
+    private invokeChannelHandler(channel: string, handler: ChannelMessageHandler, message: string): void {
+        const report = (err: unknown) => {
+            LogError(`Redis pub/sub handler for "${channel}" failed: ${err instanceof Error ? err.message : String(err)}`);
+        };
+        try {
+            const result = handler(message);
+            if (result instanceof Promise) {
+                result.catch(report);
+            }
+        } catch (err) {
+            report(err);
+        }
+    }
+
+    /**
+     * Namespaces a channel with the provider's key prefix.
+     * @throws If the result is the channel reserved for cache invalidation, where a message would
+     *         be read as a cache change by every server.
+     */
     private qualifyChannel(channel: string): string {
-        return `${this._keyPrefix}:${channel}`;
+        const fullChannel = `${this._keyPrefix}:${channel}`;
+        if (fullChannel === this._pubSubChannel) {
+            throw new Error(`Redis pub/sub: channel "${channel}" is reserved for cache invalidation`);
+        }
+        return fullChannel;
     }
 
     /**

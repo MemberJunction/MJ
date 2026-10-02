@@ -875,6 +875,7 @@ After load, `_localMetadata` is held in memory on the provider instance for the 
 - Self-message filtering via `MJGlobal.Instance.ProcessUUID`
 - `OnCacheChanged` callback for reacting to remote cache changes
 - Configurable logging for debugging pub/sub flow
+- Named application channels (`PublishMessage`, `PublishMessageAndWait`, `SubscribeToChannel`) on the same connections, prefixed `mj:<channel>`. MJAPI's cross-instance push-status fan-out uses one. Details and caveats are in the package README.
 
 **Pub/sub message format:**
 ```json

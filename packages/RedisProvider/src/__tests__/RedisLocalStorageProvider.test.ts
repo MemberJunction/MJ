@@ -1117,6 +1117,162 @@ describe('RedisLocalStorageProvider', () => {
             expect(() => unsubscribe()).not.toThrow();
             await p.Disconnect();
         });
+
+        it('reports whether pub/sub is enabled', async () => {
+            const on = new RedisLocalStorageProvider({ enablePubSub: true, enableLogging: false });
+            const off = new RedisLocalStorageProvider({ enablePubSub: false, enableLogging: false });
+
+            expect(on.IsPubSubEnabled).toBe(true);
+            expect(off.IsPubSubEnabled).toBe(false);
+            await on.Disconnect();
+            await off.Disconnect();
+        });
+
+        it('refuses the channel reserved for cache invalidation', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+
+            expect(() => p.PublishMessage('__pubsub__', 'forged')).toThrow(/reserved/);
+            await expect(p.PublishMessageAndWait('__pubsub__', 'forged')).rejects.toThrow(/reserved/);
+            await expect(p.SubscribeToChannel('__pubsub__', vi.fn())).rejects.toThrow(/reserved/);
+            expect(p.Client.publish).not.toHaveBeenCalled();
+            await p.Disconnect();
+        });
+
+        describe('PublishMessageAndWait', () => {
+            it('resolves to the number of subscribers that received the message', async () => {
+                const p = new RedisLocalStorageProvider({
+                    enablePubSub: true,
+                    enableLogging: false,
+                    keyPrefix: 'app1',
+                });
+                (p.Client.publish as ReturnType<typeof vi.fn>).mockResolvedValueOnce(3);
+
+                const received = await p.PublishMessageAndWait('abort', 'payload');
+
+                expect(received).toBe(3);
+                expect(p.Client.publish).toHaveBeenCalledWith('app1:abort', 'payload');
+                await p.Disconnect();
+            });
+
+            it('rejects when pub/sub is disabled, rather than reporting a delivery', async () => {
+                const p = new RedisLocalStorageProvider({ enablePubSub: false, enableLogging: false });
+
+                await expect(p.PublishMessageAndWait('abort', 'payload')).rejects.toThrow(/enablePubSub/);
+                expect(p.Client.publish).not.toHaveBeenCalled();
+                await p.Disconnect();
+            });
+
+            it('rejects when Redis rejects the publish', async () => {
+                const p = new RedisLocalStorageProvider({ enablePubSub: true, enableLogging: false });
+                (p.Client.publish as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('redis down'));
+
+                await expect(p.PublishMessageAndWait('abort', 'payload')).rejects.toThrow('redis down');
+                await p.Disconnect();
+            });
+        });
+
+        describe('releasing a channel', () => {
+            type MockSubscriber = {
+                subscribe: ReturnType<typeof vi.fn>;
+                unsubscribe: ReturnType<typeof vi.fn>;
+                _simulateMessage: (channel: string, message: string) => void;
+            };
+            const subscriberOf = (p: RedisLocalStorageProvider): MockSubscriber =>
+                (p as unknown as { _subscriber: MockSubscriber })._subscriber;
+
+            it('unsubscribes from Redis only when the last handler leaves, and only once', async () => {
+                const p = new RedisLocalStorageProvider({
+                    enablePubSub: true,
+                    enableLogging: false,
+                    keyPrefix: 'mj',
+                });
+                const first = await p.SubscribeToChannel('abort', vi.fn());
+                const second = await p.SubscribeToChannel('abort', vi.fn());
+                const subscriber = subscriberOf(p);
+
+                first();
+                expect(subscriber.unsubscribe).not.toHaveBeenCalledWith('mj:abort');
+
+                second();
+                second();
+                const released = subscriber.unsubscribe.mock.calls.filter((c: unknown[]) => c[0] === 'mj:abort');
+                expect(released).toHaveLength(1);
+                await p.Disconnect();
+            });
+
+            it('subscribes again when a handler arrives after the channel was released', async () => {
+                const p = new RedisLocalStorageProvider({
+                    enablePubSub: true,
+                    enableLogging: false,
+                    keyPrefix: 'mj',
+                });
+                const unsubscribe = await p.SubscribeToChannel('abort', vi.fn());
+                unsubscribe();
+
+                const handler = vi.fn();
+                await p.SubscribeToChannel('abort', handler);
+                const subscriber = subscriberOf(p);
+                subscriber._simulateMessage('mj:abort', 'payload');
+
+                const subscribes = subscriber.subscribe.mock.calls.filter((c: unknown[]) => c[0] === 'mj:abort');
+                expect(subscribes).toHaveLength(2);
+                expect(handler).toHaveBeenCalledWith('payload');
+                await p.Disconnect();
+            });
+
+            it('starts a fresh subscriber when the first one failed to subscribe', async () => {
+                // A subscriber left behind by a failed start reads as "already listening" to every
+                // later caller, and has no message listener, so their handlers never fire.
+                const p = new RedisLocalStorageProvider({
+                    enablePubSub: true,
+                    enableLogging: false,
+                    keyPrefix: 'mj',
+                });
+                const internals = p as unknown as { createSubscriberClient: () => MockSubscriber };
+                const createSubscriber = internals.createSubscriberClient.bind(p);
+                let created = 0;
+                internals.createSubscriberClient = () => {
+                    const client = createSubscriber();
+                    if (created++ === 0) {
+                        client.subscribe.mockRejectedValueOnce(new Error('redis down'));
+                    }
+                    return client;
+                };
+
+                await expect(p.SubscribeToChannel('abort', vi.fn())).rejects.toThrow('redis down');
+                const handler = vi.fn();
+                await p.SubscribeToChannel('abort', handler);
+                subscriberOf(p)._simulateMessage('mj:abort', 'payload');
+
+                expect(handler).toHaveBeenCalledWith('payload');
+                await p.Disconnect();
+            });
+        });
+
+        it('contains a rejected promise from an async handler and logs it', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            const good = vi.fn();
+            await p.SubscribeToChannel('abort', async () => {
+                throw new Error('async handler blew up');
+            });
+            await p.SubscribeToChannel('abort', good);
+
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:abort', 'payload');
+            await new Promise(resolve => setImmediate(resolve));
+
+            expect(good).toHaveBeenCalledWith('payload');
+            expect(LogError).toHaveBeenCalledWith(expect.stringContaining('async handler blew up'));
+            await p.Disconnect();
+        });
     });
 
     // ────────────────────────────────────────────────────────────────────────
