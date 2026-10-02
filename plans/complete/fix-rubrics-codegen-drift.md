@@ -165,6 +165,13 @@ FROM __mj.Entity e WHERE e.Name LIKE 'MJ: Rubric%';
 
 ### Step 3 — Author the new migration
 
+> **As shipped (changed in review):** the CodeGen output was NOT shipped as a new file. Per the
+> maintainer, CodeGen SQL is appended to the migration it originated from, so it lives at the end
+> of `V202609302342__v6.2.x__Rubrics.sql`, after 50 blank lines and a "Pass 2 (hierarchy)" banner.
+> That migration is in no release tag (it postdates `v6.2.0-edge.1`), and nothing in 2343–2345
+> references the objects the block rebuilds, so running it earlier is equivalent. The steps
+> below describe the original new-file approach.
+
 ```bash
 date +"%Y%m%d%H%M"     # must sort AFTER V202609302345 and after anything else on next at merge time
 ```
