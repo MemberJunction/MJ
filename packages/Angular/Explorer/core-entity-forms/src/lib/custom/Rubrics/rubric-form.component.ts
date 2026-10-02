@@ -6,7 +6,7 @@ import { RegisterClass, RegisterClassEx, UUIDsEqual } from '@memberjunction/glob
 import { BaseFormComponent, BaseFormPolicy, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { bandFromRow, NodeFields, nodeFromRow, PlanNodeSave, planBandSave, QueueNodeSave, publishPreview, scaleFromRow, VersionShownWithoutDraft, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionCard, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
-import { MJRubricEntity } from '@memberjunction/core-entities';
+import { MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { MJRubricFormComponent } from '../../generated/Entities/MJRubric/mjrubric.form.component';
 
 /**
@@ -207,11 +207,15 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
 
     public async OnPublish(event: { bump: string | null; summary: string }): Promise<void> {
         if (!this.DraftId) return;
-        const version = await this.ProviderToUse.GetEntityObject('MJ: Rubric Versions', this.ProviderToUse.CurrentUser);
-        await version.InnerLoad(CompositeKey.FromID(this.DraftId));
-        version.Set('ChangeSummary', event.summary);
-        if (event.bump === 'Major' || event.bump === 'Minor' || event.bump === 'Patch') version.Set('RequestedBump', event.bump);
-        version.Set('Status', 'Published');
+        const version = await this.ProviderToUse.GetEntityObject<MJRubricVersionEntity>('MJ: Rubric Versions', this.ProviderToUse.CurrentUser);
+        const loaded = await version.InnerLoad(CompositeKey.FromID(this.DraftId));
+        if (!loaded) {
+            this.Message = 'The draft version was not found.';
+            return;
+        }
+        version.ChangeSummary = event.summary;
+        if (event.bump === 'Major' || event.bump === 'Minor' || event.bump === 'Patch') version.RequestedBump = event.bump;
+        version.Status = 'Published';
         const ok = await version.Save();
         this.Message = ok ? 'Published.' : (version.LatestResult?.Message ?? 'Publish failed.');
         await this.LoadWorkspace();
@@ -256,18 +260,85 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     }
 
     private async write(entityName: string, id: string, isNew: boolean, fields: Record<string, unknown>): Promise<void> {
-        const row = await this.ProviderToUse.GetEntityObject(entityName, this.ProviderToUse.CurrentUser);
-        if (isNew) row.NewRecord();
-        else await row.InnerLoad(CompositeKey.FromID(id));
-        for (const [name, value] of Object.entries(fields)) row.Set(name, value);
-        if (isNew) row.Set('ID', id);
-        await row.Save();
+        if (entityName === 'MJ: Rubric Criteria') return this.saveCriterion(id, isNew, fields);
+        if (entityName === 'MJ: Rubric Bands') return this.saveBand(id, isNew, fields);
+        if (entityName === 'MJ: Rubric Criterion Levels') return this.saveLevel(id, isNew, fields);
+        throw new Error(`Cannot save ${entityName}.`);
+    }
+
+    private async saveCriterion(id: string, isNew: boolean, fields: Record<string, unknown>): Promise<void> {
+        const row = await this.ProviderToUse.GetEntityObject<MJRubricCriterionEntity>('MJ: Rubric Criteria', this.ProviderToUse.CurrentUser);
+        if (!(await this.openRow(row, id, isNew, 'criterion'))) return;
+        if (isNew) row.ID = id;
+        row.RubricVersionID = text(fields.RubricVersionID);
+        row.ParentID = textOrNull(fields.ParentID);
+        row.Key = text(fields.Key);
+        row.Name = text(fields.Name);
+        row.Description = textOrNull(fields.Description);
+        row.Guidance = textOrNull(fields.Guidance);
+        row.NodeType = fields.NodeType === 'Group' ? 'Group' : 'Criterion';
+        row.ScaleID = textOrNull(fields.ScaleID);
+        row.Weight = numberOrZero(fields.Weight);
+        row.IsAdvisory = flag(fields.IsAdvisory);
+        row.IsGate = flag(fields.IsGate);
+        row.GateMinimumScore = numberOrNull(fields.GateMinimumScore);
+        row.NotApplicablePolicy = policyOrNull(fields.NotApplicablePolicy);
+        row.RollupMethod = rollupOrNull(fields.RollupMethod);
+        row.EvidenceRequired = flag(fields.EvidenceRequired);
+        row.RationaleRequired = flag(fields.RationaleRequired);
+        row.Sequence = numberOrZero(fields.Sequence);
+        await this.requireSave(row, 'criterion');
+    }
+
+    private async saveBand(id: string, isNew: boolean, fields: Record<string, unknown>): Promise<void> {
+        const row = await this.ProviderToUse.GetEntityObject<MJRubricBandEntity>('MJ: Rubric Bands', this.ProviderToUse.CurrentUser);
+        if (!(await this.openRow(row, id, isNew, 'band'))) return;
+        if (isNew) row.ID = id;
+        row.RubricVersionID = text(fields.RubricVersionID);
+        row.Label = text(fields.Label);
+        row.Description = textOrNull(fields.Description);
+        row.MinScore = numberOrZero(fields.MinScore);
+        row.MaxScore = numberOrZero(fields.MaxScore);
+        row.DisplayTone = toneOrNeutral(fields.DisplayTone);
+        row.Sequence = numberOrZero(fields.Sequence);
+        await this.requireSave(row, 'band');
+    }
+
+    private async saveLevel(id: string, isNew: boolean, fields: Record<string, unknown>): Promise<void> {
+        const row = await this.ProviderToUse.GetEntityObject<MJRubricCriterionLevelEntity>('MJ: Rubric Criterion Levels', this.ProviderToUse.CurrentUser);
+        if (!(await this.openRow(row, id, isNew, 'anchor'))) return;
+        if (isNew) row.ID = id;
+        const criterionId = textOrNull(fields.CriterionID);
+        if (criterionId) row.CriterionID = criterionId;
+        row.ScaleLevelID = textOrNull(fields.ScaleLevelID);
+        row.AnchorValue = numberOrNull(fields.AnchorValue);
+        row.Descriptor = text(fields.Descriptor);
+        await this.requireSave(row, 'anchor');
+    }
+
+    private async openRow(row: { NewRecord: () => void; InnerLoad: (key: CompositeKey) => Promise<boolean> }, id: string, isNew: boolean, label: string): Promise<boolean> {
+        if (isNew) {
+            row.NewRecord();
+            return true;
+        }
+        const loaded = await row.InnerLoad(CompositeKey.FromID(id));
+        if (!loaded) throw new Error(`The ${label} was not found.`);
+        return true;
+    }
+
+    private async requireSave(row: { Save: () => Promise<boolean>; LatestResult?: { Message?: string } | null }, label: string): Promise<void> {
+        if (!await row.Save()) throw new Error(row.LatestResult?.Message || `Could not save the ${label}.`);
     }
 
     private async remove(entityName: string, id: string): Promise<void> {
-        const row = await this.ProviderToUse.GetEntityObject(entityName, this.ProviderToUse.CurrentUser);
-        await row.InnerLoad(CompositeKey.FromID(id));
-        await row.Delete();
+        const row = entityName === 'MJ: Rubric Criteria'
+            ? await this.ProviderToUse.GetEntityObject<MJRubricCriterionEntity>(entityName, this.ProviderToUse.CurrentUser)
+            : entityName === 'MJ: Rubric Bands'
+                ? await this.ProviderToUse.GetEntityObject<MJRubricBandEntity>(entityName, this.ProviderToUse.CurrentUser)
+                : await this.ProviderToUse.GetEntityObject<MJRubricCriterionLevelEntity>('MJ: Rubric Criterion Levels', this.ProviderToUse.CurrentUser);
+        const loaded = await row.InnerLoad(CompositeKey.FromID(id));
+        if (!loaded) throw new Error(`The ${entityName} row was not found.`);
+        if (!await row.Delete()) throw new Error(row.LatestResult?.Message || `Could not delete the ${entityName} row.`);
     }
 
     private snapshot(row: Record<string, unknown>, nodes: RubricNodeSnapshot[], bands: RubricBandSnapshot[]): RubricVersionSnapshot {
@@ -291,8 +362,45 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     private async rows(entityName: string, filter: string): Promise<Record<string, unknown>[]> {
         const view = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 500 }, this.ProviderToUse.CurrentUser);
+        if (!result.Success) throw new Error(result.ErrorMessage || `Could not read ${entityName}.`);
         return (result.Results ?? []) as Record<string, unknown>[];
     }
+}
+
+function text(value: unknown): string {
+    return value == null ? '' : String(value);
+}
+
+function textOrNull(value: unknown): string | null {
+    if (value == null || value === '') return null;
+    return String(value);
+}
+
+function numberOrZero(value: unknown): number {
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function numberOrNull(value: unknown): number | null {
+    if (value == null || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function flag(value: unknown): boolean {
+    return value === true || value === 1;
+}
+
+function policyOrNull(value: unknown): 'CountAsZero' | 'ExcludeAndRedistribute' | 'FailEvaluation' | 'NotAllowed' | null {
+    return value === 'CountAsZero' || value === 'ExcludeAndRedistribute' || value === 'FailEvaluation' || value === 'NotAllowed' ? value : null;
+}
+
+function rollupOrNull(value: unknown): 'Maximum' | 'Minimum' | 'WeightedMean' | null {
+    return value === 'Maximum' || value === 'Minimum' || value === 'WeightedMean' ? value : null;
+}
+
+function toneOrNeutral(value: unknown): 'Error' | 'Info' | 'Neutral' | 'Success' | 'Warning' {
+    return value === 'Error' || value === 'Info' || value === 'Success' || value === 'Warning' ? value : 'Neutral';
 }
 
 /** The rubric record uses the left-nav rail. Each contribution is one item. */

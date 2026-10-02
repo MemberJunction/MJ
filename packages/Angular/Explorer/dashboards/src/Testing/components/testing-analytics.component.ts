@@ -75,6 +75,9 @@ interface VersionRow {
 
     <ng-template #content>
     <div class="testing-analytics">
+      @if (RubricAnalyticsError) {
+        <p role="alert">{{ RubricAnalyticsError }}</p>
+      }
       @if (RubricTrend.length || FailureRates.length) {
         <div class="section-title">
           <i class="fa-solid fa-scale-balanced"></i>
@@ -305,6 +308,8 @@ interface VersionRow {
       <div class="card version-card">
         @if (IsLoadingVersions) {
           <div class="empty-mini"><i class="fa-solid fa-spinner fa-spin"></i><span>Loading versions...</span></div>
+        } @else if (VersionMetricsError) {
+          <p role="alert">{{ VersionMetricsError }}</p>
         } @else if (VersionRows.length === 0) {
           <mj-empty-state Size="compact" Icon="fa-solid fa-code-branch" Title="No version data available" />
         } @else {
@@ -828,6 +833,8 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   IsLoadingVersions = false;
   RubricTrend: { at: string; score: number }[] = [];
   FailureRates: { key: string; rate: number; count: number }[] = [];
+  RubricAnalyticsError = '';
+  VersionMetricsError = '';
 
   // Cached breakdown name lists for the dashboard's agent context.
   private topFailingNames: string[] = [];
@@ -869,6 +876,7 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
       if (!provider) return;
       const view = RunView.FromMetadataProvider(provider);
       const runs = await view.RunView({ EntityName: 'MJ: Test Suite Runs', ExtraFilter: 'Score IS NOT NULL', ResultType: 'simple', MaxRows: 200 });
+      if (!runs.Success) throw new Error(runs.ErrorMessage || 'Could not load suite runs.');
       const points = ((runs.Results ?? []) as Record<string, unknown>[]).map(row => ({
         at: String(row.CompletedAt ?? row.__mj_CreatedAt ?? ''),
         score: row.Score == null ? null : Number(row.Score),
@@ -877,8 +885,11 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
       const scopes = [...new Set(points.map(point => point.scopeId).filter(id => id.length > 0))];
       this.RubricTrend = scopes.map(scope => scoreTrend(points, scope)).sort((left, right) => right.length - left.length)[0] ?? [];
       const scores = await view.RunView({ EntityName: 'MJ: Rubric Evaluation Scores', ExtraFilter: 'NormalizedScore IS NOT NULL', ResultType: 'simple', MaxRows: 1000 });
+      if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not load rubric scores.');
       const evaluations = await view.RunView({ EntityName: 'MJ: Rubric Evaluations', ExtraFilter: `Status='Submitted'`, ResultType: 'simple', MaxRows: 500 });
+      if (!evaluations.Success) throw new Error(evaluations.ErrorMessage || 'Could not load evaluations.');
       const versions = await view.RunView({ EntityName: 'MJ: Rubric Versions', ResultType: 'simple', MaxRows: 500 });
+      if (!versions.Success) throw new Error(versions.ErrorMessage || 'Could not load rubric versions.');
       const evaluationById = new Map(((evaluations.Results ?? []) as Record<string, unknown>[]).map(row => [String(row.ID), row]));
       const thresholdByVersion = new Map(((versions.Results ?? []) as Record<string, unknown>[]).map(row => [String(row.ID), row.PassThreshold == null ? null : Number(row.PassThreshold)]));
       this.FailureRates = criterionFailureRates(((scores.Results ?? []) as Record<string, unknown>[]).map(row => {
@@ -891,10 +902,13 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
           passThreshold: thresholdByVersion.get(versionId) ?? null,
         };
       }).filter(row => row.key.length > 0));
+      this.RubricAnalyticsError = '';
       this.cdr.markForCheck();
-    } catch {
+    } catch (error) {
       this.RubricTrend = [];
       this.FailureRates = [];
+      this.RubricAnalyticsError = error instanceof Error ? error.message : 'Could not load rubric analytics.';
+      this.cdr.markForCheck();
     }
   }
 
@@ -1100,8 +1114,10 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
     try {
       const metrics = await this.instrumentationService.getVersionMetrics();
       this.VersionRows = this.buildVersionRows(metrics);
-    } catch {
+      this.VersionMetricsError = '';
+    } catch (error) {
       this.VersionRows = [];
+      this.VersionMetricsError = error instanceof Error ? error.message : 'Could not load version metrics.';
     } finally {
       this.IsLoadingVersions = false;
       this.emitState();

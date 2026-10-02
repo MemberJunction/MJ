@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
-import { MJRubricScaleEntity } from '@memberjunction/core-entities';
+import { MJRubricScaleEntity, MJRubricScaleLevelEntity } from '@memberjunction/core-entities';
 import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPanel, BaseFormPolicy, BaseFormsModule, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { MJRubricScaleFormComponent } from '../../generated/Entities/MJRubricScale/mjrubricscale.form.component';
@@ -17,6 +17,7 @@ export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormCompone
     public Loading = true;
     public Frozen = false;
     public Levels: Record<string, unknown>[] = [];
+    public Message = '';
 
     public get RangeMin(): string {
         const values = this.Levels.map(level => Number(level.Value)).filter(value => Number.isFinite(value));
@@ -43,6 +44,10 @@ export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormCompone
                 ResultType: 'simple',
                 MaxRows: 200,
             }, this.ProviderToUse.CurrentUser);
+            if (!result.Success) {
+                this.Message = result.ErrorMessage || 'Could not load the scale levels.';
+                return;
+            }
             this.Levels = (result.Results ?? []) as Record<string, unknown>[];
             const used = await view.RunView({
                 EntityName: 'MJ: Rubric Criteria',
@@ -50,13 +55,22 @@ export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormCompone
                 ResultType: 'simple',
                 MaxRows: 50,
             }, this.ProviderToUse.CurrentUser);
+            if (!used.Success) {
+                this.Message = used.ErrorMessage || 'Could not load criteria that use this scale.';
+                return;
+            }
             const versionIds = [...new Set(((used.Results ?? []) as { RubricVersionID?: string }[]).map(row => row.RubricVersionID).filter((id): id is string => !!id))];
-            const published = versionIds.length === 0 ? { Results: [] } : await view.RunView({
+            const published = versionIds.length === 0 ? { Success: true, Results: [] as unknown[] } : await view.RunView({
                 EntityName: 'MJ: Rubric Versions',
                 ExtraFilter: `Status='Published' AND ID IN (${versionIds.map(id => `'${id}'`).join(',')})`,
                 ResultType: 'simple',
                 MaxRows: 1,
             }, this.ProviderToUse.CurrentUser);
+            if (!published.Success) {
+                const message = 'ErrorMessage' in published ? published.ErrorMessage : '';
+                this.Message = message || 'Could not check whether this scale is published.';
+                return;
+            }
             this.Frozen = (published.Results ?? []).length > 0;
         } finally {
             this.Loading = false;
@@ -65,20 +79,38 @@ export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormCompone
 
     public async OnLabel(level: Record<string, unknown>, event: Event): Promise<void> {
         const label = (event.target as HTMLInputElement).value;
-        const row = await this.ProviderToUse.GetEntityObject('MJ: Rubric Scale Levels', this.ProviderToUse.CurrentUser);
-        await row.InnerLoad(CompositeKey.FromID(String(level.ID)));
-        row.Set('Label', label);
-        await row.Save();
+        const row = await this.level(String(level.ID));
+        if (!row) return;
+        row.Label = label;
+        if (!await row.Save()) {
+            this.Message = row.LatestResult?.Message || 'Could not save the label.';
+            return;
+        }
         level.Label = label;
+        this.Message = '';
     }
 
     public async OnDescription(level: Record<string, unknown>, event: Event): Promise<void> {
         const description = (event.target as HTMLInputElement).value;
-        const row = await this.ProviderToUse.GetEntityObject('MJ: Rubric Scale Levels', this.ProviderToUse.CurrentUser);
-        await row.InnerLoad(CompositeKey.FromID(String(level.ID)));
-        row.Set('Description', description);
-        await row.Save();
+        const row = await this.level(String(level.ID));
+        if (!row) return;
+        row.Description = description;
+        if (!await row.Save()) {
+            this.Message = row.LatestResult?.Message || 'Could not save the description.';
+            return;
+        }
         level.Description = description;
+        this.Message = '';
+    }
+
+    private async level(id: string): Promise<MJRubricScaleLevelEntity | null> {
+        const row = await this.ProviderToUse.GetEntityObject<MJRubricScaleLevelEntity>('MJ: Rubric Scale Levels', this.ProviderToUse.CurrentUser);
+        const loaded = await row.InnerLoad(CompositeKey.FromID(id));
+        if (!loaded) {
+            this.Message = 'The scale level was not found.';
+            return null;
+        }
+        return row;
     }
 }
 

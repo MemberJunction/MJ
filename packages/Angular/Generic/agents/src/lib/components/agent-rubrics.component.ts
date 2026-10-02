@@ -1,5 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
+import { MJAIAgentRubricEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DisableLink, MakeDefaultLink, SortAgentRubrics, type AgentRubricLink } from './agent-rubrics.model';
@@ -89,6 +90,7 @@ export class AgentRubricsComponent extends BaseAngularComponent {
                 ResultType: 'simple',
                 MaxRows: 100,
             }, this.ProviderToUse?.CurrentUser);
+            if (!links.Success) throw new Error(links.ErrorMessage || 'Could not load rubric links.');
             this.Links = SortAgentRubrics((links.Results ?? []) as typeof this.Links);
             const rubrics = await view.RunView({
                 EntityName: 'MJ: Rubrics',
@@ -96,6 +98,7 @@ export class AgentRubricsComponent extends BaseAngularComponent {
                 ResultType: 'simple',
                 MaxRows: 200,
             }, this.ProviderToUse?.CurrentUser);
+            if (!rubrics.Success) throw new Error(rubrics.ErrorMessage || 'Could not load rubrics.');
             this.RubricOptions = ((rubrics.Results ?? []) as { ID: string; Name: string }[]).sort((left, right) => left.Name.localeCompare(right.Name));
             if (!this.RubricID && this.RubricOptions[0]) this.RubricID = this.RubricOptions[0].ID;
             this.loaded = true;
@@ -110,13 +113,13 @@ export class AgentRubricsComponent extends BaseAngularComponent {
         event.preventDefault();
         if (!this.agentID || !this.RubricID || !this.ProviderToUse) return;
         if (this.IsDefault) await this.clearOtherDefaults(this.Purpose);
-        const row = await this.ProviderToUse.GetEntityObject('MJ: AI Agent Rubrics', this.ProviderToUse.CurrentUser);
+        const row = await this.ProviderToUse.GetEntityObject<MJAIAgentRubricEntity>('MJ: AI Agent Rubrics', this.ProviderToUse.CurrentUser);
         row.NewRecord();
-        row.Set('AgentID', this.agentID);
-        row.Set('RubricID', this.RubricID);
-        row.Set('Purpose', this.Purpose);
-        row.Set('Status', 'Active');
-        row.Set('IsDefault', this.IsDefault);
+        row.AgentID = this.agentID;
+        row.RubricID = this.RubricID;
+        row.Purpose = this.Purpose === 'ProductionSampling' || this.Purpose === 'SelfCheck' ? this.Purpose : 'Evaluation';
+        row.Status = 'Active';
+        row.IsDefault = this.IsDefault;
         if (!await row.Save()) {
             this.Error = row.LatestResult?.Message || 'Could not add the rubric.';
             return;
@@ -151,11 +154,13 @@ export class AgentRubricsComponent extends BaseAngularComponent {
         }
     }
 
-    private async saveLink(id: string, fields: Record<string, unknown>): Promise<void> {
+    private async saveLink(id: string, fields: { Status?: string; IsDefault?: boolean | number }): Promise<void> {
         if (!this.ProviderToUse) return;
-        const row = await this.ProviderToUse.GetEntityObject('MJ: AI Agent Rubrics', this.ProviderToUse.CurrentUser);
-        await row.InnerLoad(CompositeKey.FromID(id));
-        for (const [field, value] of Object.entries(fields)) row.Set(field, value);
+        const row = await this.ProviderToUse.GetEntityObject<MJAIAgentRubricEntity>('MJ: AI Agent Rubrics', this.ProviderToUse.CurrentUser);
+        if (!await row.InnerLoad(CompositeKey.FromID(id))) throw new Error('The rubric link was not found.');
+        if (fields.Status === 'Active' || fields.Status === 'Disabled') row.Status = fields.Status;
+        if (fields.IsDefault === true || fields.IsDefault === 1) row.IsDefault = true;
+        else if (fields.IsDefault === false || fields.IsDefault === 0) row.IsDefault = false;
         if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not update the rubric link.');
     }
 }

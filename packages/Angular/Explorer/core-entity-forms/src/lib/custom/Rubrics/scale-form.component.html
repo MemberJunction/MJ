@@ -3,6 +3,9 @@
     <p>Loading the scale...</p>
   } @else {
     <section class="scale-sheet">
+      @if (Form.Message) {
+        <p class="callout" role="alert">{{ Form.Message }}</p>
+      }
       @if (Form.Frozen) {
         <p class="callout">This scale is used by a published rubric. Level values stay locked. Labels and descriptions stay editable.</p>
       }

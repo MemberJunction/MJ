@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { CompositeKey, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { MJRubricCriterionLevelEntity } from '@memberjunction/core-entities';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { CategoryParentChoices, HostSnapshot, PriorPublishedVersion, ScaleIsFrozen } from './form-hosts.model';
 import { publishPreview } from './model.js';
@@ -190,13 +191,13 @@ export class RubricCriterionHostComponent implements OnChanges {
             const match = saved.find(row => String(row.ScaleLevelID ?? '') === String(anchor.scaleLevelId ?? '') && !used.has(String(row.ID)));
             if (match) {
                 used.add(String(match.ID));
-                await writeFields(this.Provider, 'MJ: Rubric Criterion Levels', String(match.ID), false, { Descriptor: anchor.descriptor, ScaleLevelID: anchor.scaleLevelId });
+                await saveLevel(this.Provider, String(match.ID), false, { Descriptor: anchor.descriptor, ScaleLevelID: anchor.scaleLevelId ?? null });
             } else if (anchor.descriptor) {
-                await writeFields(this.Provider, 'MJ: Rubric Criterion Levels', '', true, { CriterionID: this.CriterionId, Descriptor: anchor.descriptor, ScaleLevelID: anchor.scaleLevelId });
+                await saveLevel(this.Provider, '', true, { CriterionID: this.CriterionId, Descriptor: anchor.descriptor, ScaleLevelID: anchor.scaleLevelId ?? null });
             }
         }
         for (const row of saved) {
-            if (!used.has(String(row.ID))) await removeRow(this.Provider, 'MJ: Rubric Criterion Levels', String(row.ID));
+            if (!used.has(String(row.ID))) await deleteLevel(this.Provider, String(row.ID));
         }
     }
     private async load(): Promise<void> {
@@ -229,6 +230,7 @@ export class RubricCriterionHostComponent implements OnChanges {
 async function rows(provider: IMetadataProvider, entityName: string, filter: string): Promise<Row[]> {
     const view = RunView.FromMetadataProvider(provider);
     const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 500 }, provider.CurrentUser as UserInfo);
+    if (!result.Success) throw new Error(result.ErrorMessage || `Could not read ${entityName}.`);
     return (result.Results ?? []) as Row[];
 }
 
@@ -246,16 +248,18 @@ function quote(value: string): string {
     return value.replace(/'/g, "''");
 }
 
-async function writeFields(provider: IMetadataProvider, entityName: string, id: string, isNew: boolean, fields: Record<string, unknown>): Promise<void> {
-    const row = await provider.GetEntityObject(entityName, provider.CurrentUser);
+async function saveLevel(provider: IMetadataProvider, id: string, isNew: boolean, fields: { CriterionID?: string; Descriptor: string; ScaleLevelID: string | null }): Promise<void> {
+    const row = await provider.GetEntityObject<MJRubricCriterionLevelEntity>('MJ: Rubric Criterion Levels', provider.CurrentUser);
     if (isNew) row.NewRecord();
-    else await row.InnerLoad(CompositeKey.FromID(id));
-    for (const [name, value] of Object.entries(fields)) row.Set(name, value);
-    await row.Save();
+    else if (!await row.InnerLoad(CompositeKey.FromID(id))) throw new Error('The anchor was not found.');
+    if (fields.CriterionID) row.CriterionID = fields.CriterionID;
+    row.Descriptor = fields.Descriptor;
+    row.ScaleLevelID = fields.ScaleLevelID;
+    if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not save the anchor.');
 }
 
-async function removeRow(provider: IMetadataProvider, entityName: string, id: string): Promise<void> {
-    const row = await provider.GetEntityObject(entityName, provider.CurrentUser);
-    await row.InnerLoad(CompositeKey.FromID(id));
-    await row.Delete();
+async function deleteLevel(provider: IMetadataProvider, id: string): Promise<void> {
+    const row = await provider.GetEntityObject<MJRubricCriterionLevelEntity>('MJ: Rubric Criterion Levels', provider.CurrentUser);
+    if (!await row.InnerLoad(CompositeKey.FromID(id))) throw new Error('The anchor was not found.');
+    if (!await row.Delete()) throw new Error(row.LatestResult?.Message || 'Could not delete the anchor.');
 }

@@ -16,6 +16,7 @@
   "repository": { "type": "git", "url": "https://github.com/MemberJunction/MJ" },
   "dependencies": {
     "@memberjunction/core": "6.2.0-edge.1",
+    "@memberjunction/core-entities": "6.2.0-edge.1",
     "@memberjunction/global": "6.2.0-edge.1",
     "@memberjunction/ng-ui-components": "6.2.0-edge.1",
     "@memberjunction/rubrics-base": "6.2.0-edge.1",

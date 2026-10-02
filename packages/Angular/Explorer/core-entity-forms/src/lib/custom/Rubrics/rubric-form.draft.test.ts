@@ -38,4 +38,20 @@ describe('rubric author draft', () => {
         expect(model).toContain('UUIDsEqual');
         expect(form).toContain('ngOnDestroy');
     });
+
+    it('saves rubric rows through typed entities and checks the result', () => {
+        const directory = dirname(fileURLToPath(import.meta.url));
+        const form = readFileSync(join(directory, 'rubric-form.component.ts'), 'utf8');
+        const scale = readFileSync(join(directory, 'scale-form.component.ts'), 'utf8');
+        expect(form).not.toMatch(/\.Set\(/);
+        expect(form).not.toMatch(/\.Get\(/);
+        expect(form).toContain('MJRubricCriterionEntity');
+        expect(form).toContain('requireSave');
+        expect(form).toContain('result.Success');
+        expect(form).toContain('row.Delete()');
+        expect(scale).not.toMatch(/\.Set\(/);
+        expect(scale).toContain('MJRubricScaleLevelEntity');
+        expect(scale).toContain('result.Success');
+        expect(scale).toContain('row.Save()');
+    });
 });

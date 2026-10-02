@@ -1,6 +1,6 @@
 import { Component, OnInit, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { RubricFormAnswer, RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { HumanEvaluationFields, HumanScoreFields, judgedRubric, PriorHumanEvaluation, VersionSnapshot, type JudgedRubric } from '../models/human-review';
@@ -726,26 +726,37 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
     try {
       const existing = await this.rows('MJ: Rubric Evaluations', `SubjectRecordID='${this.Data.testRunId.replace(/'/g, "''")}'`);
       const priorId = PriorHumanEvaluation(existing, this.Judged, this.Data.currentUser.ID);
-      const evaluation = await this.metadata.GetEntityObject('MJ: Rubric Evaluations', this.Data.currentUser);
+      const evaluation = await this.metadata.GetEntityObject<MJRubricEvaluationEntity>('MJ: Rubric Evaluations', this.Data.currentUser);
       evaluation.NewRecord();
-      for (const [field, value] of Object.entries(HumanEvaluationFields(this.Judged, this.Data.currentUser.ID, priorId))) {
-        evaluation.Set(field, value);
-      }
+      const draft = HumanEvaluationFields(this.Judged, this.Data.currentUser.ID, priorId);
+      evaluation.RubricVersionID = String(draft.RubricVersionID ?? '');
+      evaluation.SubjectEntityID = String(draft.SubjectEntityID ?? '');
+      evaluation.SubjectRecordID = String(draft.SubjectRecordID ?? '');
+      evaluation.ContextEntityID = draft.ContextEntityID == null || draft.ContextEntityID === '' ? null : String(draft.ContextEntityID);
+      evaluation.ContextRecordID = draft.ContextRecordID == null || draft.ContextRecordID === '' ? null : String(draft.ContextRecordID);
+      evaluation.EvaluatorType = 'Human';
+      evaluation.EvaluatorUserID = this.Data.currentUser.ID;
+      evaluation.Status = 'Draft';
+      evaluation.SupersedesEvaluationID = draft.SupersedesEvaluationID == null || draft.SupersedesEvaluationID === '' ? null : String(draft.SupersedesEvaluationID);
       if (!await evaluation.Save()) {
         this.errorMessage = evaluation.LatestResult?.Message || 'Could not start the human score.';
         return;
       }
-      const evaluationId = String(evaluation.Get('ID'));
-      for (const fields of HumanScoreFields(evaluationId, answers)) {
-        const score = await this.metadata.GetEntityObject('MJ: Rubric Evaluation Scores', this.Data.currentUser);
+      for (const fields of HumanScoreFields(evaluation.ID, answers)) {
+        const score = await this.metadata.GetEntityObject<MJRubricEvaluationScoreEntity>('MJ: Rubric Evaluation Scores', this.Data.currentUser);
         score.NewRecord();
-        for (const [field, value] of Object.entries(fields)) score.Set(field, value);
+        score.EvaluationID = String(fields.EvaluationID ?? '');
+        score.CriterionID = String(fields.CriterionID ?? '');
+        score.ScaleLevelID = fields.ScaleLevelID == null || fields.ScaleLevelID === '' ? null : String(fields.ScaleLevelID);
+        score.IsNotApplicable = fields.IsNotApplicable === true;
+        score.Rationale = fields.Rationale == null ? null : String(fields.Rationale);
+        score.Evidence = fields.Evidence == null ? null : String(fields.Evidence);
         if (!await score.Save()) {
           this.errorMessage = score.LatestResult?.Message || 'Could not save a criterion answer.';
           return;
         }
       }
-      evaluation.Set('Status', 'Submitted');
+      evaluation.Status = 'Submitted';
       if (!await evaluation.Save()) {
         this.errorMessage = evaluation.LatestResult?.Message || 'Could not submit the human score.';
         return;
@@ -768,6 +779,7 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
   private async rows(entityName: string, filter: string): Promise<Record<string, unknown>[]> {
     const view = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 500 }, this.Data.currentUser);
+    if (!result.Success) throw new Error(result.ErrorMessage || `Could not read ${entityName}.`);
     return (result.Results ?? []) as Record<string, unknown>[];
   }
 

@@ -66,6 +66,9 @@ interface ReviewFormState {
     <ng-template #content>
     <!-- Inner page content -->
     <div class="review-page">
+      @if (DisagreementError) {
+        <p role="alert">{{ DisagreementError }}</p>
+      }
       @if (Disagreement.length) {
         <section class="rubric-disagreement" aria-label="Rubric disagreement">
           <h3>Rubric disagreement</h3>
@@ -1159,6 +1162,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   Metrics: EvaluationSummaryMetrics | null = null;
   PendingCount = 0;
   Disagreement: DisagreementItem[] = [];
+  DisagreementError = '';
 
   // Constants
   readonly RatingNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -1186,12 +1190,14 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
         ResultType: 'simple',
         MaxRows: 500,
       });
+      if (!evaluations.Success) throw new Error(evaluations.ErrorMessage || 'Could not load evaluations.');
       const scores = await view.RunView({
         EntityName: 'MJ: Rubric Evaluation Scores',
         ExtraFilter: 'NormalizedScore IS NOT NULL',
         ResultType: 'simple',
         MaxRows: 1000,
       });
+      if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not load scores.');
       const evaluationRows = (evaluations.Results ?? []) as Record<string, unknown>[];
       this.Disagreement = disagreementFromScores({
         evaluations: evaluationRows.map(row => ({
@@ -1207,9 +1213,12 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
           normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
         })),
       });
+      this.DisagreementError = '';
       this.cdr.markForCheck();
-    } catch {
+    } catch (error) {
       this.Disagreement = [];
+      this.DisagreementError = error instanceof Error ? error.message : 'Could not load disagreement.';
+      this.cdr.markForCheck();
     }
   }
 

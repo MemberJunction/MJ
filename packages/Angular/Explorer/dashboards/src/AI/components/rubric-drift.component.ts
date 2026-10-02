@@ -78,6 +78,9 @@ export class RubricDriftComponent {
           </div>
         </mj-page-header>
         <mj-page-body>
+          @if (LoadError) {
+            <p role="alert">{{ LoadError }}</p>
+          }
           <mj-rubric-drift [current]="current" [previous]="previous" [threshold]="threshold"></mj-rubric-drift>
         </mj-page-body>
       </mj-page-layout>
@@ -113,6 +116,7 @@ export class RubricDriftResourceComponent extends BaseResourceComponent implemen
         this.Previous = value;
     }
     public Threshold = 0.2;
+    public LoadError = '';
 
     /** @deprecated Use {@link Threshold}. */
     public get threshold() {
@@ -134,9 +138,11 @@ export class RubricDriftResourceComponent extends BaseResourceComponent implemen
             const loaded = await this.loadPeriods();
             this.Current = loaded.current;
             this.Previous = loaded.previous;
-        } catch {
+            this.LoadError = '';
+        } catch (error) {
             this.Current = [];
             this.Previous = [];
+            this.LoadError = error instanceof Error ? error.message : 'Could not load drift.';
         }
     }
 
