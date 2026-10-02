@@ -279,6 +279,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'prompt-runner': 1,
         'queue': 7,
         'realtime-deterministic': 9,
+        'realtime-session-guard': 2,
+        'realtime-session-verification': 6,
         'record-cloning': 13,
         'record-process': 12,
         'record-process-facade': 2,
@@ -338,7 +340,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(98);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(100);
     });
 });
 
@@ -472,6 +474,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'realtime-session-guard.RSG1',
+        'realtime-session-guard.RSG2',
+        'realtime-session-verification.RSV1',
+        'realtime-session-verification.RSV2',
+        'realtime-session-verification.RSV3',
+        'realtime-session-verification.RSV4',
+        'realtime-session-verification.RSV5',
+        'realtime-session-verification.RSV6',
         'record-cloning.RC1',
         'record-cloning.RC2',
         'record-cloning.RC4',

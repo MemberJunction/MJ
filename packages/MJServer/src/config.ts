@@ -563,9 +563,87 @@ const telephonySchema = z.object({
   teams: teamsMeetingsSchema.optional(),
 }).passthrough();
 
+/**
+ * Mid-session identity verification for realtime sessions (see `src/realtimeSessions/README.md`).
+ *
+ * A person talking to an agent proves they control an email address WITHOUT leaving the conversation:
+ * the server emails a one-time link plus a short code, records the verification on the session, extends
+ * the session's limits, and tells the live session through a session event. The session's principal is
+ * never changed.
+ *
+ * Off by default: nothing is emailed and `/realtime/verify` is not mounted until `enabled` is true AND a
+ * `communicationProvider` is configured. Policy set here is the BASE layer; the config cascade
+ * (`channels.config.IdentityVerification`) snapshotted onto each session at mint overrides it per knob.
+ */
+const identityVerificationSchema = z.object({
+  /** Master switch. When false the verify routes are not mounted and the GraphQL operations refuse. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** CommunicationEngine provider that delivers the verification email (e.g. 'SendGrid', 'Microsoft Graph'). Required to send. */
+  communicationProvider: z.string().optional(),
+  /** From address of the verification email. */
+  fromAddress: z.string().optional(),
+  /**
+   * Server-only secret the typed verification code is HMAC'd under before it is stored on the session
+   * (at least 16 characters; 32+ random characters recommended). REQUIRED: without it verification is
+   * unavailable, because a session's owner can read their own session row and a bare hash of a six-digit
+   * code can be reversed offline. Never exposed to clients. Rotating it voids pending verifications only.
+   */
+  hmacSecret: z.string().optional().default(process.env.MJ_REALTIME_VERIFICATION_SECRET || ''),
+  /**
+   * `send` (default) delivers the email. `dry-run` builds and logs the message through the communication
+   * provider WITHOUT delivering it — for rehearsal and integration environments, where a test reads the
+   * emailed link and code from the `MJ: Communication Logs` row. Never use `dry-run` in production: the
+   * Communication Log then holds live credentials and no one is emailed.
+   */
+  deliveryMode: z.enum(['send', 'dry-run']).optional().default('send'),
+  /**
+   * Base URL the emailed link is built from (`<publicBaseUrl>/realtime/verify/<token>`). Defaults to the
+   * server's `publicUrl`, or `baseUrl:graphqlPort` when that is unset — the same derivation magic links use.
+   */
+  publicBaseUrl: z.string().optional(),
+  /**
+   * The internal user the server acts as to read/write the session, send the email and write the audit
+   * row, matched against `User.Name` then `User.Email` (falls back to the system user, then the lowest-ID
+   * active Owner). The verify link is public, so it has no caller identity of its own.
+   */
+  contextUserForVerification: z.string().optional(),
+  /** Base policy layer; each knob here is overridden by the per-session cascade layer. */
+  policy: z.object({
+    requireBusinessDomain: z.boolean().optional(),
+    blockedDomains: z.array(z.string()).optional(),
+    consumerDomains: z.array(z.string()).optional(),
+    linkTtlMinutes: z.coerce.number().optional(),
+    maxSendsPerSession: z.coerce.number().optional(),
+    maxCodeAttempts: z.coerce.number().optional(),
+    unverifiedMaxSeconds: z.coerce.number().optional(),
+    verifiedMaxSeconds: z.coerce.number().optional(),
+  }).optional().default({}),
+  /** Send-side and attempt-side limits (per instance, in memory; per-session limits are persisted and exact). */
+  rateLimits: z.object({
+    /** Window (ms) for the three send limits. Default 1 hour. */
+    sendWindowMs: z.coerce.number().optional().default(3_600_000),
+    /** Verification emails per client IP per window. Default 10. 0 disables. */
+    perIpSends: z.coerce.number().optional().default(10),
+    /** Verification emails per recipient domain per window. Default 30. 0 disables. */
+    perEmailDomainSends: z.coerce.number().optional().default(30),
+    /** Verification emails per recipient address per window — stops the feature being used to mail-bomb one inbox. Default 3. 0 disables. */
+    perEmailSends: z.coerce.number().optional().default(3),
+    /** Window (ms) for code attempts. Default 10 minutes. */
+    codeAttemptWindowMs: z.coerce.number().optional().default(600_000),
+    /** Code submissions per session per window. Default 10. 0 disables. */
+    perSessionCodeAttempts: z.coerce.number().optional().default(10),
+    /** Window (ms) of the public `/realtime/verify` route limiter. Default 60s. */
+    redeemWindowMs: z.coerce.number().optional().default(60_000),
+    /** `/realtime/verify` requests per IP per window. Default 30. */
+    redeemPerIp: z.coerce.number().optional().default(30),
+  }).optional().default({}),
+}).passthrough();
+
 const realtimeSchema = z.object({
   /** Master switch. When false, the WebRTC SDP broker router is not mounted. Defaults to true. */
   enabled: zodBooleanWithTransforms().default(true),
+  /** Mid-session identity verification (off by default). */
+  identityVerification: identityVerificationSchema.optional().default({}),
 }).passthrough();
 
 const configInfoSchema = z.object({
@@ -629,6 +707,7 @@ export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type TelephonyConfig = z.infer<typeof telephonySchema>;
 export type RealtimeConfig = z.infer<typeof realtimeSchema>;
+export type IdentityVerificationConfig = z.infer<typeof identityVerificationSchema>;
 export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
 export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;
 export type RingCentralTelephonyConfig = z.infer<typeof ringcentralTelephonySchema>;

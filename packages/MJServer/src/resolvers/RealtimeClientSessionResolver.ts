@@ -63,6 +63,9 @@ import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
 import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
+import { BuildMintConfigStamps, LoadInheritedVerifiedIdentity } from '../realtimeSessions/sessionConfigStamps.js';
+import { ParseConfigObject } from '../realtimeSessions/verificationCore.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -199,6 +202,12 @@ interface RealtimeSessionConfig {
      * agent default kit is used (the common case).
      */
     mediaCollectionID?: string;
+    /**
+     * Server-authoritative identity-verification state (policy snapshot taken at mint, pending/verified
+     * state written by `RealtimeSessionVerificationService`). Protected from owner writes by
+     * `MJAIAgentSessionEntityServer`; opaque to this resolver beyond preserving it across config rewrites.
+     */
+    identityVerification?: Record<string, unknown>;
 }
 
 /**
@@ -497,16 +506,21 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 );
             }
         }
-        const session = await this.sessionManager.CreateSession(
-            {
-                agentID: coAgentID,
-                userID: contextUser.ID,
-                conversationID: conversationId,
-                lastSessionID: lastSessionId,
-                config: JSON.stringify(config),
-            },
-            contextUser,
-            provider,
+        // The initial Config carries `maxSessionDeadlineIso` for capped sessions — a server-authoritative key
+        // that `MJAIAgentSessionEntityServer` refuses to let the session OWNER write, so this write (and only
+        // this one, built entirely from server-decided values) runs in the trusted scope.
+        const session = await RunWithTrustedSessionConfigWrites(() =>
+            this.sessionManager.CreateSession(
+                {
+                    agentID: coAgentID,
+                    userID: contextUser.ID,
+                    conversationID: conversationId,
+                    lastSessionID: lastSessionId,
+                    config: JSON.stringify(config),
+                },
+                contextUser,
+                provider,
+            ),
         );
 
         // Best-effort: stamp recording-start metadata when the browser captured (with consent) at start.
@@ -528,10 +542,60 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, prior?.Text,
             configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson), conversationMessages,
         );
+        await this.stampVerificationPolicy(session, result.EffectiveConfigJson, lastSessionId, contextUser, provider);
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
         result.PriorChannelStatesJson = (await this.loadPriorChannelStatesJson(lastSessionId, contextUser, provider)) ?? undefined;
         return result;
+    }
+
+    /**
+     * Stamps the identity-verification policy snapshot, the configured unverified duration cap and any
+     * verified identity inherited from the resumed session onto the new session's `Config`.
+     *
+     * The effective config (config cascade) is only known after prepare, so this is a second, narrowly
+     * scoped write: it runs only when there is something to stamp. It **fails closed** — a cap that could
+     * not be applied would leave the session uncapped, so on a save failure the session is closed and the
+     * start fails rather than proceeding without its limits.
+     */
+    private async stampVerificationPolicy(
+        session: MJAIAgentSessionEntity,
+        effectiveConfigJson: string | undefined,
+        lastSessionId: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
+        const plan = BuildMintConfigStamps({
+            EffectiveRealtime: this.readEffectiveRealtime(effectiveConfigJson),
+            ExistingConfigRaw: session.Config_,
+            InheritedVerified: await LoadInheritedVerifiedIdentity(lastSessionId, contextUser, provider),
+            NowMs: Date.now(),
+        });
+        if (!plan) {
+            return;
+        }
+        session.Config_ = plan.NextConfigRaw;
+        const saved = await RunWithTrustedSessionConfigWrites(() => session.Save());
+        if (!saved) {
+            LogError(
+                `RealtimeClientSessionResolver.stampVerificationPolicy save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
+            );
+            await this.sessionManager.CloseSession(session.ID, contextUser, provider, 'Error');
+            throw new Error('Failed to apply the session limits; the realtime session was not started.');
+        }
+    }
+
+    /** The `realtime` section of the resolved effective config JSON, or undefined when absent/unparseable. */
+    private readEffectiveRealtime(effectiveConfigJson: string | undefined): unknown {
+        if (!effectiveConfigJson) {
+            return undefined;
+        }
+        try {
+            return (JSON.parse(effectiveConfigJson) as { realtime?: unknown }).realtime;
+        } catch (error) {
+            LogError(`RealtimeClientSessionResolver: effective config JSON was unparseable while stamping verification policy: ${(error as Error).message}`);
+            return undefined;
+        }
     }
 
     /**
@@ -670,17 +734,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!previous && !pausedRunID) {
             return;
         }
-        const next: RealtimeSessionConfig = {
-            targetAgentID: config.targetAgentID,
-            coAgentRunID: config.coAgentRunID,
-            promptRunID: config.promptRunID,
-            coAgentRunStepID: config.coAgentRunStepID,
-            pendingFeedbackRunID: pausedRunID,
-            // Preserve the server-authoritative voice deadline across config rewrites.
-            maxSessionDeadlineIso: config.maxSessionDeadlineIso,
-            applicationID: config.applicationID,
-            allowedAgents: config.allowedAgents,
-        };
+        // Start from the RAW stored config so every key survives the rewrite — including the
+        // server-authoritative `maxSessionDeadlineIso` and `identityVerification` (dropping either would be
+        // refused by `MJAIAgentSessionEntityServer`, and silently losing a verification would be worse).
+        const next = { ...ParseConfigObject(session.Config_), targetAgentID: config.targetAgentID, pendingFeedbackRunID: pausedRunID };
         session.Config_ = JSON.stringify(next);
         if (!(await session.Save())) {
             LogError(
@@ -1822,15 +1879,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         allowedAgents?: RealtimeAllowedAgent[],
         directActions?: RealtimeDirectActionsConfig,
     ): Promise<void> {
-        // Preserve any server-authoritative voice deadline stamped at session start (this rebuilds the
-        // full config, so read the existing value forward rather than dropping it).
-        const existing = this.tryReadSessionConfig(session);
-        const config: RealtimeSessionConfig = {
+        // Start from the RAW stored config so every key set at session start survives — the
+        // server-authoritative voice deadline (`maxSessionDeadlineIso`) and the per-session media-kit
+        // override among them — rather than rebuilding from a whitelist that silently drops the rest.
+        const config = {
+            ...ParseConfigObject(session.Config_),
             targetAgentID,
             coAgentRunID,
             promptRunID,
             coAgentRunStepID,
-            maxSessionDeadlineIso: existing?.maxSessionDeadlineIso,
             applicationID,
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
             directActions,
@@ -2682,15 +2739,6 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             }
         }
         throw new Error(`Realtime session ${session.ID} has no target agent configured`);
-    }
-
-    /** Like {@link readSessionConfig} but returns `undefined` instead of throwing (for best-effort reads). */
-    private tryReadSessionConfig(session: MJAIAgentSessionEntity): RealtimeSessionConfig | undefined {
-        try {
-            return this.readSessionConfig(session);
-        } catch {
-            return undefined;
-        }
     }
 
     /**

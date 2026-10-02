@@ -1,0 +1,11 @@
+[
+  {
+    "fields": {
+      "Name": "Realtime Identity Verified",
+      "Description": "A person proved control of an email address during a realtime agent session (emailed link or typed code). Written by the realtime identity-verification service for the session's owner; RecordID is the AI Agent Session."
+    },
+    "primaryKey": {
+      "ID": "76CF3040-4B61-44F5-BD62-57EAB3445558"
+    }
+  }
+]

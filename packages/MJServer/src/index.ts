@@ -48,6 +48,14 @@ import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.j
 import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
+import {
+  CreateRealtimeVerifyRouter,
+  REALTIME_VERIFY_MOUNT_PATH,
+  RealtimeSessionEventService,
+  RealtimeSessionVerificationService,
+  ParseReplicatedRealtimeSessionEvent,
+  type RealtimeSessionEventTopicPayload,
+} from './realtimeSessions/index.js';
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 
@@ -243,6 +251,9 @@ export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
 export * from './resolvers/AgentSessionResolver.js';
 export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './resolvers/RealtimeSessionEventsResolver.js';
+export * from './resolvers/RealtimeSessionVerificationResolver.js';
+export * from './realtimeSessions/index.js';
 export * from './resolvers/RemoteBrowserActionResolver.js';
 export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
@@ -353,6 +364,44 @@ async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, st
     // Single-instance delivery still works, and the durable tail query covers the rest. Degraded,
     // not broken — so this must not stop the server from starting.
     console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
+  }
+}
+
+/** Redis channel carrying replicated realtime session events between server instances. */
+const REALTIME_SESSION_EVENTS_FANOUT_CHANNEL = 'realtime-session-events';
+
+/**
+ * Replicate realtime session events across server instances over Redis.
+ *
+ * Behind a load balancer the browser's WebSocket (the `RealtimeSessionEvents` subscription) lives on one
+ * replica while the request that raises the event — typically the public verify-link redemption — can be
+ * handled by another. The session-events topic is an in-process PubSub, so without this an
+ * `identity.verified` published on replica B never reaches the subscriber on replica A.
+ *
+ * Inbound messages are republished onto THIS instance's local topic only (never back through the
+ * replication hook, so there is no loop) and are still judged by the subscription filter against the
+ * connection's identity — a replica has no say in who sees what. The durable
+ * `RealtimeSessionVerificationStatus` query remains the backstop if Redis is down.
+ */
+async function wireRealtimeSessionEventFanOut(redisProvider: RedisLocalStorageProvider): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(REALTIME_SESSION_EVENTS_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = ParseReplicatedRealtimeSessionEvent(raw, MJGlobal.Instance.ProcessUUID);
+        if (payload) {
+          RealtimeSessionEventService.Instance.PublishReplicated(payload);
+        }
+      } catch (err) {
+        LogError(`Realtime session event fan-out: dropping a malformed replicated event: ${(err as Error).message}`);
+      }
+    });
+    RealtimeSessionEventService.Instance.SetReplicationHook((payload: RealtimeSessionEventTopicPayload) => {
+      redisProvider.PublishMessage(REALTIME_SESSION_EVENTS_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+    console.log('[MJAPI] Realtime session events: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    // Single-instance delivery still works and the status query covers the rest: degraded, not broken.
+    console.warn(`Realtime session event fan-out unavailable: ${(err as Error).message}`);
   }
 }
 
@@ -792,6 +841,7 @@ const setupComplete$ = new ReplaySubject(1);
     // forever for an event that was delivered to nobody. Replicating progress and completion over
     // Redis closes that, and the durable tail query remains the backstop if Redis is down.
     await wirePushStatusFanOut(redisProvider, startupLog);
+    await wireRealtimeSessionEventFanOut(redisProvider);
 
     startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
@@ -1357,6 +1407,19 @@ const setupComplete$ = new ReplaySubject(1);
       startupLog.LogIf('verbose', `[Widget] Published reused signing key at ${MAGIC_LINK_MOUNT_PATH}/jwks.json (magic-link flow disabled)`);
     }
     startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
+  }
+
+  // ─── Realtime identity verification: PUBLIC verify-link routes (before auth mw) ───
+  // The person opening the emailed link holds no MJ token — the single-use token is the capability.
+  // GET only renders a confirm button; the POST redeems (mail scanners GET every link). Mounted only
+  // when verification is enabled AND able to send mail AND able to protect its codes (see
+  // realtime.identityVerification config: communicationProvider + hmacSecret).
+  if (configInfo.realtime?.identityVerification?.enabled && !RealtimeSessionVerificationService.Instance.IsEnabled) {
+    console.warn('[RealtimeVerify] realtime.identityVerification.enabled is true but verification is unavailable: it needs a communicationProvider and an hmacSecret of at least 16 characters.');
+  }
+  if (RealtimeSessionVerificationService.Instance.IsEnabled) {
+    app.use(REALTIME_VERIFY_MOUNT_PATH, cors<cors.CorsRequest>(), CreateRealtimeVerifyRouter());
+    startupLog.LogIf('verbose', `[RealtimeVerify] Public routes registered at ${REALTIME_VERIFY_MOUNT_PATH}/:token (GET) and ${REALTIME_VERIFY_MOUNT_PATH} (POST)`);
   }
 
   // ─── Server extensions loader & shared service registry ───────────────────
