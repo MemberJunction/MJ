@@ -94,7 +94,7 @@ export { ConnectorFactory } from './ConnectorFactory.js';
 // Engines
 export { FieldMappingEngine } from './FieldMappingEngine.js';
 export { MatchEngine } from './MatchEngine.js';
-export { serializeKeyValue } from './KeySerialization.js';
+export { SerializeKeyValue, serializeKeyValue } from './KeySerialization.js';
 
 // Services
 export { WatermarkService } from './WatermarkService.js';
@@ -126,22 +126,22 @@ export { IntegrationSchemaSync } from './IntegrationSchemaSync.js';
 export type { PersistSchemaOptions, PersistSchemaResult } from './IntegrationSchemaSync.js';
 
 // ── Restored module exports dropped by the origin/next index.ts merge (union) ──
-export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
+export { ComputeContentHash, computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
 export { CollapseDuplicateIdentities } from './BatchIdentity.js';
-export { CUSTOM_OVERFLOW_COLUMN, computeUnmappedFields, hasUnmappedFields, foldCustomKeyStats, CUSTOM_KEY_SAMPLE_CAP } from './CustomOverflow.js';
+export { CUSTOM_OVERFLOW_COLUMN, ComputeUnmappedFields, computeUnmappedFields, HasUnmappedFields, hasUnmappedFields, FoldCustomKeyStats, foldCustomKeyStats, CUSTOM_KEY_SAMPLE_CAP } from './CustomOverflow.js';
 export { SYNC_DIRECTIVE_CONFIG_KEY, ReadFieldSyncDirective, WriteFieldSyncDirective, ComputeExcludedSourceNames, StripExcludedFields } from './SyncDirectives.js';
 export type { FieldSyncDirective, FieldWithConfiguration } from './SyncDirectives.js';
 export { FindUnbindableFieldMaps, DescribeUnbindableFieldMaps } from './FieldMapValidation.js';
 export type { ValidatableFieldMap, UnbindableFieldMap } from './FieldMapValidation.js';
 export type { CustomKeyAccumulator } from './CustomOverflow.js';
 export type { HasExternalID, BatchIdentityResult } from './BatchIdentity.js';
-export { planPromotions, planColumnReclamations, inferColumnTypeFromSamples, inferColumnTypeFromStats, buildOverflowStats, sanitizeColumnName } from './CustomColumnPromotion.js';
-export { discoverFromStream, pickPrimaryKeyFromStats } from './StreamingDiscovery.js';
+export { PlanPromotions, planPromotions, PlanColumnReclamations, planColumnReclamations, InferColumnTypeFromSamples, inferColumnTypeFromSamples, InferColumnTypeFromStats, inferColumnTypeFromStats, BuildOverflowStats, buildOverflowStats, SanitizeColumnName, sanitizeColumnName } from './CustomColumnPromotion.js';
+export { DiscoverFromStream, discoverFromStream, PickPrimaryKeyFromStats, pickPrimaryKeyFromStats } from './StreamingDiscovery.js';
 export type { StreamDiscoveryOptions, DiscoveredColumnStat, StreamDiscoveryResult, PkPickOptions, PkStatVerdict } from './StreamingDiscovery.js';
 export type { InferredColumnType, OverflowKeyStats, PromotionCandidate, PromotionPlanOptions, PromotedColumnState, ReclaimPlanOptions, ReclaimCandidate } from './CustomColumnPromotion.js';
-export { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
+export { PartitionRecords, partitionRecords, PartitionRollupHash, partitionRollupHash, DiffPartitions, diffPartitions, PartitionKeyForIdentity, partitionKeyForIdentity } from './HashDiff.js';
 export type { PartitionDiff } from './HashDiff.js';
-export { mostRecentWinner, parseTimestamp } from './ConflictRecency.js';
+export { MostRecentWinner, mostRecentWinner, ParseTimestamp, parseTimestamp } from './ConflictRecency.js';
 export type { RecencyWinner } from './ConflictRecency.js';
 export { EnrichSchemaConstraints } from './EnrichSchemaConstraints.js';
 export type { EnrichOptions, EnrichResult, DescribeFn } from './EnrichSchemaConstraints.js';
@@ -155,7 +155,7 @@ export { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrenc
 export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult } from './AdaptiveConcurrency.js';
 export type { FetchWarning } from './BaseIntegrationConnector.js';
 export type { FieldMergeLog, ObjectMergeLog } from './IntegrationSchemaSync.js';
-export { decideSchemaLimitViolations } from './IntegrationSchemaSync.js';
+export { DecideSchemaLimitViolations, decideSchemaLimitViolations } from './IntegrationSchemaSync.js';
 export type { SchemaLimitInput } from './IntegrationSchemaSync.js';
 
 // ── Auth helpers (shared OAuth2/token primitives for connectors) ──

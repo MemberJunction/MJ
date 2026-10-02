@@ -412,10 +412,10 @@ export class IntegrationConnectorCreationPipeline {
             // The connection's own catalog is no longer resident (MJ-RUN-43): load its objects and
             // dependency edges into the scope before any stage reads them synchronously.
             await LoadCatalogScope(opts.CompanyIntegration.ID, opts.ContextUser);
-            await withDeadline('ConnectionTest', this.StageConnectionTest(emitter, opts));
-            const sourceSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts));
-            const persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
-            const { verdicts, unresolved } = await withDeadline('PKClassify', this.StagePKClassify(emitter, opts));
+            await withDeadline('ConnectionTest', this.stageConnectionTest(emitter, opts));
+            const sourceSchema = await withDeadline('Introspect', this.stageIntrospect(emitter, opts));
+            const persistResult = await withDeadline('Persist', this.stagePersist(emitter, opts, sourceSchema));
+            const { verdicts, unresolved } = await withDeadline('PKClassify', this.stagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
                 processed: persistResult.ObjectsCreated + persistResult.ObjectsUpdated,
@@ -450,7 +450,7 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 1: connection ──────────────────────────────────────────────
 
-    private async StageConnectionTest(
+    private async stageConnectionTest(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions
     ): Promise<void> {
@@ -467,7 +467,7 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 2: introspect ──────────────────────────────────────────────
 
-    private async StageIntrospect(
+    private async stageIntrospect(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions
     ) {
@@ -579,7 +579,7 @@ export class IntegrationConnectorCreationPipeline {
                     // and a fully-declared one gets its true widths and undeclared columns.
                     const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
                     if (existing) {
-                        await this.SampleDeclaredObjectInPlace(existing, d.Name, opts, emitter);
+                        await this.sampleDeclaredObjectInPlace(existing, d.Name, opts, emitter);
                         sampledDeclared.add(key);
                     }
                     continue;
@@ -593,7 +593,7 @@ export class IntegrationConnectorCreationPipeline {
                     // DB write happens here; the real save is the later ApplyAll → StartSync.
                     fields = await opts.Connector.DiscoverFieldsViaFetch(
                         opts.CompanyIntegration, d.Name, opts.ContextUser,
-                        { OnFallback: (err) => this.ReportSampleFallback(d.Name, err, emitter) }
+                        { OnFallback: (err) => this.reportSampleFallback(d.Name, err, emitter) }
                     );
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
@@ -647,7 +647,7 @@ export class IntegrationConnectorCreationPipeline {
                 // Record it here too: two declared entries that differ only by case resolve to the
                 // SAME object, and sampling it twice doubles the most expensive part of discovery.
                 sampledDeclared.add(key);
-                await this.SampleDeclaredObjectInPlace(existing, name, opts, emitter);
+                await this.sampleDeclaredObjectInPlace(existing, name, opts, emitter);
                 declaredOnlySampled++;
             }
 
@@ -706,7 +706,7 @@ export class IntegrationConnectorCreationPipeline {
      * catalog states no observed widths — but from the outside the two are indistinguishable, so
      * without this an object quietly keeps a guessed width and drops every longer value at sync.
      */
-    private ReportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
+    private reportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
         const msg = err instanceof Error ? err.message : String(err);
         emitter.stageError(
             'Introspect',
@@ -717,7 +717,7 @@ export class IntegrationConnectorCreationPipeline {
         console.warn(`[IntrospectPipeline] sample fallback for "${objectName}": ${msg}`);
     }
 
-    private async SampleDeclaredObjectInPlace(
+    private async sampleDeclaredObjectInPlace(
         existing: SourceObjectInfo,
         objectName: string,
         opts: ConnectorCreationPipelineOptions,
@@ -726,7 +726,7 @@ export class IntegrationConnectorCreationPipeline {
         try {
             const dfields = await opts.Connector.DiscoverFieldsViaFetch(
                 opts.CompanyIntegration, objectName, opts.ContextUser,
-                { OnFallback: (err) => this.ReportSampleFallback(objectName, err, emitter) }
+                { OnFallback: (err) => this.reportSampleFallback(objectName, err, emitter) }
             );
             const sampled = dfields.map(f => ({
                 Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
@@ -776,7 +776,7 @@ export class IntegrationConnectorCreationPipeline {
         }
     }
 
-    private async StagePersist(
+    private async stagePersist(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions,
         sourceSchema: Awaited<ReturnType<BaseIntegrationConnector['IntrospectSchema']>>
@@ -840,7 +840,7 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 4: PK classification ───────────────────────────────────────
 
-    private async StagePKClassify(
+    private async stagePKClassify(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions
     ): Promise<{

@@ -59,7 +59,7 @@ function emitter(log: Emitted[]) {
     };
 }
 
-type StageHost = { StagePKClassify: (e: unknown, o: unknown) => Promise<{ unresolved: string[] }> };
+type StageHost = { stagePKClassify: (e: unknown, o: unknown) => Promise<{ unresolved: string[] }> };
 const opts = { CompanyIntegration: { ID: 'ci-1', IntegrationID: 'int-1' }, ContextUser: { ID: 'u-1' }, Provider: {} };
 
 describe('StagePKClassify', () => {
@@ -74,7 +74,7 @@ describe('StagePKClassify', () => {
     it('never reloads the engine — every read goes through the writer', async () => {
         const log: Emitted[] = [];
         const pipeline = new IntegrationConnectorCreationPipeline() as unknown as StageHost;
-        const result = await pipeline.StagePKClassify(emitter(log), opts);
+        const result = await pipeline.stagePKClassify(emitter(log), opts);
 
         expect(config).not.toHaveBeenCalled();
         expect(writerCalls).toEqual(['ObjectsInScope', 'KeyedObjectIDs:2', 'FieldsForObject:OBJ-KEYLESS']);
@@ -91,7 +91,7 @@ describe('StagePKClassify', () => {
         fields['OBJ-KEYLESS'] = Array.from({ length: 15 }, (_, i) => ({ ID: `f${i}`, Name: `col${i}`, IsPrimaryKey: false, Save: async () => true }));
         const log: Emitted[] = [];
         const pipeline = new IntegrationConnectorCreationPipeline() as unknown as StageHost;
-        await pipeline.StagePKClassify(emitter(log), opts);
+        await pipeline.stagePKClassify(emitter(log), opts);
 
         const verdicts = log.filter(e => e.event === 'pkClassifierResult');
         expect(verdicts).toHaveLength(1);

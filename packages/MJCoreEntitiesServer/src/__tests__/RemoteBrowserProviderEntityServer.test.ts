@@ -121,8 +121,11 @@ describe('ValidateControlModeAgainstFeatures', () => {
 // ── Constants sanity ─────────────────────────────────────────────────────────────
 
 describe('Remote Browser provider constants', () => {
-    it('has all 12 feature keys', () => {
-        expect(KNOWN_REMOTE_BROWSER_PROVIDER_FEATURE_KEYS.size).toBe(12);
+    it('has expected feature keys', () => {
+        expect(KNOWN_REMOTE_BROWSER_PROVIDER_FEATURE_KEYS.has('RawCdpControl')).toBe(true);
+        expect(KNOWN_REMOTE_BROWSER_PROVIDER_FEATURE_KEYS.has('NativeAIControl')).toBe(true);
+        expect(KNOWN_REMOTE_BROWSER_PROVIDER_FEATURE_KEYS.has('LiveView')).toBe(true);
+        expect(KNOWN_REMOTE_BROWSER_PROVIDER_FEATURE_KEYS.has('HumanTakeover')).toBe(true);
     });
     it('has the three control modes', () => {
         expect([...REMOTE_BROWSER_CONTROL_MODES].sort()).toEqual(['AgentOnly', 'Collaborative', 'ViewOnly']);

@@ -34,7 +34,7 @@ interface PandaDocConfig {
 }
 
 /** Maps a PandaDoc document status onto our normalized lifecycle. */
-export function mapPandaDocStatus(status: string): EnvelopeStatus {
+export function MapPandaDocStatus(status: string): EnvelopeStatus {
     switch ((status || '').toLowerCase()) {
         case 'document.uploaded':
         case 'document.draft':
@@ -58,6 +58,11 @@ export function mapPandaDocStatus(status: string): EnvelopeStatus {
         default:
             return 'Unknown';
     }
+}
+
+/** @deprecated Use {@link MapPandaDocStatus}. */
+export function mapPandaDocStatus(status: string): EnvelopeStatus {
+    return MapPandaDocStatus(status);
 }
 
 /** US-Letter page in PDF points (72/inch) — used to convert normalized-percent coordinates into the
@@ -169,7 +174,7 @@ export class PandaDocSignatureProvider extends BaseSignatureProvider {
             const json = (await resp.json()) as PandaDocDocument;
             return {
                 Success: true,
-                status: mapPandaDocStatus(json.status || ''),
+                status: MapPandaDocStatus(json.status || ''),
                 recipients: this.mapRecipients(json),
             };
         } catch (e) {
@@ -234,7 +239,7 @@ export class PandaDocSignatureProvider extends BaseSignatureProvider {
         }
         return {
             externalEnvelopeId: documentId,
-            status: mapPandaDocStatus(this.readField(data, 'status') ?? ''),
+            status: MapPandaDocStatus(this.readField(data, 'status') ?? ''),
             occurredAt: this.readField(entry, 'event_time') ?? new Date().toISOString(),
             raw: payload,
         };
@@ -371,7 +376,7 @@ export class PandaDocSignatureProvider extends BaseSignatureProvider {
         if (!json.id) {
             return { Success: false, ErrorMessage: 'PandaDoc did not return a document id.' };
         }
-        return { Success: true, documentId: json.id, status: mapPandaDocStatus(json.status || 'document.uploaded') };
+        return { Success: true, documentId: json.id, status: MapPandaDocStatus(json.status || 'document.uploaded') };
     }
 
     /**

@@ -39,7 +39,16 @@ const CAN_SHARE_SKILLS_AUTH_NAME = 'Can Share Skills';
     styleUrls: ['./ai-skill-sharing-panel.component.css'],
 })
 export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
-    @ViewChild('importFileInput') importFileInput!: ElementRef<HTMLInputElement>;
+    @ViewChild('importFileInput') ImportFileInput!: ElementRef<HTMLInputElement>;
+
+    /** @deprecated Use {@link ImportFileInput}. */
+    get importFileInput(): ElementRef<HTMLInputElement> {
+        return this.ImportFileInput;
+    }
+    /** @deprecated Use {@link ImportFileInput}. */
+    set importFileInput(value: ElementRef<HTMLInputElement>) {
+        this.ImportFileInput = value;
+    }
 
     public PermissionsDialogVisible = false;
 
@@ -109,7 +118,7 @@ export class AISkillSharingPanel extends BaseFormPanel<MJAISkillEntity> {
 
     /** Opens the hidden file input; the actual import happens in `OnImportFileSelected`. */
     public TriggerImport(): void {
-        this.importFileInput?.nativeElement.click();
+        this.ImportFileInput?.nativeElement.click();
     }
 
     public async OnImportFileSelected(event: Event): Promise<void> {

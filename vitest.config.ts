@@ -20,6 +20,10 @@ export default defineConfig({
       'packages/DBAutoDoc',
       'packages/MJExportEngine',
       'packages/MarkdownCore',
+      // Framework-agnostic runtimes extracted out of the Angular packages, so their suites run
+      // without a DOM. NOTE: 'packages/ConversationsRuntime' is NOT registered here — a
+      // pre-existing gap, left for its owners rather than swept in with this change.
+      'packages/RealtimeRuntime',
       'packages/Angular/Generic/markdown',
       'packages/ContentAutotagging',
       // AI packages

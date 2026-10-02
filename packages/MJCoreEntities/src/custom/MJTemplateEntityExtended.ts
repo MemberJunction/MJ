@@ -4,20 +4,20 @@ import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, 'MJ: Templates')
 export class MJTemplateEntityExtended extends MJTemplateEntity {
-    private _Content: MJTemplateContentEntity[] = [];
+    private _content: MJTemplateContentEntity[] = [];
     public get Content(): MJTemplateContentEntity[] {
-        return this._Content;
+        return this._content;
     }
     public set Content(value: MJTemplateContentEntity[]) {
-        this._Content = value;
+        this._content = value;
     }
 
-    private _Params: MJTemplateParamEntity[] = [];
+    private _params: MJTemplateParamEntity[] = [];
     public get Params(): MJTemplateParamEntity[] {
-        return this._Params;
+        return this._params;
     }
     public set Params(value: MJTemplateParamEntity[]) {
-        this._Params = value;
+        this._params = value;
     }
 
     /**

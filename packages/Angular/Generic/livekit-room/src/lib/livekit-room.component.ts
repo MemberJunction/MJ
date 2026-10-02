@@ -44,14 +44,14 @@ import { LiveKitAgentStateComponent, type LiveKitAgentVisualState } from './comp
 import { LiveKitWhiteboardSurfaceComponent } from './components/livekit-whiteboard-surface.component';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import {
-  deriveAgentState,
-  isAgentVisualState,
-  selectAllParticipants,
-  selectDisplayParticipants,
-  selectFilmstrip,
-  selectScreenShare,
-  selectSplitSpeaker,
-  selectSpotlight,
+  DeriveAgentState,
+  IsAgentVisualState,
+  SelectAllParticipants,
+  SelectDisplayParticipants,
+  SelectFilmstrip,
+  SelectScreenShare,
+  SelectSplitSpeaker,
+  SelectSpotlight,
 } from './livekit-room-logic';
 import {
   LIVEKIT_CHAT_TOPIC,
@@ -393,7 +393,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   }
 
   /** Handles PreJoin completion: stores the choices, marks PreJoin complete, and connects. */
-  public onPreJoinJoin(choices: LiveKitPreJoinChoices): void {
+  public OnPreJoinJoin(choices: LiveKitPreJoinChoices): void {
     this.PreJoinChoices = choices;
     this.PreJoinComplete = true;
     if (choices.DisplayName) {
@@ -402,9 +402,19 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     void this.Connect();
   }
 
+  /** @deprecated Use {@link OnPreJoinJoin}. */
+  public onPreJoinJoin(choices: LiveKitPreJoinChoices): void {
+    return this.OnPreJoinJoin(choices);
+  }
+
   /** Resumes audio playback after a browser autoplay block (must run from a user gesture). */
-  public onEnableSound(): void {
+  public OnEnableSound(): void {
     void this.controller.StartAudio();
+  }
+
+  /** @deprecated Use {@link OnEnableSound}. */
+  public onEnableSound(): void {
+    return this.OnEnableSound();
   }
 
   /** Builds the E2EE connect options when a passphrase + worker are both supplied. */
@@ -423,47 +433,87 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   // ── Control-bar intent handlers ─────────────────────────────────────────────────
 
   /** Toggles the microphone. */
-  public onToggleMicrophone(): void {
+  public OnToggleMicrophone(): void {
     void this.controller.ToggleMicrophone();
   }
+
+  /** @deprecated Use {@link OnToggleMicrophone}. */
+  public onToggleMicrophone(): void {
+    return this.OnToggleMicrophone();
+  }
   /** Toggles the camera. */
-  public onToggleCamera(): void {
+  public OnToggleCamera(): void {
     void this.controller.ToggleCamera();
   }
+
+  /** @deprecated Use {@link OnToggleCamera}. */
+  public onToggleCamera(): void {
+    return this.OnToggleCamera();
+  }
   /** Toggles screen sharing. */
-  public onToggleScreenShare(): void {
+  public OnToggleScreenShare(): void {
     void this.controller.ToggleScreenShare();
   }
+
+  /** @deprecated Use {@link OnToggleScreenShare}. */
+  public onToggleScreenShare(): void {
+    return this.OnToggleScreenShare();
+  }
   /** Toggles the chat panel and clears the unread count when opening. */
-  public onToggleChat(): void {
+  public OnToggleChat(): void {
     this.SidePanel = this.SidePanel === 'chat' ? 'none' : 'chat';
     if (this.SidePanel === 'chat') {
       this.UnreadChatCount = 0;
     }
   }
+
+  /** @deprecated Use {@link OnToggleChat}. */
+  public onToggleChat(): void {
+    return this.OnToggleChat();
+  }
   /** Toggles the participants panel. */
-  public onToggleParticipants(): void {
+  public OnToggleParticipants(): void {
     this.SidePanel = this.SidePanel === 'participants' ? 'none' : 'participants';
   }
+
+  /** @deprecated Use {@link OnToggleParticipants}. */
+  public onToggleParticipants(): void {
+    return this.OnToggleParticipants();
+  }
   /** Opens the device menu and (re)loads device lists. */
-  public async onOpenDeviceSettings(): Promise<void> {
+  public async OnOpenDeviceSettings(): Promise<void> {
     this.DeviceMenuOpen = !this.DeviceMenuOpen;
     if (this.DeviceMenuOpen) {
       await this.loadDevices();
     }
   }
+
+  /** @deprecated Use {@link OnOpenDeviceSettings}. */
+  public async onOpenDeviceSettings(): Promise<void> {
+    return this.OnOpenDeviceSettings();
+  }
   /** Closes the device menu. */
-  public onCloseDeviceMenu(): void {
+  public OnCloseDeviceMenu(): void {
     this.DeviceMenuOpen = false;
   }
+
+  /** @deprecated Use {@link OnCloseDeviceMenu}. */
+  public onCloseDeviceMenu(): void {
+    return this.OnCloseDeviceMenu();
+  }
   /** Switches a device. */
-  public onDeviceSelected(selection: LiveKitDeviceSelection): void {
+  public OnDeviceSelected(selection: LiveKitDeviceSelection): void {
     // Optimistically reflect the user's choice immediately, then reconcile with the
     // controller's actual active device once the async switch resolves.
     this.applySelectedDeviceId(selection.Kind, selection.DeviceId);
     void this.controller.SwitchDevice(selection.Kind, selection.DeviceId).then(() => {
       this.runInZone(() => this.refreshSelectedDeviceIds());
     });
+  }
+
+  /** @deprecated Use {@link OnDeviceSelected}. */
+  public onDeviceSelected(selection: LiveKitDeviceSelection): void {
+    return this.OnDeviceSelected(selection);
   }
 
   /** Updates the locally-tracked selected device id for a kind. */
@@ -477,48 +527,93 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     }
   }
   /** Toggles the Krisp noise filter. */
-  public onNoiseFilterToggled(enabled: boolean): void {
+  public OnNoiseFilterToggled(enabled: boolean): void {
     void this.controller.SetNoiseFilterEnabled(enabled);
   }
+
+  /** @deprecated Use {@link OnNoiseFilterToggled}. */
+  public onNoiseFilterToggled(enabled: boolean): void {
+    return this.OnNoiseFilterToggled(enabled);
+  }
   /** Toggles camera background blur. */
-  public onBackgroundBlurToggled(enabled: boolean): void {
+  public OnBackgroundBlurToggled(enabled: boolean): void {
     void this.controller.SetBackgroundEffect(enabled ? { Kind: 'blur', Radius: 12 } : { Kind: 'none' });
   }
+
+  /** @deprecated Use {@link OnBackgroundBlurToggled}. */
+  public onBackgroundBlurToggled(enabled: boolean): void {
+    return this.OnBackgroundBlurToggled(enabled);
+  }
   /** Pins/unpins a participant to the spotlight (toggles off if already pinned). */
-  public onTogglePin(identity: string): void {
+  public OnTogglePin(identity: string): void {
     this.PinnedIdentity = this.PinnedIdentity === identity ? null : identity;
   }
+
+  /** @deprecated Use {@link OnTogglePin}. */
+  public onTogglePin(identity: string): void {
+    return this.OnTogglePin(identity);
+  }
   /** Toggles the layout switcher popover. */
-  public onToggleLayoutMenu(): void {
+  public OnToggleLayoutMenu(): void {
     this.LayoutMenuOpen = !this.LayoutMenuOpen;
   }
+
+  /** @deprecated Use {@link OnToggleLayoutMenu}. */
+  public onToggleLayoutMenu(): void {
+    return this.OnToggleLayoutMenu();
+  }
   /** Selects a layout and emits {@link LayoutChange}. */
-  public onSelectLayout(layout: LiveKitRoomLayout): void {
+  public OnSelectLayout(layout: LiveKitRoomLayout): void {
     this.Layout = layout;
     this.LayoutMenuOpen = false;
     this.LayoutChange.emit(layout);
   }
+
+  /** @deprecated Use {@link OnSelectLayout}. */
+  public onSelectLayout(layout: LiveKitRoomLayout): void {
+    return this.OnSelectLayout(layout);
+  }
   /** Toggles recording intent (the host performs the actual server-side egress call). */
-  public onToggleRecording(): void {
+  public OnToggleRecording(): void {
     this.ToggleRecording.emit();
   }
+
+  /** @deprecated Use {@link OnToggleRecording}. */
+  public onToggleRecording(): void {
+    return this.OnToggleRecording();
+  }
   /** Toggles the collaborative whiteboard surface. */
-  public onToggleWhiteboard(): void {
+  public OnToggleWhiteboard(): void {
     this.WhiteboardActive = !this.WhiteboardActive;
   }
+
+  /** @deprecated Use {@link OnToggleWhiteboard}. */
+  public onToggleWhiteboard(): void {
+    return this.OnToggleWhiteboard();
+  }
   /** Broadcasts a local whiteboard snapshot to the room over the data channel. */
-  public onWhiteboardChanged(json: string): void {
+  public OnWhiteboardChanged(json: string): void {
     void this.controller.SendData(json, LIVEKIT_WHITEBOARD_TOPIC);
   }
 
+  /** @deprecated Use {@link OnWhiteboardChanged}. */
+  public onWhiteboardChanged(json: string): void {
+    return this.OnWhiteboardChanged(json);
+  }
+
   /** Begins dragging the split-view divider. */
-  public onSplitDragStart(event: PointerEvent): void {
+  public OnSplitDragStart(event: PointerEvent): void {
     this.splitDragging = true;
     (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
     event.preventDefault();
   }
+
+  /** @deprecated Use {@link OnSplitDragStart}. */
+  public onSplitDragStart(event: PointerEvent): void {
+    return this.OnSplitDragStart(event);
+  }
   /** Updates the split ratio while dragging the divider, clamped to 20–80%. */
-  public onSplitDragMove(event: PointerEvent, container: HTMLElement): void {
+  public OnSplitDragMove(event: PointerEvent, container: HTMLElement): void {
     if (!this.splitDragging) {
       return;
     }
@@ -526,12 +621,22 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     const ratio = (event.clientX - rect.left) / rect.width;
     this.SplitRatio = Math.max(0.2, Math.min(0.8, ratio));
   }
+
+  /** @deprecated Use {@link OnSplitDragMove}. */
+  public onSplitDragMove(event: PointerEvent, container: HTMLElement): void {
+    return this.OnSplitDragMove(event, container);
+  }
   /** Ends the split-view drag. */
-  public onSplitDragEnd(): void {
+  public OnSplitDragEnd(): void {
     this.splitDragging = false;
   }
+
+  /** @deprecated Use {@link OnSplitDragEnd}. */
+  public onSplitDragEnd(): void {
+    return this.OnSplitDragEnd();
+  }
   /** Sends a chat message on the chat topic and optimistically renders it locally. */
-  public onSendChat(text: string): void {
+  public OnSendChat(text: string): void {
     void this.controller.SendData(text, LIVEKIT_CHAT_TOPIC);
     this.addChatMessage({
       Sender: this.DisplayName ?? 'You',
@@ -542,21 +647,26 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     });
   }
 
+  /** @deprecated Use {@link OnSendChat}. */
+  public onSendChat(text: string): void {
+    return this.OnSendChat(text);
+  }
+
   // ── Layout helpers (template-bound) ─────────────────────────────────────────────
 
   /** The participants to render on the stage (local optionally included). */
   public get DisplayParticipants(): LiveKitParticipantView[] {
-    return selectDisplayParticipants(this.State, this.ShowSelfView);
+    return SelectDisplayParticipants(this.State, this.ShowSelfView);
   }
 
   /** All participants (local + remote) for the roster panel. */
   public get AllParticipants(): LiveKitParticipantView[] {
-    return selectAllParticipants(this.State);
+    return SelectAllParticipants(this.State);
   }
 
   /** The participant featured in spotlight layout (pinned → active speaker → agent → first remote → local). */
   public get SpotlightParticipant(): LiveKitParticipantView | null {
-    return selectSpotlight(this.State, this.PinnedIdentity, this.EnablePinning);
+    return SelectSpotlight(this.State, this.PinnedIdentity, this.EnablePinning);
   }
 
   /**
@@ -571,22 +681,22 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
 
   /** The participant currently sharing their screen (for split view), if any. */
   public get ScreenShareParticipant(): LiveKitParticipantView | null {
-    return selectScreenShare(this.AllParticipants);
+    return SelectScreenShare(this.AllParticipants);
   }
 
   /** The "speaker" pane participant for split view (active speaker → agent → first remote → local). */
   public get SplitSpeakerParticipant(): LiveKitParticipantView | null {
-    return selectSplitSpeaker(this.State);
+    return SelectSplitSpeaker(this.State);
   }
 
   /** The agent's visual state: an explicit data-channel signal wins, else derived from speaking activity. */
   public get AgentState(): LiveKitAgentVisualState {
-    return deriveAgentState(this.State, this.agentStateSignal);
+    return DeriveAgentState(this.State, this.agentStateSignal);
   }
 
   /** The non-spotlight participants for the spotlight-layout filmstrip. */
   public get FilmstripParticipants(): LiveKitParticipantView[] {
-    return selectFilmstrip(this.DisplayParticipants, this.SpotlightParticipant);
+    return SelectFilmstrip(this.DisplayParticipants, this.SpotlightParticipant);
   }
 
   /** Whether the room is connected. */
@@ -600,8 +710,13 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   }
 
   /** Per-tile avatar URL for a participant (agent gets the configured agent avatar). */
-  public avatarFor(p: LiveKitParticipantView): string | null {
+  public AvatarFor(p: LiveKitParticipantView): string | null {
     return p.Role === 'agent' ? this.AgentAvatarUrl : null;
+  }
+
+  /** @deprecated Use {@link AvatarFor}. */
+  public avatarFor(p: LiveKitParticipantView): string | null {
+    return this.AvatarFor(p);
   }
 
   // ── internals ────────────────────────────────────────────────────────────────────
@@ -683,7 +798,7 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
 
   /** Applies an explicit agent-state signal from the data channel, auto-clearing after a short idle. */
   private applyAgentStateSignal(raw: string): void {
-    if (!isAgentVisualState(raw)) {
+    if (!IsAgentVisualState(raw)) {
       return;
     }
     this.agentStateSignal = raw;

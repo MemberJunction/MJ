@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 import { Dimension } from '../../../types';
 
 interface BCDimension {
@@ -21,7 +21,7 @@ interface BCDimensionValue {
 /**
  * Dimensions + dimension values from Business Central OData v2.0.
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetDimensions, ERP_INTEGRATION.BusinessCentral))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.GetDimensions, ERP_INTEGRATION.BusinessCentral))
 export class GetBusinessCentralDimensionsAction extends BusinessCentralBaseAction {
 
     public get Description(): string {

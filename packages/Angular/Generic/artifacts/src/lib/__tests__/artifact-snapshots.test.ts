@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { DataSnapshot, DataTable, NormalizeToTables } from '@memberjunction/core';
 import {
-  createJsonSnapshot,
-  createCodeSnapshot,
-  createMarkdownSnapshot,
-  createDataSnapshot,
-  buildMultiTableSql,
+  CreateJsonSnapshot,
+  CreateCodeSnapshot,
+  CreateMarkdownSnapshot,
+  CreateDataSnapshot,
+  BuildMultiTableSql,
 } from '../snapshot-helpers';
 
 /**
@@ -19,13 +19,13 @@ describe('Artifact Snapshot Helpers', () => {
 
   describe('createJsonSnapshot', () => {
     it('should return null when content is null', () => {
-      const result = createJsonSnapshot(null, 'Test');
+      const result = CreateJsonSnapshot(null, 'Test');
       expect(result).toBeNull();
     });
 
     it('should parse valid JSON and count top-level keys', () => {
       const json = '{"name":"Alice","age":30,"active":true}';
-      const result = createJsonSnapshot(json, 'My JSON');
+      const result = CreateJsonSnapshot(json, 'My JSON');
       expect(result).not.toBeNull();
       expect(result!.title).toBe('My JSON');
       expect(result!.interpretation).toBe('JSON artifact with 3 top-level keys.');
@@ -33,13 +33,13 @@ describe('Artifact Snapshot Helpers', () => {
     });
 
     it('should return null for invalid JSON', () => {
-      const result = createJsonSnapshot('not json {{{', 'Bad');
+      const result = CreateJsonSnapshot('not json {{{', 'Bad');
       expect(result).toBeNull();
     });
 
     it('should handle JSON arrays', () => {
       const json = '[1,2,3]';
-      const result = createJsonSnapshot(json, 'Array');
+      const result = CreateJsonSnapshot(json, 'Array');
       expect(result).not.toBeNull();
       // Arrays don't have "top-level keys" — no interpretation set
       expect(result!.interpretation).toBeUndefined();
@@ -49,13 +49,13 @@ describe('Artifact Snapshot Helpers', () => {
 
   describe('createCodeSnapshot', () => {
     it('should return null when content is null', () => {
-      const result = createCodeSnapshot(null, 'Test');
+      const result = CreateCodeSnapshot(null, 'Test');
       expect(result).toBeNull();
     });
 
     it('should count lines and include content in custom', () => {
       const code = 'line1\nline2\nline3';
-      const result = createCodeSnapshot(code, 'My Code');
+      const result = CreateCodeSnapshot(code, 'My Code');
       expect(result).not.toBeNull();
       expect(result!.title).toBe('My Code');
       expect(result!.interpretation).toBe('Code artifact, 3 lines.');
@@ -63,7 +63,7 @@ describe('Artifact Snapshot Helpers', () => {
     });
 
     it('should handle single line content', () => {
-      const result = createCodeSnapshot('console.log("hi")', 'One Liner');
+      const result = CreateCodeSnapshot('console.log("hi")', 'One Liner');
       expect(result!.interpretation).toBe('Code artifact, 1 lines.');
       expect((result!.custom as { lineCount: number }).lineCount).toBe(1);
     });
@@ -71,13 +71,13 @@ describe('Artifact Snapshot Helpers', () => {
 
   describe('createMarkdownSnapshot', () => {
     it('should return null when content is null', () => {
-      const result = createMarkdownSnapshot(null, 'Test');
+      const result = CreateMarkdownSnapshot(null, 'Test');
       expect(result).toBeNull();
     });
 
     it('should include content in custom', () => {
       const md = '# Hello\n\nWorld';
-      const result = createMarkdownSnapshot(md, 'My Doc');
+      const result = CreateMarkdownSnapshot(md, 'My Doc');
       expect(result).not.toBeNull();
       expect(result!.title).toBe('My Doc');
       expect(result!.custom).toEqual({ content: md });
@@ -86,7 +86,7 @@ describe('Artifact Snapshot Helpers', () => {
 
   describe('createDataSnapshot', () => {
     it('should return null when spec is null', () => {
-      const result = createDataSnapshot(null);
+      const result = CreateDataSnapshot(null);
       expect(result).toBeNull();
     });
 
@@ -102,7 +102,7 @@ describe('Artifact Snapshot Helpers', () => {
           { Name: 'Bob', Amount: 200 },
         ],
       };
-      const result = createDataSnapshot(spec);
+      const result = CreateDataSnapshot(spec);
       expect(result).not.toBeNull();
       expect(result!.title).toBe('Sales Report');
       expect(result!.tables).toBeDefined();
@@ -115,7 +115,7 @@ describe('Artifact Snapshot Helpers', () => {
         columns: [{ field: 'ID' }],
         rows: [{ ID: 1 }],
       };
-      const result = createDataSnapshot(spec);
+      const result = CreateDataSnapshot(spec);
       expect(result).not.toBeNull();
       expect(result!.tables).toBeDefined();
       expect(result!.tables![0].name).toBe('Results');
@@ -129,7 +129,7 @@ describe('buildMultiTableSql', () => {
       { name: 'customers', metadata: { sql: 'SELECT * FROM Customers' } },
       { name: 'orders', metadata: { sql: 'SELECT * FROM Orders' } },
     ];
-    const result = buildMultiTableSql(tables as DataTable[]);
+    const result = BuildMultiTableSql(tables as DataTable[]);
 
     expect(result).toContain('-- ═══ customers ═══');
     expect(result).toContain('SELECT * FROM Customers');
@@ -143,7 +143,7 @@ describe('buildMultiTableSql', () => {
       { name: 'no_sql', metadata: {} },
       { name: 'no_meta' },
     ];
-    const result = buildMultiTableSql(tables as DataTable[]);
+    const result = BuildMultiTableSql(tables as DataTable[]);
 
     expect(result).toContain('-- ═══ has_sql ═══');
     expect(result).not.toContain('no_sql');
@@ -152,7 +152,7 @@ describe('buildMultiTableSql', () => {
 
   it('returns null when no tables have SQL', () => {
     const tables = [{ name: 'a' }, { name: 'b', metadata: {} }];
-    const result = buildMultiTableSql(tables as DataTable[]);
+    const result = BuildMultiTableSql(tables as DataTable[]);
     expect(result).toBeNull();
   });
 });

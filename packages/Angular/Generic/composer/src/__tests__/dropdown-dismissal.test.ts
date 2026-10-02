@@ -33,7 +33,7 @@ describe('MentionEditorComponent — click-away dismissal', () => {
     // cover virtualTriggerOpen: between a button press and the provider's response the dropdown is
     // not yet showing, and without that half the dismissing click is ignored and the menu opens
     // afterwards, unbidden.
-    expect(body).toMatch(/if \(!this\.showMentionDropdown && !this\.virtualTriggerOpen\) \{\s*return;/);
+    expect(body).toMatch(/if \(!this\.ShowMentionDropdown && !this\.virtualTriggerOpen\) \{\s*return;/);
   });
 
   it('leaves clicks INSIDE the component alone, so a suggestion row still selects', () => {
@@ -41,11 +41,11 @@ describe('MentionEditorComponent — click-away dismissal', () => {
     // containment covers the rows. Without this, mousedown on a suggestion would close the list
     // before the click could select it — the button would look broken in the most common path.
     expect(body).toContain('this.hostRef.nativeElement.contains(target)');
-    expect(body.indexOf('contains(target)')).toBeLessThan(body.indexOf('closeMentionDropdown()'));
+    expect(body.indexOf('contains(target)')).toBeLessThan(body.indexOf('CloseMentionDropdown()'));
   });
 
   it('closes on a genuine outside press', () => {
-    expect(body).toContain('this.closeMentionDropdown();');
+    expect(body).toContain('this.CloseMentionDropdown();');
   });
 
   it('injects the host element rather than reaching for the editor child', () => {

@@ -44,19 +44,42 @@ import {
     SumAgentRunTreeCost,
     WalkAgentRunTree,
     type AgentRunTreeNode,
+
+    FinalizeAgentRunStep,
+    InitAgentRunStep,
+    type GraphDecisions,
+    DecisionReferencesIn,
+    ResolveDecisionState,
+    type TaskGraphDecisionAnswer,
 } from '@memberjunction/ai-core-plus';
-import { IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
-import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
 import {
     BuildConditionContext,
     DecideGate,
+    EvaluateCondition,
     IsBrokenGuard,
     ParseConditionOutput,
     type ConditionInvocation,
 } from './condition-gate';
+import {
+    BuildDecisionStepOutput,
+    DecisionStepOutputAnswers,
+    DecisionsPayloadConflict,
+    FailedDecisionIDs,
+    KeptDecisionAnswers,
+    PassOverFailedDecisionPaths,
+    QuestionsToAsk,
+    ReadsFailedDecision,
+    ReadDecisionStepConfiguration,
+    ResolveGraphDecisions,
+    StillHoldingDecisionOutput,
+    type TaskDecisionStepConfiguration,
+} from './decision-node';
+import { AIDecisionTaskRunner } from './AIDecisionTaskRunner';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
 import {
     IsSettlementExpired,
@@ -145,6 +168,42 @@ function asRunQueryProvider(provider: IMetadataProvider): IRunQueryProvider | un
     const candidate = provider as unknown as Partial<IRunQueryProvider>;
     return typeof candidate.RunQuery === 'function' ? (candidate as IRunQueryProvider) : undefined;
 }
+
+/**
+ * True when a task's `InputPayload` is a well-formed name → value object, or absent entirely.
+ *
+ * A type predicate rather than a plain boolean check so `runTaskBody`'s `if (!isNameValuePayload(...))
+ * return ...` narrows `inputPayload` for the rest of the method — including the call into
+ * `mergedPayload` — instead of leaving it `unknown` and inviting a second, possibly-divergent
+ * array/scalar check downstream (MJ#4794 was exactly that: a shape decision duplicated in two
+ * places that disagreed).
+ */
+function isNameValuePayload(inputPayload: unknown): inputPayload is Record<string, unknown> | null {
+    return inputPayload == null || (typeof inputPayload === 'object' && !Array.isArray(inputPayload));
+}
+
+/**
+ * Parses a task's stored `InputPayload`, telling an ABSENT input apart from an UNREADABLE one.
+ *
+ * Both used to come out as `null`, and `null` is a legitimate "this node takes no input" — so a row
+ * whose payload could not be parsed ran with none of its inputs, the same silent outcome the shape
+ * guard in `runTaskBody` refuses for an array. A string that is not JSON reaches here through
+ * `TaskGraph.RetryTask` / `UpdateTaskInput`, which store a string payload verbatim.
+ */
+export function ParseTaskInputPayload(taskID: string, raw: string | null | undefined): { Payload: unknown } | { ErrorMessage: string } {
+    if (!raw) {
+        return { Payload: null };
+    }
+    try {
+        return { Payload: JSON.parse(raw) };
+    } catch (e) {
+        return {
+            ErrorMessage:
+                `Task ${taskID} has an InputPayload that is not valid JSON (${e instanceof Error ? e.message : String(e)}). ` +
+                `Its inputs cannot be mapped to parameters, so it was not run.`,
+        };
+    }
+}
 import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata, TASK_TYPE_NAME, type TaskGraphParentMetadata } from './TaskGraphService';
 import {
     DEFAULT_DISPATCHER_CONFIG,
@@ -154,6 +213,8 @@ import {
     TaskAgentRunner,
     TaskPromptRunner,
     TaskGraphDispatcherConfig,
+    type TaskDecisionRunner,
+    type TaskDecisionRunResult,
     type TaskContinuationDeliverer,
     type TaskContinuationParams,
     type TaskGraphFrame,
@@ -361,6 +422,16 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private readonly reportedUnevaluableConditions = new Set<string>();
 
+    /**
+     * Decision run-step logs in flight, by agent run.
+     *
+     * A logged step takes the run's next step number, which is read and then written, so two
+     * Decision steps logging on one run at once would take the same number. Chaining them per run
+     * closes that on this instance. Instances do not share it; the column has no unique constraint,
+     * so a collision across instances only misorders the run's timeline.
+     */
+    private readonly runStepLogs = new Map<string, Promise<void>>();
+
     /** Resolved once it EXISTS; null while it does not, so a fresh install is not cached blind. */
     private cachedWorkflowTaskTypeID: string | null = null;
 
@@ -483,6 +554,12 @@ export class TaskGraphDispatcher implements IShutdownable {
          * rather than being failed, for the same reason action nodes do.
          */
         private readonly promptRunner?: TaskPromptRunner,
+        /**
+         * Answers Decision nodes. Defaults to {@link AIDecisionTaskRunner}, one `AIDecisionRunner`
+         * call per node, so every host that runs the dispatcher can run a Decision; supply one to
+         * decide differently, or to test without a model.
+         */
+        private readonly decisionRunner: TaskDecisionRunner = new AIDecisionTaskRunner(),
     ) {
         this.config = { ...DEFAULT_DISPATCHER_CONFIG, ...config };
         this.claims = new TaskClaimStore(this.config.InstanceID, this.config.ClaimTTLSeconds);
@@ -664,6 +741,56 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Says, once per episode, that this dispatcher cannot claim anything.
+     *
+     * Once per episode rather than once per task: the failure repeats on every task of every poll,
+     * and a line per attempt buries the one fact an operator needs. `TaskClaimStore` resets its
+     * counter on the first write that actually runs, so a later episode announces itself again.
+     */
+    private reportClaimsUnavailable(): void {
+        if (this.claims.ConsecutiveWriteFailures !== 1) return;
+        LogError(
+            `[TaskGraphDispatcher] Cannot claim tasks — the guarded write was refused, not lost to ` +
+            `another instance. Nothing in any graph will execute on this instance until it succeeds. ` +
+            `If this is a permission error, the database principal needs EXECUTE on the task-graph ` +
+            `procedures (the cdp_Developer or cdp_Integration role grants them). ` +
+            `${this.claims.LastWriteError ?? ''}`,
+        );
+    }
+
+    /**
+     * Warns at boot when this process cannot execute the claim procedure.
+     *
+     * The same check the scheduling engine runs for its lock sproc, and for the same reason: the
+     * alternative is discovering it one refused claim at a time, in a log line that reads like a lost
+     * race. Never throws — a dispatcher that cannot probe should still start and try.
+     */
+    private async probeClaimPermission(): Promise<void> {
+        try {
+            const db = (await this.providerFactory.CreateProvider()) as unknown as DatabaseProviderBase;
+            // sys.fn_my_permissions is SQL Server-only; on other platforms a real problem still
+            // surfaces at the first claim rather than as an error-shaped line at boot.
+            if (db.PlatformKey !== 'sqlserver') return;
+            const rows = await db.ExecuteSQL<{ permission_name: string }>(
+                `SELECT permission_name FROM sys.fn_my_permissions(` +
+                `'${db.MJCoreSchemaName}.spTaskGraphClaimTask', 'OBJECT') WHERE permission_name = 'EXECUTE'`,
+                [],
+                { isMutation: false, description: 'TaskGraph claim permission probe' },
+                this.contextUser,
+            );
+            if (!rows || rows.length === 0) {
+                LogError(
+                    `[TaskGraphDispatcher] The database principal lacks EXECUTE on ` +
+                    `${db.MJCoreSchemaName}.spTaskGraphClaimTask, so NO task will ever be claimed. ` +
+                    `Grant the cdp_Developer or cdp_Integration role to the principal and restart.`,
+                );
+            }
+        } catch {
+            // A probe that cannot run is not itself a fault; the claim path reports the real thing.
+        }
+    }
+
+    /**
      * Begins dispatching.
      *
      * Runs reconciliation FIRST, before accepting any new work. On a restart this instance may be
@@ -680,6 +807,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         ShutdownRegistry.Instance.Register(this);
 
         LogStatus(`[TaskGraphDispatcher] Starting as instance '${this.config.InstanceID}'.`);
+        await this.probeClaimPermission();
         await this.Reconcile();
         // One wide pass over graphs that reached terminal without settling, mirroring what claim
         // reconciliation above already does for tasks. The realistic producer of a >24h-stale
@@ -941,6 +1069,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                 if (!this.running) break;
                 if (this.inFlight.size >= this.config.MaxConcurrentTasks) break;
                 if (!(await this.claims.TryClaim(provider, task.ID, this.contextUser))) {
+                    // A write that was REFUSED is not a lost race (#4575). Both return false, and
+                    // reading the first as the second is what let a dispatcher skip every task in
+                    // the table, forever, while logging nothing but "normal". Stop the wave: if this
+                    // process cannot write claims, the next task will not go better either.
+                    if (this.claims.LastWriteFailed) {
+                        this.reportClaimsUnavailable();
+                        break;
+                    }
                     // Another instance won the race, or the task is no longer Pending. Normal.
                     continue;
                 }
@@ -1032,14 +1168,17 @@ export class TaskGraphDispatcher implements IShutdownable {
             });
 
             const dependencyOutputs = await this.loadDependencyOutputs(provider, taskID);
-            let inputPayload: unknown = null;
-            if (task.InputPayload) {
-                try { inputPayload = JSON.parse(task.InputPayload); }
-                catch (e) { LogError(`[TaskGraphDispatcher] Task ${taskID} has malformed InputPayload: ${e}`); }
+            const parsed = ParseTaskInputPayload(taskID, task.InputPayload);
+            let result: TaskBodyOutcome;
+            if ('ErrorMessage' in parsed) {
+                // Refused through the normal Failed path below, like runTaskBody's shape guard — never
+                // run as though the node had no input.
+                LogError(`[TaskGraphDispatcher] ${parsed.ErrorMessage}`);
+                result = { Success: false, ErrorMessage: parsed.ErrorMessage };
+            } else {
+                const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
+                result = await this.runTaskBody(task, provider, parsed.Payload, dependencyOutputs, onProgress);
             }
-
-            const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
-            const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs, onProgress);
 
             // ONLY THE CONFIRMED OWNER MUTATES THE GRAPH (R2-10).
             //
@@ -2267,7 +2406,11 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // they cleared. Without a notification here a workflow simply stops, waiting on
                 // someone who was never told. That silent stall is the failure mode this exists to
                 // prevent, so it happens on the eligibility check rather than at submission.
-                if (entity.ActionID) {
+                if (entity.StepType === 'Decision') {
+                    // Tested before the key columns: a Decision carries its decision prompt in
+                    // PromptID, but it runs on the decision runner, which every dispatcher has — so
+                    // a host with no PROMPT runner must not leave it Pending.
+                } else if (entity.ActionID) {
                     // An action node this host has no runner for is left Pending rather than
                     // claimed. Claiming it would take ownership of work this process cannot do, and
                     // the claim would then have to expire before any host that CAN do it gets a
@@ -2353,6 +2496,8 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private canActOn(entity: MJTaskEntity): boolean {
         if (this.inFlight.has(entity.ID)) return false;
+        // Before the PromptID test, for the reason given in `findClaimableTasks`.
+        if (entity.StepType === 'Decision') return true;
         if (entity.ActionID) return !!this.actionRunner;
         if (entity.PromptID) return !!this.promptRunner;
         if (entity.AgentID) return true;
@@ -2819,6 +2964,10 @@ export class TaskGraphDispatcher implements IShutdownable {
             Data: parentMeta.invocation?.data,
             Context: parentMeta.invocation?.context,
         };
+        // The graph's Decision answers, read ONCE from the Decision steps' own rows. Every condition
+        // this pass evaluates sees the same answers, and one reading an answer that is not settled
+        // holds instead of reading false (plan 4.5).
+        const decisions = ResolveGraphDecisions(children);
 
         // Conditional edges are resolved HERE, before eligibility runs, by dropping edges whose
         // condition does not hold. Expressing it as edge removal rather than as a second rule inside
@@ -2853,17 +3002,29 @@ export class TaskGraphDispatcher implements IShutdownable {
             ? new Set<TaskGraphNodeStatus>(['Complete', 'Failed'])
             : new Set<TaskGraphNodeStatus>(['Complete']);
 
+        // A path reading a decision whose call FAILED is passed over when another path of its fork
+        // is satisfied: that path is the author's recovery route, taken whatever its rank, exactly
+        // as the in-run walker takes it. With no such path the fork still holds, so a Retry of the
+        // failed Decision step can route it.
+        const failedDecisions = FailedDecisionIDs(children);
+        const conditionByEdge = new Map(exclusive.map((d) => [d.ID, d.Condition ?? '']));
+        // Why each exclusive edge that cannot be evaluated is held, by edge — reported below, once the
+        // resolution says whether its fork is actually held.
+        const exclusiveHoldReasons = new Map<string, string>();
         const resolution = ResolveExclusiveGroups(
-            exclusive.map((d) => ({
-                id: d.ID,
-                taskId: d.TaskID,
-                dependsOnTaskId: d.DependsOnTaskID,
-                exclusiveGroup: d.ExclusiveGroup!,
-                originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
-                priority: d.Priority ?? 0,
-                sequence: d.Sequence ?? 0,
-                conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation, debug),
-            })),
+            PassOverFailedDecisionPaths(
+                exclusive.map((d) => ({
+                    id: d.ID,
+                    taskId: d.TaskID,
+                    dependsOnTaskId: d.DependsOnTaskID,
+                    exclusiveGroup: d.ExclusiveGroup!,
+                    originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
+                    priority: d.Priority ?? 0,
+                    sequence: d.Sequence ?? 0,
+                    conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation, decisions, debug, exclusiveHoldReasons),
+                })),
+                (edge) => ReadsFailedDecision(conditionByEdge.get(edge.id) ?? '', failedDecisions),
+            ),
             // WHICH STATUSES MAY DECIDE — the graph's own failure dialect, not a constant.
             //
             // Under `'edges'`, a flow's failure handling IS its outgoing edges, so a Failed origin
@@ -2892,7 +3053,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         for (const d of ordinary) {
             if (d.Condition?.trim()) {
-                const decision = this.evaluateEdgeCondition(d, entityById, failureSemantics, invocation, debug);
+                const decision = this.evaluateEdgeCondition(d, entityById, failureSemantics, invocation, decisions, debug);
                 if (decision.decided) {
                     gateDecisions.push({
                         edge: d,
@@ -2955,13 +3116,18 @@ export class TaskGraphDispatcher implements IShutdownable {
         for (const d of exclusive) {
             const originStatus = entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending';
             if (!decidingStatuses.has(originStatus as TaskGraphNodeStatus) && !OverrideVerdictFor(debug ?? {}, d.ID)) continue;
+            const held = !loserEdgeIDs.has(d.ID) && exclusiveHolds.has(d.TaskID);
+            // The edge that holds its fork says why — below its confidence, from a failed call — and
+            // is logged once, as an ordinary edge is. Its siblings hold only because it does.
+            const holdReason = held ? exclusiveHoldReasons.get(d.ID) : undefined;
+            if (holdReason) this.logUnevaluableConditionOnce(d, holdReason);
             gateDecisions.push({
                 edge: d,
                 verdict: loserEdgeIDs.has(d.ID)
                     ? 'notTaken'
-                    : exclusiveHolds.has(d.TaskID) ? 'held' : 'satisfied',
-                reason: exclusiveHolds.has(d.TaskID)
-                    ? 'this fork is undecided — a path in its group cannot be answered yet'
+                    : held ? 'held' : 'satisfied',
+                reason: held
+                    ? holdReason ?? 'this fork is undecided — a path in its group cannot be answered yet'
                     : undefined,
             });
         }
@@ -3024,11 +3190,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         const key = `${dep.ID}:${errorMessage ?? ''}`;
         if (this.reportedUnevaluableConditions.has(key)) return;
         this.reportedUnevaluableConditions.add(key);
+        // A hold on a decision has a way out that a broken condition does not: ask again.
+        const readsDecision = DecisionReferencesIn(dep.Condition ?? '').References.length > 0;
         LogError(
             `[TaskGraphDispatcher] Dependency ${dep.ID} has an unevaluable condition ` +
             `(${errorMessage}); condition text: ${JSON.stringify(dep.Condition)}. ` +
             `Task ${dep.TaskID} is HELD — it will not run and will not be skipped until the ` +
-            `condition can be evaluated. The graph reports as stalled while this holds.`,
+            `condition can be evaluated. The graph reports as stalled while this holds.` +
+            (readsDecision
+                ? ' Retrying the Decision step it reads asks the questions it is holding again; an edge override answers the condition by hand.'
+                : ''),
         );
     }
 
@@ -3044,6 +3215,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         entityById: Map<string, MJTaskEntity>,
         failureSemantics: TaskGraphParentMetadata['failureSemantics'],
         invocation: ConditionInvocation,
+        decisions: GraphDecisions,
         debug?: TaskGraphDebugState,
     ): { outcome: 'keep' | 'drop' | 'hold'; reason?: string; decided: boolean } {
         // An operator's override answers the edge BEFORE the condition is consulted — an override
@@ -3072,9 +3244,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         let evaluated = false;
         const outcome = DecideGate(upstream.Status, failureSemantics, () => {
             evaluated = true;
-            const result = this.conditionEvaluator.Evaluate(
+            // A condition reading an unsettled decision is held here, before evaluation could read
+            // its absence as a confident false.
+            const result = EvaluateCondition(
                 dep.Condition!,
-                BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload), invocation),
+                BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload), invocation, decisions.Answers),
+                decisions,
+                (condition, context) => this.conditionEvaluator.Evaluate(condition, context),
             );
             if (!result.Success) unevaluableError = result.ErrorMessage;
             return result;
@@ -3111,7 +3287,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         dep: MJTaskDependencyEntity,
         entityById: Map<string, MJTaskEntity>,
         invocation: ConditionInvocation,
+        decisions: GraphDecisions,
         debug?: TaskGraphDebugState,
+        holdReasons?: Map<string, string>,
     ): EdgeConditionOutcome {
         // Same override-first rule as ordinary edges — see evaluateEdgeCondition.
         const override = OverrideVerdictFor(debug ?? {}, dep.ID);
@@ -3121,19 +3299,27 @@ export class TaskGraphDispatcher implements IShutdownable {
         const upstream = entityById.get(dep.DependsOnTaskID);
         if (!upstream) return 'unevaluable';
 
-        const result = this.conditionEvaluator.Evaluate(
+        const result = EvaluateCondition(
             dep.Condition,
             // The invocation envelope rides the EXCLUSIVE dialect too. R3-3 threaded it into the
             // ordinary path; a flow's XOR branch reading `data.userApproval` is the same documented
             // condition on a different edge kind, and `BuildConditionContext`'s defaulted parameter
             // made omitting it here silently evaluate those roots against nothing.
-            BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload), invocation),
+            BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload), invocation, decisions.Answers),
+            decisions,
+            (condition, context) => this.conditionEvaluator.Evaluate(condition, context),
         );
+        // A fork on a judgment that is not settled — below its confidence, or from a failed call —
+        // holds the whole group rather than guessing a branch (plan 4.5). The reason is kept for the
+        // caller to report, as an ordinary edge's is.
+        const unevaluable = result.Unevaluable || (!result.Success && IsBrokenGuard(result.ErrorMessage));
+        if (unevaluable && result.ErrorMessage) holdReasons?.set(dep.ID, result.ErrorMessage);
+        if (unevaluable) return 'unevaluable';
         // SAME CLASSIFICATION AS THE ORDINARY DIALECT (R2-3). The null-safe envelope already makes
         // one level of absence read as false here, but a deeper absent chain still throws — and
         // calling that 'unevaluable' would hold the whole group forever on a terminal origin, while
         // `DecideGate` would have dropped the identical condition. Two dialects, one question.
-        if (!result.Success) return IsBrokenGuard(result.ErrorMessage) ? 'unevaluable' : 'unsatisfied';
+        if (!result.Success) return 'unsatisfied';
         return result.Value ? 'satisfied' : 'unsatisfied';
     }
 
@@ -3218,6 +3404,23 @@ export class TaskGraphDispatcher implements IShutdownable {
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
+        // A node's input is a name → value object (`TaskGraphSpecNode.inputPayload: Record<string, unknown>`).
+        // `mergedPayload` below only merges objects, so anything else would be dropped without a word
+        // and the step would run with none of its inputs — how durable entity actions ran before MJ#4794
+        // (their redacted params were stored as an array). Rows written that way may still be queued, so
+        // refuse them loudly rather than run them empty. This is also the only place that narrows
+        // `inputPayload`'s type: everything downstream (`mergedPayload` included) receives the narrowed
+        // `Record<string, unknown> | null`, so the array/scalar case cannot recur as a second, divergent
+        // check further down the call chain.
+        if (!isNameValuePayload(inputPayload)) {
+            const found = Array.isArray(inputPayload) ? 'an array' : `a ${typeof inputPayload}`;
+            const message =
+                `Task ${task.ID} has an InputPayload that is ${found}; expected a name → value object. ` +
+                `Its inputs cannot be mapped to parameters, so it was not run.`;
+            LogError(`[TaskGraphDispatcher] ${message}`);
+            return { Success: false, ErrorMessage: message };
+        }
+
         const payload = this.mergedPayload(inputPayload, dependencyOutputs);
         const config = task.ConfigurationObject;
 
@@ -3225,6 +3428,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         // through the very same runners as a one-shot step.
         if (task.StepType === 'ForEach' || task.StepType === 'While') {
             return { ...await this.runLoopTask(task, provider, payload, dependencyOutputs), PayloadAtStart: payload };
+        }
+
+        // Routed on StepType before the mappings below: a Decision reads its state from the merged
+        // payload by path and writes its answers back under `decisions`, so it has no mapping of its
+        // own. And it carries a PromptID, so the Prompt branch would otherwise take it.
+        if (task.StepType === 'Decision') {
+            return { ...await this.runDecisionNode(task, provider, payload, onProgress), PayloadAtStart: payload };
         }
 
         const { params, errors } = BuildMappedInput(config?.inputMapping, { payload });
@@ -3626,6 +3836,203 @@ export class TaskGraphDispatcher implements IShutdownable {
             ContextUser: this.contextUser,
             OnProgress: onProgress,
         });
+    }
+
+    /**
+     * Runs a Decision step: ONE call that answers every question the node asks, about one state.
+     *
+     * The answers land in the step's output under `decisions.<tempId>`, where later steps can read
+     * them, and the edges that route on them read the same answers from this row (see
+     * `ResolveGraphDecisions`). A call that fails writes no answers and fails the step: under
+     * `'block'` its dependents block, and under `'edges'` every condition that reads it holds. It
+     * never reads as `false`.
+     *
+     * **A retry asks only what the step is holding.** A step retried from `Complete` keeps the usable
+     * answers it already gave (`KeptDecisionAnswers`), because the graph has already acted on them,
+     * and the call asks only the rest. If that call fails, or cannot be made, the step stays
+     * `Complete` with the same usable answers, and the questions it asked again hold with the reason.
+     */
+    private async runDecisionNode(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        payload: Record<string, unknown>,
+        onProgress?: TaskRunProgressCallback,
+    ): Promise<TaskBodyOutcome> {
+        const config = ReadDecisionStepConfiguration(task.Configuration);
+        if (!config) return this.decisionNotAsked(task, payload, 'it has no decision settings, so there is nothing to ask');
+        const kept = KeptDecisionAnswers(task);
+        const toAsk = QuestionsToAsk(config.questions, kept);
+        const notAsked = (reason: string) => this.decisionNotAsked(task, payload, reason, { config, kept });
+        if (!task.PromptID) return notAsked('it has no decision prompt to run on');
+        const state = ResolveDecisionState(config.state, payload);
+        if ('ErrorMessage' in state) return notAsked(state.ErrorMessage);
+        // Checked before the call, not after: a step that cannot write its answers without destroying
+        // data should not pay for the answers first.
+        const conflict = DecisionsPayloadConflict(payload);
+        if (conflict) return notAsked(conflict);
+
+        const startedAt = new Date();
+        const result = await this.decisionRunner.RunDecisionForTask({
+            TaskID: task.ID,
+            PromptID: task.PromptID,
+            State: state.State,
+            Questions: toAsk,
+            Provider: provider,
+            ContextUser: this.contextUser,
+            OnProgress: onProgress,
+        });
+        await this.logDecisionStep(provider, task, config, toAsk, state.State, result, startedAt);
+
+        if (!result.Success || !result.Answers) {
+            const message = result.ErrorMessage || `Decision "${task.Name}" returned no answers.`;
+            if (Object.keys(kept).length > 0) return this.decisionStillHolding(task, config, kept, message, result.PromptRunID);
+            return {
+                Success: false,
+                AgentRunID: null,
+                ErrorMessage: message,
+                // The payload passes through WITHOUT answers, so nothing downstream can mistake a
+                // failed decision for one that answered.
+                Output: payload,
+                // A failed call can still have cost tokens; the rollup reaches it through this.
+                PromptRunID: result.PromptRunID,
+            };
+        }
+        // A kept answer is never replaced, whatever the call returned for its question.
+        const answers = { ...result.Answers, ...kept };
+        return {
+            Success: true,
+            AgentRunID: null,
+            // Only the answers a condition may act on; each other one is replaced by why it is held.
+            Output: BuildDecisionStepOutput(payload, config.nodeId, DecisionStepOutputAnswers(task.Name, config.questions, answers)),
+            PromptRunID: result.PromptRunID,
+        };
+    }
+
+    /**
+     * A Decision step that could not be asked — failed with the reason, its input passed through.
+     * A retried step with answers to keep stays `Complete` and holds instead (see `runDecisionNode`).
+     */
+    private decisionNotAsked(
+        task: MJTaskEntity,
+        payload: Record<string, unknown>,
+        reason: string,
+        retry?: { config: TaskDecisionStepConfiguration; kept: Record<string, TaskGraphDecisionAnswer> },
+    ): TaskBodyOutcome {
+        if (retry && Object.keys(retry.kept).length > 0) return this.decisionStillHolding(task, retry.config, retry.kept, reason);
+        return { Success: false, AgentRunID: null, ErrorMessage: `Decision "${task.Name}" was not asked: ${reason}.`, Output: payload };
+    }
+
+    /**
+     * A retried Decision step that could not answer again. It keeps its usable answers and stays
+     * `Complete`, and each question it asked again holds with `reason`, so it can be retried again.
+     */
+    private decisionStillHolding(
+        task: MJTaskEntity,
+        config: TaskDecisionStepConfiguration,
+        kept: Record<string, TaskGraphDecisionAnswer>,
+        reason: string,
+        promptRunID?: string,
+    ): TaskBodyOutcome {
+        LogError(
+            `[TaskGraphDispatcher] Decision "${task.Name}" (${task.ID}) was retried and could not answer again: ${reason}. ` +
+            'It keeps the answers it already gave and still holds the rest; retry it again.',
+        );
+        return {
+            Success: true,
+            AgentRunID: null,
+            Output: StillHoldingDecisionOutput(task.OutputPayload, task.Name, config.nodeId, config.questions, kept, reason),
+            PromptRunID: promptRunID,
+        };
+    }
+
+    /**
+     * Records a Decision step's call on the agent run that submitted the graph, as an
+     * `AIAgentRunStep` with `StepType 'Decision'`.
+     *
+     * **`'Decision'` means exactly one typed decision call**: a fixed set of Likelihood, Choice or
+     * Score questions answered about one state. `TargetID` is the decision prompt, `TargetLogID` the
+     * call's `MJ: AI Prompt Runs` row, `InputData` the state and the questions asked, and
+     * `OutputData` the answers. Some older writers use the value loosely for bookkeeping; this is the
+     * meaning new code writes (see `TaskGraphNodeConfigMap['Decision']`). A retry asks only the
+     * questions the step was holding, so its step lists only those.
+     *
+     * A graph no run submitted — a schedule, MCP, a person — has no run to log on; the call is still
+     * recorded in its prompt run, which the task points at. Observability only: a failure to log is
+     * reported, and the decision stands.
+     */
+    private async logDecisionStep(
+        provider: IMetadataProvider,
+        task: MJTaskEntity,
+        config: TaskDecisionStepConfiguration,
+        asked: TaskDecisionStepConfiguration['questions'],
+        state: string | Record<string, unknown>,
+        result: TaskDecisionRunResult,
+        startedAt: Date,
+    ): Promise<void> {
+        try {
+            const { SubmittingAgentRunID: agentRunID } = await this.graphContext(provider, task);
+            if (!agentRunID) return;
+
+            // The number is read and the step saved as one unit per run, so two Decision steps
+            // logging on the same run cannot take the same number.
+            await this.oneRunStepLogAtATime(agentRunID, async () => {
+                const step = await provider.GetEntityObject<MJAIAgentRunStepEntity>('MJ: AI Agent Run Steps', this.contextUser);
+                step.NewRecord();
+                InitAgentRunStep(step, {
+                    AgentRunID: agentRunID,
+                    StepNumber: await this.nextRunStepNumber(provider, agentRunID),
+                    StepType: 'Decision',
+                    StepName: `Decision: ${task.Name}`,
+                    TargetID: task.PromptID,
+                    InputData: JSON.stringify({ taskID: task.ID, decision: config.nodeId, state, questions: asked }),
+                });
+                step.StartedAt = startedAt;
+                FinalizeAgentRunStep(step, {
+                    success: result.Success,
+                    errorMessage: result.ErrorMessage,
+                    targetLogID: result.PromptRunID,
+                    outputData: { answers: result.Answers ?? {} },
+                });
+                if (!(await step.Save())) {
+                    LogError(`[TaskGraphDispatcher] Could not log the Decision step for task ${task.ID}: ${step.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            });
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not log the Decision step for task ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Runs `write` after every earlier run-step log for the same agent run has finished, on this
+     * instance. A failed write does not hold up the next one; its error still reaches the caller.
+     */
+    private async oneRunStepLogAtATime(agentRunID: string, write: () => Promise<void>): Promise<void> {
+        const key = agentRunID.toLowerCase();
+        const current = (this.runStepLogs.get(key) ?? Promise.resolve()).then(write);
+        const settled = current.catch(() => undefined);
+        this.runStepLogs.set(key, settled);
+        try {
+            await current;
+        } finally {
+            if (this.runStepLogs.get(key) === settled) this.runStepLogs.delete(key);
+        }
+    }
+
+    /** One past a run's highest step number, so a step logged from here sorts after the run's own. */
+    private async nextRunStepNumber(provider: IMetadataProvider, agentRunID: string): Promise<number> {
+        const result = await RunView.FromMetadataProvider(provider).RunView<{ StepNumber: number }>(
+            {
+                EntityName: 'MJ: AI Agent Run Steps',
+                ExtraFilter: `AgentRunID='${agentRunID}'`,
+                Fields: ['StepNumber'],
+                OrderBy: 'StepNumber DESC',
+                MaxRows: 1,
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            this.contextUser,
+        );
+        return (result.Success ? result.Results?.[0]?.StepNumber ?? 0 : 0) + 1;
     }
 
     /**
@@ -4053,16 +4460,21 @@ export class TaskGraphDispatcher implements IShutdownable {
      * than the flow it was compiled from. Merging in dependency order restores the accumulation.
      *
      * Later prerequisites win on a key collision, matching a flow's own last-write-wins behaviour.
+     *
+     * `inputPayload` arrives pre-narrowed: `runTaskBody`'s guard is the only place that decides
+     * whether it is a name → value object, so this method trusts that decision rather than
+     * re-checking it. `dependencyOutputs` is a separate input with no equivalent guard upstream, so
+     * its per-entry object/array check stays here.
      */
-    private mergedPayload(inputPayload: unknown, dependencyOutputs: Map<string, unknown>): Record<string, unknown> {
+    private mergedPayload(inputPayload: Record<string, unknown> | null, dependencyOutputs: Map<string, unknown>): Record<string, unknown> {
         const merged: Record<string, unknown> = {};
         for (const output of dependencyOutputs.values()) {
             if (output && typeof output === 'object' && !Array.isArray(output)) {
                 Object.assign(merged, output as Record<string, unknown>);
             }
         }
-        if (inputPayload && typeof inputPayload === 'object' && !Array.isArray(inputPayload)) {
-            Object.assign(merged, inputPayload as Record<string, unknown>);
+        if (inputPayload) {
+            Object.assign(merged, inputPayload);
         }
         return merged;
     }

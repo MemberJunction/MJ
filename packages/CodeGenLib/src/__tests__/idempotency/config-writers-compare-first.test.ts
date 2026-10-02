@@ -7,8 +7,7 @@ import { ManageMetadataBase } from '../../Database/manage-metadata';
 import { configInfo } from '../../Config/config';
 import { SQLLogging } from '../../Misc/sql_logging';
 import { CodeGenConnection, CodeGenQueryResult } from '../../Database/codeGenDatabaseProvider';
-import { DecisionMetadataWriter } from '../../Database/decision-metadata-writer';
-import { canonicalJSONStringify } from '../../Misc/util';
+import { CanonicalJSONStringify } from '../../Misc/util';
 
 // Subclass exposing protected methods for testing
 class TestableManageMetadataForConfigWriters extends ManageMetadataBase {
@@ -59,8 +58,6 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
       SQLLogging.resetForTests();
       SQLLogging.sqlOutputDirFlag = tmpDir;
       SQLLogging.initSQLLogging();
-
-      DecisionMetadataWriter.Instance.clear();
    });
 
    afterEach(async () => {
@@ -103,7 +100,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const pool = createMockConnection();
 
          // Mock config
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Tables: [
                {
                   SchemaName: 'dbo',
@@ -143,7 +140,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const mm = new TestableManageMetadataForConfigWriters();
          const pool = createMockConnection();
 
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Tables: [
                {
                   SchemaName: 'dbo',
@@ -186,7 +183,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const mm = new TestableManageMetadataForConfigWriters();
          const pool = createMockConnection();
 
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Tables: [
                {
                   SchemaName: 'dbo',
@@ -243,7 +240,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const mm = new TestableManageMetadataForConfigWriters();
          const pool = createMockConnection();
 
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Entities: [
                {
                   BaseTable: 'Organizations',
@@ -279,7 +276,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const mm = new TestableManageMetadataForConfigWriters();
          const pool = createMockConnection();
 
-         vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+         vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue({
             Entities: [
                {
                   BaseTable: 'Organizations',
@@ -332,7 +329,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
                   recordset: [
                      {
                         ID: 'SETTING-1',
-                        Value: canonicalJSONStringify(catInfo, 2),
+                        Value: CanonicalJSONStringify(catInfo, 2),
                      },
                   ],
                };
@@ -342,7 +339,7 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
                   recordset: [
                      {
                         ID: 'SETTING-2',
-                        Value: canonicalJSONStringify({ General: 'fa-info' }, 2),
+                        Value: CanonicalJSONStringify({ General: 'fa-info' }, 2),
                      },
                   ],
                };
@@ -392,36 +389,6 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const secondUuidMatch = /VALUES \('([0-9a-f-]{36})'/i.exec(secondInserts[0]);
          expect(secondUuidMatch).not.toBeNull();
          expect(secondUuidMatch![1]).toBe(firstMintedId);
-      });
-   });
-
-   describe('decision-metadata writer config column skip', () => {
-      it('skips a column additionalSchemaInfo owns and counts it in decisionRecordsSkipped', () => {
-         const writer = DecisionMetadataWriter.Instance;
-         writer.clear();
-
-         // Load config that owns AllowUserSearchAPI on Organization
-         writer.loadConfigOwnedColumns({
-            Entities: [
-               {
-                  BaseTable: 'Organization',
-                  SchemaName: 'dbo',
-                  AllowUserSearchAPI: true,
-               },
-            ],
-         });
-
-         const initialSkipped = writer.recordsSkippedCount;
-
-         // Attempt to record AllowUserSearchAPI on Organization
-         writer.recordEntityDecision('Organization', 'AllowUserSearchAPI', true);
-
-         // Must be skipped and counted
-         expect(writer.recordsSkippedCount).toBe(initialSkipped + 1);
-
-         // Recording an unowned column succeeds
-         writer.recordEntityDecision('Organization', 'Icon', 'fa-building');
-         expect(writer.recordsSkippedCount).toBe(initialSkipped + 1);
       });
    });
 });

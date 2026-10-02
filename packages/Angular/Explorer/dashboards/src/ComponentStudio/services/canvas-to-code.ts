@@ -19,10 +19,15 @@ import type { FormCanvasModel, FormCanvasSection, FormCanvasElement } from './fo
  * Build a JS-safe identifier from a free-form component name. Caller is
  * responsible for handling empty results.
  */
-export function toComponentIdentifier(name: string): string {
+export function ToComponentIdentifier(name: string): string {
     const cleaned = name.replace(/[^A-Za-z0-9]/g, '');
     if (!cleaned) return 'Form';
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+/** @deprecated Use {@link ToComponentIdentifier}. */
+export function toComponentIdentifier(name: string): string {
+    return ToComponentIdentifier(name);
 }
 
 /**
@@ -34,12 +39,12 @@ export function toComponentIdentifier(name: string): string {
  * @param componentName - human-readable component name (used for the JS
  *   function identifier)
  */
-export function generateCodeFromCanvas(
+export function GenerateCodeFromCanvas(
     canvas: FormCanvasModel,
     schema: CuratedFormSchema,
     componentName: string,
 ): string {
-    const fnName = toComponentIdentifier(componentName);
+    const fnName = ToComponentIdentifier(componentName);
     const fieldsByName = new Map<string, CuratedFormField>(
         schema.fields.map(f => [f.name, f]),
     );
@@ -143,6 +148,15 @@ export function generateCodeFromCanvas(
         `  );`,
         `}`,
     ].join('\n');
+}
+
+/** @deprecated Use {@link GenerateCodeFromCanvas}. */
+export function generateCodeFromCanvas(
+    canvas: FormCanvasModel,
+    schema: CuratedFormSchema,
+    componentName: string,
+): string {
+    return GenerateCodeFromCanvas(canvas, schema, componentName);
 }
 
 /**

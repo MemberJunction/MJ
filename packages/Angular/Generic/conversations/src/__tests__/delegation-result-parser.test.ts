@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ParseDelegationResultJson } from '../lib/services/delegation-result-parser';
+import { ParseDelegationResultJson } from '@memberjunction/realtime-runtime';
 
 describe('ParseDelegationResultJson', () => {
   it('parses a successful result with a runId', () => {

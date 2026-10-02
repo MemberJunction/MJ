@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GenericDatabaseProvider, DoomedTransactionError } from '../GenericDatabaseProvider';
 import { SqlLoggingSessionImpl } from '../SqlLogger';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
@@ -39,7 +39,11 @@ import {
     QueryCategoryInfo,
     Metadata,
 } from '@memberjunction/core';
-import type { QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
+import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
+import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
+import { EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
+import { AIEngine } from '@memberjunction/aiengine';
+import { TransactionFrameTracker } from '../TransactionFrameTracker';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 
@@ -2147,5 +2151,527 @@ describe('GenericDatabaseProvider save-call variable suffix (loom #12 WP3)', () 
         }
         expect(new Set(suffixes).size).toBe(120_000);
         expect(suffixes.every((s) => HEX12.test(s))).toBe(true);
+    });
+});
+
+describe('GenericDatabaseProvider RunAfterCommit (post-commit queue)', () => {
+    /** Records each task's label when it runs. */
+    function recorder(): { ran: string[]; task: (label: string) => () => Promise<void> } {
+        const ran: string[] = [];
+        return { ran, task: (label: string) => async () => { ran.push(label); } };
+    }
+
+    class FailingCommitProvider extends RecordingProvider {
+        protected override async CommitPhysicalTransaction(): Promise<void> {
+            throw new Error('commit failed');
+        }
+    }
+
+    it('starts the task immediately when there is no ambient transaction', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        p.RunAfterCommit(r.task('now'), 'now');
+        await Promise.resolve();
+        expect(r.ran).toEqual(['now']);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+    });
+
+    it('queues inside a transaction and runs each task exactly once, in order, after the outermost commit', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('a'), 'a');
+        p.RunAfterCommit(r.task('b'), 'b');
+        expect(r.ran).toEqual([]);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['a', 'b']);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['a', 'b']);
+    });
+
+    it('a savepoint release neither drains nor clears; the outer commit runs the task', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('inner'), 'inner');
+        await p.CommitTransaction();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        // A later savepoint at the same depth that rolls back must not take the released task with it.
+        await p.BeginTransaction();
+        await p.RollbackTransaction();
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['inner']);
+    });
+
+    it('a savepoint rollback keeps outer tasks and drops only the tasks registered inside it', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('outer'), 'outer');
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('rolled-back'), 'rolled-back');
+        await p.RollbackTransaction();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['outer']);
+    });
+
+    it('never runs a task after an outermost rollback', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('x'), 'x');
+        await p.CommitTransaction();
+        await p.RollbackTransaction();
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('never runs a task after a failed commit', async () => {
+        const p = new FailingCommitProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('x'), 'x');
+        await expect(p.CommitTransaction()).rejects.toThrow('commit failed');
+        await p.RollbackTransaction();
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        expect(r.ran).toEqual([]);
+    });
+
+    it('never runs a task queued on a doomed transaction', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('before-doom'), 'before-doom');
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('Transaction has not begun.'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        // Still inside the doomed frame: a new registration queues and is discarded on settle.
+        p.RunAfterCommit(r.task('while-doomed'), 'while-doomed');
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        expect(r.ran).toEqual([]);
+    });
+
+    it('never runs a task after ResetTransactionState', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('x'), 'x');
+        await p.ResetTransactionState();
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('a failing task is logged and neither stops later tasks nor rejects the commit', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new RecordingProvider();
+            const r = recorder();
+            await p.BeginTransaction();
+            p.RunAfterCommit(async () => { throw new Error('task exploded'); }, 'bad task');
+            p.RunAfterCommit(r.task('after'), 'after');
+            await expect(p.CommitTransaction()).resolves.toBeUndefined();
+            expect(r.ran).toEqual(['after']);
+            const logged = errorSpy.mock.calls.map((c) => String(c[0]));
+            expect(logged.some((m) => m.includes("'bad task'") && m.includes('task exploded'))).toBe(true);
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('an immediate task that fails is logged, not thrown into the caller', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new RecordingProvider();
+            expect(() => p.RunAfterCommit(async () => { throw new Error('boom now'); }, 'immediate')).not.toThrow();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            expect(errorSpy.mock.calls.some((c) => String(c[0]).includes('boom now'))).toBe(true);
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('a task can open and commit its own transaction, and its own queued work runs on that commit', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(async () => {
+            r.ran.push('outer-task');
+            await p.BeginTransaction();
+            p.RunAfterCommit(r.task('queued-by-task'), 'queued-by-task');
+            await p.CommitTransaction();
+        }, 'outer-task');
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['outer-task', 'queued-by-task']);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.beginCount).toBe(2);
+    });
+});
+
+describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late registration)', () => {
+    function recorder(): { ran: string[]; task: (label: string) => () => Promise<void> } {
+        const ran: string[] = [];
+        return { ran, task: (label: string) => async () => { ran.push(label); } };
+    }
+    const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+    it('returns a null-epoch token outside a transaction and one naming every open frame inside', async () => {
+        const p = new RecordingProvider();
+        // Not `undefined`: "no transaction was open" is information the late registration needs.
+        expect(p.CapturePostCommitToken()).toEqual({ Epoch: null, FrameIds: [] });
+        await p.BeginTransaction();
+        const outer = p.CapturePostCommitToken();
+        await p.BeginTransaction();
+        const inner = p.CapturePostCommitToken();
+        expect(outer?.FrameIds).toHaveLength(1);
+        expect(inner?.Epoch).toBe(outer?.Epoch);
+        expect(inner?.FrameIds.slice(0, 1)).toEqual(outer?.FrameIds);
+        expect(inner?.FrameIds).toHaveLength(2);
+        await p.CommitTransaction();
+        await p.CommitTransaction();
+        expect(p.CapturePostCommitToken()).toEqual({ Epoch: null, FrameIds: [] });
+    });
+
+    it('registered after the outermost ROLLBACK: never runs', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.RollbackTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+    });
+
+    it('registered after the outermost COMMIT: runs once, immediately', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual(['late']);
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('captured in a savepoint that was then released: queued, runs after the outermost commit', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        // A later savepoint rolling back at the depth the token was captured at must not drop it.
+        await p.BeginTransaction();
+        await p.RollbackTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('captured in a savepoint that rolled back, registered AFTER the outer commit: still dropped', async () => {
+        // The outer transaction committing says nothing about a savepoint that was rolled back
+        // inside it. Registration lands after both, which is the common fire-and-forget shape.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();          // outer
+        await p.BeginTransaction();          // savepoint
+        const token = p.CapturePostCommitToken();
+        await p.RollbackTransaction();       // savepoint rolled back — its work is gone
+        await p.CommitTransaction();         // outer commits
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('captured in a savepoint that was RELEASED, registered after the outer commit: runs', async () => {
+        // The control for the case above: same shape, released instead of rolled back.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        await p.CommitTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('captured with NO transaction open: runs even if an unrelated transaction is open by then', async () => {
+        // Work caused outside a transaction is already durable; it must not be attached to — and
+        // lost with — a transaction that merely happens to be open when it registers.
+        const p = new RecordingProvider();
+        const r = recorder();
+        const token = p.CapturePostCommitToken();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('unrelated-open'), 'unrelated-open', token);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.RollbackTransaction();
+        await settle();
+        expect(r.ran).toEqual(['unrelated-open']);
+    });
+
+    it('a task whose own transaction committed waits for an unrelated open one, then runs', async () => {
+        // Running it inside the unrelated transaction would enlist its writes in that transaction.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+
+        await p.BeginTransaction();                       // an unrelated transaction opens
+        p.RunAfterCommit(r.task('late'), 'late', token);  // ...and only now does the task register
+        await settle();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingIdlePostCommitTaskCount).toBe(1);
+
+        await p.RollbackTransaction();                    // it ends — either way the task is owed
+        expect(r.ran).toEqual(['late']);
+        expect(p.PendingIdlePostCommitTaskCount).toBe(0);
+    });
+
+    it('the same, when the unrelated transaction commits', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('captured in a savepoint that was then rolled back: dropped even though the outer commits', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.RollbackTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.CommitTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('captured in a savepoint whose PARENT savepoint later rolls back: dropped', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        await p.RollbackTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await p.CommitTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('follows the token epoch, not a NEW transaction: old epoch committed -> owed, and run once idle', async () => {
+        // The task is owed because ITS transaction committed. It is not run inside the unrelated
+        // one, whose rollback would take the task's own writes with it.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.RollbackTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('follows the token epoch, not a NEW transaction: old epoch rolled back -> dropped even if the new one commits', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.RollbackTransaction();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.CommitTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('registered while its own transaction is still open: queued at its frame, like an untokened task', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        // Queued at depth 1 (the token's frame), so rolling back the unrelated savepoint keeps it.
+        await p.RollbackTransaction();
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('drops a token from a failed commit, a doomed transaction, or ResetTransactionState', async () => {
+        const r = recorder();
+        const failing = new (class extends RecordingProvider {
+            protected override async CommitPhysicalTransaction(): Promise<void> { throw new Error('commit failed'); }
+        })();
+        await failing.BeginTransaction();
+        const failedToken = failing.CapturePostCommitToken();
+        await expect(failing.CommitTransaction()).rejects.toThrow('commit failed');
+        failing.RunAfterCommit(r.task('failed'), 'failed', failedToken);
+
+        const reset = new RecordingProvider();
+        await reset.BeginTransaction();
+        const resetToken = reset.CapturePostCommitToken();
+        await reset.ResetTransactionState();
+        reset.RunAfterCommit(r.task('reset'), 'reset', resetToken);
+
+        const doomed = new RecordingProvider();
+        await doomed.BeginTransaction();
+        const doomedToken = doomed.CapturePostCommitToken();
+        doomed.ExecuteSQL = async () => {
+            throw Object.assign(new Error('Transaction has not begun.'), { code: 'ENOTBEGUN' });
+        };
+        await expect(doomed.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        doomed.RunAfterCommit(r.task('doomed-open'), 'doomed-open', doomedToken);
+        expect(doomed.PendingPostCommitTaskCount).toBe(0);
+        await expect(doomed.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        doomed.RunAfterCommit(r.task('doomed-settled'), 'doomed-settled', doomedToken);
+
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('drops a token this provider does not know (another instance, or never issued)', async () => {
+        const a = new RecordingProvider();
+        const b = new RecordingProvider();
+        const r = recorder();
+        await a.BeginTransaction();
+        const tokenFromA = a.CapturePostCommitToken();
+        await a.CommitTransaction();
+        await b.BeginTransaction();
+        b.RunAfterCommit(r.task('foreign'), 'foreign', tokenFromA);
+        b.RunAfterCommit(r.task('future'), 'future', { Epoch: Number.MAX_SAFE_INTEGER, FrameIds: [1] });
+        await b.CommitTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+});
+
+describe('GenericDatabaseProvider after-save dispatch captures the token before its first await', () => {
+    const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+    const afterCreate = { ID: 'it-after-create', Name: 'AfterCreate' };
+    const entity = {
+        IsSaved: false,
+        Fields: [],
+        EntityInfo: { ID: 'ent-1', Name: 'Widgets' },
+        PrimaryKey: { ToString: () => 'ID=1' },
+    } as unknown as BaseEntity;
+
+    class DispatchProvider extends RecordingProvider {
+        public aiTokens: Array<PostCommitToken | undefined> = [];
+        public DispatchAfterSave(): Promise<unknown> {
+            return this.HandleEntityActions(entity, 'save', false, {} as UserInfo);
+        }
+        public DispatchAfterSaveAI(): Promise<void> {
+            return this.HandleEntityAIActions(entity, 'save', false, {} as UserInfo);
+        }
+        protected override GetEntityAIActions(): MJEntityAIActionEntity[] {
+            return [{ ID: 'ai-1', TriggerEvent: 'after save', AIActionID: 'a', AIModelID: 'm' } as unknown as MJEntityAIActionEntity];
+        }
+        protected override EnqueueAfterSaveAIAction(_p: unknown, _u: UserInfo, token?: PostCommitToken): void {
+            this.aiTokens.push(token);
+        }
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('entity actions: the token reaches RunEntityAction even when the transaction rolled back first', async () => {
+        const engine = EntityActionEngineServer.Instance;
+        let releaseConfig!: () => void;
+        vi.spyOn(engine, 'Config').mockImplementation(() => new Promise<void>((resolve) => { releaseConfig = resolve; }));
+        vi.spyOn(engine, 'InvocationTypes', 'get').mockReturnValue([afterCreate] as never);
+        vi.spyOn(engine, 'GetActionsByEntityNameAndInvocationType').mockReturnValue([{ ID: 'ea-1' }] as never);
+        vi.spyOn(EntityActionDispatchGuard.Instance, 'Dispatch').mockImplementation(async (_key, run) => {
+            await run();
+            return 'Ran';
+        });
+        const p = new DispatchProvider();
+        const r: string[] = [];
+        const run = vi.spyOn(engine, 'RunEntityAction').mockImplementation(async (params) => {
+            p.RunAfterCommit(async () => { r.push('ran'); }, 'durable', params.PostCommitToken);
+            return null;
+        });
+
+        await p.BeginTransaction();
+        const expected = p.CapturePostCommitToken();
+        const dispatched = p.DispatchAfterSave();
+        await p.RollbackTransaction();
+        releaseConfig();
+        await dispatched;
+        await settle();
+
+        expect(run).toHaveBeenCalledTimes(1);
+        expect(run.mock.calls[0][0].PostCommitToken).toEqual(expected);
+        expect(r).toEqual([]);
+    });
+
+    it('AI actions: the token captured at dispatch reaches EnqueueAfterSaveAIAction', async () => {
+        let releaseConfig!: () => void;
+        vi.spyOn(AIEngine.Instance, 'Config').mockImplementation(() => new Promise<void>((resolve) => { releaseConfig = resolve; }));
+        const p = new DispatchProvider();
+        await p.BeginTransaction();
+        const expected = p.CapturePostCommitToken();
+        const dispatched = p.DispatchAfterSaveAI();
+        await p.CommitTransaction();
+        releaseConfig();
+        await dispatched;
+        expect(p.aiTokens).toEqual([expected]);
+    });
+});
+
+describe('TransactionFrameTracker', () => {
+    it(`remembers only the last ${TransactionFrameTracker.SettledEpochLimit} settled epochs`, () => {
+        const t = new TransactionFrameTracker();
+        t.PushFrame();
+        const first = t.Capture()!;
+        t.EndEpoch('committed');
+        expect(t.Resolve(first, false)).toEqual({ Kind: 'run' });
+        for (let i = 0; i < TransactionFrameTracker.SettledEpochLimit; i++) {
+            t.PushFrame();
+            t.EndEpoch('committed');
+        }
+        expect(t.Resolve(first, false).Kind).toBe('drop');
     });
 });

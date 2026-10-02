@@ -171,7 +171,7 @@
                       @for (appEntity of getAppEntities(app.ID); track appEntity.ID) {
                         @if (getEntityInfo(appEntity.EntityID); as entity) {
                           <div class="entity-item">
-                            <div class="entity-name">{{ entity.Name }}</div>
+                            <div class="entity-name">{{ entity.DisplayNameOrName }}</div>
                             <div class="entity-meta">
                               @if (appEntity.DefaultForNewUser) {
                                 <span class="entity-badge public">Public</span>

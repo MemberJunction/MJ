@@ -81,14 +81,14 @@ function answer(p: Params) {
 
 type Seen = { map: string; own: string[]; parents: string[]; pinned: number };
 type Host = {
-    ProcessSingleEntityMap: (config: unknown, entityMap: { ExternalObjectName: string }) => Promise<unknown>;
-    ExecuteEntityMaps: (config: unknown, run: unknown, user: unknown) => Promise<{ Success: boolean; RecordsErrored: number; Errors: Array<{ ErrorMessage: string }> }>;
+    processSingleEntityMap: (config: unknown, entityMap: { ExternalObjectName: string }) => Promise<unknown>;
+    executeEntityMaps: (config: unknown, run: unknown, user: unknown) => Promise<{ Success: boolean; RecordsErrored: number; Errors: Array<{ ErrorMessage: string }> }>;
 };
 
 /** A real engine with ONE stub: the per-map work, which reports what it could read. */
 function makeHost(seen: Seen[]): Host {
     const host = Object.create(IntegrationEngine.prototype) as Host;
-    host.ProcessSingleEntityMap = async (_config, entityMap) => {
+    host.processSingleEntityMap = async (_config, entityMap) => {
         const base = IntegrationEngineBase.Instance;
         const own = base.GetIntegrationObject(INTEGRATION, entityMap.ExternalObjectName);
         if (!own) throw new Error(`no object ${entityMap.ExternalObjectName}`);
@@ -125,7 +125,7 @@ beforeEach(() => {
 describe('the sync loop warms what each map reads', () => {
     it('layer loop: parents first, own and parent fields warm, pinned while the map runs, released after', async () => {
         const seen: Seen[] = [];
-        const result = await RunInWarmedCatalogScope(CONN, () => makeHost(seen).ExecuteEntityMaps(config(null), {}, USER));
+        const result = await RunInWarmedCatalogScope(CONN, () => makeHost(seen).executeEntityMaps(config(null), {}, USER));
 
         expect(result.Errors.map(e => e.ErrorMessage)).toEqual([]);
         expect(result.RecordsErrored).toBe(0);
@@ -138,7 +138,7 @@ describe('the sync loop warms what each map reads', () => {
     it('cross-layer pipelined path: the same warm site, the same release', async () => {
         const seen: Seen[] = [];
         const result = await RunInWarmedCatalogScope(CONN, () =>
-            makeHost(seen).ExecuteEntityMaps(config(JSON.stringify({ crossLayerPipeline: true })), {}, USER));
+            makeHost(seen).executeEntityMaps(config(JSON.stringify({ crossLayerPipeline: true })), {}, USER));
 
         expect(result.Errors.map(e => e.ErrorMessage)).toEqual([]);
         expect(seen.map(s => s.map)).toEqual(['Parent', 'Child']);
@@ -152,7 +152,7 @@ describe('the sync loop warms what each map reads', () => {
         objectsInDb = [parentRow, childRow];             // a discovery has since added the child
 
         const seen: Seen[] = [];
-        const result = await RunInWarmedCatalogScope(CONN, () => makeHost(seen).ExecuteEntityMaps(config(null), {}, USER));
+        const result = await RunInWarmedCatalogScope(CONN, () => makeHost(seen).executeEntityMaps(config(null), {}, USER));
 
         expect(result.Errors.map(e => e.ErrorMessage)).toEqual([]);
         expect(seen.map(s => s.map)).toEqual(['Parent', 'Child']);

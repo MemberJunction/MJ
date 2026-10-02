@@ -11,7 +11,7 @@ import { logStatus } from '../Misc/status_logging';
 import { LogError, DatabasePlatform } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
-import { parseExcludeTableEntry } from '../Database/exclude-tables';
+import { ParseExcludeTableEntry } from '../Database/exclude-tables';
 
 /** Global configuration explorer for finding MJ config files */
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
@@ -66,6 +66,16 @@ const commandInfoSchema = z.object({
   args: z.string().array(),
   /** Optional timeout in milliseconds */
   timeout: z.number().nullish(),
+  /**
+   * Marks a long-running service that never exits on its own (e.g. `npm start`).
+   *
+   * For these, reaching `timeout` without having crashed IS the pass — the command
+   * is a boot check and the timeout is the observation window. Exiting before the
+   * timeout is still a failure, because a service that comes down on its own
+   * crashed. Requires a positive `timeout`; without one the process would never be
+   * killed and CodeGen would wait forever.
+   */
+  isDaemon: z.boolean().nullish(),
   /** When to run the command (e.g., 'before', 'after') */
   when: z.string(),
 });
@@ -115,7 +125,7 @@ const tableInfoSchema = z.object({
 const excludeTableEntrySchema = z.union([
   tableInfoSchema,
   z.string().min(1),
-]).transform((entry) => parseExcludeTableEntry(entry));
+]).transform((entry) => ParseExcludeTableEntry(entry));
 
 const fileEmitSchema = z.object({
   /** Emit one TypeScript file per schema plus a barrel. Default true. */
@@ -493,16 +503,6 @@ const newEntityRelationshipDefaultsSchema = z.object({
   CreateOneToManyRelationships: z.boolean().default(true),
 });
 
-export const decisionMetadataConfigSchema = z.object({
-  /**
-   * Controls decision metadata persistence:
-   * - 'auto' (default): enabled if <metadataDirectory>/entities/.mj-sync.json exists
-   * - true: explicitly enabled
-   * - false: explicitly disabled
-   */
-  enabled: z.union([z.literal('auto'), z.boolean()]).default('auto'),
-}).default({ enabled: 'auto' });
-export type DecisionMetadataConfig = z.infer<typeof decisionMetadataConfigSchema>;
 
 /**
  * Default settings applied when creating new entities
@@ -604,7 +604,7 @@ const configInfoSchema = z.object({
     { workingDirectory: '../GeneratedEntities', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../GeneratedActions', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../MJServer', command: 'npm', args: ['run', 'build'], when: 'after' },
-    { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, when: 'after' },
+    { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, isDaemon: true, when: 'after' },
   ]),
   /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
   additionalSchemaInfo: z.string().optional(),
@@ -634,8 +634,6 @@ const configInfoSchema = z.object({
   forceRegeneration: forceRegenerationConfigSchema,
   /** Root directory containing metadata files for sync (e.g. './metadata') */
   metadataDirectory: z.string().optional(),
-  /** Decision metadata persistence settings */
-  decisionMetadata: decisionMetadataConfigSchema,
 
   /** Database platform: 'sqlserver' or 'postgresql'. */
   dbPlatform: z.enum(['sqlserver', 'postgresql']).default('sqlserver'),
@@ -802,7 +800,10 @@ const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
  * Exported solely so tests can reset the dedup state between cases — production
  * code never mutates this set directly.
  */
-export const _warnedEnvPrecedencePairs = new Set<string>();
+export const WarnedEnvPrecedencePairs = new Set<string>();
+
+/** @deprecated Use {@link WarnedEnvPrecedencePairs}. */
+export const _warnedEnvPrecedencePairs = WarnedEnvPrecedencePairs;
 /**
  * Resolve a connection field from PG_*-prefixed env vars when `dbPlatform`
  * defaults to PostgreSQL, falling back to the SQL-Server-style env var name
@@ -824,9 +825,9 @@ function _resolveConnEnv(pgName: string, ssName: string, fallback: string): stri
     pgVal !== undefined &&
     ssVal !== undefined &&
     pgVal !== ssVal &&
-    !_warnedEnvPrecedencePairs.has(pairKey)
+    !WarnedEnvPrecedencePairs.has(pairKey)
   ) {
-    _warnedEnvPrecedencePairs.add(pairKey);
+    WarnedEnvPrecedencePairs.add(pairKey);
     // eslint-disable-next-line no-console
     console.warn(
       `[codegen-lib] ${pgName}=${pgVal} takes precedence over ${ssName}=${ssVal} on a PostgreSQL-default config. ` +
@@ -852,7 +853,7 @@ function _resolveConnEnv(pgName: string, ssName: string, fallback: string): stri
  * values always win. A `console.warn` records the precedence whenever a PG_*
  * env var and its DB_* counterpart are both set and differ.
  */
-export function applyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Partial<ConfigInfo>): void {
+export function ApplyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Partial<ConfigInfo>): void {
   if (config.dbPlatform !== 'postgresql') return;
 
   const overrides: ReadonlyArray<{
@@ -874,8 +875,8 @@ export function applyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Pa
     if (userValue !== undefined) continue;
     const ssVal = process.env[ssEnv];
     const pairKey = `${pgEnv}:${ssEnv}`;
-    if (ssVal !== undefined && ssVal !== pgVal && !_warnedEnvPrecedencePairs.has(pairKey)) {
-      _warnedEnvPrecedencePairs.add(pairKey);
+    if (ssVal !== undefined && ssVal !== pgVal && !WarnedEnvPrecedencePairs.has(pairKey)) {
+      WarnedEnvPrecedencePairs.add(pairKey);
       // eslint-disable-next-line no-console
       console.warn(
         `[codegen-lib] ${pgEnv}=${pgVal} takes precedence over ${ssEnv}=${ssVal} on a PostgreSQL config. ` +
@@ -884,6 +885,11 @@ export function applyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Pa
     }
     apply(pgVal);
   }
+}
+
+/** @deprecated Use {@link ApplyPlatformDependentEnvVars}. */
+export function applyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Partial<ConfigInfo>): void {
+  return ApplyPlatformDependentEnvVars(config, userConfig);
 }
 
 export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
@@ -916,7 +922,6 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   graphqlPort: 4000,
   verboseOutput: false,
   metadataDirectory: './metadata',
-  decisionMetadata: { enabled: 'auto' },
 
   settings: [
     { name: 'mj_core_schema', value: '__mj' },
@@ -1062,7 +1067,12 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
 /**
  * Current working directory for the code generation process
  */
-export let currentWorkingDirectory: string = process.cwd();
+export let CurrentWorkingDirectory: string = process.cwd();
+
+export {
+  /** @deprecated Use {@link CurrentWorkingDirectory} instead. */
+  CurrentWorkingDirectory as currentWorkingDirectory,
+};
 
 /**
  * Merge user config with DEFAULT_CODEGEN_CONFIG.
@@ -1084,13 +1094,13 @@ const configParsing = configInfoSchema.safeParse(mergedConfig);
 // config file (not via env), which `_resolveConnEnv()` could not have known
 // about at the moment it built DEFAULT_CODEGEN_CONFIG.
 if (configParsing.data) {
-  applyPlatformDependentEnvVars(configParsing.data, configSearchResult?.config ?? {});
+  ApplyPlatformDependentEnvVars(configParsing.data, configSearchResult?.config ?? {});
 }
 
 /**
  * Parsed configuration object with fallback to empty object if parsing fails
  */
-export const configInfo = configParsing.data ?? ({} as ConfigInfo);
+export const configInfo = configParsing.data ?? ({} as ConfigInfo);  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 /**
  * Destructured commonly used configuration values
  */
@@ -1102,10 +1112,10 @@ export const { mjCoreSchema, dbDatabase } = configInfo;
  * @returns Parsed configuration object
  * @throws Error if no configuration is found
  */
-export function initializeConfig(cwd: string): ConfigInfo {
-  currentWorkingDirectory = cwd;
+export function InitializeConfig(cwd: string): ConfigInfo {
+  CurrentWorkingDirectory = cwd;
 
-  const userConfigResult = explorer.search(currentWorkingDirectory);
+  const userConfigResult = explorer.search(CurrentWorkingDirectory);
   const mergedConfig = userConfigResult?.config
     ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfigResult.config)
     : DEFAULT_CODEGEN_CONFIG;
@@ -1130,7 +1140,7 @@ export function initializeConfig(cwd: string): ConfigInfo {
   // merged in — handles the case where `dbPlatform: 'postgresql'` was set in
   // the config file (not via env), which `_resolveConnEnv()` could not have
   // known about at the moment it built DEFAULT_CODEGEN_CONFIG.
-  applyPlatformDependentEnvVars(config, userConfigResult?.config ?? {});
+  ApplyPlatformDependentEnvVars(config, userConfigResult?.config ?? {});
 
   // Update the module-level configInfo so that helpers like
   // resolveEntityPackageName(), resolveEntityImportPackage() and
@@ -1149,24 +1159,34 @@ export function initializeConfig(cwd: string): ConfigInfo {
   return config;
 }
 
+/** @deprecated Use {@link InitializeConfig}. */
+export function initializeConfig(cwd: string): ConfigInfo {
+  return InitializeConfig(cwd);
+}
+
 /**
  * Gets the output directory for a specific generation type
  * @param type The type of output (e.g., 'SQL', 'Angular')
  * @param useLocalDirectoryIfMissing Whether to use a local directory if config is missing
  * @returns The output directory path or null if not found
  */
-export function outputDir(type: string, useLocalDirectoryIfMissing: boolean): string | null {
+export function OutputDir(type: string, useLocalDirectoryIfMissing: boolean): string | null {
   const outputInfo = configInfo.output.find((o) => o.type.trim().toUpperCase() === type.trim().toUpperCase());
   if (outputInfo) {
     if (outputInfo.appendOutputCode && outputInfo.appendOutputCode === true && configInfo.outputCode)
-      return path.join(currentWorkingDirectory, outputInfo.directory, configInfo.outputCode);
-    else return path.join(currentWorkingDirectory, outputInfo.directory);
+      return path.join(CurrentWorkingDirectory, outputInfo.directory, configInfo.outputCode);
+    else return path.join(CurrentWorkingDirectory, outputInfo.directory);
   } else {
     if (useLocalDirectoryIfMissing) {
       logStatus('>>> No output directory found for type: ' + type + ' within config file, using local directory instead');
-      return path.join(currentWorkingDirectory, 'output', type);
+      return path.join(CurrentWorkingDirectory, 'output', type);
     } else return null;
   }
+}
+
+/** @deprecated Use {@link OutputDir}. */
+export function outputDir(type: string, useLocalDirectoryIfMissing: boolean): string | null {
+  return OutputDir(type, useLocalDirectoryIfMissing);
 }
 
 /**
@@ -1174,13 +1194,18 @@ export function outputDir(type: string, useLocalDirectoryIfMissing: boolean): st
  * @param type The type of output
  * @returns Array of output options or null if not found
  */
-export function outputOptions(type: string): OutputOptionInfo[] | null {
+export function OutputOptions(type: string): OutputOptionInfo[] | null {
   const outputInfo = configInfo.output.find((o) => o.type.trim().toUpperCase() === type.trim().toUpperCase());
   if (outputInfo) {
     return outputInfo.options!;
   } else {
     return null;
   }
+}
+
+/** @deprecated Use {@link OutputOptions}. */
+export function outputOptions(type: string): OutputOptionInfo[] | null {
+  return OutputOptions(type);
 }
 
 /**
@@ -1190,7 +1215,7 @@ export function outputOptions(type: string): OutputOptionInfo[] | null {
  * @param defaultValue Default value if option is not found
  * @returns The option value or default value
  */
-export function outputOptionValue(type: string, optionName: string, defaultValue?: any): any {
+export function OutputOptionValue(type: string, optionName: string, defaultValue?: any): any {
   const outputInfo = configInfo.output?.find((o) => o.type.trim().toUpperCase() === type.trim().toUpperCase());
   if (outputInfo && outputInfo.options) {
     const theOption = outputInfo.options.find((o) => o.name.trim().toUpperCase() === optionName.trim().toUpperCase());
@@ -1201,24 +1226,39 @@ export function outputOptionValue(type: string, optionName: string, defaultValue
   }
 }
 
+/** @deprecated Use {@link OutputOptionValue}. */
+export function outputOptionValue(type: string, optionName: string, defaultValue?: any): any {
+  return OutputOptionValue(type, optionName, defaultValue);
+}
+
 /**
  * Gets commands configured to run at a specific time
  * @param when When the commands should run (e.g., 'before', 'after')
  * @returns Array of commands to execute
  */
-export function commands(when: string): CommandInfo[] {
+export function Commands(when: string): CommandInfo[] {
   if (process.env.MJ_CODEGEN_SKIP_COMMANDS === '1' || process.env.MJ_CODEGEN_SKIP_COMMANDS === 'true') {
     return [];
   }
   return configInfo.commands.filter((c) => c.when.trim().toUpperCase() === when.trim().toUpperCase());
+}
+
+/** @deprecated Use {@link Commands}. */
+export function commands(when: string): CommandInfo[] {
+  return Commands(when);
 }
 /**
  * Gets custom SQL scripts configured to run at a specific time
  * @param when When the scripts should run
  * @returns Array of SQL scripts to execute
  */
-export function customSqlScripts(when: string): CustomSQLScript[] {
+export function CustomSqlScripts(when: string): CustomSQLScript[] {
   return configInfo.customSQLScripts.filter((c) => c.when.trim().toUpperCase() === when.trim().toUpperCase());
+}
+
+/** @deprecated Use {@link CustomSqlScripts}. */
+export function customSqlScripts(when: string): CustomSQLScript[] {
+  return CustomSqlScripts(when);
 }
 
 /**
@@ -1226,8 +1266,13 @@ export function customSqlScripts(when: string): CustomSQLScript[] {
  * @param settingName The name of the setting to retrieve
  * @returns The setting object
  */
-export function getSetting(settingName: string): SettingInfo {
+export function GetSetting(settingName: string): SettingInfo {
   return configInfo.settings.find((s) => s.name.trim().toUpperCase() === settingName.trim().toUpperCase())!;
+}
+
+/** @deprecated Use {@link GetSetting}. */
+export function getSetting(settingName: string): SettingInfo {
+  return GetSetting(settingName);
 }
 
 /**
@@ -1236,10 +1281,15 @@ export function getSetting(settingName: string): SettingInfo {
  * @param defaultValue Default value if setting is not found
  * @returns The setting value or default value
  */
-export function getSettingValue(settingName: string, defaultValue?: any): any {
-  const setting = getSetting(settingName);
+export function GetSettingValue(settingName: string, defaultValue?: any): any {
+  const setting = GetSetting(settingName);
   if (setting) return setting.value;
   else return defaultValue;
+}
+
+/** @deprecated Use {@link GetSettingValue}. */
+export function getSettingValue(settingName: string, defaultValue?: any): any {
+  return GetSettingValue(settingName, defaultValue);
 }
 
 /**
@@ -1258,11 +1308,16 @@ export function getSettingValue(settingName: string, defaultValue?: any): any {
  *
  * @returns True if auto-indexing is enabled (the default), false only if explicitly disabled
  */
-export function autoIndexForeignKeys(): boolean {
+export function AutoIndexForeignKeys(): boolean {
   const keyName = 'auto_index_foreign_keys';
-  const setting = getSetting(keyName);
+  const setting = GetSetting(keyName);
   if (setting) return <boolean>setting.value;
   else return true;
+}
+
+/** @deprecated Use {@link AutoIndexForeignKeys}. */
+export function autoIndexForeignKeys(): boolean {
+  return AutoIndexForeignKeys();
 }
 
 /**
@@ -1298,11 +1353,16 @@ export function autoIndexForeignKeys(): boolean {
  *
  * @returns True if soft-PK auto-indexing is enabled (the default), false only if explicitly disabled
  */
-export function autoIndexSoftPrimaryKeys(): boolean {
+export function AutoIndexSoftPrimaryKeys(): boolean {
   const keyName = 'auto_index_soft_primary_keys';
-  const setting = getSetting(keyName);
+  const setting = GetSetting(keyName);
   if (setting) return <boolean>setting.value;
   else return true;
+}
+
+/** @deprecated Use {@link AutoIndexSoftPrimaryKeys}. */
+export function autoIndexSoftPrimaryKeys(): boolean {
+  return AutoIndexSoftPrimaryKeys();
 }
 
 /**
@@ -1327,7 +1387,7 @@ function coreSchemaFromConfig(cfg: ConfigInfo): string {
     return String(cfg.mjCoreSchema).trim();
   }
   try {
-    const fromFn = typeof mj_core_schema === 'function' ? mj_core_schema() : mj_core_schema;
+    const fromFn = typeof MjCoreSchema === 'function' ? MjCoreSchema() : MjCoreSchema;
     if (fromFn && String(fromFn).trim()) {
       return String(fromFn).trim();
     }
@@ -1353,13 +1413,18 @@ function coreSchemaFromConfig(cfg: ConfigInfo): string {
  * @param config     Optional config override; falls back to the module-level configInfo
  * @returns The npm package name to use for importing entities from this schema
  */
-export function resolveEntityPackageName(schemaName: string, config?: ConfigInfo): string {
+export function ResolveEntityPackageName(schemaName: string, config?: ConfigInfo): string {
   const cfg = config ?? configInfo;
   const epn = cfg.entityPackageName;
   if (typeof epn === 'string') {
     return epn || 'mj_generatedentities';
   }
   return lookupSchemaPackage(epn, schemaName) || 'mj_generatedentities';
+}
+
+/** @deprecated Use {@link ResolveEntityPackageName}. */
+export function resolveEntityPackageName(schemaName: string, config?: ConfigInfo): string {
+  return ResolveEntityPackageName(schemaName, config);
 }
 
 /**
@@ -1370,13 +1435,18 @@ export function resolveEntityPackageName(schemaName: string, config?: ConfigInfo
  * the owning schema's entry, or `mj_generatedentities` when the owning schema is
  * not mapped.
  */
-export function thisEmitEntityPackageName(owningSchema: string, config?: ConfigInfo): string {
+export function ThisEmitEntityPackageName(owningSchema: string, config?: ConfigInfo): string {
   const cfg = config ?? configInfo;
   const epn = cfg.entityPackageName;
   if (typeof epn === 'string') {
     return epn.trim() || 'mj_generatedentities';
   }
   return lookupSchemaPackage(epn, owningSchema) || 'mj_generatedentities';
+}
+
+/** @deprecated Use {@link ThisEmitEntityPackageName}. */
+export function thisEmitEntityPackageName(owningSchema: string, config?: ConfigInfo): string {
+  return ThisEmitEntityPackageName(owningSchema, config);
 }
 
 /**
@@ -1403,7 +1473,7 @@ export function thisEmitEntityPackageName(owningSchema: string, config?: ConfigI
  * @param owningSchema  Schema of the entity currently being generated
  * @param config        Optional config override; falls back to module-level configInfo
  */
-export function resolveEntityImportPackage(
+export function ResolveEntityImportPackage(
   relatedSchema: string,
   owningSchema: string,
   config?: ConfigInfo,
@@ -1427,7 +1497,7 @@ export function resolveEntityImportPackage(
     return '@memberjunction/core-entities';
   }
 
-  const localPackage = thisEmitEntityPackageName(owning, cfg);
+  const localPackage = ThisEmitEntityPackageName(owning, cfg);
 
   if (related.toLowerCase() === owning.toLowerCase()) {
     return localPackage;
@@ -1464,18 +1534,32 @@ export function resolveEntityImportPackage(
   );
 }
 
+/** @deprecated Use {@link ResolveEntityImportPackage}. */
+export function resolveEntityImportPackage(
+  relatedSchema: string,
+  owningSchema: string,
+  config?: ConfigInfo,
+): string {
+  return ResolveEntityImportPackage(relatedSchema, owningSchema, config);
+}
+
 /**
  * Returns all schema names that have an explicit external entity package mapping.
  * These schemas should be skipped during local entity subclass generation because
  * their entities are provided by an installed OpenApp npm package.
  */
-export function getExternalEntitySchemas(config?: ConfigInfo): string[] {
+export function GetExternalEntitySchemas(config?: ConfigInfo): string[] {
   const cfg = config ?? configInfo;
   const epn = cfg.entityPackageName;
   if (typeof epn === 'string') {
     return [];
   }
   return Object.keys(epn);
+}
+
+/** @deprecated Use {@link GetExternalEntitySchemas}. */
+export function getExternalEntitySchemas(config?: ConfigInfo): string[] {
+  return GetExternalEntitySchemas(config);
 }
 
 /**
@@ -1487,14 +1571,72 @@ export const MAX_INDEX_NAME_LENGTH = 128;
  * Gets the MemberJunction core schema name from configuration
  * @returns The core schema name (typically '__mj')
  */
+export function MjCoreSchema(): string {
+  return GetSetting('mj_core_schema').value;
+}
+
+/** @deprecated Use {@link MjCoreSchema}. */
 export function mj_core_schema(): string {
-  return getSetting('mj_core_schema').value;
+  return MjCoreSchema();
 }
 
 /**
  * Returns the configured database platform.
  * Defaults to 'sqlserver' when the user config does not specify one.
  */
-export function dbPlatform(): DatabasePlatform {
+export function DbPlatform(): DatabasePlatform {
   return configInfo.dbPlatform;
+}
+
+/** @deprecated Use {@link DbPlatform}. */
+export function dbPlatform(): DatabasePlatform {
+  return DbPlatform();
+}
+
+/**
+ * Environment switch that keeps advanced (AI) generation ON for in-process CodeGen runs. Absent, or any
+ * value other than '1', means an in-process run turns it off for its duration.
+ */
+export const IN_PROCESS_ADVANCED_GENERATION_ENV = 'RSU_CODEGEN_ADVANCED_GENERATION';
+
+/**
+ * Applies the in-process CodeGen policy for advanced generation to `config` and returns a function that
+ * puts the previous value back.
+ *
+ * In-process CodeGen is the runtime schema-update path: a connector's tables are created while a
+ * customer watches a progress screen. The CLI's full AI profile is the wrong thing to run there. Every
+ * new entity and field goes through several LLM round trips, so the step's duration becomes the LLM
+ * provider's failover behaviour rather than the schema's size (one 27-table connector spent hours in
+ * it), and a model that answers the name prompt with `-1` puts the whole table at risk. So an in-process
+ * run disables advanced generation unless the operator opts back in with
+ * RSU_CODEGEN_ADVANCED_GENERATION=1. Table-derived names and descriptions are what the runtime path
+ * produces; the AI profile stays available to the CLI, which reads the same config untouched.
+ */
+export function ApplyInProcessAdvancedGenerationPolicy(
+  config: ConfigInfo,
+  env: NodeJS.ProcessEnv = process.env
+): { disabled: boolean; restore: () => void } {
+  const noop = { disabled: false, restore: (): void => undefined };
+  if (env[IN_PROCESS_ADVANCED_GENERATION_ENV] === '1') {
+    return noop;
+  }
+  const section = config.advancedGeneration;
+  if (!section || section.enableAdvancedGeneration !== true) {
+    return noop;
+  }
+  section.enableAdvancedGeneration = false;
+  return {
+    disabled: true,
+    restore: (): void => {
+      section.enableAdvancedGeneration = true;
+    },
+  };
+}
+
+/** @deprecated Use {@link ApplyInProcessAdvancedGenerationPolicy}. */
+export function applyInProcessAdvancedGenerationPolicy(
+  config: ConfigInfo,
+  env: NodeJS.ProcessEnv = process.env
+): { disabled: boolean; restore: () => void } {
+  return ApplyInProcessAdvancedGenerationPolicy(config, env);
 }

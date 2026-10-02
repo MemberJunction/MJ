@@ -27,8 +27,8 @@ import {
     ClusterPoint,
     ClusterResult,
     IClusterVectorSource,
-    toPersistedAlgorithm,
-    toVectorMetric,
+    ToPersistedAlgorithm,
+    ToVectorMetric,
 } from './types';
 import { DimensionalityReducer } from './DimensionalityReducer';
 import { ClusterNamer } from './ClusterNamer';
@@ -149,7 +149,7 @@ export class ClusteringEngine {
     /** Run KMeans or DBSCAN over the supplied vectors. */
     private cluster(vectors: ClusterInputVector[], config: ClusterConfig): VectorClusterResult {
         const svc = this.loadService(vectors);
-        const metric = toVectorMetric(config.DistanceMetric);
+        const metric = ToVectorMetric(config.DistanceMetric);
 
         if (config.Algorithm === 'dbscan') {
             return svc.DBSCANCluster(config.Epsilon, config.MinPoints, metric);
@@ -328,7 +328,7 @@ export class ClusteringEngine {
         if (config.EntityID) {
             analysis.EntityID = config.EntityID;
         }
-        analysis.Algorithm = toPersistedAlgorithm(config.Algorithm);
+        analysis.Algorithm = ToPersistedAlgorithm(config.Algorithm);
         analysis.Configuration = JSON.stringify(config);
         analysis.Metrics = JSON.stringify(result.Metrics);
         analysis.ProjectedPoints = JSON.stringify({
