@@ -1,35 +1,21 @@
 /**
- * Surviving a Redis outage: reconnect, fail fast, say so, and come back correct.
+ * Behaviour of the provider across a loss and recovery of the Redis connection.
  *
- * Found operationally — an Azure Cache for Redis instance was unreachable for ~25 minutes on
- * 2026-09-25 and every server already running went permanently cache-blind without saying so. Four
- * separate defects combined to produce that, and each is pinned here:
+ * Four requirements, each covered below:
  *
- * 1. **Reconnection gave up forever.** `retryStrategy` returned `null` past `maxRetries` (default
- *    10), and `null` tells ioredis to stop reconnecting for the life of the client. The backoff was
- *    `times * 200` — linear, despite a comment claiming otherwise — so ten attempts was **~11
- *    seconds** of total tolerance, shorter than a Redis restart.
- * 2. **Reconnecting is not being correct.** Pub/sub has no replay: a subscriber that was away
- *    receives nothing published during the gap, so it resumes holding entries its siblings
- *    invalidated minutes ago and believes they are fresh.
- * 3. **Commands accumulated.** With `maxRetriesPerRequest: null` and ioredis's default offline queue,
- *    a multi-minute outage queued commands whose promises never settled.
- * 4. **None of it was observable.** Lifecycle logging was gated behind `enableLogging` AND went
- *    through `LogStatus`, which is compiled out when `GetProductionStatus()` is true — so a dead
- *    cache client produced no output at all in production.
+ * 1. **Reconnection does not surrender.** With no explicit `maxRetries` the retry strategy never
+ *    returns `null`, which would stop ioredis reconnecting for the life of the client. The ceiling
+ *    is on the wait between attempts, not their number.
+ * 2. **A reconnect is only trusted when the shared epoch has not moved.** Pub/sub has no replay, so
+ *    a subscriber that was away cannot see what it missed; the epoch is what distinguishes a gap in
+ *    which nothing was invalidated from one in which something was.
+ * 3. **Commands fail fast once a connection has been lost**, rather than queueing in ioredis with
+ *    promises that never settle. Startup is exempt, so a cold cache can still warm.
+ * 4. **Loss and recovery are observable** through public events, since status logging is suppressed
+ *    in production.
  *
- * The cases below drive the provider through a real outage shape: connect, lose the connection,
- * issue commands while down, then recover.
- *
- * **Twelve of these were watched to fail against the un-fixed code**, across five separate reverts so
- * each failure is attributable to one change: the retry strategy, the fail-fast guards, the connection
- * events, the reconciliation trigger, and — for the keep-the-cache case — a naive
- * flush-on-every-reconnect. The messages are quoted in the commit bodies.
- *
- * The remainder are **invariant pins and are labelled as such**: they cannot be made to fail by
- * removing the feature, and exist to stop a future change from breaking a property that holds today
- * (the explicit opt-out still working, startup still being allowed to queue, an unsubscribe actually
- * unsubscribing, a throwing listener not taking down the lifecycle handler).
+ * The harness drives lifecycle events on a mock ioredis client, so a test can connect, drop the
+ * connection, issue commands while down, and recover.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -161,10 +147,7 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
 
     // ── 1. reconnection ───────────────────────────────────────────────────────
     describe('the retry strategy', () => {
-        /**
-         * REGRESSION PIN. The headline fix: with no explicit ceiling the provider must never return
-         * `null`, because `null` is unrecoverable for the life of the client.
-         */
+        /** `null` would stop ioredis reconnecting permanently, so it must never be returned here. */
         it('never gives up when no maxRetries is configured', () => {
             const provider = newProvider();
 
@@ -195,11 +178,7 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
             expect(retryDelay(provider, 100)).toBe(30000);
         });
 
-        /**
-         * INVARIANT PIN. The opt-out still works — a short-lived script may genuinely want to fail
-         * rather than wait. It passes against the old code too, by construction: surrendering at a
-         * ceiling is exactly what the old code always did. What changed is that it is now opt-IN.
-         */
+        /** The opt-out: a short-lived script can still ask to fail rather than wait out an outage. */
         it('still surrenders when a caller explicitly asks for a ceiling', () => {
             const provider = newProvider({ maxRetries: 3 });
 
@@ -221,10 +200,7 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
 
     // ── 4. observability ──────────────────────────────────────────────────────
     describe('connection events', () => {
-        /**
-         * REGRESSION PIN. Before this there was no way to learn of a state CHANGE — only to poll
-         * `IsConnected` — and the logs that existed were invisible in production.
-         */
+        /** `IsConnected` reports state but not a change, so the transition has to be observable. */
         it('fires OnConnectionLost when an established connection drops', () => {
             const provider = newProvider();
             const lost = vi.fn();
@@ -295,11 +271,9 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
     // ── 3. failing fast instead of queueing ───────────────────────────────────
     describe('commands while disconnected', () => {
         /**
-         * REGRESSION PIN. Previously these went into ioredis's offline queue and their promises never
-         * settled for the duration of the outage — unbounded memory plus hanging awaits.
-         *
-         * A read returning null is a MISS, so the caller refetches from the source of truth: correct,
-         * merely slower. That is what a cache outage should cost.
+         * A read must answer with a miss rather than wait in ioredis's offline queue, where its
+         * promise would not settle until the outage ended. The caller then refetches from the source
+         * of truth, which is correct and only slower.
          */
         it('fails reads fast once the connection has been lost', async () => {
             const provider = newProvider();
@@ -335,10 +309,8 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
         });
 
         /**
-         * INVARIANT PIN, and the one that keeps the fix from over-reaching. Deliberately NOT
-         * fail-fast before the first connection: at startup a brief queue is the difference between a
-         * warm cache and a cold one, and nothing is stale yet because nothing is cached. Only a
-         * connection that was established and then LOST switches to failing fast.
+         * Startup is exempt from failing fast: queueing briefly is what lets the cache warm, and
+         * nothing can be stale before anything is cached. Only a lost connection changes the answer.
          */
         it('still queues during initial startup, before anything has connected', async () => {
             const provider = newProvider();
@@ -387,15 +359,12 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
         });
 
         /**
-         * The reason the epoch is worth having at all: an outage during which nothing was invalidated
-         * anywhere must NOT cost a cache flush, or every connection blip throws away a perfectly
-         * valid cache.
+         * A gap in which nothing was invalidated must not cost a flush, or every connection blip
+         * discards a valid cache.
          *
-         * This one cannot fail by REMOVING reconciliation — with no reconciliation nothing flushes and
-         * it passes trivially. It was instead verified against the naive design: forcing
-         * `advanced = true` (flush on every reconnect) fails it with
-         * `expected "spy" to not be called at all, but actually been called 1 times`. So it pins the
-         * epoch comparison specifically, not the existence of the feature.
+         * Note for anyone simplifying this: the case passes if reconciliation is removed altogether,
+         * because nothing then flushes. It only fails if reconciliation flushes unconditionally, so
+         * it covers the epoch comparison rather than the feature's existence.
          */
         it('keeps the local cache when nothing changed during the gap', async () => {
             const { provider, sub, client } = await withSubscriber();
@@ -412,10 +381,7 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
             expect(flushed).not.toHaveBeenCalled();
         });
 
-        /**
-         * REGRESSION PIN. The epoch advanced while this process was away, so it cannot know what it
-         * missed — everything it holds is suspect.
-         */
+        /** An advanced epoch means something changed that this process cannot identify. */
         it('flushes when the epoch advanced during the gap', async () => {
             const { provider, sub, client } = await withSubscriber();
             const flushed = vi.fn();
