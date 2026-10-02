@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -29,7 +29,7 @@ export class UtilitiesNoDirectInstantiationRule extends BaseLintRule {
       ['SimpleVectorService', 'utilities.ai.VectorService'],
     ]);
 
-    traverse(ast, {
+    Traverse(ast, {
       NewExpression(path: NodePath<t.NewExpression>) {
         // Check if instantiating a restricted class
         if (t.isIdentifier(path.node.callee)) {

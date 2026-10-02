@@ -21,8 +21,13 @@ export class AutotagLocalFileSystem extends AutotagBase {
         this.engine = AutotagBaseEngine.Instance;
     }
 
-    public getContextUser(): UserInfo | null {
+    public GetContextUser(): UserInfo | null {
         return this.contextUser;
+    }
+
+    /** @deprecated Use {@link GetContextUser}. */
+    public getContextUser(): UserInfo | null {
+        return this.GetContextUser();
     }
 
     /**
@@ -52,7 +57,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
         for (const contentSource of contentSources) {
             // First check that the directory exists
             if (fs.existsSync(contentSource.URL)) {
-                const contentSourceParams = await this.setContentSourceParams(contentSource);
+                const contentSourceParams = await this.SetContentSourceParams(contentSource);
                 const lastRunDate: Date = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, this.contextUser)
 
                 // Traverse through all the files in the directory
@@ -77,7 +82,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
         return contentItemsToProcess;
     }
 
-    public async setContentSourceParams(contentSource: MJContentSourceEntity) { 
+    public async SetContentSourceParams(contentSource: MJContentSourceEntity) { 
         // If content source parameters were provided, set them. Otherwise, use the default values.
         const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
         if (contentSourceParamsMap) {
@@ -99,6 +104,11 @@ export class AutotagLocalFileSystem extends AutotagBase {
         }
 
         return contentSourceParams;
+    }
+
+    /** @deprecated Use {@link SetContentSourceParams}. */
+    public async setContentSourceParams(contentSource: MJContentSourceEntity) {
+        return this.SetContentSourceParams(contentSource);
     }
 
     /**
@@ -127,12 +137,12 @@ export class AutotagLocalFileSystem extends AutotagBase {
                 const changedDate = new Date(stats.ctime.toUTCString())
                 if (changedDate > lastRunDate) {
                     // The file has been added, create a new record for this file
-                    const contentItem = await this.setAddedContentItem(filePath, contentSourceParams);
+                    const contentItem = await this.SetAddedContentItem(filePath, contentSourceParams);
                     contentItems.push(contentItem); // Content item was added, add to list
                 }
                 else if (modifiedDate > lastRunDate) {
                     // The file's contents has been, update the record for this file 
-                    const contentItem = await this.setModifiedContentItem(filePath, contentSourceParams);
+                    const contentItem = await this.SetModifiedContentItem(filePath, contentSourceParams);
                     contentItems.push(contentItem);
                 }
             }
@@ -140,7 +150,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
         return contentItems;
     }
 
-    public async setAddedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> { 
+    public async SetAddedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> { 
         const md = this.ProviderToUse;
         const text = await this.engine.parseFileFromPath(filePath);
         const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
@@ -163,7 +173,12 @@ export class AutotagLocalFileSystem extends AutotagBase {
         }
     }
 
-    public async setModifiedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> {
+    /** @deprecated Use {@link SetAddedContentItem}. */
+    public async setAddedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> {
+        return this.SetAddedContentItem(filePath, contentSourceParams);
+    }
+
+    public async SetModifiedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> {
         const md = this.ProviderToUse;
         const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
         const contentItemID: string = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
@@ -178,5 +193,10 @@ export class AutotagLocalFileSystem extends AutotagBase {
         else {
             throw new Error('Failed to save content item');
         }
+    }
+
+    /** @deprecated Use {@link SetModifiedContentItem}. */
+    public async setModifiedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> {
+        return this.SetModifiedContentItem(filePath, contentSourceParams);
     }
 }

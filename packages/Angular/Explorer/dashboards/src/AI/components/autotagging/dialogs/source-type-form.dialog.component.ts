@@ -216,8 +216,13 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
     }
 
     /** Merge a partial patch into the working config (immutable spread, like the reference panel). */
-    public setConfig(patch: Partial<IContentSourceClassificationConfiguration>): void {
+    public SetConfig(patch: Partial<IContentSourceClassificationConfiguration>): void {
         this.workingConfig = { ...this.workingConfig, ...patch };
+    }
+
+    /** @deprecated Use {@link SetConfig}. */
+    public setConfig(patch: Partial<IContentSourceClassificationConfiguration>): void {
+        return this.SetConfig(patch);
     }
 
     // Taxonomy mode
@@ -225,7 +230,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         return this.Config.TagTaxonomyMode ?? DEFAULT_TAXONOMY_MODE;
     }
     public SetMode(mode: TaxonomyModeJson): void {
-        this.setConfig({ TagTaxonomyMode: mode });
+        this.SetConfig({ TagTaxonomyMode: mode });
     }
 
     // Thresholds — match auto-applies; suggest routes to inbox. When match moves
@@ -240,14 +245,14 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         if (cur == null || cur >= clamped) {
             patch.SuggestThreshold = Math.max(0, clamped - SUGGEST_THRESHOLD_GAP);
         }
-        this.setConfig(patch);
+        this.SetConfig(patch);
     }
     public get SuggestThresholdValue(): number {
         return this.Config.SuggestThreshold ?? Math.max(0, this.MatchThresholdValue - SUGGEST_THRESHOLD_GAP);
     }
     public set SuggestThresholdValue(v: number | string) {
         const clamped = Math.max(0, Math.min(this.MatchThresholdValue, Number(v) || 0));
-        this.setConfig({ SuggestThreshold: clamped });
+        this.SetConfig({ SuggestThreshold: clamped });
     }
     public get ThresholdValidationMessage(): string | null {
         const m = this.Config.TagMatchThreshold;
@@ -263,19 +268,19 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         return this.Config.TagRootID ?? '';
     }
     public set TagRootIDValue(v: string) {
-        this.setConfig({ TagRootID: v ? v : null });
+        this.SetConfig({ TagRootID: v ? v : null });
     }
     public get ShareTaxonomyValue(): boolean {
         return this.Config.ShareTaxonomyWithLLM !== false; // default true
     }
     public set ShareTaxonomyValue(v: boolean) {
-        this.setConfig({ ShareTaxonomyWithLLM: v });
+        this.SetConfig({ ShareTaxonomyWithLLM: v });
     }
     public get EnableVectorizationValue(): boolean {
         return this.Config.EnableVectorization !== false; // default true
     }
     public set EnableVectorizationValue(v: boolean) {
-        this.setConfig({ EnableVectorization: v });
+        this.SetConfig({ EnableVectorization: v });
     }
 
     // ── Domain context (source scope) ──────────────────────────────────────
@@ -289,7 +294,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
     }
     public set ClassificationContextValue(v: string) {
         const trimmed = (v ?? '').length > 0 ? v : undefined;
-        this.setConfig({ ClassificationContext: trimmed });
+        this.SetConfig({ ClassificationContext: trimmed });
         this.cdr.detectChanges();
     }
 
@@ -298,7 +303,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         return this.Config.ClassificationContextMode === 'substitutive' ? 'substitutive' : 'additive';
     }
     public set ClassificationContextModeValue(v: ClassificationContextMode) {
-        this.setConfig({ ClassificationContextMode: v });
+        this.SetConfig({ ClassificationContextMode: v });
         this.cdr.detectChanges();
     }
 
@@ -348,25 +353,25 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
         return this.Config.MaxNewTagsPerRun ?? null;
     }
     public set MaxNewTagsPerRunValue(v: number | string | null) {
-        this.setConfig({ MaxNewTagsPerRun: this.normalizeNullableNumber(v) });
+        this.SetConfig({ MaxNewTagsPerRun: this.normalizeNullableNumber(v) });
     }
     public get MaxNewTagsPerItemValue(): number | null {
         return this.Config.MaxNewTagsPerItem ?? null;
     }
     public set MaxNewTagsPerItemValue(v: number | string | null) {
-        this.setConfig({ MaxNewTagsPerItem: this.normalizeNullableNumber(v) });
+        this.SetConfig({ MaxNewTagsPerItem: this.normalizeNullableNumber(v) });
     }
     public get MaxTokensPerRunValue(): number | null {
         return this.Config.MaxTokensPerRun ?? null;
     }
     public set MaxTokensPerRunValue(v: number | string | null) {
-        this.setConfig({ MaxTokensPerRun: this.normalizeNullableNumber(v) });
+        this.SetConfig({ MaxTokensPerRun: this.normalizeNullableNumber(v) });
     }
     public get MaxCostPerRunValue(): number | null {
         return this.Config.MaxCostPerRun ?? null;
     }
     public set MaxCostPerRunValue(v: number | string | null) {
-        this.setConfig({ MaxCostPerRun: this.normalizeNullableNumber(v) });
+        this.SetConfig({ MaxCostPerRun: this.normalizeNullableNumber(v) });
     }
 
     /**

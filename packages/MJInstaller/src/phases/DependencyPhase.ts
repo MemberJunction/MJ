@@ -29,6 +29,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner, type ProcessResult } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
+import { ClassifyTurboFailures } from '../util/turboOutput.js';
 import path from 'node:path';
 
 /**
@@ -50,9 +51,14 @@ import path from 'node:path';
  * Exported for unit testing; consumed by `DependencyPhase.ensureCliDependency`
  * and `DependencyPhase.ensureHoistedDependencies`.
  */
-export function tagToNpmVersion(tag: string): string {
+export function TagToNpmVersion(tag: string): string {
   const stripped = tag.startsWith('v') ? tag.slice(1) : tag;
   return /^\d+\.\d+\.\d+(-[\w.-]+)?(\+[\w.-]+)?$/.test(stripped) ? stripped : 'latest';
+}
+
+/** @deprecated Use {@link TagToNpmVersion}. */
+export function tagToNpmVersion(tag: string): string {
+  return TagToNpmVersion(tag);
 }
 
 /**
@@ -62,6 +68,13 @@ export function tagToNpmVersion(tag: string): string {
  * CodeGen will regenerate their stale source code and rebuild them in the
  * codegen phase. If any package outside this list fails, the build is a
  * hard error.
+ *
+ * `CodeGenPhase` has a same-named constant with deliberately different
+ * contents — it omits `mj_generatedentities`/`mj_generatedactions`. This
+ * build runs **before** CodeGen has written `src/generated/`, so those two
+ * packages are expected to fail here; by the time `CodeGenPhase`'s rebuild
+ * runs, CodeGen has written that source and they are expected to build. Do
+ * not "fix" one list to match the other.
  */
 const CODEGEN_MANAGED_PACKAGES = [
   'mj_generatedentities',
@@ -382,6 +395,11 @@ export class DependencyPhase {
     const build = pm.RunScript('build');
     const result = await this.processRunner.Run(build.Cmd, build.Args, {
       Cwd: dir,
+      // turbo colourises when FORCE_COLOR is set, and ProcessRunner forwards the
+      // operator's whole environment. Colourised output is harder to read in
+      // diagnostic reports and was the trigger for #4562. NO_COLOR does not
+      // override FORCE_COLOR; pinning it to '0' does.
+      Env: { FORCE_COLOR: '0' },
       TimeoutMs: 1_800_000, // 30 minutes — first-time full workspace build of 170 packages can take 17+ min
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
@@ -417,17 +435,15 @@ export class DependencyPhase {
       return false;
     }
 
-    // Build failed — check if failures are only in codegen-managed packages.
-    // These packages contain generated code that may be stale in the release.
-    // CodeGen will regenerate them and rebuild in a later phase.
-    // Note: turbo outputs the "Failed:" summary to stdout, not stderr.
+    // Build failed. The two generated packages are expected to fail here — the
+    // distribution assembler strips their src/generated/**, and CodeGen writes it
+    // in a later phase. Everything else is a real failure.
+    // turbo writes its summary to stdout, so both streams go to the classifier.
     const combinedOutput = result.Stdout + '\n' + result.Stderr;
-    const failedPackages = this.extractFailedTurboPackages(combinedOutput);
-    const onlyCodegenFailures = failedPackages.length > 0
-      && failedPackages.every(pkg => CODEGEN_MANAGED_PACKAGES.some(pattern => pkg.includes(pattern)));
+    const verdict = ClassifyTurboFailures(combinedOutput, CODEGEN_MANAGED_PACKAGES);
 
-    if (onlyCodegenFailures) {
-      const failList = failedPackages.join(', ');
+    if (verdict.ToleratedOnly) {
+      const failList = verdict.FailedPackages.join(', ');
       emitter.Emit('warn', {
         Type: 'warn',
         Phase: 'dependencies',
@@ -439,38 +455,28 @@ export class DependencyPhase {
       return true;
     }
 
-    // Non-codegen failures — hard error
-    const lastLines = this.lastNLines(result.Stderr || result.Stdout, 50);
+    // The error body carries BOTH streams on purpose: turbo writes the `Failed:`
+    // summary to stdout, and the previous stderr-only tail never showed the line
+    // that decided the verdict — which is why #4562 was misdiagnosed twice.
+    const lastLines = this.lastNLines(combinedOutput, 50);
+
+    // Never tolerate a failure we cannot name — that is how a broken install gets
+    // reported as a working one.
+    if (!verdict.Attributable) {
+      throw new InstallerError(
+        'dependencies',
+        'BUILD_FAILED',
+        `Build failed (exit code ${result.ExitCode}) and the failure could not be attributed to any package — no "Failed:" summary was found in turbo's output:\n${lastLines}`,
+        `Run "${pm.Name} run build" manually at the repo root to see full error output.`
+      );
+    }
+
     throw new InstallerError(
       'dependencies',
       'BUILD_FAILED',
-      `Build failed (exit code ${result.ExitCode}):\n${lastLines}`,
+      `Build failed (exit code ${result.ExitCode}). Failed packages: ${verdict.FailedPackages.join(', ')}\n${lastLines}`,
       `Run "${pm.Name} run build" manually at the repo root to see full error output.`
     );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Turbo output parsing
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Extract failed package names from turbo's output.
-   *
-   * Turbo outputs lines like:
-   * - `"Failed:    @memberjunction/ng-core-entity-forms#build"` (scoped)
-   * - `"Failed:    mj_generatedactions#build"` (unscoped)
-   *
-   * @param output - Combined stdout + stderr from turbo.
-   * @returns Deduplicated list of failed package names.
-   */
-  private extractFailedTurboPackages(output: string): string[] {
-    const packages: string[] = [];
-    const failedPattern = /Failed:\s+([@\w][^#\s]*)#build/g;
-    let match: RegExpExecArray | null;
-    while ((match = failedPattern.exec(output)) !== null) {
-      packages.push(match[1]);
-    }
-    return [...new Set(packages)];
   }
 
   // ---------------------------------------------------------------------------
@@ -545,7 +551,7 @@ export class DependencyPhase {
       return;
     }
 
-    const npmVersion = tagToNpmVersion(tag);
+    const npmVersion = TagToNpmVersion(tag);
 
     if (!pkg['devDependencies']) {
       pkg['devDependencies'] = {};
@@ -599,7 +605,7 @@ export class DependencyPhase {
 
     const pkgPath = path.join(dir, 'package.json');
     const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
-    const npmVersion = tagToNpmVersion(tag);
+    const npmVersion = TagToNpmVersion(tag);
 
     let modified = false;
 

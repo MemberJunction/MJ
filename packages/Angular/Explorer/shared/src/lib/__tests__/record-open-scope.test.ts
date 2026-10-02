@@ -15,25 +15,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NavigationService } from '../navigation.service';
 import { SetRecordOpenStyle } from '../record-open-style';
+import { Metadata } from '@memberjunction/core';
 import type { CompositeKey } from '@memberjunction/core';
 import type { TabRequest } from '@memberjunction/ng-base-application';
+import { fakeMetadataProvider } from '@memberjunction/ng-test-utils';
 
-vi.mock('@angular/core', () => ({
-  Directive: () => (target: Function) => target,
-  Injectable: () => (target: Function) => target,
-  OnInit: class {},
-  OnDestroy: class {},
-  inject: vi.fn(),
-  Input: () => () => {},
-  Output: () => () => {},
-  EventEmitter: class { emit() {} },
-}));
+vi.mock(import('@angular/core'), async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    Directive: () => (target: Function) => target,
+    Injectable: () => (target: Function) => target,
+    inject: vi.fn(),
+  };
+});
 vi.mock('@angular/router', () => ({}));
 vi.mock('@memberjunction/ng-base-types', () => ({ BaseAngularComponent: class {} }));
 vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
   Metadata: class {},
-  CompositeKey: class { SimpleLoadFromURLSegment() { /* no-op for these specs */ } },
+  CompositeKey: class MockCompositeKey {
+    SimpleLoadFromURLSegment() { /* no-op for these specs */ }
+    static FromURLSegment() { return new MockCompositeKey(); }
+  },
   LogError: vi.fn(),
 }));
 vi.mock('@memberjunction/core-entities', () => ({
@@ -58,6 +62,8 @@ interface ServiceStubs {
   openTab: ReturnType<typeof vi.fn>;
   openTabForced: ReturnType<typeof vi.fn>;
   setActiveTab: ReturnType<typeof vi.fn>;
+  updateTabTitle: ReturnType<typeof vi.fn>;
+  getTab: ReturnType<typeof vi.fn>;
 }
 
 function createService(opts?: { shift?: boolean; existingTab?: { id: string } | null }): {
@@ -68,6 +74,8 @@ function createService(opts?: { shift?: boolean; existingTab?: { id: string } | 
     openTab: vi.fn(() => 'tab-opened'),
     openTabForced: vi.fn(() => 'tab-forced'),
     setActiveTab: vi.fn(),
+    updateTabTitle: vi.fn(),
+    getTab: vi.fn((id: string) => ({ id, title: 'Widget' })),
   };
   const service = Object.create(NavigationService.prototype) as NavigationService;
   const internals = service as unknown as Record<string, unknown>;
@@ -75,6 +83,8 @@ function createService(opts?: { shift?: boolean; existingTab?: { id: string } | 
     OpenTab: stubs.openTab,
     OpenTabForced: stubs.openTabForced,
     SetActiveTab: stubs.setActiveTab,
+    UpdateTabTitle: stubs.updateTabTitle,
+    GetTab: stubs.getTab,
   };
   internals['appManager'] = { GetActiveApp: () => ({ ID: 'app-1', GetColor: () => '#ff0000' }) };
   // Real shouldForceNewTab runs against this — the shift state is what a
@@ -262,5 +272,54 @@ describe('record origin chain', () => {
 
     // A missing crumb beats one that points back at where you just came from.
     expect(openEntityRecord.mock.calls[0][2]?.recordSource).toBe('none');
+  });
+
+  describe('tab title resolution and fire-and-forget update', () => {
+    beforeEach(() => SetRecordOpenStyle('records'));
+
+    it('uses cached title immediately and does not fire background lookup when name is cached', () => {
+      const { service, stubs } = createService();
+      const getEntityRecordName = vi.fn().mockResolvedValue('Async Name');
+      (Metadata as unknown as { Provider: unknown }).Provider = {
+        ...fakeMetadataProvider([{ Name: 'Widgets', DisplayName: 'Widget' }]),
+        HasCachedRecordName: vi.fn().mockReturnValue(true),
+        GetCachedRecordNameOnlyIfCached: vi.fn().mockReturnValue('Widget #42'),
+        GetEntityRecordName: getEntityRecordName,
+      };
+
+      service.OpenEntityRecord('Widgets', pkey);
+
+      expect(requestFrom(stubs.openTab).Title).toBe('Widget #42');
+      expect(getEntityRecordName).not.toHaveBeenCalled();
+      expect(stubs.updateTabTitle).not.toHaveBeenCalled();
+    });
+
+    it('uses entity friendly name initially and fires async update when name is not cached', async () => {
+      const { service, stubs } = createService();
+      let resolveLookup!: (value: string) => void;
+      const lookupPromise = new Promise<string>(res => { resolveLookup = res; });
+      const getEntityRecordName = vi.fn().mockReturnValue(lookupPromise);
+
+      (Metadata as unknown as { Provider: unknown }).Provider = {
+        ...fakeMetadataProvider([{ Name: 'Widgets', DisplayName: 'Widget' }]),
+        HasCachedRecordName: vi.fn().mockReturnValue(false),
+        GetCachedRecordNameOnlyIfCached: vi.fn().mockReturnValue(undefined),
+        GetEntityRecordName: getEntityRecordName,
+      };
+
+      service.OpenEntityRecord('Widgets', pkey);
+
+      // Initial tab open uses friendly entity name without stalling
+      expect(requestFrom(stubs.openTab).Title).toBe('Widget');
+      expect(getEntityRecordName).toHaveBeenCalledTimes(1);
+      expect(stubs.updateTabTitle).not.toHaveBeenCalled();
+
+      // Once lookup completes, tab title updates in workspace
+      resolveLookup('Resolved Widget #42');
+      await lookupPromise;
+      await Promise.resolve();
+
+      expect(stubs.updateTabTitle).toHaveBeenCalledWith('tab-opened', 'Resolved Widget #42');
+    });
   });
 });

@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T147 - Component Editor Tabs Code View",
+    "Description": "Exercises the mj-editor-tabs multi-tab inspector (Spec/Code/Requirements/Design/Data @switch) and the code-editor-panel — a distinct read/inspect surface not present anywhere else.",
+    "InputDefinition": "{\n  \"goal\": \"In the Component Studio app (Components section), select a component card so the center workspace loads its editor. In the editor tab bar on the right of the workspace, verify multiple editor tabs render (Spec, Code, Requirements, Design, Data). Click the 'Code' tab and verify the code editor content area displays for that tab (source/code view). If the editor panel is collapsed, use the columns/toggle button in the Preview sub-header to reveal it first. Pages can take 10-30s to load — wait, don't navigate away. Seeing the editor tabs render and the Code tab activate is success.\",\n  \"startUrl\": \"http://localhost:4200/app/component-studio\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Selecting a component shows an editor tab bar including Spec, Code, Requirements, Design, and Data tabs\",\n    \"Clicking the 'Code' tab activates it and displays the code/source editor content area\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,component-studio",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "FCFA4E8B-D722-44C3-877B-DAE81C1E4291"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:54.261Z",
+    "checksum": "478f47b10390f0037501ac1da1ed7710e1e225b07b80ce751919882661db3fcd"
+  }
+}

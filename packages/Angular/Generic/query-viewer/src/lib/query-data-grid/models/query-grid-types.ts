@@ -348,7 +348,7 @@ export interface TargetEntityInfo {
  * - If the source field is a foreign key, target is the related entity
  * Also retrieves the target entity's icon for display in column headers.
  */
-export function resolveTargetEntity(
+export function ResolveTargetEntity(
     sourceEntityName: string | undefined,
     sourceFieldName: string | undefined,
     md: IMetadataProvider
@@ -395,10 +395,19 @@ export function resolveTargetEntity(
     return { isPrimaryKey: false, isForeignKey: false };
 }
 
+/** @deprecated Use {@link ResolveTargetEntity}. */
+export function resolveTargetEntity(
+    sourceEntityName: string | undefined,
+    sourceFieldName: string | undefined,
+    md: IMetadataProvider
+): TargetEntityInfo {
+    return ResolveTargetEntity(sourceEntityName, sourceFieldName, md);
+}
+
 /**
  * Builds column configs from QueryFieldInfo metadata
  */
-export function buildColumnsFromQueryFields(fields: MJQueryFieldEntity[], provider?: IMetadataProvider): QueryGridColumnConfig[] {
+export function BuildColumnsFromQueryFields(fields: MJQueryFieldEntity[], provider?: IMetadataProvider): QueryGridColumnConfig[] {
     // Metadata.Provider IS the global IMetadataProvider — no cast needed, and it names the fallback.
     const md = provider ?? Metadata.Provider;
 
@@ -406,7 +415,7 @@ export function buildColumnsFromQueryFields(fields: MJQueryFieldEntity[], provid
         .sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0))
         .map((field, index) => {
             // Resolve the target entity using metadata
-            const targetInfo = resolveTargetEntity(field.SourceEntity ?? undefined, field.SourceFieldName ?? undefined, md);
+            const targetInfo = ResolveTargetEntity(field.SourceEntity ?? undefined, field.SourceFieldName ?? undefined, md);
 
             // Determine if this is an entity link
             // It's linkable if we have a valid target entity (either PK or FK)
@@ -451,25 +460,40 @@ export function buildColumnsFromQueryFields(fields: MJQueryFieldEntity[], provid
         });
 }
 
+/** @deprecated Use {@link BuildColumnsFromQueryFields}. */
+export function buildColumnsFromQueryFields(fields: MJQueryFieldEntity[], provider?: IMetadataProvider): QueryGridColumnConfig[] {
+    return BuildColumnsFromQueryFields(fields, provider);
+}
+
 /**
  * Gets the User Settings key for query grid state
  */
-export function getQueryGridStateKey(queryId: string): string {
+export function GetQueryGridStateKey(queryId: string): string {
     return `QueryViewer_${queryId}_GridState`;
+}
+
+/** @deprecated Use {@link GetQueryGridStateKey}. */
+export function getQueryGridStateKey(queryId: string): string {
+    return GetQueryGridStateKey(queryId);
 }
 
 /**
  * Gets the User Settings key for query parameters
  */
-export function getQueryParamsKey(queryId: string): string {
+export function GetQueryParamsKey(queryId: string): string {
     return `QueryViewer_${queryId}_LastParams`;
+}
+
+/** @deprecated Use {@link GetQueryParamsKey}. */
+export function getQueryParamsKey(queryId: string): string {
+    return GetQueryParamsKey(queryId);
 }
 
 /**
  * Infers column configuration from actual data when query has no field metadata.
  * Examines the first row to determine column names and types.
  */
-export function buildColumnsFromData(data: Record<string, unknown>[]): QueryGridColumnConfig[] {
+export function BuildColumnsFromData(data: Record<string, unknown>[]): QueryGridColumnConfig[] {
     if (!data || data.length === 0) {
         return [];
     }
@@ -528,4 +552,9 @@ export function buildColumnsFromData(data: Record<string, unknown>[]): QueryGrid
             flex: undefined
         };
     });
+}
+
+/** @deprecated Use {@link BuildColumnsFromData}. */
+export function buildColumnsFromData(data: Record<string, unknown>[]): QueryGridColumnConfig[] {
+    return BuildColumnsFromData(data);
 }

@@ -58,14 +58,24 @@ fi
 # Tests + suites still need to be pushed to that DB so `mj test suite --name`
 # resolves the suite. If EXTRA_METADATA_DIRS is set, push those too.
 echo "Syncing test metadata to results DB..."
-npx mj sync push --dir=metadata --include="tests" 2>&1 || {
+node /app/packages/MJCLI/bin/run.js sync push --dir=metadata --include="tests" 2>&1 || {
     echo "  WARNING: Test metadata sync failed"
 }
 echo ""
 
 echo "Syncing test suites to results DB..."
-npx mj sync push --dir=metadata --include="test-suites" 2>&1 || {
+node /app/packages/MJCLI/bin/run.js sync push --dir=metadata --include="test-suites" 2>&1 || {
     echo "  WARNING: Suite metadata sync failed"
+}
+echo ""
+
+# The MJ Explorer Regression Suite and its tests live in the opt-in
+# metadata-optional sibling root, so `--include=test-suites` above no longer
+# reaches them. Push that root too, otherwise `mj test suite --name` cannot
+# resolve the default suite in remote mode.
+echo "Syncing regression tests + suite to results DB..."
+node /app/packages/MJCLI/bin/run.js sync push --dir=metadata-optional/regression-test 2>&1 || {
+    echo "  WARNING: Regression metadata sync failed"
 }
 echo ""
 
@@ -75,7 +85,7 @@ if [ -n "${EXTRA_METADATA_DIRS:-}" ]; then
         EXTRA_DIR_TRIMMED="$(echo "$EXTRA_DIR" | xargs)"
         if [ -d "$EXTRA_DIR_TRIMMED" ]; then
             echo "Syncing extra metadata from $EXTRA_DIR_TRIMMED..."
-            npx mj sync push --dir="$EXTRA_DIR_TRIMMED" 2>&1 || {
+            node /app/packages/MJCLI/bin/run.js sync push --dir="$EXTRA_DIR_TRIMMED" 2>&1 || {
                 echo "  WARNING: Extra metadata sync from $EXTRA_DIR_TRIMMED failed"
             }
             echo ""
@@ -125,7 +135,7 @@ if [ -n "${ORACLES_MODULE:-}" ]; then
 fi
 
 set +e
-npx mj test suite --name "${TEST_SUITE_NAME}" \
+node /app/packages/MJCLI/bin/run.js test suite --name "${TEST_SUITE_NAME}" \
     --format json \
     --output "$RUN_DIR/results.json" \
     --parallel \

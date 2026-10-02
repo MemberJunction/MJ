@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
 import { CompositeKey } from '@memberjunction/core';
+import type { EntityFieldInfo } from '@memberjunction/core';
 import { MjIsaRelatedCardComponent } from './isa-related-card.component';
 import type { EntityHierarchyNavigationEvent } from '../types/navigation-events';
 
@@ -87,5 +88,41 @@ describe('MjIsaRelatedCardComponent (DOM)', () => {
     const card = query(f, '.mj-isa-card');
     expect(card?.classList.contains('mj-isa-card--error')).toBe(true);
     expect(card?.classList.contains('mj-isa-card--loading')).toBe(false);
+  });
+});
+
+describe('a date-only field renders its stored calendar day (MJ#4210)', () => {
+  /**
+   * A `date` column arrives as UTC midnight. Formatting it in the reader's local zone lands on
+   * the previous day for everyone west of Greenwich. The card has the field's metadata in hand,
+   * so a `date` is pinned to its stored day and a timestamp keeps local rendering. Pinned to New
+   * York: at Greenwich this bug is invisible. The formatter is private; the test reaches it
+   * through a structural handle rather than widening the class.
+   */
+  const AT = (tz: string, fn: () => void) => {
+    const original = process.env.TZ;
+    process.env.TZ = tz;
+    try {
+      fn();
+    } finally {
+      process.env.TZ = original;
+    }
+  };
+  type Internals = { formatFieldValue(value: unknown, field: EntityFieldInfo): string };
+  const formatter = (): Internals => render({ EntityName: 'Animals' }).componentInstance as unknown as Internals;
+  const field = (name: string, type: string): EntityFieldInfo => ({ Name: name, Type: type } as unknown as EntityFieldInfo);
+
+  it('shows the 20th for a stored 2026-11-20, not the 19th', () => {
+    AT('America/New_York', () => {
+      const shown = formatter().formatFieldValue(new Date('2026-11-20T00:00:00.000Z'), field('IntakeDate', 'date'));
+      expect(shown, `got ${shown}`).toContain('20');
+      expect(shown).not.toContain('19');
+    });
+  });
+
+  it('keeps a timestamp field in local time', () => {
+    AT('America/New_York', () => {
+      expect(formatter().formatFieldValue(new Date('2026-11-20T02:00:00.000Z'), field('LaunchAt', 'datetimeoffset'))).toContain('19');
+    });
   });
 });

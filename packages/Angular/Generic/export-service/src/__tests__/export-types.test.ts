@@ -81,20 +81,20 @@ describe('ExportDialogResult', () => {
 describe('ExportServiceOptions', () => {
   it('should construct with required fields', () => {
     const options: ExportServiceOptions = {
-      data: [{ Name: 'Test', Value: 42 }],
-      format: 'csv'
+      Data: [{ Name: 'Test', Value: 42 }],
+      Format: 'csv'
     };
-    expect(options.data).toHaveLength(1);
-    expect(options.format).toBe('csv');
+    expect(options.Data).toHaveLength(1);
+    expect(options.Format).toBe('csv');
   });
 
   it('should support JSON format', () => {
     const options: ExportServiceOptions = {
-      data: [],
-      format: 'json',
-      fileName: 'data',
-      includeHeaders: true
+      Data: [],
+      Format: 'json',
+      FileName: 'data',
+      IncludeHeaders: true
     };
-    expect(options.format).toBe('json');
+    expect(options.Format).toBe('json');
   });
 });

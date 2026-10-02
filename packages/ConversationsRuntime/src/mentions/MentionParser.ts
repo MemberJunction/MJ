@@ -79,7 +79,7 @@ export class MentionParser {
      * }
      * ```
      */
-    public parseMentions(
+    public ParseMentions(
         text: string,
         availableAgents: MJAIAgentEntityExtended[],
         availableUsers?: UserInfo[]
@@ -162,11 +162,20 @@ export class MentionParser {
         return { mentions, agentMention, userMentions, entityMentions, skillMentions };
     }
 
+    /** @deprecated Use {@link ParseMentions}. */
+    public parseMentions(
+        text: string,
+        availableAgents: MJAIAgentEntityExtended[],
+        availableUsers?: UserInfo[]
+    ): MentionParseResult {
+        return this.ParseMentions(text, availableAgents, availableUsers);
+    }
+
     /**
      * Validate every mention in `text`. Returns an array of mention names that could not be
      * resolved to a known agent or user.
      */
-    public validateMentions(
+    public ValidateMentions(
         text: string,
         availableAgents: MJAIAgentEntityExtended[],
         availableUsers?: UserInfo[]
@@ -222,10 +231,19 @@ export class MentionParser {
         return invalidMentions;
     }
 
+    /** @deprecated Use {@link ValidateMentions}. */
+    public validateMentions(
+        text: string,
+        availableAgents: MJAIAgentEntityExtended[],
+        availableUsers?: UserInfo[]
+    ): string[] {
+        return this.ValidateMentions(text, availableAgents, availableUsers);
+    }
+
     /**
      * Extract every raw mention name from `text` (no resolution against agents/users).
      */
-    public extractMentionNames(text: string): string[] {
+    public ExtractMentionNames(text: string): string[] {
         // Check JSON mentions first
         const jsonMatches = Array.from(text.matchAll(this.JSON_MENTION_REGEX));
         if (jsonMatches.length > 0) {
@@ -247,11 +265,16 @@ export class MentionParser {
         return matches.map((match) => match[1] || match[2]).filter(Boolean);
     }
 
+    /** @deprecated Use {@link ExtractMentionNames}. */
+    public extractMentionNames(text: string): string[] {
+        return this.ExtractMentionNames(text);
+    }
+
     /**
      * Rewrite mentions in `text` to a canonical `@Name` format using the proper casing
      * from `mentions`. Useful when normalizing user-typed mentions before storage or display.
      */
-    public formatMentions(text: string, mentions: Mention[]): string {
+    public FormatMentions(text: string, mentions: Mention[]): string {
         let formattedText = text;
 
         for (const mention of mentions) {
@@ -269,6 +292,11 @@ export class MentionParser {
         return formattedText;
     }
 
+    /** @deprecated Use {@link FormatMentions}. */
+    public formatMentions(text: string, mentions: Mention[]): string {
+        return this.FormatMentions(text, mentions);
+    }
+
     /**
      * Convert a message containing JSON-encoded mentions to plain text — `@{…}` blocks
      * become simple `@Name` strings. Delegates to
@@ -280,7 +308,7 @@ export class MentionParser {
      * // Output: '@Sage help me'
      * ```
      */
-    public toPlainText(
+    public ToPlainText(
         text: string,
         agents?: MJAIAgentEntityExtended[],
         users?: UserInfo[]
@@ -300,6 +328,15 @@ export class MentionParser {
         }));
 
         return ConversationUtility.ToPlainText(text, agentInfos, userInfos);
+    }
+
+    /** @deprecated Use {@link ToPlainText}. */
+    public toPlainText(
+        text: string,
+        agents?: MJAIAgentEntityExtended[],
+        users?: UserInfo[]
+    ): string {
+        return this.ToPlainText(text, agents, users);
     }
 
     /**

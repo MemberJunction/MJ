@@ -20,19 +20,33 @@ export class EntityPermissionsSelectorWithGridComponent extends BaseAngularCompo
 
   @Input() CurrentEntity: EntityInfo | undefined;
 
-  public entityList: EntityInfo[] = [];
+  public EntityList: EntityInfo[] = [];
+
+  /** @deprecated Use {@link EntityList}. */
+  public get entityList(): EntityInfo[] {
+    return this.EntityList;
+  }
+  /** @deprecated Use {@link EntityList}. */
+  public set entityList(value: EntityInfo[]) {
+    this.EntityList = value;
+  }
   public ngOnInit(): void {
     // Copy before sorting — provider.Entities is the provider's live (shared) metadata
     // array; Array.prototype.sort would reorder it in place for every consumer.
-    this.entityList = [...this.ProviderToUse.Entities].sort((a, b) => a.Name.localeCompare(b.Name));
-    if (this.entityList?.length > 0)
-      this.CurrentEntity = this.entityList[0];
+    this.EntityList = [...this.ProviderToUse.Entities].sort((a, b) => a.Name.localeCompare(b.Name));
+    if (this.EntityList?.length > 0)
+      this.CurrentEntity = this.EntityList[0];
   }
 
-  public handlePermissionChanged(event: EntityPermissionChangedEvent) {
+  public HandlePermissionChanged(event: EntityPermissionChangedEvent) {
     // bubble up the event to our container component
     this.PermissionChanged.emit(
       event
     );
+  }
+
+  /** @deprecated Use {@link HandlePermissionChanged}. */
+  public handlePermissionChanged(event: EntityPermissionChangedEvent) {
+    return this.HandlePermissionChanged(event);
   }
 }

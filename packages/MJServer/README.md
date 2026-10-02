@@ -108,6 +108,7 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_REST_API_INCLUDE_ENTITIES` | Comma-separated entity include list | (optional) |
 | `MJ_REST_API_EXCLUDE_ENTITIES` | Comma-separated entity exclude list | (optional) |
 | `MJ_TELEMETRY_ENABLED` | Enable server telemetry | `true` |
+| `MJ_REALTIME_ENABLED` | Enable WebRTC SDP broker router (`/realtime/sdp-exchange`) | `true` |
 | `METADATA_CACHE_REFRESH_INTERVAL` | Metadata refresh interval (ms) | `180000` |
 | `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
 
@@ -181,6 +182,12 @@ module.exports = {
     level: 'standard',  // 'minimal' | 'standard' | 'verbose' | 'debug'
   },
 
+  // Realtime WebRTC SDP broker router (/realtime/sdp-exchange)
+  // Enabled by default; can be disabled via MJ_REALTIME_ENABLED=false or realtime.enabled: false
+  realtime: {
+    enabled: true,
+  },
+
   // Debugging — see "Debugging GraphQL requests" below
   loggingSettings: {
     graphql: {
@@ -248,6 +255,38 @@ export class MyInput {
   @Field(() => String) Description: string;
 }
 ```
+
+### Realtime WebRTC Broker Configuration
+
+MemberJunction provides a built-in WebRTC SDP broker router mounted at `/realtime/sdp-exchange`. This endpoint enables browser clients to negotiate full-duplex audio and data channels with realtime models (such as Gemini Live 3.8 and OpenAI Realtime) via proxy sessions.
+
+#### Why Realtime is Enabled by Default
+
+`realtime.enabled` defaults to `true`. This decision was made because:
+1. **Safe by Design**: The broker endpoint is protected by single-use ticket redemption via `RealtimeProxyRegistry`. Inbound requests cannot initiate or hijack sessions without an ephemeral ticket issued through an authenticated GraphQL session (`StartRealtimeClientSession`).
+2. **Zero-Friction Realtime UX**: Voice co-agents, live audio, and collaborative whiteboards work out of the box without requiring operators to discover and configure esoteric flags.
+
+#### Disabling Realtime
+
+Operators running an API server strictly as a headless GraphQL/REST backend without realtime media requirements can disable the broker route in either of two ways:
+
+1. **Environment Variable**:
+   ```bash
+   MJ_REALTIME_ENABLED=false
+   ```
+2. **`mj.config.cjs`**:
+   ```javascript
+   module.exports = {
+     // ...
+     realtime: {
+       enabled: false,
+     },
+   };
+   ```
+
+When disabled, the `/realtime/sdp-exchange` Express route is not mounted, and incoming requests to that path return standard 404 responses.
+
+
 
 ## Usage
 

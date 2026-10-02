@@ -3,7 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { buildVersionDownload } from './artifact-version-download.js';
+import { BuildVersionDownload } from './artifact-version-download.js';
 
 @Component({
   standalone: false,
@@ -111,18 +111,108 @@ import { buildVersionDownload } from './artifact-version-download.js';
 export class ArtifactVersionHistoryComponent extends BaseAngularComponent implements OnInit  {
   private confirmService = inject(MJConfirmService);
 
-  @Input() artifact!: MJArtifactEntity;
-  @Input() currentUser!: UserInfo;
+  @Input() Artifact!: MJArtifactEntity;
 
-  @Output() closed = new EventEmitter<void>();
-  @Output() versionRestored = new EventEmitter<number>();
-  @Output() versionSelected = new EventEmitter<number>();
+  /** @deprecated Use {@link Artifact}. */
+  @Input() set artifact(value: MJArtifactEntity) {
+    this.Artifact = value;
+  }
+  /** @deprecated Use {@link Artifact}. */
+  get artifact(): MJArtifactEntity {
+    return this.Artifact;
+  }
+  @Input() CurrentUser!: UserInfo;
 
-  public versions: MJArtifactVersionEntity[] = [];
-  public selectedVersion: number | null = null;
-  public showDiff: boolean = false;
-  public currentVersionContent: string = '';
-  public previousVersionContent: string = '';
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+
+  @Output() Closed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
+  @Output() VersionRestored = new EventEmitter<number>();
+
+  /**
+   * @deprecated Use {@link VersionRestored}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (versionRestored) keeps working. Must stay AFTER VersionRestored: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() versionRestored = this.VersionRestored;
+  @Output() VersionSelected = new EventEmitter<number>();
+
+  /**
+   * @deprecated Use {@link VersionSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (versionSelected) keeps working. Must stay AFTER VersionSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() versionSelected = this.VersionSelected;
+
+  public Versions: MJArtifactVersionEntity[] = [];
+
+  /** @deprecated Use {@link Versions}. */
+  public get versions(): MJArtifactVersionEntity[] {
+    return this.Versions;
+  }
+  /** @deprecated Use {@link Versions}. */
+  public set versions(value: MJArtifactVersionEntity[]) {
+    this.Versions = value;
+  }
+  public SelectedVersion: number | null = null;
+
+  /** @deprecated Use {@link SelectedVersion}. */
+  public get selectedVersion(): number | null {
+    return this.SelectedVersion;
+  }
+  /** @deprecated Use {@link SelectedVersion}. */
+  public set selectedVersion(value: number | null) {
+    this.SelectedVersion = value;
+  }
+  public ShowDiff: boolean = false;
+
+  /** @deprecated Use {@link ShowDiff}. */
+  public get showDiff(): boolean {
+    return this.ShowDiff;
+  }
+  /** @deprecated Use {@link ShowDiff}. */
+  public set showDiff(value: boolean) {
+    this.ShowDiff = value;
+  }
+  public CurrentVersionContent: string = '';
+
+  /** @deprecated Use {@link CurrentVersionContent}. */
+  public get currentVersionContent(): string {
+    return this.CurrentVersionContent;
+  }
+  /** @deprecated Use {@link CurrentVersionContent}. */
+  public set currentVersionContent(value: string) {
+    this.CurrentVersionContent = value;
+  }
+  public PreviousVersionContent: string = '';
+
+  /** @deprecated Use {@link PreviousVersionContent}. */
+  public get previousVersionContent(): string {
+    return this.PreviousVersionContent;
+  }
+  /** @deprecated Use {@link PreviousVersionContent}. */
+  public set previousVersionContent(value: string) {
+    this.PreviousVersionContent = value;
+  }
 
   ngOnInit() {
     this.loadVersions();
@@ -133,30 +223,35 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID='${this.artifact.ID}'`,
+        ExtraFilter: `ArtifactID='${this.Artifact.ID}'`,
         OrderBy: 'VersionNumber DESC',
         ResultType: 'entity_object'
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (result.Success) {
-        this.versions = result.Results || [];
+        this.Versions = result.Results || [];
       }
     } catch (error) {
       console.error('Failed to load version history:', error);
     }
   }
 
-  onSelectVersion(version: MJArtifactVersionEntity): void {
-    this.selectedVersion = version.VersionNumber;
-    this.versionSelected.emit(version.VersionNumber);
+  OnSelectVersion(version: MJArtifactVersionEntity): void {
+    this.SelectedVersion = version.VersionNumber;
+    this.VersionSelected.emit(version.VersionNumber);
   }
 
-  async onRestoreVersion(version: MJArtifactVersionEntity): Promise<void> {
+  /** @deprecated Use {@link OnSelectVersion}. */
+  onSelectVersion(version: MJArtifactVersionEntity): void {
+    return this.OnSelectVersion(version);
+  }
+
+  async OnRestoreVersion(version: MJArtifactVersionEntity): Promise<void> {
     if (!(await this.confirmService.Confirm({ title: 'Restore version', message: `Restore to version ${version.VersionNumber}?`, detail: 'This will create a new version.' }))) return;
 
     try {
       // Restoring creates a new version with the old content
-      this.versionRestored.emit(version.VersionNumber);
+      this.VersionRestored.emit(version.VersionNumber);
       alert(`Version ${version.VersionNumber} has been restored as the latest version`);
     } catch (error) {
       console.error('Failed to restore version:', error);
@@ -164,20 +259,25 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
     }
   }
 
-  async onCompareVersion(version: MJArtifactVersionEntity): Promise<void> {
+  /** @deprecated Use {@link OnRestoreVersion}. */
+  async onRestoreVersion(version: MJArtifactVersionEntity): Promise<void> {
+    return this.OnRestoreVersion(version);
+  }
+
+  async OnCompareVersion(version: MJArtifactVersionEntity): Promise<void> {
     if (version.VersionNumber === 1) {
       alert('Cannot compare: this is the first version');
       return;
     }
 
     try {
-      this.currentVersionContent = version.Content || '';
+      this.CurrentVersionContent = version.Content || '';
 
       // Load previous version
-      const previousVersion = this.versions.find(v => v.VersionNumber === version.VersionNumber - 1);
+      const previousVersion = this.Versions.find(v => v.VersionNumber === version.VersionNumber - 1);
       if (previousVersion) {
-        this.previousVersionContent = previousVersion.Content || '';
-        this.showDiff = true;
+        this.PreviousVersionContent = previousVersion.Content || '';
+        this.ShowDiff = true;
       }
     } catch (error) {
       console.error('Failed to load version for comparison:', error);
@@ -185,15 +285,20 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
     }
   }
 
-  onDownloadVersion(version: MJArtifactVersionEntity): void {
+  /** @deprecated Use {@link OnCompareVersion}. */
+  async onCompareVersion(version: MJArtifactVersionEntity): Promise<void> {
+    return this.OnCompareVersion(version);
+  }
+
+  OnDownloadVersion(version: MJArtifactVersionEntity): void {
     try {
       const content = version.Content || '';
-      const download = buildVersionDownload(content, version.FileName, this.artifact.Name, version.VersionNumber, version.MimeType);
-      const blob = new Blob([download.data], { type: download.mimeType });
+      const download = BuildVersionDownload(content, version.FileName, this.Artifact.Name, version.VersionNumber, version.MimeType);
+      const blob = new Blob([download.Data], { type: download.MimeType });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = download.fileName;
+      link.download = download.FileName;
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
@@ -202,7 +307,12 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
     }
   }
 
-  getContentSize(content: string | null): string {
+  /** @deprecated Use {@link OnDownloadVersion}. */
+  onDownloadVersion(version: MJArtifactVersionEntity): void {
+    return this.OnDownloadVersion(version);
+  }
+
+  GetContentSize(content: string | null): string {
     if (!content) return '0 B';
     const bytes = new Blob([content]).size;
     if (bytes < 1024) return `${bytes} B`;
@@ -210,10 +320,15 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  getDiffSummary(): string {
+  /** @deprecated Use {@link GetContentSize}. */
+  getContentSize(content: string | null): string {
+    return this.GetContentSize(content);
+  }
+
+  GetDiffSummary(): string {
     // Simple line-based diff summary
-    const currentLines = this.currentVersionContent.split('\n');
-    const previousLines = this.previousVersionContent.split('\n');
+    const currentLines = this.CurrentVersionContent.split('\n');
+    const previousLines = this.PreviousVersionContent.split('\n');
 
     const added = currentLines.length - previousLines.length;
     const summary = `Lines: ${previousLines.length} → ${currentLines.length} (${added > 0 ? '+' : ''}${added})\n\n`;
@@ -222,7 +337,17 @@ export class ArtifactVersionHistoryComponent extends BaseAngularComponent implem
     return summary + '(Full diff view would require a diff library)';
   }
 
+  /** @deprecated Use {@link GetDiffSummary}. */
+  getDiffSummary(): string {
+    return this.GetDiffSummary();
+  }
+
+  OnClose(): void {
+    this.Closed.emit();
+  }
+
+  /** @deprecated Use {@link OnClose}. */
   onClose(): void {
-    this.closed.emit();
+    return this.OnClose();
   }
 }

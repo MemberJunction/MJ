@@ -39,33 +39,110 @@ const STATUS_OPTIONS: ReadonlyArray<FilterOption> = [
 })
 export class EntityFilterPanelComponent implements OnInit, OnChanges {
   /** All entities available for filtering */
-  @Input() entities: EntityInfo[] = [];
+  @Input() Entities: EntityInfo[] = [];
+
+  /** @deprecated Use {@link Entities}. */
+  @Input() set entities(value: EntityInfo[]) {
+    this.Entities = value;
+  }
+  /** @deprecated Use {@link Entities}. */
+  get entities(): EntityInfo[] {
+    return this.Entities;
+  }
 
   /** Currently filtered entities (for display count) */
-  @Input() filteredEntities: EntityInfo[] = [];
+  @Input() FilteredEntities: EntityInfo[] = [];
+
+  /** @deprecated Use {@link FilteredEntities}. */
+  @Input() set filteredEntities(value: EntityInfo[]) {
+    this.FilteredEntities = value;
+  }
+  /** @deprecated Use {@link FilteredEntities}. */
+  get filteredEntities(): EntityInfo[] {
+    return this.FilteredEntities;
+  }
 
   /** Current filter values */
-  @Input() filters: EntityFilter = {
+  @Input() Filters: EntityFilter = {
     schemaName: null,
     entityName: '',
     entityStatus: null,
     baseTable: '',
   };
 
+  /** @deprecated Use {@link Filters}. */
+  @Input() set filters(value: EntityFilter) {
+    this.Filters = value;
+  }
+  /** @deprecated Use {@link Filters}. */
+  get filters(): EntityFilter {
+    return this.Filters;
+  }
+
   /** Emitted when any filter value changes */
-  @Output() filtersChange = new EventEmitter<EntityFilter>();
+  @Output() FiltersChange = new EventEmitter<EntityFilter>();
+
+  /**
+   * @deprecated Use {@link FiltersChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (filtersChange) keeps working. Must stay AFTER FiltersChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() filtersChange = this.FiltersChange;
 
   /** Emitted when filter is applied (for debouncing) */
-  @Output() filterChange = new EventEmitter<void>();
+  @Output() FilterChange = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link FilterChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (filterChange) keeps working. Must stay AFTER FilterChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() filterChange = this.FilterChange;
 
   /** Emitted when reset button is clicked */
-  @Output() resetFilters = new EventEmitter<void>();
+  @Output() ResetFilters = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ResetFilters}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (resetFilters) keeps working. Must stay AFTER ResetFilters: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() resetFilters = this.ResetFilters;
 
   /** Emitted when close button is clicked */
-  @Output() closePanel = new EventEmitter<void>();
+  @Output() ClosePanel = new EventEmitter<void>();
 
-  public schemaOptions: FilterOption[] = [];
-  public readonly statusOptions = STATUS_OPTIONS;
+  /**
+   * @deprecated Use {@link ClosePanel}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closePanel) keeps working. Must stay AFTER ClosePanel: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closePanel = this.ClosePanel;
+
+  public SchemaOptions: FilterOption[] = [];
+
+  /** @deprecated Use {@link SchemaOptions}. */
+  public get schemaOptions(): FilterOption[] {
+    return this.SchemaOptions;
+  }
+  /** @deprecated Use {@link SchemaOptions}. */
+  public set schemaOptions(value: FilterOption[]) {
+    this.SchemaOptions = value;
+  }
+  public readonly StatusOptions = STATUS_OPTIONS;
+
+  /** @deprecated Use {@link StatusOptions}. */
+  public get statusOptions() {
+    return this.StatusOptions;
+  }
 
   ngOnInit(): void {
     this.updateDistinctSchemas();
@@ -77,42 +154,62 @@ export class EntityFilterPanelComponent implements OnInit, OnChanges {
     }
   }
 
-  public onSchemaChange(value: unknown): void {
-    this.filters = { ...this.filters, schemaName: (value as string | null) ?? null };
+  public OnSchemaChange(value: unknown): void {
+    this.Filters = { ...this.Filters, schemaName: (value as string | null) ?? null };
     this.emitFilterChange();
   }
 
-  public onStatusChange(value: unknown): void {
-    this.filters = { ...this.filters, entityStatus: (value as string | null) ?? null };
+  /** @deprecated Use {@link OnSchemaChange}. */
+  public onSchemaChange(value: unknown): void {
+    return this.OnSchemaChange(value);
+  }
+
+  public OnStatusChange(value: unknown): void {
+    this.Filters = { ...this.Filters, entityStatus: (value as string | null) ?? null };
     this.emitFilterChange();
+  }
+
+  /** @deprecated Use {@link OnStatusChange}. */
+  public onStatusChange(value: unknown): void {
+    return this.OnStatusChange(value);
   }
 
   public onFilterChange(): void {
     this.emitFilterChange();
   }
 
-  public resetAllFilters(): void {
-    this.resetFilters.emit();
+  public ResetAllFilters(): void {
+    this.ResetFilters.emit();
   }
 
+  /** @deprecated Use {@link ResetAllFilters}. */
+  public resetAllFilters(): void {
+    return this.ResetAllFilters();
+  }
+
+  public ToggleFilterPanel(): void {
+    this.ClosePanel.emit();
+  }
+
+  /** @deprecated Use {@link ToggleFilterPanel}. */
   public toggleFilterPanel(): void {
-    this.closePanel.emit();
+    return this.ToggleFilterPanel();
   }
 
   private emitFilterChange(): void {
-    this.filtersChange.emit(this.filters);
-    this.filterChange.emit();
+    this.FiltersChange.emit(this.Filters);
+    this.FilterChange.emit();
   }
 
   private updateDistinctSchemas(): void {
     const schemas = new Set<string>();
-    this.entities.forEach(entity => {
+    this.Entities.forEach(entity => {
       if (entity.SchemaName) {
         schemas.add(entity.SchemaName);
       }
     });
 
-    this.schemaOptions = [
+    this.SchemaOptions = [
       { text: 'All Schemas', value: null },
       ...Array.from(schemas).sort().map(schema => ({ text: schema, value: schema })),
     ];

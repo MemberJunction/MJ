@@ -21,8 +21,7 @@
           "matcher": "nonEmpty"
         },
         "forbiddenActions": [
-          "Google Custom Search",
-          "Perplexity Search",
+          "Web Search",
           "Web Page Content"
         ]
       }
@@ -47,8 +46,7 @@
               "matcher": "nonEmpty"
             },
             "forbiddenActions": [
-              "Google Custom Search",
-              "Perplexity Search",
+              "Web Search",
               "Web Page Content"
             ]
           }

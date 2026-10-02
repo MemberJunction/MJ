@@ -40,7 +40,7 @@ export class PKCEGenerator {
      *
      * @returns PKCE challenge data including verifier, challenge, and method
      */
-    public generate(): PKCEChallenge {
+    public Generate(): PKCEChallenge {
         const codeVerifier = this.generateCodeVerifier();
         const codeChallenge = this.generateCodeChallenge(codeVerifier);
 
@@ -49,6 +49,11 @@ export class PKCEGenerator {
             codeChallenge,
             codeChallengeMethod: 'S256'
         };
+    }
+
+    /** @deprecated Use {@link Generate}. */
+    public generate(): PKCEChallenge {
+        return this.Generate();
     }
 
     /**
@@ -113,9 +118,14 @@ export class PKCEGenerator {
      * @param length - Number of random bytes (default: 32, resulting in 43 chars)
      * @returns Base64url-encoded state string
      */
-    public generateState(length = 32): string {
+    public GenerateState(length = 32): string {
         const buffer = randomBytes(length);
         return this.base64UrlEncode(buffer);
+    }
+
+    /** @deprecated Use {@link GenerateState}. */
+    public generateState(length = 32): string {
+        return this.GenerateState(length);
     }
 
     /**
@@ -124,7 +134,7 @@ export class PKCEGenerator {
      * @param verifier - The code verifier to validate
      * @returns true if valid, false otherwise
      */
-    public validateCodeVerifier(verifier: string): boolean {
+    public ValidateCodeVerifier(verifier: string): boolean {
         // Length must be 43-128 characters
         if (verifier.length < 43 || verifier.length > 128) {
             return false;
@@ -133,5 +143,10 @@ export class PKCEGenerator {
         // Must contain only unreserved characters
         const validPattern = /^[A-Za-z0-9\-._~]+$/;
         return validPattern.test(verifier);
+    }
+
+    /** @deprecated Use {@link ValidateCodeVerifier}. */
+    public validateCodeVerifier(verifier: string): boolean {
+        return this.ValidateCodeVerifier(verifier);
     }
 }

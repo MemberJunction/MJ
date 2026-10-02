@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T013 - Entity Form Delete Record",
+    "Description": "Verifies the full create-then-delete lifecycle: a throwaway record is created and saved, then opened and deleted, confirming the delete action removes it from the entity.",
+    "InputDefinition": "{\n  \"goal\": \"Navigate to Data Explorer and open the 'Forum Categories' entity (or 'Products' if Forum Categories is unavailable). Click the New Record button, fill the Name field with 'Regression Delete Me', fill any required fields, and Save the new record. Then open that record and use the Delete action to delete it, confirming the deletion if prompted. Reach the state where the record has been removed (a delete confirmation appears, or the record no longer appears in the grid). Pages can take 10-30s to load in this resource-constrained environment, so wait for loads, saves, and deletes to finish rather than navigating away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 55,\n  \"judgeValidationCriteria\": [\n    \"A record named 'Regression Delete Me' was created and saved successfully\",\n    \"The Delete action was performed on that record and a delete confirmation or removed-from-grid state is visible\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 55,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 55
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,crud",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "C034F558-3B3D-4325-9D42-2DD76B4CCA7B"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.029Z",
+    "checksum": "e5cd1cff6dc3d28ea7de03102bd29fca076ccc7b5479285b1b6483dc1ca6ebec"
+  }
+}

@@ -7,37 +7,37 @@ import { ResourceData } from '@memberjunction/core-entities';
  */
 export interface CachedComponentInfo {
   // The Angular component reference
-  componentRef: ComponentRef<BaseResourceComponent>;
+  componentRef: ComponentRef<BaseResourceComponent>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // The wrapper DOM element (for detaching/reattaching)
-  wrapperElement: HTMLElement;
+  wrapperElement: HTMLElement;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Resource identity (the ONLY key used for cache operations)
-  resourceType: string;
-  resourceRecordId: string;
-  applicationId: string;
+  resourceType: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  resourceRecordId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  applicationId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Optional tiebreaker used when recordId is empty (e.g., "new record" tabs for
   // different entities all have recordId='' but must NOT share a cache entry).
   // For entity-record resources this is the entity name; null/undefined for
   // resource types that don't need disambiguation.
-  keyDiscriminator?: string;
+  keyDiscriminator?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Usage tracking
-  isAttached: boolean;        // Currently attached to a tab/container?
-  attachedToTabId: string | null;  // Which tab is it attached to? (metadata only, NOT used for lookup)
+  isAttached: boolean;        // Currently attached to a tab/container? — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  attachedToTabId: string | null;  // Which tab is it attached to? (metadata only, NOT used for lookup) — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Lifecycle tracking
-  lastUsed: Date;
-  createdAt: Date;
+  lastUsed: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  createdAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Resource data snapshot (for comparison)
-  resourceData: ResourceData;
+  resourceData: ResourceData;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Saved query params from the tab config at detach time.
   // Restored to the tab config when the component is reattached,
   // so the URL reflects the component's preserved state.
-  savedQueryParams?: Record<string, string>;
+  savedQueryParams?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Agent context reported by this component via NavigationService.SetAgentContext()
   // Cached so it can be restored when the component becomes active again.
@@ -88,32 +88,61 @@ export class ComponentCacheManager {
    * Generate a unique cache key from resource identity.
    * This is the ONE canonical key format used by ALL cache operations.
    *
-   * `discriminator` is appended into the recordId slot only when recordId is empty.
-   * It exists to prevent collisions between distinct "new record" tabs that share
-   * an empty recordId — e.g., a new MJ:Companies form and a new MJ:Employees form
-   * would otherwise both cache at `appId::RecordResource::__no_record__` and clobber
-   * each other. Passing the entity name as discriminator keeps them separate.
+   * `discriminator` is appended into the recordId slot when the recordId alone does not
+   * identify the resource:
+   * - **Empty recordId** — distinct "new record" tabs, e.g. a new MJ:Companies form and a new
+   *   MJ:Employees form, would otherwise both cache at `appId::RecordResource::__no_record__`
+   *   and clobber each other.
+   * - **The `'dynamic'` view marker** — `NavigationService.OpenDynamicView` stamps every
+   *   dynamic view with that same recordId, so without the entity every dynamic view in an app
+   *   shares one key. A reload from `#Accounts` to `#Contacts` would then get a cache hit on the
+   *   Accounts component, which never has its `Data` rebound, so the tab keeps showing Accounts
+   *   and the tab-container's entity check fires again on every emission.
+   *
+   * Passing the entity name as discriminator keeps them separate. Whatever the tab-container's
+   * reload check compares has to be part of this key, or a reload is handed back the component
+   * it just detached.
    */
   private getCacheKey(resourceType: string, recordId: string, appId: string, discriminator?: string): string {
-    const normalizedRecordId = recordId
-      || (discriminator ? `__new__::${discriminator}` : '__no_record__');
+    let normalizedRecordId: string;
+    if (!recordId) {
+      normalizedRecordId = discriminator ? `__new__::${discriminator}` : '__no_record__';
+    } else if (discriminator && ComponentCacheManager.IsDynamicViewMarker(recordId)) {
+      normalizedRecordId = `dynamic::${discriminator}`;
+    } else {
+      normalizedRecordId = recordId;
+    }
     return `${appId}::${resourceType}::${normalizedRecordId}`;
+  }
+
+  /**
+   * Whether a recordId is the `'dynamic'` marker `NavigationService.OpenDynamicView` stamps on a
+   * dynamic view, which is not a saved-view ID. Matched the way `ViewResourceComponent` matches it
+   * (trimmed, case-insensitive), so the cache and the view agree on what counts as dynamic.
+   */
+  public static IsDynamicViewMarker(recordId: string | null | undefined): boolean {
+    return typeof recordId === 'string' && recordId.trim().toLowerCase() === 'dynamic';
   }
 
   /**
    * Check if a component exists in cache and is available for reuse.
    */
-  hasAvailableComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): boolean {
+  HasAvailableComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): boolean {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
     return info !== undefined && !info.isAttached;
+  }
+
+  /** @deprecated Use {@link HasAvailableComponent}. */
+  hasAvailableComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): boolean {
+    return this.HasAvailableComponent(resourceType, recordId, appId, discriminator);
   }
 
   /**
    * Get a cached component if available (not currently attached).
    * Lookup is by resource identity, not tab ID.
    */
-  getCachedComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+  GetCachedComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
 
@@ -129,10 +158,15 @@ export class ComponentCacheManager {
     return info;
   }
 
+  /** @deprecated Use {@link GetCachedComponent}. */
+  getCachedComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+    return this.GetCachedComponent(resourceType, recordId, appId, discriminator);
+  }
+
   /**
    * Store a component in the cache and mark as attached.
    */
-  cacheComponent(
+  CacheComponent(
     componentRef: ComponentRef<BaseResourceComponent>,
     wrapperElement: HTMLElement,
     resourceData: ResourceData,
@@ -171,10 +205,20 @@ export class ComponentCacheManager {
     this.cache.set(key, info);
   }
 
+  /** @deprecated Use {@link CacheComponent}. */
+  cacheComponent(
+    componentRef: ComponentRef<BaseResourceComponent>,
+    wrapperElement: HTMLElement,
+    resourceData: ResourceData,
+    tabId: string
+  ): void {
+    return this.CacheComponent(componentRef, wrapperElement, resourceData, tabId);
+  }
+
   /**
    * Mark a component as attached. Lookup by resource identity.
    */
-  markAsAttached(resourceType: string, recordId: string, appId: string, tabId: string, discriminator?: string): void {
+  MarkAsAttached(resourceType: string, recordId: string, appId: string, tabId: string, discriminator?: string): void {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
 
@@ -188,13 +232,18 @@ export class ComponentCacheManager {
     }
   }
 
+  /** @deprecated Use {@link MarkAsAttached}. */
+  markAsAttached(resourceType: string, recordId: string, appId: string, tabId: string, discriminator?: string): void {
+    return this.MarkAsAttached(resourceType, recordId, appId, tabId, discriminator);
+  }
+
   /**
    * Mark a component as detached (available for reuse). Lookup by resource identity.
    *
    * This is the ONLY way to detach a component. Both single-resource mode and
    * Golden Layout mode use this same method to ensure consistent cache behavior.
    */
-  markAsDetached(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+  MarkAsDetached(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
     if (!info) return null;
@@ -205,8 +254,13 @@ export class ComponentCacheManager {
     // Clear this surface's agent client tools on detach so the previous app's tools aren't offered to
     // the AI agent on the next surface. NotifyResourceReattached replays them if the user returns.
     this.navigationService?.NotifyResourceDetached(info.componentRef.instance);
-    this.EvictIfNeeded();
+    this.evictIfNeeded();
     return info;
+  }
+
+  /** @deprecated Use {@link MarkAsDetached}. */
+  markAsDetached(resourceType: string, recordId: string, appId: string, discriminator?: string): CachedComponentInfo | null {
+    return this.MarkAsDetached(resourceType, recordId, appId, discriminator);
   }
 
   /**
@@ -220,7 +274,7 @@ export class ComponentCacheManager {
    * Preserves the live component instance — only the cache key + stored identity change.
    * Returns true if a matching entry was found and re-keyed, false otherwise.
    */
-  rekeyComponent(
+  RekeyComponent(
     resourceType: string,
     oldRecordId: string,
     newRecordId: string,
@@ -253,27 +307,44 @@ export class ComponentCacheManager {
     return true;
   }
 
+  /** @deprecated Use {@link RekeyComponent}. */
+  rekeyComponent(
+    resourceType: string,
+    oldRecordId: string,
+    newRecordId: string,
+    appId: string,
+    oldDiscriminator?: string,
+    newDiscriminator?: string
+  ): boolean {
+    return this.RekeyComponent(resourceType, oldRecordId, newRecordId, appId, oldDiscriminator, newDiscriminator);
+  }
+
   /**
    * Find a cached component by tab ID and detach it.
    * This is a convenience wrapper for callers that only know the tab ID
    * (e.g., Golden Layout tab close events). It resolves the tab ID to
    * resource identity, then delegates to the identity-based markAsDetached.
    */
-  findAndDetachByTabId(tabId: string): CachedComponentInfo | null {
+  FindAndDetachByTabId(tabId: string): CachedComponentInfo | null {
     const entry = Array.from(this.cache.entries())
       .find(([_, info]) => info.attachedToTabId === tabId);
 
     if (!entry) return null;
 
     const [_, info] = entry;
-    return this.markAsDetached(info.resourceType, info.resourceRecordId, info.applicationId, info.keyDiscriminator);
+    return this.MarkAsDetached(info.resourceType, info.resourceRecordId, info.applicationId, info.keyDiscriminator);
+  }
+
+  /** @deprecated Use {@link FindAndDetachByTabId}. */
+  findAndDetachByTabId(tabId: string): CachedComponentInfo | null {
+    return this.FindAndDetachByTabId(tabId);
   }
 
   /**
    * Evict least-recently-used detached components when over the limit.
    * Only evicts components that are not currently attached.
    */
-  private EvictIfNeeded(): void {
+  private evictIfNeeded(): void {
     if (ComponentCacheManager.MaxDetachedComponents <= 0) return;
 
     const detached = Array.from(this.cache.entries())
@@ -294,17 +365,22 @@ export class ComponentCacheManager {
    * Get component info by tab ID (for finding what's attached to a tab).
    * Uses linear scan since tabId is metadata, not a key.
    */
-  getComponentByTabId(tabId: string): CachedComponentInfo | null {
+  GetComponentByTabId(tabId: string): CachedComponentInfo | null {
     const entry = Array.from(this.cache.entries())
       .find(([_, info]) => info.attachedToTabId === tabId);
 
     return entry ? entry[1] : null;
   }
 
+  /** @deprecated Use {@link GetComponentByTabId}. */
+  getComponentByTabId(tabId: string): CachedComponentInfo | null {
+    return this.GetComponentByTabId(tabId);
+  }
+
   /**
    * Remove and destroy a specific component from cache by resource identity.
    */
-  destroyComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): void {
+  DestroyComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): void {
     const key = this.getCacheKey(resourceType, recordId, appId, discriminator);
     const info = this.cache.get(key);
 
@@ -316,10 +392,15 @@ export class ComponentCacheManager {
     this.cache.delete(key);
   }
 
+  /** @deprecated Use {@link DestroyComponent}. */
+  destroyComponent(resourceType: string, recordId: string, appId: string, discriminator?: string): void {
+    return this.DestroyComponent(resourceType, recordId, appId, discriminator);
+  }
+
   /**
    * Remove and destroy component by tab ID (convenience for Golden Layout tab close).
    */
-  destroyComponentByTabId(tabId: string): void {
+  DestroyComponentByTabId(tabId: string): void {
     const entry = Array.from(this.cache.entries())
       .find(([_, info]) => info.attachedToTabId === tabId);
 
@@ -331,16 +412,26 @@ export class ComponentCacheManager {
     this.cache.delete(key);
   }
 
+  /** @deprecated Use {@link DestroyComponentByTabId}. */
+  destroyComponentByTabId(tabId: string): void {
+    return this.DestroyComponentByTabId(tabId);
+  }
+
   /**
    * Clear the entire cache, destroying all components.
    * Call this on user logout or app shutdown.
    */
-  clearCache(): void {
+  ClearCache(): void {
     this.cache.forEach(info => {
       this.appRef.detachView(info.componentRef.hostView);
       info.componentRef.destroy();
     });
     this.cache.clear();
+  }
+
+  /** @deprecated Use {@link ClearCache}. */
+  clearCache(): void {
+    return this.ClearCache();
   }
 
   /**
@@ -376,7 +467,7 @@ export class ComponentCacheManager {
   /**
    * Get cache statistics for debugging.
    */
-  getCacheStats(): {
+  GetCacheStats(): {
     total: number;
     attached: number;
     detached: number;
@@ -401,5 +492,15 @@ export class ComponentCacheManager {
     });
 
     return stats;
+  }
+
+  /** @deprecated Use {@link GetCacheStats}. */
+  getCacheStats(): {
+    total: number;
+    attached: number;
+    detached: number;
+    byResourceType: Map<string, number>;
+  } {
+    return this.GetCacheStats();
   }
 }

@@ -154,6 +154,37 @@ describe('ShellComponent — a hidden search bar has no keyboard back door', () 
   });
 });
 
+describe('ShellComponent — the command palette search row', () => {
+  function createShell(searchBar: boolean): { shell: ShellComponent; openSearch: ReturnType<typeof vi.fn> } {
+    const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+    const openSearch = vi.fn();
+    const open = shell as unknown as Record<string, unknown>;
+    open['_chromeFlags'] = { ...allOn, searchBar };
+    open['navigationService'] = { OpenSearch: openSearch };
+    return { shell, openSearch };
+  }
+
+  it('opens Search Results for the palette query while search is shown', () => {
+    const { shell, openSearch } = createShell(true);
+    shell.OnCommandPaletteSearch('invoices');
+    expect(openSearch).toHaveBeenCalledWith('invoices');
+  });
+
+  it('does nothing while search is hidden', () => {
+    const { shell, openSearch } = createShell(false);
+    shell.OnCommandPaletteSearch('invoices');
+    expect(openSearch).not.toHaveBeenCalled();
+  });
+
+  it('the palette gets the search gate and the shell handles its search request', () => {
+    const html = readFileSync(join(__dirname, 'shell.component.html'), 'utf8');
+    const start = html.indexOf('<mj-command-palette');
+    const tag = html.slice(start, html.indexOf('>', start));
+    expect(tag).toContain('[ShowSearch]="ShowSearchBar"');
+    expect(tag).toContain('(KnowledgeSearchRequested)="OnCommandPaletteSearch($event)"');
+  });
+});
+
 describe('the user menu fits the viewport', () => {
   const css = readFileSync(join(__dirname, 'shell.component.css'), 'utf8');
   const block = css.slice(css.indexOf('.user-context-menu {'), css.indexOf('}', css.indexOf('.user-context-menu {')));

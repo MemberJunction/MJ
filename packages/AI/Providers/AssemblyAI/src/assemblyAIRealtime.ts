@@ -709,7 +709,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
             return;
         }
         this.responseActive = true;
-        this.outputHandler?.(AssemblyAIRealtimeSession.Base64ToArrayBuffer(audioBase64));
+        this.outputHandler?.(AssemblyAIRealtimeSession.base64ToArrayBuffer(audioBase64));
     }
 
     /**
@@ -819,7 +819,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
     }
 
     /** Decodes a base64 audio payload into a freshly-allocated `ArrayBuffer`. */
-    private static Base64ToArrayBuffer(base64: string): ArrayBuffer {
+    private static base64ToArrayBuffer(base64: string): ArrayBuffer {
         const bytes = Buffer.from(base64, 'base64');
         const out = new ArrayBuffer(bytes.byteLength);
         new Uint8Array(out).set(bytes);
