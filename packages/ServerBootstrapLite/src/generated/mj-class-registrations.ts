@@ -162,8 +162,9 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (1 classes)
+// @memberjunction/ai-systemone (2 classes)
 import {
+    PerplexityDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
@@ -1391,6 +1392,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterDecision,
     OpenRouterLLM,
     SiliconFlowLLM,
+    PerplexityDecision,
     SystemOneDecision,
     VertexLLM,
     xAILLM,
@@ -1547,11 +1549,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
-    MJComponentDependencyEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
     MJComponentLibraryEntity,
@@ -1751,11 +1753,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRowLevelSecurityFilterEntity,
     MJRubricBandEntity,
     MJRubricCategoryEntity,
-    MJRubricCriterionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricCriterionEntity,
     MJRubricCriterionLevelEntity,
     MJRubricEntity,
     MJRubricEvaluationEntity,
@@ -1955,11 +1957,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferGetAnalyticsAction,
     BufferGetChannelsAction,
     BufferGetPendingPostsAction,
-    BufferGetSentPostsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    BufferGetSentPostsAction,
     BufferReorderQueueAction,
     BufferSearchPostsAction,
     CreateVideoPostAction,
@@ -2159,11 +2161,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
-    MJAIAgentCoAgentEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
@@ -2363,11 +2365,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     UpdateListItemStatusAction,
     UpdateRecordAction,
     ValidateAddressAction,
-    ValidateEmailUniqueAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ValidateEmailUniqueAction,
     VectorizeEntityAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
@@ -2400,7 +2402,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1016;
+export const CLASS_REGISTRATIONS_COUNT = 1017;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

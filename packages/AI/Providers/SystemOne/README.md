@@ -1,6 +1,11 @@
 # @memberjunction/ai-systemone
 
-MemberJunction driver for any server that speaks TypeSafe's System One decisions API, `POST {base}/v1/systemone`. It ships one driver, `SystemOneDecision`, a `BaseDecision` driver that covers three kinds of server:
+MemberJunction drivers for decision APIs that speak TypeSafe's System One decisions format. It ships two `BaseDecision` drivers:
+
+- **`SystemOneDecision`**, for any server that answers `POST {base}/v1/systemone` (below);
+- **`PerplexityDecision`**, for Perplexity's Decisions API and its `pplx-decider-v1-27b` model (see [Perplexity's Decider](#perplexitydecision-perplexitys-decider)).
+
+`SystemOneDecision` covers three kinds of server:
 
 | Server | How you run it | Auth |
 |---|---|---|
@@ -20,11 +25,13 @@ graph TD
     A["SystemOneDecision<br/>(@memberjunction/ai-systemone)"] -->|extends| B["BaseSystemOneDecision<br/>(@memberjunction/ai)"]
     C["CloudflareDecision<br/>(@memberjunction/ai-cloudflare)"] -->|extends| B
     D["OpenRouterDecision<br/>(@memberjunction/ai-openrouter)"] -->|extends| B
+    P["PerplexityDecision<br/>(@memberjunction/ai-systemone)"] -->|extends| B
     B -->|extends| E["BaseDecision<br/>(@memberjunction/ai)"]
     A -->|POST /v1/systemone| F["Kev on Modal · llama-server · TypeSafe"]
+    P -->|POST /v1/decisions| G["Perplexity Decisions API<br/>(pplx-decider-v1-27b)"]
 ```
 
-`BaseSystemOneDecision` owns the System One request and answer mapping. `SystemOneDecision` adds the endpoint, the optional token and error messages that name what the server said.
+`BaseSystemOneDecision` owns the System One request and answer mapping. `SystemOneDecision` adds the endpoint, the optional token and error messages that name what the server said. `PerplexityDecision` adds Perplexity's endpoint, the key check and Perplexity's error messages.
 
 ## Configuration
 
@@ -88,13 +95,74 @@ The shipped `Default Decision` prompt does not bind any Kev model.
 - The message names the server's own text: Kev's `detail` (a string, or a list of `{ msg }`) or llama.cpp's `error.message`.
 - A response that cannot be mapped fails with a `ModelError` that allows failover.
 
+## `PerplexityDecision`: Perplexity's Decider
+
+`PerplexityDecision` calls Perplexity's Decisions API, `POST https://api.perplexity.ai/v1/decisions`, which serves Perplexity's open-weight decision model `pplx-decider-v1-27b` (Apache-2.0, released 2026-10-01, fine-tuned from Qwen3.8-27B). In MJ's catalog it is the `Perplexity Decider v1 27B` model on the `Perplexity` vendor.
+
+That API is the model's only managed host. As of 2026-10-02 it is not on OpenRouter or any Hugging Face inference provider, and llama.cpp cannot run it. Running the weights yourself takes a CUDA GPU with about 49 GiB for the weights, plus Perplexity's own Python inference code, which has no HTTP server.
+
+The API speaks the System One format and returns the response bare, so the driver adds only the endpoint, a check that there is a key, and Perplexity's error messages.
+
+| | |
+|---|---|
+| **Endpoint** | `https://api.perplexity.ai/v1/decisions`. A URL passed to the constructor wins, then a credential's `endpoint`. Trailing slashes are removed, because the API answers a path with one with `404`. |
+| **Key** | A Perplexity API key, sent as `Authorization: Bearer <key>`. The API does not read `x-api-key`. |
+| **Model** | `pplx-decider-v1-27b`, the only model the API serves. It is the row's `APIName` and the driver's default. |
+| **Limits** | 1 to 128 questions per call, up to 255 options per Choice, up to 10 levels per Score, under 262,144 input tokens (the state and every question), and a 32 MiB body. 10 requests per second per organization. |
+| **Price** | $0.04 per million input tokens. Output is free, and there is no per-request fee. |
+
+**Configuration.** Bind an `API Key` AI Credential to the Decider's `Perplexity` row (or to the `Perplexity` vendor), or set the legacy variable. `AIDecisionRunner` only selects a candidate it has a credential for.
+
+```bash
+AI_VENDOR_API_KEY__PERPLEXITYDECISION=pplx-...
+```
+
+**Usage.** Name the model and the vendor through `AIDecisionRunner`:
+
+```typescript
+params.override = { modelId: perplexityDecider.ID, vendorId: perplexity.ID };
+```
+
+Or call the driver directly. The state can be a string or an object:
+
+```typescript
+import { PerplexityDecision } from '@memberjunction/ai-systemone';
+
+const decider = new PerplexityDecision('your-perplexity-api-key');
+const result = await decider.Decide({
+    Model: 'pplx-decider-v1-27b',
+    State: { title: 'Battery died after two weeks', review: 'The headphones sound great, but the battery stopped charging after two weeks.' },
+    Questions: {
+        defect: { Kind: 'Likelihood', Instructions: 'Does the review report a product defect?' },
+        severity: { Kind: 'Score', Instructions: 'How severe is the reported problem?', Levels: ['Cosmetic', 'Inconvenient', 'Product unusable'] },
+    },
+});
+// result.Answers.defect → { Kind: 'Likelihood', Probability: 0.94 }
+```
+
+**As a fallback.** The shipped `Default Decision` prompt does not bind the Decider. Like every active `Decision` model, it joins `Default Decision`'s power-matched fallbacks once its key resolves, after Jev and `LLM Decision`, exactly as the Kev sizes do (see [Usage](#usage)). Its `PowerRank` is 59, below Jev's 60, until MJ measures it. Perplexity reports 85.71% accuracy overall on 11 public benchmarks it chose, against 84.51% for Jev, with Jev ahead on 6 of the 11. Those are Perplexity's figures.
+
+**Score probabilities.** Perplexity keys a Score answer's `probabilities` by level index (`"0"`, `"1"`, …), like its `legend`, as Jev does. MJ re-keys them by level name.
+
+**Errors and failover.**
+
+- A missing key fails before any request with a `NoCredentials` error that allows failover.
+- The message names Perplexity's own `error.message`. A `404` or `405` has an empty body, and a `504` can be an HTML page; for those the message has the status and the start of the body.
+- A `401` (a missing or invalid key, or one sent as `x-api-key`) is an `Authentication` error. `ErrorAnalyzer` rates it fatal, which stops the failover loop.
+- A `429` (over the request or token rate) is a `RateLimit`: the runner retries it as the prompt's `MaxRetries` allows, then fails over. The runner waits `ErrorAnalyzer`'s default 30 seconds; the driver does not pass on Perplexity's `Retry-After`.
+- A `5xx` fails over. The API returns `504` when the model has not answered after about a minute.
+- A `400` is classified from its message. An unknown model is an `InvalidRequest`, which stops the loop.
+- A `413` (a body over 32 MiB) is an `Unknown` error, which fails over. MJ sends no images, so its requests stay far below that size.
+
 ## Not supported yet
 
-- **Images.** llama.cpp and Clef accept images with the state; MJ's `DecisionParams` has none, so the driver does not send them.
+- **Images.** llama.cpp, Clef and Perplexity's API accept images with the state; MJ's `DecisionParams` has none, so neither driver sends them.
 
 ## Class Registration
 
 Registered as `SystemOneDecision` via `@RegisterClass(BaseDecision, 'SystemOneDecision')`. The Kev models' `System One Endpoint` rows name it as their `DriverClass`.
+
+Registered as `PerplexityDecision` via `@RegisterClass(BaseDecision, 'PerplexityDecision')`. The `Perplexity Decider v1 27B` model's `Perplexity` row names it as its `DriverClass`.
 
 ## Dependencies
 

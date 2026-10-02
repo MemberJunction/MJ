@@ -167,8 +167,9 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (1 classes)
+// @memberjunction/ai-systemone (2 classes)
 import {
+    PerplexityDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
@@ -1651,6 +1652,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterDecision,
     OpenRouterLLM,
     SiliconFlowLLM,
+    PerplexityDecision,
     SystemOneDecision,
     VertexLLM,
     xAILLM,
@@ -1806,11 +1808,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationProviderEntity,
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
-    MJCompanyEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
@@ -2010,11 +2012,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordProcessEntity,
     MJRecordProcessWatermarkEntity,
     MJRemoteOperationCategoryEntity,
-    MJRemoteOperationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRemoteOperationEntity,
     MJResourceLinkEntity,
     MJResourcePermissionEntity,
     MJResourcePermissionEntityExtended,
@@ -2214,11 +2216,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     DetachTagsAction,
     EnrollUserAction,
     GetBundlesAction,
-    GetCertificatesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetCertificatesAction,
     GetCourseAnalyticsAction,
     GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
@@ -2418,11 +2420,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DefaultRuntimeActionBridgeBuilder,
     ClaudeCodeCliAdapter,
     CodexAdapter,
-    GeminiCliAdapter,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
     OpenCodeAdapter,
@@ -2622,11 +2624,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ExcelReaderAction,
     ExecuteAIPromptAction,
     ExecuteAgentAction,
-    ExecuteCodeAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ExecuteCodeAction,
     ExecuteMCPToolAction,
     ExploreDatabaseSchemaAction,
     ExternalChangeDetectionAction,
@@ -2750,7 +2752,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1107;
+export const CLASS_REGISTRATIONS_COUNT = 1108;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
