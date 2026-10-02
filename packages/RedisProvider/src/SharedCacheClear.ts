@@ -14,12 +14,19 @@ import { RedisLocalStorageProvider, RedisProviderConfig } from './RedisLocalStor
 /** Categories a database-changing tool clears by default. */
 export const SHARED_CACHE_WRITE_CATEGORIES: readonly string[] = ['RunViewCache', 'RunQueryCache', 'DatasetCache', 'Metadata'];
 
-/** The category the provider's metadata snapshot and dataset caches are stored in. */
+/** The category the provider's metadata snapshot is stored in. */
 const SNAPSHOT_CATEGORY = 'default';
 
 /**
  * Every key of the provider's metadata snapshot (`___MJCore_Metadata_Timestamps`, `_AllMetadata`,
- * …) and of its dataset caches (`___MJCore_Metadata<connection>__DATASET__<name>`) contains this.
+ * …) contains this.
+ *
+ * Dataset keys (`___MJCore_Metadata<connection>__DATASET__<name>`) contain it too, because
+ * `GetDatasetCacheKey` builds on the same root. They are no longer written to this category —
+ * `ProviderBase.DatasetCacheCategory` owns them, and the ordinary `DatasetCache` clear removes
+ * them — but a Redis instance that served an older build still holds them here. Matching on the
+ * marker is therefore what sweeps those legacy orphans, which is why this scan is deliberately not
+ * narrowed to the snapshot's own suffixes.
  */
 const SNAPSHOT_KEY_MARKER = '___MJCore_Metadata';
 
@@ -93,8 +100,9 @@ async function removeKeys(provider: RedisLocalStorageProvider, keys: readonly st
 }
 
 /**
- * Removes the metadata snapshot and the provider's dataset caches. The timestamps key goes last:
- * removing it is the notice that makes servers re-check their metadata.
+ * Removes the metadata snapshot, and with it any dataset keys an older build left in this category
+ * (see {@link SNAPSHOT_KEY_MARKER}). The timestamps key goes last: removing it is the notice that
+ * makes servers re-check their metadata.
  * @returns How many keys were (or, on a dry run, would be) removed.
  */
 async function removeMetadataSnapshot(provider: RedisLocalStorageProvider, dryRun: boolean): Promise<number> {
