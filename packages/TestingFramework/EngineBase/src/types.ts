@@ -916,4 +916,10 @@ export interface SuiteFixtureContext {
 
   /** Rows the driver created and must delete; teardown sweeps these best-effort. */
   CreatedRecords: { EntityName: string; PrimaryKeyID: string }[];
+
+  /**
+   * Published rubric versions captured when the suite started, keyed by rubric id.
+   * A version published after the suite starts does not replace these.
+   */
+  PinnedRubricVersions?: Record<string, { id: string; label: string }>;
 }

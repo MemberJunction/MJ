@@ -12,6 +12,7 @@ import { BaseTestDriver } from './BaseTestDriver';
 import { EnsureImplicitRubricOracle, PublishedVersionPin, ResolveRubric, WeightsForImplicitRubric, type RubricSuiteRow } from '../oracles/rubric-resolution';
 import {
     DriverExecutionContext,
+    SuiteFixtureContext,
     DriverExecutionResult,
     OracleInput,
     OracleResult,
@@ -843,6 +844,25 @@ export class AgentEvalDriver extends BaseTestDriver {
     private readonly versionPins = new PublishedVersionPin();
     private readonly versionLabels = new Map<string, string>();
 
+    /** Pins the suite's rubric version before any test runs. */
+    public override async SetupSuite(context: SuiteFixtureContext, contextUser: UserInfo): Promise<void> {
+        await super.SetupSuite(context, contextUser);
+        const execution = {
+            contextUser,
+            fixtures: context,
+            test: { ID: '' },
+            testRun: { ID: context.SuiteRunID, TestSuiteRunID: context.SuiteRunID },
+            options: {},
+            oracleRegistry: new Map(),
+        } as unknown as DriverExecutionContext;
+        const loaded = await this.LoadSuites(execution);
+        const choice = ResolveRubric({ suites: loaded.suites, suiteId: loaded.suiteId });
+        if (!choice.RubricId || context.PinnedRubricVersions?.[choice.RubricId]) return;
+        const found = await this.LookupLatestPublished(execution, choice.RubricId);
+        if (!found) return;
+        context.PinnedRubricVersions = { ...context.PinnedRubricVersions, [choice.RubricId]: found };
+    }
+
     protected async WithResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
         const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string } | undefined;
         const loaded = await this.LoadSuites(context);
@@ -863,12 +883,24 @@ export class AgentEvalDriver extends BaseTestDriver {
             versionId = choice.VersionId;
             versionLabel = await this.LookupVersionLabel(context, choice.VersionId);
         } else if (choice.RubricId) {
-            versionId = await this.versionPins.Remember(suiteRunId, choice.RubricId, undefined, async () => {
-                const found = await this.LookupLatestPublished(context, choice.RubricId!);
-                if (found) this.versionLabels.set(labelKey, found.label);
-                return found?.id;
-            });
-            versionLabel = this.versionLabels.get(labelKey);
+            const pinned = context.fixtures?.PinnedRubricVersions?.[choice.RubricId];
+            if (pinned) {
+                versionId = pinned.id;
+                versionLabel = pinned.label;
+            } else {
+                versionId = await this.versionPins.Remember(suiteRunId, choice.RubricId, undefined, async () => {
+                    const found = await this.LookupLatestPublished(context, choice.RubricId!);
+                    if (found) this.versionLabels.set(labelKey, found.label);
+                    return found?.id;
+                });
+                versionLabel = this.versionLabels.get(labelKey);
+                if (versionId && context.fixtures) {
+                    context.fixtures.PinnedRubricVersions = {
+                        ...context.fixtures.PinnedRubricVersions,
+                        [choice.RubricId]: { id: versionId, label: versionLabel ?? '' },
+                    };
+                }
+            }
         }
         const oracles = EnsureImplicitRubricOracle(config.oracles, choice, versionId, versionLabel);
         return { ...config, oracles, scoringWeights: WeightsForImplicitRubric(config.scoringWeights, oracles.length > (config.oracles?.length ?? 0) && !hadRubric) };

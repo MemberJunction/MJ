@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { AgentEvalDriver, type AgentEvalConfig } from '../drivers/AgentEvalDriver.js';
-import type { DriverExecutionContext } from '../types.js';
+import type { DriverExecutionContext, SuiteFixtureContext } from '../types.js';
 
 class SuiteProbe extends AgentEvalDriver {
     public readonly reads: { entity: string; filter: string }[] = [];
@@ -62,6 +62,32 @@ describe('agent eval rubric driver', () => {
             testRun: { ID: 'run' },
         } as DriverExecutionContext);
         expect(withoutSuiteRun.oracles).toEqual([]);
+    });
+
+    it('pins the suite rubric version on the fixture before the first test', async () => {
+        class MovingProbe extends SuiteProbe {
+            public latest = { id: 'version-4', label: '1.2.0' };
+            public async start(fixtures: SuiteFixtureContext) {
+                await this.SetupSuite(fixtures, {} as never);
+            }
+            protected override async LookupLatestPublished(): Promise<{ id: string; label: string }> {
+                return this.latest;
+            }
+        }
+        const driver = new MovingProbe();
+        const fixtures: SuiteFixtureContext = { SuiteRunID: 'suite-run', Data: {}, CreatedRecords: [] };
+        await driver.start(fixtures);
+        expect(fixtures.PinnedRubricVersions?.['parent-rubric']).toEqual({ id: 'version-4', label: '1.2.0' });
+        driver.latest = { id: 'version-9', label: '9.0.0' };
+        const resolved = await driver.resolve({ agentId: 'agent', oracles: [] }, {
+            test: { ID: 'test', RubricID: null },
+            testRun: { ID: 'run', TestSuiteRunID: 'suite-run' },
+            options: {},
+            fixtures,
+            contextUser: {},
+            oracleRegistry: new Map(),
+        } as unknown as DriverExecutionContext);
+        expect(resolved.oracles).toEqual([{ type: 'rubric', config: { rubricId: 'parent-rubric', rubricVersionId: 'version-4', versionLabel: '1.2.0' } }]);
     });
 
     it('labels an explicit version without pinning it', async () => {
