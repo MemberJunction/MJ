@@ -346,7 +346,7 @@ export interface CacheChangedEvent {
      * disconnected receives nothing published during the gap and cannot otherwise tell whether it
      * missed anything. Recording the highest epoch seen lets a reconnecting process compare against
      * the current value and distinguish an outage in which nothing changed — keep the cache — from
-     * one in which something did — drop it. See issue #4759.
+     * one in which something did — drop it.
      *
      * Optional: transports that do not implement the counter omit it, and a consumer that does not
      * care about recovery can ignore it.
