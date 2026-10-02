@@ -54,6 +54,15 @@ describe('shipped rubric metadata', () => {
         for (const row of publications) expect(row.fields).toEqual({ Status: 'Published' });
     });
 
+    it('does not give the Rubric Evaluation Agent Get Rubric Consensus', () => {
+        const agent = JSON.parse(readFileSync(join(root, 'agents/.rubric-evaluation-agent.json'), 'utf8'));
+        const actions = agent.relatedEntities['MJ: AI Agent Actions'].map((row: { fields: { ActionID: string } }) => row.fields.ActionID);
+        expect(actions).not.toContain('@lookup:MJ: Actions.Name=Get Rubric Consensus');
+        const prompt = readFileSync(join(root, 'prompts/templates/rubrics/rubric-evaluation-agent.md'), 'utf8');
+        expect(prompt).not.toMatch(/Use Get Rubric Consensus/);
+        expect(prompt).toContain('Do not call Get Rubric Consensus.');
+    });
+
     it('matches the agent evaluation example to the guide scale', () => {
         const rubric = JSON.parse(readFileSync(join(root, 'rubrics/.agent-evaluation.json'), 'utf8'));
         const version = rubric.relatedEntities['MJ: Rubric Versions'][0];

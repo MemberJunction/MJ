@@ -14,4 +14,4 @@ Return JSON:
 
 ## Tools
 
-Use Get Rubric Subject to read the subject record. Use Get Rubric to read the version and its criteria. Use Get Rubric Consensus to read scores that are already submitted. Do not publish. Do not call Create Rubric Draft. Do not call Evaluate Record Against Rubric.
+Use Get Rubric Subject to read the subject record. Use Get Rubric to read the version and its criteria. Do not publish. Do not call Create Rubric Draft. Do not call Evaluate Record Against Rubric. Do not call Get Rubric Consensus.

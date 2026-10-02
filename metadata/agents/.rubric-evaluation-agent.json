@@ -39,16 +39,6 @@
       {
         "fields": {
           "AgentID": "@parent:ID",
-          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric Consensus",
-          "Status": "Active"
-        },
-        "primaryKey": {
-          "ID": "F2BE0462-B8C6-44ED-B041-0C6512F60DCD"
-        }
-      },
-      {
-        "fields": {
-          "AgentID": "@parent:ID",
           "ActionID": "@lookup:MJ: Actions.Name=Get Rubric Subject",
           "Status": "Active"
         },
