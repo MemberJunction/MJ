@@ -45,6 +45,7 @@
     "@memberjunction/ai-openrouter": "6.2.0-edge.1",
     "@memberjunction/ai-recommendations-rex": "6.2.0-edge.1",
     "@memberjunction/ai-siliconflow": "6.2.0-edge.1",
+    "@memberjunction/ai-systemone": "6.2.0-edge.1",
     "@memberjunction/ai-vectors-pinecone": "6.2.0-edge.1",
     "@memberjunction/ai-vertex": "6.2.0-edge.1",
     "@memberjunction/ai-xai": "6.2.0-edge.1",

@@ -133,7 +133,7 @@ const TIER_2 = [
     '@memberjunction/ai-llamacpp', '@memberjunction/ai-lmstudio', '@memberjunction/ai-local-embeddings',
     '@memberjunction/ai-minimax', '@memberjunction/ai-mistral', '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai', '@memberjunction/ai-openrouter', '@memberjunction/ai-recommendations-rex',
-    '@memberjunction/ai-siliconflow',
+    '@memberjunction/ai-siliconflow', '@memberjunction/ai-systemone',
     '@memberjunction/ai-vertex', '@memberjunction/ai-xai', '@memberjunction/ai-zhipu',
 ];
 

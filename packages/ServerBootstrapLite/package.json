@@ -78,6 +78,7 @@
     "@memberjunction/ai-recommendations-rex": "6.2.0-edge.1",
     "@memberjunction/ai-reranker": "6.2.0-edge.1",
     "@memberjunction/ai-siliconflow": "6.2.0-edge.1",
+    "@memberjunction/ai-systemone": "6.2.0-edge.1",
     "@memberjunction/ai-vector-dupe": "6.2.0-edge.1",
     "@memberjunction/ai-vectors-memory": "6.2.0-edge.1",
     "@memberjunction/ai-vectors-pgvector": "6.2.0-edge.1",

@@ -91,7 +91,16 @@ AI_VENDOR_API_KEY__OPENROUTERDECISION=sk-or-...   # the same OpenRouter key as A
 Without a key the runner skips Jev and falls back to the next decision model (`LLM Decision`), and
 logs that once per process.
 
-**The wire format.** Jev speaks the System One decisions format. `OpenRouterDecision` extends
+A bound AI Credential reaches the driver as its values in JSON (`{"apiKey":"…"}`). The driver sends
+that credential's `apiKey` as the bearer token; a raw key from the environment variable is sent as
+given.
+
+**Kev-4B.** OpenRouter also serves Jared Palmer's Kev-4B (`jaredpalmer/kev-4b-20260924`, hosted by
+SiliconFlow) through the same Decisions API, so the `Kev-4B` model's OpenRouter row uses
+`OpenRouterDecision` and the same key. Its other route, a self-hosted Kev server, uses
+`SystemOneDecision` in [`@memberjunction/ai-systemone`](../SystemOne/README.md).
+
+**The wire format.** Jev and Kev speak the System One decisions format. `OpenRouterDecision` extends
 `BaseSystemOneDecision` (`@memberjunction/ai`), which owns the request and answer mapping; this class
 supplies only the endpoint and the default model. Cloudflare's Clef models speak the same format on
 Workers AI, through `CloudflareDecision` in
