@@ -157,7 +157,7 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
     const vectorUpserter = this.createVectorUpserter(
-      entityDocument, templateContent, obj.vectorDB, vectorIndexEntity.Name, delayTimeMS,
+      entityDocument, templateContent, obj.vectorDB, AIEngine.Instance.GetProviderIndexName(vectorIndexEntity), delayTimeMS,
       params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
       vectorIndexProviderConfig
     );
@@ -444,7 +444,10 @@ export class EntityVectorSyncer extends VectorBase {
       EntityDocument: validEntries[index].record.__mj_entityDocument as Record<string, unknown>,
       VectorID: String(validEntries[index].record.VectorID ?? ''),
       VectorIndexID: String(validEntries[index].record.VectorIndexID ?? ''),
-      TemplateContent: templateContent.TemplateText,
+      // The RENDERED text for this record, i.e. exactly what was embedded above. This flows into
+      // EntityRecordDocument.DocumentText, the audit trail for "what text got embedded for record X";
+      // the raw template (templateContent.TemplateText) is the same string for every record.
+      TemplateContent: validEntries[index].text,
     }));
   }
 
@@ -1178,7 +1181,7 @@ export class EntityVectorSyncer extends VectorBase {
 
   /**
    * Resolves the VectorIndex for the given EntityDocument by looking up its VectorIndexID
-   * using the cached KnowledgeHubMetadataEngine. If VectorIndexID is not set on the
+   * using the AIEngine vector index cache. If VectorIndexID is not set on the
    * EntityDocument, throws a descriptive error instructing the user to configure it.
    */
   private getVectorIndexForEntityDocument(entityDocument: MJEntityDocumentEntity): MJVectorIndexEntity {
@@ -1190,7 +1193,7 @@ export class EntityVectorSyncer extends VectorBase {
       );
     }
 
-    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
+    const vectorIndex = AIEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
     if (!vectorIndex) {
       throw new Error(
         `Vector Index with ID "${entityDocument.VectorIndexID}" not found for Entity Document "${entityDocument.Name}". ` +
@@ -1473,9 +1476,9 @@ export class EntityVectorSyncer extends VectorBase {
     contextUser: UserInfo
   ): Promise<void> {
     const vectorIndexID: string = String(embeddingData.VectorIndexID);
-    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(vectorIndexID);
+    const vectorIndex = AIEngine.Instance.GetVectorIndexByID(vectorIndexID);
     if (!vectorIndex) {
-      LogError(`Vector Index with ID ${vectorIndexID} not found in KnowledgeHubMetadataEngine cache`);
+      LogError(`Vector Index with ID ${vectorIndexID} not found in AIEngine cache`);
       return;
     }
 

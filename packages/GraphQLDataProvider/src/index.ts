@@ -26,7 +26,11 @@ export type {
     RunAIAgentFromConversationDetailParams,
     AutotagPipelineResult,
     VectorizeEntityParams,
-    VectorizeEntityResult
+    VectorizeEntityResult,
+    DuplicateEntryCheckParams,
+    DuplicateEntryCheckStatus,
+    DuplicateEntryCandidate,
+    DuplicateEntryCheckResult
 } from './graphQLAIClient';
 export { GraphQLClusterClient } from './graphQLClusterClient';
 export type {
@@ -112,3 +116,5 @@ export type {
     SourceObjectListItem,
     SourceObjectSelectionInput
 } from './graphQLIntegrationClient';
+export { GraphQLConversationClient } from './graphQLConversationClient';
+export type { ConversationRunEvent, ConversationTailResult } from './graphQLConversationClient';

@@ -139,15 +139,17 @@ flowchart TD
     Accept --> Done([return true])
 
     Node -.->|any node fails| Rollback[scope.Rollback]
-    Rollback --> Failed([return false<br/><b>nothing persisted</b>])
+    Rollback --> Restore[Put every record back<br/>as it was before Save<br/><i>IS-A parents included</i>]
+    Restore --> Failed([return false<br/><b>nothing persisted</b>])
 
     style Single fill:#1b5e20,stroke:#66bb6a,color:#fff
     style Guarantees fill:#0d47a1,stroke:#64b5f6,color:#fff
     style Rollback fill:#b71c1c,stroke:#ef5350,color:#fff
+    style Restore fill:#b71c1c,stroke:#ef5350,color:#fff
     style Failed fill:#b71c1c,stroke:#ef5350,color:#fff
 ```
 
-Three properties of that diagram are the whole design:
+Four properties of that diagram are the whole design:
 
 **A single-node plan is the old path, untouched.** An entity with no collections — or whose
 collections are empty — takes the byte-for-byte original save. That is what makes this safe to
@@ -161,6 +163,13 @@ path to quietly skip a guarantee the single-record path has.
 **Validation runs over the complete set — including removals — before anything is written.** A
 cross-record invariant ("debits must equal credits") therefore sees the whole graph, rather than
 being evaluated after half of it has landed.
+
+**A failure leaves every record as it was before `Save()`.** Each node that saved before the failure
+was finalized as saved and clean, and so was each IS-A parent above it. The rollback undoes their
+writes, and the graph puts them back in memory too: saved flags, values and pending edits. The same
+`Save()` can then simply be called again. A delete graph works the same way: a record it deletes is
+reset with `NewRecord()` only once the graph commits, so a rollback leaves it saved and a retry
+deletes it.
 
 ---
 
@@ -484,6 +493,11 @@ await order.Delete();   // OnRemove:'delete' collections cascade — related rec
 
 Records still go through their own `Delete()`, so soft-delete, Record Changes and entity actions
 all behave normally.
+
+The one transaction is the server's. There, a failed delete rolls back and every record stays saved,
+so the same `Delete()` can be retried. A client provider has no transaction to open, so the deletes run
+one at a time: a failure partway leaves the earlier deletes done, and their records reset. For an
+atomic delete from the browser, expose a remote operation that deletes the graph on the server.
 
 ### Validating across records
 

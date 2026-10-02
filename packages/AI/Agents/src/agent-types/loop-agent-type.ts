@@ -23,6 +23,7 @@ import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParam
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse, LOOP_NEXT_STEP_TYPES } from './loop-agent-response-type';
+import { IsValidFinishIf } from '../finish-if-state';
 import { ConversationMessageResolver } from '../utils/ConversationMessageResolver'; 
 /** A native tool call paired with the binding it resolved to. */
 interface ResolvedNativeCall<B extends NativeToolBinding = NativeToolBinding> {
@@ -784,16 +785,7 @@ export class LoopAgentType extends BaseAgentType {
 
     /** A valid finishIf has one to three non-empty string questions and a non-empty string message. */
     private isValidFinishIf(candidate: unknown): candidate is AgentFinishIf {
-        if (!candidate || typeof candidate !== 'object') {
-            return false;
-        }
-        const { questions, message } = candidate as Partial<AgentFinishIf>;
-        return Array.isArray(questions)
-            && questions.length >= 1
-            && questions.length <= 3
-            && questions.every(q => typeof q === 'string' && q.trim().length > 0)
-            && typeof message === 'string'
-            && message.trim().length > 0;
+        return IsValidFinishIf(candidate);
     }
 
     /**

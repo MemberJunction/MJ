@@ -6,6 +6,7 @@ import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, Rich
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FORM_SECTION_FIELD_HOST, SectionRelevantFormContextChanged } from '../section-indicators/form-section-field-host';
+import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
 import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
 import {
@@ -179,6 +180,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * into. Absent for a field rendered outside any `mj-collapsible-panel`.
    */
   private sectionHost = inject(FORM_SECTION_FIELD_HOST, { optional: true });
+  /**
+   * The form's field-edit broadcast, provided by `mj-record-form-container`. Absent for a field
+   * rendered outside a record form.
+   */
+  private fieldEdits = inject(FormFieldEditCoordinator, { optional: true });
 
   constructor() {
     super();
@@ -373,6 +379,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.markTouched();
     this.runFieldValidation();
     this.ValueChange.emit({ FieldName: this.FieldName, OldValue: oldValue, NewValue: newValue });
+    this.fieldEdits?.Notify({ FieldName: this.FieldName });
   }
 
   /** Whether this field is read-only based on entity metadata */
@@ -585,6 +592,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // a denied field. Returning true here is also what lets a section whose fields are all
     // denied collapse away instead of rendering an empty card.
     if (!this.IsFieldReadableByUser) return true;
+    if (this.FormContext?.hiddenFieldNames?.includes(this.FieldName)) return true;
     if (this.EditMode) return false;
     if (!this.HideWhenEmptyInReadOnlyMode) return false;
     if (this.FormContext?.showEmptyFields) return false;

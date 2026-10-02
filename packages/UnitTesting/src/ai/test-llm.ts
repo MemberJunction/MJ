@@ -321,7 +321,9 @@ export class TestLLM extends BaseLLM {
  * that must keep its real providers (the integration suite runs every bundle in one
  * process), call the returned `restore()` in a `finally` instead: it re-registers, above
  * the TestLLM, whatever class each name resolved to before. A name that had no prior
- * registration has nothing to restore and keeps resolving to the TestLLM.
+ * registration has nothing to restore and keeps resolving to the TestLLM. The TestLLM is
+ * registered at `priority` or above every registration the name already has, whichever is
+ * higher, so it also wins over a class an earlier `restore()` put back.
  *
  * @returns `restore` — hands every name back to its previous class.
  */
@@ -343,17 +345,23 @@ export function RegisterTestLLM(llm: TestLLM, driverClass: string | string[], pr
         return llm;
       }
     }
-    factory.Register(BaseLLM, TestLLMRegistrationHandle, name, priority);
+    // At least `priority`, and above everything registered for the name: an earlier restore()
+    // re-registered the production class above its TestLLM, and this registration must outrank it.
+    factory.Register(BaseLLM, TestLLMRegistrationHandle, name, Math.max(priority, highestPriority(name) + 1));
   }
 
   return () => {
     for (const { name, registration } of previous) {
       // An explicit priority above everything registered wins resolution outright, and avoids
       // the unrelated-class warning the auto-increment path emits.
-      const highest = Math.max(...factory.GetAllRegistrations(BaseLLM, name).map((r) => r.Priority));
-      factory.Register(BaseLLM, registration.SubClass, name, highest + 1);
+      factory.Register(BaseLLM, registration.SubClass, name, highestPriority(name) + 1);
     }
   };
+}
+
+/** The highest priority registered on BaseLLM for `name`, or 0 when it has none. */
+function highestPriority(name: string): number {
+  return Math.max(0, ...MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseLLM, name).map((r) => r.Priority));
 }
 
 /** @deprecated Use {@link RegisterTestLLM}. */

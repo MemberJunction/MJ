@@ -20,8 +20,10 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
+import { ProviderRubricEngine } from '@memberjunction/rubrics';
+import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
@@ -140,7 +142,8 @@ import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './Mem
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
 import { PayloadFeedbackManager, PayloadFeedbackContext, PayloadFeedbackQuestion, PayloadFeedbackResponse } from './PayloadFeedbackManager';
 import { PayloadAnalysisResult } from './PayloadChangeAnalyzer';
-import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_CALLS_PER_TURN, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
+import { FinishIfModeWarnings } from './finish-if-mode-warnings';
 import {
     ApplyCatalogNarrowing,
     BuildCatalogNarrowingQuestions,
@@ -160,28 +163,35 @@ import {
     SelectCatalogNarrowing,
 } from './catalog-narrowing';
 import {
-    AgentsWithoutDescription,
+    BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
     CanSearchEntities,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
     DECISION_DISCOVERY_MIN_OPTIONS,
-    DECISION_DISCOVERY_SEARCH_ENTITY,
     DECISION_DISCOVERY_TIMEOUT_MS,
+    DecisionDiscoveryAgentSearch,
     DecisionDiscoveryFromResult,
-    DecisionDiscoveryOptions,
     DecisionDiscoveryOptionSet,
     DecisionDiscoveryOutcome,
-    DecisionOptionLimit,
+    DecisionDiscoveryRunnableAgents,
+    DecisionPromptOptionCap,
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
     IsOpeningTurn,
-    KeepHostAllowedAgents,
     MentionsAgent,
-    RankOptionsBySearch,
-    SmallestOptionCap,
 } from './decision-discovery';
+import {
+    BuildFinishIfQuestions,
+    CapFinishIfState,
+    FINISH_IF_STATE_EXCERPT,
+    FormatActionForFinishIf,
+    FormatSubAgentForFinishIf,
+    JudgeFinishIf,
+    type FinishIfOutcome,
+    type SubAgentStepResult
+} from './finish-if-state';
 import {
     PipelineExecutor,
     PipelineToolRegistry,
@@ -470,65 +480,12 @@ interface AgentBaseCatalog {
 
 /** The finishIf settings of the current step. */
 interface FinishIfSettings {
-    /** Whether a gate is evaluated: `finishIfMode` is `shadow` or `on`, and the response field is on. */
+    /** Whether a gate is evaluated: the master switch is on, `finishIfMode` is `shadow` or `on`, and the response field is on. */
     Enabled: boolean;
     /** The agent's `finishIfMode`. Only `on` lets a passing gate end the run. */
     Mode: FinishIfMode;
     Threshold: number;
     PromptName: string;
-}
-
-/** The outcome of a finishIf gate. */
-interface FinishIfOutcome {
-    Passed: boolean;
-    Probabilities: Record<string, number>;
-    Reason: string;
-}
-
-/**
- * A Sub-Agent step's result. The child and related paths spread the sub-agent's own
- * `ExecuteAgentResult` into it, so its final message and returned payload are there too.
- */
-type SubAgentStepResult<P> = BaseAgentNextStep<P> & Partial<Pick<ExecuteAgentResult, 'agentRun' | 'payload'>>;
-
-/** The most text of a step's results the finishIf gate sends to the decision model. */
-const FINISH_IF_STATE_MAX = 16000;
-
-/** How much of the finishIf state the `Finish check` step records. */
-const FINISH_IF_STATE_EXCERPT = 2000;
-
-function capFinishIfState(text: string): string {
-    return text.length > FINISH_IF_STATE_MAX ? text.slice(0, FINISH_IF_STATE_MAX) : text;
-}
-
-function jsonExcerpt(value: unknown, max: number): string {
-    let text: string;
-    try {
-        text = typeof value === 'string' ? value : JSON.stringify(value) ?? '';
-    } catch {
-        text = String(value);
-    }
-    return text.slice(0, max);
-}
-
-/** One action's result as finishIf text: its name, outcome, message and sanitized output params. */
-function formatActionForFinishIf(summary: ActionResultSummary): string {
-    const lines = [`Action: ${summary.actionName}`, `Message: ${String(summary.message ?? '').slice(0, 1000)}`];
-    for (const param of summary.params ?? []) {
-        lines.push(`Output ${param.Name}: ${jsonExcerpt(param.Value, 2000)}`);
-    }
-    return lines.join('\n');
-}
-
-/** A sub-agent's result as finishIf text: its final message and the payload it returned. */
-function formatSubAgentForFinishIf<P>(result: SubAgentStepResult<P>): string {
-    const message = result.agentRun?.Message ?? result.message ?? '';
-    const payload = result.payload ?? result.newPayload;
-    const lines = [`Final message: ${String(message).slice(0, 4000)}`];
-    if (payload !== undefined && payload !== null) {
-        lines.push(`Payload: ${jsonExcerpt(payload, 4000)}`);
-    }
-    return capFinishIfState(lines.join('\n\n'));
 }
 
 /** The top-level `reasoning` and `message` of a prompt's JSON response, when it has them. */
@@ -573,6 +530,17 @@ interface HeldDecisionRequests {
     /** Why they were held, for the log line when they are skipped. */
     Reason: string;
 }
+
+/** How many decision calls one request of a turn may make, from the turn's `decisionsMaxCallsPerTurn` budget. */
+interface DecisionCallAllowance {
+    /** The calls the request makes with no budget: one, or one per `forEachItemIn` item up to `decisionsMaxItems`. */
+    Wanted: number;
+    /** The calls the budget leaves it, handed out in request order: `Wanted`, or fewer once the budget runs out. */
+    Allowed: number;
+}
+
+/** The prompt params that limit one turn's decisions. */
+type DecisionLimitParam = 'decisionsMaxRequests' | 'decisionsMaxItems' | 'decisionsMaxCallsPerTurn';
 
 export class BaseAgent {
     /**
@@ -2304,8 +2272,8 @@ export class BaseAgent {
                 // conversationId). Runs here so the results are in the messages before
                 // the pre-turn compaction check and the first prompt.
                 this.injectPriorTurnToolResults(wrappedParams),
-                // Decision discovery (plan Task 3.1), off unless the decisionDiscovery prompt param is
-                // true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
+                // Decision discovery (plan Task 3.1), off unless the decisionsEnabled and decisionDiscovery prompt
+                // params are true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
                 this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data)
             ]);
 
@@ -2411,6 +2379,9 @@ export class BaseAgent {
             // consumers that re-read `params` after the call see what they
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
+            // A cancellation, or an error thrown out of the step loop, leaves any held decision
+            // requests unasked. The terminate path has already logged and cleared its own.
+            this.skipHeldDecisions(params, this.runEndForHeldDecisions());
             this.releasePerRunDataCache();
             await this.finalizeRun(this.deriveRunOutcome());
         }
@@ -2654,6 +2625,11 @@ export class BaseAgent {
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
+            // The run's runtime API keys, so the bridged voice session mints on the caller's key when
+            // the run carries one for the realtime driver (the same run-key → platform order as
+            // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.
+            // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
+            APIKeys: params.apiKeys,
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -2695,13 +2671,22 @@ export class BaseAgent {
         // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
         // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
         // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
+        // The run's runtime API keys, in GetAIAPIKey's order: the run's key for a driver class, else
+        // the platform's. That is the legacy tier of prompt key resolution — a prompt consults MJ
+        // Credentials / AICredentialBindings first, and realtime does not consult them at all.
+        //
+        // This also affects WHICH vendor runs the session, deliberately. Vendor selection walks
+        // candidates by priority and takes the first whose key resolves, so an organization that
+        // brings its own credential for a vendor we hold no platform key for now reaches that
+        // vendor — which is the point of bringing your own key, not a side effect of it.
+        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
         for (const model of candidates) {
-            const vendor = SelectRealtimeVendorForModel(model.ID);
+            const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
             if (!vendor) {
                 continue;
             }
-            const apiKey = GetAIAPIKey(vendor.DriverClass);
+            const apiKey = resolveAPIKey(vendor.DriverClass);
             if (!apiKey) {
                 continue;
             }
@@ -3677,7 +3662,7 @@ export class BaseAgent {
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
-                this.skipHeldDecisions(params);
+                this.skipHeldDecisions(params, 'the run ended after the step that carried them');
                 this.logStatus(`🏁 Agent '${params.agent.Name}' terminating after ${stepCount} steps with result: ${nextStep.step}`, true, params);
             } else {
                 currentNextStep = nextStep;
@@ -3945,7 +3930,8 @@ export class BaseAgent {
      * Decision discovery (plan Task 3.1): suggests the agent to delegate to before the first prompt.
      *
      * Runs in parallel with the rest of Phase 2 of `Execute()`, and only when the merged agent-type
-     * prompt params set `decisionDiscovery: true`, the run answers its conversation's opening request
+     * prompt params set `decisionsEnabled: true` (the master switch, {@link DecisionsEnabled}) and
+     * `decisionDiscovery: true`, the run answers its conversation's opening request
      * ({@link IsOpeningTurn}), and that request @mentions no agent. A follow-up turn is never asked
      * about: it may be continuing work with an agent already engaged, and a suggestion must not pull
      * the agent away from it. One decision asks which of the agents the user may run (and the host
@@ -4004,16 +3990,22 @@ export class BaseAgent {
     }
 
     /**
-     * Whether discovery is on for this run, read without rebuilding the merged prompt params, since it
-     * is asked on every run of every agent: the per-run override's `decisionDiscovery` when it sets
-     * one, otherwise the agent's base params, cached on AIEngine with its base catalog. Only a cold
+     * Whether discovery is on for this run: the master switch ({@link DecisionsEnabled}) and
+     * `decisionDiscovery` are both on. Read without rebuilding the merged prompt params, since it is
+     * asked on every run of every agent: each setting from the per-run override when it sets one,
+     * otherwise from the agent's base params, cached on AIEngine with its base catalog. Only a cold
      * cache builds them.
      */
     private isDecisionDiscoveryOnFor(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): boolean {
-        if (overrides && 'decisionDiscovery' in overrides) {
-            return IsDecisionDiscoveryOn(overrides);
-        }
-        return IsDecisionDiscoveryOn(this.cachedBasePromptParams(agent) ?? this.buildDecisionDiscoveryPromptParams(agent, undefined));
+        let base: Record<string, unknown> | undefined;
+        const paramsSetting = (key: string): Record<string, unknown> => {
+            if (overrides && key in overrides) {
+                return overrides;
+            }
+            base ??= this.cachedBasePromptParams(agent) ?? this.buildDecisionDiscoveryPromptParams(agent, undefined);
+            return base;
+        };
+        return this.DecisionsEnabled(paramsSetting('decisionsEnabled')) && IsDecisionDiscoveryOn(paramsSetting('decisionDiscovery'));
     }
 
     /**
@@ -4038,7 +4030,9 @@ export class BaseAgent {
 
     /**
      * Records one `Agent discovery` step around a bounded discovery, and returns what it found. A
-     * failed discovery is logged as a warning; an unsure one only in verbose logs.
+     * failed discovery is logged as a warning; an unsure one only in verbose logs, except that an
+     * answer from a model with no discovery calibration is warned about once per model, because
+     * then discovery can never suggest anything.
      */
     private async runDecisionDiscovery(
         agent: MJAIAgentEntityExtended,
@@ -4055,9 +4049,36 @@ export class BaseAgent {
         if (!outcome.Succeeded) {
             this.warnDecisionDiscovery(agent, outcome.Reason ?? 'unknown error');
         } else if (!outcome.Injected) {
+            if (outcome.UncalibratedModel) {
+                BaseAgent.warnUncalibratedDiscoveryModel(outcome.UncalibratedModel);
+            }
             this.logStatus(`Decision discovery for '${agent.Name}' suggested no agent: ${outcome.Reason}`, true);
         }
         return outcome;
+    }
+
+    /** The answering models already warned about as having no discovery calibration, so each is warned about once per process. */
+    private static readonly _uncalibratedDiscoveryModelsWarned = new Set<string>();
+
+    /**
+     * Warns, once per model, that discovery answered by a model with no discovery calibration
+     * suggests nothing. That happens when a decision model is added or renamed, when a vendor model
+     * moves to another version (Jev's `APIName`), or when LLM Decision answers through a chat model
+     * other than the one its calibration was fitted on; without the warning the only trace is each
+     * `Agent discovery` step's reason.
+     */
+    private static warnUncalibratedDiscoveryModel(model: string): void {
+        if (BaseAgent._uncalibratedDiscoveryModelsWarned.has(model)) {
+            return;
+        }
+        BaseAgent._uncalibratedDiscoveryModelsWarned.add(model);
+        LogErrorEx({
+            message: `Decision discovery answered by ${model} suggests nothing: the model has no discovery calibration `
+                + '(DECISION_DISCOVERY_CALIBRATION), so its answers are treated as unsure. Fit one with the agent-discovery '
+                + 'Decision Eval, or check that the model was not renamed or moved to another version.',
+            severity: 'warning',
+            category: 'DecisionDiscovery',
+        });
     }
 
     /**
@@ -4139,10 +4160,9 @@ export class BaseAgent {
     }
 
     /**
-     * The Choice's options, rebuilt on every call and never cached: the agents in the permitted
-     * catalog that the host allows and that have a description. There are never more than
-     * {@link DecisionOptionLimit}: when there are, the semantic search narrows them first; if it
-     * cannot, `Error` says why.
+     * The Choice's options, rebuilt on every call and never cached ({@link BuildDecisionDiscoveryOptionSet}):
+     * from AIEngine's current catalog, the agents the user may run, the decision prompt's option cap,
+     * and the semantic search over the opening request when the provider can run it.
      */
     private async decisionDiscoveryOptionSet(
         agent: MJAIAgentEntityExtended,
@@ -4150,67 +4170,14 @@ export class BaseAgent {
         promptName: string,
         hostAllowedIDs: string[] | undefined
     ): Promise<DecisionDiscoveryOptionSet> {
-        const catalog = KeepHostAllowedAgents(await this.decisionDiscoveryCatalog(agent, contextUser), hostAllowedIDs);
-        const options = DecisionDiscoveryOptions(catalog);
-        const declaredCap = this.decisionOptionCap(promptName);
-        const limit = DecisionOptionLimit(declaredCap);
-        const set: DecisionDiscoveryOptionSet = {
-            Options: options,
-            CatalogSize: catalog.length,
-            HostAllowListSize: hostAllowedIDs?.length,
-            WithoutDescription: AgentsWithoutDescription(catalog),
-            OptionLimit: limit,
-            DeclaredOptionCap: declaredCap,
-        };
-        if (options.length <= limit) {
-            return set;
-        }
         const provider = this.ProviderToUse;
-        if (!CanSearchEntities(provider)) {
-            return { ...set, Options: [], NarrowedFrom: options.length,
-                Error: `${options.length} agents exceed the limit of ${limit} options, and the provider cannot run the semantic search that narrows them` };
-        }
-        // The search Find Candidate Agents runs: hybrid over MJ: AI Agents, over-fetching threefold for
-        // the permission filter. Its similarity floor is not applied: the decision judges fit.
-        const results = await provider.SearchEntity({
-            entityName: DECISION_DISCOVERY_SEARCH_ENTITY,
-            searchText: this._openingRequest,
-            options: { mode: 'hybrid', topK: limit * 3, minScore: 0, contextUser },
+        return BuildDecisionDiscoveryOptionSet({
+            Agents: await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser),
+            RunningAgentID: agent.ID,
+            HostAllowedIDs: hostAllowedIDs,
+            DeclaredCap: DecisionPromptOptionCap(AIEngine.Instance, promptName),
+            Search: CanSearchEntities(provider) ? DecisionDiscoveryAgentSearch(provider, this._openingRequest, contextUser) : undefined,
         });
-        return { ...set, Options: RankOptionsBySearch(options, results.map(r => r.recordId), limit), NarrowedFrom: options.length };
-    }
-
-    /**
-     * The agents this run may suggest, from AIEngine's current catalog: the ones the user may run and
-     * that can be discovered directly (the set Find Candidate Agents offers, through the same
-     * {@link AIAgentPermissionHelper} filter), minus the running agent itself.
-     */
-    private async decisionDiscoveryCatalog(agent: MJAIAgentEntityExtended, contextUser: UserInfo): Promise<MJAIAgentEntityExtended[]> {
-        const runnable = await AIAgentPermissionHelper.FilterRunnableAgents(AIEngine.Instance.Agents, contextUser);
-        return runnable.filter(a => AIAgentPermissionHelper.IsDirectlyDiscoverable(a) && !UUIDsEqual(a.ID, agent.ID));
-    }
-
-    /**
-     * The decision model's option cap: the smallest `Decision.MaxChoiceOptions` in the effective model
-     * configuration of the models the decision prompt is bound to, the setting `AIDecisionRunner`
-     * checks before its call. `undefined` when none declares one, or the prompt is not found.
-     */
-    private decisionOptionCap(promptName: string): number | undefined {
-        const engine = AIEngine.Instance;
-        const target = promptName.trim().toLowerCase();
-        const prompt = engine.Prompts.find(p => (p.Name ?? '').trim().toLowerCase() === target);
-        if (!prompt) {
-            return undefined;
-        }
-        const caps = engine.PromptModels
-            .filter(pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview'))
-            .map(pm => {
-                const modelVendor = pm.VendorID
-                    ? engine.ModelVendors.find(mv => UUIDsEqual(mv.ModelID, pm.ModelID) && UUIDsEqual(mv.VendorID, pm.VendorID))
-                    : undefined;
-                return engine.GetEffectiveModelConfiguration(pm.ModelID, modelVendor?.ID)?.Decision?.MaxChoiceOptions;
-            });
-        return SmallestOptionCap(caps);
     }
 
     /** Opens the `Agent discovery` Decision step. Without a run there is no step. */
@@ -6401,6 +6368,93 @@ export class BaseAgent {
      * @returns Modified next step if guardrails exceeded, or original next step
      * @protected
      */
+    private _selfCheckAttemptsByRun = new Map<string, number>();
+    private _selfCheckLinkByAgent = new Map<string, SelfCheckLinkRow | null>();
+
+    private async applySelfCheck<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentPayload: P,
+    ): Promise<BaseAgentNextStep<P> | null> {
+        if (params.cancellationToken?.aborted) return null;
+        const provider = params.provider || this._activeProvider;
+        let row = this._selfCheckLinkByAgent.get(agentRun.AgentID);
+        if (row === undefined) {
+            try {
+                const view = RunView.FromMetadataProvider(provider as never);
+                const found = await view.RunView({
+                    EntityName: 'MJ: AI Agent Rubrics',
+                    ExtraFilter: `AgentID='${agentRun.AgentID}' AND Purpose='SelfCheck' AND Status='Active'`,
+                    OrderBy: 'ID',
+                    ResultType: 'simple',
+                }, params.contextUser);
+                if (!found.Success) {
+                    LogError(`Self-check lookup failed, so the run continues: ${found.ErrorMessage || 'the view did not succeed'}`);
+                    return null;
+                }
+                row = PickSelfCheckLink((found.Results ?? []) as SelfCheckLinkRow[]) ?? null;
+                this._selfCheckLinkByAgent.set(agentRun.AgentID, row);
+            } catch (error) {
+                LogError(`Self-check lookup failed, so the run continues: ${error instanceof Error ? error.message : String(error)}`);
+                return null;
+            }
+        }
+        if (!row?.RubricID) return null;
+        const link: SelfCheckLink & { rubricId: string; passThreshold?: number | null } = {
+            Purpose: String(row.Purpose ?? ''),
+            Status: String(row.Status ?? ''),
+            MaxAttempts: row.MaxSelfCheckAttempts ?? null,
+            rubricId: String(row.RubricID),
+            passThreshold: row.PassThreshold ?? null,
+        };
+        const attempt = (this._selfCheckAttemptsByRun.get(agentRun.ID) ?? 0) + 1;
+        this._selfCheckAttemptsByRun.set(agentRun.ID, attempt);
+        const record = async (step: { EvaluationId?: string; Passed: boolean; Message?: string }) => {
+            const saved = await this.createStepEntity({
+                stepType: 'Validation',
+                stepName: 'Rubric self-check',
+                contextUser: params.contextUser,
+                inputData: { rubricEvaluationId: step.EvaluationId, passed: step.Passed },
+            });
+            await this.finalizeStepEntity(saved, step.Passed, step.Message || undefined);
+        };
+        try {
+            const outcome = await ExecuteSelfCheck({
+                engine: ProviderRubricEngine(provider, params.contextUser),
+                link,
+                runId: agentRun.ID,
+                agentKind: this.AgentTypeInstance?.constructor?.name === 'LoopAgentType' ? 'loop' : 'flow',
+                attempt,
+                candidate: { Message: nextStep.message, Payload: nextStep.newPayload ?? currentPayload },
+                record,
+            });
+            if (outcome.step === 'Success') return null;
+            if (outcome.step === 'Retry') return { ...nextStep, step: 'Retry', message: outcome.decision.Message };
+            return { ...nextStep, step: 'Failed', message: outcome.decision.Message, errorMessage: outcome.decision.Message };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`Self-check could not be saved, so the run continues: ${message}`);
+            try {
+                await record({ Passed: false, Message: message });
+            } catch (recordError) {
+                LogError(`Self-check validation step could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}`);
+            }
+            return null;
+        }
+    }
+
+    /** Runs the self-check when a success exit did not pass through the guardrail hook. */
+    private async selfCheckSuccess<P>(
+        params: ExecuteAgentParams,
+        step: BaseAgentNextStep<P>,
+        payload: P,
+    ): Promise<BaseAgentNextStep<P>> {
+        if (step.step !== 'Success' || !this._agentRun) return step;
+        const checked = await this.applySelfCheck(params, step, this._agentRun, payload);
+        return checked ?? step;
+    }
+
     protected async checkExecutionGuardrails<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
@@ -6408,9 +6462,12 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        // Skip guardrail checks for terminal steps
-        if (nextStep.step === 'Success' || nextStep.step === 'Failed' || nextStep.step === 'Chat') {
+        if (nextStep.step === 'Failed' || nextStep.step === 'Chat') {
             return nextStep;
+        }
+        if (nextStep.step === 'Success') {
+            const checked = await this.applySelfCheck(params, nextStep, agentRun, currentPayload);
+            return checked ?? nextStep;
         }
 
         // Check if any guardrails are exceeded
@@ -8386,8 +8443,14 @@ The context is now within limits. Please retry your request with the recovered c
      * (StepType 'Decision'), with bounded concurrency. A failed request never fails the run: it
      * becomes that request's `success: false`, which the agent reads on its next turn.
      *
-     * At most `decisionsMaxRequests` requests run (default {@link MAX_DECISION_REQUESTS_PER_TURN}).
-     * Each request over the cap is not run and records no step; its result says why.
+     * Two limits bound the turn. At most `decisionsMaxRequests` requests run (default
+     * {@link MAX_DECISION_REQUESTS_PER_TURN}); each request over that cap is not run and records no
+     * step, and its result says why. And the requests make at most `decisionsMaxCallsPerTurn`
+     * decision calls in total, counting every `forEachItemIn` item (default
+     * {@link MAX_DECISION_CALLS_PER_TURN}). That budget is handed out in request order before any
+     * call is made, so which calls run never depends on timing. A `forEachItemIn` request it cuts
+     * short asks its first items and reports the rest in `skippedCount`. A request it leaves no calls
+     * for is not run, records no step, and its result says why.
      *
      * @since 2.132.0
      */
@@ -8398,12 +8461,17 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
     ): Promise<AgentDecisionResult[]> {
         const cap = this.decisionRequestCap(agentTypePromptParams);
+        const toRun = requests.slice(0, cap);
         const overCap = requests.slice(cap);
         if (overCap.length > 0) {
             this.logStatus(`[Decisions] ${requests.length} decision requests on one turn — answering the first ${cap}, skipping ${overCap.length} (per-turn cap)`, true, params);
         }
-        const results = await this.runWithConcurrencyLimit(requests.slice(0, cap), BaseAgent.DECISION_CONCURRENCY,
-            req => this.executeSingleDecisionRequestAsStep(req, finalPayload, agentTypePromptParams, params),
+        const budget = this.decisionCallBudget(agentTypePromptParams);
+        const allowances = this.allotDecisionCalls(toRun, finalPayload, agentTypePromptParams, budget, params);
+        const results = await this.runWithConcurrencyLimit(toRun, BaseAgent.DECISION_CONCURRENCY,
+            async (req, index) => allowances[index].Wanted > 0 && allowances[index].Allowed === 0
+                ? this.overBudgetDecisionResult(req, index, budget)
+                : this.executeSingleDecisionRequestAsStep(req, finalPayload, agentTypePromptParams, params, allowances[index].Allowed),
             (error, req, index): AgentDecisionResult => ({
                 id: this.decisionRequestId(req, index),
                 success: false,
@@ -8419,10 +8487,86 @@ The context is now within limits. Please retry your request with the recovered c
 
     /** The most decision requests one turn may run: `decisionsMaxRequests`, or {@link MAX_DECISION_REQUESTS_PER_TURN}. */
     private decisionRequestCap(agentTypePromptParams: Record<string, unknown> | undefined): number {
-        const configured = agentTypePromptParams?.decisionsMaxRequests;
-        return typeof configured === 'number' && Number.isInteger(configured) && configured >= 0
-            ? configured
-            : MAX_DECISION_REQUESTS_PER_TURN;
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxRequests', MAX_DECISION_REQUESTS_PER_TURN);
+    }
+
+    /**
+     * The most decision calls one turn's requests make in total, `forEachItemIn` items included:
+     * `decisionsMaxCallsPerTurn`, or {@link MAX_DECISION_CALLS_PER_TURN}.
+     */
+    private decisionCallBudget(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxCallsPerTurn', MAX_DECISION_CALLS_PER_TURN);
+    }
+
+    /** The most items one `forEachItemIn` request asks about: `decisionsMaxItems`, or its default. */
+    private decisionMaxItems(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxItems', DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxItems);
+    }
+
+    /** A decision limit from the prompt params when it is a non-negative integer, or `fallback` when it is absent or anything else. */
+    private decisionLimit(agentTypePromptParams: Record<string, unknown> | undefined, name: DecisionLimitParam, fallback: number): number {
+        const configured = agentTypePromptParams?.[name];
+        return typeof configured === 'number' && Number.isInteger(configured) && configured >= 0 ? configured : fallback;
+    }
+
+    /**
+     * Hands out the turn's decision-call budget to its requests in order, before any of them runs.
+     * Each request gets the calls it wants while the budget lasts. The first one the budget cannot
+     * cover gets what is left, and the ones after it get none.
+     */
+    private allotDecisionCalls(
+        requests: AgentDecisionRequest[],
+        finalPayload: unknown,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        budget: number,
+        params: ExecuteAgentParams
+    ): DecisionCallAllowance[] {
+        let remaining = budget;
+        const allowances = requests.map((request): DecisionCallAllowance => {
+            const wanted = this.decisionCallsWanted(request, finalPayload, agentTypePromptParams);
+            const allowed = Math.min(wanted, remaining);
+            remaining -= allowed;
+            return { Wanted: wanted, Allowed: allowed };
+        });
+        const cut = allowances.reduce((sum, allowance) => sum + allowance.Wanted - allowance.Allowed, 0);
+        if (cut > 0) {
+            this.logStatus(`[Decisions] The turn's decision requests want ${budget + cut} decision calls — making ${budget}, skipping ${cut} (per-turn call budget)`, true, params);
+        }
+        return allowances;
+    }
+
+    /**
+     * The decision calls a request makes with no budget: one, or one per `forEachItemIn` item up to
+     * `decisionsMaxItems`. A request that cannot make any, because it is not an object or its
+     * `forEachItemIn` is not an array, wants none. A request that fails before it asks, such as one
+     * with no valid question, still holds what its shape wants: the budget can then go unused, but
+     * it is never exceeded.
+     */
+    private decisionCallsWanted(
+        request: AgentDecisionRequest,
+        finalPayload: unknown,
+        agentTypePromptParams: Record<string, unknown> | undefined
+    ): number {
+        if (!request || typeof request !== 'object') {
+            return 0;
+        }
+        if (!request.forEachItemIn) {
+            return 1;
+        }
+        const target = typeof request.forEachItemIn === 'string' ? this.resolvePayloadPath(request.forEachItemIn, finalPayload) : undefined;
+        return Array.isArray(target) ? Math.min(target.length, this.decisionMaxItems(agentTypePromptParams)) : 0;
+    }
+
+    /**
+     * The result of a request the turn's decision-call budget left no calls for. It was not run.
+     * A budget of 0 turns decision calls off for the agent, so then asking again on a later turn
+     * cannot help, and the result does not invite it.
+     */
+    private overBudgetDecisionResult(request: AgentDecisionRequest, index: number, budget: number): AgentDecisionResult {
+        const error = budget === 0
+            ? 'Not run: this agent\'s decision-call budget is 0 (decisionsMaxCallsPerTurn), so it makes no decision calls on any turn. Asking again will not help: carry on without the answer.'
+            : `Not run: one turn's decisions make at most ${budget} decision calls in total, counting each forEachItemIn item, and the requests before this one used them all. Ask again next turn if you still need it.`;
+        return { id: this.decisionRequestId(request, index), success: false, error };
     }
 
     /** A request's id for its result, or its position when the model sent no usable id. */
@@ -8451,7 +8595,7 @@ The context is now within limits. Please retry your request with the recovered c
         const payload = decision.newPayload ?? decision.previousPayload;
         const promptParams = decision.decisionPromptName ? { decisionPromptName: decision.decisionPromptName } : undefined;
         const results = await this.runWithConcurrencyLimit(decision.decisions ?? [], BaseAgent.DECISION_CONCURRENCY,
-            request => this.executeSingleDecisionRequestAsStep(request, payload, promptParams, params, SummarizeDecisionAnswers),
+            request => this.executeSingleDecisionRequestAsStep(request, payload, promptParams, params, Number.POSITIVE_INFINITY, SummarizeDecisionAnswers),
             (error, request, index): AgentDecisionResult => ({
                 id: this.decisionRequestId(request, index),
                 success: false,
@@ -8466,6 +8610,11 @@ The context is now within limits. Please retry your request with the recovered c
      * output, so any error finishes the step as failed rather than escaping: this never throws
      * once the step exists.
      *
+     * @param callAllowance The most decision calls the request may make, from the turn's
+     * `decisionsMaxCallsPerTurn` budget. It caps a `forEachItemIn` request's items below
+     * `decisionsMaxItems`. A single-state request makes one call, and
+     * {@link executeDecisionRequestsAsSteps} never starts one the budget left without it.
+     * Unbounded by default.
      * @param summarize how the typed answers are summarised for whoever reads them next; defaults
      *                  to the loop turn's model-facing summary
      * @since 2.132.0
@@ -8475,6 +8624,7 @@ The context is now within limits. Please retry your request with the recovered c
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams,
+        callAllowance: number = Number.POSITIVE_INFINITY,
         summarize: DecisionAnswerSummarizer = AgentDecisionService.SummarizeAnswers,
     ): Promise<AgentDecisionResult> {
         const step = await this.createStepEntity({
@@ -8498,7 +8648,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
             const ask = this.decisionAsker(mapping.Questions, agentTypePromptParams, params);
             const outcome = request.forEachItemIn
-                ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, params, step, ask, summarize)
+                ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, callAllowance, params, step, ask, summarize)
                 : await this.askOnce(request, finalPayload, step, ask, summarize);
             return await this.finishDecisionStep(step, request, outcome, mapping.Invalid);
         } catch (error) {
@@ -8547,14 +8697,16 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Asks the same questions of each item of a payload array, up to `decisionsMaxItems`. Each item's
-     * call is its own child Decision step of the request's step, carrying that call's prompt run, as
-     * each iteration of a ForEach is a child step of its loop step.
+     * Asks the same questions of each item of a payload array, up to `decisionsMaxItems` and the
+     * request's share of the turn's call budget. Each item's call is its own child Decision step of
+     * the request's step, carrying that call's prompt run, as each iteration of a ForEach is a child
+     * step of its loop step.
      */
     private async askForEachItem(
         request: AgentDecisionRequest,
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
+        callAllowance: number,
         params: ExecuteAgentParams,
         step: MJAIAgentRunStepEntityExtended,
         ask: (state: string) => Promise<AIDecisionRunResult>,
@@ -8564,11 +8716,13 @@ The context is now within limits. Please retry your request with the recovered c
         if (!Array.isArray(target)) {
             return { Error: `forEachItemIn target "${request.forEachItemIn}" is not an array` };
         }
-        const maxItems = typeof agentTypePromptParams?.decisionsMaxItems === 'number' ? agentTypePromptParams.decisionsMaxItems : 100;
-        const items = target.slice(0, maxItems);
-        const skippedCount = target.length > maxItems ? target.length - maxItems : undefined;
+        const maxItems = this.decisionMaxItems(agentTypePromptParams);
+        const limit = Math.min(maxItems, callAllowance);
+        const items = target.slice(0, limit);
+        const skippedCount = target.length > limit ? target.length - limit : undefined;
         if (skippedCount) {
-            this.logStatus(`[Decisions] "${request.forEachItemIn}" has ${target.length} items; asking the first ${maxItems} (${skippedCount} skipped)`, true, params);
+            const why = limit < maxItems ? "the turn's decision-call budget" : 'decisionsMaxItems';
+            this.logStatus(`[Decisions] "${request.forEachItemIn}" has ${target.length} items; asking the first ${limit} (${skippedCount} skipped: ${why})`, true, params);
         }
         const results = await this.runWithConcurrencyLimit(items, BaseAgent.DECISION_CONCURRENCY,
             (item, index) => this.askItemAsStep(request, item, index, step, ask, params),
@@ -8612,7 +8766,7 @@ The context is now within limits. Please retry your request with the recovered c
      * Links a decision call's prompt run to its step, as the Prompt step links its own, so the run's
      * cost and token totals and its `MaxCostPerRun` / `MaxTokensPerRun` checks count the call.
      */
-    private attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
+    protected attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
         if (result.promptRun?.ID) {
             step.TargetLogID = result.promptRun.ID;
             step.PromptRun = result.promptRun; // transient related object (not a persisted field)
@@ -8704,7 +8858,8 @@ The context is now within limits. Please retry your request with the recovered c
      * Answers the decision requests a prompt returned, or holds them when the step that carries
      * them can end the run, because then no turn would read their answers. Held requests run before
      * the next prompt ({@link runHeldDecisions}), or are skipped if the run ends first
-     * ({@link skipHeldDecisions}).
+     * ({@link skipHeldDecisions}). Skips them all, unasked, while the master switch is off
+     * ({@link DecisionsEnabled}) or the agent's `decisions` response field is.
      */
     private async processTurnDecisions(
         decisions: AgentDecisionRequest[],
@@ -8713,6 +8868,10 @@ The context is now within limits. Please retry your request with the recovered c
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams
     ): Promise<void> {
+        if (!this.DecisionsEnabled(agentTypePromptParams)) {
+            this.logStatus(`[Decisions] LLM requested decisions but decision-model use is off for this agent (decisionsEnabled is not true) — skipped`, true, params);
+            return;
+        }
         const responseTypeRules = agentTypePromptParams?.includeResponseTypeDefinition as Record<string, unknown> | undefined;
         if (responseTypeRules?.decisions === false) {
             this.logStatus(`[Decisions] LLM requested decisions but feature is disabled (includeResponseTypeDefinition.decisions=false) — skipped`, true, params);
@@ -8770,15 +8929,35 @@ The context is now within limits. Please retry your request with the recovered c
         this.injectDecisionResultsMessage(params, results);
     }
 
-    /** Skips the decision requests a prompt held back, because the step that carried them ended the run. */
-    private skipHeldDecisions(params: ExecuteAgentParams): void {
+    /**
+     * Skips the decision requests a prompt held back, because the run ended before they could be
+     * asked: the step that carried them ended it, or it was cancelled, or an error was thrown out of
+     * the step loop. Called from the loop's terminate branch and from `Execute()`'s `finally`, so
+     * every way out logs them. The held state is cleared before the log line, so the second call on
+     * the terminate path logs nothing and each held request is logged exactly once.
+     *
+     * @param runEnd How the run ended, as a clause for the log line.
+     */
+    private skipHeldDecisions(params: ExecuteAgentParams, runEnd: string): void {
         const held = this._heldDecisions;
         if (!held) {
             return;
         }
         this._heldDecisions = undefined;
         const ids = held.Requests.map((d, i) => this.decisionRequestId(d, i)).join(', ');
-        this.logStatus(`[Decisions] Skipped ${held.Requests.length} held decision request(s) (${ids}) without asking them: the run ended after the step that carried them (${held.Reason}), so no turn would read the answers`, false, params);
+        this.logStatus(`[Decisions] Skipped ${held.Requests.length} held decision request(s) (${ids}) without asking them: ${runEnd}, so no turn would read the answers (they were held because ${held.Reason})`, false, params);
+    }
+
+    /** How the run ended, as a clause for held decision requests that a cancellation or an error left unasked. */
+    private runEndForHeldDecisions(): string {
+        switch (this.deriveRunOutcome()) {
+            case 'cancelled':
+                return 'the run was cancelled before they were asked';
+            case 'failure':
+                return 'the run failed before they were asked';
+            default:
+                return 'the run ended before they were asked';
+        }
     }
 
     /**
@@ -8931,8 +9110,8 @@ The context is now within limits. Please retry your request with the recovered c
             const availableSkills = await this.availableSkills(
                 engine.GetAutoActivatableSkillsForAgent(agent, _contextUser), 'catalog', agent, _contextUser);
 
-            // Catalog narrowing (plan Task 3.7), off unless maxActionsInPrompt / maxSubAgentsInPrompt is
-            // positive and the list is longer. It narrows what the prompt SHOWS, once per run:
+            // Catalog narrowing (plan Task 3.7), off unless decisionsEnabled is true and maxActionsInPrompt /
+            // maxSubAgentsInPrompt is positive and the list is longer. It narrows what the prompt SHOWS, once per run:
             // _effectiveActions / _effectiveSubAgents above stay whole, so validation forbids nothing.
             // Skills are narrowed here, after the filterAvailableSkills policy, never inside it: the
             // decision judges only skills the policy offers, and an override that skips `super` keeps it.
@@ -8995,7 +9174,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Narrows the catalog once per run, on its first prompt (plan Task 3.7), and caches the result for
-     * every later step. With narrowing off it asks nothing and records nothing. Never throws: any
+     * every later step. With narrowing off, or the master switch ({@link DecisionsEnabled}) off, it
+     * asks nothing and records nothing, so the prompt describes the whole catalog. Never throws: any
      * failure leaves the full catalog in place. It narrows the prose catalog only:
      * {@link applyNativeTools} still declares every action and sub-agent.
      */
@@ -9012,6 +9192,9 @@ The context is now within limits. Please retry your request with the recovered c
         }
         // Set first, so a failure below is cached as "hide nothing" rather than retried every step.
         this._catalogNarrowing = NoCatalogNarrowing();
+        if (!this.DecisionsEnabled(promptParams)) {
+            return;
+        }
         const limits = this.reachableCatalogNarrowingLimits(agent, promptParams, actions);
         if (limits.Actions === 0 && limits.SubAgents === 0 && limits.Skills === 0) {
             return;
@@ -9420,9 +9603,54 @@ The context is now within limits. Please retry your request with the recovered c
         // to distinguish between explicit user settings and schema defaults
         const explicitResponseType = (runtimeOverrides?.includeResponseTypeDefinition as Record<string, unknown> | undefined) ||
                                      (agentParams.includeResponseTypeDefinition as Record<string, unknown> | undefined);
+        this.warnOnceOnUnknownFinishIfMode(merged.finishIfMode, agent);
         this.applyResponseTypeAutoAlignment(merged, explicitResponseType);
 
         return merged;
+    }
+
+    /**
+     * The agent and value pairs {@link warnOnceOnUnknownFinishIfMode} has already reported. It is
+     * process-wide because the prompt params are merged again for every run of an agent, and on every
+     * turn that carries runtime overrides. One warning per agent and value is enough. A run request
+     * can set the value, so what this keeps is bounded: see {@link FinishIfModeWarnings}.
+     */
+    private static readonly finishIfModeWarnings = new FinishIfModeWarnings();
+
+    /**
+     * Warns, once per agent and value, when the merged `finishIfMode` is set but is not a
+     * {@link FinishIfMode}. {@link ResolveFinishIfMode} treats such a value as `'off'`, so without
+     * this a typo such as `"On"` or `"true"` would turn the agent's gates off without a word. An
+     * absent value is the default, so it is not reported.
+     */
+    private warnOnceOnUnknownFinishIfMode(value: unknown, agent: MJAIAgentEntityExtended): void {
+        const warning = BaseAgent.finishIfModeWarnings.WarningFor(agent.ID, agent.Name, value);
+        if (warning) {
+            this.logError(warning, { agent, category: 'AgentConfiguration', severity: 'warning' });
+        }
+    }
+
+    /**
+     * The master switch for decision-model use by this agent: `decisionsEnabled` in its merged
+     * agent-type prompt params (type default < agent < the run's `data.__agentTypePromptParams`).
+     * Anything but `true` is off, the default.
+     *
+     * While it is off the agent never asks a decision model on its own. Each automatic use checks it
+     * before it asks, whatever its own setting says: inline `decisions` ({@link processTurnDecisions}),
+     * `finishIf` gates ({@link finishIfSettings}), decision discovery ({@link isDecisionDiscoveryOnFor}),
+     * the payload change check ({@link isPayloadFeedbackCheckOn}), catalog narrowing
+     * ({@link ensureCatalogNarrowing}) and the Memory Manager's note gate. And
+     * {@link applyResponseTypeAutoAlignment} keeps the `decisions` and `finishIf` docs and response
+     * fields out of the prompt. While it is on, each use keeps its own setting, and each is off by default.
+     *
+     * Explicit uses never read it: a Flow agent's Decision step ({@link executeDecisionStep}) runs because
+     * someone placed it, and the task-graph Decision step and the Run Decision action call
+     * {@link AgentDecisionService} directly. That is why the check sits at each automatic use, not in the service.
+     *
+     * @param promptParams - The merged agent-type prompt params.
+     */
+    protected DecisionsEnabled(promptParams: Record<string, unknown> | undefined): boolean {
+        return promptParams?.decisionsEnabled === true;
     }
 
     /**
@@ -9440,6 +9668,9 @@ The context is now within limits. Please retry your request with the recovered c
      * - includeWhileDocs → includeResponseTypeDefinition.while
      * - includeDecisionsDocs → includeResponseTypeDefinition.decisions
      *
+     * While the master switch is off ({@link DecisionsEnabled}), the decisions and finishIf docs and
+     * response fields are off, even when set explicitly.
+     *
      * @param params - The merged params object to modify in place
      * @param explicitResponseType - The explicitly set response type config from agent/runtime (not schema defaults)
      * @protected
@@ -9449,8 +9680,13 @@ The context is now within limits. Please retry your request with the recovered c
         params: Record<string, unknown>,
         explicitResponseType?: Record<string, unknown>
     ): void {
+        // Align a copy: the object may be the caller's per-run override, which sub-agents inherit with the
+        // run's data. Writing into it would turn a key "explicit" for every later merge of that override.
+        if (IsPlainObject(params.includeResponseTypeDefinition)) {
+            params.includeResponseTypeDefinition = { ...params.includeResponseTypeDefinition };
+        }
         // Ensure includeResponseTypeDefinition is an object
-        if (!params.includeResponseTypeDefinition || typeof params.includeResponseTypeDefinition !== 'object') {
+        else if (!params.includeResponseTypeDefinition || typeof params.includeResponseTypeDefinition !== 'object') {
             params.includeResponseTypeDefinition = {
                 payload: true,
                 responseForms: true,
@@ -9464,11 +9700,19 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
+        const decisionsEnabled = this.DecisionsEnabled(params);
 
-        // finishIf gates are opt-in (`finishIfMode`). While off, the model is not taught to write one,
-        // whatever includeFinishIfDocs says, so the response field below follows it off too.
-        if (ResolveFinishIfMode(params.finishIfMode) === 'off') {
+        // finishIf gates are opt-in (`finishIfMode`), and need the master switch. While off, the model is
+        // not taught to write one, whatever includeFinishIfDocs says, so the response field below follows it off too.
+        if (!decisionsEnabled || ResolveFinishIfMode(params.finishIfMode) === 'off') {
             params.includeFinishIfDocs = false;
+        }
+
+        // `decisions` is opt-in too (`includeDecisionsDocs: true`), and needs the master switch. Its docs and
+        // types add about 1,200 tokens to every turn, and on the Prompt Eval corpus no model used it
+        // (typed-decision plan, Task 4.7). Unset means off, so the response field below follows it off too.
+        if (!decisionsEnabled || params.includeDecisionsDocs !== true) {
+            params.includeDecisionsDocs = false;
         }
 
         // Auto-alignment mappings: docs flag → response type property
@@ -9503,6 +9747,13 @@ The context is now within limits. Please retry your request with the recovered c
             else if (responseType[responseTypeKey] === undefined) {
                 responseType[responseTypeKey] = true;
             }
+        }
+
+        // With the master switch off, neither decision field is offered, even when set explicitly: the
+        // model must not be invited to ask for something the run would refuse.
+        if (!decisionsEnabled) {
+            responseType.decisions = false;
+            responseType.finishIf = false;
         }
 
         // Capability gates align the OTHER way: default OFF, and the section appears only when the
@@ -9556,8 +9807,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * The finishIf settings of the current step, from its merged agent-type prompt params. A gate is
-     * evaluated when `finishIfMode` is `shadow` or `on` and `includeResponseTypeDefinition.finishIf`
-     * is not `false`; it ends the run only in `on`.
+     * evaluated when the master switch is on ({@link DecisionsEnabled}), `finishIfMode` is `shadow` or
+     * `on`, and `includeResponseTypeDefinition.finishIf` is not `false`; it ends the run only in `on`.
      */
     private finishIfSettings(): FinishIfSettings {
         const promptParams = this._agentTypePromptParams;
@@ -9565,7 +9816,7 @@ The context is now within limits. Please retry your request with the recovered c
         const threshold = promptParams?.finishIfThreshold;
         const mode = ResolveFinishIfMode(promptParams?.finishIfMode);
         return {
-            Enabled: mode !== 'off' && rules?.finishIf !== false,
+            Enabled: this.DecisionsEnabled(promptParams) && mode !== 'off' && rules?.finishIf !== false,
             Mode: mode,
             Threshold: typeof threshold === 'number' && threshold > 0 && threshold <= 1
                 ? threshold
@@ -9625,7 +9876,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.logStatus(`[finishIf] Gate skipped: ${withDirectives.join(', ')} returned AIDirectives, which the model must see on its next turn`, false, params);
             return undefined;
         }
-        const state = capFinishIfState(actionSummaries.map(formatActionForFinishIf).join('\n\n'));
+        const state = CapFinishIfState(actionSummaries.map(FormatActionForFinishIf).join('\n\n'));
         const outcome = await this.evaluateFinishIf(finishIf, state, params, decision, payload, parentStepId);
         return this.gateEndsRun(outcome, params)
             ? { ...this.finishIfSuccessStep(finishIf, decision, payload), priorStepResult: actionSummaries }
@@ -9645,7 +9896,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!finishIf || result.terminate || result.step !== 'Success' || !this.finishIfSettings().Enabled) {
             return undefined;
         }
-        const outcome = await this.evaluateFinishIf(finishIf, formatSubAgentForFinishIf(result), params, decision, result.newPayload);
+        const outcome = await this.evaluateFinishIf(finishIf, FormatSubAgentForFinishIf(result), params, decision, result.newPayload);
         return this.gateEndsRun(outcome, params) ? { ...result, terminate: true, message: finishIf.message } : undefined;
     }
 
@@ -9699,10 +9950,7 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         step: MJAIAgentRunStepEntityExtended
     ): Promise<FinishIfOutcome> {
-        const questions: Record<string, DecisionQuestion> = {};
-        finishIf.questions.forEach((question, i) => {
-            questions[`q${i + 1}`] = { Kind: 'Likelihood', Instructions: question };
-        });
+        const questions = BuildFinishIfQuestions(finishIf);
         const result = await this._agentDecisionService.Ask({
             State: state,
             Questions: questions,
@@ -9715,23 +9963,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!result.success) {
             return { Passed: false, Probabilities: {}, Reason: `The decision call failed: ${result.errorMessage ?? 'no error message'}` };
         }
-        const probabilities: Record<string, number> = {};
-        const failures: string[] = [];
-        for (const key of Object.keys(questions)) {
-            const answer = result.Answers[key];
-            if (answer?.Kind !== 'Likelihood') {
-                failures.push(`${key} has no answer`);
-                continue;
-            }
-            probabilities[key] = answer.Probability;
-            // Written so that a non-numeric probability fails too.
-            if (!(answer.Probability >= settings.Threshold)) {
-                failures.push(`${key} is ${answer.Probability}`);
-            }
-        }
-        return failures.length === 0
-            ? { Passed: true, Probabilities: probabilities, Reason: `Every question reached ${settings.Threshold}` }
-            : { Passed: false, Probabilities: probabilities, Reason: `Below the threshold of ${settings.Threshold}: ${failures.join('; ')}` };
+        return JudgeFinishIf(result.Answers, questions, settings.Threshold);
     }
 
     /**
@@ -9804,10 +10036,33 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Whether the merged agent-type prompt params turn the payload change check on. It is off unless
-     * `payloadFeedbackCheck` is `true`.
+     * the master switch ({@link DecisionsEnabled}) and `payloadFeedbackCheck` are both `true`.
      */
     private isPayloadFeedbackCheckOn(agentTypePromptParams: Record<string, unknown> | undefined): boolean {
-        return agentTypePromptParams?.payloadFeedbackCheck === true;
+        return this.DecisionsEnabled(agentTypePromptParams) && agentTypePromptParams?.payloadFeedbackCheck === true;
+    }
+
+    /**
+     * Runs the payload change check ({@link checkPayloadChanges}) on a step's applied payload changes
+     * when it applies: the analyzer flagged a change for feedback, the check is on
+     * ({@link isPayloadFeedbackCheckOn}), and a turn will read the result. A step that ends the run
+     * skips it: no call to pay for, and no message left in the conversation. Never throws.
+     */
+    private async checkPayloadChangesWhenOn(
+        changeResult: Pick<PayloadManagerResult, 'requiresFeedback' | 'analysis'>,
+        nextStep: BaseAgentNextStep,
+        promptResult: AIPromptRunResult,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        if (!changeResult.requiresFeedback || !this.isPayloadFeedbackCheckOn(agentTypePromptParams)) {
+            return;
+        }
+        if (this.stepEndsRun(nextStep)) {
+            this.logStatus(`[Payload check] Skipped: the ${nextStep.step} step ends the run, so no turn would read the result`, true, params);
+            return;
+        }
+        await this.checkPayloadChanges(changeResult.analysis, nextStep, promptResult, agentTypePromptParams, params);
     }
 
     /**
@@ -11881,7 +12136,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // so the run shows what was emitted even if the sub-agent then fails.
                 await this.recordFoldedTaskGraph(params, previousDecision);
                 const subAgentResult = await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
-                return (await this.finishAfterSubAgent<P>(params, previousDecision, subAgentResult)) ?? subAgentResult;
+                const afterSubAgent = (await this.finishAfterSubAgent<P>(params, previousDecision, subAgentResult)) ?? subAgentResult;
+                return this.selfCheckSuccess(params, afterSubAgent, afterSubAgent.newPayload ?? subAgentResult.newPayload);
             }
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount, this.actionOptionsForAgentType());
@@ -12317,16 +12573,9 @@ The context is now within limits. Please retry your request with the recovered c
                 finalPayload = changeResult.result;
 
                 // Opt-in payload change check: asks whether the flagged changes were intended. It never
-                // reverts or blocks a change; the agent reads the result on its next turn, so a step
-                // that ends the run skips it (no call to pay for, no message left in the conversation).
+                // reverts or blocks a change; the agent reads the result on its next turn.
                 const payloadCheckParams = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
-                if (changeResult.requiresFeedback && this.isPayloadFeedbackCheckOn(payloadCheckParams)) {
-                    if (this.stepEndsRun(initialNextStep)) {
-                        this.logStatus(`[Payload check] Skipped: the ${initialNextStep.step} step ends the run, so no turn would read the result`, true, params);
-                    } else {
-                        await this.checkPayloadChanges(changeResult.analysis, initialNextStep, promptResult, payloadCheckParams, params);
-                    }
-                }
+                await this.checkPayloadChangesWhenOn(changeResult, initialNextStep, promptResult, payloadCheckParams, params);
             }
 
             // Apply scratchpad changes if provided (zero turn cost — processed inline)
@@ -14658,7 +14907,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             const finished = await this.finishAfterActions(params, previousDecision, actionResults, actionSummaries, finalPayload, parentStepId, addConversationMessage);
             if (finished) {
-                return finished;
+                return this.selfCheckSuccess(params, finished, finalPayload);
             }
 
             // After actions complete, we need to process the results
@@ -14815,7 +15064,7 @@ The context is now within limits. Please retry your request with the recovered c
         // If the LLM already declared taskComplete=true alongside the client tools,
         // honor that intent now that tools have executed — no need for another LLM call.
         if (previousDecision.terminateAfterExecution) {
-            return {
+            return this.selfCheckSuccess(params, {
                 step: 'Success',
                 terminate: true,
                 message: previousDecision.message || 'Client tools executed successfully.',
@@ -14828,7 +15077,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // own artifact directive has to come along. Omitting it silently discarded the
                 // instruction whenever an agent declared client tools and taskComplete together.
                 artifactDirective: previousDecision.artifactDirective
-            };
+            }, previousDecision.newPayload);
         }
 
         return await this.executePromptStep(params, config, previousDecision, stepCount);

@@ -51,7 +51,7 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIDecisionRunner, type AIDecisionParams, type AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import type { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
+import { DecisionResult, type DecisionAnswer, type DecisionQuestion } from '@memberjunction/ai';
 import { RunDecisionResolver } from '../resolvers/RunDecisionResolver.js';
 import { RunAIPromptResolver } from '../resolvers/RunAIPromptResolver.js';
 import type { AppContext, UserPayload } from '../types.js';
@@ -140,11 +140,20 @@ const ANSWERS: Record<string, DecisionAnswer> = {
 const PROMPT_RUN = new MJAIPromptRunEntity(PROMPT_RUN_ENTITY);
 PROMPT_RUN.Hydrate({ ID: 'run-1' });
 
+/** What the Jev driver returned: its answers, and the dated model OpenRouter reported. */
+const jevDecision = (): DecisionResult => {
+  const decided = new DecisionResult(true, new Date(), new Date());
+  decided.Answers = ANSWERS;
+  decided.ResolvedModel = 'typesafe/jev-1.13-20260917';
+  return decided;
+};
+
 const successResult = (): AIDecisionRunResult => ({
   success: true,
   Answers: ANSWERS,
   promptRun: PROMPT_RUN,
   modelInfo: { modelId: 'model-jev', modelName: 'Jev' },
+  DecisionResult: jevDecision(),
 });
 
 const failedResult = (): AIDecisionRunResult => ({
@@ -503,7 +512,18 @@ describe('RunDecision: result mapping', () => {
     expect(JSON.parse(result.answersJSON ?? '')).toEqual(ANSWERS);
     expect(result.promptRunId).toBe('run-1');
     expect(result.modelName).toBe('Jev');
+    expect(result.resolvedModel).toBe('typesafe/jev-1.13-20260917');
     expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('leaves the resolved model out when the driver reports none', async () => {
+    executeDecision.mockResolvedValue({ ...successResult(), DecisionResult: undefined });
+
+    const result = await runDecision();
+
+    expect(result.success).toBe(true);
+    expect(result.modelName).toBe('Jev');
+    expect(result.resolvedModel).toBeUndefined();
   });
 
   it('maps a failed run to success: false, keeping the prompt run and the model but sending no answers', async () => {

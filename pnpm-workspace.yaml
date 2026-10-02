@@ -85,5 +85,6 @@ packages:
   - 'packages/Lists/*'
   - 'packages/RecordSetProcessor/*'
   - 'packages/RecordCloning/*'
+  - 'packages/Rubrics/*'
   - 'packages/eSignature/*'
   - 'packages/eSignature/Providers/*'
