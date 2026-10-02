@@ -3,10 +3,10 @@
  * @module @memberjunction/testing-cli
  */
 
-import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { RunInEntityTransaction, RunView, UserInfo, type EntityTransactionScope, type IMetadataProvider } from '@memberjunction/core';
 import { TestEngine, BINARY_SCALE_NAME, BuildPromotedRubric, PromoteInlineCriteria, type PromoteCriteriaStore, type PromotedRubric } from '@memberjunction/testing-engine';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJTestEntity } from '@memberjunction/core-entities';
+import { MJRubricCriterionEntity, MJRubricEntity, MJRubricScaleEntity, MJRubricScaleLevelEntity, MJRubricVersionEntity, MJTestEntity } from '@memberjunction/core-entities';
 import { OutputFormatter } from '../utils/output-formatter';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 
@@ -18,9 +18,9 @@ export class PromoteCriteriaCommand {
     async Execute(testRef: string, contextUser?: UserInfo): Promise<void> {
         try {
             await initializeMJProvider();
-            if (!contextUser) contextUser = await getContextUser();
+            const user = contextUser ?? await getContextUser();
             const engine = TestEngine.Instance;
-            await engine.Config(false, contextUser);
+            await engine.Config(false, user);
             const matches = engine.Tests.filter(test => test.Name === testRef || UUIDsEqual(test.ID, testRef));
             if (matches.length === 0) {
                 console.error(OutputFormatter.formatError(`No test matches "${testRef}".`));
@@ -48,7 +48,11 @@ export class PromoteCriteriaCommand {
                 await closeMJProvider();
                 return;
             }
-            const saved = await PromoteInlineCriteria(test.ID, plan.rubric, providerStore(test, contextUser));
+            const provider = test.ProviderToUse as unknown as IMetadataProvider & {
+                SupportsEntityTransactions?: boolean;
+                BeginEntityTransaction?(): Promise<EntityTransactionScope>;
+            };
+            const saved = await RunInEntityTransaction(provider, () => PromoteInlineCriteria(test.ID, plan.rubric, providerStore(test, user, provider)));
             console.log(`Promoted ${plan.rubric.criteria.length} criteria from "${test.Name}" into draft rubric "${plan.rubric.name}".`);
             console.log(`Rubric ${saved.rubricId}, version ${saved.versionId}. The version is Draft and was not published. Test.RubricID is set.`);
             await closeMJProvider();
@@ -64,17 +68,16 @@ export class PromoteCriteriaCommand {
     }
 }
 
-function providerStore(test: MJTestEntity, user: UserInfo): PromoteCriteriaStore {
-    const provider = test.ProviderToUse as unknown as IMetadataProvider;
+function providerStore(test: MJTestEntity, user: UserInfo, provider: IMetadataProvider): PromoteCriteriaStore {
     return {
         async saveRubric(input) {
-            const row = await provider.GetEntityObject<MJTestEntity>('MJ: Rubrics', user);
+            const row = await provider.GetEntityObject<MJRubricEntity>('MJ: Rubrics', user);
             row.NewRecord();
-            row.Set('Name', input.name);
-            row.Set('Description', input.description);
-            row.Set('Status', 'Active');
+            row.Name = input.name;
+            row.Description = input.description;
+            row.Status = 'Active';
             if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not create the rubric.');
-            return String(row.Get('ID'));
+            return row.ID;
         },
         async ensureBinaryScale() {
             const view = RunView.FromMetadataProvider(provider);
@@ -84,27 +87,28 @@ function providerStore(test: MJTestEntity, user: UserInfo): PromoteCriteriaStore
                 ResultType: 'simple',
                 MaxRows: 1,
             }, user);
+            if (!found.Success) throw new Error(found.ErrorMessage || 'Could not read MJ: Rubric Scales.');
             const existing = found.Results?.[0] as { ID?: string } | undefined;
             if (existing?.ID) return String(existing.ID);
-            const scale = await provider.GetEntityObject<MJTestEntity>('MJ: Rubric Scales', user);
+            const scale = await provider.GetEntityObject<MJRubricScaleEntity>('MJ: Rubric Scales', user);
             scale.NewRecord();
-            scale.Set('Name', BINARY_SCALE_NAME);
-            scale.Set('ScaleType', 'Levels');
-            scale.Set('HigherIsBetter', true);
-            scale.Set('Status', 'Active');
+            scale.Name = BINARY_SCALE_NAME;
+            scale.ScaleType = 'Levels';
+            scale.HigherIsBetter = true;
+            scale.Status = 'Active';
             if (!await scale.Save()) throw new Error(scale.LatestResult?.Message || 'Could not create the binary scale.');
-            const scaleId = String(scale.Get('ID'));
+            const scaleId = scale.ID;
             for (const level of [
                 { label: 'Not met', value: 0, normalized: 0, sequence: 0 },
                 { label: 'Met', value: 1, normalized: 1, sequence: 1 },
             ]) {
-                const row = await provider.GetEntityObject<MJTestEntity>('MJ: Rubric Scale Levels', user);
+                const row = await provider.GetEntityObject<MJRubricScaleLevelEntity>('MJ: Rubric Scale Levels', user);
                 row.NewRecord();
-                row.Set('ScaleID', scaleId);
-                row.Set('Label', level.label);
-                row.Set('Value', level.value);
-                row.Set('NormalizedValue', level.normalized);
-                row.Set('Sequence', level.sequence);
+                row.ScaleID = scaleId;
+                row.Label = level.label;
+                row.Value = level.value;
+                row.NormalizedValue = level.normalized;
+                row.Sequence = level.sequence;
                 if (!await row.Save()) throw new Error(row.LatestResult?.Message || `Could not save scale level ${level.label}.`);
             }
             return scaleId;
@@ -120,31 +124,31 @@ function providerStore(test: MJTestEntity, user: UserInfo): PromoteCriteriaStore
 }
 
 async function saveDraft(input: PromotedRubric & { rubricId: string; scaleId: string }, user: UserInfo, provider: IMetadataProvider): Promise<string> {
-    const version = await provider.GetEntityObject<MJTestEntity>('MJ: Rubric Versions', user);
+    const version = await provider.GetEntityObject<MJRubricVersionEntity>('MJ: Rubric Versions', user);
     version.NewRecord();
-    version.Set('RubricID', input.rubricId);
-    version.Set('Status', 'Draft');
-    version.Set('PassThreshold', input.passThreshold);
-    version.Set('NotApplicablePolicy', input.notApplicablePolicy);
-    version.Set('ScoreDisplayMin', input.scoreDisplayMin);
-    version.Set('ScoreDisplayMax', input.scoreDisplayMax);
+    version.RubricID = input.rubricId;
+    version.Status = 'Draft';
+    version.PassThreshold = input.passThreshold;
+    version.NotApplicablePolicy = input.notApplicablePolicy;
+    version.ScoreDisplayMin = input.scoreDisplayMin;
+    version.ScoreDisplayMax = input.scoreDisplayMax;
     if (!await version.Save()) throw new Error(version.LatestResult?.Message || 'Could not create the draft version.');
-    const versionId = String(version.Get('ID'));
+    const versionId = version.ID;
     for (const criterion of input.criteria) {
-        const row = await provider.GetEntityObject<MJTestEntity>('MJ: Rubric Criteria', user);
+        const row = await provider.GetEntityObject<MJRubricCriterionEntity>('MJ: Rubric Criteria', user);
         row.NewRecord();
-        row.Set('RubricVersionID', versionId);
-        row.Set('Key', criterion.key);
-        row.Set('Name', criterion.name);
-        row.Set('NodeType', 'Criterion');
-        row.Set('ScaleID', input.scaleId);
-        row.Set('Weight', criterion.weight);
-        row.Set('IsAdvisory', false);
-        row.Set('IsGate', criterion.isGate);
-        row.Set('GateMinimumScore', criterion.gateMinimumScore);
-        row.Set('EvidenceRequired', false);
-        row.Set('RationaleRequired', false);
-        row.Set('Sequence', criterion.sequence);
+        row.RubricVersionID = versionId;
+        row.Key = criterion.key;
+        row.Name = criterion.name;
+        row.NodeType = 'Criterion';
+        row.ScaleID = input.scaleId;
+        row.Weight = criterion.weight;
+        row.IsAdvisory = false;
+        row.IsGate = criterion.isGate;
+        row.GateMinimumScore = criterion.gateMinimumScore;
+        row.EvidenceRequired = false;
+        row.RationaleRequired = false;
+        row.Sequence = criterion.sequence;
         if (!await row.Save()) throw new Error(row.LatestResult?.Message || `Could not save criterion ${criterion.key}.`);
     }
     return versionId;
