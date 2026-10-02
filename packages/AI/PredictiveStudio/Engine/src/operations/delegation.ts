@@ -132,7 +132,8 @@ export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
  * {@link RunViewMLModelLoader} (loads the `MJ: ML Models` row), the
  * {@link MJSidecarPredictor} (runs `/predict` against the Python sidecar) and the
  * {@link MJStorageArtifactLoader} (downloads the model bytes from the storage provider
- * named on their `MJ: Files` row, the read-side inverse of `MJFilesArtifactStore`).
+ * named on their `MJ: Files` row on first use, then reads this server's local copy —
+ * the read-side inverse of `MJFilesArtifactStore`).
  * Shared by {@link buildScoreRecordSetRunner} (the Score action / Remote Op path) AND the
  * startup work-type registration so a model trained one way is always scored the same
  * way — one source of truth (CLAUDE.md DRY).
@@ -164,7 +165,7 @@ export function buildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
  * Score a record set, delegating to the SAME production runner the Score action
  * uses ({@link ProductionScoreRecordSetRunner} → `MLModelInferenceProcessor`). The
  * default runner is wired with the {@link MJStorageArtifactLoader} so the artifact is
- * downloaded from the storage provider its `MJ: Files` row names. The `runner` is injectable for tests.
+ * read from this server's local copy, downloaded from storage on first use. The `runner` is injectable for tests.
  *
  * @param request the model id + resolved scope + write-back directive + user/provider
  * @param runner optional runner override (defaults to {@link buildScoreRecordSetRunner})

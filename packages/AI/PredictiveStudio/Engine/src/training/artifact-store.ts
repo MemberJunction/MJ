@@ -10,7 +10,8 @@
  *   records the `MJ: Files` row that points at them (`ProviderID` + `ProviderKey`,
  *   `Status = 'Uploaded'`). It returns the real File row id, so
  *   `MLModel.ArtifactFileID` satisfies its FK to `__mj.File`, and the matching
- *   `MJStorageArtifactLoader` downloads the bytes back from that row's provider.
+ *   `MJStorageArtifactLoader` downloads the bytes from that row's provider the
+ *   first time a server needs them, and keeps a copy on that server's disk.
  * - {@link InMemoryArtifactStore} — an in-memory map used by unit tests (no DB).
  *
  * ## Why the bytes live in the storage provider
@@ -22,10 +23,10 @@
  * for long. The File row is the whole contract: whoever can read it can fetch the
  * bytes.
  *
- * Models trained before this change have a File row with no `ProviderKey`; their
- * bytes are still on the training host's disk at `<baseDir>/<file.ID>.bin`
- * ({@link ResolveLocalArtifactBaseDir}). The loader keeps reading those so existing
- * models do not stop scoring where they used to; retraining moves them to storage.
+ * Each server keeps its downloaded copies at `<baseDir>/<file.ID>.bin`
+ * ({@link ResolveLocalArtifactBaseDir}). Models trained before this change have a
+ * File row with no `ProviderKey` and their bytes at that same path on the host that
+ * trained them, so they keep scoring there; retraining moves them to storage.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -38,10 +39,11 @@ import { FileStorageEngine, type FileStorageBase } from '@memberjunction/storage
 import type { IArtifactStore, IEntityFactory } from './types';
 
 /**
- * Resolve the base directory that artifacts trained before #4991 were written to:
- * env `PS_ARTIFACT_DIR` when set, else `<os.tmpdir()>/mj-ps-artifacts`. New
- * artifacts go to the storage provider; this is read only to keep scoring those
- * older models (bytes at `<baseDir>/<file.ID>.bin`).
+ * Resolve the directory a server keeps its local copies of model artifacts in:
+ * env `PS_ARTIFACT_DIR` when set, else `<os.tmpdir()>/mj-ps-artifacts`. Copies live
+ * at `<baseDir>/<file.ID>.bin`. The storage provider holds the real artifact; this
+ * is a copy the server downloaded, or the original bytes of a model trained here
+ * before #4991.
  */
 export function ResolveLocalArtifactBaseDir(): string {
   const fromEnv = process.env.PS_ARTIFACT_DIR;
@@ -57,8 +59,8 @@ export function resolveLocalArtifactBaseDir(): string {
 }
 
 /**
- * Build the absolute path a pre-#4991 artifact with the given File-row fileId lives
- * at: `<baseDir>/<fileId>.bin`.
+ * Build the absolute path a server's local copy of the artifact with the given
+ * File-row fileId lives at: `<baseDir>/<fileId>.bin`.
  *
  * @param baseDir the resolved artifact base directory
  * @param fileId the `MJ: Files` row id the artifact was stored under

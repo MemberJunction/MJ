@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -57,7 +57,7 @@ vi.mock('@memberjunction/storage', () => ({
 }));
 
 import { ARTIFACT_OBJECT_PREFIX, BuildArtifactObjectKey, BuildArtifactStore, LocalArtifactPath, MJFilesArtifactStore } from '../artifact-store';
-import { InMemoryArtifactLoader, MJStorageArtifactLoader } from '../../scoring/artifact-loader';
+import { MJStorageArtifactLoader } from '../../scoring/artifact-loader';
 import { BuildProductionMLInferenceDeps } from '../../operations/delegation';
 import type { IEntityFactory } from '../types';
 
@@ -138,14 +138,13 @@ class SharedFileFactory implements IEntityFactory {
 }
 
 /** Scoring-side metadata provider — reads File rows from the shared table. */
-const sharedMetadataProvider = {
-  GetEntityObject: async (entityName: string) => {
-    if (entityName !== 'MJ: Files') {
-      throw new Error(`sharedMetadataProvider: unexpected entity ${entityName}`);
-    }
-    return new FakeFile();
-  },
-} as unknown as IMetadataProvider;
+const getFileEntityMock = vi.fn(async (entityName: string) => {
+  if (entityName !== 'MJ: Files') {
+    throw new Error(`sharedMetadataProvider: unexpected entity ${entityName}`);
+  }
+  return new FakeFile();
+});
+const sharedMetadataProvider = { GetEntityObject: getFileEntityMock } as unknown as IMetadataProvider;
 
 const user = { ID: 'USER-1', Email: 'trainer@example.com' } as unknown as UserInfo;
 const modelBytes = new Uint8Array([7, 1, 9, 9, 4, 2, 0, 255]);
@@ -161,7 +160,9 @@ describe('Predictive Studio model artifacts live in the storage provider (#4991)
     return dir;
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Every test starts on a fresh, empty "host" disk — never the real os.tmpdir() default.
+    process.env.PS_ARTIFACT_DIR = await newHostDir();
     bucket.clear();
     fileTable.clear();
     failNextSave = false;
@@ -334,11 +335,61 @@ describe('Predictive Studio model artifacts live in the storage provider (#4991)
       expect(engineMock.GetDriver).not.toHaveBeenCalled();
     });
 
-    it('delegates a row with no ProviderKey to the injected legacy loader', async () => {
+    it('returns null for a pre-#4991 artifact whose bytes are not on this host', async () => {
       recordLegacyRow('LEGACY-FILE-2');
-      const legacyLoader = new InMemoryArtifactLoader(new Map([['LEGACY-FILE-2', modelBytes]]));
 
-      const loaded = await new MJStorageArtifactLoader({ LegacyLoader: legacyLoader }).load('LEGACY-FILE-2', user);
+      expect(await new MJStorageArtifactLoader().load('LEGACY-FILE-2', user)).toBeNull();
+      expect(engineMock.GetDriver).not.toHaveBeenCalled();
+    });
+
+    it("downloads on first use and keeps the file on this host's disk", async () => {
+      const fileId = await BuildArtifactStore('PROVIDER-1', new SharedFileFactory()).save(modelBytes, 'm.bin', user);
+      const hostDir = await newHostDir();
+
+      const loaded = await new MJStorageArtifactLoader({ CacheDir: hostDir }).load(fileId, user);
+
+      expect(Array.from(loaded ?? [])).toEqual(Array.from(modelBytes));
+      expect(getObjectMock).toHaveBeenCalledTimes(1);
+      expect(Array.from(await readFile(LocalArtifactPath(hostDir, fileId)))).toEqual(Array.from(modelBytes));
+      expect(await readdir(hostDir)).toEqual([`${fileId}.bin`]);
+    });
+
+    it('serves later loads from disk without touching storage or the File row', async () => {
+      const fileId = await BuildArtifactStore('PROVIDER-1', new SharedFileFactory()).save(modelBytes, 'm.bin', user);
+      const hostDir = await newHostDir();
+      await new MJStorageArtifactLoader({ CacheDir: hostDir }).load(fileId, user);
+      vi.clearAllMocks();
+
+      // A new loader, as after a server restart: the disk copy is what makes it fast.
+      const loaded = await new MJStorageArtifactLoader({ CacheDir: hostDir }).load(fileId, user);
+
+      expect(Array.from(loaded ?? [])).toEqual(Array.from(modelBytes));
+      expect(getObjectMock).not.toHaveBeenCalled();
+      expect(engineMock.GetDriver).not.toHaveBeenCalled();
+      expect(getFileEntityMock).not.toHaveBeenCalled();
+    });
+
+    it('downloads again after the local copy is cleared', async () => {
+      const fileId = await BuildArtifactStore('PROVIDER-1', new SharedFileFactory()).save(modelBytes, 'm.bin', user);
+      const hostDir = await newHostDir();
+      const loader = new MJStorageArtifactLoader({ CacheDir: hostDir });
+      await loader.load(fileId, user);
+      await rm(hostDir, { recursive: true, force: true });
+
+      const loaded = await loader.load(fileId, user);
+
+      expect(Array.from(loaded ?? [])).toEqual(Array.from(modelBytes));
+      expect(getObjectMock).toHaveBeenCalledTimes(2);
+      expect(await readdir(hostDir)).toEqual([`${fileId}.bin`]);
+    });
+
+    it('still returns the bytes when the local copy cannot be written', async () => {
+      const fileId = await BuildArtifactStore('PROVIDER-1', new SharedFileFactory()).save(modelBytes, 'm.bin', user);
+      // A regular file where the directory should be: mkdir under it fails with ENOTDIR.
+      const blocker = join(await newHostDir(), 'not-a-directory');
+      await writeFile(blocker, 'x');
+
+      const loaded = await new MJStorageArtifactLoader({ CacheDir: join(blocker, 'cache') }).load(fileId, user);
 
       expect(Array.from(loaded ?? [])).toEqual(Array.from(modelBytes));
     });

@@ -80,5 +80,6 @@ export class MJSidecarPredictor implements ISidecarPredictor {
 // The read-side artifact loader is the counterpart to the training
 // `MJFilesArtifactStore.save`. The production loader, `MJStorageArtifactLoader`
 // in `./artifact-loader`, downloads the bytes from the storage provider named on
-// the artifact's `MJ: Files` row through MJStorage's `FileStorageEngine`. Tests
-// inject the in-memory loader from the same module.
+// the artifact's `MJ: Files` row through MJStorage's `FileStorageEngine` the first
+// time a server needs them, and keeps a local copy. Tests inject the in-memory
+// loader from the same module.
