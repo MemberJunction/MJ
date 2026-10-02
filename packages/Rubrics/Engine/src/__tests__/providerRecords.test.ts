@@ -79,6 +79,7 @@ describe('generated rubric entity rows', () => {
         const catalog = readFileSync(join(directory, '../productionSamplingCatalog.ts'), 'utf8');
         expect(records).not.toMatch(/interface RubricRow/);
         expect(records).not.toMatch(/\.Set\(/);
+        expect(records).not.toMatch(/row\.ID = node\.id/);
         expect(records).toMatch(/MJRubricVersionEntity/);
         expect(records).toMatch(/MJRubricEvaluationScoreEntity/);
         expect(catalog).toMatch(/MJAIAgentRubricEntity/);

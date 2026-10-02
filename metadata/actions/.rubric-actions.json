@@ -545,7 +545,7 @@
   {
     "fields": {
       "Name": "Create Rubric Draft",
-      "Description": "Stores a rubric tree as a Draft version. Never publishes. Publishing stays a human action.",
+      "Description": "Stores a rubric tree as a Draft version. When RubricID is omitted and RubricName or Description is set, creates a new rubric first. Never publishes. Publishing stays a human action.",
       "Type": "Custom",
       "DriverClass": "Create Rubric Draft",
       "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
@@ -564,11 +564,25 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The rubric that owns the new draft.",
-            "IsRequired": true
+            "Description": "The rubric that owns the new draft. Omit this and pass RubricName or Description to create a new rubric.",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "DB2B6E47-D053-414C-8204-19934C18ADBF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of a rubric to create when RubricID is omitted. The new rubric is Active and its version is a Draft. This does not publish.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "47FE5B79-75C6-4812-AF50-96670E7725DA"
           }
         },
         {

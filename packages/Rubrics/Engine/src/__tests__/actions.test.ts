@@ -31,14 +31,17 @@ import { CreateDraftVersion } from '../providerRecords.js';
 import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from '../RubricEngine.js';
 
 /** Property assignment, as on a generated MJRubric*Entity. Set is absent, so the old row type fails. */
-function draftEntity(entity: string, onSave: (values: Map<string, unknown>) => void) {
+function draftEntity(entity: string, onSave: (values: Map<string, unknown>) => void, fail = false) {
     const values = new Map<string, unknown>();
     const row = {
         NewRecord() { /* the draft starts empty */ },
         async Load() { return true; },
         async Save() {
-            onSave(values);
-            if (entity === 'MJ: Rubric Versions') values.set('ID', 'version-new');
+            if (fail) return false;
+            if (!values.has('ID')) {
+                values.set('ID', entity === 'MJ: Rubric Versions' ? 'version-new' : entity === 'MJ: Rubrics' ? 'rubric-new' : `id-${String(values.get('Key') ?? values.get('Label') ?? entity)}`);
+            }
+            onSave(new Map(values));
             return true;
         },
     };
@@ -89,6 +92,7 @@ function catalog(): RubricRecords & { filters: string[]; draftCalls: number; dra
         draftCalls: 0,
         draftStatus: 'Draft',
         savedNodes: [] as { id: string; key: string; name: string; weight: number; isGate: boolean; parentId?: string | null }[],
+        lastDraft: undefined as { rubricId?: string; rubricName?: string; nodes?: unknown[] } | undefined,
         async rows(entityName: string, filter: string) {
             filters.push(`${entityName} ${filter}`);
             if (entityName === 'MJ: Rubrics') return [{ ID: 'rubric', Name: 'Writing' }];
@@ -105,8 +109,9 @@ function catalog(): RubricRecords & { filters: string[]; draftCalls: number; dra
             }
             return [];
         },
-        async createDraft(input?: { nodes?: { id: string; key: string; name: string; weight: number; isGate: boolean; parentId?: string | null }[] }) {
+        async createDraft(input?: { rubricId?: string; rubricName?: string; nodes?: { id: string; key: string; name: string; weight: number; isGate: boolean; parentId?: string | null }[] }) {
             records.draftCalls += 1;
+            records.lastDraft = input;
             records.savedNodes = input?.nodes ?? [];
             return { id: 'draft-1', status: records.draftStatus };
         },
@@ -196,6 +201,17 @@ describe('rubric actions', () => {
         const security = records.savedNodes.find(node => node.key === '3');
         expect(encryption).toMatchObject({ name: 'Encryption', weight: 2, isGate: true });
         expect(encryption?.parentId).toBe(security?.id);
+        const quoted = await new CreateRubricDraftAction().Invoke(engine, {
+            rubricName: 'Vendor review',
+            matrix: '3,"Security, access",1,no',
+        });
+        expect(quoted).toEqual({ id: 'draft-1', status: 'Draft' });
+        expect(records.lastDraft?.rubricId).toBeUndefined();
+        expect(records.lastDraft?.rubricName).toBe('Vendor review');
+        expect(records.savedNodes.find(node => node.key === '3')).toMatchObject({ name: 'Security, access' });
+        await expect(new CreateRubricDraftAction().Invoke(engine, { matrix: '3.2,Encryption,2,yes' })).rejects.toThrow(/parent/);
+        await expect(new CreateRubricDraftAction().Invoke(engine, { description: 'Score a vendor packet' })).resolves.toMatchObject({ status: 'Draft' });
+        expect(records.lastDraft?.rubricName).toBe('Score a vendor packet');
         records.draftStatus = 'Published';
         await expect(new CreateRubricDraftAction().Invoke(engine, { rubricId: 'rubric', nodes: [] })).rejects.toThrow(/never publishes/);
     });
@@ -223,7 +239,17 @@ describe('rubric actions', () => {
 
     it('sets BasedOnVersionID to the highest non-draft version and copies its anchors and bands', async () => {
         const written: { entity: string; values: Map<string, unknown> }[] = [];
+        const order: string[] = [];
         const provider = {
+            SupportsEntityTransactions: true,
+            async BeginEntityTransaction() {
+                order.push('begin');
+                return {
+                    IsNested: false,
+                    async Commit() { order.push('commit'); },
+                    async Rollback() { order.push('rollback'); },
+                };
+            },
             async RunView(params: { EntityName: string }) {
                 if (params.EntityName === 'MJ: Rubric Versions') {
                     return { Success: true, Results: [
@@ -248,6 +274,7 @@ describe('rubric actions', () => {
             },
             async GetEntityObject(entity: string) {
                 return draftEntity(entity, values => {
+                    order.push(`save:${entity}`);
                     written.push({ entity, values: new Map(values) });
                 });
             },
@@ -259,8 +286,12 @@ describe('rubric actions', () => {
         const version = written.find(row => row.entity === 'MJ: Rubric Versions');
         expect(version?.values.get('BasedOnVersionID')).toBe('retired');
         expect(version?.values.get('Status')).toBe('Draft');
+        const criterion = written.find(row => row.entity === 'MJ: Rubric Criteria');
+        expect(criterion?.values.get('ID')).not.toBe('leaf');
+        expect(criterion?.values.get('Key')).toBe('clarity');
         const anchors = written.filter(row => row.entity === 'MJ: Rubric Criterion Levels');
-        expect(anchors[0]?.values.get('CriterionID')).toBe('leaf');
+        expect(anchors[0]?.values.get('CriterionID')).toBe(criterion?.values.get('ID'));
+        expect(anchors[0]?.values.get('CriterionID')).not.toBe('leaf');
         expect(anchors[0]?.values.get('ScaleLevelID')).toBe('high');
         expect(anchors[0]?.values.get('Descriptor')).toBe('Clear');
         expect(anchors[0]?.values.has('Sequence')).toBe(false);
@@ -269,6 +300,69 @@ describe('rubric actions', () => {
         const band = written.find(row => row.entity === 'MJ: Rubric Bands');
         expect(band?.values.get('RubricVersionID')).toBe('version-new');
         expect(band?.values.get('Label')).toBe('Met');
+        expect(order[0]).toBe('begin');
+        expect(order.at(-1)).toBe('commit');
+        expect(order.indexOf('commit')).toBeGreaterThan(order.indexOf('save:MJ: Rubric Criterion Levels'));
+        expect(order.indexOf('commit')).toBeGreaterThan(order.indexOf('save:MJ: Rubric Bands'));
+        expect(order).not.toContain('rollback');
+    });
+
+    it('creates a rubric, keeps caller ids off the primary key, and rolls a failed write back', async () => {
+        const written: { entity: string; values: Map<string, unknown> }[] = [];
+        const order: string[] = [];
+        const provider = {
+            SupportsEntityTransactions: true,
+            async BeginEntityTransaction() {
+                order.push('begin');
+                return {
+                    IsNested: false,
+                    async Commit() { order.push('commit'); },
+                    async Rollback() { order.push('rollback'); },
+                };
+            },
+            async RunView() {
+                return { Success: true, Results: [] };
+            },
+            async GetEntityObject(entity: string) {
+                return draftEntity(entity, values => {
+                    order.push(`save:${entity}`);
+                    written.push({ entity, values });
+                });
+            },
+        };
+        const leaf = { id: 'leaf', key: 'clarity', name: 'Clarity', nodeType: 'Criterion' as const, weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 };
+        await CreateDraftVersion(provider, { id: 'user' }, {
+            rubricName: 'Vendor review',
+            nodes: [
+                { ...leaf, id: 'group', key: '3', name: 'Security', nodeType: 'Group' },
+                { ...leaf, id: 'child', parentId: 'group', key: '3.2', name: 'Encryption' },
+            ],
+        });
+        const rubric = written.find(row => row.entity === 'MJ: Rubrics');
+        const version = written.find(row => row.entity === 'MJ: Rubric Versions');
+        const child = written.find(row => row.values.get('Key') === '3.2');
+        const group = written.find(row => row.values.get('Key') === '3');
+        expect(rubric?.values.get('Name')).toBe('Vendor review');
+        expect(rubric?.values.get('Status')).toBe('Active');
+        expect(version?.values.get('RubricID')).toBe('rubric-new');
+        expect(version?.values.get('Status')).toBe('Draft');
+        expect(child?.values.get('ID')).not.toBe('child');
+        expect(child?.values.get('ParentID')).toBe(group?.values.get('ID'));
+        expect(child?.values.get('ParentID')).not.toBe('group');
+        expect(order.at(-1)).toBe('commit');
+        await expect(CreateDraftVersion(provider, { id: 'user' }, {
+            rubricId: 'rubric',
+            nodes: [{ ...leaf, parentId: 'absent' }],
+        })).rejects.toThrow(/parent/);
+        const failing = {
+            ...provider,
+            async GetEntityObject(entity: string) {
+                return draftEntity(entity, () => { order.push(`save:${entity}`); }, entity === 'MJ: Rubric Criteria');
+            },
+        };
+        const before = order.length;
+        await expect(CreateDraftVersion(failing, { id: 'user' }, { rubricId: 'rubric', nodes: [leaf] })).rejects.toThrow(/Could not save criterion/);
+        expect(order.slice(before)).toEqual(['begin', 'save:MJ: Rubric Versions', 'rollback']);
     });
 
     it('runs LLM through the Rubric Evaluator prompt and does not accept AI', async () => {

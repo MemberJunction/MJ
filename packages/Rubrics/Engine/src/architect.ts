@@ -9,11 +9,11 @@ export interface ImportedCriterion {
     gate: boolean;
 }
 
-/** A requirements matrix. Numbered paths such as 3.2.1 nest under 3.2. A knockout column marks a gate. */
+/** A requirements matrix. Numbered paths such as 3.2.1 nest under 3.2. A knockout column marks a gate. Quoted cells may contain commas. */
 export function ImportMatrix(csv: string): ImportedCriterion[] {
     const lines = csv.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.toLowerCase().startsWith('path'));
     return lines.map(line => {
-        const [path, name, weight, knockout] = line.split(',').map(part => part.trim());
+        const [path, name, weight, knockout] = csvCells(line);
         const segments = (path ?? '').split('.').filter(Boolean);
         const parentKey = segments.length > 1 ? segments.slice(0, -1).join('.') : null;
         return {
@@ -24,6 +24,37 @@ export function ImportMatrix(csv: string): ImportedCriterion[] {
             gate: /^(yes|true|1|knockout)$/i.test(knockout ?? ''),
         };
     });
+}
+
+/** RFC-style cells. A comma inside quotes is part of the cell, not a column break. */
+function csvCells(line: string): string[] {
+    const cells: string[] = [];
+    let current = '';
+    let quoted = false;
+    for (let index = 0; index < line.length; index++) {
+        const char = line[index];
+        if (quoted) {
+            if (char === '"') {
+                if (line[index + 1] === '"') {
+                    current += '"';
+                    index += 1;
+                } else {
+                    quoted = false;
+                }
+            } else {
+                current += char;
+            }
+        } else if (char === '"') {
+            quoted = true;
+        } else if (char === ',') {
+            cells.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    cells.push(current.trim());
+    return cells;
 }
 
 /** @deprecated Use {@link ImportMatrix}. */
@@ -98,8 +129,12 @@ export function draftFromImport(name: string, csv: string): { name: string; stat
 }
 
 /** A description becomes a Draft version. This path does not publish. */
+export function DraftTitle(description: string): string {
+    return description.trim().replace(/[\r\n,]+/g, ' ').slice(0, 120) || 'Draft rubric';
+}
+
 export async function DraftFromDescription(store: DraftVersionStore, description: string): Promise<{ id: string; status: 'Draft' }> {
-    const title = description.trim().replace(/[\r\n,]+/g, ' ').slice(0, 120) || 'Draft rubric';
+    const title = DraftTitle(description);
     return SaveImportedDraft(store, title, `1,${title},1,no`);
 }
 
@@ -113,20 +148,25 @@ export function NodesFromMatrix(csv: string): RubricNodeSnapshot[] {
     const imported = ImportMatrix(csv);
     const ids = new Map(imported.map(row => [row.key, randomUUID()]));
     const parentKeys = new Set(imported.map(row => row.parentKey).filter((key): key is string => !!key));
-    return imported.map((row, sequence) => ({
-        id: ids.get(row.key) ?? randomUUID(),
-        key: row.key,
-        parentId: row.parentKey ? ids.get(row.parentKey) ?? null : null,
-        name: row.name,
-        nodeType: parentKeys.has(row.key) ? 'Group' : 'Criterion',
-        weight: row.weight,
-        isAdvisory: false,
-        isGate: row.gate,
-        gateMinimumScore: row.gate ? 1 : null,
-        evidenceRequired: false,
-        rationaleRequired: false,
-        sequence,
-    }));
+    return imported.map((row, sequence) => {
+        if (row.parentKey && !ids.has(row.parentKey)) {
+            throw new Error(`Criterion ${row.key} names parent ${row.parentKey}, which is not in the matrix.`);
+        }
+        return {
+            id: ids.get(row.key) ?? randomUUID(),
+            key: row.key,
+            parentId: row.parentKey ? ids.get(row.parentKey) ?? null : null,
+            name: row.name,
+            nodeType: parentKeys.has(row.key) ? 'Group' : 'Criterion',
+            weight: row.weight,
+            isAdvisory: false,
+            isGate: row.gate,
+            gateMinimumScore: row.gate ? 1 : null,
+            evidenceRequired: false,
+            rationaleRequired: false,
+            sequence,
+        };
+    });
 }
 
 /** @deprecated Use {@link NodesFromMatrix}. */
@@ -136,7 +176,7 @@ export function nodesFromMatrix(csv: string): RubricNodeSnapshot[] {
 
 /** One criterion whose name is the description. This path does not publish. */
 export function NodesFromDescription(description: string): RubricNodeSnapshot[] {
-    const title = description.trim().replace(/[\r\n,]+/g, ' ').slice(0, 120) || 'Draft rubric';
+    const title = DraftTitle(description);
     return NodesFromMatrix(`1,${title},1,no`);
 }
 

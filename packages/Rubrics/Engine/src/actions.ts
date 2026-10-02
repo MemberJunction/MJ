@@ -3,7 +3,7 @@ import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RubricEngine, type EvaluateRecordInput, type EvaluateRecordResult } from './RubricEngine.js';
-import { NodesFromDescription, NodesFromMatrix } from './architect.js';
+import { DraftTitle, NodesFromDescription, NodesFromMatrix } from './architect.js';
 import type { RubricSubjectContent } from './content.js';
 import { ProviderRubricEngine } from './providerRecords.js';
 import type { ConsensusResult } from './statistics.js';
@@ -193,19 +193,23 @@ export class GetRubricAction extends BaseAction {
  */
 @RegisterClass(BaseAction, 'Create Rubric Draft')
 export class CreateRubricDraftAction extends BaseAction {
-    public async Invoke(engine: RubricEngine, input: { rubricId: string; nodes?: RubricNodeSnapshot[]; matrix?: string; description?: string }): Promise<{ id: string; status: 'Draft' }> {
+    public async Invoke(engine: RubricEngine, input: { rubricId?: string; rubricName?: string; nodes?: RubricNodeSnapshot[]; matrix?: string; description?: string }): Promise<{ id: string; status: 'Draft' }> {
         const nodes = input.matrix
             ? NodesFromMatrix(input.matrix)
             : input.description
                 ? NodesFromDescription(input.description)
                 : input.nodes ?? [];
-        return engine.createDraft({ rubricId: input.rubricId, nodes });
+        const rubricId = input.rubricId?.trim() || undefined;
+        const rubricName = input.rubricName?.trim() || (!rubricId && input.description ? DraftTitle(input.description) : undefined);
+        if (!rubricId && !rubricName) throw new Error('A rubric id or name is required.');
+        return engine.createDraft({ rubricId, rubricName, nodes });
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const draft = await this.Invoke(EngineForAction(params), {
-                rubricId: textValue(params, 'RubricID') ?? '',
+                rubricId: textValue(params, 'RubricID'),
+                rubricName: textValue(params, 'RubricName'),
                 nodes: nodeInput(params),
                 matrix: textValue(params, 'Matrix'),
                 description: textValue(params, 'Description'),

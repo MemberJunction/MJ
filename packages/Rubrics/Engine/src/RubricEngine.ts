@@ -39,7 +39,7 @@ export interface RubricEvaluationStore {
 /** Rows the engine reads, and the one write that creates a Draft version. Tests pass a fake. */
 export interface RubricRecords {
     rows(entityName: string, filter: string): Promise<Record<string, unknown>[]>;
-    createDraft(input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }>;
+    createDraft(input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }>;
 }
 
 /** Runs a named prompt. The engine builds the Rubric Evaluator runner from this. */
@@ -358,14 +358,14 @@ export class RubricEngine {
      * Stores the payload as a Draft version. Throws when the stored status is
      * anything else. Publishing stays a human action.
      */
-    public async CreateDraft(input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
+    public async CreateDraft(input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
         const draft = await this.records.createDraft(input);
         if (draft.status !== 'Draft') throw new Error('Create Rubric Draft never publishes.');
         return { id: draft.id, status: 'Draft' };
     }
 
     /** @deprecated Use {@link CreateDraft}. */
-    public async createDraft(input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
+    public async createDraft(input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
         return this.CreateDraft(input);
     }
 

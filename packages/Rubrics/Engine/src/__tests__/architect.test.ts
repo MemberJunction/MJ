@@ -1,11 +1,18 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CritiqueRubric, DraftFromDescription, DraftFromImport, ImportMatrix, ImproveFromData, PublishImportedDraft, SaveImportedDraft } from '../architect.js';
+import { CritiqueRubric, DraftFromDescription, DraftFromImport, ImportMatrix, ImproveFromData, NodesFromMatrix, PublishImportedDraft, SaveImportedDraft } from '../architect.js';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 describe('rubric architect', () => {
     it('nests a numbered path and marks a knockout as a gate', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../architect.ts'), 'utf8');
+        expect(source).not.toMatch(/split\(','\)/);
         const rows = ImportMatrix('3,Security,1,no\n3.2,Encryption,2,yes');
         expect(rows[1]).toMatchObject({ key: '3.2', parentKey: '3', name: 'Encryption', weight: 2, gate: true });
+        expect(ImportMatrix('3,"Security, access",1,no')[0]).toMatchObject({ key: '3', name: 'Security, access' });
+        expect(() => NodesFromMatrix('3.2,Encryption,2,yes')).toThrow(/parent 3/);
     });
 
     it('flags a vague name, a missing anchor, and a gate that allows not-applicable', async () => {

@@ -2,12 +2,15 @@ import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { RubricDecisionRunner } from './LLMRubricEvaluator.js';
 import { RubricEvaluationAgentRunner } from './RubricEvaluationAgentRunner.js';
-import { RunView } from '@memberjunction/core';
-import { MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
+import { RunInEntityTransaction, RunView, type EntityTransactionScope } from '@memberjunction/core';
+import { MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { HighestNonDraftVersion, type RubricNodeSnapshot, type ScoredNode } from '@memberjunction/rubrics-base';
 import { RubricEngine, type RubricEvaluationStore, type RubricPromptRun, type RubricRecords } from './RubricEngine.js';
 
 interface RubricProvider {
+    SupportsEntityTransactions?: boolean;
+    BeginEntityTransaction?(): Promise<EntityTransactionScope>;
+    GetEntityObject(entityName: 'MJ: Rubrics', contextUser?: unknown): Promise<MJRubricEntity>;
     GetEntityObject(entityName: 'MJ: Rubric Versions', contextUser?: unknown): Promise<MJRubricVersionEntity>;
     GetEntityObject(entityName: 'MJ: Rubric Criteria', contextUser?: unknown): Promise<MJRubricCriterionEntity>;
     GetEntityObject(entityName: 'MJ: Rubric Criterion Levels', contextUser?: unknown): Promise<MJRubricCriterionLevelEntity>;
@@ -45,47 +48,91 @@ export function providerRecords(provider: RubricProvider, user: unknown): Rubric
  * When the caller does not supply nodes, that version is cloned, including its
  * anchors and bands. Caller-supplied nodes are written as given, and anchors
  * and bands are still copied from the base where the keys match.
+ *
+ * Caller-supplied node ids are not primary keys. The entity assigns those.
+ * A parent that is not in this draft is refused. The rubric, version, criteria,
+ * anchors, and bands commit or roll back together.
  */
-export async function CreateDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
-    const base = await findHighestVersion(provider, user, input.rubricId);
-    const version = await provider.GetEntityObject('MJ: Rubric Versions', user);
-    version.NewRecord();
-    version.RubricID = input.rubricId;
-    version.Status = 'Draft';
-    if (base) version.BasedOnVersionID = base.id;
-    if (!await version.Save()) throw new Error(version.LatestResult?.Message || 'Could not create the draft version.');
-    const versionId = String(version.ID ?? '');
-    const nodes = input.nodes.length > 0 ? input.nodes : await clonedBaseNodes(provider, user, base?.id ?? null);
-    for (const node of parentsFirst(nodes)) {
-        const row = await provider.GetEntityObject('MJ: Rubric Criteria', user);
-        row.NewRecord();
-        row.ID = node.id;
-        row.RubricVersionID = versionId;
-        if (node.parentId) row.ParentID = node.parentId;
-        row.Key = node.key;
-        row.Name = node.name;
-        row.Description = node.description ?? null;
-        row.Guidance = node.guidance ?? null;
-        row.NodeType = node.nodeType;
-        row.ScaleID = node.scaleId ?? null;
-        row.Weight = node.weight;
-        row.IsAdvisory = node.isAdvisory;
-        row.IsGate = node.isGate;
-        row.GateMinimumScore = node.gateMinimumScore ?? null;
-        row.NotApplicablePolicy = node.notApplicablePolicy ?? null;
-        row.RollupMethod = node.rollupMethod ?? null;
-        row.EvidenceRequired = node.evidenceRequired;
-        row.RationaleRequired = node.rationaleRequired;
-        row.Sequence = node.sequence;
-        row.EvaluatorConfig = node.evaluatorConfig === undefined || node.evaluatorConfig === null ? null : JSON.stringify(node.evaluatorConfig);
-        if (!await row.Save()) throw new Error(row.LatestResult?.Message || `Could not save criterion ${node.key}.`);
+export async function CreateDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
+    assertParentsPresent(input.nodes);
+    return RunInEntityTransaction(provider, async () => {
+        const rubricId = input.rubricId?.trim() || await createRubric(provider, user, input.rubricName);
+        const base = await findHighestVersion(provider, user, rubricId);
+        const version = await provider.GetEntityObject('MJ: Rubric Versions', user);
+        version.NewRecord();
+        version.RubricID = rubricId;
+        version.Status = 'Draft';
+        if (base) version.BasedOnVersionID = base.id;
+        if (!await version.Save()) throw new Error(version.LatestResult?.Message || 'Could not create the draft version.');
+        const versionId = String(version.ID ?? '');
+        const nodes = input.nodes.length > 0 ? input.nodes : await clonedBaseNodes(provider, user, base?.id ?? null);
+        assertParentsPresent(nodes);
+        const storedIds = new Map<string, string>();
+        for (const node of parentsFirst(nodes)) {
+            const row = await provider.GetEntityObject('MJ: Rubric Criteria', user);
+            row.NewRecord();
+            row.RubricVersionID = versionId;
+            if (node.parentId) {
+                const parentId = storedIds.get(node.parentId);
+                if (!parentId) throw new Error(`Criterion ${node.key} names a parent that is not in this draft.`);
+                row.ParentID = parentId;
+            }
+            row.Key = node.key;
+            row.Name = node.name;
+            row.Description = node.description ?? null;
+            row.Guidance = node.guidance ?? null;
+            row.NodeType = node.nodeType;
+            row.ScaleID = node.scaleId ?? null;
+            row.Weight = node.weight;
+            row.IsAdvisory = node.isAdvisory;
+            row.IsGate = node.isGate;
+            row.GateMinimumScore = node.gateMinimumScore ?? null;
+            row.NotApplicablePolicy = node.notApplicablePolicy ?? null;
+            row.RollupMethod = node.rollupMethod ?? null;
+            row.EvidenceRequired = node.evidenceRequired;
+            row.RationaleRequired = node.rationaleRequired;
+            row.Sequence = node.sequence;
+            row.EvaluatorConfig = node.evaluatorConfig === undefined || node.evaluatorConfig === null ? null : JSON.stringify(node.evaluatorConfig);
+            if (!await row.Save()) throw new Error(row.LatestResult?.Message || `Could not save criterion ${node.key}.`);
+            const storedId = String(row.ID ?? '');
+            if (!storedId) throw new Error(`Could not save criterion ${node.key}.`);
+            if (storedId === node.id) throw new Error(`Create Rubric Draft does not reuse the id supplied for ${node.key}.`);
+            storedIds.set(node.id, storedId);
+        }
+        const stored = nodes.map(node => ({
+            ...node,
+            id: storedIds.get(node.id) as string,
+            parentId: node.parentId ? storedIds.get(node.parentId) ?? null : null,
+        }));
+        if (base) await copyAnchorsAndBands(provider, user, base.id, versionId, stored);
+        return { id: versionId, status: String(version.Status ?? '') };
+    });
+}
+
+async function createRubric(provider: RubricProvider, user: unknown, rubricName: string | undefined): Promise<string> {
+    const name = rubricName?.trim();
+    if (!name) throw new Error('A rubric id or name is required.');
+    const rubric = await provider.GetEntityObject('MJ: Rubrics', user);
+    rubric.NewRecord();
+    rubric.Name = name;
+    rubric.Status = 'Active';
+    if (!await rubric.Save()) throw new Error(rubric.LatestResult?.Message || 'Could not create the rubric.');
+    const id = String(rubric.ID ?? '');
+    if (!id) throw new Error('Could not create the rubric.');
+    return id;
+}
+
+function assertParentsPresent(nodes: RubricNodeSnapshot[]): void {
+    const ids = new Set(nodes.map(node => node.id));
+    for (const node of nodes) {
+        if (node.parentId && !ids.has(node.parentId)) {
+            throw new Error(`Criterion ${node.key} names a parent that is not in this draft.`);
+        }
     }
-    if (base) await copyAnchorsAndBands(provider, user, base.id, versionId, nodes);
-    return { id: versionId, status: String(version.Status ?? '') };
 }
 
 /** @deprecated Use {@link CreateDraftVersion}. */
-export async function createDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
+export async function createDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
     return CreateDraftVersion(provider, user, input);
 }
 
