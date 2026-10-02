@@ -35,6 +35,8 @@ interface PoolWorker {
   Worker: Worker;
   Current: PendingTask | null;
   Timer: ReturnType<typeof setTimeout> | null;
+  /** The timeout the current task was started with (settings may change while it runs) */
+  TimeoutMs: number;
 }
 
 export class VectorWorkerPool extends BaseSingleton<VectorWorkerPool> {
@@ -131,8 +133,8 @@ export class VectorWorkerPool extends BaseSingleton<VectorWorkerPool> {
   private assign(worker: PoolWorker, task: PendingTask): void {
     worker.Current = task;
     worker.Worker.ref(); // keep the process alive while a caller awaits this task
-    const timeoutMs = VectorAccelerationSettings.Instance.Options.TaskTimeoutMs;
-    worker.Timer = setTimeout(() => this.timeOut(worker), timeoutMs);
+    worker.TimeoutMs = VectorAccelerationSettings.Instance.Options.TaskTimeoutMs;
+    worker.Timer = setTimeout(() => this.timeOut(worker), worker.TimeoutMs);
     worker.Timer.unref();
     worker.Worker.postMessage(task.Request);
   }
@@ -140,7 +142,7 @@ export class VectorWorkerPool extends BaseSingleton<VectorWorkerPool> {
   private spawnIfRoom(): PoolWorker | null {
     if (this.workers.length >= VectorAccelerationSettings.Instance.Options.PoolSize) return null;
     const workerData: VectorWorkerData = { LoadNative: VectorAccelerationSettings.Instance.Options.UseNative };
-    const poolWorker: PoolWorker = { Worker: new Worker(this.ScriptPath, { workerData }), Current: null, Timer: null };
+    const poolWorker: PoolWorker = { Worker: new Worker(this.ScriptPath, { workerData }), Current: null, Timer: null, TimeoutMs: 0 };
     poolWorker.Worker.unref();
     poolWorker.Worker.on('message', (response: WorkerResponse) => this.onMessage(poolWorker, response));
     poolWorker.Worker.on('error', (error: Error) => this.onFailure(poolWorker, error));
@@ -166,9 +168,8 @@ export class VectorWorkerPool extends BaseSingleton<VectorWorkerPool> {
   private timeOut(worker: PoolWorker): void {
     const task = worker.Current;
     if (!task) return;
-    const timeoutMs = VectorAccelerationSettings.Instance.Options.TaskTimeoutMs;
     this.remove(worker);
-    task.Reject(new Error(`vector worker task exceeded ${timeoutMs} ms`));
+    task.Reject(new Error(`vector worker task exceeded ${worker.TimeoutMs} ms`));
     void worker.Worker.terminate();
     this.dispatch();
   }

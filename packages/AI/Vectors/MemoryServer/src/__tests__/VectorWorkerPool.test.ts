@@ -100,7 +100,10 @@ describe('VectorWorkerPool', () => {
 
   it('abandons a task that runs past the timeout and replaces its worker', async () => {
     VectorAccelerationSettings.Instance.Configure({ PoolSize: 1, TaskTimeoutMs: 100 });
-    await expect(pool.Run(task(HANG))).rejects.toThrow('vector worker task exceeded 100 ms');
+    const hung = pool.Run(task(HANG)); // its timer is armed with 100 ms as it is assigned
+    // The replacement worker's cold start must not race the short timeout on a loaded machine.
+    VectorAccelerationSettings.Instance.Configure({ TaskTimeoutMs: 5_000 });
+    await expect(hung).rejects.toThrow('vector worker task exceeded 100 ms');
     expect(pool.WorkerCount).toBe(0);
     expect(rowsOf(await pool.Run(task()))).toHaveLength(1);
   });
@@ -108,6 +111,7 @@ describe('VectorWorkerPool', () => {
   it('starts queued work on a fresh worker after a timeout frees the slot', async () => {
     VectorAccelerationSettings.Instance.Configure({ PoolSize: 1, TaskTimeoutMs: 100 });
     const hung = pool.Run(task(HANG));
+    VectorAccelerationSettings.Instance.Configure({ TaskTimeoutMs: 5_000 }); // for the queued task only
     const queued = pool.Run(task());
     await expect(hung).rejects.toThrow(/exceeded/);
     expect(rowsOf(await queued)).toHaveLength(1);
