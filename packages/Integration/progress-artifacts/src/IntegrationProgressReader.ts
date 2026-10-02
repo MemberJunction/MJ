@@ -58,10 +58,15 @@ export class IntegrationProgressReader {
      * start time never moves. (The same reasoning governs retention; see
      * `IntegrationProgressEmitter.pruneOldRuns`.)
      *
+     * `offset` exists because the caller authorization-filters AFTER this returns, so a short page
+     * does not mean the source is exhausted — it may just mean the caller could not read some of
+     * what came back. Without an offset there is no way to ask for the next slice, and both UI
+     * surfaces faked paging by re-requesting with a doubled limit.
+     *
      * Filters and the limit are applied on the run HEADS — `manifest.json` plus the presence of
      * `result.json` — so only the runs actually being returned are hydrated.
      */
-    public async ListRuns(filter: IntegrationRunFilter = {}, limit = 50): Promise<IntegrationRunSnapshot[]> {
+    public async ListRuns(filter: IntegrationRunFilter = {}, limit = 50, offset = 0): Promise<IntegrationRunSnapshot[]> {
         const entries = await this.safeReadDir(this.rootDir);
         const heads: Array<{ runID: string; head: RunHead }> = [];
         for (const runID of entries) {
@@ -82,7 +87,8 @@ export class IntegrationProgressReader {
             // tiebreak for two runs that started in the same millisecond.
             return a.runID < b.runID ? 1 : a.runID > b.runID ? -1 : 0;
         });
-        const kept = heads.slice(0, limit);
+        const start = Math.max(0, offset);
+        const kept = heads.slice(start, start + limit);
         const snapshots: IntegrationRunSnapshot[] = [];
         for (const k of kept) {
             snapshots.push(await this.hydrate(k.runID, k.head));
@@ -219,6 +225,44 @@ export class IntegrationProgressReader {
         const raw = await this.safeReadFile(p);
         if (!raw) return undefined;
         try { return JSON.parse(raw) as T; } catch { return undefined; }
+    }
+
+    /**
+     * Per-entity outcome counts for a sync run, recovered from its event stream.
+     *
+     * The run ROW records only TotalRecords, so history could never show created vs updated vs
+     * skipped per table — the field existed on the API type and was never populated, which is what
+     * thing.txt saw as an empty breakdown. The engine already emits every number needed on
+     * `sync.entity-map.complete`; this reads them back.
+     *
+     * Honest ceiling: artifacts are pruned by the retention cap and are node-local, so a run old
+     * enough to have been pruned yields nothing. The caller must render that as "not recorded"
+     * rather than as zeros.
+     */
+    public async EntityOutcomes(runID: string): Promise<Array<{
+        EntityName: string; InsertCount: number; UpdateCount: number; SkipCount: number; ErrorCount: number;
+    }>> {
+        const events = await this.Tail(runID, 0);
+        const byEntity = new Map<string, { EntityName: string; InsertCount: number; UpdateCount: number; SkipCount: number; ErrorCount: number }>();
+        for (const ev of events) {
+            // A sync mirrors each entity map's completion as a `stage.complete` whose stage is the
+            // object name. `counts` folds created and updated into `succeeded`, so the split rides
+            // alongside in `data`.
+            if (ev.eventType !== 'stage.complete') continue;
+            const d = (ev.data ?? {}) as Record<string, unknown>;
+            if (d.recordsCreated === undefined && d.recordsUpdated === undefined) continue;
+            const name = String(d.mjEntity ?? ev.stage ?? '');
+            if (!name) continue;
+            const row = byEntity.get(name) ?? { EntityName: name, InsertCount: 0, UpdateCount: 0, SkipCount: 0, ErrorCount: 0 };
+            // A map can appear more than once in a run (resume, or a push pass after a pull), so
+            // accumulate rather than overwrite.
+            row.InsertCount += Number(d.recordsCreated ?? 0);
+            row.UpdateCount += Number(d.recordsUpdated ?? 0);
+            row.SkipCount   += Number(ev.counts?.skipped ?? 0);
+            row.ErrorCount  += Number(ev.counts?.failed ?? 0);
+            byEntity.set(name, row);
+        }
+        return [...byEntity.values()];
     }
 
     /**
