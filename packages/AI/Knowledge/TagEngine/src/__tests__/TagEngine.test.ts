@@ -18,7 +18,9 @@ const {
     mockCreateTaggedItem: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    // Real codec: TagEngine persists fresh vectors in both JSON and binary (base64 float32) form.
+    Float32VectorToBase64: (await importOriginal<typeof import('@memberjunction/global')>()).Float32VectorToBase64,
     BaseSingleton: class BaseSingleton<T> {
         public static getInstance<T>(): T { return new (this as unknown as new () => T)(); }
     },
@@ -149,7 +151,8 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
     TagTreeNode: class {},
 }));
 
-vi.mock('@memberjunction/ai-vectors-memory', () => {
+vi.mock('@memberjunction/ai-vectors-memory', async () => {
+    const { ReadStoredVectorStub } = await import('./helpers/readStoredVectorStub');
     class MockSimpleVectorService {
         LoadVectors = mockLoadVectors;
         FindNearest = mockFindNearest;
@@ -158,6 +161,7 @@ vi.mock('@memberjunction/ai-vectors-memory', () => {
     }
     return {
         SimpleVectorService: MockSimpleVectorService,
+        ReadStoredVector: ReadStoredVectorStub,
         VectorEntry: class {},
     };
 });

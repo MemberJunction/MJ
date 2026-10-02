@@ -1665,6 +1665,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push('imr:1');
         }
 
+        // Binary-width segment. Cached slots are fetched at full width, but "full width" leaves
+        // binary columns out unless the caller asks for them (RunViewParams.IncludeBinaryFields,
+        // set automatically by ProviderBase when a caller names a binary field in Fields). A slot
+        // without binary columns must never answer a request that needs them, so the two widths
+        // get separate slots. Appended only when true, so every existing fingerprint stays
+        // byte-for-byte identical.
+        if (params.IncludeBinaryFields === true) {
+            parts.push('bin:1');
+        }
+
         // DataSource segment. RunViewParams.DataSource:'Materialized' routes the read to the entity's
         // materialized snapshot view (GetEffectiveBaseView), a DIFFERENT physical source than the default
         // live base view — so a Live read and a Materialized read of the same entity/filter/orderBy MUST

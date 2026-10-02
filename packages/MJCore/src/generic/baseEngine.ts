@@ -98,6 +98,22 @@ export class BaseEnginePropertyConfig extends BaseInfo {
     CacheLocalTTL?: number;
 
     /**
+     * Whether the engine loads the entity's binary fields (`varbinary` / `bytea` columns, held as
+     * base64 strings) along with the rest. Engines leave them out by default, like every RunView,
+     * so a cached entity never carries large embeddings or file content it does not use.
+     *
+     * - `true` — always load them.
+     * - `'DatabaseProviderOnly'` — load them only when the engine runs on a database provider
+     *   (the server), never over a network provider (the browser). Use this for an engine shared
+     *   by both tiers where only server code reads the binary values — e.g. persisted embeddings
+     *   that only the server indexes — so the browser never downloads them.
+     * - `false` / omitted — never load them.
+     *
+     * @default false
+     */
+    IncludeBinaryFields?: boolean | 'DatabaseProviderOnly';
+
+    /**
      * Controls whether loaded rows are returned as full BaseEntity subclass instances
      * ('entity_object') or plain JavaScript objects ('simple').
      *
@@ -1898,10 +1914,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Resolves {@link BaseEnginePropertyConfig.IncludeBinaryFields} for this engine's provider:
+     * `'DatabaseProviderOnly'` becomes true on a database provider and false on any other.
+     */
+    protected ResolveConfigIncludeBinaryFields(config: BaseEnginePropertyConfig): boolean {
+        if (config.IncludeBinaryFields === 'DatabaseProviderOnly') {
+            return this.ProviderToUse?.ProviderType === ProviderType.Database;
+        }
+        return config.IncludeBinaryFields === true;
+    }
+
+    /**
      * Builds the RunViewParams for an engine config. Used by LoadSingleEntityConfig,
      * LoadMultipleEntityConfigs, RegisterCacheChangeCallbacks, and syncLocalCacheForConfig
      * to ensure the fingerprint-affecting params (EntityName, ExtraFilter, OrderBy,
-     * IgnoreMaxRows) are always consistent — preventing cache key mismatches that break
+     * IgnoreMaxRows, IncludeBinaryFields) are always consistent — preventing cache key mismatches that break
      * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
      */
     protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
@@ -1914,6 +1941,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             _fromEngine: true,   // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
             CacheLocalTTL: config.CacheLocalTTL,
+            IncludeBinaryFields: this.ResolveConfigIncludeBinaryFields(config),
             BypassCache: bypassCache
         } as RunViewParams;
     }

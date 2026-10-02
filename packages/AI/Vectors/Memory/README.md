@@ -226,6 +226,8 @@ const allVectors = service.ExportVectors();
 
 Dimension validation is automatic -- all vectors must have the same dimensionality.
 
+Every input accepts a `VectorValues` value — `number[]`, `Float32Array` or `Float64Array` — and is copied into the packed store, so a vector decoded from a binary column (below) can be loaded without converting it to an array first.
+
 ## Clustering Algorithms
 
 ### K-Means (with K-Means++ Initialization)
@@ -332,6 +334,25 @@ embeddings.ReserveCapacity(rowCount, 1536); // optional: one allocation for a bu
 
 Behaviour is unchanged from the `Map`-based implementation: same scores (bit-for-bit at float64), same tie-breaking (insertion order), same `topK` / threshold / filter semantics. `GetVector` and `ExportVectors` now return **copies**, so mutating a returned array no longer changes the stored vector. Subclasses that override a metric method (`CalculateDistance`, `CosineSimilarity`, …) keep working — the service detects the override and scores row by row through it.
 
+## Reading Persisted Embeddings
+
+MemberJunction stores each persisted embedding twice: a JSON column (`VectorJSON`, `EmbeddingVector`, …) and a binary companion (`VectorBinary`, `EmbeddingVectorBinary`, …) holding the same vector as little-endian float32 bytes, base64-encoded in a `BaseEntity`. Decoding the binary column is a copy; parsing the JSON builds a string per number (20,000 × 1,536 vectors on Node 22: 0.28 s vs 3.9 s). These helpers read either form:
+
+| Function | Returns |
+|---|---|
+| `ReadStoredVector(binary, json)` | The binary vector when it is valid, otherwise the parsed JSON vector, otherwise `null` |
+| `DecodeVectorBinary(binary)` | `Float32Array`, or `null` when missing, not base64, not a whole number of float32 values, or non-finite |
+| `ParseVectorJSON(json)` | `number[]`, or `null` when missing, malformed, empty, or containing anything but finite numbers |
+
+```typescript
+import { ReadStoredVector } from '@memberjunction/ai-vectors-memory';
+
+const vector = ReadStoredVector(note.EmbeddingVectorBinary, note.EmbeddingVector);
+if (vector) service.AddOrUpdateVector(note.ID, vector, metadata);
+```
+
+The JSON fallback covers rows written before the binary column existed, browser code that did not fetch binary fields (`RunView` omits them unless asked), and a corrupt binary value. The helpers are browser-safe. See the [Binary Fields Guide](../../../../guides/BINARY_FIELDS_GUIDE.md).
+
 ## Async Search and Server Acceleration
 
 `FindNearestAsync`, `KMeansClusterAsync` and `DBSCANClusterAsync` take the same arguments and return the same results as their synchronous forms. In a browser, or anywhere no accelerator is registered, they run in-process. On a server that loads [`@memberjunction/ai-vectors-memory-server`](../MemoryServer/README.md), large searches and every clustering run move to a worker-thread pool reading the store through shared memory, optionally using a native SIMD backend — so the event loop keeps serving other requests.
@@ -366,9 +387,15 @@ In-process VectorDBBase driver that reads from an `MJ: Vector Indexes` row confi
 
 Rows are read on every query, as the calling user, so row-level security always applies. The parsed vectors are reused only when the index config and the rows just read (their keys, `__mj_UpdatedAt` values and vector presence) match what they were built from, so one user never receives another user's rows. After writing vectors by a path that bypasses `BaseEntity`, call `DeleteAllRecords(indexName)` to drop the cached vectors.
 
+When the index's ProviderConfig names a `binaryVectorField`, the driver fetches that column too (setting `IncludeBinaryFields`) and prefers it over `vectorField`, falling back to the JSON for rows whose binary value is empty or invalid:
+
+```json
+{ "entityName": "MJ: AI Agent Notes", "vectorField": "EmbeddingVector", "binaryVectorField": "EmbeddingVectorBinary" }
+```
+
 ### `SimpleVectorServiceProvider` (new in v5.38)
 
-**EntityDocument-keyed** in-process driver, purpose-built for `Provider.SearchEntities()` and any other `EntityDocument`-backed search. Each "index" corresponds to one `MJ: Entity Documents` row; vectors come from `MJ: Entity Record Documents.VectorJSON` filtered by `EntityDocumentID`, and matches surface the **underlying entity record's RecordID** in their metadata (not the EntityRecordDocument PK).
+**EntityDocument-keyed** in-process driver, purpose-built for `Provider.SearchEntities()` and any other `EntityDocument`-backed search. Each "index" corresponds to one `MJ: Entity Documents` row; vectors come from `MJ: Entity Record Documents` rows filtered by `EntityDocumentID` — `VectorBinary` when valid, falling back to `VectorJSON` (both are fetched), and matches surface the **underlying entity record's RecordID** in their metadata (not the EntityRecordDocument PK).
 
 ```typescript
 import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
@@ -381,9 +408,9 @@ const result = await provider.QueryIndex(
 // result.data.matches[i].metadata.RecordID is the parent record's ID
 ```
 
-**Incrementally maintained cache:** one loaded index per `EntityDocumentID`, held at float32. Saves and deletes of `MJ: Entity Record Documents` rows — local, or on another server via `remote-invalidate` — are applied to the loaded index **row by row**; the index is never thrown away because one row changed. Remote changes use the broadcast record when the host opts the entity into record-data broadcast, otherwise only the changed rows are re-read (batched), once per user an index was loaded as, and each read is applied only to that user's indexes. Once the TTL (default 15 minutes) passes, the index keeps serving while it reloads in the background. Call `SimpleVectorServiceProvider.InvalidateIndex(entityDocumentId)` only after writing `VectorJSON` by a path that bypasses `BaseEntity` (raw SQL, external tools); it forces the next query to reload first, even if a load was already running when you called it.
+**Incrementally maintained cache:** one loaded index per `EntityDocumentID`, held at float32. Saves and deletes of `MJ: Entity Record Documents` rows — local, or on another server via `remote-invalidate` — are applied to the loaded index **row by row**; the index is never thrown away because one row changed. Remote changes use the broadcast record when the host opts the entity into record-data broadcast, otherwise only the changed rows are re-read (batched), once per user an index was loaded as, and each read is applied only to that user's indexes. Once the TTL (default 15 minutes) passes, the index keeps serving while it reloads in the background. Call `SimpleVectorServiceProvider.InvalidateIndex(entityDocumentId)` only after writing `VectorBinary` / `VectorJSON` by a path that bypasses `BaseEntity` (raw SQL, external tools); it forces the next query to reload first, even if a load was already running when you called it.
 
-**Read-only:** ingestion methods (`CreateRecord`, `UpdateRecord`, etc.) throw via the `unsupported()` path. The vector-sync pipeline writes `EntityRecordDocument.VectorJSON` directly; this driver just rehydrates from those rows.
+**Read-only:** ingestion methods (`CreateRecord`, `UpdateRecord`, etc.) throw via the `unsupported()` path. The vector-sync pipeline writes `EntityRecordDocument.VectorBinary` and `VectorJSON` directly; this driver just rehydrates from those rows.
 
 **When NOT to use:** many hundreds of thousands of `EntityRecordDocument` rows per `EntityDocument`, or scenarios that need a persistent ANN index. For those, configure a colocated or remote provider (pgvector, SQL Server, Qdrant, Pinecone) on the `EntityDocument`'s `VectorDatabaseID` instead. (A server running `@memberjunction/ai-vectors-memory-server` can opt into an in-memory HNSW index for large stores.)
 

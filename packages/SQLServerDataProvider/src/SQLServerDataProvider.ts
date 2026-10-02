@@ -81,7 +81,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsByteArray, TryBase64ToBytes, UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -1470,6 +1470,7 @@ export class SQLServerDataProvider
    * @returns SQL value string
    */
   private generateSetStatementValue(f: EntityFieldInfo, value: any): string {
+    if (f.IsBinaryFieldType) return this.FormatBinaryLiteral(f, value);
     let val: any = value;
     
     switch (f.TSType) {
@@ -1522,6 +1523,10 @@ export class SQLServerDataProvider
   }
 
   private generateSingleSPParam(f: EntityFieldInfo, value: string, isFirst: boolean): string {
+    if (f.IsBinaryFieldType) {
+      const literal = value === null || value === undefined ? 'NULL' : this.FormatBinaryLiteral(f, value);
+      return `${isFirst ? '' : ',\n                '}@${f.CodeName}=${literal}`;
+    }
     let sRet: string = '';
     let quotes: string = '';
     let val: any = value;
@@ -1558,6 +1563,29 @@ export class SQLServerDataProvider
     sRet += `@${f.CodeName}=${this.packageSPParam(val, quotes, f.UnicodePrefix)}`;
 
     return sRet;
+  }
+
+  /**
+   * Renders a binary field value as a T-SQL hexadecimal literal (`0x…`).
+   *
+   * A binary field's value in a `BaseEntity` is a base64 string. SQL Server has no implicit
+   * conversion from a quoted string to `varbinary` — a quoted base64 value would either fail or be
+   * stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
+   * which is unambiguous, needs no escaping and works on every SQL Server version. A byte array
+   * (e.g. a Buffer set by server code) is accepted as well.
+   *
+   * @param field - The binary field being written; named in the error message.
+   * @param value - Base64 string or byte array.
+   * @returns The literal, e.g. `0x0A0B` (`0x` for zero bytes).
+   * @throws Error when the value is neither a byte array nor valid base64, so a corrupt value fails
+   *   the save instead of being stored as garbage.
+   */
+  protected FormatBinaryLiteral(field: EntityFieldInfo, value: unknown): string {
+    const bytes = IsByteArray(value) ? value : TryBase64ToBytes(typeof value === 'string' ? value : null);
+    if (!bytes) {
+      throw new Error(`Field "${field.Name}" is binary (${field.Type}); its value must be a base64 string, but it is not valid base64`);
+    }
+    return `0x${Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('hex').toUpperCase()}`;
   }
 
   /**
@@ -1803,17 +1831,6 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IMetadataProvider
   /**************************************************************************/
-
-  /**
-   * Public backward-compatible wrapper that delegates to PostProcessRows (inherited from GenericDP).
-   * Used by SQLServerTransactionGroup which needs a public entry point for row processing.
-   *
-   * PostProcessRows (GenericDP) handles: AdjustDatetimeFields → encryption decryption.
-   */
-  public async ProcessEntityRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, contextUser?: UserInfo): Promise<Record<string, unknown>[]> {
-    if (!rows || rows.length === 0) return rows;
-    return this.PostProcessRows(rows, entityInfo, contextUser as UserInfo);
-  }
 
   /**
    * SQL Server-specific datetime field adjustments.

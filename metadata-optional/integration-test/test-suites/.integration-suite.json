@@ -1239,6 +1239,17 @@
           "primaryKey": {
             "ID": "D0A93B02-FD0F-4B47-89D0-914DC49D13B6"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT99 - Binary Fields and Vector Columns",
+            "Sequence": 72,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "80642370-A10B-405B-89CC-536AAAA00397"
+          }
         }
       ]
     },

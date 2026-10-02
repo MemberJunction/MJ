@@ -198,6 +198,12 @@ export function SQLFullType(baseType: string, length: number, precision: number,
         sOutput += `(${length > 0 ? length / 2 : 'MAX'})`; // nvarchar divide the system length by 2 to get the actual length for the output
     else if (type === 'char')
         sOutput += `(${length})`;
+    else if (type === 'varbinary')
+        // A bare `varbinary` parameter or variable means varbinary(1) in T-SQL, which silently
+        // truncates every value to one byte — so always emit the length, MAX when unbounded (-1).
+        sOutput += `(${length > 0 ? length : 'MAX'})`;
+    else if (type === 'binary')
+        sOutput += `(${length > 0 ? length : 1})`;
     else if (type === 'nchar')
         sOutput += `(${length / 2})`; // nchar divide the system length by 2 to get the actual length for the output
     else if (type === 'decimal' || type === 'numeric')

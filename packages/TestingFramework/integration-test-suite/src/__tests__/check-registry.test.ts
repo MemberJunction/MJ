@@ -53,6 +53,7 @@ import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
+import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
 import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
@@ -170,6 +171,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
+        ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT99)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -244,6 +246,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-behavioral': 3,
         'app-wiring': 10,
         'auth-validation': 7,
+        'binary-fields': 6,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'class-resolution': 5,
@@ -338,7 +341,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(98);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(99);
     });
 });
 
@@ -379,6 +382,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'actions-pipeline.AP2',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
+        'binary-fields.BF4',
+        'binary-fields.BF6',
         'cache-gauntlet.CG1',
         'cache-gauntlet.CG2',
         'cache-gauntlet.CG3',

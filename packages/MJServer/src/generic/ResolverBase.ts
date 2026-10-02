@@ -37,7 +37,7 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
@@ -99,7 +99,10 @@ export class ResolverBase {
       return null;
     }
     // Shallow copy up front so every write below lands on our object, never the caller's.
-    dataObject = { ...dataObject };
+    // Binary values are base64 strings everywhere above the providers; any byte array that still
+    // reaches a resolver (custom code, an external driver) is converted here, because GraphQL's
+    // String scalar cannot serialize a Buffer and would fail the whole response.
+    dataObject = ReplaceByteArraysWithBase64({ ...dataObject });
 
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
@@ -566,7 +569,8 @@ export class ResolverBase {
             ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
             : undefined,
           viewInput.BypassCache,
-          viewInput.DataSource
+          viewInput.DataSource,
+          viewInput.IncludeBinaryFields
         );
       }
       else {
@@ -610,7 +614,8 @@ export class ResolverBase {
         viewInput.Aggregates,
         undefined,
         viewInput.BypassCache,
-        viewInput.DataSource
+        viewInput.DataSource,
+        viewInput.IncludeBinaryFields
       );
     } catch (err) {
       console.log(err);
@@ -657,7 +662,8 @@ export class ResolverBase {
         viewInput.Aggregates,
         undefined,
         viewInput.BypassCache,
-        viewInput.DataSource
+        viewInput.DataSource,
+        viewInput.IncludeBinaryFields
       );
     } catch (err) {
       console.log(err);
@@ -732,6 +738,7 @@ export class ResolverBase {
           aggregates: viewInput.Aggregates,
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
+          includeBinaryFields: viewInput.IncludeBinaryFields,
         });
       } catch (err) {
         LogError(err);
@@ -1068,7 +1075,8 @@ export class ResolverBase {
     aggregates?: AggregateExpression[],
     afterKey?: CompositeKey,
     bypassCache?: boolean,
-    dataSource?: 'Live' | 'Materialized'
+    dataSource?: 'Live' | 'Materialized',
+    includeBinaryFields?: boolean
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -1146,6 +1154,7 @@ export class ResolverBase {
           Aggregates: aggregates,
           BypassCache: bypassCache,
           DataSource: dataSource,
+          IncludeBinaryFields: includeBinaryFields,
         },
         user
       );
@@ -1293,6 +1302,7 @@ export class ResolverBase {
           Aggregates: param.aggregates,
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
+          IncludeBinaryFields: param.includeBinaryFields,
         });
       }
 

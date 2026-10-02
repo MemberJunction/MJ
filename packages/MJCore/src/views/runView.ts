@@ -397,6 +397,25 @@ export class RunViewParams {
     BypassCache?: boolean;
 
     /**
+     * When true, binary fields (SQL Server `binary` / `varbinary` / `image`, PostgreSQL `bytea`)
+     * are included in the results. Their values are base64 strings, the same representation a
+     * `BaseEntity` holds; convert with `Base64ToBytes` / `Base64ToFloat32Vector` from
+     * `@memberjunction/global`.
+     *
+     * Binary columns are left out by default **when the view runs over a network transport**
+     * (`GraphQLDataProvider` in the browser or another client), because they are usually large
+     * and most lists, grids and lookups never read them. A field named explicitly in
+     * {@link Fields} is always included, whatever this flag says, so a caller that wants one
+     * specific binary column can ask for just that column.
+     *
+     * Server-side database providers read binary columns from the database in every case; the
+     * flag only controls what crosses the wire.
+     *
+     * @default false
+     */
+    IncludeBinaryFields?: boolean;
+
+    /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
      * After this time, cached results will be considered stale and fresh data will be fetched.
      * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
@@ -507,6 +526,9 @@ export class RunViewParams {
         if (a.ResultType !== b.ResultType) return false;
         if (a.CacheLocal !== b.CacheLocal) return false;
         if (a.CacheLocalTTL !== b.CacheLocalTTL) return false;
+        // Including binary fields changes the columns returned, so a toggle must trigger a reload.
+        // undefined and false mean the same thing and must not cause a spurious one.
+        if ((a.IncludeBinaryFields === true) !== (b.IncludeBinaryFields === true)) return false;
         // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
         // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
         // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.

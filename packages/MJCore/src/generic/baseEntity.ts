@@ -1,4 +1,4 @@
-import { ClassFactory, ClassRegistration, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
+import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
@@ -435,6 +435,9 @@ export class EntityField {
                 result.Success = false;
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be longer than ${ef.MaxLength} characters. Current value is ${this.Value.length} characters`, this.Value));
             }
+            if (ef.IsBinaryFieldType && this.Value !== null && this.Value !== undefined) {
+                this.validateBinaryValue(ef, result);
+            }
             if (ef.TSType == EntityFieldTSType.Date && (this.Value !== null && this.Value !== undefined && !(this.Value instanceof Date)) ) {
                 // invalid non-null date, but that is okay if we are a new record and we have a default value
                 result.Success = false;
@@ -501,6 +504,27 @@ export class EntityField {
         return result;
     }
 
+
+    /**
+     * Validates a non-null binary field value. A binary field (`varbinary` / `bytea`) holds a base64
+     * string in a `BaseEntity`, and the database providers decode it when the record is saved, so a
+     * value that is not base64 — a data URI, raw text, a byte array — would fail the save with a
+     * database error that names no field. Catching it here reports it against the field instead.
+     * A fixed-size column (`varbinary(n)` / `binary(n)`) also has its decoded byte length checked.
+     */
+    private validateBinaryValue(ef: EntityFieldInfo, result: ValidationResult): void {
+        const value: unknown = this.Value;
+        if (typeof value !== 'string' || !IsValidBase64(value)) {
+            result.Success = false;
+            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} is a binary field; its value must be a base64-encoded string`, this.Value));
+            return;
+        }
+        const byteLength = Base64DecodedByteLength(value);
+        if (ef.Length > 0 && byteLength > ef.Length) {
+            result.Success = false;
+            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be longer than ${ef.Length} bytes. Current value is ${byteLength} bytes`, this.Value));
+        }
+    }
 
     constructor(fieldInfo: EntityFieldInfo, Value?: any) {
         // NOTE: constructing an EntityField for a deprecated/disabled field is always allowed — the
@@ -6787,13 +6811,14 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Generates vector embeddings for multiple text fields by their field names.
      * Processes fields in parallel for better performance.
-     * @param fields - Array of field configurations specifying source text field, target vector field, and model ID field names
+     * @param fields - Array of field configurations specifying source text field, target vector field, model ID field
+     *   and, optionally, the binary companion of the vector field (see {@link GenerateEmbedding})
      * @returns Promise that resolves to true if all embeddings were generated successfully, false if any failed
      */
-    protected async GenerateEmbeddingsByFieldName(fields: Array<{fieldName: string, vectorFieldName: string, modelFieldName: string}>): Promise<boolean> {
+    protected async GenerateEmbeddingsByFieldName(fields: Array<{fieldName: string, vectorFieldName: string, modelFieldName: string, binaryVectorFieldName?: string}>): Promise<boolean> {
         const promises = [];
-        for (const {fieldName, vectorFieldName, modelFieldName} of fields) {
-            promises.push(this.GenerateEmbeddingByFieldName(fieldName, vectorFieldName, modelFieldName));
+        for (const {fieldName, vectorFieldName, modelFieldName, binaryVectorFieldName} of fields) {
+            promises.push(this.GenerateEmbeddingByFieldName(fieldName, vectorFieldName, modelFieldName, binaryVectorFieldName));
         }
         const results = await Promise.all(promises);
         return results.every(result => result === true);
@@ -6803,11 +6828,14 @@ export abstract class BaseEntity<T = unknown> {
      * Generates a vector embedding for a single text field identified by field name.
      * Retrieves the field objects and delegates to GenerateEmbedding method.
      * @param fieldName - Name of the text field to generate embedding from
-     * @param vectorFieldName - Name of the field to store the vector embedding
+     * @param vectorFieldName - Name of the field to store the vector embedding (JSON)
      * @param modelFieldName - Name of the field to store the model ID used for embedding
+     * @param binaryVectorFieldName - Optional name of the binary (varbinary/bytea) companion of `vectorFieldName`,
+     *   which receives the same vector as little-endian float32 bytes. Omit for entities without one.
      * @returns Promise that resolves to true if embedding was generated successfully, false otherwise
+     * @throws Error when a named field does not exist on the entity
      */
-    protected async GenerateEmbeddingByFieldName(fieldName: string, vectorFieldName: string, modelFieldName: string): Promise<boolean> {
+    protected async GenerateEmbeddingByFieldName(fieldName: string, vectorFieldName: string, modelFieldName: string, binaryVectorFieldName?: string): Promise<boolean> {
         const field = this.GetFieldByName(fieldName);
         const vectorField = this.GetFieldByName(vectorFieldName);
         const modelField = this.GetFieldByName(modelFieldName);
@@ -6817,20 +6845,27 @@ export abstract class BaseEntity<T = unknown> {
             throw new Error(`Vector field not found: ${vectorFieldName}`);
         if (modelFieldName?.trim().length > 0 && !modelField)
             throw new Error(`Model field not found: ${modelFieldName}`);
-        
-        return await this.GenerateEmbedding(field, vectorField, modelField);
+        let binaryVectorField: EntityField | undefined;
+        if (binaryVectorFieldName?.trim().length) {
+            binaryVectorField = this.GetFieldByName(binaryVectorFieldName);
+            if (!binaryVectorField)
+                throw new Error(`Binary vector field not found: ${binaryVectorFieldName}`);
+        }
+
+        return await this.GenerateEmbedding(field, vectorField, modelField, binaryVectorField);
     }
 
     /**
      * Generates vector embeddings for multiple text fields using EntityField objects.
      * Processes fields in parallel for better performance.
-     * @param fields - Array of field configurations with EntityField objects for source, vector, and model fields
+     * @param fields - Array of field configurations with EntityField objects for source, vector, model and
+     *   (optionally) binary vector fields
      * @returns Promise that resolves to true if all embeddings were generated successfully, false if any failed
      */
-    protected async GenerateEmbeddings(fields: Array<{field: EntityField, vectorField: EntityField, modelField: EntityField}>): Promise<boolean> {
+    protected async GenerateEmbeddings(fields: Array<{field: EntityField, vectorField: EntityField, modelField: EntityField, binaryVectorField?: EntityField}>): Promise<boolean> {
         const promises = [];
-        for (const {field, vectorField, modelField} of fields) {
-            promises.push(this.GenerateEmbedding(field, vectorField, modelField));
+        for (const {field, vectorField, modelField, binaryVectorField} of fields) {
+            promises.push(this.GenerateEmbedding(field, vectorField, modelField, binaryVectorField));
         }
         const results = await Promise.all(promises);
         return results.every(result => result === true);
@@ -6839,13 +6874,23 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Generates a vector embedding for a single text field using AI engine.
      * Only generates embeddings for new records or when the source field has changed.
-     * Stores both the vector embedding and the model ID used to generate it.
+     * Stores the vector embedding, the model ID used to generate it and, when the entity has one, the
+     * vector's binary companion.
+     *
+     * **Two persisted forms.** The JSON field holds the vector as a JSON number array. The optional
+     * binary field (`varbinary(MAX)` / `bytea`) holds the same vector as little-endian float32 bytes —
+     * set here as a base64 string via `Float32VectorToBase64`, which is how every binary field travels
+     * in MJ. Readers prefer the binary form because decoding it is a copy, not a JSON parse (see
+     * `ReadStoredVector` in `@memberjunction/ai-vectors-memory`). Both are written and cleared together
+     * so they never disagree.
+     *
      * @param field - The EntityField containing the text to embed
      * @param vectorField - The EntityField to store the generated vector embedding (as JSON string)
      * @param modelField - The EntityField to store the ID of the AI model used
+     * @param binaryVectorField - Optional EntityField to store the same vector as base64-encoded float32 bytes
      * @returns Promise that resolves to true if embedding was generated successfully, false otherwise
      */
-    protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField): Promise<boolean> {
+    protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField, binaryVectorField?: EntityField): Promise<boolean> {
         try {
             if (this._skipEmbeddings) return true;
             if (!this.IsSaved || field.Dirty) {
@@ -6854,23 +6899,27 @@ export abstract class BaseEntity<T = unknown> {
                     const e = await this.EmbedTextLocal(field.Value)
                     if (e && e.vector) {
                         vectorField.Value = JSON.stringify(e.vector);
+                        if (binaryVectorField)
+                            binaryVectorField.Value = Float32VectorToBase64(e.vector);
                         if (modelField)
                             modelField.Value = e.modelID;
                     }
                 }
                 else {
                     vectorField.Value = null;
+                    if (binaryVectorField)
+                        binaryVectorField.Value = null;
                     if (modelField)
                         modelField.Value = null;
                 }
-            }        
+            }
             return true;
         }
         catch (e) {
             console.error("Error generating embedding:", e);
             return false;
         }
-    }    
+    }
 
     /**
      * In the BaseEntity class this method is not implemented. This method shoudl be implemented only in 

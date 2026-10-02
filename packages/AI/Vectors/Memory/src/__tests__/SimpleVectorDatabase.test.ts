@@ -57,7 +57,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 import { EntityInfo, UserInfo } from '@memberjunction/core';
 import type { BaseResponse, QueryOptions } from '@memberjunction/ai-vectordb';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
-import { MJGlobal } from '@memberjunction/global';
+import { Float32VectorToBase64, MJGlobal } from '@memberjunction/global';
 import { LoadSimpleVectorDatabase, SimpleVectorDatabase } from '../models/SimpleVectorDatabase';
 
 // ─────────────────────────────────────────────
@@ -116,6 +116,7 @@ const USER = new UserInfo(undefined, { ID: 'user-1', Email: 'person@example.com'
 interface ProviderConfigFixture {
     entityName?: string;
     vectorField?: string;
+    binaryVectorField?: string;
     filter?: string;
     titleField?: string;
     snippetField?: string;
@@ -934,6 +935,100 @@ describe('SimpleVectorDatabase', () => {
             expect(result.message).toBe(
                 `SimpleVectorDatabase does not support ${name} — embeddings are read directly from the entity row's vector column. Use Pinecone/pgvector/Qdrant for ingestion.`);
             expect(mocks.RunView).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('QueryIndex — binary vector companion column', () => {
+        const BINARY_CONFIG: ProviderConfigFixture = { ...NOTES_CONFIG, binaryVectorField: 'EmbeddingVectorBinary' };
+
+        /** A note row carrying its vector only in the binary column (base64 of float32 bytes). */
+        function binaryNote(id: string, vector: number[], json: string | null = null): Record<string, unknown> {
+            return { ID: id, Title: `Note ${id}`, EmbeddingVector: json, EmbeddingVectorBinary: Float32VectorToBase64(vector) };
+        }
+
+        it('asks RunView for binary fields only when the ProviderConfig names a binary companion', async () => {
+            defineIndex('json-index', NOTES_CONFIG);
+            defineIndex('binary-index', BINARY_CONFIG);
+            setRows(NOTES.Name, [note('a', [1, 0, 0])]);
+
+            await query('json-index', [1, 0, 0]);
+            await query('binary-index', [1, 0, 0]);
+
+            const [jsonRead, binaryRead] = rowQueries();
+            expect(jsonRead.IncludeBinaryFields).toBeUndefined();
+            expect(binaryRead.IncludeBinaryFields).toBe(true);
+        });
+
+        it('ranks rows whose vector exists only in the binary column', async () => {
+            defineIndex('binary-index', BINARY_CONFIG);
+            setRows(NOTES.Name, [binaryNote('a', [1, 0, 0]), binaryNote('b', [0, 1, 0])]);
+
+            const matches = matchesOf(await query('binary-index', [1, 0, 0], 2));
+
+            expect(matches.map(m => m.id)).toEqual(['ID|a', 'ID|b']);
+            expect(matches[0].score).toBeCloseTo(1, 6);
+        });
+
+        it('prefers the binary column over a disagreeing JSON column', async () => {
+            defineIndex('binary-index', BINARY_CONFIG);
+            // JSON says "points along y", binary says "points along x": the binary value must win.
+            setRows(NOTES.Name, [binaryNote('a', [1, 0, 0], JSON.stringify([0, 1, 0]))]);
+
+            const matches = matchesOf(await query('binary-index', [1, 0, 0]));
+
+            expect(matches[0].score).toBeCloseTo(1, 6);
+        });
+
+        it('falls back to the JSON column when the binary value is empty, invalid base64, or a partial float', async () => {
+            defineIndex('binary-index', BINARY_CONFIG);
+            setRows(NOTES.Name, [
+                note('empty', [1, 0, 0], { EmbeddingVectorBinary: '' }),
+                note('garbage', [1, 0, 0], { EmbeddingVectorBinary: '!!not base64!!' }),
+                note('partial', [1, 0, 0], { EmbeddingVectorBinary: 'AAAAAP8=' }), // 5 bytes — not whole float32s
+                note('missing', [1, 0, 0]),
+            ]);
+
+            const matches = matchesOf(await query('binary-index', [1, 0, 0]));
+
+            expect(matches.map(m => m.id).sort()).toEqual(['ID|empty', 'ID|garbage', 'ID|missing', 'ID|partial']);
+        });
+
+        it('falls back to JSON when the binary vector holds a non-finite value', async () => {
+            defineIndex('binary-index', BINARY_CONFIG);
+            setRows(NOTES.Name, [note('nan', [0, 1, 0], { EmbeddingVectorBinary: Float32VectorToBase64([NaN, 0, 0]) })]);
+
+            const matches = matchesOf(await query('binary-index', [0, 1, 0]));
+
+            expect(matches[0].score).toBeCloseTo(1, 6);
+        });
+
+        it('skips a row with neither a usable binary nor JSON vector', async () => {
+            defineIndex('binary-index', BINARY_CONFIG);
+            setRows(NOTES.Name, [binaryNote('ok', [1, 0, 0]), { ID: 'none', EmbeddingVector: null, EmbeddingVectorBinary: null }]);
+
+            const matches = matchesOf(await query('binary-index', [1, 0, 0]));
+
+            expect(matches.map(m => m.id)).toEqual(['ID|ok']);
+        });
+
+        it('rebuilds the cached index when a row gains a binary vector without its other fingerprint parts changing', async () => {
+            defineIndex('binary-index', BINARY_CONFIG);
+            const stamp = '2026-01-01T00:00:00.000Z';
+            setRows(NOTES.Name, [{ ID: 'a', EmbeddingVector: JSON.stringify([0, 1, 0]), __mj_UpdatedAt: stamp }]);
+            expect(matchesOf(await query('binary-index', [1, 0, 0]))[0].score).toBeCloseTo(0.5, 6);
+
+            setRows(NOTES.Name, [{ ID: 'a', EmbeddingVector: JSON.stringify([0, 1, 0]), EmbeddingVectorBinary: Float32VectorToBase64([1, 0, 0]), __mj_UpdatedAt: stamp }]);
+
+            expect(matchesOf(await query('binary-index', [1, 0, 0]))[0].score).toBeCloseTo(1, 6);
+        });
+
+        it('treats an empty binaryVectorField in the ProviderConfig as not configured', async () => {
+            defineIndex('blank-index', { ...NOTES_CONFIG, binaryVectorField: '' });
+            setRows(NOTES.Name, [note('a', [1, 0, 0])]);
+
+            await query('blank-index', [1, 0, 0]);
+
+            expect(rowQueries()[0].IncludeBinaryFields).toBeUndefined();
         });
     });
 

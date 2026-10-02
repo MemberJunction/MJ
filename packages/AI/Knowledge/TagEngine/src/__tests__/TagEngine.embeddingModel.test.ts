@@ -130,7 +130,8 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
     TagTreeNode: class {},
 }));
 
-vi.mock('@memberjunction/ai-vectors-memory', () => ({
+vi.mock('@memberjunction/ai-vectors-memory', async () => ({
+    ReadStoredVector: (await import('./helpers/readStoredVectorStub')).ReadStoredVectorStub,
     SimpleVectorService: class {
         LoadVectors = vi.fn();
         AddVector = vi.fn();

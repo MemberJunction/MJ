@@ -5,7 +5,8 @@
  * configured to point at any entity, **this** driver is purpose-built for
  * `EntityDocument`-backed search: each "index" corresponds to one
  * `MJ: Entity Documents` row, vectors are loaded from
- * `MJ: Entity Record Documents.VectorJSON` filtered by `EntityDocumentID`,
+ * `MJ: Entity Record Documents` (`VectorBinary`, falling back to `VectorJSON`)
+ * filtered by `EntityDocumentID`,
  * and matches surface the **underlying entity record's RecordID** in their
  * metadata (not the EntityRecordDocument PK).
  *
@@ -56,6 +57,7 @@ import type {
 } from '@memberjunction/ai-vectordb';
 import type { QueryOptions } from '@memberjunction/ai-vectordb';
 import { SimpleVectorService } from './SimpleVectorService';
+import { ReadStoredVector } from './StoredVector';
 
 const ENTITY_RECORD_DOCUMENTS = 'MJ: Entity Record Documents';
 
@@ -71,6 +73,12 @@ interface RecordDocumentVectorRow {
     EntityDocumentID: string;
     RecordID: string;
     VectorJSON: string | null;
+    /**
+     * The same vector as little-endian float32 bytes, base64-encoded (the `VectorBinary` column).
+     * Preferred over `VectorJSON` when present; optional because rows written before the column
+     * existed, and partial remote broadcasts, do not carry it.
+     */
+    VectorBinary?: string | null;
 }
 
 /** What each vector in a loaded index carries: the parent entity's record ID. */
@@ -312,7 +320,7 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
      * removed and counts as applied.
      */
     private applyRowToIndex(index: LoadedIndex, row: RecordDocumentVectorRow): boolean {
-        const vector = parseVectorJSON(row.VectorJSON);
+        const vector = ReadStoredVector(row.VectorBinary, row.VectorJSON);
         if (!vector || !row.RecordID) {
             index.service.RemoveVector(row.ID);
             return true;
@@ -383,6 +391,7 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
                 EntityDocumentID: record.EntityDocumentID,
                 RecordID: record.RecordID,
                 VectorJSON: record.VectorJSON,
+                VectorBinary: record.VectorBinary,
             });
         }
     }
@@ -451,7 +460,8 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         const result = await new RunView().RunView<RecordDocumentVectorRow>({
             EntityName: ENTITY_RECORD_DOCUMENTS,
             ExtraFilter: `ID IN (${inList})`,
-            Fields: ['ID', 'EntityDocumentID', 'RecordID', 'VectorJSON'],
+            // Naming the binary column requests it (RunView omits binary columns otherwise).
+            Fields: ['ID', 'EntityDocumentID', 'RecordID', 'VectorJSON', 'VectorBinary'],
             ResultType: 'simple',
             BypassCache: true,
         }, contextUser);
@@ -485,24 +495,6 @@ function userKeyOf(user: UserInfo | undefined): string {
     return user?.ID ?? '';
 }
 
-/**
- * Parses a VectorJSON value into a finite number array, or null when it is
- * missing, malformed, empty, or contains anything but numbers.
- */
-function parseVectorJSON(vectorJSON: string | null | undefined): number[] | null {
-    if (!vectorJSON) return null;
-    try {
-        const parsed: unknown = JSON.parse(vectorJSON);
-        if (!Array.isArray(parsed) || parsed.length === 0) return null;
-        for (const value of parsed) {
-            if (typeof value !== 'number') return null;
-        }
-        return parsed as number[];
-    } catch {
-        return null; // stale/corrupted VectorJSON — the next sync rewrites it
-    }
-}
-
 /** Reads the `ID` value out of a remote-invalidate `primaryKeyValues` payload. */
 function parsePrimaryKeyID(primaryKeyValues: string): string | null {
     try {
@@ -519,12 +511,14 @@ function parseRecordData(recordData: string): RecordDocumentVectorRow | null {
     try {
         const data = JSON.parse(recordData) as Partial<RecordDocumentVectorRow>;
         if (!data || typeof data.ID !== 'string' || typeof data.EntityDocumentID !== 'string') return null;
-        if (!('VectorJSON' in data)) return null; // a partial broadcast can't tell us the vector
+        // A partial broadcast that carries neither vector column can't tell us the vector.
+        if (!('VectorJSON' in data) && !('VectorBinary' in data)) return null;
         return {
             ID: data.ID,
             EntityDocumentID: data.EntityDocumentID,
             RecordID: typeof data.RecordID === 'string' ? data.RecordID : '',
             VectorJSON: typeof data.VectorJSON === 'string' ? data.VectorJSON : null,
+            VectorBinary: typeof data.VectorBinary === 'string' ? data.VectorBinary : null,
         };
     } catch {
         return null;
@@ -533,7 +527,7 @@ function parseRecordData(recordData: string): RecordDocumentVectorRow | null {
 
 /**
  * In-process VectorDBBase driver that loads embeddings from
- * `MJ: Entity Record Documents.VectorJSON` rows associated with a given
+ * `MJ: Entity Record Documents` rows (`VectorBinary`, falling back to `VectorJSON`) associated with a given
  * `EntityDocumentID`.
  *
  * Callers pass the EntityDocumentID as the `id` field of `QueryIndex` params:
@@ -560,7 +554,7 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
      */
     constructor(apiKey?: string) { super(apiKey && apiKey.trim().length > 0 ? apiKey : 'in-memory-no-auth'); }
 
-    /** SVS reads vectors out of `MJ: Entity Record Documents.VectorJSON`; it
+    /** SVS reads vectors out of `MJ: Entity Record Documents` (VectorBinary / VectorJSON); it
      *  intentionally does not implement `CreateRecord(s)`. Flagging this lets
      *  ingestion pipelines short-circuit the upsert call instead of logging
      *  spurious "unsupported" errors per batch. */
@@ -568,7 +562,7 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
         return true;
     }
 
-    /** In-process provider — it reads vectors from `MJ: Entity Record Documents.VectorJSON`
+    /** In-process provider — it reads vectors from `MJ: Entity Record Documents` (VectorBinary / VectorJSON)
      *  and never calls an external service, so it needs no API key / credential. Lets the
      *  Entity Vector Sync pipeline and dupe detector skip the "No API Key found" guard. */
     public override get RequiresAPIKey(): boolean {
@@ -613,10 +607,13 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
     private loadIndex(entityDocumentId: string, contextUser: UserInfo | undefined): Promise<LoadedIndex | null> {
         return SimpleVectorIndexCache.Instance.GetOrLoad(entityDocumentId, contextUser, async () => {
             const rv = new RunView();
-            const r = await rv.RunView<Pick<RecordDocumentVectorRow, 'ID' | 'RecordID' | 'VectorJSON'>>({
+            const r = await rv.RunView<Pick<RecordDocumentVectorRow, 'ID' | 'RecordID' | 'VectorJSON' | 'VectorBinary'>>({
                 EntityName: ENTITY_RECORD_DOCUMENTS,
-                ExtraFilter: `EntityDocumentID='${EscapeSQLString(entityDocumentId)}' AND VectorJSON IS NOT NULL`,
-                Fields: ['ID', 'RecordID', 'VectorJSON'],
+                ExtraFilter: `EntityDocumentID='${EscapeSQLString(entityDocumentId)}' AND (VectorBinary IS NOT NULL OR VectorJSON IS NOT NULL)`,
+                // Both vector columns: the binary one decodes with a copy instead of a JSON parse,
+                // and VectorJSON covers rows embedded before VectorBinary existed. Naming
+                // VectorBinary in Fields is what requests it — RunView omits binary columns otherwise.
+                Fields: ['ID', 'RecordID', 'VectorJSON', 'VectorBinary'],
                 ResultType: 'simple',
             }, contextUser);
 
@@ -631,21 +628,22 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
     }
 
     /**
-     * Parses rows straight into a float32 vector pool. Vectors are added one
-     * at a time into pre-sized storage, so the parsed `number[]` for a row is
-     * garbage as soon as it is copied — peak memory is the pool, not the pool
-     * plus every parsed array.
+     * Decodes rows straight into a float32 vector pool, preferring each row's
+     * `VectorBinary` (a copy) over its `VectorJSON` (a parse). Vectors are added
+     * one at a time into pre-sized storage, so a row's decoded vector is garbage
+     * as soon as it is copied — peak memory is the pool, not the pool plus every
+     * decoded array.
      */
     private buildService(
         entityDocumentId: string,
-        rows: Array<Pick<RecordDocumentVectorRow, 'ID' | 'RecordID' | 'VectorJSON'>>
+        rows: Array<Pick<RecordDocumentVectorRow, 'ID' | 'RecordID' | 'VectorJSON' | 'VectorBinary'>>
     ): SimpleVectorService<RecordDocumentVectorMetadata> {
         const service = new SimpleVectorService<RecordDocumentVectorMetadata>({ Precision: 'float32' });
         let mismatched = 0;
         for (const row of rows) {
             if (!row.ID || !row.RecordID) continue;
-            const vector = parseVectorJSON(row.VectorJSON);
-            if (!vector) continue; // unparseable VectorJSON — likely stale/corrupted; sync will fix
+            const vector = ReadStoredVector(row.VectorBinary, row.VectorJSON);
+            if (!vector) continue; // no usable vector in either column — likely stale/corrupted; sync will fix
             if (service.ExpectedDimensions === null) service.ReserveCapacity(rows.length, vector.length);
             if (vector.length !== service.ExpectedDimensions) {
                 mismatched++;

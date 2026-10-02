@@ -980,6 +980,11 @@ export const MJAIAgentExampleSchema = z.object({
         * * Display Name: Expires At
         * * SQL Data Type: datetimeoffset
         * * Description: Optional expiration timestamp. Examples past this date are candidates for archival. NULL means no expiration.`),
+    EmbeddingVectorBinary: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVectorBinary
+        * * Display Name: Embedding Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The example embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -1516,6 +1521,11 @@ export const MJAIAgentNoteSchema = z.object({
     *   * MemoryManager
     *   * User
         * * Description: Type of author that created the note: Agent = written in-flight during an agent run, MemoryManager = extracted/consolidated by the scheduled Memory Manager, User = manually created by a person.`),
+    EmbeddingVectorBinary: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVectorBinary
+        * * Display Name: Embedding Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The note embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -7631,7 +7641,7 @@ export const MJAIResultCacheSchema = z.object({
     PromptEmbedding: z.string().nullable().describe(`
         * * Field Name: PromptEmbedding
         * * Display Name: Prompt Embedding
-        * * SQL Data Type: varbinary
+        * * SQL Data Type: varbinary(MAX)
         * * Description: Vector representation of the prompt for similarity matching.`),
     PromptRunID: z.string().nullable().describe(`
         * * Field Name: PromptRunID
@@ -13168,6 +13178,16 @@ export const MJComponentSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether the component has any custom properties that are marked as required. This is auto-calculated based on the component's properties array to identify components with mandatory custom configuration.`),
+    FunctionalRequirementsVectorBinary: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirementsVectorBinary
+        * * Display Name: Functional Requirements Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The functional-requirements embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of FunctionalRequirementsVector. Written alongside FunctionalRequirementsVector; readers prefer it and fall back to FunctionalRequirementsVector when it is NULL.`),
+    TechnicalDesignVectorBinary: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesignVectorBinary
+        * * Display Name: Technical Design Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The technical-design embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of TechnicalDesignVector. Written alongside TechnicalDesignVector; readers prefer it and fall back to TechnicalDesignVector when it is NULL.`),
     SourceRegistry: z.string().nullable().describe(`
         * * Field Name: SourceRegistry
         * * Display Name: Source Registry
@@ -19786,6 +19806,11 @@ export const MJEntityRecordDocumentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    VectorBinary: z.string().nullable().describe(`
+        * * Field Name: VectorBinary
+        * * Display Name: Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of VectorJSON. Written alongside VectorJSON by vector sync; readers prefer it and fall back to VectorJSON when it is NULL.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -26333,6 +26358,11 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJQueryEntity_IQueryConfiguration
         * * Description: Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration). Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging, AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope.`),
+    EmbeddingVectorBinary: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVectorBinary
+        * * Display Name: Embedding Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The query embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -32598,6 +32628,11 @@ export const MJTagSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: AI model whose embedding produced EmbeddingVector. When the configured tag-embedding model differs from this value, the cached vector is treated as stale and recomputed.`),
+    EmbeddingVectorBinary: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVectorBinary
+        * * Display Name: Embedding Vector Binary
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The tag embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
@@ -39204,6 +39239,20 @@ export class MJAIAgentExampleEntity extends BaseEntity<MJAIAgentExampleEntityTyp
     }
 
     /**
+    * * Field Name: EmbeddingVectorBinary
+    * * Display Name: Embedding Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The example embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
+    */
+    get EmbeddingVectorBinary(): string | null {
+        return this.Get('EmbeddingVectorBinary');
+    }
+    set EmbeddingVectorBinary(value: string | null) {
+        this.Set('EmbeddingVectorBinary', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -40679,6 +40728,20 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     }
     set AuthorType(value: 'Agent' | 'MemoryManager' | 'User') {
         this.Set('AuthorType', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingVectorBinary
+    * * Display Name: Embedding Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The note embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
+    */
+    get EmbeddingVectorBinary(): string | null {
+        return this.Get('EmbeddingVectorBinary');
+    }
+    set EmbeddingVectorBinary(value: string | null) {
+        this.Set('EmbeddingVectorBinary', value);
     }
 
     /**
@@ -59210,7 +59273,8 @@ export class MJAIResultCacheEntity extends BaseEntity<MJAIResultCacheEntityType>
     /**
     * * Field Name: PromptEmbedding
     * * Display Name: Prompt Embedding
-    * * SQL Data Type: varbinary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
     * * Description: Vector representation of the prompt for similarity matching.
     */
     get PromptEmbedding(): string | null {
@@ -73771,6 +73835,34 @@ export class MJComponentEntity extends BaseEntity<MJComponentEntityType> {
     }
     set HasRequiredCustomProps(value: boolean) {
         this.Set('HasRequiredCustomProps', value);
+    }
+
+    /**
+    * * Field Name: FunctionalRequirementsVectorBinary
+    * * Display Name: Functional Requirements Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The functional-requirements embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of FunctionalRequirementsVector. Written alongside FunctionalRequirementsVector; readers prefer it and fall back to FunctionalRequirementsVector when it is NULL.
+    */
+    get FunctionalRequirementsVectorBinary(): string | null {
+        return this.Get('FunctionalRequirementsVectorBinary');
+    }
+    set FunctionalRequirementsVectorBinary(value: string | null) {
+        this.Set('FunctionalRequirementsVectorBinary', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesignVectorBinary
+    * * Display Name: Technical Design Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The technical-design embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of TechnicalDesignVector. Written alongside TechnicalDesignVector; readers prefer it and fall back to TechnicalDesignVector when it is NULL.
+    */
+    get TechnicalDesignVectorBinary(): string | null {
+        return this.Get('TechnicalDesignVectorBinary');
+    }
+    set TechnicalDesignVectorBinary(value: string | null) {
+        this.Set('TechnicalDesignVectorBinary', value);
     }
 
     /**
@@ -91971,6 +92063,20 @@ export class MJEntityRecordDocumentEntity extends BaseEntity<MJEntityRecordDocum
     }
 
     /**
+    * * Field Name: VectorBinary
+    * * Display Name: Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of VectorJSON. Written alongside VectorJSON by vector sync; readers prefer it and fall back to VectorJSON when it is NULL.
+    */
+    get VectorBinary(): string | null {
+        return this.Get('VectorBinary');
+    }
+    set VectorBinary(value: string | null) {
+        this.Set('VectorBinary', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
@@ -108990,6 +109096,20 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: EmbeddingVectorBinary
+    * * Display Name: Embedding Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The query embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
+    */
+    get EmbeddingVectorBinary(): string | null {
+        return this.Get('EmbeddingVectorBinary');
+    }
+    set EmbeddingVectorBinary(value: string | null) {
+        this.Set('EmbeddingVectorBinary', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -125409,6 +125529,20 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
     }
     set EmbeddingModelID(value: string | null) {
         this.Set('EmbeddingModelID', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingVectorBinary
+    * * Display Name: Embedding Vector Binary
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The tag embedding as little-endian IEEE-754 float32 bytes (4 bytes per dimension): the compact form of EmbeddingVector. Written alongside EmbeddingVector; readers prefer it and fall back to EmbeddingVector when it is NULL.
+    */
+    get EmbeddingVectorBinary(): string | null {
+        return this.Get('EmbeddingVectorBinary');
+    }
+    set EmbeddingVectorBinary(value: string | null) {
+        this.Set('EmbeddingVectorBinary', value);
     }
 
     /**

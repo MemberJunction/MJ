@@ -790,6 +790,12 @@ ${indentedFormHTML}
                       if (field.IsVirtual && this.isVirtualNameFieldForFK(entity, field)) {
                           continue;
                       }
+                      // Skip binary fields (varbinary / bytea). Their value is base64-encoded data
+                      // — an embedding, a file — that a form can neither display nor edit
+                      // meaningfully, and rendering it would put kilobytes of base64 in a textarea.
+                      if (field.IsBinaryFieldType) {
+                          continue;
+                      }
                       section.Fields.push(field) // add the field to the section fields array
                   }
               }

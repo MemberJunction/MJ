@@ -59,6 +59,7 @@ vi.mock('@memberjunction/global', async () => {
 import { LogError, UserInfo } from '@memberjunction/core';
 import type { BaseEntityEvent, RemoteInvalidatePayload, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { MJEvent } from '@memberjunction/global';
+import { Float32VectorToBase64 } from '@memberjunction/global';
 import type { BaseResponse, QueryOptions } from '@memberjunction/ai-vectordb';
 import {
     LoadSimpleVectorServiceProvider, SimpleVectorIndexCache, SimpleVectorServiceProvider,
@@ -71,7 +72,7 @@ const DEFAULT_TTL_MS = 15 * 60 * 1000;
 const REMOTE_REFRESH_DEBOUNCE_MS = 250;
 
 /** The columns the cache re-reads for a changed row. */
-type ReReadRow = { ID: string; EntityDocumentID: string; RecordID: string; VectorJSON: string | null };
+type ReReadRow = { ID: string; EntityDocumentID: string; RecordID: string; VectorJSON: string | null; VectorBinary?: string | null };
 /** The columns the provider loads an index from. */
 type LoadRow = Omit<ReReadRow, 'EntityDocumentID'>;
 /** One match as QueryIndex returns it. */
@@ -1068,7 +1069,7 @@ describe('SimpleVectorServiceProvider', () => {
 
                 expect(runViewCall(2).User).toBe(loader);
                 expect(runViewCall(2).Params.BypassCache).toBe(true);
-                expect(runViewCall(2).Params.Fields).toEqual(['ID', 'EntityDocumentID', 'RecordID', 'VectorJSON']);
+                expect(runViewCall(2).Params.Fields).toEqual(['ID', 'EntityDocumentID', 'RecordID', 'VectorJSON', 'VectorBinary']);
             });
 
             it('escapes quotes in re-read IDs', async () => {
@@ -1081,6 +1082,64 @@ describe('SimpleVectorServiceProvider', () => {
 
                 expect(runViewCall(1).Params.ExtraFilter).toBe(`ID IN ('erd-''1')`);
             });
+        });
+    });
+
+    describe('binary vector column (VectorBinary)', () => {
+        const bin = (...values: number[]): string => Float32VectorToBase64(values);
+        type BinRow = { ID: string; EntityDocumentID: string; RecordID: string; VectorJSON: string | null; VectorBinary: string | null };
+        function localSave(row: BinRow): BaseEntityEvent {
+            return { type: 'save', payload: null, baseEntity: { EntityInfo: { Name: ERD_ENTITY }, ...row } } as unknown as BaseEntityEvent;
+        }
+
+        it('loads rows whose vector exists only in VectorBinary', async () => {
+            await loadDoc('doc-1', [
+                { ID: 'erd-1', RecordID: 'A', VectorJSON: null, VectorBinary: bin(1, 0, 0) },
+                { ID: 'erd-2', RecordID: 'B', VectorJSON: null, VectorBinary: bin(0, 1, 0) },
+            ]);
+
+            const result = await queryDoc('doc-1', [0, 1, 0], 1);
+
+            expect(recordIdsOf(result)).toEqual(['B']);
+            expect(matchesOf(result)[0].score).toBeCloseTo(1, 6);
+        });
+
+        it('prefers VectorBinary over a disagreeing VectorJSON', async () => {
+            await loadDoc('doc-1', [{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(0, 1, 0), VectorBinary: bin(1, 0, 0) }]);
+
+            const result = await queryDoc('doc-1', [1, 0, 0], 1);
+
+            expect(matchesOf(result)[0].score).toBeCloseTo(1, 6);
+        });
+
+        it('falls back to VectorJSON when VectorBinary is invalid or holds a non-finite value', async () => {
+            await loadDoc('doc-1', [
+                { ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0), VectorBinary: '!!' },
+                { ID: 'erd-2', RecordID: 'B', VectorJSON: vec(1, 0, 0), VectorBinary: bin(Infinity, 0, 0) },
+            ]);
+
+            const result = await queryDoc('doc-1', [1, 0, 0], 5);
+
+            expect(recordIdsOf(result).sort()).toEqual(['A', 'B']);
+        });
+
+        it('applies a local save that carries only VectorBinary without reloading', async () => {
+            await loadDoc('doc-1', [{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }]);
+            SimpleVectorIndexCache.Instance.HandleEntityEvent(
+                localSave({ ID: 'erd-2', EntityDocumentID: 'doc-1', RecordID: 'B', VectorJSON: null, VectorBinary: bin(0, 0, 1) }));
+
+            const result = await queryDoc('doc-1', [0, 0, 1], 1);
+
+            expect(recordIdsOf(result)).toEqual(['B']);
+            expect(runViewMock).toHaveBeenCalledTimes(1);
+        });
+
+        it('removes a row whose save clears both vector columns', async () => {
+            await loadDoc('doc-1', [{ ID: 'erd-1', RecordID: 'A', VectorJSON: null, VectorBinary: bin(1, 0, 0) }]);
+            SimpleVectorIndexCache.Instance.HandleEntityEvent(
+                localSave({ ID: 'erd-1', EntityDocumentID: 'doc-1', RecordID: 'A', VectorJSON: null, VectorBinary: null }));
+
+            expect(matchesOf(await queryDoc('doc-1', [1, 0, 0]))).toEqual([]);
         });
     });
 
@@ -1097,8 +1156,8 @@ describe('SimpleVectorServiceProvider', () => {
 
             const { Params, User } = runViewCall(0);
             expect(Params.EntityName).toBe(ERD_ENTITY);
-            expect(Params.ExtraFilter).toBe(`EntityDocumentID='doc''1' AND VectorJSON IS NOT NULL`);
-            expect(Params.Fields).toEqual(['ID', 'RecordID', 'VectorJSON']);
+            expect(Params.ExtraFilter).toBe(`EntityDocumentID='doc''1' AND (VectorBinary IS NOT NULL OR VectorJSON IS NOT NULL)`);
+            expect(Params.Fields).toEqual(['ID', 'RecordID', 'VectorJSON', 'VectorBinary']);
             expect(Params.ResultType).toBe('simple');
             expect(User).toBe(caller);
         });

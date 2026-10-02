@@ -7,7 +7,7 @@ import {
     DatabasePlatform,
 } from "@memberjunction/core";
 import { MJQuerySQLEntity, MJQueryEntityExtended, MJSQLDialectEntity, QueryEngine } from "@memberjunction/core-entities";
-import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { EmbedTextLocalHelper } from "./util";
 import {
     RunExtractionPipeline,
@@ -43,7 +43,8 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
     /**
      * Generates an embedding from composite text (Name + UserQuestion + Description) for richer semantic search.
-     * Stores the vector in EmbeddingVector and the model reference in EmbeddingModelID.
+     * Stores the vector in EmbeddingVector (JSON) and EmbeddingVectorBinary (float32 bytes, base64), and the
+     * model reference in EmbeddingModelID.
      */
     protected async GenerateCompositeEmbedding(): Promise<void> {
         const parts = [
@@ -54,6 +55,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
         if (parts.length === 0) {
             this.EmbeddingVector = null;
+            this.EmbeddingVectorBinary = null;
             this.EmbeddingModelID = null;
             return;
         }
@@ -62,6 +64,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         const result = await this.EmbedTextLocal(compositeText);
         if (result && result.vector && result.vector.length > 0) {
             this.EmbeddingVector = JSON.stringify(result.vector);
+            this.EmbeddingVectorBinary = Float32VectorToBase64(result.vector);
             this.EmbeddingModelID = result.modelID;
         }
     }
@@ -82,6 +85,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
                 await this.GenerateCompositeEmbedding();
             } else if (!this.Description || this.Description.trim().length === 0) {
                 this.EmbeddingVector = null;
+                this.EmbeddingVectorBinary = null;
                 this.EmbeddingModelID = null;
             }
 

@@ -27,7 +27,7 @@ import {
 
 import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
-import { EscapeSQLString } from '@memberjunction/global';
+import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
@@ -796,11 +796,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         if (this.UseJsonArgShape(entity.EntityInfo, isUpdate ? 'update' : 'create')) {
             const payload: Record<string, unknown> = {};
             for (const [field, value] of fieldValues) {
-                const processed = PGQueryParameterProcessor.ProcessParameterValue(value);
-                if (this.isBinaryField(field) && processed !== null && processed !== undefined) {
-                    payload[field.Name] = this.encodeBinaryToBase64(processed);
+                if (this.isBinaryField(field) && value !== null && value !== undefined) {
+                    // The JSON-arg sprocs decode with decode(p_data->>'Field', 'base64').
+                    payload[field.Name] = BytesToBase64(this.toBinaryBytes(field, value));
                 } else {
-                    payload[field.Name] = processed;
+                    payload[field.Name] = PGQueryParameterProcessor.ProcessParameterValue(value);
                 }
             }
             // UPDATE: orchestrator skips PK fields (see GenericDatabaseProvider.GenerateSaveSQL),
@@ -822,7 +822,10 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const placeholders: string[] = [];
         let paramIndex = 0;
         for (const [field, value] of fieldValues) {
-            values.push(PGQueryParameterProcessor.ProcessParameterValue(value));
+            // A binary field's value is a base64 string; bound as text to a bytea parameter, PG
+            // would store the ASCII of the base64 itself. Bind the decoded bytes instead.
+            const isBinaryValue = this.isBinaryField(field) && value !== null && value !== undefined;
+            values.push(isBinaryValue ? this.toBinaryBytes(field, value) : PGQueryParameterProcessor.ProcessParameterValue(value));
             // Param name via the canonical builder (ParameterRef → `p_<lowercased CodeName>`,
             // no inner separator) so it EXACTLY matches the CRUD function's declared signature,
             // which is emitted by PostgreSQLCodeGenProvider using the same ParameterRef. Using
@@ -1239,16 +1242,27 @@ SELECT * FROM delete_result`;
     /** Field-type predicate for BYTEA / varbinary / image columns. Used by JSON-arg payload. */
     private isBinaryField(field: EntityFieldInfo): boolean {
         const t = (field.Type || '').toLowerCase().trim();
-        return t === 'bytea' || t.startsWith('varbinary') || t.startsWith('image');
+        // Same set as EntityFieldInfo.IsBinaryFieldType — a type both reads and binds as binary or neither.
+        return t === 'bytea' || t.startsWith('varbinary') || t.startsWith('binary') || t.startsWith('image');
     }
 
-    private encodeBinaryToBase64(value: unknown): string {
-        if (value instanceof Uint8Array) return Buffer.from(value).toString('base64');
-        if (Buffer.isBuffer(value)) return value.toString('base64');
-        if (typeof value === 'string') return value; // already encoded
-        // Fallback — coerce via Buffer.from; throws on incompatible types,
-        // surfacing the encoding failure at save time rather than silent corruption.
-        return Buffer.from(value as ArrayBufferLike).toString('base64');
+    /**
+     * Converts a binary field's save value to bytes for a `bytea` parameter.
+     *
+     * A binary field's value in a `BaseEntity` is a base64 string; server code may also hand over
+     * a byte array (e.g. a Buffer). Anything else, including a string that is not valid base64,
+     * throws, so a corrupt value fails the save instead of being stored as garbage.
+     *
+     * @param field - The binary field being written; named in the error message.
+     * @param value - Base64 string or byte array (non-null).
+     * @returns The bytes, as a Node Buffer so the pg driver binds them as `bytea`.
+     */
+    private toBinaryBytes(field: EntityFieldInfo, value: unknown): Buffer {
+        const bytes = IsByteArray(value) ? value : TryBase64ToBytes(typeof value === 'string' ? value : null);
+        if (!bytes) {
+            throw new Error(`Field "${field.Name}" is binary (${field.Type}); its value must be a base64 string, but it is not valid base64`);
+        }
+        return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     }
 
     // resolveFieldValue moved to CoerceSaveFieldValue (above).

@@ -3,8 +3,8 @@
  *
  * Use this driver when you want SearchScope multi-provider fusion to include
  * vector search WITHOUT standing up a remote store (Pinecone / pgvector /
- * Qdrant). It reads the rows of a single MJ entity, parses each row's
- * `EmbeddingVector` JSON column, and uses {@link SimpleVectorService} for
+ * Qdrant). It reads the rows of a single MJ entity, decodes each row's
+ * vector column(s), and uses {@link SimpleVectorService} for
  * cosine ranking — exactly the same primitive `AgentContextInjector` already
  * uses for its `FindSimilarAgentNotes` path.
  *
@@ -32,7 +32,8 @@ import type {
     IndexList, ListVectorIDsParams, ListVectorIDsResult, UpdateOptions, VectorRecord,
 } from '@memberjunction/ai-vectordb';
 import type { QueryOptions } from '@memberjunction/ai-vectordb';
-import { SimpleVectorService } from './SimpleVectorService';
+import { SimpleVectorService, VectorValues } from './SimpleVectorService';
+import { DecodeVectorBinary, ParseVectorJSON } from './StoredVector';
 
 /** Shape of the optional ProviderConfig JSON on the MJVectorIndex row.
  *  Tells the driver which entity column it's reading from. */
@@ -41,6 +42,14 @@ interface SimpleVectorProviderConfig {
     entityName: string;
     /** Field on that entity that holds the JSON-serialized embedding vector. */
     vectorField: string;
+    /**
+     * Optional binary companion of `vectorField` (e.g. `EmbeddingVectorBinary`): a varbinary/bytea
+     * column holding the same vector as little-endian float32 bytes. When set, the driver fetches it
+     * (binary fields are omitted from RunView by default) and prefers it over the JSON column —
+     * decoding is a copy instead of a JSON parse. Rows whose binary value is empty or invalid fall
+     * back to `vectorField`.
+     */
+    binaryVectorField?: string;
     /** Optional ExtraFilter — useful for `Status='Active'`-style row scoping. */
     filter?: string;
     /** Optional title field for QueryIndex result metadata. Defaults to first
@@ -114,6 +123,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
             return {
                 entityName: parsed.entityName,
                 vectorField: parsed.vectorField,
+                binaryVectorField: parsed.binaryVectorField || undefined,
                 filter: parsed.filter,
                 titleField: parsed.titleField,
                 snippetField: parsed.snippetField,
@@ -176,7 +186,8 @@ export class SimpleVectorDatabase extends VectorDBBase {
             const key = CompositeKey.FromEntityRecord(entity, row);
             const updatedAt = row['__mj_UpdatedAt'];
             const stamp = updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt ?? '');
-            parts[i] = `${key.ToURLSegment()}\u0001${stamp}\u0001${row[config.vectorField] ? 1 : 0}`;
+            const hasBinary = config.binaryVectorField && row[config.binaryVectorField] ? 1 : 0;
+            parts[i] = `${key.ToURLSegment()}\u0001${stamp}\u0001${row[config.vectorField] ? 1 : 0}${hasBinary}`;
         }
         return parts.join('\u0002');
     }
@@ -199,6 +210,8 @@ export class SimpleVectorDatabase extends VectorDBBase {
             ExtraFilter: config.filter,
             ResultType: 'simple',
             BypassCache: true,
+            // Binary columns are omitted from RunView unless asked for; fetch the companion when configured.
+            ...(config.binaryVectorField ? { IncludeBinaryFields: true } : {}),
         }, contextUser);
         if (!r.Success) {
             LogError(`SimpleVectorDatabase.loadIndex: RunView on "${config.entityName}" failed: ${r.ErrorMessage}`);
@@ -207,7 +220,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
         return { entity, rows: r.Results ?? [] };
     }
 
-    /** Parse each row's vector field, validate it's a numeric array, and
+    /** Decode each row's vector (binary companion first, then the JSON field), and
      *  pack the survivors into a fresh `SimpleVectorService` plus the
      *  ID→row map used to enrich match metadata. Rows with missing IDs,
      *  missing vector columns, or unparseable JSON are silently skipped
@@ -221,7 +234,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
         entity: EntityInfo,
     ): { service: SimpleVectorService; rowsByID: Map<string, Record<string, unknown>> } {
         const service = new SimpleVectorService();
-        const entries: Array<{ key: string; vector: number[]; metadata: Record<string, unknown> }> = [];
+        const entries: Array<{ key: string; vector: VectorValues; metadata: Record<string, unknown> }> = [];
         const rowsByID = new Map<string, Record<string, unknown>>();
         let dims: number | null = null;
         let mismatched = 0;
@@ -230,31 +243,44 @@ export class SimpleVectorDatabase extends VectorDBBase {
             // CompositeKey segment form vector metadata carries. `row['ID']` skipped every row of an
             // entity whose key isn't called ID, leaving the index silently empty.
             const key = CompositeKey.FromEntityRecord(entity, row);
-            const vecRaw = row[config.vectorField];
-            if (!key.HasValue || !vecRaw) continue;
-            const id = key.ToURLSegment();
-            try {
-                const vector = typeof vecRaw === 'string' ? JSON.parse(vecRaw) : vecRaw;
-                if (Array.isArray(vector) && vector.length > 0 && vector.every(v => typeof v === 'number')) {
-                    // One vector of another size (a re-embed with a different model in progress)
-                    // must not fail the whole index: skip it, and report the count once below.
-                    dims ??= vector.length;
-                    if (vector.length !== dims) {
-                        mismatched++;
-                        continue;
-                    }
-                    entries.push({ key: id, vector: vector as number[], metadata: row });
-                    rowsByID.set(id, row);
-                }
-            } catch {
-                // Vector column is unparseable — silently skip (see JSDoc above).
+            if (!key.HasValue) continue;
+            const vector = this.readRowVector(row, config);
+            if (!vector) continue;
+            // One vector of another size (a re-embed with a different model in progress)
+            // must not fail the whole index: skip it, and report the count once below.
+            dims ??= vector.length;
+            if (vector.length !== dims) {
+                mismatched++;
+                continue;
             }
+            const id = key.ToURLSegment();
+            entries.push({ key: id, vector, metadata: row });
+            rowsByID.set(id, row);
         }
         if (mismatched > 0) {
             LogError(`SimpleVectorDatabase: skipped ${mismatched} "${config.entityName}" row(s) whose ${config.vectorField} has a different dimension count than the rest (${dims}) — re-embed them with one model`);
         }
         service.LoadVectors(entries);
         return { service, rowsByID };
+    }
+
+    /**
+     * Reads one row's vector: the binary companion when configured and valid, else the JSON field
+     * (a JSON string, or an already-parsed numeric array). Returns null for a row with no usable
+     * vector — callers haven't necessarily embedded every row yet.
+     */
+    private readRowVector(row: Record<string, unknown>, config: SimpleVectorProviderConfig): VectorValues | null {
+        if (config.binaryVectorField) {
+            const binary = row[config.binaryVectorField];
+            const decoded = typeof binary === 'string' ? DecodeVectorBinary(binary) : null;
+            if (decoded) return decoded;
+        }
+        const raw = row[config.vectorField];
+        if (typeof raw === 'string') return ParseVectorJSON(raw);
+        if (Array.isArray(raw) && raw.length > 0 && raw.every(v => typeof v === 'number' && Number.isFinite(v))) {
+            return raw as number[];
+        }
+        return null;
     }
 
     /** Build the metadata bag returned in QueryIndex matches. Mirrors what

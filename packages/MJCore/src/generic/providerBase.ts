@@ -2733,8 +2733,44 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * they asked for, and field security narrows per request at read time via
      * {@link ApplyFieldSecurityProjection}.
      */
-    protected ComputeRunViewFetchFields(entity: EntityInfo): string[] {
-        return entity.Fields.map(f => f.Name);
+    protected ComputeRunViewFetchFields(entity: EntityInfo, params?: RunViewParams): string[] {
+        const includeBinary = params?.IncludeBinaryFields === true;
+        return entity.Fields.filter(f => includeBinary || !f.IsBinaryFieldType).map(f => f.Name);
+    }
+
+    /**
+     * True when `fieldNames` names at least one of the entity's binary fields (case-insensitive,
+     * whitespace-trimmed).
+     *
+     * @param entity - The entity being queried.
+     * @param fieldNames - Field names as a caller supplied them, e.g. `RunViewParams.Fields`.
+     */
+    protected static NamesAnyBinaryField(entity: EntityInfo, fieldNames: readonly string[] | null | undefined): boolean {
+        if (!fieldNames || fieldNames.length === 0) return false;
+        const binaryNames = new Set(entity.Fields.filter(f => f.IsBinaryFieldType).map(f => f.Name.toLowerCase()));
+        if (binaryNames.size === 0) return false;
+        return fieldNames.some(name => typeof name === 'string' && binaryNames.has(name.trim().toLowerCase()));
+    }
+
+    /**
+     * Decides whether a RunView returns the entity's binary fields, and records the decision on
+     * `params.IncludeBinaryFields` so every later step (field widening, cache fingerprint,
+     * transport) sees one answer.
+     *
+     * Binary fields are returned when the caller sets `IncludeBinaryFields`, or names a binary
+     * field in `Fields` — asking for a column by name is asking for it. Otherwise they are left
+     * out, which keeps result sets, engine caches and the RunView caches free of large values
+     * nobody reads. Must run before `Fields` is widened, since widening replaces the caller's list.
+     *
+     * @param params - The view parameters; `IncludeBinaryFields` is set to true when applicable.
+     * @param entity - The entity being queried.
+     * @returns True when binary fields will be returned.
+     */
+    protected ResolveIncludeBinaryFields(params: RunViewParams, entity: EntityInfo): boolean {
+        if (params.IncludeBinaryFields !== true && ProviderBase.NamesAnyBinaryField(entity, params.Fields)) {
+            params.IncludeBinaryFields = true;
+        }
+        return params.IncludeBinaryFields === true;
     }
 
     /**
@@ -3031,8 +3067,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // field-restricted user RECEIVES is still their allowed set: the server strips denied
         // columns on the wire, and the missing keys mark those fields not-loaded.
         const widenForEntityObject = params.ResultType === 'entity_object';
+        if (entity) this.ResolveIncludeBinaryFields(params, entity);
         if (entity && (willCache || widenForEntityObject)) {
-            params.Fields = this.ComputeRunViewFetchFields(entity);
+            params.Fields = this.ComputeRunViewFetchFields(entity, params);
             // Platform contract: explicit Fields always include the primary key(s) —
             // project back down to requested ∪ PK, matching the direct SQL path.
             if (callerRequestedFields) {
@@ -3228,8 +3265,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const batchWillCache = this.runViewCacheEligible(param);
             // Same entity_object-always-widens rule as the single-view path above.
             const batchWidenForEntityObject = param.ResultType === 'entity_object';
+            if (batchEntity) this.ResolveIncludeBinaryFields(param, batchEntity);
             if (batchEntity && (batchWillCache || batchWidenForEntityObject)) {
-                param.Fields = this.ComputeRunViewFetchFields(batchEntity);
+                param.Fields = this.ComputeRunViewFetchFields(batchEntity, param);
                 // Platform contract: explicit Fields always include the primary key(s)
                 if (callerFields) {
                     callerFields = ProviderBase.UnionFieldsWithPrimaryKeys(callerFields, batchEntity);
@@ -3351,7 +3389,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // provider FETCHES, not just how the slot is keyed, and I could not verify the
                 // downstream fetch behavior tonight. The safe fix is to normalize a full-coverage
                 // field list to `*` in the FINGERPRINT only, which cannot affect fetching.
-                param.Fields = entity.Fields.map(f => f.Name);
+                this.ResolveIncludeBinaryFields(param, entity);
+                param.Fields = this.ComputeRunViewFetchFields(entity, param);
             }
 
             // Gate on runViewCacheEligible (NOT raw param.CacheLocal): the smart-cache-check path is a
@@ -4337,7 +4376,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entity = this.EntityByName(params.EntityName);
             if (!entity)
                 throw new Error(`Entity ${params.EntityName} not found in metadata`);
-            params.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
+            // Override whatever was passed in with every field the entity object hydrates from.
+            // Binary fields are included only when requested (ResolveIncludeBinaryFields); a
+            // missing binary field hydrates as not-loaded and is never written back on Save.
+            this.ResolveIncludeBinaryFields(params, entity);
+            params.Fields = this.ComputeRunViewFetchFields(entity, params);
         }
     }
 
@@ -4411,7 +4454,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     if (!entity) {
                         throw new Error(`Entity ${param.EntityName} not found in metadata`);
                     }
-                    param.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
+                    // Same rule as PreProcessRunView: every field, binary fields only on request.
+                    this.ResolveIncludeBinaryFields(param, entity);
+                    param.Fields = this.ComputeRunViewFetchFields(entity, param);
                 }
             }
         }

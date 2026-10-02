@@ -106,6 +106,26 @@ export interface ClusterResult<TMetadata = Record<string, unknown>> {
 /**
  * Represents a vector entry with a unique key and associated embedding
  */
+/**
+ * The values of a vector supplied to the service. A typed array is copied into the store just like
+ * a `number[]` — passing the `Float32Array` that `Base64ToFloat32Vector` (from
+ * `@memberjunction/global`) decodes from a binary embedding column avoids building an intermediate
+ * `number[]`.
+ */
+export type VectorValues = number[] | Float32Array | Float64Array;
+
+/**
+ * A vector to load into the service: like {@link VectorEntry}, but the values may be a typed array.
+ */
+export interface VectorInputEntry<TMetadata = Record<string, unknown>> {
+  /** User-defined unique identifier for the vector */
+  key: string;
+  /** The embedding values; copied into the store */
+  vector: VectorValues;
+  /** Optional metadata associated with the vector */
+  metadata?: TMetadata;
+}
+
 export interface VectorEntry<TMetadata = Record<string, unknown>> {
   /** User-defined unique identifier for the vector */
   key: string;
@@ -221,7 +241,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * Loads vectors into memory. Can accept either an array of VectorEntry objects
    * or a Map where keys are identifiers and values are vector arrays.
    * 
-   * @param {VectorEntry<TMetadata>[] | Map<string, number[]>} entries - The vectors to load
+   * @param {VectorInputEntry<TMetadata>[] | Map<string, VectorValues>} entries - The vectors to load; values may be `number[]` or a typed array
    * @throws {Error} If entries is null or undefined
    * 
    * @example
@@ -242,7 +262,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @public
    * @method
    */
-  public LoadVectors(entries: VectorEntry<TMetadata>[] | Map<string, number[]>): void {
+  public LoadVectors(entries: VectorInputEntry<TMetadata>[] | Map<string, VectorValues>): void {
     if (!entries) {
       throw new Error('Entries cannot be null or undefined');
     }
@@ -272,7 +292,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * Adds or updates a single vector in the service
    * 
    * @param {string} key - The unique identifier for the vector
-   * @param {number[]} vector - The vector/embedding array
+   * @param {VectorValues} vector - The vector/embedding values (`number[]` or a typed array; copied)
    * @param {TMetadata} metadata - Optional metadata to associate with the vector
    * @throws {Error} If key is null/undefined, or if vector is invalid
    * 
@@ -287,7 +307,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @public
    * @method
    */
-  public AddVector(key: string, vector: number[], metadata?: TMetadata): void {
+  public AddVector(key: string, vector: VectorValues, metadata?: TMetadata): void {
     if (!key) {
       throw new Error('Key cannot be null or undefined');
     }
@@ -1114,7 +1134,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @public
    * @method
    */
-  public UpdateVector(key: string, updates: { vector?: number[]; metadata?: TMetadata }): boolean {
+  public UpdateVector(key: string, updates: { vector?: VectorValues; metadata?: TMetadata }): boolean {
     const row = this.store.RowOf(key);
     if (row === undefined) {
       throw new Error(`Vector with key "${key}" not found. Use AddVector to create new entries.`);
@@ -1164,7 +1184,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @public
    * @method
    */
-  public AddOrUpdateVector(key: string, vector: number[], metadata?: TMetadata): boolean {
+  public AddOrUpdateVector(key: string, vector: VectorValues, metadata?: TMetadata): boolean {
     if (!key) {
       throw new Error('Key cannot be null or undefined');
     }
@@ -1253,7 +1273,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @private
    * @method
    */
-  private validateAndSetDimensions(vector: number[]): void {
+  private validateAndSetDimensions(vector: VectorValues): void {
     this.validateAndSetDimensionCount(vector.length);
   }
 
