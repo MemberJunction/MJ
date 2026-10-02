@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { __test__ } from '../discovery/SemanticPhase.js';
+import { TestHooks } from '../discovery/SemanticPhase.js';
 import { DatabaseDocumentation } from '../types/state.js';
 import { OrganicKeyDetectionConfig } from '../types/config.js';
 
-const { prefilter, MIN_DISTINCT_FOR_KEY, MIN_UNIQUENESS_RATIO } = __test__;
+const { prefilter, MIN_DISTINCT_FOR_KEY, MIN_UNIQUENESS_RATIO } = TestHooks;
 
 interface ColSpec {
     name: string;

@@ -27,7 +27,7 @@ import { JoinProbeResult, KeyVerifier } from './JoinProbe.js';
 export interface ComposerResult {
     output: DetectedOrganicKeysOutput;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Per-cluster record of what the value-overlap probe concluded, for reporting. */
-    verification: ClusterVerification[];
+    Verification: ClusterVerification[];
     /** Clusters with isFKRedundant filled in — callers that persist the cluster list
      *  (e.g. detector → state.json → dashboard) should use THIS, not the pre-compose
      *  input, otherwise the flag is silently lost. */
@@ -35,24 +35,24 @@ export interface ComposerResult {
     Emitted: number;
     FlaggedFKRedundant: number;
     /** Clusters dropped because the probe refuted the shared value space. */
-    droppedUnverified: number;
+    DroppedUnverified: number;
     /** Individual members dropped for not sharing the anchor's value space. */
-    droppedMembers: number;
+    DroppedMembers: number;
     Summary: { outputSchemas: number; outputTables: number; outputKeys: number; outputSpokes: number };
 }
 
 /** What the probe concluded about one cluster. */
 export interface ClusterVerification {
-    clusterId: string;
-    concept: string;
+    ClusterId: string;
+    Concept: string;
     /** `schema.table.column` of the member every other member was probed against. */
-    anchor: string;
-    membersIn: number;
-    membersKept: number;
+    Anchor: string;
+    MembersIn: number;
+    MembersKept: number;
     /** One entry per probed member. */
-    results: Array<{ member: string; status: JoinProbeResult['status']; reason: string }>;
+    Results: Array<{ member: string; status: JoinProbeResult['Status']; reason: string }>;
     /** True when the cluster was not emitted at all. */
-    dropped: boolean;
+    Dropped: boolean;
 }
 
 /**
@@ -113,18 +113,18 @@ export async function Compose(
         }));
 
     const output = TranslateClusters(annotated, spokes, {
-        autoCreateRelatedViewOnForm: options.autoCreateRelatedViewOnForm,
+        AutoCreateRelatedViewOnForm: options.AutoCreateRelatedViewOnForm,
     });
     const counts = CountOutputEntries(output);
 
     return {
         output,
         AnnotatedClusters: annotated,
-        verification,
+        Verification: verification,
         Emitted: annotated.length,
         FlaggedFKRedundant: flaggedCount,
-        droppedUnverified,
-        droppedMembers,
+        DroppedUnverified: droppedUnverified,
+        DroppedMembers: droppedMembers,
         Summary: {
             outputSchemas: counts.schemas,
             outputTables: counts.tables,
@@ -137,7 +137,7 @@ export async function Compose(
 /** Emit-time options threaded through to the translator. */
 export interface ComposeOptions {
     /** See {@link import('./OrganicKeyTranslator.js').TranslateOptions}. Default false. */
-    autoCreateRelatedViewOnForm?: boolean;
+    AutoCreateRelatedViewOnForm?: boolean;
 }
 
 /** `schema.table.col[,col]` for a cluster member. */
@@ -178,13 +178,13 @@ async function verifyClusters(
         if (!verifier || cluster.members.length < 2) {
             // Nothing to probe against, or no probe available: emit unchanged and say so.
             verification.push({
-                clusterId: cluster.id,
-                concept: cluster.concept,
-                anchor: cluster.members.length > 0 ? memberLabel(pickAnchorMember(cluster.members)) : '',
-                membersIn: cluster.members.length,
-                membersKept: cluster.members.length,
-                results: [],
-                dropped: false,
+                ClusterId: cluster.id,
+                Concept: cluster.concept,
+                Anchor: cluster.members.length > 0 ? memberLabel(pickAnchorMember(cluster.members)) : '',
+                MembersIn: cluster.members.length,
+                MembersKept: cluster.members.length,
+                Results: [],
+                Dropped: false,
             });
             out.push(cluster);
             continue;
@@ -192,19 +192,19 @@ async function verifyClusters(
 
         const anchorMember = pickAnchorMember(cluster.members);
         const kept: OrganicKeyClusterMember[] = [];
-        const results: ClusterVerification['results'] = [];
+        const results: ClusterVerification['Results'] = [];
 
         for (const member of cluster.members) {
             if (member === anchorMember) {
                 kept.push(member);
                 continue;
             }
-            const probe = await verifier.verify({
-                child: { schema: member.schema, table: member.table, column: member.column },
-                parent: { schema: anchorMember.schema, table: anchorMember.table, column: anchorMember.column },
+            const probe = await verifier.Verify({
+                Child: { Schema: member.schema, Table: member.table, Column: member.column },
+                Parent: { Schema: anchorMember.schema, Table: anchorMember.table, Column: anchorMember.column },
             });
-            results.push({ member: memberLabel(member), status: probe.status, reason: probe.reason });
-            if (probe.status === 'Refuted') {
+            results.push({ member: memberLabel(member), status: probe.Status, reason: probe.Reason });
+            if (probe.Status === 'Refuted') {
                 droppedMembers += 1;
                 continue;
             }
@@ -214,13 +214,13 @@ async function verifyClusters(
         const distinctTables = new Set(kept.map((m) => `${m.schema}.${m.table}`));
         const dropped = kept.length < 2 || distinctTables.size < 2;
         verification.push({
-            clusterId: cluster.id,
-            concept: cluster.concept,
-            anchor: memberLabel(anchorMember),
-            membersIn: cluster.members.length,
-            membersKept: dropped ? 0 : kept.length,
-            results,
-            dropped,
+            ClusterId: cluster.id,
+            Concept: cluster.concept,
+            Anchor: memberLabel(anchorMember),
+            MembersIn: cluster.members.length,
+            MembersKept: dropped ? 0 : kept.length,
+            Results: results,
+            Dropped: dropped,
         });
         if (dropped) {
             // Everything but the anchor was refuted, or what survives no longer spans

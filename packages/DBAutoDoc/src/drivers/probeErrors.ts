@@ -10,7 +10,7 @@
  *
  * So a raw driver error is never persisted. It is classified into one of a fixed set
  * of reasons, and anything that could be a value is stripped from whatever tail is
- * kept. {@link sanitizeErrorText} is the belt to the classifier's braces.
+ * kept. {@link SanitizeErrorText} is the belt to the classifier's braces.
  */
 
 /** Fixed causes a probe can fail for. The persisted reason is always one of these. */
@@ -41,7 +41,7 @@ const PROBE_FAILURE_PATTERNS: ReadonlyArray<{ test: RegExp; reason: string }> = 
  * runs, backticked runs, bracketed runs, and any long unbroken token. What survives is
  * prose.
  */
-export function sanitizeErrorText(text: string): string {
+export function SanitizeErrorText(text: string): string {
     return text
         .replace(/'[^']*'/g, "'?'")
         .replace(/"[^"]*"/g, '"?"')
@@ -58,20 +58,20 @@ export function sanitizeErrorText(text: string): string {
  * Classify a driver error into a fixed, value-free reason.
  *
  * Unrecognised errors fall back to a sanitised, length-capped tail so a novel failure
- * is still debuggable, but it goes through {@link sanitizeErrorText} first.
+ * is still debuggable, but it goes through {@link SanitizeErrorText} first.
  */
-export function describeProbeFailure(error: unknown): string {
+export function DescribeProbeFailure(error: unknown): string {
     const raw = errorMessage(error);
     for (const { test, reason } of PROBE_FAILURE_PATTERNS) {
         if (test.test(raw)) return reason;
     }
-    const cleaned = sanitizeErrorText(raw);
+    const cleaned = SanitizeErrorText(raw);
     const capped = cleaned.length > 120 ? `${cleaned.slice(0, 120)}…` : cleaned;
     return capped.length > 0 ? `probe failed: ${capped}` : 'probe failed for an unknown reason';
 }
 
 /** Pull a provider error code (PostgreSQL SQLSTATE, MySQL errno, SQL Server number) if present. */
-export function extractSqlState(error: unknown): string | undefined {
+export function ExtractSqlState(error: unknown): string | undefined {
     if (error === null || typeof error !== 'object') return undefined;
     const rec = error as Record<string, unknown>;
     const code = rec.code ?? rec.number ?? rec.errno;

@@ -529,11 +529,11 @@ function resolveEmbeddingProvider(
 }
 
 /**
- * Re-export for tests / observability, matching the `__test__` convention in Composer.
+ * Re-export for tests / observability, matching the `TestHooks` convention in Composer.
  * The selectivity gate is the cheapest and highest-volume filter in the pipeline and is
  * worth pinning directly rather than through a run that needs an LLM and an embedder.
  */
-export const __test__ = { prefilter, MIN_DISTINCT_FOR_KEY, MIN_UNIQUENESS_RATIO };
+export const TestHooks = { prefilter, MIN_DISTINCT_FOR_KEY, MIN_UNIQUENESS_RATIO };
 
 function emptyResult(columnsInScope: number): SemanticPhaseResult {
     return {

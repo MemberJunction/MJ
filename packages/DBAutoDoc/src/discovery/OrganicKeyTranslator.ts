@@ -93,7 +93,7 @@ export interface TranslateOptions {
      * each one a value-join on a column the detector had never verified. Opting in is
      * the right default for a machine-proposed key.
      */
-    autoCreateRelatedViewOnForm?: boolean;
+    AutoCreateRelatedViewOnForm?: boolean;
 }
 
 /**
@@ -108,7 +108,7 @@ export function TranslateClusters(
     transitiveSpokes: TransitiveSpokeInput[] = [],
     options: TranslateOptions = {},
 ): DetectedOrganicKeysOutput {
-    const autoCreateRelatedView = options.autoCreateRelatedViewOnForm ?? false;
+    const autoCreateRelatedView = options.AutoCreateRelatedViewOnForm ?? false;
     // Step 1 — group by normalized canonical concept name.
     const byConcept = new Map<string, OrganicKeyCluster[]>();
     for (const cluster of clusters) {

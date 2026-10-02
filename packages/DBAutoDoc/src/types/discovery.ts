@@ -98,7 +98,7 @@ export interface FKCandidate {
    * compiling; absent means nothing recorded which stage authored the key or whether
    * anyone ever checked it against the data.
    */
-  verification?: KeyVerificationStamp;
+  verification?: KeyVerificationStamp;  // case-violation-ok-legacy-back-compat: FKCandidate is persisted in state.json and read back on resume, like its camelCase siblings above; a rename would silently drop stamps from existing state files
 }
 
 /**

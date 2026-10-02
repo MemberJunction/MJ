@@ -5,9 +5,9 @@ import { BaseAutoDocDriver, DriverProbeOutcome } from '../drivers/BaseAutoDocDri
 import { OrganicKeyCluster, OrganicKeyClusterMember } from '../types/organic-keys.js';
 
 interface ProbeOnlyDriver {
-    probeJoinContainment(
-        child: { schema: string; table: string; column: string },
-        parent: { schema: string; table: string; column: string },
+    ProbeJoinContainment(
+        child: { Schema: string; Table: string; Column: string },
+        parent: { Schema: string; Table: string; Column: string },
         sampleSize: number,
         timeoutMs: number,
     ): Promise<DriverProbeOutcome>;
@@ -16,12 +16,12 @@ interface ProbeOnlyDriver {
 /** Route each probe by the child column's fully-qualified name. */
 function driverFor(
     byChild: Record<string, DriverProbeOutcome>,
-    fallback: DriverProbeOutcome = { ok: true, sampledValues: 100, matchedValues: 100 },
+    fallback: DriverProbeOutcome = { Ok: true, SampledValues: 100, MatchedValues: 100 },
 ): { driver: BaseAutoDocDriver; probed: string[] } {
     const probed: string[] = [];
     const impl: ProbeOnlyDriver = {
-        probeJoinContainment: async (child) => {
-            const key = `${child.schema}.${child.table}.${child.column}`;
+        ProbeJoinContainment: async (child) => {
+            const key = `${child.Schema}.${child.Table}.${child.Column}`;
             probed.push(key);
             return byChild[key] ?? fallback;
         },
@@ -45,8 +45,8 @@ function cluster(id: string, concept: string, members: OrganicKeyClusterMember[]
     } as OrganicKeyCluster;
 }
 
-const MATCHES_NOTHING: DriverProbeOutcome = { ok: true, sampledValues: 1000, matchedValues: 0 };
-const CANNOT_COMPARE: DriverProbeOutcome = { ok: false, reason: 'columns are not comparable (type mismatch)' };
+const MATCHES_NOTHING: DriverProbeOutcome = { Ok: true, SampledValues: 1000, MatchedValues: 0 };
+const CANNOT_COMPARE: DriverProbeOutcome = { Ok: false, Reason: 'columns are not comparable (type mismatch)' };
 
 describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
     it('drops a member whose values do not overlap the anchor', async () => {
@@ -60,7 +60,7 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         const r = await compose([c], [], new KeyVerifier(driver));
 
         expect(r.Emitted).toBe(1);
-        expect(r.droppedMembers).toBe(1);
+        expect(r.DroppedMembers).toBe(1);
         const kept = r.AnnotatedClusters[0].members.map((m) => m.column);
         expect(kept).toEqual(['cust_id', 'cust_id']);
         expect(kept).not.toContain('postal_code');
@@ -75,9 +75,9 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         const r = await compose([c], [], new KeyVerifier(driver));
 
         expect(r.Emitted).toBe(0);
-        expect(r.droppedUnverified).toBe(1);
+        expect(r.DroppedUnverified).toBe(1);
         expect(r.output).toEqual({});
-        expect(r.verification[0].dropped).toBe(true);
+        expect(r.Verification[0].Dropped).toBe(true);
     });
 
     it('drops a cluster that no longer spans two tables after the gate', async () => {
@@ -92,7 +92,7 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         // code_alt survives the probe, but everything left is on s.t1 — there is no
         // cross-table organic key to emit.
         expect(r.Emitted).toBe(0);
-        expect(r.droppedUnverified).toBe(1);
+        expect(r.DroppedUnverified).toBe(1);
     });
 
     it('KEEPS an Unprobed member — an unevaluable join is not a refuted one', async () => {
@@ -107,9 +107,9 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         const r = await compose([c], [], new KeyVerifier(driver));
 
         expect(r.Emitted).toBe(1);
-        expect(r.droppedMembers).toBe(0);
-        expect(r.verification[0].results[0].status).toBe('Unprobed');
-        expect(r.verification[0].results[0].reason).toContain('not comparable');
+        expect(r.DroppedMembers).toBe(0);
+        expect(r.Verification[0].Results[0].status).toBe('Unprobed');
+        expect(r.Verification[0].Results[0].reason).toContain('not comparable');
     });
 
     it('probes against a PK anchor when the cluster has one, N-1 times not N²', async () => {
@@ -125,7 +125,7 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         // 4 members -> 3 probes, all against the PK member.
         expect(probed.length).toBe(3);
         expect(probed).not.toContain('acgi.customer.record_key');
-        expect(r.verification[0].anchor).toBe('acgi.customer.record_key');
+        expect(r.Verification[0].Anchor).toBe('acgi.customer.record_key');
     });
 
     it('emits everything unverified when no verifier is supplied, and says so', async () => {
@@ -133,8 +133,8 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         const r = await compose([c], [], null);
 
         expect(r.Emitted).toBe(1);
-        expect(r.droppedUnverified).toBe(0);
-        expect(r.verification[0].results).toEqual([]);
+        expect(r.DroppedUnverified).toBe(0);
+        expect(r.Verification[0].Results).toEqual([]);
     });
 
     it('the probe budget is shared across clusters, not reset per cluster', async () => {
@@ -148,11 +148,11 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         const r = await compose(clusters, [], verifier);
 
         expect(probed.length).toBe(2);
-        expect(verifier.budget.exhausted).toBe(true);
+        expect(verifier.Budget.Exhausted).toBe(true);
         // The third cluster's member is Unprobed, so it is KEPT, not dropped.
         expect(r.Emitted).toBe(3);
-        expect(r.verification[2].results[0].status).toBe('Unprobed');
-        expect(r.verification[2].results[0].reason).toContain('budget exhausted');
+        expect(r.Verification[2].Results[0].status).toBe('Unprobed');
+        expect(r.Verification[2].Results[0].reason).toContain('budget exhausted');
     });
 });
 
@@ -171,7 +171,7 @@ describe('compose — AutoCreateRelatedViewOnForm (MJC-79)', () => {
     });
 
     it('honours an explicit opt-in', async () => {
-        const r = await compose([c], [], null, { autoCreateRelatedViewOnForm: true });
+        const r = await compose([c], [], null, { AutoCreateRelatedViewOnForm: true });
         expect(firstKey(r.output as Record<string, unknown>).AutoCreateRelatedViewOnForm).toBe(true);
     });
 });

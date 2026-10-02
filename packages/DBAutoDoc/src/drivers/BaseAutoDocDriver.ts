@@ -26,18 +26,18 @@ import {
  */
 export type DriverProbeOutcome =
   | {
-      ok: true;
+      Ok: true;
       /** Distinct non-null child values sampled (at most the requested sampleSize). */
-      sampledValues: number;
+      SampledValues: number;
       /** How many of those exist in the parent column. */
-      matchedValues: number;
+      MatchedValues: number;
     }
   | {
-      ok: false;
+      Ok: false;
       /** Human-readable cause, safe to persist — never contains a data value. */
-      reason: string;
+      Reason: string;
       /** Provider error code where one is available (e.g. PostgreSQL SQLSTATE). */
-      code?: string;
+      Code?: string;
     };
 
 /**
@@ -216,7 +216,7 @@ export abstract class BaseAutoDocDriver {
    *
    * NOTE: this returns a bare number and reports every failure as 0, which the
    * caller's containment gate reads as a refutation. Prefer
-   * {@link probeJoinContainment}, whose result distinguishes "measured zero" from
+   * {@link ProbeJoinContainment}, whose result distinguishes "measured zero" from
    * "could not measure".
    */
   public abstract testValueOverlap(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
@@ -238,9 +238,9 @@ export abstract class BaseAutoDocDriver {
    * rather than as zero overlap, so a caller can tell a join that matches nothing
    * from a join it was unable to evaluate. Implementations must not throw.
    */
-  public abstract probeJoinContainment(
-    child: { schema: string; table: string; column: string },
-    parent: { schema: string; table: string; column: string },
+  public abstract ProbeJoinContainment(
+    child: { Schema: string; Table: string; Column: string },
+    parent: { Schema: string; Table: string; Column: string },
     sampleSize: number,
     timeoutMs: number
   ): Promise<DriverProbeOutcome>;

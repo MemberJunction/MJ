@@ -25,7 +25,7 @@
  * The probe returns counts and nothing else. There is no code path here that can
  * surface a value, a sample row, or a masked select — {@link JoinProbeResult}
  * carries no value-bearing field, and the driver contract
- * ({@link BaseAutoDocDriver.probeJoinContainment}) returns two numbers. "4,812 of
+ * ({@link BaseAutoDocDriver.ProbeJoinContainment}) returns two numbers. "4,812 of
  * 5,000 matched" is the maximum resolution this module is capable of.
  *
  * ── The bound ────────────────────────────────────────────────────────────────
@@ -65,34 +65,34 @@ export type { KeyProvenance, KeyVerificationStamp, KeyVerificationStatus, KeyVer
 /** Counts only. There is deliberately no field here that can carry a value. */
 export interface JoinContainment {
     /** Distinct non-null child values the probe sampled (bounded by `sampleSize`). */
-    sampledValues: number;
+    SampledValues: number;
     /** How many of those exist in the parent column. */
-    matchedValues: number;
+    MatchedValues: number;
     /** matchedValues / sampledValues, or 0 when nothing was sampled. */
-    containment: number;
+    Containment: number;
 }
 
 /** The verdict on one candidate edge. */
 export interface JoinProbeResult {
-    status: KeyVerificationStatus;
+    Status: KeyVerificationStatus;
     /** Populated for Verified and Refuted; null for Unprobed — no measurement exists. */
-    containment: JoinContainment | null;
+    Containment: JoinContainment | null;
     /** Always populated: why it verified, why it was refuted, or why it could not run. */
-    reason: string;
-    probedAt: string;
+    Reason: string;
+    ProbedAt: string;
 }
 
 /** One end of a candidate edge. */
 export interface ColumnRef {
-    schema: string;
-    table: string;
-    column: string;
+    Schema: string;
+    Table: string;
+    Column: string;
 }
 
 /** A candidate key edge: do the child's values exist in the parent's column? */
 export interface KeyCandidate {
-    child: ColumnRef;
-    parent: ColumnRef;
+    Child: ColumnRef;
+    Parent: ColumnRef;
 }
 
 /** Resolved defaults for {@link KeyVerificationConfig}. */
@@ -106,27 +106,27 @@ export const DEFAULT_KEY_VERIFICATION: Required<KeyVerificationConfig> = {
 
 /** How many probes a run has spent, and whether the cap has been reached. */
 export interface ProbeBudget {
-    probesUsed: number;
-    probesAllowed: number;
-    exhausted: boolean;
+    ProbesUsed: number;
+    ProbesAllowed: number;
+    Exhausted: boolean;
     /** Probes that returned a measurement (Verified or Refuted). */
-    measured: number;
+    Measured: number;
     /** Candidates that could not be measured, by reason. */
-    unprobed: number;
+    Unprobed: number;
 }
 
 function refRefersToSame(a: ColumnRef, b: ColumnRef): boolean {
     return (
-        a.schema.toLowerCase() === b.schema.toLowerCase() &&
-        a.table.toLowerCase() === b.table.toLowerCase() &&
-        a.column.toLowerCase() === b.column.toLowerCase()
+        a.Schema.toLowerCase() === b.Schema.toLowerCase() &&
+        a.Table.toLowerCase() === b.Table.toLowerCase() &&
+        a.Column.toLowerCase() === b.Column.toLowerCase()
     );
 }
 
 /** Stable cache key for an edge, so the same candidate is never probed twice in a run. */
-export function candidateKey(c: KeyCandidate): string {
-    const f = (r: ColumnRef) => `${r.schema}.${r.table}.${r.column}`.toLowerCase();
-    return `${f(c.child)}->${f(c.parent)}`;
+export function CandidateKey(c: KeyCandidate): string {
+    const f = (r: ColumnRef) => `${r.Schema}.${r.Table}.${r.Column}`.toLowerCase();
+    return `${f(c.Child)}->${f(c.Parent)}`;
 }
 
 /**
@@ -150,18 +150,18 @@ export class KeyVerifier {
         this.cfg = { ...DEFAULT_KEY_VERIFICATION, ...stripUndefined(config) };
     }
 
-    public get budget(): ProbeBudget {
+    public get Budget(): ProbeBudget {
         return {
-            probesUsed: this.probesUsed,
-            probesAllowed: this.cfg.maxProbes,
-            exhausted: this.probesUsed >= this.cfg.maxProbes,
-            measured: this.measured,
-            unprobed: this.unprobedCount,
+            ProbesUsed: this.probesUsed,
+            ProbesAllowed: this.cfg.maxProbes,
+            Exhausted: this.probesUsed >= this.cfg.maxProbes,
+            Measured: this.measured,
+            Unprobed: this.unprobedCount,
         };
     }
 
     /** The resolved configuration, so callers can report the bound they ran under. */
-    public get resolvedConfig(): Required<KeyVerificationConfig> {
+    public get ResolvedConfig(): Required<KeyVerificationConfig> {
         return { ...this.cfg };
     }
 
@@ -169,26 +169,26 @@ export class KeyVerifier {
      * Verify one candidate edge. Never throws: a probe that cannot run comes back
      * as `Unprobed` with a reason, which callers must not treat as a refutation.
      */
-    public async verify(candidate: KeyCandidate): Promise<JoinProbeResult> {
-        const ck = candidateKey(candidate);
+    public async Verify(candidate: KeyCandidate): Promise<JoinProbeResult> {
+        const ck = CandidateKey(candidate);
         const cached = this.cache.get(ck);
         if (cached) return cached;
 
         const result = await this.runProbe(candidate);
         this.cache.set(ck, result);
-        if (result.status === 'Unprobed') this.unprobedCount += 1;
+        if (result.Status === 'Unprobed') this.unprobedCount += 1;
         else this.measured += 1;
         return result;
     }
 
     /**
      * Verify many candidates, sequentially so the per-run bound is honored exactly.
-     * Returns a map keyed by {@link candidateKey}.
+     * Returns a map keyed by {@link CandidateKey}.
      */
-    public async verifyAll(candidates: KeyCandidate[]): Promise<Map<string, JoinProbeResult>> {
+    public async VerifyAll(candidates: KeyCandidate[]): Promise<Map<string, JoinProbeResult>> {
         const out = new Map<string, JoinProbeResult>();
         for (const c of candidates) {
-            out.set(candidateKey(c), await this.verify(c));
+            out.set(CandidateKey(c), await this.Verify(c));
         }
         return out;
     }
@@ -202,7 +202,7 @@ export class KeyVerifier {
         if (!this.driver) {
             return unprobed('no database driver available to probe', probedAt);
         }
-        if (refRefersToSame(candidate.child, candidate.parent)) {
+        if (refRefersToSame(candidate.Child, candidate.Parent)) {
             return unprobed('child and parent are the same column', probedAt);
         }
         if (this.probesUsed >= this.cfg.maxProbes) {
@@ -213,68 +213,68 @@ export class KeyVerifier {
         }
 
         this.probesUsed += 1;
-        const outcome: DriverProbeOutcome = await this.driver.probeJoinContainment(
-            candidate.child,
-            candidate.parent,
+        const outcome: DriverProbeOutcome = await this.driver.ProbeJoinContainment(
+            candidate.Child,
+            candidate.Parent,
             this.cfg.sampleSize,
             this.cfg.probeTimeoutMs,
         );
 
-        if (outcome.ok !== true) {
+        if (outcome.Ok !== true) {
             // A failed probe is NOT zero containment. This distinction is the whole
             // point of the discriminated union: `testValueOverlap` returns a bare
             // number and swallows its errors as 0, which the 75% gate then reads as
             // a refutation — so on PostgreSQL an incomparable `text = uuid` join
             // silently deletes a candidate instead of reporting that it could not
             // be compared.
-            return unprobed(outcome.reason, probedAt);
+            return unprobed(outcome.Reason, probedAt);
         }
 
-        const sampledValues = outcome.sampledValues;
-        const matchedValues = outcome.matchedValues;
+        const sampledValues = outcome.SampledValues;
+        const matchedValues = outcome.MatchedValues;
         if (sampledValues === 0) {
             return unprobed('child column has no non-null values to sample', probedAt);
         }
 
         const containment = matchedValues / sampledValues;
-        const measurement: JoinContainment = { sampledValues, matchedValues, containment };
+        const measurement: JoinContainment = { SampledValues: sampledValues, MatchedValues: matchedValues, Containment: containment };
         const pct = (containment * 100).toFixed(1);
 
         if (containment < this.cfg.minContainment) {
             return {
-                status: 'Refuted',
-                containment: measurement,
-                reason: `${matchedValues} of ${sampledValues} sampled values matched (${pct}%), below the ${(this.cfg.minContainment * 100).toFixed(1)}% floor`,
-                probedAt,
+                Status: 'Refuted',
+                Containment: measurement,
+                Reason: `${matchedValues} of ${sampledValues} sampled values matched (${pct}%), below the ${(this.cfg.minContainment * 100).toFixed(1)}% floor`,
+                ProbedAt: probedAt,
             };
         }
 
         return {
-            status: 'Verified',
-            containment: measurement,
-            reason: `${matchedValues} of ${sampledValues} sampled values matched (${pct}%)`,
-            probedAt,
+            Status: 'Verified',
+            Containment: measurement,
+            Reason: `${matchedValues} of ${sampledValues} sampled values matched (${pct}%)`,
+            ProbedAt: probedAt,
         };
     }
 }
 
 /** Build the persisted stamp for an emitted key from a probe result. */
-export function stampFor(
+export function StampFor(
     provenance: KeyProvenance,
     result: JoinProbeResult,
 ): KeyVerificationStamp {
     return {
         Provenance: provenance,
-        Verification: result.status,
-        VerifiedAt: result.probedAt,
-        MatchedRows: result.containment ? result.containment.matchedValues : null,
-        SampledRows: result.containment ? result.containment.sampledValues : null,
-        VerificationNote: result.reason,
+        Verification: result.Status,
+        VerifiedAt: result.ProbedAt,
+        MatchedRows: result.Containment ? result.Containment.MatchedValues : null,
+        SampledRows: result.Containment ? result.Containment.SampledValues : null,
+        VerificationNote: result.Reason,
     };
 }
 
 function unprobed(reason: string, probedAt: string): JoinProbeResult {
-    return { status: 'Unprobed', containment: null, reason, probedAt };
+    return { Status: 'Unprobed', Containment: null, Reason: reason, ProbedAt: probedAt };
 }
 
 function stripUndefined(c: KeyVerificationConfig): KeyVerificationConfig {

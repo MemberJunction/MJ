@@ -291,7 +291,7 @@ export class AnalysisOrchestrator {
         db ? db.getDriver() : null,
         this.config.analysis.keyVerification ?? {}
       );
-      analysisEngine.setKeyVerifier(keyVerifier);
+      analysisEngine.SetKeyVerifier(keyVerifier);
 
       // Create analysis run
       const run = stateManager.createAnalysisRun(
@@ -426,7 +426,7 @@ export class AnalysisOrchestrator {
             this.config.ai,
             this.config.database.provider,
             keyVerifier,
-            { autoCreateRelatedViewOnForm: this.config.analysis.organicKeyDetection.autoCreateRelatedViewOnForm },
+            { AutoCreateRelatedViewOnForm: this.config.analysis.organicKeyDetection.autoCreateRelatedViewOnForm },
           );
           const okResult = await detector.detect(state, {
             OnProgress: (msg) => this.onProgress(msg),

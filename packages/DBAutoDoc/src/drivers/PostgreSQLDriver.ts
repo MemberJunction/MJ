@@ -6,7 +6,7 @@
 import { Pool, PoolClient, PoolConfig } from 'pg';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver, DriverProbeOutcome } from './BaseAutoDocDriver.js';
-import { describeProbeFailure, extractSqlState } from './probeErrors.js';
+import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -920,9 +920,9 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
    *    so a slow probe is abandoned server-side instead of stalling the run, and
    *    the setting never leaks back into the pool.
    */
-  public async probeJoinContainment(
-    child: { schema: string; table: string; column: string },
-    parent: { schema: string; table: string; column: string },
+  public async ProbeJoinContainment(
+    child: { Schema: string; Table: string; Column: string },
+    parent: { Schema: string; Table: string; Column: string },
     sampleSize: number,
     timeoutMs: number
   ): Promise<DriverProbeOutcome> {
@@ -932,22 +932,22 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
         await this.connect();
       }
       if (!this.pool) {
-        return { ok: false, reason: 'no PostgreSQL connection pool available' };
+        return { Ok: false, Reason: 'no PostgreSQL connection pool available' };
       }
       client = await this.pool.connect();
 
-      const childCol = this.escapeIdentifier(child.column);
-      const parentCol = this.escapeIdentifier(parent.column);
+      const childCol = this.escapeIdentifier(child.Column);
+      const parentCol = this.escapeIdentifier(parent.Column);
       const query = `
         WITH child_sample AS (
           SELECT DISTINCT ${childCol}::text AS v
-          FROM ${this.escapeIdentifier(child.schema)}.${this.escapeIdentifier(child.table)}
+          FROM ${this.escapeIdentifier(child.Schema)}.${this.escapeIdentifier(child.Table)}
           WHERE ${childCol} IS NOT NULL
           LIMIT ${Math.max(1, Math.floor(sampleSize))}
         ),
         parent_values AS (
           SELECT DISTINCT ${parentCol}::text AS v
-          FROM ${this.escapeIdentifier(parent.schema)}.${this.escapeIdentifier(parent.table)}
+          FROM ${this.escapeIdentifier(parent.Schema)}.${this.escapeIdentifier(parent.Table)}
           WHERE ${parentCol} IS NOT NULL
         )
         SELECT COUNT(*)::bigint AS sampled_values,
@@ -960,15 +960,15 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
       const result = await client.query<{ sampled_values: string; matched_values: string }>(query);
       const row = result.rows[0];
       if (!row) {
-        return { ok: false, reason: 'probe returned no rows' };
+        return { Ok: false, Reason: 'probe returned no rows' };
       }
       return {
-        ok: true,
-        sampledValues: Number(row.sampled_values),
-        matchedValues: Number(row.matched_values)
+        Ok: true,
+        SampledValues: Number(row.sampled_values),
+        MatchedValues: Number(row.matched_values)
       };
     } catch (error) {
-      return { ok: false, reason: describeProbeFailure(error), code: extractSqlState(error) };
+      return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
     } finally {
       if (client) {
         try {

@@ -7,7 +7,7 @@ import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, 
 import { EnsureArray } from "../utils/ensureArray.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
-import { KeyVerifier, stampFor, JoinProbeResult } from '../discovery/JoinProbe.js';
+import { KeyVerifier, StampFor, JoinProbeResult } from '../discovery/JoinProbe.js';
 import {
   TableAnalysisPromptResult,
   ColumnDescriptionPromptResult,
@@ -49,7 +49,7 @@ export class AnalysisEngine {
    * the connection and passes ONE verifier so the per-run probe budget is shared with
    * the organic-key path instead of each path getting its own allowance.
    */
-  public setKeyVerifier(verifier: KeyVerifier | null): void {
+  public SetKeyVerifier(verifier: KeyVerifier | null): void {
     this.keyVerifier = verifier;
   }
 
@@ -1514,23 +1514,23 @@ export class AnalysisEngine {
     const now = new Date().toISOString();
     if (!this.keyVerifier) {
       return {
-        status: 'Unprobed',
-        containment: null,
-        reason: 'no key verifier configured for this run',
-        probedAt: now
+        Status: 'Unprobed',
+        Containment: null,
+        Reason: 'no key verifier configured for this run',
+        ProbedAt: now
       };
     }
     if (!parentColumn || !parentTable || !parentSchema) {
       return {
-        status: 'Unprobed',
-        containment: null,
-        reason: 'LLM did not name a complete target column',
-        probedAt: now
+        Status: 'Unprobed',
+        Containment: null,
+        Reason: 'LLM did not name a complete target column',
+        ProbedAt: now
       };
     }
-    return this.keyVerifier.verify({
-      child: { schema: childSchema, table: childTable, column: childColumn },
-      parent: { schema: parentSchema, table: parentTable, column: parentColumn }
+    return this.keyVerifier.Verify({
+      Child: { Schema: childSchema, Table: childTable, Column: childColumn },
+      Parent: { Schema: parentSchema, Table: parentTable, Column: parentColumn }
     });
   }
 
@@ -1619,13 +1619,13 @@ export class AnalysisEngine {
         referencesSchema, referencesTable, referencesColumn
       );
 
-      if (probe.status === 'Refuted') {
+      if (probe.Status === 'Refuted') {
         // Measured, not assumed: the probe ran and the join matches (near) nothing.
         // Dropping it here is the only place it can be dropped — once the column is
         // stamped, the introspected-FK path emits it with no gate to fail.
-        console.log(`[AnalysisEngine] Rejecting LLM FK — probe refuted: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn} (${probe.reason})`);
+        console.log(`[AnalysisEngine] Rejecting LLM FK — probe refuted: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn} (${probe.Reason})`);
         this.onProgress(
-          `Rejected LLM-proposed FK ${schemaName}.${tableName}.${columnName} → ${referencesTable}.${referencesColumn}: ${probe.reason}`,
+          `Rejected LLM-proposed FK ${schemaName}.${tableName}.${columnName} → ${referencesTable}.${referencesColumn}: ${probe.Reason}`,
           { refutedKey: `${schemaName}.${tableName}.${columnName}` }
         );
         continue;
@@ -1635,7 +1635,7 @@ export class AnalysisEngine {
       // whenever the probe cannot run turns a permissions or timeout problem into
       // total key loss with no signal. It proceeds STAMPED, so a consumer can tell a
       // checked key from an unchecked one.
-      const verificationStamp = stampFor('LLM', probe);
+      const verificationStamp = StampFor('LLM', probe);
 
       // Check if we already have this FK - boost confidence
       const existingFK = discoveryPhase.discovered.foreignKeys.find(fk =>
@@ -1684,17 +1684,17 @@ export class AnalysisEngine {
             // which is indistinguishable from a probe that ran and found nothing —
             // the exact conflation that let a schema of zero-match keys be emitted
             // with the same apparent confidence as a correct one.
-            valueOverlap: probe.containment ? probe.containment.containment : 0,
+            valueOverlap: probe.Containment ? probe.Containment.Containment : 0,
             cardinalityRatio: 0,
             dataTypeMatch: true,
             nullPercentage: 0,
-            sampleSize: probe.containment ? probe.containment.sampledValues : 0,
-            orphanCount: probe.containment
-              ? probe.containment.sampledValues - probe.containment.matchedValues
+            sampleSize: probe.Containment ? probe.Containment.SampledValues : 0,
+            orphanCount: probe.Containment
+              ? probe.Containment.SampledValues - probe.Containment.MatchedValues
               : 0,
-            warnings: probe.status === 'Unprobed'
-              ? ['Created from structured LLM output', `Join NOT verified: ${probe.reason}`]
-              : ['Created from structured LLM output', `Join verified: ${probe.reason}`]
+            warnings: probe.Status === 'Unprobed'
+              ? ['Created from structured LLM output', `Join NOT verified: ${probe.Reason}`]
+              : ['Created from structured LLM output', `Join verified: ${probe.Reason}`]
           },
           discoveredInIteration: 1,
           validatedByLLM: true,

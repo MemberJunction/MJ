@@ -21,9 +21,9 @@ import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInf
  */
 
 interface ProbeOnlyDriver {
-    probeJoinContainment(
-        child: { schema: string; table: string; column: string },
-        parent: { schema: string; table: string; column: string },
+    ProbeJoinContainment(
+        child: { Schema: string; Table: string; Column: string },
+        parent: { Schema: string; Table: string; Column: string },
         sampleSize: number,
         timeoutMs: number,
     ): Promise<DriverProbeOutcome>;
@@ -41,13 +41,13 @@ interface FKInsightSink {
 
 function driverFor(
     byTarget: Record<string, DriverProbeOutcome>,
-    fallback: DriverProbeOutcome = { ok: true, sampledValues: 1000, matchedValues: 1000 },
+    fallback: DriverProbeOutcome = { Ok: true, SampledValues: 1000, MatchedValues: 1000 },
 ): { driver: BaseAutoDocDriver; probed: Array<{ child: string; parent: string }> } {
     const probed: Array<{ child: string; parent: string }> = [];
     const impl: ProbeOnlyDriver = {
-        probeJoinContainment: async (child, parent) => {
-            const p = `${parent.schema}.${parent.table}.${parent.column}`;
-            probed.push({ child: `${child.schema}.${child.table}.${child.column}`, parent: p });
+        ProbeJoinContainment: async (child, parent) => {
+            const p = `${parent.Schema}.${parent.Table}.${parent.Column}`;
+            probed.push({ child: `${child.Schema}.${child.Table}.${child.Column}`, parent: p });
             return byTarget[p] ?? fallback;
         },
     };
@@ -122,7 +122,7 @@ function engineWith(verifier: KeyVerifier | null): { engine: AnalysisEngine; sin
         {} as unknown as IterationTracker,
         (msg: string) => progress.push(msg),
     );
-    engine.setKeyVerifier(verifier);
+    engine.SetKeyVerifier(verifier);
     return { engine, sink: engine as unknown as FKInsightSink, progress };
 }
 
@@ -134,7 +134,7 @@ const insight = (columnName: string, table: string, column: string): ForeignKeyP
     confidence: 0.95,
 });
 
-const MATCHES_NOTHING: DriverProbeOutcome = { ok: true, sampledValues: 1000, matchedValues: 0 };
+const MATCHES_NOTHING: DriverProbeOutcome = { Ok: true, SampledValues: 1000, MatchedValues: 0 };
 
 describe('AnalysisEngine — an LLM-proposed FK is probed before it is confirmed', () => {
     it('a refuted join is NOT written to discovered.foreignKeys', async () => {
@@ -231,7 +231,7 @@ describe('AnalysisEngine — an LLM-proposed FK is probed before it is confirmed
         // to remove. It proceeds, visibly unverified.
         const state = acgiState();
         const { driver } = driverFor({
-            'acgi.customer.cust_id': { ok: false, reason: 'no permission to read one of the columns' },
+            'acgi.customer.cust_id': { Ok: false, Reason: 'no permission to read one of the columns' },
         });
         const { sink } = engineWith(new KeyVerifier(driver));
 

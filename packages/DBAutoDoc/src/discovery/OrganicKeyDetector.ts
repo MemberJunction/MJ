@@ -51,7 +51,7 @@ export interface OrganicKeyDetectionResult {
         probesAllowed: number;
     };
     /** Per-cluster probe record, so a dropped key can be explained rather than just missing. */
-    verification: ClusterVerification[];
+    Verification: ClusterVerification[];
 }
 
 export interface DetectorRunOptions {
@@ -64,7 +64,7 @@ export interface OrganicKeyEmitOptions {
      * Set `AutoCreateRelatedViewOnForm` on emitted keys. Default false — a
      * machine-proposed key should not silently create a grid per spoke on every form.
      */
-    autoCreateRelatedViewOnForm?: boolean;
+    AutoCreateRelatedViewOnForm?: boolean;
 }
 
 export class OrganicKeyDetector {
@@ -96,16 +96,16 @@ export class OrganicKeyDetector {
         const b = RunStructuralPhase(state, a.clusters, this.databaseProvider);
         progress(`structural: ${b.Summary.transitiveBridgesFound} bridges`);
         const c = await Compose(a.clusters, b.Bridges, this.keyVerifier, {
-            autoCreateRelatedViewOnForm: this.emitOptions.autoCreateRelatedViewOnForm,
+            AutoCreateRelatedViewOnForm: this.emitOptions.AutoCreateRelatedViewOnForm,
         });
         // Report what the probe removed, not just what survived: "emitted 5 clusters" and
         // "emitted 5 of 161, 156 refuted" are the same output and completely different
         // facts about the schema.
-        const budget = this.keyVerifier ? this.keyVerifier.budget : null;
+        const budget = this.keyVerifier ? this.keyVerifier.Budget : null;
         progress(
             `compose: emitted ${c.Emitted}/${a.clusters.length} clusters (${c.Summary.outputKeys} keys, ${c.Summary.outputSpokes} spokes)`
             + (budget
-                ? `; probe refuted ${c.droppedUnverified} clusters and ${c.droppedMembers} members using ${budget.probesUsed}/${budget.probesAllowed} probes`
+                ? `; probe refuted ${c.DroppedUnverified} clusters and ${c.DroppedMembers} members using ${budget.ProbesUsed}/${budget.ProbesAllowed} probes`
                 : '; keys NOT verified (no probe configured)')
         );
 
@@ -146,12 +146,12 @@ export class OrganicKeyDetector {
                 outputKeys: c.Summary.outputKeys,
                 outputSpokes: c.Summary.outputSpokes,
                 transitiveBridges: b.Summary.transitiveBridgesFound,
-                clustersDroppedUnverified: c.droppedUnverified,
-                membersDroppedUnverified: c.droppedMembers,
-                probesUsed: budget ? budget.probesUsed : 0,
-                probesAllowed: budget ? budget.probesAllowed : 0,
+                clustersDroppedUnverified: c.DroppedUnverified,
+                membersDroppedUnverified: c.DroppedMembers,
+                probesUsed: budget ? budget.ProbesUsed : 0,
+                probesAllowed: budget ? budget.ProbesAllowed : 0,
             },
-            verification: c.verification,
+            Verification: c.Verification,
         };
     }
 
