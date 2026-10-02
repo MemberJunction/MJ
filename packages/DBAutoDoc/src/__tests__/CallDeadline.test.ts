@@ -5,8 +5,8 @@ import { MJGlobal } from '@memberjunction/global';
 import {
   DEFAULT_CALL_TIMEOUT_MS,
   LLMCallTimeoutError,
-  resolveCallTimeoutMs,
-  withCallDeadline,
+  ResolveCallTimeoutMs,
+  WithCallDeadline,
 } from '../utils/call-deadline.js';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { LLMDiscoveryValidator } from '../discovery/LLMDiscoveryValidator.js';
@@ -23,26 +23,26 @@ import type { AIConfig, RelationshipDiscoveryConfig } from '../types/config.js';
  * actually aborted (not merely abandoned), and that the call sites pass the signal through.
  */
 
-describe('resolveCallTimeoutMs', () => {
+describe('ResolveCallTimeoutMs', () => {
   it('defaults when unset, so an existing config gets the bound', () => {
-    expect(resolveCallTimeoutMs(undefined)).toBe(DEFAULT_CALL_TIMEOUT_MS);
+    expect(ResolveCallTimeoutMs(undefined)).toBe(DEFAULT_CALL_TIMEOUT_MS);
   });
 
   it('treats 0 as an explicit opt-out', () => {
-    expect(resolveCallTimeoutMs(0)).toBe(0);
+    expect(ResolveCallTimeoutMs(0)).toBe(0);
   });
 
   it('treats a negative or non-finite value as no bound rather than an instant one', () => {
     // A negative ceiling that fired immediately would fail every call in the run.
-    expect(resolveCallTimeoutMs(-1)).toBe(0);
-    expect(resolveCallTimeoutMs(Number.NaN)).toBe(0);
+    expect(ResolveCallTimeoutMs(-1)).toBe(0);
+    expect(ResolveCallTimeoutMs(Number.NaN)).toBe(0);
   });
 });
 
-describe('withCallDeadline', () => {
+describe('WithCallDeadline', () => {
   it('rejects with a typed timeout once the ceiling elapses, instead of waiting forever', async () => {
     // The call never settles on its own — the shape of a real stall.
-    const promise = withCallDeadline(20, 'stalling call', () => new Promise<string>(() => {}));
+    const promise = WithCallDeadline(20, 'stalling call', () => new Promise<string>(() => {}));
     await expect(promise).rejects.toBeInstanceOf(LLMCallTimeoutError);
   });
 
@@ -50,7 +50,7 @@ describe('withCallDeadline', () => {
     // Rejecting without aborting leaves the request open — which is how a failing provider ends up
     // holding a pile of sockets while the caller opens another. Assert the signal actually fired.
     let seen: AbortSignal | undefined;
-    const promise = withCallDeadline(20, 'stalling call', signal => {
+    const promise = WithCallDeadline(20, 'stalling call', signal => {
       seen = signal;
       return new Promise<string>(() => {});
     });
@@ -61,18 +61,18 @@ describe('withCallDeadline', () => {
 
   it('carries the word "timeout" so the retry classifier treats a stall as retriable', async () => {
     // PromptEngine.isRetryableError classifies on message text; so does MJ's ErrorAnalyzer.
-    const promise = withCallDeadline(20, 'stalling call', () => new Promise<string>(() => {}));
+    const promise = WithCallDeadline(20, 'stalling call', () => new Promise<string>(() => {}));
     await expect(promise).rejects.toThrow(/timeout/i);
   });
 
   it('leaves a call that finishes in time completely alone', async () => {
-    const result = await withCallDeadline(5_000, 'quick call', async () => 'answered');
+    const result = await WithCallDeadline(5_000, 'quick call', async () => 'answered');
     expect(result).toBe('answered');
   });
 
   it('passes NO signal when the bound is disabled, restoring the previous behaviour exactly', async () => {
     let seen: AbortSignal | undefined | 'unset' = 'unset';
-    const result = await withCallDeadline(0, 'unbounded call', async signal => {
+    const result = await WithCallDeadline(0, 'unbounded call', async signal => {
       seen = signal;
       return 'answered';
     });
@@ -82,7 +82,7 @@ describe('withCallDeadline', () => {
 
   it('propagates the call\'s own failure unchanged rather than masking it as a timeout', async () => {
     await expect(
-      withCallDeadline(5_000, 'failing call', async () => {
+      WithCallDeadline(5_000, 'failing call', async () => {
         throw new Error('401 invalid api key');
       })
     ).rejects.toThrow('401 invalid api key');

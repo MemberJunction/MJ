@@ -5,7 +5,7 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { resolveCallTimeoutMs, withCallDeadline } from '../utils/call-deadline.js';
+import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { AIConfig } from '../types/config.js';
 import { CreateLLMInstance } from '../utils/llm-factory.js';
@@ -78,8 +78,8 @@ export class LLMSanityChecker {
     // exception from this checker as fatal to the iteration, whereas a returned failure is
     // swallowed into "no candidates were invalid" — which would silently pass every statistically
     // derived key through unreviewed. A timeout must not look like an all-clear.
-    const chatResult: ChatResult = await withCallDeadline(
-      resolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
+    const chatResult: ChatResult = await WithCallDeadline(
+      ResolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
       'PK/FK sanity check',
       signal => this.llm.ChatCompletion({ ...params, cancellationToken: signal })
     );

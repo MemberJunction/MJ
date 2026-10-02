@@ -6,7 +6,7 @@
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { CreateLLMInstance } from '../utils/llm-factory.js';
-import { resolveCallTimeoutMs, withCallDeadline } from '../utils/call-deadline.js';
+import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 import { SchemaDefinition } from '../types/state.js';
@@ -77,8 +77,8 @@ export class LLMDiscoveryValidator {
     // Bounded. This runs once per candidate table inside a sequential loop, so one stalled call
     // parks every table after it — the discovery phase would appear to be working and simply never
     // reach its next table.
-    const chatResult: ChatResult = await withCallDeadline(
-      resolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
+    const chatResult: ChatResult = await WithCallDeadline(
+      ResolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
       `relationship validation for ${schemaName}.${tableName}`,
       signal => this.llm.ChatCompletion({ ...params, cancellationToken: signal })
     );

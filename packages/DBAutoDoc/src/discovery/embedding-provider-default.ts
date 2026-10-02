@@ -38,7 +38,7 @@ const LLM_PROVIDER_TO_EMBEDDING: Partial<Record<string, EmbeddingProviderName>> 
  * @throws when the LLM vendor ships no embedding driver — the operator must set
  *         `organicKeyDetection.embedding.provider` (and, for a different vendor, that vendor's key).
  */
-export function defaultEmbeddingProviderFor(llmProvider: string): EmbeddingProviderName {
+export function DefaultEmbeddingProviderFor(llmProvider: string): EmbeddingProviderName {
     const mapped = LLM_PROVIDER_TO_EMBEDDING[String(llmProvider ?? '').trim().toLowerCase()];
     if (mapped) {
         return mapped;

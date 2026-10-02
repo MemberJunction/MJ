@@ -24,7 +24,7 @@
 export const DEFAULT_CALL_TIMEOUT_MS = 120_000;
 
 /** Resolves the configured ceiling. `0` (or a negative value) means no bound. */
-export function resolveCallTimeoutMs(configured: number | undefined): number {
+export function ResolveCallTimeoutMs(configured: number | undefined): number {
   if (configured === undefined) {
     return DEFAULT_CALL_TIMEOUT_MS;
   }
@@ -56,7 +56,7 @@ export class LLMCallTimeoutError extends Error {
  * @param what Description used in the timeout message (a prompt or table name).
  * @param call Issues the request, attaching the supplied signal.
  */
-export async function withCallDeadline<T>(
+export async function WithCallDeadline<T>(
   timeoutMs: number,
   what: string,
   call: (signal: AbortSignal | undefined) => Promise<T>

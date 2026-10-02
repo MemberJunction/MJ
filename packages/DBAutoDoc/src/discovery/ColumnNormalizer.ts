@@ -31,7 +31,7 @@ import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { AIConfig } from '../types/config.js';
 import { OrganicKeyNormalizationStrategy } from '../types/organic-keys.js';
 import { CleanAndParseJSON } from '../utils/json.js';
-import { resolveCallTimeoutMs, withCallDeadline } from '../utils/call-deadline.js';
+import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 
 /** One column's input to the normalizer. */
 export interface NormalizerInputColumn {
@@ -78,13 +78,13 @@ export interface NormalizationBatchResult {
     /** Tables where the LLM call failed entirely. */
     errors: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     tokens: { total: number; input: number; output: number };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    /** True when the pass stopped scheduling tables because `tokenBudget` was reached. */
-    budgetExhausted: boolean;
+    /** True when the pass stopped scheduling tables because `TokenBudget` was reached. */
+    BudgetExhausted: boolean;
     /**
      * Tables never attempted because the budget ran out. Non-zero means this result is PARTIAL:
      * fewer clusters will be found, and that is a budget outcome rather than a schema fact.
      */
-    tablesSkippedForBudget: number;
+    TablesSkippedForBudget: number;
 }
 
 export interface NormalizerOptions {
@@ -101,7 +101,7 @@ export interface NormalizerOptions {
      * overshoot by up to `concurrency` tables' worth. A hard mid-call cut would waste the tokens
      * already spent on those requests and return nothing for them.
      */
-    tokenBudget?: number;
+    TokenBudget?: number;
 }
 
 export class TableNormalizer {
@@ -146,8 +146,8 @@ export class TableNormalizer {
                 // then stops sending never settles the promise, and this loop only runs once one
                 // settles — so without the deadline a single stalled table parks a worker for the
                 // rest of the run, and with concurrency N, N stalls park the whole pass.
-                result = await withCallDeadline(
-                    resolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
+                result = await WithCallDeadline(
+                    ResolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
                     what,
                     (signal) => this.llm.ChatCompletion({ ...params, cancellationToken: signal }),
                 );
@@ -260,7 +260,7 @@ export class TableNormalizer {
         // absent, 0, negative and NaN all fail it, so every one of them means unlimited — which is
         // exactly what this pass did before. Normalising here as well would be a second rule that
         // could disagree with that one.
-        const tokenBudget = opts.tokenBudget ?? 0;
+        const tokenBudget = opts.TokenBudget ?? 0;
         let budgetExhausted = false;
         let tablesSkippedForBudget = 0;
 
@@ -317,8 +317,8 @@ export class TableNormalizer {
             rejected,
             errors,
             tokens: { total, input, output },
-            budgetExhausted,
-            tablesSkippedForBudget,
+            BudgetExhausted: budgetExhausted,
+            TablesSkippedForBudget: tablesSkippedForBudget,
         };
     }
 

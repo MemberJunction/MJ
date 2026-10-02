@@ -2,8 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEmbeddings } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 
-import { defaultEmbeddingProviderFor } from '../discovery/embedding-provider-default.js';
-import { resolveEmbeddingProvider } from '../discovery/SemanticPhase.js';
+import { DefaultEmbeddingProviderFor } from '../discovery/embedding-provider-default.js';
+import { ResolveEmbeddingProvider } from '../discovery/SemanticPhase.js';
 import type { AIConfig, OrganicKeyDetectionConfig } from '../types/config.js';
 
 /**
@@ -18,25 +18,25 @@ import type { AIConfig, OrganicKeyDetectionConfig } from '../types/config.js';
 
 describe('the default embedding provider follows the key that exists', () => {
   it('sends a Gemini key to the Gemini embedding driver — the shipped-default case', () => {
-    expect(defaultEmbeddingProviderFor('gemini')).toBe('gemini');
+    expect(DefaultEmbeddingProviderFor('gemini')).toBe('gemini');
   });
 
   it('maps every vendor that ships both an LLM and an embedding driver', () => {
-    expect(defaultEmbeddingProviderFor('openai')).toBe('openai');
-    expect(defaultEmbeddingProviderFor('mistral')).toBe('mistral');
-    expect(defaultEmbeddingProviderFor('azure')).toBe('azure');
-    expect(defaultEmbeddingProviderFor('bedrock')).toBe('bedrock');
+    expect(DefaultEmbeddingProviderFor('openai')).toBe('openai');
+    expect(DefaultEmbeddingProviderFor('mistral')).toBe('mistral');
+    expect(DefaultEmbeddingProviderFor('azure')).toBe('azure');
+    expect(DefaultEmbeddingProviderFor('bedrock')).toBe('bedrock');
   });
 
   it('is forgiving about case and whitespace in a hand-edited config', () => {
-    expect(defaultEmbeddingProviderFor('  GEMINI ')).toBe('gemini');
+    expect(DefaultEmbeddingProviderFor('  GEMINI ')).toBe('gemini');
   });
 
   it('never infers `local`, which is a deliberate choice rather than a fallback', () => {
     // `local` needs no key, so it would "work" for every vendor — and would silently swap a
     // hosted embedding model for a small on-disk one, changing cluster quality with no signal.
     for (const p of ['gemini', 'openai', 'mistral', 'azure', 'bedrock']) {
-      expect(defaultEmbeddingProviderFor(p)).not.toBe('local');
+      expect(DefaultEmbeddingProviderFor(p)).not.toBe('local');
     }
   });
 
@@ -44,7 +44,7 @@ describe('the default embedding provider follows the key that exists', () => {
     // Not a new failure: an Anthropic key sent to OpenAIEmbedding failed too — opaquely, a layer
     // down, and blamed on OpenAI. This names the decision the operator has to make.
     for (const p of ['anthropic', 'groq', 'openrouter', 'cerebras', 'xai', 'vertex']) {
-      expect(() => defaultEmbeddingProviderFor(p)).toThrow(/embedding\.provider/);
+      expect(() => DefaultEmbeddingProviderFor(p)).toThrow(/embedding\.provider/);
     }
   });
 
@@ -59,14 +59,14 @@ describe('the default embedding provider follows the key that exists', () => {
     for (const p of all) {
       let resolved: string | null = null;
       try {
-        resolved = defaultEmbeddingProviderFor(p);
+        resolved = DefaultEmbeddingProviderFor(p);
       } catch {
         resolved = null;
       }
       if (resolved !== null) {
         expect(resolved).toBe(p); // never another vendor's driver
       } else {
-        expect(() => defaultEmbeddingProviderFor(p)).toThrow(/embedding\.provider/);
+        expect(() => DefaultEmbeddingProviderFor(p)).toThrow(/embedding\.provider/);
       }
     }
   });
@@ -82,7 +82,7 @@ describe('the semantic phase actually uses that default', () => {
     const spy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockReturnValue({
       EmbedTexts: async () => ({ vectors: [] }),
     } as unknown as BaseEmbeddings);
-    resolveEmbeddingProvider(config, { provider: aiProvider, model: 'm', apiKey: 'k' } as AIConfig);
+    ResolveEmbeddingProvider(config, { provider: aiProvider, model: 'm', apiKey: 'k' } as AIConfig);
     return String(spy.mock.calls[0][1]);
   }
 

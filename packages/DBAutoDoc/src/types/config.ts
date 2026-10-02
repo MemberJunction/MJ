@@ -236,7 +236,7 @@ export interface OrganicKeyDetectionConfig {
    *
    * Enforced by NOT SCHEDULING further tables once the running total exceeds it; calls already in
    * flight are allowed to finish, so the recorded total may overshoot by up to `concurrency`
-   * tables' worth. The result reports `budgetExhausted` and how many tables were skipped, because
+   * tables' worth. The result reports `BudgetExhausted` and how many tables were skipped, because
    * normalizing 300 of 500 tables and reporting success is its own defect.
    *
    * This was declared and read nowhere, so the pass had no token, cost or call-count cap at all.

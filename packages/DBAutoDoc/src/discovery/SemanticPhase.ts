@@ -58,7 +58,7 @@ import {
 } from './ColumnNormalizer.js';
 import { ColumnClusterer, ClustererInputColumn } from './ColumnClusterer.js';
 import { CreateEmbeddingProvider, EmbeddingProviderName } from './EmbeddingProvider.js';
-import { defaultEmbeddingProviderFor } from './embedding-provider-default.js';
+import { DefaultEmbeddingProviderFor } from './embedding-provider-default.js';
 
 const AUDIT_COLUMN_PATTERN = /^(modified|created|updated|inserted|changed)(date|at|time|by|on)?$|^rowguid$|^timestamp$|^row_?version$|^__mj_.*$/i;
 const NON_VALUEMATCHABLE_TYPES = /(binary|blob|image|varbinary|xml|geography|geometry|hierarchyid|sql_variant)/i;
@@ -147,13 +147,13 @@ export async function RunSemanticPhase(
     const normResult = await new TableNormalizer(aiConfig).normalizeAll(tableInputs, {
         Concurrency: config.refinementConcurrency ?? DEFAULT_DETECTOR_CONFIG.RefinementConcurrency,
         MaxRetries: config.maxRefinementRetries ?? 2,
-        tokenBudget: config.tokenBudget,
+        TokenBudget: config.tokenBudget,
         OnProgress: () => {},
     });
     progress(`semantic: ${normResult.Normalized.length} columns kept (${normResult.rejected} rejected by PR-#2193 axes)`);
-    if (normResult.budgetExhausted) {
+    if (normResult.BudgetExhausted) {
         progress(
-            `semantic: PARTIAL — token budget reached, ${normResult.tablesSkippedForBudget} table(s) not normalized`,
+            `semantic: PARTIAL — token budget reached, ${normResult.TablesSkippedForBudget} table(s) not normalized`,
         );
     }
 
@@ -168,13 +168,13 @@ export async function RunSemanticPhase(
                 clustersBeforeSplit: 0,
                 clustersFound: 0,
                 clustersDropped: 0,
-                tablesSkippedForBudget: normResult.tablesSkippedForBudget,
+                tablesSkippedForBudget: normResult.TablesSkippedForBudget,
             },
         };
     }
 
     // ─── 3. Embed the normalized descriptions ────────────────────────────────
-    const embedProvider = resolveEmbeddingProvider(config, aiConfig);
+    const embedProvider = ResolveEmbeddingProvider(config, aiConfig);
     progress(`semantic: embedding ${normResult.Normalized.length} descriptions via ${embedProvider.name}`);
     const texts = normResult.Normalized.map((n) => buildEmbeddingText(n));
     const embeddings = await embedProvider.embed(texts);
@@ -229,7 +229,7 @@ export async function RunSemanticPhase(
             clustersBeforeSplit: rawClusters.length,
             clustersFound: clusters.length,
             clustersDropped: dropped,
-            tablesSkippedForBudget: normResult.tablesSkippedForBudget,
+            tablesSkippedForBudget: normResult.TablesSkippedForBudget,
         },
     };
 }
@@ -499,15 +499,15 @@ interface EmbeddingProviderHandle {
 }
 
 /** Exported for test: the default this picks is the fix, so it needs to be assertable directly. */
-export function resolveEmbeddingProvider(
+export function ResolveEmbeddingProvider(
     config: OrganicKeyDetectionConfig,
     aiConfig: AIConfig,
 ): EmbeddingProviderHandle {
     const cfg = config.embedding ?? {};
     // No configured provider means "use the vendor whose key we already have". Hardcoding openai
     // here sent a Gemini key to OpenAIEmbedding under the SHIPPED DEFAULTS — see
-    // defaultEmbeddingProviderFor.
-    const provider = (cfg.provider ?? defaultEmbeddingProviderFor(aiConfig.provider)) as EmbeddingProviderName;
+    // DefaultEmbeddingProviderFor.
+    const provider = (cfg.provider ?? DefaultEmbeddingProviderFor(aiConfig.provider)) as EmbeddingProviderName;
     const apiKey = aiConfig.apiKey;
     const impl = CreateEmbeddingProvider({
         provider,

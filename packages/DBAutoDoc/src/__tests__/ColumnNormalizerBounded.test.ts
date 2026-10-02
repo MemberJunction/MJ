@@ -243,7 +243,7 @@ describe('the token budget is enforced, and a short run says so', () => {
   it('stops scheduling once the budget is reached', async () => {
     const { n, llm } = normalizerWith([{ kind: 'ok', tokens: 100 }], aiConfig({ callTimeoutMs: 0 }));
 
-    const r = await n.NormalizeAll(TABLES, { Concurrency: 1, MaxRetries: 0, tokenBudget: 250 });
+    const r = await n.NormalizeAll(TABLES, { Concurrency: 1, MaxRetries: 0, TokenBudget: 250 });
 
     // Three calls take the total to 300, which is over; the fourth is never scheduled.
     expect(llm.calls).toHaveLength(3);
@@ -255,10 +255,10 @@ describe('the token budget is enforced, and a short run says so', () => {
     // that as a finding about the schema rather than as a budget outcome.
     const { n } = normalizerWith([{ kind: 'ok', tokens: 100 }], aiConfig({ callTimeoutMs: 0 }));
 
-    const r = await n.NormalizeAll(TABLES, { Concurrency: 1, MaxRetries: 0, tokenBudget: 250 });
+    const r = await n.NormalizeAll(TABLES, { Concurrency: 1, MaxRetries: 0, TokenBudget: 250 });
 
-    expect(r.budgetExhausted).toBe(true);
-    expect(r.tablesSkippedForBudget).toBe(7);
+    expect(r.BudgetExhausted).toBe(true);
+    expect(r.TablesSkippedForBudget).toBe(7);
   });
 
   it('runs everything when no budget is set — the previous behaviour, unchanged', async () => {
@@ -267,8 +267,8 @@ describe('the token budget is enforced, and a short run says so', () => {
     const r = await n.NormalizeAll(TABLES, { Concurrency: 2, MaxRetries: 0 });
 
     expect(llm.calls).toHaveLength(10);
-    expect(r.budgetExhausted).toBe(false);
-    expect(r.tablesSkippedForBudget).toBe(0);
+    expect(r.BudgetExhausted).toBe(false);
+    expect(r.TablesSkippedForBudget).toBe(0);
   });
 
   it('treats 0 and a nonsense budget as unlimited, never as "spend nothing"', async () => {
@@ -276,9 +276,9 @@ describe('the token budget is enforced, and a short run says so', () => {
     // whole database and look like a schema with none.
     for (const tokenBudget of [0, -1, Number.NaN]) {
       const { n, llm } = normalizerWith([{ kind: 'ok', tokens: 100 }], aiConfig({ callTimeoutMs: 0 }));
-      const r = await n.NormalizeAll(TABLES, { Concurrency: 1, MaxRetries: 0, tokenBudget });
+      const r = await n.NormalizeAll(TABLES, { Concurrency: 1, MaxRetries: 0, TokenBudget: tokenBudget });
       expect(llm.calls).toHaveLength(10);
-      expect(r.budgetExhausted).toBe(false);
+      expect(r.BudgetExhausted).toBe(false);
     }
   });
 });

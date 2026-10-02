@@ -8,7 +8,7 @@ import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig, RetryConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
 import { CreateLLMInstance } from '../utils/llm-factory.js';
-import { resolveCallTimeoutMs, withCallDeadline } from '../utils/call-deadline.js';
+import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 import { CleanAndParseJSON } from '@memberjunction/global';
 
 export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -396,8 +396,8 @@ export class PromptEngine {
         // Bounded: a stalled provider becomes a normal failure this retry loop can act on. Without
         // the deadline the loop is unreachable — it only runs once the promise settles, and a
         // provider that accepts the socket and stops sending never settles one.
-        lastResult = await withCallDeadline(
-          resolveCallTimeoutMs(this.config.callTimeoutMs),
+        lastResult = await WithCallDeadline(
+          ResolveCallTimeoutMs(this.config.callTimeoutMs),
           `prompt for model ${params.model}`,
           signal => this.llm.ChatCompletion({ ...params, cancellationToken: signal })
         );
