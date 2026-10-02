@@ -43,7 +43,7 @@ export class SyncStateManager {
   }
 
   /** Load state from ~/.mj/sync-state/. Gracefully handles missing or corrupt files. */
-  async load(): Promise<void> {
+  async Load(): Promise<void> {
     try {
       if (await fs.pathExists(this.statePath)) {
         const raw = await fs.readJson(this.statePath);
@@ -59,34 +59,64 @@ export class SyncStateManager {
     }
   }
 
+  /** @deprecated Use {@link Load}. */
+  async load(): Promise<void> {
+    return this.Load();
+  }
+
   /** Save state to ~/.mj/sync-state/. */
-  async save(): Promise<void> {
+  async Save(): Promise<void> {
     await fs.ensureDir(STATE_DIR);
     await fs.writeJson(this.statePath, this.state, { spaces: 2 });
+  }
+
+  /** @deprecated Use {@link Save}. */
+  async save(): Promise<void> {
+    return this.Save();
   }
 
   // ---------------------------------------------------------------------------
   // Pull timestamps
   // ---------------------------------------------------------------------------
 
-  getLastPullTimestamp(entityName: string): string | undefined {
+  GetLastPullTimestamp(entityName: string): string | undefined {
     return this.state.pullTimestamps[entityName];
   }
 
-  setLastPullTimestamp(entityName: string, timestamp: string): void {
+  /** @deprecated Use {@link GetLastPullTimestamp}. */
+  getLastPullTimestamp(entityName: string): string | undefined {
+    return this.GetLastPullTimestamp(entityName);
+  }
+
+  SetLastPullTimestamp(entityName: string, timestamp: string): void {
     this.state.pullTimestamps[entityName] = timestamp;
+  }
+
+  /** @deprecated Use {@link SetLastPullTimestamp}. */
+  setLastPullTimestamp(entityName: string, timestamp: string): void {
+    return this.SetLastPullTimestamp(entityName, timestamp);
   }
 
   // ---------------------------------------------------------------------------
   // Push timestamps
   // ---------------------------------------------------------------------------
 
-  getLastPushTimestamp(entityDir: string): string | undefined {
+  GetLastPushTimestamp(entityDir: string): string | undefined {
     return this.state.pushTimestamps[entityDir];
   }
 
-  setLastPushTimestamp(entityDir: string, timestamp: string): void {
+  /** @deprecated Use {@link GetLastPushTimestamp}. */
+  getLastPushTimestamp(entityDir: string): string | undefined {
+    return this.GetLastPushTimestamp(entityDir);
+  }
+
+  SetLastPushTimestamp(entityDir: string, timestamp: string): void {
     this.state.pushTimestamps[entityDir] = timestamp;
+  }
+
+  /** @deprecated Use {@link SetLastPushTimestamp}. */
+  setLastPushTimestamp(entityDir: string, timestamp: string): void {
+    return this.SetLastPushTimestamp(entityDir, timestamp);
   }
 
   // ---------------------------------------------------------------------------
@@ -94,17 +124,27 @@ export class SyncStateManager {
   // ---------------------------------------------------------------------------
 
   /** Returns true if the file's current checksum differs from the stored one. */
-  hasFileChanged(relativePath: string, currentChecksum: string): boolean {
+  HasFileChanged(relativePath: string, currentChecksum: string): boolean {
     const stored = this.state.fileChecksums[relativePath];
     return stored !== currentChecksum;
   }
 
-  setFileChecksum(relativePath: string, checksum: string): void {
+  /** @deprecated Use {@link HasFileChanged}. */
+  hasFileChanged(relativePath: string, currentChecksum: string): boolean {
+    return this.HasFileChanged(relativePath, currentChecksum);
+  }
+
+  SetFileChecksum(relativePath: string, checksum: string): void {
     this.state.fileChecksums[relativePath] = checksum;
   }
 
+  /** @deprecated Use {@link SetFileChecksum}. */
+  setFileChecksum(relativePath: string, checksum: string): void {
+    return this.SetFileChecksum(relativePath, checksum);
+  }
+
   /** Remove checksums for files that no longer exist on disk. */
-  async pruneStaleChecksums(baseDir: string): Promise<number> {
+  async PruneStaleChecksums(baseDir: string): Promise<number> {
     let pruned = 0;
     for (const relativePath of Object.keys(this.state.fileChecksums)) {
       const fullPath = path.join(baseDir, relativePath);
@@ -114,5 +154,10 @@ export class SyncStateManager {
       }
     }
     return pruned;
+  }
+
+  /** @deprecated Use {@link PruneStaleChecksums}. */
+  async pruneStaleChecksums(baseDir: string): Promise<number> {
+    return this.PruneStaleChecksums(baseDir);
   }
 }

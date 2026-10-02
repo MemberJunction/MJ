@@ -53,7 +53,7 @@ export interface GraphProviderPoolOptions {
  * before any graph runs, so a push never discovers mid-file that it has to switch topology.
  * @returns `undefined` when independent instances work, otherwise the reason they do not.
  */
-export async function probeIndependentInstances(host: GraphProviderLike): Promise<string | undefined> {
+export async function ProbeIndependentInstances(host: GraphProviderLike): Promise<string | undefined> {
   let instance: GraphProviderLike;
   try {
     instance = await host.CreateIndependentInstance();
@@ -66,6 +66,11 @@ export async function probeIndependentInstances(host: GraphProviderLike): Promis
     /* the probe instance did no work; a failed release changes nothing */
   }
   return undefined;
+}
+
+/** @deprecated Use {@link ProbeIndependentInstances}. */
+export async function probeIndependentInstances(host: GraphProviderLike): Promise<string | undefined> {
+  return ProbeIndependentInstances(host);
 }
 
 export class GraphProviderPool {
@@ -94,7 +99,7 @@ export class GraphProviderPool {
    * Record, per graphId, the highest dependency-level index it occupies so we
    * can drain (commit/rollback + release) as soon as that level finishes.
    */
-  noteLevels(levels: Array<Array<{ graphId: string }>>): void {
+  NoteLevels(levels: Array<Array<{ graphId: string }>>): void {
     this.lastLevelByGraph.clear();
     for (let i = 0; i < levels.length; i++) {
       for (const rec of levels[i]) {
@@ -103,17 +108,32 @@ export class GraphProviderPool {
     }
   }
 
+  /** @deprecated Use {@link NoteLevels}. */
+  noteLevels(levels: Array<Array<{ graphId: string }>>): void {
+    return this.NoteLevels(levels);
+  }
+
   /** One record error anywhere in the file rolls back every graph in that file. */
-  markFailed(): void {
+  MarkFailed(): void {
     this.anyFailed = true;
   }
 
-  get hasFailed(): boolean {
+  /** @deprecated Use {@link MarkFailed}. */
+  markFailed(): void {
+    return this.MarkFailed();
+  }
+
+  get HasFailed(): boolean {
     return this.anyFailed;
   }
 
+  /** @deprecated Use {@link HasFailed}. */
+  get hasFailed(): boolean {
+    return this.HasFailed;
+  }
+
   /** Provider for this graph. See the class comment for the per-mode rules. */
-  async obtain(graphId: string): Promise<GraphProviderLike> {
+  async Obtain(graphId: string): Promise<GraphProviderLike> {
     if (this.mode === 'host') {
       return this.obtainHost(graphId);
     }
@@ -133,6 +153,11 @@ export class GraphProviderPool {
     }
   }
 
+  /** @deprecated Use {@link Obtain}. */
+  async obtain(graphId: string): Promise<GraphProviderLike> {
+    return this.Obtain(graphId);
+  }
+
   private obtainHost(graphId: string): GraphProviderLike {
     if (this.hostHolder !== undefined && this.hostHolder !== graphId) {
       throw new Error(
@@ -150,7 +175,7 @@ export class GraphProviderPool {
    * graphs whose last level is `levelIndex`, or whose TransactionDepth is already 0.
    * Returns the first settle error so the caller cannot report success with uncommitted rows.
    */
-  async drainBatch(graphIds: string[], levelIndex: number): Promise<Error | undefined> {
+  async DrainBatch(graphIds: string[], levelIndex: number): Promise<Error | undefined> {
     if (this.mode === 'host') {
       this.releaseHost(graphIds);
       return undefined;
@@ -164,13 +189,23 @@ export class GraphProviderPool {
     return this.releaseGraphs(ending);
   }
 
+  /** @deprecated Use {@link DrainBatch}. */
+  async drainBatch(graphIds: string[], levelIndex: number): Promise<Error | undefined> {
+    return this.DrainBatch(graphIds, levelIndex);
+  }
+
   /** Release every remaining graph. Safe to call from `finally`. */
-  async releaseAll(): Promise<Error | undefined> {
+  async ReleaseAll(): Promise<Error | undefined> {
     if (this.mode === 'host') {
       this.hostHolder = undefined;
       return undefined;
     }
     return this.releaseGraphs([...this.providers.keys()]);
+  }
+
+  /** @deprecated Use {@link ReleaseAll}. */
+  async releaseAll(): Promise<Error | undefined> {
+    return this.ReleaseAll();
   }
 
   private releaseHost(graphIds: string[]): void {

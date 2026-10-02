@@ -20,7 +20,7 @@ import { EntityTransactionScope } from "./entityTransactionScope";
 export class ProviderConfigDataBase<D = any> {
     private _includeSchemas: string[] = [];
     private _excludeSchemas: string[] = [];
-    private _MJCoreSchemaName: string = '__mj';
+    private _mJCoreSchemaName: string = '__mj';
     private _data: D;
     private _ignoreExistingMetadata: boolean = false;
 
@@ -31,7 +31,7 @@ export class ProviderConfigDataBase<D = any> {
         return this._includeSchemas;
     }
     public get MJCoreSchemaName(): string {
-        return this._MJCoreSchemaName;
+        return this._mJCoreSchemaName;
     }
     public get ExcludeSchemas(): string[] {
         return this._excludeSchemas;
@@ -50,7 +50,7 @@ export class ProviderConfigDataBase<D = any> {
      */
     constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[], ignoreExistingMetadata: boolean = true) {
         this._data = data;
-        this._MJCoreSchemaName = MJCoreSchemaName;
+        this._mJCoreSchemaName = MJCoreSchemaName;
         if (includeSchemas)
             this._includeSchemas = includeSchemas;
         if (excludeSchemas)
@@ -88,6 +88,14 @@ export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number;
     /** Full vector metadata snapshot from the vector DB (Name, Description, EntityIcon, etc.) */
     VectorMetadata?: Record<string, string>;
+    /**
+     * Optional LLM verdict for THIS candidate, set alongside the set-level
+     * {@link PotentialDuplicateResult.ReasoningRecommendation} when reasoning returned a verdict
+     * for it. Auto-merge (AutoMergeAboveAbsolute) requires this to be 'Merge' too, so a candidate
+     * is never merged on the strength of another candidate's verdict. Undefined when reasoning did
+     * not run for the set, or returned no verdict for this candidate.
+     */
+    ReasoningRecommendation?: 'Merge' | 'NotDuplicate' | 'Uncertain';
 }
 
 /**
@@ -187,9 +195,10 @@ export class PotentialDuplicateResult {
     /**
      * Optional LLM recommendation for this source record's matched set, populated only
      * when the entity has LLM reasoning enabled and the set cleared the reasoning gate.
-     * Consulted by the auto-merge step (e.g. AutoMergeAboveAbsolute additionally requires
-     * 'Merge'). Undefined means reasoning did not run for this set — the vector-only path
-     * applies, byte-for-byte unchanged.
+     * Consulted by the auto-merge step (AutoMergeAboveAbsolute additionally requires 'Merge'
+     * here AND on the candidate's own {@link PotentialDuplicate.ReasoningRecommendation}).
+     * Undefined means reasoning did not run for this set — the vector-only path applies,
+     * byte-for-byte unchanged.
      */
     ReasoningRecommendation?: 'Merge' | 'NotDuplicate' | 'Uncertain';
     /**

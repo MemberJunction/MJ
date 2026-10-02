@@ -780,10 +780,28 @@ interface VersionRow {
 export class TestingAnalyticsComponent implements OnInit, OnDestroy {
 
   // ------- Inputs / Outputs -------
-  @Input() initialState: Record<string, unknown> | null = null;
+  @Input() InitialState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link InitialState}. */
+  @Input() set initialState(value: Record<string, unknown> | null) {
+    this.InitialState = value;
+  }
+  /** @deprecated Use {@link InitialState}. */
+  get initialState(): Record<string, unknown> | null {
+    return this.InitialState;
+  }
   /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
   @Input() HideToolbar = false;
-  @Output() stateChange = new EventEmitter<Record<string, unknown>>();
+  @Output() StateChange = new EventEmitter<Record<string, unknown>>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
 
   // ------- Public state -------
   TimeRanges: TimeRangeOption[] = [
@@ -906,8 +924,13 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   }
 
   /** trackBy for trend @for loops */
-  trackTrend(index: number, t: TestTrendData): number {
+  TrackTrend(index: number, t: TestTrendData): number {
     return index;
+  }
+
+  /** @deprecated Use {@link TrackTrend}. */
+  trackTrend(index: number, t: TestTrendData): number {
+    return this.TrackTrend(index, t);
   }
 
   // ===================================================================
@@ -915,9 +938,9 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   // ===================================================================
 
   private restoreState(): void {
-    if (this.initialState != null) {
-      if (typeof this.initialState['selectedDays'] === 'number') {
-        this.SelectedDays = this.initialState['selectedDays'] as number;
+    if (this.InitialState != null) {
+      if (typeof this.InitialState['selectedDays'] === 'number') {
+        this.SelectedDays = this.InitialState['selectedDays'] as number;
       }
     }
     // Apply initial date range
@@ -1058,7 +1081,7 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   }
 
   private emitState(): void {
-    this.stateChange.emit({
+    this.StateChange.emit({
       selectedDays: this.SelectedDays,
       // Breakdown name lists + version count for the dashboard's agent context.
       topFailingTests: this.topFailingNames,

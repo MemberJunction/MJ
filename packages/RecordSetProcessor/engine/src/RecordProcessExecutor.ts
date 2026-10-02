@@ -6,7 +6,7 @@
  */
 
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJGlobal, EscapeSQLString, SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
+import { EscapeSQLString, SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
     ArraySource,
@@ -30,7 +30,7 @@ import { InferProcessor } from './processors/InferProcessor';
 import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
 import { ChildRecordMapping, FieldLookupConfig, OutputMappingConfig, RunProvenance, TagOutputMapping } from './writeBack';
-import { validateSpec, validateMaterializationTargets, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { type DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 /** Options for executing a Record Process. */
 export interface RunRecordProcessOptions {
@@ -95,8 +95,8 @@ export class RecordProcessExecutor {
         }
 
         return RecordSetProcessor.Instance.Process({
-            source: this.buildSource(rp, provider, options.singleRecordID, options.scope),
-            processor: this.buildProcessor(rp, options.dryRun, provider),
+            source: this.BuildSource(rp, provider, options.singleRecordID, options.scope),
+            processor: this.BuildProcessor(rp, options.dryRun, provider),
             contextUser: options.contextUser,
             provider,
             dryRun: options.dryRun,
@@ -115,7 +115,7 @@ export class RecordProcessExecutor {
     }
 
     /** Builds the record-set source from a single-record override, a runtime scope override, or the process's stored Scope. */
-    public buildSource(rp: MJRecordProcessEntity, provider: IMetadataProvider, singleRecordID?: string, scope?: RecordProcessScopeOverride): IRecordSetSource {
+    public BuildSource(rp: MJRecordProcessEntity, provider: IMetadataProvider, singleRecordID?: string, scope?: RecordProcessScopeOverride): IRecordSetSource {
         if (singleRecordID) {
             return new ArraySource([{ EntityID: rp.EntityID, RecordID: singleRecordID }], rp.EntityID, 'SingleRecord');
         }
@@ -147,6 +147,11 @@ export class RecordProcessExecutor {
         }
     }
 
+    /** @deprecated Use {@link BuildSource}. */
+    public buildSource(rp: MJRecordProcessEntity, provider: IMetadataProvider, singleRecordID?: string, scope?: RecordProcessScopeOverride): IRecordSetSource {
+        return this.BuildSource(rp, provider, singleRecordID, scope);
+    }
+
     /** Resolves a runtime scope override (UI invocation: selection / view / list / filter) to a source. */
     private buildSourceFromScope(rp: MJRecordProcessEntity, provider: IMetadataProvider, scope: RecordProcessScopeOverride): IRecordSetSource {
         switch (scope.Kind) {
@@ -173,7 +178,7 @@ export class RecordProcessExecutor {
      * dry-run the inner work runs but the mapping only previews (nothing is saved), so EVERY work type's
      * dry-run is side-effect-free, not just FieldRules.
      */
-    public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
+    public BuildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
         if (rp.WorkType === 'FieldRules') {
             const ruleSet = rp.Configuration ? SafeJSONParse<FieldRuleSet>(rp.Configuration) : undefined;
             if (!ruleSet || !Array.isArray(ruleSet.Rules)) {
@@ -197,40 +202,10 @@ export class RecordProcessExecutor {
             }
             base = new AgentRecordProcessor(rp.AgentID, inputMapping);
         } else if (rp.WorkType === 'Infer') {
-            if (!rp.PromptID) {
-                throw new Error(`Record Process '${rp.Name}': WorkType=Infer requires PromptID`);
-            }
-            if (rp.Configuration && rp.Configuration.trim().length > 0) {
-                try {
-                    spec = JSON.parse(rp.Configuration) as DataFeatureSpec;
-                } catch (e) {
-                    throw new Error(`Record Process '${rp.Name}': Configuration is invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
-                }
-                const issues = validateSpec(spec);
-                const errors = issues.filter((i) => i.Severity === 'error');
-                if (errors.length > 0) {
-                    throw new Error(`Record Process '${rp.Name}': invalid DataFeatureSpec in Configuration: ${errors.map((err) => err.Message).join('; ')}`);
-                }
-
-                const targetProvider = provider ?? Metadata.Provider;
-                if (targetProvider && rp.EntityID) {
-                    const materializationIssues = validateMaterializationTargets(spec, targetProvider, rp.EntityID);
-                    const matErrors = materializationIssues.filter((i) => i.Severity === 'error');
-                    if (matErrors.length > 0) {
-                        throw new Error(`Record Process '${rp.Name}': invalid materialization targets: ${matErrors.map((err) => `${err.Field ? `[${err.Field}] ` : ''}${err.Message} Fix: ${err.FixRecommendation}`).join('; ')}`);
-                    }
-                }
-            }
-            if (spec?.ProcessorExtensionKey) {
-                const custom = MJGlobal.Instance.ClassFactory.CreateInstance<InferProcessor>(InferProcessor, spec.ProcessorExtensionKey, rp.PromptID, inputMapping, spec);
-                if (custom && custom.constructor !== InferProcessor) {
-                    base = custom;
-                } else {
-                    throw new Error(`Record Process '${rp.Name}': ProcessorExtensionKey '${spec.ProcessorExtensionKey}' not found in ClassFactory`);
-                }
-            } else {
-                base = new InferProcessor(rp.PromptID, inputMapping, spec);
-            }
+            // Shared with a Decision pipeline's escalation target, which is built the same way
+            const infer = InferProcessor.FromRecordProcess(rp, provider);
+            spec = infer.Spec;
+            base = infer;
         } else {
             // Not a built-in work type — consult the pluggable registry. This is the open seam that
             // lets external packages (e.g. Predictive Studio's 'ML Model' scoring) register a processor
@@ -270,6 +245,11 @@ export class RecordProcessExecutor {
             return new WriteBackProcessor(base, outputMapping, dryRun, run);
         }
         return base;
+    }
+
+    /** @deprecated Use {@link BuildProcessor}. */
+    public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
+        return this.BuildProcessor(rp, dryRun, provider);
     }
 
     /**

@@ -54,7 +54,36 @@ export interface DataFeatureSpec {
 
   /** Optional subclass hook registration (P1-6). */
   ProcessorExtensionKey?: string;
+
+  /** The name of an `MJ: Feature Pipeline Types` row. Absent means `LLM`. */
+  PipelineType?: string;
+
+  /** Decision pipelines only: re-run records the decision model is unsure of through an LLM pipeline. */
+  Escalation?: {
+    /** The `MJ: Record Processes` ID of the LLM Feature Pipeline to escalate to. */
+    PipelineID: string;
+    /** A record escalates when ANY of its outputs' confidence is below this (0 < floor < 1). */
+    BelowConfidence: number;
+  };
 }
+
+/** The pipeline type a spec without `PipelineType` runs as. */
+export const LLM_PIPELINE_TYPE = 'LLM';
+
+/** The pipeline type that answers typed questions on a decision model, and the only one that may escalate. */
+export const DECISION_PIPELINE_TYPE = 'Decision';
+
+/** Whether a spec's `PipelineType` means `LLM`: absent (or a JSON `null`) does; a name is matched case-insensitively, trimmed. */
+export function IsLLMPipelineType(pipelineType: string | null | undefined): boolean {
+  return pipelineType == null || pipelineType.trim().toLowerCase() === LLM_PIPELINE_TYPE.toLowerCase();
+}
+
+/** Whether a spec's `PipelineType` names the `Decision` type (case-insensitive, trimmed). */
+export function IsDecisionPipelineType(pipelineType: string | null | undefined): boolean {
+  return typeof pipelineType === 'string' && pipelineType.trim().toLowerCase() === DECISION_PIPELINE_TYPE.toLowerCase();
+}
+
+export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'decision-derived';
 
 export interface DataFeatureOutput {
   /** Result path, e.g. "$.seniority". */
@@ -66,7 +95,9 @@ export interface DataFeatureOutput {
   /** Where this output lands (D19). */
   Target: OutputTarget;
   /** How Predictive Studio should treat it when consumed as a model feature. */
-  FeatureKind?: 'numeric' | 'categorical' | 'embedding' | 'llm-derived';
+  FeatureKind?: FeatureKind;
+  /** Optional human-readable description / instructions for this output. */
+  Description?: string;
 }
 
 /** Structured validation issue surfaced by validateSpec. */
@@ -86,7 +117,7 @@ export interface FieldMetadataStub {
   AllowsNull?: boolean;
   RelatedEntity?: string;
   RelatedEntityID?: string;
-  EntityFieldValues?: Array<{ Value: string; Code?: string }>;
+  EntityFieldValues?: Array<{ Value: string; Code?: string; Description?: string }>;
 }
 
 /** Minimal entity metadata stub decoupled from @memberjunction/core. */
@@ -101,7 +132,7 @@ export type FieldResolver = (fieldName: string) => FieldMetadataStub | undefined
  * Pure validator for a DataFeatureSpec against optional entity metadata.
  * Returns structured problems naming the field and the fix recommendation.
  */
-export function validateSpec(
+export function ValidateSpec(
   spec: DataFeatureSpec,
   entityInfo?: EntityMetadataStub,
   fieldResolver?: FieldResolver
@@ -125,6 +156,13 @@ export function validateSpec(
       Severity: 'error',
     });
   }
+
+  const pipelineTypeIssue = validatePipelineType(spec);
+  if (pipelineTypeIssue) {
+    issues.push(pipelineTypeIssue);
+  }
+
+  issues.push(...validateEscalation(spec));
 
   if (!spec.Outputs || spec.Outputs.length === 0) {
     issues.push({
@@ -328,6 +366,20 @@ export function validateSpec(
         }
       }
 
+      if (out.FeatureKind !== undefined) {
+        const validFeatureKinds: ReadonlyArray<string> = ['numeric', 'categorical', 'embedding', 'llm-derived', 'decision-derived'];
+        if (!validFeatureKinds.includes(out.FeatureKind)) {
+          issues.push({
+            Path: `${basePath}.FeatureKind`,
+            Message: `Output '${out.Name}' has invalid FeatureKind '${out.FeatureKind}'.`,
+            FixRecommendation: `Specify one of: ${validFeatureKinds.join(', ')}.`,
+            Severity: 'error',
+          });
+        }
+      }
+
+
+
       // Constraint bounds validation
       if (out.Constraint) {
         if (out.Constraint.Type === 'enum') {
@@ -339,6 +391,20 @@ export function validateSpec(
               Severity: 'error',
             });
           }
+          if (out.Constraint.ValueDescriptions !== undefined) {
+            if (
+              typeof out.Constraint.ValueDescriptions !== 'object' ||
+              out.Constraint.ValueDescriptions === null ||
+              Array.isArray(out.Constraint.ValueDescriptions)
+            ) {
+              issues.push({
+                Path: `${basePath}.Constraint.ValueDescriptions`,
+                Message: `Enum constraint ValueDescriptions on output '${out.Name}' must be an object mapping enum values to string descriptions.`,
+                FixRecommendation: 'Provide an object mapping each allowed value to its description.',
+                Severity: 'error',
+              });
+            }
+          }
         } else if (out.Constraint.Type === 'numeric' || out.Constraint.Type === 'money') {
           if (out.Constraint.Min !== undefined && out.Constraint.Max !== undefined && out.Constraint.Min > out.Constraint.Max) {
             issues.push({
@@ -347,6 +413,32 @@ export function validateSpec(
               FixRecommendation: 'Ensure Min is less than or equal to Max.',
               Severity: 'error',
             });
+          }
+          if (out.Constraint.Type === 'numeric' && out.Constraint.Levels !== undefined) {
+            if (
+              !Array.isArray(out.Constraint.Levels) ||
+              out.Constraint.Levels.length < 2 ||
+              out.Constraint.Levels.length > 10 ||
+              out.Constraint.Levels.some(l => typeof l !== 'string' || l.trim().length === 0)
+            ) {
+              issues.push({
+                Path: `${basePath}.Constraint.Levels`,
+                Message: `Numeric constraint Levels on output '${out.Name}' must be an array of 2 to 10 non-empty strings.`,
+                FixRecommendation: 'Provide between 2 and 10 level descriptions, e.g. ["Low", "Medium", "High"].',
+                Severity: 'error',
+              });
+            }
+          }
+        } else if (out.Constraint.Type === 'boolean') {
+          if (out.Constraint.Threshold !== undefined) {
+            if (typeof out.Constraint.Threshold !== 'number' || isNaN(out.Constraint.Threshold) || out.Constraint.Threshold < 0 || out.Constraint.Threshold > 1) {
+              issues.push({
+                Path: `${basePath}.Constraint.Threshold`,
+                Message: `Boolean constraint Threshold on output '${out.Name}' must be a number between 0 and 1.`,
+                FixRecommendation: 'Provide a number between 0 and 1, or omit to default to 0.5.',
+                Severity: 'error',
+              });
+            }
           }
         }
 
@@ -363,6 +455,99 @@ export function validateSpec(
   }
 
   return issues;
+}
+
+/**
+ * PipelineType is optional, but when a spec names one it must be a non-empty string. The spec is
+ * parsed from JSON, so the value is read as `unknown` and narrowed. A JSON `null` counts as absent,
+ * as it does where the processor resolves the type.
+ */
+function validatePipelineType(spec: DataFeatureSpec): SpecValidationIssue | null {
+  const pipelineType: unknown = spec.PipelineType;
+  if (pipelineType === undefined || pipelineType === null) {
+    return null;
+  }
+  if (typeof pipelineType === 'string' && pipelineType.trim().length > 0) {
+    return null;
+  }
+  return {
+    Path: 'PipelineType',
+    Message: 'DataFeatureSpec PipelineType, when present, must be a non-empty string.',
+    FixRecommendation: 'Name an MJ: Feature Pipeline Types row (for example "LLM"), or remove PipelineType to use LLM.',
+    Severity: 'error',
+  };
+}
+
+/**
+ * Escalation is optional. When a spec names one, the pipeline must be a Decision pipeline, the target
+ * pipeline must be named, and the floor must lie strictly between 0 and 1. The spec is parsed from
+ * JSON, so each value is read as `unknown` and narrowed; a JSON `null` counts as absent. This stays
+ * pure: it does not load the target pipeline, which the processor checks when a record first escalates.
+ */
+function validateEscalation(spec: DataFeatureSpec): SpecValidationIssue[] {
+  const escalation = spec.Escalation;
+  if (escalation === undefined || escalation === null) {
+    return [];
+  }
+  if (typeof escalation !== 'object' || Array.isArray(escalation)) {
+    return [{
+      Path: 'Escalation',
+      Message: 'DataFeatureSpec Escalation, when present, must be an object with PipelineID and BelowConfidence.',
+      FixRecommendation: 'Set Escalation to { "PipelineID": "<LLM pipeline ID>", "BelowConfidence": 0.7 }, or remove it.',
+      Severity: 'error',
+    }];
+  }
+  const issues: SpecValidationIssue[] = [];
+  if (!IsDecisionPipelineType(spec.PipelineType)) {
+    issues.push(escalationOnNonDecisionIssue(spec.PipelineType));
+  }
+  const pipelineID: unknown = escalation.PipelineID;
+  if (typeof pipelineID !== 'string' || pipelineID.trim().length === 0) {
+    issues.push({
+      Path: 'Escalation.PipelineID',
+      Message: 'DataFeatureSpec Escalation.PipelineID is required: it names the LLM Feature Pipeline that borderline records escalate to.',
+      FixRecommendation: 'Set Escalation.PipelineID to the MJ: Record Processes ID of an LLM Feature Pipeline on the same entity, or remove Escalation.',
+      Severity: 'error',
+    });
+  }
+  const floor: unknown = escalation.BelowConfidence;
+  if (typeof floor !== 'number' || !Number.isFinite(floor) || floor <= 0 || floor >= 1) {
+    issues.push({
+      Path: 'Escalation.BelowConfidence',
+      Message: `DataFeatureSpec Escalation.BelowConfidence must be a number greater than 0 and less than 1, but is ${describeFloor(floor)}.`,
+      FixRecommendation: 'Set the confidence floor between 0 and 1 (for example 0.7). A record escalates when any output\'s confidence is below it.',
+      Severity: 'error',
+    });
+  }
+  return issues;
+}
+
+/** Renders an invalid floor for a message: numbers as written (NaN too), anything else as JSON, and absence as "missing". */
+function describeFloor(floor: unknown): string {
+  if (floor === undefined) {
+    return 'missing';
+  }
+  return typeof floor === 'number' ? String(floor) : JSON.stringify(floor);
+}
+
+/** The issue for an Escalation on a pipeline whose type is not Decision. */
+function escalationOnNonDecisionIssue(pipelineType: unknown): SpecValidationIssue {
+  const typeName = typeof pipelineType === 'string' && pipelineType.trim().length > 0 ? pipelineType.trim() : LLM_PIPELINE_TYPE;
+  return {
+    Path: 'Escalation',
+    Message: `DataFeatureSpec Escalation is only valid on a Decision pipeline, but this pipeline's type is '${typeName}'.`,
+    FixRecommendation: `Remove Escalation, or set PipelineType to '${DECISION_PIPELINE_TYPE}'.`,
+    Severity: 'error',
+  };
+}
+
+/** @deprecated Use {@link ValidateSpec}. */
+export function validateSpec(
+  spec: DataFeatureSpec,
+  entityInfo?: EntityMetadataStub,
+  fieldResolver?: FieldResolver
+): SpecValidationIssue[] {
+  return ValidateSpec(spec, entityInfo, fieldResolver);
 }
 
 function checkTypeCompatibility(
@@ -406,7 +591,7 @@ function checkTypeCompatibility(
  * Resolves an output's constraint against field metadata.
  * Materializes FromFieldMetadata into concrete allowed values.
  */
-export function resolveConstraint(
+export function ResolveConstraint(
   output: DataFeatureOutput,
   field?: FieldMetadataStub
 ): ResolvedConstraint | null {
@@ -416,13 +601,20 @@ export function resolveConstraint(
   if (c) {
     if (c.Type === 'enum') {
       let allowedValues = c.Values ?? [];
+      const valueDescriptions: Record<string, string> = { ...(c.ValueDescriptions ?? {}) };
       if (c.FromFieldMetadata && field?.EntityFieldValues && field.EntityFieldValues.length > 0) {
         allowedValues = field.EntityFieldValues.map(v => v.Value);
+        for (const efv of field.EntityFieldValues) {
+          if (efv.Description && !valueDescriptions[efv.Value]) {
+            valueDescriptions[efv.Value] = efv.Description;
+          }
+        }
       }
       return {
         Type: 'enum',
         OnViolation: c.OnViolation,
         AllowedValues: allowedValues,
+        ValueDescriptions: Object.keys(valueDescriptions).length > 0 ? valueDescriptions : undefined,
       };
     }
     if (c.Type === 'numeric') {
@@ -432,6 +624,7 @@ export function resolveConstraint(
         Min: c.Min,
         Max: c.Max,
         Integer: c.Integer,
+        Levels: c.Levels,
       };
     }
     if (c.Type === 'money') {
@@ -455,6 +648,7 @@ export function resolveConstraint(
       return {
         Type: 'boolean',
         OnViolation: c.OnViolation,
+        Threshold: c.Threshold,
       };
     }
     if (c.Type === 'lookup') {
@@ -477,10 +671,17 @@ export function resolveConstraint(
   // 2. Implicit constraint derived from field metadata if target is Mode: 'field'
   if (output.Target.Mode === 'field' && field) {
     if (field.EntityFieldValues && field.EntityFieldValues.length > 0) {
+      const valueDescriptions: Record<string, string> = {};
+      for (const efv of field.EntityFieldValues) {
+        if (efv.Description) {
+          valueDescriptions[efv.Value] = efv.Description;
+        }
+      }
       return {
         Type: 'enum',
         OnViolation: 'fail',
         AllowedValues: field.EntityFieldValues.map(v => v.Value),
+        ValueDescriptions: Object.keys(valueDescriptions).length > 0 ? valueDescriptions : undefined,
       };
     }
     if (field.TSType === 'boolean') {
@@ -494,10 +695,18 @@ export function resolveConstraint(
   return null;
 }
 
+/** @deprecated Use {@link ResolveConstraint}. */
+export function resolveConstraint(
+  output: DataFeatureOutput,
+  field?: FieldMetadataStub
+): ResolvedConstraint | null {
+  return ResolveConstraint(output, field);
+}
+
 /**
  * Pure function to render the exact constraint block text injected into prompts and shown in UI previews.
  */
-export function renderConstraintBlock(
+export function RenderConstraintBlock(
   outputs: DataFeatureOutput[],
   resolvedConstraints?: Map<string, ResolvedConstraint | null>
 ): string {
@@ -510,7 +719,7 @@ export function renderConstraintBlock(
   lines.push('You MUST adhere to the following output value constraints:');
 
   for (const out of outputs) {
-    const resolved = resolvedConstraints?.get(out.Name) ?? resolveConstraint(out);
+    const resolved = resolvedConstraints?.get(out.Name) ?? ResolveConstraint(out);
     lines.push(`- **${out.Name}** (${out.Ref}):`);
 
     if (!resolved) {
@@ -577,4 +786,12 @@ export function renderConstraintBlock(
   }
 
   return lines.join('\n');
+}
+
+/** @deprecated Use {@link RenderConstraintBlock}. */
+export function renderConstraintBlock(
+  outputs: DataFeatureOutput[],
+  resolvedConstraints?: Map<string, ResolvedConstraint | null>
+): string {
+  return RenderConstraintBlock(outputs, resolvedConstraints);
 }

@@ -34,12 +34,17 @@ import path from 'node:path';
  * `src/install/migration-runner.ts` — same heuristic, duplicated because the engine
  * cannot depend on this package and cross-package re-exports are disallowed.
  */
-export function isResolutionFailure(error: unknown): boolean {
+export function IsResolutionFailure(error: unknown): boolean {
   const { code, message } = (error as { code?: string; message?: string }) ?? {};
   if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND' || code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
     return true;
   }
   return code === undefined && typeof message === 'string' && /^Cannot find (package|module) /.test(message);
+}
+
+/** @deprecated Use {@link IsResolutionFailure}. */
+export function isResolutionFailure(error: unknown): boolean {
+  return IsResolutionFailure(error);
 }
 
 /**
@@ -84,7 +89,7 @@ function findPackageJsonWithName(fromFile: string, pkgName: string): string | nu
  * introspect `memberjunction.serverExtensions` without relying on an exports map.
  * Returns `null` when no host anchor can see the package.
  */
-export function resolvePackageJsonFromHost(pkgName: string, configFilePath?: string): string | null {
+export function ResolvePackageJsonFromHost(pkgName: string, configFilePath?: string): string | null {
   for (const anchor of hostAnchors(configFilePath)) {
     const req = createRequire(anchor);
     try {
@@ -92,7 +97,7 @@ export function resolvePackageJsonFromHost(pkgName: string, configFilePath?: str
     } catch (resolveError: unknown) {
       if ((resolveError as { code?: string })?.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
         // exports map omits package.json — resolve the main entry and walk up.
-      } else if (!isResolutionFailure(resolveError)) {
+      } else if (!IsResolutionFailure(resolveError)) {
         throw resolveError;
       }
     }
@@ -103,12 +108,17 @@ export function resolvePackageJsonFromHost(pkgName: string, configFilePath?: str
         return found;
       }
     } catch (mainError: unknown) {
-      if (!isResolutionFailure(mainError) && (mainError as { code?: string })?.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
+      if (!IsResolutionFailure(mainError) && (mainError as { code?: string })?.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
         throw mainError;
       }
     }
   }
   return null;
+}
+
+/** @deprecated Use {@link ResolvePackageJsonFromHost}. */
+export function resolvePackageJsonFromHost(pkgName: string, configFilePath?: string): string | null {
+  return ResolvePackageJsonFromHost(pkgName, configFilePath);
 }
 
 /**
@@ -127,11 +137,11 @@ export function resolvePackageJsonFromHost(pkgName: string, configFilePath?: str
  * alongside any ESM copy already in the process — fine for MJ-shaped single-condition
  * packages, but keep it in mind before widening this mechanism.
  */
-export async function importFromHost(pkgName: string, configFilePath?: string): Promise<Record<string, unknown>> {
+export async function ImportFromHost(pkgName: string, configFilePath?: string): Promise<Record<string, unknown>> {
   try {
     return (await import(pkgName)) as Record<string, unknown>;
   } catch (error: unknown) {
-    if (!isResolutionFailure(error)) {
+    if (!IsResolutionFailure(error)) {
       throw error;
     }
     // Anchor priority: the mj.config.cjs that NAMED the package is the authoritative host,
@@ -151,7 +161,7 @@ export async function importFromHost(pkgName: string, configFilePath?: string): 
           sawExportsMapMismatch = true;
           continue;
         }
-        if (!isResolutionFailure(resolveError)) {
+        if (!IsResolutionFailure(resolveError)) {
           throw resolveError;
         }
         continue; // this anchor can't see the package — try the next
@@ -168,4 +178,9 @@ export async function importFromHost(pkgName: string, configFilePath?: string): 
     }
     throw error; // no anchor resolved it — surface the original bare-import failure
   }
+}
+
+/** @deprecated Use {@link ImportFromHost}. */
+export async function importFromHost(pkgName: string, configFilePath?: string): Promise<Record<string, unknown>> {
+  return ImportFromHost(pkgName, configFilePath);
 }

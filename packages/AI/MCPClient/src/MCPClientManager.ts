@@ -187,8 +187,13 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      *
      * @param publicUrl - The public URL (e.g., https://api.example.com)
      */
-    public setPublicUrl(publicUrl: string): void {
+    public SetPublicUrl(publicUrl: string): void {
         this.publicUrl = publicUrl;
+    }
+
+    /** @deprecated Use {@link SetPublicUrl}. */
+    public setPublicUrl(publicUrl: string): void {
+        return this.SetPublicUrl(publicUrl);
     }
 
     /**
@@ -197,8 +202,13 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param connectionId - Connection ID to check
      * @returns true if connected
      */
-    public isConnected(connectionId: string): boolean {
+    public IsConnected(connectionId: string): boolean {
         return this.connections.has(connectionId);
+    }
+
+    /** @deprecated Use {@link IsConnected}. */
+    public isConnected(connectionId: string): boolean {
+        return this.IsConnected(connectionId);
     }
 
     /**
@@ -206,8 +216,13 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      *
      * @returns Array of active connection IDs
      */
-    public getActiveConnections(): string[] {
+    public GetActiveConnections(): string[] {
         return Array.from(this.connections.keys());
+    }
+
+    /** @deprecated Use {@link GetActiveConnections}. */
+    public getActiveConnections(): string[] {
+        return this.GetActiveConnections();
     }
 
     // ========================================
@@ -328,7 +343,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             // Auto-sync tools if enabled
             if (connectionConfig.AutoSyncTools && !skipAutoSync) {
                 try {
-                    await this.syncTools(connectionId, { contextUser });
+                    await this.SyncTools(connectionId, { contextUser });
                 } catch (syncError) {
                     // Don't fail connection for sync errors
                     LogError(`[MCPClient] Auto-sync failed for ${connectionId}: ${syncError}`);
@@ -449,7 +464,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param options - Client options
      * @returns Tool call result
      */
-    public async callTool(
+    public async CallTool(
         connectionId: string,
         toolName: string,
         toolOptions: MCPCallToolOptions,
@@ -603,6 +618,16 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         }
     }
 
+    /** @deprecated Use {@link CallTool}. */
+    public async callTool(
+        connectionId: string,
+        toolName: string,
+        toolOptions: MCPCallToolOptions,
+        options: MCPClientOptions
+    ): Promise<MCPToolCallResult> {
+        return this.CallTool(connectionId, toolName, toolOptions, options);
+    }
+
     /**
      * Lists available tools from an MCP server
      *
@@ -610,7 +635,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param options - Client options
      * @returns List of available tools
      */
-    public async listTools(
+    public async ListTools(
         connectionId: string,
         options: MCPClientOptions
     ): Promise<MCPListToolsResult> {
@@ -662,6 +687,14 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         }
     }
 
+    /** @deprecated Use {@link ListTools}. */
+    public async listTools(
+        connectionId: string,
+        options: MCPClientOptions
+    ): Promise<MCPListToolsResult> {
+        return this.ListTools(connectionId, options);
+    }
+
     /**
      * Syncs tool definitions from the MCP server to the database
      *
@@ -669,7 +702,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param options - Client options
      * @returns Sync result
      */
-    public async syncTools(
+    public async SyncTools(
         connectionId: string,
         options: MCPClientOptions
     ): Promise<MCPSyncToolsResult> {
@@ -683,7 +716,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
 
         try {
             // List tools from server
-            const listResult = await this.listTools(connectionId, options);
+            const listResult = await this.ListTools(connectionId, options);
             if (!listResult.success) {
                 return {
                     success: false,
@@ -771,7 +804,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             await this.updateServerLastSync(connection.serverConfig.ID, contextUser);
 
             // Sync Actions for the tools (creates Actions in System/MCP/{ServerName})
-            const actionsResult = await this.syncActionsForServer(connection.serverConfig.ID, contextUser);
+            const actionsResult = await this.SyncActionsForServer(connection.serverConfig.ID, contextUser);
             if (!actionsResult.success) {
                 LogError(`Warning: Tool sync succeeded but Actions sync failed: ${actionsResult.error}`);
             }
@@ -804,6 +837,14 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         }
     }
 
+    /** @deprecated Use {@link SyncTools}. */
+    public async syncTools(
+        connectionId: string,
+        options: MCPClientOptions
+    ): Promise<MCPSyncToolsResult> {
+        return this.SyncTools(connectionId, options);
+    }
+
     /**
      * Syncs MCP Server Tools to MJ Actions.
      * Creates the category hierarchy System/MCP/{ServerName} and an Action for each tool.
@@ -812,7 +853,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param contextUser - The user context for database operations
      * @returns Sync result with counts of created/updated actions and params
      */
-    public async syncActionsForServer(
+    public async SyncActionsForServer(
         serverId: string,
         contextUser: UserInfo,
         provider?: IMetadataProvider
@@ -917,6 +958,15 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 error: error instanceof Error ? error.message : String(error)
             };
         }
+    }
+
+    /** @deprecated Use {@link SyncActionsForServer}. */
+    public async syncActionsForServer(
+        serverId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MCPSyncActionsResult> {
+        return this.SyncActionsForServer(serverId, contextUser, provider);
     }
 
     /**
@@ -1427,7 +1477,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param options - Client options
      * @returns Test result
      */
-    public async testConnection(
+    public async TestConnection(
         connectionId: string,
         options: MCPClientOptions
     ): Promise<MCPTestConnectionResult> {
@@ -1435,7 +1485,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
 
         try {
             // Try to connect
-            const wasConnected = this.isConnected(connectionId);
+            const wasConnected = this.IsConnected(connectionId);
             if (!wasConnected) {
                 await this.connect(connectionId, { ...options, skipAutoSync: true });
             }
@@ -1472,6 +1522,14 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         }
     }
 
+    /** @deprecated Use {@link TestConnection}. */
+    public async testConnection(
+        connectionId: string,
+        options: MCPClientOptions
+    ): Promise<MCPTestConnectionResult> {
+        return this.TestConnection(connectionId, options);
+    }
+
     // ========================================
     // Event Handling
     // ========================================
@@ -1482,11 +1540,16 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param eventType - Event type to listen for
      * @param listener - Listener function
      */
-    public addEventListener(eventType: MCPClientEventType, listener: MCPClientEventListener): void {
+    public AddEventListener(eventType: MCPClientEventType, listener: MCPClientEventListener): void {
         const listeners = this.eventListeners.get(eventType);
         if (listeners) {
             listeners.add(listener);
         }
+    }
+
+    /** @deprecated Use {@link AddEventListener}. */
+    public addEventListener(eventType: MCPClientEventType, listener: MCPClientEventListener): void {
+        return this.AddEventListener(eventType, listener);
     }
 
     /**
@@ -1495,11 +1558,16 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param eventType - Event type
      * @param listener - Listener function to remove
      */
-    public removeEventListener(eventType: MCPClientEventType, listener: MCPClientEventListener): void {
+    public RemoveEventListener(eventType: MCPClientEventType, listener: MCPClientEventListener): void {
         const listeners = this.eventListeners.get(eventType);
         if (listeners) {
             listeners.delete(listener);
         }
+    }
+
+    /** @deprecated Use {@link RemoveEventListener}. */
+    public removeEventListener(eventType: MCPClientEventType, listener: MCPClientEventListener): void {
+        return this.RemoveEventListener(eventType, listener);
     }
 
     /**
@@ -1515,7 +1583,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param connectionId - Connection ID
      * @returns Connection info or null if not connected
      */
-    public getConnectionInfo(connectionId: string): { serverName: string; connectionName: string; connectedAt: Date } | null {
+    public GetConnectionInfo(connectionId: string): { serverName: string; connectionName: string; connectedAt: Date } | null {
         const connection = this.connections.get(connectionId);
         if (!connection) {
             return null;
@@ -1525,6 +1593,11 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             connectionName: connection.connectionConfig.Name,
             connectedAt: connection.connectedAt
         };
+    }
+
+    /** @deprecated Use {@link GetConnectionInfo}. */
+    public getConnectionInfo(connectionId: string): { serverName: string; connectionName: string; connectedAt: Date } | null {
+        return this.GetConnectionInfo(connectionId);
     }
 
     // ========================================
@@ -1538,13 +1611,18 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param connectionId - The connection ID that was authorized
      * @param data - Optional additional data (token info, etc.)
      */
-    public notifyOAuthAuthorizationCompleted(connectionId: string, data?: Record<string, unknown>): void {
+    public NotifyOAuthAuthorizationCompleted(connectionId: string, data?: Record<string, unknown>): void {
         this.emitEvent({
             type: 'authorizationCompleted',
             connectionId,
             timestamp: new Date(),
             data
         });
+    }
+
+    /** @deprecated Use {@link NotifyOAuthAuthorizationCompleted}. */
+    public notifyOAuthAuthorizationCompleted(connectionId: string, data?: Record<string, unknown>): void {
+        return this.NotifyOAuthAuthorizationCompleted(connectionId, data);
     }
 
     /**
@@ -1554,13 +1632,18 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param connectionId - The connection ID whose token was refreshed
      * @param data - Optional additional data (new expiration, etc.)
      */
-    public notifyOAuthTokenRefreshed(connectionId: string, data?: Record<string, unknown>): void {
+    public NotifyOAuthTokenRefreshed(connectionId: string, data?: Record<string, unknown>): void {
         this.emitEvent({
             type: 'tokenRefreshed',
             connectionId,
             timestamp: new Date(),
             data
         });
+    }
+
+    /** @deprecated Use {@link NotifyOAuthTokenRefreshed}. */
+    public notifyOAuthTokenRefreshed(connectionId: string, data?: Record<string, unknown>): void {
+        return this.NotifyOAuthTokenRefreshed(connectionId, data);
     }
 
     /**
@@ -1570,7 +1653,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param connectionId - The connection ID whose token refresh failed
      * @param data - Error details and whether re-authorization is required
      */
-    public notifyOAuthTokenRefreshFailed(connectionId: string, data: {
+    public NotifyOAuthTokenRefreshFailed(connectionId: string, data: {
         error: string;
         requiresReauthorization: boolean;
         authorizationUrl?: string;
@@ -1582,6 +1665,16 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             timestamp: new Date(),
             data
         });
+    }
+
+    /** @deprecated Use {@link NotifyOAuthTokenRefreshFailed}. */
+    public notifyOAuthTokenRefreshFailed(connectionId: string, data: {
+        error: string;
+        requiresReauthorization: boolean;
+        authorizationUrl?: string;
+        stateParameter?: string;
+    }): void {
+        return this.NotifyOAuthTokenRefreshFailed(connectionId, data);
     }
 
     // ========================================
@@ -1767,7 +1860,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      * @param contextUser - User context
      * @returns OAuth connection status or null if not an OAuth2 connection
      */
-    public async getOAuthConnectionStatus(
+    public async GetOAuthConnectionStatus(
         connectionId: string,
         contextUser: UserInfo
     ): Promise<{
@@ -1810,6 +1903,20 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             LogError(`[MCPClient] Failed to get OAuth status: ${error}`);
             return null;
         }
+    }
+
+    /** @deprecated Use {@link GetOAuthConnectionStatus}. */
+    public async getOAuthConnectionStatus(
+        connectionId: string,
+        contextUser: UserInfo
+    ): Promise<{
+        isOAuthEnabled: boolean;
+        hasValidTokens: boolean;
+        requiresReauthorization: boolean;
+        reauthorizationReason?: string;
+        tokenExpiresAt?: Date;
+    } | null> {
+        return this.GetOAuthConnectionStatus(connectionId, contextUser);
     }
 
     /**

@@ -1,7 +1,7 @@
 /** Tiny SVG element factory shared by all flow renderers. */
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export function svgEl(
+export function SvgEl(
   tag: string,
   attrs: Record<string, string | number>,
   parent?: SVGElement
@@ -15,9 +15,23 @@ export function svgEl(
   return e;
 }
 
+/** @deprecated Use {@link SvgEl}. */
+export function svgEl(
+  tag: string,
+  attrs: Record<string, string | number>,
+  parent?: SVGElement
+): SVGElement {
+  return SvgEl(tag, attrs, parent);
+}
+
 /** Truncate a label to fit, with an ellipsis. */
-export function clip(text: string, max: number): string {
+export function Clip(text: string, max: number): string {
   return text.length <= max ? text : text.slice(0, max - 1) + '…';
+}
+
+/** @deprecated Use {@link Clip}. */
+export function clip(text: string, max: number): string {
+  return Clip(text, max);
 }
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -27,17 +41,17 @@ const XHTML_NS = 'http://www.w3.org/1999/xhtml';
  * when `logoUrl` is set, otherwise a Font Awesome glyph via `<foreignObject>` (FA's
  * global stylesheet renders it; we just set colour + size).
  */
-export function appendIcon(
+export function AppendIcon(
   parent: SVGElement, x: number, y: number, size: number,
   iconClass: string, logoUrl: string | null, color: string
 ): SVGElement {
   if (logoUrl) {
-    const img = svgEl('image', { x, y, width: size, height: size, preserveAspectRatio: 'xMidYMid slice' }, parent);
+    const img = SvgEl('image', { x, y, width: size, height: size, preserveAspectRatio: 'xMidYMid slice' }, parent);
     img.setAttribute('href', logoUrl);
     img.setAttribute('clip-path', `inset(0 round ${size / 2}px)`);
     return img;
   }
-  const fo = svgEl('foreignObject', { x, y, width: size, height: size }, parent);
+  const fo = SvgEl('foreignObject', { x, y, width: size, height: size }, parent);
   const div = document.createElementNS(XHTML_NS, 'div');
   div.setAttribute('style', `width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;color:${color}`);
   const i = document.createElementNS(XHTML_NS, 'i');
@@ -48,7 +62,20 @@ export function appendIcon(
   return fo;
 }
 
+/** @deprecated Use {@link AppendIcon}. */
+export function appendIcon(
+  parent: SVGElement, x: number, y: number, size: number,
+  iconClass: string, logoUrl: string | null, color: string
+): SVGElement {
+  return AppendIcon(parent, x, y, size, iconClass, logoUrl, color);
+}
+
 /** Native hover tooltip on an SVG element (works without any JS). */
+export function AppendTitle(parent: SVGElement, text: string): void {
+  SvgEl('title', { text }, parent);
+}
+
+/** @deprecated Use {@link AppendTitle}. */
 export function appendTitle(parent: SVGElement, text: string): void {
-  svgEl('title', { text }, parent);
+  return AppendTitle(parent, text);
 }

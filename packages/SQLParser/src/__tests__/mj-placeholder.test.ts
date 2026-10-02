@@ -168,4 +168,34 @@ ORDER BY m.FirstName`;
             }).not.toThrow();
         });
     });
+
+    // An expression the author already wrapped in quotes must not get a second pair. Quoting it
+    // again produced `''__MJT_001__''` — an empty string followed by a bare word — which no parser
+    // accepts, so every query written as `= '{{ X }}'` lost its deterministic field extraction.
+    describe('Substitute — expression already inside a string literal', () => {
+        it('emits a bare placeholder inside author-written quotes', () => {
+            const result = MJPlaceholderSubstitution.Substitute("WHERE Name = '{{ VendorName }}'");
+            expect(result.cleanSQL).toBe("WHERE Name = '__MJT_001__'");
+            const entry = result.positionMap.get('__MJT_001__')!;
+            expect(entry.context).toBe('string');
+            expect(entry.originalToken.raw).toBe('{{ VendorName }}');
+        });
+
+        it('emits a bare placeholder mid-literal, as in a LIKE pattern', () => {
+            const result = MJPlaceholderSubstitution.Substitute("WHERE Name LIKE '%{{ Term }}%'");
+            expect(result.cleanSQL).toBe("WHERE Name LIKE '%__MJT_001__%'");
+        });
+
+        it('treats a doubled quote as an escape, not a literal boundary', () => {
+            const result = MJPlaceholderSubstitution.Substitute("WHERE A = 'it''s' AND B = {{ X | sqlString }}");
+            expect(result.cleanSQL).toBe("WHERE A = 'it''s' AND B = '__MJT_001__'");
+        });
+
+        it('ignores apostrophes inside comments', () => {
+            const result = MJPlaceholderSubstitution.Substitute(
+                "-- don't quote this\nWHERE B = {{ X | sqlString }} /* it's fine */ AND C = '{{ Y }}'"
+            );
+            expect(result.cleanSQL).toBe("-- don't quote this\nWHERE B = '__MJT_001__' /* it's fine */ AND C = '__MJT_002__'");
+        });
+    });
 });

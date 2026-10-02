@@ -1,4 +1,4 @@
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, RegisterClass } from '@memberjunction/global';
 import { ChatResult, ChatMessageRole, ChatMessage } from '@memberjunction/ai';
 import { MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
@@ -13,9 +13,10 @@ import {
   TokenUsageUpdate,
   ProgressCallbacksInterface,
   IParallelExecutionCoordinator,
+  JudgeRanking,
 } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from './AIPromptRunner';
 
 /**
@@ -41,27 +42,42 @@ class ParallelProgressTracker {
     this.progressCallbacks = progressCallbacks;
   }
 
-  updateProgress(currentGroup: number): void {
+  UpdateProgress(currentGroup: number): void {
     this.currentGroup = currentGroup;
     this.sendProgressUpdate();
   }
 
-  addActiveTask(taskId: string): void {
+  /** @deprecated Use {@link UpdateProgress}. */
+  updateProgress(currentGroup: number): void {
+    return this.UpdateProgress(currentGroup);
+  }
+
+  AddActiveTask(taskId: string): void {
     if (!this.activeTasks.includes(taskId)) {
       this.activeTasks.push(taskId);
     }
   }
 
-  removeActiveTask(taskId: string): void {
+  /** @deprecated Use {@link AddActiveTask}. */
+  addActiveTask(taskId: string): void {
+    return this.AddActiveTask(taskId);
+  }
+
+  RemoveActiveTask(taskId: string): void {
     const index = this.activeTasks.indexOf(taskId);
     if (index > -1) {
       this.activeTasks.splice(index, 1);
     }
   }
 
-  taskCompleted(result: ExecutionTaskResult): void {
+  /** @deprecated Use {@link RemoveActiveTask}. */
+  removeActiveTask(taskId: string): void {
+    return this.RemoveActiveTask(taskId);
+  }
+
+  TaskCompleted(result: ExecutionTaskResult): void {
     this.completedTasks++;
-    this.removeActiveTask(result.task.taskId);
+    this.RemoveActiveTask(result.task.taskId);
 
     if (result.success) {
       this.successfulTasks++;
@@ -83,6 +99,11 @@ class ParallelProgressTracker {
     }
 
     this.sendProgressUpdate();
+  }
+
+  /** @deprecated Use {@link TaskCompleted}. */
+  taskCompleted(result: ExecutionTaskResult): void {
+    return this.TaskCompleted(result);
   }
 
   private getCurrentProgress(): ParallelExecutionProgress {
@@ -256,6 +277,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     config: ResultSelectionConfig,
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
+    contextUser?: UserInfo,
   ): Promise<ExecutionTaskResult | null> {
     if (results.length === 0) {
       return null;
@@ -275,7 +297,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         return this.selectRandomResult(results);
 
       case 'PromptSelector':
-        return await this.selectResultWithPrompt(results, config.selectorPromptId!, parentPromptRunId, cancellationToken);
+        return await this.selectResultWithPrompt(results, config.selectorPromptId!, parentPromptRunId, cancellationToken, contextUser);
 
       case 'Consensus':
         return this.selectConsensusResult(results);
@@ -312,13 +334,13 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       groupTasks.sort((a, b) => b.priority - a.priority);
 
       groups.push({
-        groupNumber,
-        tasks: groupTasks,
+        GroupNumber: groupNumber,
+        Tasks: groupTasks,
       });
     }
 
     // Sort groups by group number (execute in ascending order)
-    groups.sort((a, b) => a.groupNumber - b.groupNumber);
+    groups.sort((a, b) => a.GroupNumber - b.GroupNumber);
 
     LogStatus(`Grouped ${tasks.length} tasks into ${groups.length} execution groups`);
     return groups;
@@ -347,9 +369,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     for (const group of groups) {
       // Check for cancellation before each group
       if (cancellationToken?.aborted) {
-        LogStatus(`Group execution cancelled at group ${group.groupNumber}`);
+        LogStatus(`Group execution cancelled at group ${group.GroupNumber}`);
         // Create cancelled results for remaining tasks
-        const cancelledResults = group.tasks.map((task) => ({
+        const cancelledResults = group.Tasks.map((task) => ({
           task,
           success: false,
           cancelled: true,
@@ -362,10 +384,10 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         break;
       }
 
-      LogStatus(`Executing group ${group.groupNumber} with ${group.tasks.length} tasks`);
+      LogStatus(`Executing group ${group.GroupNumber} with ${group.Tasks.length} tasks`);
 
       // Update progress tracker for current group
-      progressTracker?.updateProgress(group.groupNumber);
+      progressTracker?.updateProgress(group.GroupNumber);
 
       const groupResults = await this.executeGroupInParallel(params, group, config, parentPromptRunId, cancellationToken, progressTracker);
       allResults.push(...groupResults);
@@ -373,7 +395,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       // Check if we should fail fast
       if (config.failFast && groupResults.some((r) => !r.success)) {
         const failedTasks = groupResults.filter((r) => !r.success);
-        LogError(`Failing fast due to ${failedTasks.length} failed tasks in group ${group.groupNumber}`);
+        LogError(`Failing fast due to ${failedTasks.length} failed tasks in group ${group.GroupNumber}`);
         break;
       }
     }
@@ -399,7 +421,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
   ): Promise<ExecutionTaskResult[]> {
-    const maxConcurrent = Math.min(config.maxConcurrentExecutions, group.tasks.length);
+    const maxConcurrent = Math.min(config.maxConcurrentExecutions, group.Tasks.length);
     const results: ExecutionTaskResult[] = [];
     const executing: Promise<ExecutionTaskResult>[] = [];
 
@@ -407,13 +429,13 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     let executionOrder = 0;
 
     // Process tasks with concurrency limit
-    while (taskIndex < group.tasks.length || executing.length > 0) {
+    while (taskIndex < group.Tasks.length || executing.length > 0) {
       // Check for cancellation
       if (cancellationToken?.aborted) {
-        LogStatus(`Task execution cancelled in group ${group.groupNumber}`);
+        LogStatus(`Task execution cancelled in group ${group.GroupNumber}`);
         // Cancel remaining tasks
-        while (taskIndex < group.tasks.length) {
-          const task = group.tasks[taskIndex++];
+        while (taskIndex < group.Tasks.length) {
+          const task = group.Tasks[taskIndex++];
           results.push({
             task,
             success: false,
@@ -428,8 +450,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       }
 
       // Start new tasks up to concurrency limit
-      while (executing.length < maxConcurrent && taskIndex < group.tasks.length) {
-        const task = group.tasks[taskIndex++];
+      while (executing.length < maxConcurrent && taskIndex < group.Tasks.length) {
+        const task = group.Tasks[taskIndex++];
         progressTracker?.addActiveTask(task.taskId);
         const execution = this.executeTask(params, task, config, parentPromptRunId, executionOrder++);
         executing.push(execution);
@@ -453,7 +475,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
     const successfulResults = results.filter((r) => r.success);
     const cancelledResults = results.filter((r) => r.cancelled);
-    LogStatus(`Group ${group.groupNumber} completed: ${successfulResults.length}/${results.length} successful, ${cancelledResults.length} cancelled`);
+    LogStatus(`Group ${group.GroupNumber} completed: ${successfulResults.length}/${results.length} successful, ${cancelledResults.length} cancelled`);
     return results;
   }
 
@@ -737,13 +759,13 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     selectorPromptId: string,
     parentPromptRunId?: string,
     _cancellationToken?: AbortSignal,
+    contextUser?: UserInfo,
   ): Promise<ExecutionTaskResult> {
     try {
-      // AIPromptRunner is statically imported (this class extends it); the prior dynamic import was
-      // only needed before the subclass relationship existed.
+      const user = contextUser || results[0]?.task?.contextUser;
 
       // Load the judge prompt from AIEngine
-      await AIEngine.Instance.Config(false);
+      await AIEngine.Instance.Config(false, user);
       const judgePrompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, selectorPromptId));
 
       if (!judgePrompt) {
@@ -767,16 +789,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         },
       ];
 
-      // Create a ResultSelector prompt run log entry if parent ID is provided
-      let resultSelectorPromptRun: MJAIPromptRunEntityExtended | null = null;
-      if (parentPromptRunId) {
-        resultSelectorPromptRun = await this.createResultSelectorPromptRun(
-          judgePrompt,
-          judgeData,
-          parentPromptRunId,
-          results.length, // execution order after all parallel children
-        );
-      }
+      const agentId = results[0]?.task?.AgentID;
+      const judgeUserId = ResolvePromptRunUserID({ UserID: results[0]?.task?.UserID, ContextUser: user }) ?? undefined;
 
       // Execute the judge prompt
       const judgeRunner = new AIPromptRunner();
@@ -786,23 +800,17 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         prompt: judgePrompt,
         data: judgeData,
         conversationMessages,
+        contextUser: user,
+        provider: this.Provider,
+        parentPromptRunId,
+        RunType: 'ResultSelector',
+        ExecutionOrder: results.length,
+        agentId,
+        UserID: judgeUserId,
       });
 
       const judgeEndTime = Date.now();
       const judgeExecutionTimeMS = judgeEndTime - judgeStartTime;
-
-      // Update the result selector prompt run with the result
-      if (resultSelectorPromptRun && judgeResult.promptRun) {
-        resultSelectorPromptRun.CompletedAt = new Date(judgeEndTime);
-        resultSelectorPromptRun.ExecutionTimeMS = judgeExecutionTimeMS;
-        resultSelectorPromptRun.Success = judgeResult.success;
-        resultSelectorPromptRun.Status = judgeResult.success ? 'Completed' : 'Failed';
-        resultSelectorPromptRun.Result = judgeResult.rawResult || '';
-        if (judgeResult.tokensUsed) {
-          resultSelectorPromptRun.TokensUsed = judgeResult.tokensUsed;
-        }
-        await resultSelectorPromptRun.Save();
-      }
 
       if (!judgeResult.success || !judgeResult.rawResult) {
         LogError(`Judge prompt execution failed: ${judgeResult.errorMessage}`);
@@ -821,9 +829,40 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       this.applyRankingsToResults(results, rankings);
 
       // Store judge metadata for later use
-      const bestCandidateId = rankings.find((r) => r.rank === 1)?.candidateId;
+      const bestCandidateId = rankings.find((r) => r.Rank === 1)?.CandidateID;
       const bestResultIndex = results.findIndex((r) => r.task.taskId === bestCandidateId);
       const bestResult = bestResultIndex >= 0 ? results[bestResultIndex] : results[0];
+
+      // Update ResultSelector JudgeScore and JudgeID from rankings if present
+      const topRanking = rankings.find((r) => r.Rank === 1) || rankings[0];
+      if (judgeResult.promptRun) {
+        // The judge runner finalizes its prompt run through a FIRE-AND-FORGET queued UPDATE
+        // (AIPromptRunner.finalize -> _promptRunQueue.Update). BaseEntity.Save collapses into an
+        // in-flight save (baseEntity.ts, `if (this._pendingSave$) return firstValueFrom(...)`), so
+        // mutating and saving here while that UPDATE is in flight writes NOTHING — JudgeID and
+        // JudgeScore are silently lost. Drain the queue first so this Save is a real write.
+        await judgeRunner.WaitForPendingPromptRunSaves();
+        judgeResult.promptRun.JudgeID = judgePrompt.ID;
+        if (judgeResult.promptRun.JudgeScore == null && typeof topRanking?.Score === 'number') {
+          judgeResult.promptRun.JudgeScore = topRanking.Score;
+        }
+        await judgeResult.promptRun.Save();
+      }
+
+      // Update child prompt runs with judge feedback & winner selection
+      for (const result of results) {
+        if (result.promptRun) {
+          result.promptRun.JudgeID = judgePrompt.ID;
+          const ranking = rankings.find((r) => r.CandidateID === result.task.taskId);
+          if (ranking && typeof ranking.Score === 'number') {
+            result.promptRun.JudgeScore = ranking.Score;
+          }
+          if (result.task.taskId === bestCandidateId) {
+            result.promptRun.WasSelectedResult = true;
+          }
+          await result.promptRun.Save();
+        }
+      }
 
       // Add judge metadata to the best result
       bestResult.judgeMetadata = {
@@ -871,7 +910,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param judgeResult - Raw result from the judge prompt
    * @returns Array of ranking objects or null if parsing fails
    */
-  private parseJudgeResult(judgeResult: string): Array<{ candidateId: string; rank: number; rationale: string }> | null {
+  private parseJudgeResult(judgeResult: string): JudgeRanking[] | null {
     try {
       // Try to extract JSON from the result (in case there's extra text)
       const jsonMatch = judgeResult.match(/\{[\s\S]*\}/);
@@ -881,9 +920,12 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       if (parsed.rankings && Array.isArray(parsed.rankings)) {
         return parsed.rankings.map((ranking: Record<string, unknown>) => ({
-          candidateId: ranking.candidateId,
-          rank: ranking.rank,
-          rationale: ranking.rationale || 'No rationale provided',
+          // The judge's JSON keys are the prompt's wire format (see `format` above); the typed
+          // JudgeRanking is PascalCase like the rest of the public surface.
+          CandidateID: String(ranking.candidateId),
+          Rank: Number(ranking.rank),
+          Rationale: (ranking.rationale as string) || 'No rationale provided',
+          Score: typeof ranking.score === 'number' ? ranking.score : undefined,
         }));
       }
 
@@ -901,12 +943,12 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param results - Array of execution results to rank
    * @param rankings - Rankings from the judge
    */
-  private applyRankingsToResults(results: ExecutionTaskResult[], rankings: Array<{ candidateId: string; rank: number; rationale: string }>): void {
+  private applyRankingsToResults(results: ExecutionTaskResult[], rankings: JudgeRanking[]): void {
     for (const result of results) {
-      const ranking = rankings.find((r) => r.candidateId === result.task.taskId);
+      const ranking = rankings.find((r) => r.CandidateID === result.task.taskId);
       if (ranking) {
-        result.ranking = ranking.rank;
-        result.judgeRationale = ranking.rationale;
+        result.ranking = ranking.Rank;
+        result.judgeRationale = ranking.Rationale;
       }
     }
   }
@@ -983,6 +1025,10 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       promptRun.PromptID = task.prompt.ID;
       promptRun.ModelID = task.model.ID;
+      if (task.AgentID) {
+        promptRun.AgentID = task.AgentID;
+      }
+      promptRun.UserID = ResolvePromptRunUserID({ UserID: task.UserID, ContextUser: task.contextUser });
       promptRun.RunAt = startTime;
       promptRun.RunType = 'ParallelChild';
       promptRun.ParentID = parentPromptRunId;
@@ -1044,11 +1090,19 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       if (modelResult.success) {
         promptRun.Result = modelResult.data?.choices?.[0]?.message?.content || '';
 
-        // Extract token usage if available
+        // Extract token usage and cost if available
         if (modelResult.data?.usage) {
           promptRun.TokensUsed = modelResult.data.usage.totalTokens;
           promptRun.TokensPrompt = modelResult.data.usage.promptTokens;
           promptRun.TokensCompletion = modelResult.data.usage.completionTokens;
+          promptRun.TokensCacheRead = modelResult.data.usage.cacheReadTokens ?? 0;
+          promptRun.TokensCacheWrite = modelResult.data.usage.cacheWriteTokens ?? 0;
+          if (modelResult.data.usage.cost !== undefined) {
+            promptRun.Cost = modelResult.data.usage.cost;
+          }
+          if (modelResult.data.usage.costCurrency !== undefined) {
+            promptRun.CostCurrency = modelResult.data.usage.costCurrency;
+          }
         }
       } else {
         promptRun.ErrorMessage = modelResult.errorMessage;
@@ -1064,52 +1118,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     }
   }
 
-  /**
-   * Creates a ResultSelector AIPromptRun entity for judge execution tracking.
-   *
-   * @param judgePrompt - The judge prompt being executed
-   * @param judgeData - The data being sent to the judge
-   * @param parentPromptRunId - ID of the parent prompt run
-   * @param executionOrder - Execution order within the parallel group
-   * @returns Promise<MJAIPromptRunEntityExtended> - The created result selector prompt run
-   */
-  private async createResultSelectorPromptRun(
-    judgePrompt: MJAIPromptEntityExtended,
-    judgeData: Record<string, unknown>,
-    parentPromptRunId: string,
-    executionOrder: number,
-  ): Promise<MJAIPromptRunEntityExtended> {
-    try {
-      const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
-      promptRun.NewRecord();
 
-      promptRun.PromptID = judgePrompt.ID;
-      // We don't have a specific model ID for the judge yet, it will be set by AIPromptRunner
-      promptRun.RunAt = new Date();
-      promptRun.RunType = 'ResultSelector';
-      promptRun.ParentID = parentPromptRunId;
-      promptRun.ExecutionOrder = executionOrder;
-
-      // Store the judge data as JSON in Messages field
-      promptRun.Messages = JSON.stringify({
-        judgeData,
-        candidateCount: Array.isArray((judgeData as Record<string, unknown>).candidates)
-          ? ((judgeData as Record<string, unknown>).candidates as unknown[]).length
-          : 0,
-      });
-
-      const saveResult = await promptRun.Save();
-      if (!saveResult) {
-        const error = `Failed to save ResultSelector AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`;
-        LogError(error);
-        throw new Error(error);
-      }
-      return promptRun;
-    } catch (error) {
-      LogError(`Error creating result selector prompt run record: ${error.message}`);
-      throw error;
-    }
-  }
 
   /**
    * Creates a delay for the specified number of milliseconds.

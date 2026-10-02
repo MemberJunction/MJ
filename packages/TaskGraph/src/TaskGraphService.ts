@@ -29,7 +29,6 @@ import {
     MJTaskDependencyEntity,
     MJTaskTypeEntity,
     MJAIAgentRequestEntity,
-    type MJTaskEntity_ITaskStepConfiguration,
 } from '@memberjunction/core-entities';
 import {
     FormatValidationErrors,
@@ -45,6 +44,8 @@ import {
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
+import { AgentDecisionService } from '@memberjunction/ai-agents';
+import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
@@ -301,9 +302,12 @@ export const TASK_TYPE_NAME = 'AI Workflow';
  * `Prompt` joins them now that `TaskPromptRunner` exists — it carries `Task.PromptID`. `External`
  * remains absent: it is completed by a system that has no way to report back, so persisting one
  * would produce a task that waits forever.
+ *
+ * `Decision` carries its decision prompt in `Task.PromptID` and its questions in
+ * `Task.Configuration`, and runs on the dispatcher's decision runner.
  */
 const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
-    'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt',
+    'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt', 'Decision',
 ];
 
 /**
@@ -334,8 +338,8 @@ const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
  * workflow whose conditions all evaluate against nothing. Undefined is falsy, so that failure looks
  * exactly like a branch legitimately not being taken.
  */
-export function BuildStepConfiguration(node: TaskGraphSpecNode): MJTaskEntity_ITaskStepConfiguration | null {
-    const config: MJTaskEntity_ITaskStepConfiguration = {};
+export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfiguration | null {
+    const config: TaskStepConfiguration = {};
 
     const agent = ConfigOf(node, 'Agent');
     if (agent?.message || agent?.templateParameters) {
@@ -361,6 +365,11 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): MJTaskEntity_IT
 
     const external = ConfigOf(node, 'External');
     if (external) config.external = external;
+
+    // The questions and state, plus the node's tempId: conditions name a decision by the tempId it
+    // was submitted under (`decisions.<tempId>.<question>`), and the row keeps no other copy of it.
+    const decision = ConfigOf(node, 'Decision');
+    if (decision) config.decision = { ...decision, nodeId: node.tempId };
 
     // Mappings live on the Action arm of the spec, but they are not action-specific: a loop step
     // carries them too, which is how its per-iteration inputs and results are wired.
@@ -414,10 +423,20 @@ function agentNamesIn(node: TaskGraphSpecNode): string[] {
     return names.filter((n): n is string => !!n);
 }
 
-/** Every prompt name a node references, including the prompt a loop repeats. */
+/** Every prompt name a node references, including the prompt a loop repeats and a Decision's prompt. */
 function promptNamesIn(node: TaskGraphSpecNode): string[] {
-    const names = [ConfigOf(node, 'Prompt')?.promptName, LoopOperationOf(node)?.prompt?.name];
+    const names = [ConfigOf(node, 'Prompt')?.promptName, LoopOperationOf(node)?.prompt?.name, DecisionPromptNameOf(node)];
     return names.filter((n): n is string => !!n);
+}
+
+/**
+ * The decision prompt a Decision node runs on — its own `promptName`, or `Default Decision`, the
+ * prompt agent decisions use. `null` for any other kind.
+ */
+export function DecisionPromptNameOf(node: TaskGraphSpecNode): string | null {
+    const decision = ConfigOf(node, 'Decision');
+    if (!decision) return null;
+    return decision.promptName?.trim() || AgentDecisionService.DEFAULT_PROMPT_NAME;
 }
 
 /** Every action name a node references, including the action a loop repeats. */
@@ -488,6 +507,69 @@ export function FindCrossUserAssignments(spec: TaskGraphSpec, submitterUserID: s
         `workflow. Assigning a step to someone else is not available yet (#3524) — a workflow can ` +
         `only ask the person who started it. Remove assignToUserID from those steps.`
     );
+}
+
+/**
+ * Why a task cannot be retried, or `null` when it can.
+ *
+ * A `Failed` task can. So can a `Complete` Decision step that is holding an answer — one below its
+ * question's `minConfidence`, or missing — because the edges that read it hold until it is asked
+ * again. Anything else ran to a usable end, or has not ended.
+ *
+ * `editedInput` is the input the retry would run on, as JSON. A held Decision refuses one it could
+ * not read: that input would fail the step before it is asked, and a failed step keeps none of the
+ * answers the graph has already acted on.
+ */
+export function RetryRefusal(task: DecisionTaskRow, editedInput?: string): string | null {
+    if (task.Status === 'Failed') return null;
+    if (Object.keys(HeldDecisionAnswers(task)).length > 0) {
+        return editedInput === undefined || isNameValueJson(editedInput)
+            ? null
+            : 'its edited input is not a JSON object of named values, which would fail a Decision step and lose the answers it keeps';
+    }
+    if (task.StepType === 'Decision' && task.Status === 'Complete') {
+        return 'it is a Decision step whose answers are all usable, so nothing is waiting on it to be asked again';
+    }
+    return `status is ${task.Status}, expected Failed, or a completed Decision step holding an answer below its minConfidence`;
+}
+
+/** True when `json` is an input a step can run on: empty, or a JSON object of named values. */
+function isNameValueJson(json: string): boolean {
+    if (!json) return true;
+    try {
+        const parsed: unknown = JSON.parse(json);
+        return parsed === null || (typeof parsed === 'object' && !Array.isArray(parsed));
+    } catch {
+        return false;
+    }
+}
+
+/** The fields {@link PrepareTaskForRetry} resets. `MJTaskEntity` satisfies it as-is. */
+export type RetryableTask = Pick<
+    MJTaskEntity,
+    'Status' | 'StepType' | 'ErrorMessage' | 'StartedAt' | 'CompletedAt' | 'PercentComplete' | 'ClaimedBy' | 'ClaimExpiresAt' | 'OutputPayload'
+>;
+
+/**
+ * Puts a task back to `Pending` with nothing left from the run being retried.
+ *
+ * A Decision step retried from `Complete` keeps its output, because that output holds the usable
+ * answers it already gave, and the graph has already acted on them: the retry asks only the
+ * questions it is holding and keeps the rest (`KeptDecisionAnswers`). A failed Decision has no
+ * answers to keep, so its output is cleared: whatever is there is its input passed through, and a
+ * `decisions` entry in it must not be read back as the step's own. Other steps keep their output,
+ * as a failed step always has.
+ */
+export function PrepareTaskForRetry(task: RetryableTask): void {
+    if (task.StepType === 'Decision' && task.Status !== 'Complete') task.OutputPayload = null;
+    task.Status = 'Pending';
+    task.ErrorMessage = null;
+    task.StartedAt = null;
+    task.CompletedAt = null;
+    task.PercentComplete = 0;
+    // Clear any stale claim so the task is immediately claimable.
+    task.ClaimedBy = null;
+    task.ClaimExpiresAt = null;
 }
 
 export class TaskGraphService {
@@ -851,7 +933,29 @@ export class TaskGraphService {
     }
 
     /**
-     * Returns a failed task to `Pending` so the dispatcher can run it again.
+     * Returns a task to `Pending` so the dispatcher can run it again: a task that failed, or a
+     * Decision step holding an answer below its question's `minConfidence`.
+     *
+     * **A held Decision is retried from `Complete`.** Its call succeeded, but an edge that reads the
+     * below-threshold answer holds rather than guess, and time is the only thing that can change it —
+     * so asking again is the way out, as it is for a failed call.
+     *
+     * - **Only the held questions are asked again**, in one call. The answers it already gave that
+     *   were usable are kept and merged with the new ones, because the graph has already acted on
+     *   them: a fork's losing branch is already Skipped. Asking those questions again could flip the
+     *   fork to a branch that is gone and leave neither branch to run, so a retry can settle a hold
+     *   but never re-decide a fork. An edited `inputPayload` changes what the held questions are
+     *   asked about; the kept answers stand.
+     * - While it runs, every edge that reads it holds.
+     * - If the new call fails, or cannot be made, the step stays `Complete` with the same usable
+     *   answers, and each question it asked again holds with the reason. Retry it again.
+     * - An edited `inputPayload` that is not a JSON object of named values is refused for a held
+     *   Decision: the step would fail on it, and a failed step keeps no answers.
+     * - **Cost:** the graph's cost rollup reaches a Decision's call through
+     *   `Configuration.runtime.promptRunID`, which holds one ID and is replaced by each later call.
+     *   So the rollup counts only the last call, as it does for a retried Prompt step. Every call is
+     *   still recorded in its own `MJ: AI Prompt Runs` row and, for a graph an agent run submitted,
+     *   as a `Decision` step on that run.
      *
      * Also clears any `Blocked` dependents, since they were only blocked because this task failed —
      * leaving them blocked would make the retry pointless, as the graph still could not progress
@@ -861,10 +965,15 @@ export class TaskGraphService {
         try {
             const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
             if (!(await task.Load(taskID))) return false;
-            if (task.Status !== 'Failed') {
-                LogError(`[TaskGraphService] Cannot retry task ${taskID}: status is ${task.Status}, expected Failed.`);
+            const editedInput = inputPayload === undefined
+                ? undefined
+                : typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
+            const refusal = RetryRefusal(task, editedInput);
+            if (refusal) {
+                LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${refusal}.`);
                 return false;
             }
+            const expectedStatus = task.Status === 'Complete' ? 'Complete' : 'Failed';
 
             // An edited input rides the retry: the operator saw WHY it failed and is re-running the
             // step with a corrected brief. Applies to this run only — the graph's spec is long gone.
@@ -875,11 +984,11 @@ export class TaskGraphService {
             // hazard — a concurrent human retry is), but the shape is the same and it costs one
             // statement to not have it. The rest of this method's full-row save predates this PR
             // and is Round 3's to purge; the new write does not add to it.
-            if (inputPayload !== undefined) {
+            if (editedInput !== undefined) {
                 const typeID = await this.ensureTaskType(context);
-                const json = typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
+                const json = editedInput;
                 const wrote = await this.debugWrites.TryUpdateInputPayload(
-                    context.Provider, taskID, json, 'Failed', typeID, context.ContextUser,
+                    context.Provider, taskID, json, expectedStatus, typeID, context.ContextUser,
                 );
                 if (!wrote) {
                     LogError(`[TaskGraphService] Could not apply the edited input to task ${taskID}; retry refused rather than re-running the old brief.`);
@@ -889,14 +998,7 @@ export class TaskGraphService {
                 // not put the old input back.
                 task.InputPayload = json;
             }
-            task.Status = 'Pending';
-            task.ErrorMessage = null;
-            task.StartedAt = null;
-            task.CompletedAt = null;
-            task.PercentComplete = 0;
-            // Clear any stale claim so the task is immediately claimable.
-            task.ClaimedBy = null;
-            task.ClaimExpiresAt = null;
+            PrepareTaskForRetry(task);
             if (!(await task.Save())) return false;
 
             if (task.ParentID) {
@@ -1505,6 +1607,12 @@ export class TaskGraphService {
                     break;
                 case 'Prompt':
                     task.PromptID = promptIDsByName.get(ConfigOf(node, 'Prompt')!.promptName)!;
+                    break;
+                case 'Decision':
+                    // The decision prompt, as a real foreign key like a Prompt step's. The row stays a
+                    // machine task for claiming and reclamation; `StepType` is what routes it to the
+                    // decision runner rather than the prompt runner.
+                    task.PromptID = promptIDsByName.get(DecisionPromptNameOf(node)!)!;
                     break;
                 case 'ForEach':
                 case 'While': {

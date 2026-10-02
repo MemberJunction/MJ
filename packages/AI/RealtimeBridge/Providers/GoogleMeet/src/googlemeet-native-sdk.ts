@@ -175,7 +175,7 @@ export interface GoogleMeetNativeSdkConfig {
 }
 
 /** Copies any `Uint8Array` view or `ArrayBuffer` into a standalone `ArrayBuffer` (no aliasing the source window). */
-export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function ToArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     if (data instanceof ArrayBuffer) {
         return data.slice(0);
     }
@@ -184,8 +184,13 @@ export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     return copy.buffer;
 }
 
+/** @deprecated Use {@link ToArrayBuffer}. */
+export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+    return ToArrayBuffer(data);
+}
+
 /** Normalizes the addon's free-form role string onto the seam's {@link GoogleMeetParticipantRole}. */
-export function mapNativeRole(role?: string): GoogleMeetParticipantRole {
+export function MapNativeRole(role?: string): GoogleMeetParticipantRole {
     switch ((role ?? '').trim().toLowerCase()) {
         case 'host':
             return 'Host';
@@ -197,30 +202,45 @@ export function mapNativeRole(role?: string): GoogleMeetParticipantRole {
     }
 }
 
+/** @deprecated Use {@link MapNativeRole}. */
+export function mapNativeRole(role?: string): GoogleMeetParticipantRole {
+    return MapNativeRole(role);
+}
+
 /**
  * **Pure mapping** of one native participant onto the seam's {@link GoogleMeetParticipant}. Isolated from
  * the addon and from I/O so it is unit-tested directly.
  */
-export function mapNativeParticipant(p: NativeMeetParticipant): GoogleMeetParticipant {
+export function MapNativeParticipant(p: NativeMeetParticipant): GoogleMeetParticipant {
     return {
         ParticipantId: String(p.participantId),
         DisplayName: p.displayName,
-        Role: mapNativeRole(p.role),
+        Role: MapNativeRole(p.role),
         IsSelf: p.isSelf,
     };
+}
+
+/** @deprecated Use {@link MapNativeParticipant}. */
+export function mapNativeParticipant(p: NativeMeetParticipant): GoogleMeetParticipant {
+    return MapNativeParticipant(p);
 }
 
 /**
  * **Pure mapping** of one native inbound audio frame onto the seam's diarized {@link GoogleMeetAudioFrame}.
  * Copies the PCM (see {@link toArrayBuffer}) and resolves the speaker label. Isolated for direct testing.
  */
-export function mapNativeAudioFrame(frame: NativeMeetAudioFrame): GoogleMeetAudioFrame {
+export function MapNativeAudioFrame(frame: NativeMeetAudioFrame): GoogleMeetAudioFrame {
     return {
-        Pcm: toArrayBuffer(frame.data),
+        Pcm: ToArrayBuffer(frame.data),
         ParticipantId: String(frame.participantId),
         DisplayName: frame.displayName,
         TimestampMs: typeof frame.timestampMs === 'number' ? frame.timestampMs : Date.now(),
     };
+}
+
+/** @deprecated Use {@link MapNativeAudioFrame}. */
+export function mapNativeAudioFrame(frame: NativeMeetAudioFrame): GoogleMeetAudioFrame {
+    return MapNativeAudioFrame(frame);
 }
 
 /**
@@ -258,7 +278,7 @@ function unwrapDefault(mod: unknown): unknown {
  * VERIFY against the native Google Meet media bot addon: the module's default/namespace interop + that it
  * exposes `createClient`.
  */
-export const defaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
+export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
     try {
         const mod: unknown = await import(/* @vite-ignore */ specifier);
         const resolved = unwrapDefault(mod);
@@ -276,6 +296,9 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
         );
     }
 };
+
+/** @deprecated Use {@link DefaultNativeLoader}. */
+export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
 
 /**
  * A **real, two-way** {@link IGoogleMeetSdk} over the native Google Meet media bot addon (raw-audio send +
@@ -319,7 +342,7 @@ export class GoogleMeetNativeMeetingSdk implements IGoogleMeetSdk {
      * @param config Resolved credentials + raw-audio opts + the native module specifier.
      * @param loadModule The native-addon loader (defaults to the lazy specifier loader).
      */
-    constructor(config: GoogleMeetNativeSdkConfig, loadModule: NativeModuleLoader = defaultNativeLoader) {
+    constructor(config: GoogleMeetNativeSdkConfig, loadModule: NativeModuleLoader = DefaultNativeLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -413,7 +436,7 @@ export class GoogleMeetNativeMeetingSdk implements IGoogleMeetSdk {
             return [];
         }
         const natives = await this.client.getParticipants();
-        return natives.map(mapNativeParticipant);
+        return natives.map(MapNativeParticipant);
     }
 
     /** Registers the meeting-ended handler. */
@@ -451,8 +474,8 @@ export class GoogleMeetNativeMeetingSdk implements IGoogleMeetSdk {
 
     /** Wires the native client's callbacks to this adapter's handlers, mapping native shapes to the seam. */
     private wireClient(client: NativeMeetClient): void {
-        client.onAudioFrame((frame) => this.audioHandler?.(mapNativeAudioFrame(frame)));
-        client.onParticipantJoin((p) => this.joinHandler?.(mapNativeParticipant(p)));
+        client.onAudioFrame((frame) => this.audioHandler?.(MapNativeAudioFrame(frame)));
+        client.onParticipantJoin((p) => this.joinHandler?.(MapNativeParticipant(p)));
         client.onParticipantLeave((id) => this.leaveHandler?.(String(id)));
         client.onHandRaise((id, raised) => this.handRaiseHandler?.(String(id), raised));
         client.onMeetingEnded(() => this.endedHandler?.());
@@ -476,10 +499,10 @@ export class GoogleMeetNativeMeetingSdk implements IGoogleMeetSdk {
  * @returns A factory `(config) => GoogleMeetNativeMeetingSdk`.
  */
 export function BindGoogleMeetNative(
-    loadModule: NativeModuleLoader = defaultNativeLoader,
+    loadModule: NativeModuleLoader = DefaultNativeLoader,
 ): (config?: Record<string, unknown>) => GoogleMeetNativeMeetingSdk {
     return (config?: Record<string, unknown>) =>
-        new GoogleMeetNativeMeetingSdk(readNativeConfig(config), loadModule);
+        new GoogleMeetNativeMeetingSdk(ReadNativeConfig(config), loadModule);
 }
 
 /**
@@ -488,7 +511,7 @@ export function BindGoogleMeetNative(
  * clean, partially-resolved object (and {@link GoogleMeetNativeMeetingSdk.join} then throws a precise error
  * if the required specifier is absent) rather than a half-typed blob.
  */
-export function readNativeConfig(config?: Record<string, unknown>): GoogleMeetNativeSdkConfig {
+export function ReadNativeConfig(config?: Record<string, unknown>): GoogleMeetNativeSdkConfig {
     const cfg = config ?? {};
     return {
         ProjectId: readString(cfg.ProjectId),
@@ -498,6 +521,11 @@ export function readNativeConfig(config?: Record<string, unknown>): GoogleMeetNa
         Channels: readNumber(cfg.Channels),
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
     };
+}
+
+/** @deprecated Use {@link ReadNativeConfig}. */
+export function readNativeConfig(config?: Record<string, unknown>): GoogleMeetNativeSdkConfig {
+    return ReadNativeConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */
