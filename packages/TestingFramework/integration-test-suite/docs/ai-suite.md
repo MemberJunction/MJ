@@ -28,6 +28,7 @@ All seven deterministic bundles honor the family's **anti-vacuity / loud-skip di
 | `agent-loop-standin` | 6 | ALS1–ALS6 | deterministic | server | IT46 | Deterministic |
 | `conversation-compaction` | 12 | CC1–CC12 | deterministic | server | IT30 | Deterministic |
 | `agent-decisions-switch` | 9 | DS1–DS9 | deterministic | server | IT97 | Deterministic |
+| `cloudflare-clef` | 3 | CF1–CF3 | deterministic | server | IT99 | Deterministic |
 | `prompt-runner` | 1 | PR1 | live-model | server | IT16 | Live Model |
 | `agent-runner` | 1 | AR1 | live-model | server | IT17 | Live Model |
 | `concurrent` | 2 | CC1–CC2 (bundle-prefixed `concurrent.CC*`) | live-model | server | IT18 | Live Model |
@@ -266,7 +267,7 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 
 **Machinery under test.** `decisionsEnabled`, a Loop agent-type prompt param that is `false` by default, is the master switch for an agent's own decision-model use. The bundle runs real agents end to end and shows that the five loop uses it governs (inline `decisions`, `finishIf`, decision discovery, catalog narrowing, the payload change check) ask nothing while it is off, whatever their own settings say, and that each use an agent turns on asks once while it is on; that the per-run override (`data.__agentTypePromptParams.decisionsEnabled`) flips it for one run in either direction; that the Memory Manager's note gate obeys it; and that a Flow agent's Decision step, an explicit use, ignores it. The params merge is the real one, over the Loop schema as synced to the database (DS1 pins its default).
 
-**No model calls, real everything else.** Every chat call is a scripted reply from `TestLLM` (`@memberjunction/unit-testing`), registered over the chat driver classes, and every decision call a scripted answer from `ScriptedDecision` (`src/checks/decision-test-double.ts`), registered over the decision driver classes the shipped decision prompts bind to (`LLMDecision`, `OpenRouterDecision`). The lifecycle Setup registers both and Teardown restores the real drivers and disarms the stand-in. Runs pass a placeholder API key for the chat drivers, so model selection accepts the seeded prompt's binding on a runner with no keys at all. AgentRunner, BaseAgent, the Loop type, prompt rendering, AIPromptRunner, AIDecisionRunner's candidate selection and run rows, and the Calculate Expression action are all real.
+**No model calls, real everything else.** Every chat call is a scripted reply from `TestLLM` (`@memberjunction/unit-testing`), registered over the chat driver classes, and every decision call a scripted answer from `ScriptedDecision` (`src/checks/decision-test-double.ts`), registered over the decision driver classes the shipped decision prompts can reach (`LLMDecision` and `OpenRouterDecision`, which `Default Decision` binds, and `CloudflareDecision`, whose Clef models are its power-matched fallbacks). The lifecycle Setup registers both and Teardown restores the real drivers and disarms the stand-in. Runs pass a placeholder API key for the chat drivers, so model selection accepts the seeded prompt's binding on a runner with no keys at all. AgentRunner, BaseAgent, the Loop type, prompt rendering, AIPromptRunner, AIDecisionRunner's candidate selection and run rows, and the Calculate Expression action are all real.
 
 **The script.** Turn 1: an Actions step, an inline `decisions` request and a payload change that shortens a 170-character `notes` (flagged by the payload analyzer). Turn 2: an Actions step with a `finishIf` gate. Turn 3: `taskComplete`. With the switch off the gate is ignored and the run takes three turns; with `finishIfMode: 'on'` and the switch on, the gate passes and the run ends after two. The stand-in answers every Likelihood 0.97 except the narrowing question about Get Weather (0.05), so narrowing at one action visibly hides it.
 
@@ -287,6 +288,26 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 | `agent-decisions-switch.DS7` | Per-run override `false` | the DS4 agent asks nothing and takes three turns | an override that can only turn the switch on |
 | `agent-decisions-switch.DS8` | Memory Manager note gate | with `enableDecisionGate` on: no stand-in call and no prompt run without the switch; one call and one persisted Default Decision prompt run with it on for the run | the gate reading only its own flag |
 | `agent-decisions-switch.DS9` | Flow Decision step is not gated | an in-run Flow agent with `decisionsEnabled: false` for the run completes with no chat call and one `Decision: ready_check` step linked to a Default Decision prompt run | the switch spreading to explicit uses |
+
+---
+
+## 12. `cloudflare-clef` (CF1–CF3) — Cloudflare's Clef decision models, through an HTTP stand-in
+
+**Machinery under test.** The `Clef` and `Clef-flash` models (`metadata/ai-models/.clef-models.json`), the `Cloudflare` vendor, the `CloudflareDecision` driver (`@memberjunction/ai-cloudflare`) and the System One mapping it inherits from `BaseSystemOneDecision` (`@memberjunction/ai`), from the synced metadata through `AIDecisionRunner` to the Workers AI request.
+
+**No network, real everything else.** CF3 registers `ScriptedWorkersAIDecision`, a subclass of the real `CloudflareDecision` that overrides only `SendRequest` (the driver's one network call), over the `CloudflareDecision` key for the length of the check, and restores the shipped class after it. The stand-in records each request and answers with a Workers AI response in Cloudflare's v4 envelope. The prompt, model and vendor rows, candidate selection, credential resolution (a legacy `apiKeys` entry holding `<accountId>:<apiToken>`), the URL, header and body building, the answer mapping, `BaseDecision`'s validation and the `MJ: AI Prompt Runs` row are all real.
+
+**Transport.** Server-only by necessity: the stand-in is a ClassFactory registration in the test process.
+
+**Fixtures / lifecycle.** None seeded: the models are shipped metadata, read only. Teardown deletes the prompt runs CF3 created.
+
+**Tier.** All 3 deterministic, ungated. Break-it check: with `BaseSystemOneDecision` reading Score probabilities by level name instead of level index, CF3 fails ("the Score probabilities sum to 0"); with `CloudflareDecision` sending the full APIName as the body's `model`, CF3 fails on the request body. CF1 and CF2 pass both ways.
+
+| Id | Name (abridged) | Asserted observable | Failure it catches |
+|---|---|---|---|
+| `cloudflare-clef.CF1` | Catalog rows | both models Active, type `Decision`, effective `Decision` limits 64 / 255 / 10 / 65,536; one Cloudflare Model Developer row and one Active Inference Provider row naming `CloudflareDecision`, the `@cf/cloudflare/...` APIName, 65,536 input tokens, no streaming; an active Realtime cost row at $0.24 / $0.09 per million input tokens, $0 output; the vendor's credential type is `API Key` | metadata that did not sync, a wrong driver class or APIName (the runner would build the wrong driver or call the wrong URL), wrong limits or prices |
+| `cloudflare-clef.CF2` | ClassFactory builds the driver | `CreateInstance(BaseDecision, 'CloudflareDecision', '<account>:<token>')` returns the shipped class, with the account ID read from the key | the package not registering its class, or the compound key not parsed |
+| `cloudflare-clef.CF3` | A runner call per model | `ExecuteDecision` with `override` naming the model and Cloudflare succeeds with `CloudflareDecision`; one request to `https://api.cloudflare.com/client/v4/accounts/<account>/ai/run/<APIName>` with `Bearer <token>` and body `{ model: 'clef' or 'clef-flash', state, questions }` for a Likelihood, a Choice and a Score; the answers come back mapped (Choice renormalised from 0.98, Score keyed by level name); the prompt-run row names the model, Cloudflare and Default Decision, succeeded, has the scripted input tokens and a cost priced from the cost row | a broken wire mapping, URL, token handling, envelope unwrapping or model-name derivation; the run recorded against the wrong model or vendor; a missing cost row |
 
 ---
 

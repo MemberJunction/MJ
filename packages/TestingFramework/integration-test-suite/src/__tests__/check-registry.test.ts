@@ -44,6 +44,7 @@ import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
 import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
 import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
+import { CloudflareClefChecks } from '../checks/cloudflare-clef.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
@@ -149,6 +150,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
+        ['cloudflare-clef', CloudflareClefChecks, 3], // CF1-CF3 Clef/Clef-flash metadata, driver registration, runner call through an HTTP stand-in (IT99)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
@@ -248,6 +250,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-immutability': 15,
         'class-resolution': 5,
         'client-cache': 13,
+        'cloudflare-clef': 3,
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
@@ -338,7 +341,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(98);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(99);
     });
 });
 

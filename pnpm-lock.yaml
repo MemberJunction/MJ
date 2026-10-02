@@ -15457,6 +15457,9 @@ importers:
       '@memberjunction/ai-bridge-server':
         specifier: 6.2.0-edge.1
         version: link:../../AI/RealtimeBridge/Server
+      '@memberjunction/ai-cloudflare':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Providers/Cloudflare
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.1
         version: link:../../AI/CorePlus

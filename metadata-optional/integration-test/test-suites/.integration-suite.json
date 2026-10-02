@@ -1232,6 +1232,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT99 - Cloudflare Clef Decision Models",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "65821289-4E59-4121-918A-235558EF39A8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT96 - Record Cloning",
             "Sequence": 71,
             "Status": "Active"
