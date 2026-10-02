@@ -33691,6 +33691,12 @@ export class MJContentItemChunk_ {
     ParentChunkID?: string;
         
     @Field({nullable: true}) 
+    FieldConfidence?: string;
+        
+    @Field({nullable: true, description: `Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk.`}) 
+    Decorator?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(250)
     ContentItem?: string;
         
@@ -33790,6 +33796,12 @@ export class CreateMJContentItemChunkInput {
     @Field({ nullable: true })
     ParentChunkID: string | null;
 
+    @Field({ nullable: true })
+    FieldConfidence: string | null;
+
+    @Field({ nullable: true })
+    Decorator: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -33865,6 +33877,12 @@ export class UpdateMJContentItemChunkInput {
 
     @Field({ nullable: true })
     ParentChunkID?: string | null;
+
+    @Field({ nullable: true })
+    FieldConfidence?: string | null;
+
+    @Field({ nullable: true })
+    Decorator?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -34471,6 +34489,43 @@ export class MJContentItem_ {
     DisplayLink?: string;
         
     @Field({nullable: true}) 
+    FieldConfidence?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(40)
+    ExtractionStatus?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(40)
+    SegmentationStatus?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    DeleteStatus?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ExtractorKey?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ExtractorKeyOverride?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    Modality?: string;
+        
+    @Field({nullable: true}) 
+    Date?: Date;
+        
+    @Field({nullable: true}) 
+    Decorator?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    FileID?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(255)
     ContentSource?: string;
         
@@ -34497,6 +34552,10 @@ export class MJContentItem_ {
     @Field({nullable: true}) 
     @MaxLength(250)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    File?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -34581,6 +34640,36 @@ export class CreateMJContentItemInput {
     @Field({ nullable: true })
     DisplayLink: string | null;
 
+    @Field({ nullable: true })
+    FieldConfidence: string | null;
+
+    @Field({ nullable: true })
+    ExtractionStatus?: string;
+
+    @Field({ nullable: true })
+    SegmentationStatus?: string;
+
+    @Field({ nullable: true })
+    DeleteStatus: string | null;
+
+    @Field({ nullable: true })
+    ExtractorKey: string | null;
+
+    @Field({ nullable: true })
+    ExtractorKeyOverride: string | null;
+
+    @Field({ nullable: true })
+    Modality?: string;
+
+    @Field({ nullable: true })
+    Date: Date | null;
+
+    @Field({ nullable: true })
+    Decorator: string | null;
+
+    @Field({ nullable: true })
+    FileID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -34647,6 +34736,36 @@ export class UpdateMJContentItemInput {
 
     @Field({ nullable: true })
     DisplayLink?: string | null;
+
+    @Field({ nullable: true })
+    FieldConfidence?: string | null;
+
+    @Field({ nullable: true })
+    ExtractionStatus?: string;
+
+    @Field({ nullable: true })
+    SegmentationStatus?: string;
+
+    @Field({ nullable: true })
+    DeleteStatus?: string | null;
+
+    @Field({ nullable: true })
+    ExtractorKey?: string | null;
+
+    @Field({ nullable: true })
+    ExtractorKeyOverride?: string | null;
+
+    @Field({ nullable: true })
+    Modality?: string;
+
+    @Field({ nullable: true })
+    Date?: Date | null;
+
+    @Field({ nullable: true })
+    Decorator?: string | null;
+
+    @Field({ nullable: true })
+    FileID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -35816,6 +35935,9 @@ export class MJContentSourceType_ {
     @Field({nullable: true, description: `JSON configuration blob for type-level settings. Conforms to the IContentSourceTypeConfiguration interface. Reserved for future type-wide settings shared by all sources of this type.`}) 
     Configuration?: string;
         
+    @Field(() => Boolean, {nullable: true}) 
+    SupportsMultiModal?: boolean;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -35841,6 +35963,9 @@ export class CreateMJContentSourceTypeInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    SupportsMultiModal?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -35865,6 +35990,9 @@ export class UpdateMJContentSourceTypeInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsMultiModal?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -36026,6 +36154,23 @@ export class MJContentSource_ {
     ScheduledJobID?: string;
         
     @Field({nullable: true}) 
+    FieldConfidence?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ExtractorKey?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    MultiModalEnabled?: boolean;
+        
+    @Field({nullable: true, description: `Status of the Discover stage for this source: Pending, Processing, Complete, Failed or Skipped. What makes a source ready to walk is its schedule; this records how the last walk ended.`}) 
+    @MaxLength(40)
+    DiscoveryStatus?: string;
+        
+    @Field({nullable: true, description: `When this source was last walked by the Discover stage.`}) 
+    LastDiscoveredAt?: Date;
+        
+    @Field({nullable: true}) 
     @MaxLength(255)
     ContentType?: string;
         
@@ -36109,6 +36254,21 @@ export class CreateMJContentSourceInput {
     @Field({ nullable: true })
     ScheduledJobID: string | null;
 
+    @Field({ nullable: true })
+    FieldConfidence: string | null;
+
+    @Field({ nullable: true })
+    ExtractorKey: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    MultiModalEnabled?: boolean;
+
+    @Field({ nullable: true })
+    DiscoveryStatus?: string;
+
+    @Field({ nullable: true })
+    LastDiscoveredAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -36160,6 +36320,21 @@ export class UpdateMJContentSourceInput {
 
     @Field({ nullable: true })
     ScheduledJobID?: string | null;
+
+    @Field({ nullable: true })
+    FieldConfidence?: string | null;
+
+    @Field({ nullable: true })
+    ExtractorKey?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    MultiModalEnabled?: boolean;
+
+    @Field({ nullable: true })
+    DiscoveryStatus?: string;
+
+    @Field({ nullable: true })
+    LastDiscoveredAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -36478,6 +36653,10 @@ export class MJContentType_ {
     CleanerKey?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(100)
+    ExtractorKey?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(50)
     AIModel?: string;
         
@@ -36532,6 +36711,9 @@ export class CreateMJContentTypeInput {
     @Field({ nullable: true })
     CleanerKey: string | null;
 
+    @Field({ nullable: true })
+    ExtractorKey: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -36574,6 +36756,9 @@ export class UpdateMJContentTypeInput {
 
     @Field({ nullable: true })
     CleanerKey?: string | null;
+
+    @Field({ nullable: true })
+    ExtractorKey?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

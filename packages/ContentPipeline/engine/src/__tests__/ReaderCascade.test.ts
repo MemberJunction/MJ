@@ -1,0 +1,114 @@
+import { describe, expect, it } from 'vitest';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseContentReader, ReadResult } from '@memberjunction/content-pipeline-base';
+import { SelectReader } from '../ReaderCascade.js';
+
+function reader(key: string, types: string[]) {
+    @RegisterClass(BaseContentReader, key)
+    class R extends BaseContentReader {
+        public readonly Key = key;
+        public readonly SupportedFileTypes = types;
+        public async Read(): Promise<ReadResult> {
+            return { Blocks: [] };
+        }
+    }
+    return R;
+}
+
+reader('cascade-pdf', ['pdf']);
+reader('cascade-sheet', ['xlsx', 'csv']);
+reader('cascade-html', ['html']);
+reader('cascade-any', ['*']);
+
+describe('SelectReader — rung precedence', () => {
+    it('takes an explicit override first', () => {
+        const selected = SelectReader({
+            FileType: 'pdf',
+            ExtractorKeyOverride: 'cascade-pdf',
+            SourceExtractorKey: 'cascade-any',
+        });
+        expect(selected).toMatchObject({ Key: 'cascade-pdf', From: 'Override' });
+    });
+
+    it('takes the highest-priority source candidate that supports the file type', () => {
+        const selected = SelectReader({
+            FileType: 'pdf',
+            SourceCandidates: [
+                { ExtractorKey: 'cascade-any', Priority: 1 },
+                { ExtractorKey: 'cascade-pdf', Priority: 10 },
+            ],
+        });
+        expect(selected).toMatchObject({ Key: 'cascade-pdf', From: 'SourceCandidate' });
+    });
+
+    it('falls to the source default when no candidate applies', () => {
+        const selected = SelectReader({
+            FileType: 'html',
+            SourceCandidates: [{ ExtractorKey: 'cascade-pdf', Priority: 10 }],
+            SourceExtractorKey: 'cascade-html',
+        });
+        expect(selected).toMatchObject({ Key: 'cascade-html', From: 'Source' });
+    });
+
+    it('falls to the content-type default', () => {
+        const selected = SelectReader({ FileType: 'html', ContentTypeExtractorKey: 'cascade-html' });
+        expect(selected).toMatchObject({ From: 'ContentType' });
+    });
+
+    it('falls to the built-in last rung', () => {
+        const selected = SelectReader({ FileType: 'whatever', FallbackExtractorKey: 'cascade-any' });
+        expect(selected).toMatchObject({ From: 'Fallback' });
+    });
+
+    it('returns null when nothing applies anywhere', () => {
+        expect(SelectReader({ FileType: 'pdf' })).toBeNull();
+    });
+});
+
+describe('SelectReader — non-applicable candidates fall through', () => {
+    it('skips an OVERRIDE that does not support the file type', () => {
+        // The key behaviour: a rung that cannot handle this content is not applicable, and falls
+        // through exactly as an unset rung does — rather than being selected and then failing.
+        const selected = SelectReader({
+            FileType: 'html',
+            ExtractorKeyOverride: 'cascade-pdf',
+            SourceExtractorKey: 'cascade-html',
+        });
+        expect(selected).toMatchObject({ Key: 'cascade-html', From: 'Source' });
+    });
+
+    it('skips a higher-priority candidate that does not support the file type', () => {
+        // A source holding both PDFs and spreadsheets escalates its PDFs without that reader
+        // having to handle anything else.
+        const selected = SelectReader({
+            FileType: 'xlsx',
+            SourceCandidates: [
+                { ExtractorKey: 'cascade-pdf', Priority: 100 },
+                { ExtractorKey: 'cascade-sheet', Priority: 1 },
+            ],
+        });
+        expect(selected).toMatchObject({ Key: 'cascade-sheet', From: 'SourceCandidate' });
+    });
+
+    it('skips a source default that does not support the file type', () => {
+        const selected = SelectReader({
+            FileType: 'html',
+            SourceExtractorKey: 'cascade-pdf',
+            ContentTypeExtractorKey: 'cascade-html',
+        });
+        expect(selected).toMatchObject({ From: 'ContentType' });
+    });
+
+    it('skips a key nothing registered', () => {
+        const selected = SelectReader({
+            FileType: 'pdf',
+            ExtractorKeyOverride: 'never-registered',
+            SourceExtractorKey: 'cascade-pdf',
+        });
+        expect(selected).toMatchObject({ From: 'Source' });
+    });
+
+    it('matches file type case-insensitively', () => {
+        expect(SelectReader({ FileType: 'PDF', SourceExtractorKey: 'cascade-pdf' })).not.toBeNull();
+    });
+});
