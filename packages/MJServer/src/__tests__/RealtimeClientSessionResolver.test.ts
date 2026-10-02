@@ -94,6 +94,7 @@ const { resolveStorageMock, storeRecordingMock, writeSegmentMock, deleteSegments
 const onChannelStateSaveMock = vi.fn(
     async (_agentSessionID: string, _channelName: string, stateJson: string): Promise<string> => stateJson,
 );
+const pruneSessionChannelsMock = vi.fn((_agentSessionID: string, _channelNames: ReadonlyArray<string>): string[] => []);
 // PARTIAL mock: the service + channel host are stubbed, but the PURE co-agent config module
 // (DeepMergeConfigs / ResolveEffectiveRealtimeConfig / EvaluateRuntimeOverrideAuthorization /
 // ParseRealtimeTypeConfiguration) stays REAL — the resolver's pairing/override gate is under test.
@@ -117,7 +118,7 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
         },
         RealtimeChannelServerHost: {
             get Instance() {
-                return { OnChannelStateSave: onChannelStateSaveMock };
+                return { OnChannelStateSave: onChannelStateSaveMock, PruneSessionChannels: pruneSessionChannelsMock };
             },
         },
         resolveRecordingStorageAccountID: resolveStorageMock,
@@ -3637,5 +3638,163 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
 
         expect(historyArg()).toEqual([]);
         expect(runView.mock.calls.some((c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='))).toBe(false);
+    });
+});
+
+
+describe('RealtimeClientSessionResolver — channel scoping at mint (Realtime Channels v2)', () => {
+    const okConfig = { Provider: 'openai', Model: 'm', EphemeralToken: 'ek', ExpiresAt: '2099-01-01T00:00:00Z', SessionConfig: {} };
+    const CANDIDATE = {
+        Key: 'Whiteboard',
+        DefaultAvailability: 'all-sessions',
+        DisplayPolicy: 'open-on-start',
+        MaxExposure: 'pixels',
+        ToolNamePrefix: 'Whiteboard_',
+        Tools: [{ Name: 'Whiteboard_AddNote', Description: 'Add a note', ParametersSchema: { type: 'object' } }],
+    };
+    const POLICY = {
+        Version: 1,
+        Channels: [{ Key: 'Whiteboard', DisplayPolicy: 'open-on-start', MaxExposure: 'pixels', Source: 'default' }],
+        ExcludedChannels: [{ Key: 'RemoteBrowser', Reason: 'excluded-by-config' }],
+    };
+
+    function setupStart(prepOverrides: Record<string, unknown> = {}): { created: FakeSession } {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity());
+        const created = makeSessionEntity({ ID: 'session-ch' });
+        createSessionMock.mockResolvedValue(created);
+        prepareClientSessionMock.mockResolvedValue({ Success: true, ClientConfig: okConfig, ...prepOverrides });
+        pruneSessionChannelsMock.mockClear();
+        return { created };
+    }
+
+    async function start(channelCandidatesJson?: string) {
+        const resolver = makeResolver();
+        return resolver.StartRealtimeClientSession(
+            'target-1', makeCtx(),
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined, undefined, channelCandidatesJson,
+        );
+    }
+
+    it('threads valid candidates to PrepareClientSession and returns the resolved policy as ClientPolicyJson', async () => {
+        setupStart({ ClientPolicy: POLICY });
+        const result = await start(JSON.stringify([CANDIDATE]));
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ChannelCandidates?: Array<{ Key: string }> };
+        expect(prepArg.ChannelCandidates?.map((c) => c.Key)).toEqual(['Whiteboard']);
+        expect(JSON.parse(result.ClientPolicyJson ?? 'null')).toEqual(POLICY);
+    });
+
+    it('sends no candidates and returns no policy when the caller reported none (a client that predates scoping)', async () => {
+        setupStart();
+        const result = await start(undefined);
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ChannelCandidates?: unknown };
+        expect(prepArg.ChannelCandidates).toBeUndefined();
+        expect(result.ClientPolicyJson).toBeUndefined();
+    });
+
+    it('persists the in-scope channel keys on the session config, preserving what was stamped at start', async () => {
+        const { created } = setupStart({ ClientPolicy: POLICY });
+        await start(JSON.stringify([CANDIDATE]));
+        const persisted = JSON.parse(created.Config_ as string) as { channels?: string[]; targetAgentID: string };
+        expect(persisted.channels).toEqual(['Whiteboard']);
+        expect(persisted.targetAgentID).toBe('target-1');
+    });
+
+    it('carries the config stamped at session start (the media-kit override) through the run-id rewrite', async () => {
+        const { created } = setupStart({ CoAgentRunID: 'run-1' });
+        const resolver = makeResolver();
+        // The create call receives the initial config; emulate the stored value the rewrite reads back.
+        createSessionMock.mockImplementation(async (arg: { config: string }) => {
+            created.Config_ = arg.config;
+            return created;
+        });
+        await resolver.StartRealtimeClientSession(
+            'target-1', makeCtx(),
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            '11111111-1111-4111-8111-111111111111',
+        );
+        const persisted = JSON.parse(created.Config_ as string) as { mediaCollectionID?: string; coAgentRunID?: string };
+        expect(persisted.mediaCollectionID).toBe('11111111-1111-4111-8111-111111111111');
+        expect(persisted.coAgentRunID).toBe('run-1');
+    });
+
+    it('prunes the server plugins of channels the scope excluded', async () => {
+        setupStart({ ClientPolicy: POLICY });
+        await start(JSON.stringify([CANDIDATE]));
+        expect(pruneSessionChannelsMock).toHaveBeenCalledWith('session-ch', ['RemoteBrowser']);
+    });
+
+    it('does not touch server plugins when nothing was excluded', async () => {
+        setupStart({ ClientPolicy: { Version: 1, Channels: POLICY.Channels } });
+        await start(JSON.stringify([CANDIDATE]));
+        expect(pruneSessionChannelsMock).not.toHaveBeenCalled();
+    });
+
+    it('tolerantly drops malformed, oversized and flooded candidate payloads (the session still starts)', async () => {
+        for (const payload of ['{not json', JSON.stringify({ not: 'an array' }), JSON.stringify(Array.from({ length: 33 }, (_, i) => ({ ...CANDIDATE, Key: `C${i}` }))), 'x'.repeat(300_000)]) {
+            setupStart();
+            await start(payload);
+            const prepArg = prepareClientSessionMock.mock.calls.at(-1)?.[0] as { ChannelCandidates?: unknown };
+            expect(prepArg.ChannelCandidates).toBeUndefined();
+            prepareClientSessionMock.mockClear();
+        }
+    });
+
+    it('skips an invalid candidate but keeps the valid ones', async () => {
+        setupStart();
+        await start(JSON.stringify([CANDIDATE, { Key: 'Broken', DefaultAvailability: 'sometimes' }]));
+        const prepArg = prepareClientSessionMock.mock.calls[0][0] as { ChannelCandidates?: Array<{ Key: string }> };
+        expect(prepArg.ChannelCandidates?.map((c) => c.Key)).toEqual(['Whiteboard']);
+    });
+});
+
+describe('RealtimeClientSessionResolver — save endpoints honor the session\'s resolved channel scope', () => {
+    const CHANNEL_ROW = { ID: 'channel-wb', IsActive: true };
+
+    function provider(session: FakeSession) {
+        engineChannelsMock.mockReturnValue([{ Name: 'Whiteboard', ...CHANNEL_ROW }]);
+        const newRow = makeSessionEntity({ ID: 'sc-new' });
+        return {
+            newRow,
+            provider: {
+                GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agent Session Channels' ? newRow : session)),
+                RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+            },
+        };
+    }
+
+    it('refuses to save state for a channel the session\'s scope excluded', async () => {
+        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 't', channels: ['Media'] }) });
+        const p = provider(session);
+        currentProvider = p.provider;
+        const ok = await makeResolver().SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
+        expect(ok).toBe(false);
+        expect(p.newRow.Save).not.toHaveBeenCalled();
+    });
+
+    it('saves state for an in-scope channel (case-insensitively)', async () => {
+        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 't', channels: ['whiteboard'] }) });
+        const p = provider(session);
+        currentProvider = p.provider;
+        const ok = await makeResolver().SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
+        expect(ok).toBe(true);
+    });
+
+    it('an unscoped session (no persisted channels) allows any channel, as before', async () => {
+        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 't' }) });
+        const p = provider(session);
+        currentProvider = p.provider;
+        const ok = await makeResolver().SaveSessionChannelState('session-1', 'Whiteboard', '{}', makeCtx());
+        expect(ok).toBe(true);
+    });
+
+    it('refuses to save an artifact for an out-of-scope channel with a structured failure', async () => {
+        const session = makeSessionEntity({ Config_: JSON.stringify({ targetAgentID: 't', channels: ['Media'] }) });
+        const p = provider(session);
+        currentProvider = p.provider;
+        const result = await makeResolver().SaveSessionChannelArtifact('session-1', 'Whiteboard', 'Board', '{}', makeCtx());
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('not in session');
     });
 });

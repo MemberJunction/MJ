@@ -45,6 +45,11 @@
 // Type-only import from the pure @memberjunction/ai model layer — erased at runtime, so the
 // module keeps its framework-free / pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
+import {
+    AccumulateRealtimeChannelsConfig,
+    type RealtimeChannelDisplayPolicy,
+    type RealtimeChannelsConfig,
+} from '@memberjunction/ai-core-plus';
 
 /**
  * The MJ Authorization name that gates RUNTIME overrides on realtime session start:
@@ -327,6 +332,20 @@ export interface RealtimeConfigSection {
     directActionNames?: string[];
     /** Shorthand / flat alias: timeout for direct action execution in milliseconds. */
     directActionTimeoutMs?: number;
+    /**
+     * Which interactive channels the session gets, and how they are configured — the agent and app
+     * layers of channel scoping (the channel's code default sits beneath them; a host-declared channel
+     * is a default beneath them too). `include` turns a channel ON (the only way to get an `'opt-in'`
+     * one), `exclude` turns it OFF (a hard veto a host cannot lift), `config` is per-channel opaque
+     * configuration and `displayPolicy` a per-channel display override.
+     *
+     * Like `allowedAgents` this is ACCUMULATED across layers rather than array-replaced — a channel's
+     * on/off decision belongs to the most specific layer that mentions that channel, so an app's
+     * `exclude: ['Media']` must not erase the agent's `exclude: ['RemoteBrowser']`
+     * (see {@link AccumulateRealtimeChannelsConfig}). {@link ResolveEffectiveRealtimeConfig} populates
+     * this with the accumulated result.
+     */
+    channels?: RealtimeChannelsConfig;
 }
 
 /**
@@ -602,7 +621,23 @@ export function ResolveEffectiveRealtimeConfig(
         config.realtime.allowedAgents = allowed;
     }
 
+    // channels: accumulated per channel across all layers for the same reason — each layer's
+    // include/exclude is a decision about individual channels, not a replaceable list.
+    const channels = AccumulateRealtimeChannelsConfig(
+        [typeLayer, agentLayer, targetLayer, appLayer, overrideLayer].map(layer => realtimeSectionOf(layer)?.['channels'])
+    );
+    if (channels) {
+        config.realtime = config.realtime ?? {};
+        config.realtime.channels = channels;
+    }
+
     return config;
+}
+
+/** The raw `realtime` section of a parsed layer, or `undefined` when the layer has none. */
+function realtimeSectionOf(layer: JSONObjectLike | null | undefined): JSONObjectLike | undefined {
+    const section = layer?.['realtime'];
+    return isPlainObject(section) ? section : undefined;
 }
 
 /** Why something in an override payload will not survive {@link ResolveEffectiveRealtimeConfig}. */
@@ -645,6 +680,7 @@ const REALTIME_SECTION_KEY_ACCEPTS: { readonly [K in keyof Required<RealtimeConf
     turnTaking: isPlainObject,
     disclosure: (v) => v === 'silent' || v === 'mention' || v === 'hand-voice',
     allowedAgents: (v) => Array.isArray(v),
+    channels: isPlainObject,
     session: isPlainObject,
     directActions: isPlainObject,
     allowDirectActionInvocation: (v) => typeof v === 'boolean',
@@ -836,6 +872,13 @@ export function BuildAppRealtimeOverridesJson(
         Disclosure?: RealtimeDisclosurePolicy | null;
         Persona?: { Tone?: string | null; SpeakingStyle?: string | null } | null;
         ModelPreference?: string | null;
+        /** `AgentSettings.Realtime.Channels` — the app's channel scoping (see {@link RealtimeConfigSection.channels}). */
+        Channels?: {
+            Include?: string[] | null;
+            Exclude?: string[] | null;
+            Config?: Record<string, JSONObjectLike> | null;
+            DisplayPolicy?: Record<string, RealtimeChannelDisplayPolicy> | null;
+        } | null;
     } | null,
     relevantAgents?: RealtimeAllowedAgent[] | null
 ): string | null {
@@ -863,8 +906,33 @@ export function BuildAppRealtimeOverridesJson(
     if (relevantAgents && relevantAgents.length > 0) {
         realtime.allowedAgents = relevantAgents;
     }
+    const channels = mapAppChannels(appRealtime?.Channels);
+    if (channels) {
+        realtime.channels = channels;
+    }
 
     return Object.keys(realtime).length > 0 ? JSON.stringify({ realtime }) : null;
+}
+
+/**
+ * Maps the app's PascalCase `AgentSettings.Realtime.Channels` block onto the cascade's lower-case
+ * `channels` section. Wrong-typed members are dropped (the shared normalizer does the checking), and
+ * a block that contributes nothing yields `undefined` so the cascade is not given an empty section.
+ */
+function mapAppChannels(
+    channels: NonNullable<Parameters<typeof BuildAppRealtimeOverridesJson>[0]>['Channels']
+): RealtimeChannelsConfig | undefined {
+    if (!channels) {
+        return undefined;
+    }
+    return AccumulateRealtimeChannelsConfig([
+        {
+            include: channels.Include ?? undefined,
+            exclude: channels.Exclude ?? undefined,
+            config: channels.Config ?? undefined,
+            displayPolicy: channels.DisplayPolicy ?? undefined,
+        },
+    ]);
 }
 
 /** Normalizes a merged raw config object into the typed, sanity-checked shape. */

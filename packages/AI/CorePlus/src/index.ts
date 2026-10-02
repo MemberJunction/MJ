@@ -18,6 +18,11 @@ export * from './agent-decisions';
 export * from './agent-run-steps';
 export * from './app-context';
 export * from './client-tool-resolver';
+export * from './agent-settings';
+export * from './json-schema-subset';
+export * from './realtime-channel-descriptor';
+export * from './realtime-channel-scope';
+export * from './realtime-session-policy';
 export * from './artifact-tool-library';
 
 export * from './MJAIPromptEntityExtended';

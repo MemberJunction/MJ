@@ -1,23 +1,27 @@
 /**
- * App-scoped agent configuration.
+ * @fileoverview The package-side mirror of `Application.AgentSettings` and a tolerant parser for it.
  *
- * Stored as a JSON object in the `AgentSettings` column of the `Applications` entity.
- * CodeGen emits a strongly-typed `AgentSettingsObject` accessor on `ApplicationEntity`
- * that returns `IAgentSettings | null`.
+ * `Application.AgentSettings` is a JSONType column: its shape is authored in
+ * `metadata/entities/JSONType-interfaces/IAgentSettings.ts` and CodeGen copies that text into the
+ * entity layer as the typed `AgentSettingsObject` accessor. That copy is regenerated only when a
+ * CodeGen pass runs, so a field added to the interface is invisible to code that reads the
+ * generated accessor until then.
  *
- * Read by the conversations default-agent resolver (for the app's default/lead agent)
- * and by the realtime co-agent cascade (relevant agents, app-scoped client tools, and
- * realtime persona/disclosure overrides). Every field is optional — an app opts into
- * exactly what it needs.
+ * Runtime code therefore reads the **raw column** through {@link ParseAgentSettings} and this
+ * mirror instead — the new field works the moment the code that reads it ships, and a routine
+ * `mj sync push` + `mj codegen` later refreshes the generated copy without anything depending on it.
  *
- * Disclosure values ('silent' | 'mention' | 'hand-voice') mirror the RealtimeDisclosurePolicy
- * union declared in @memberjunction/ai-agents.
+ * **Lockstep contract.** {@link IAgentSettings} is the metadata interface, field for field. Edit
+ * both in the same commit; a reviewer should be able to diff the two bodies and see no difference.
  *
- * **Lockstep contract**: this interface is mirrored, field for field, by `IAgentSettings` in
- * `packages/AI/CorePlus/src/agent-settings.ts` (`@memberjunction/ai-core-plus`). Runtime code parses
- * the column with that mirror (`ParseAgentSettings`) rather than the CodeGen-generated
- * `AgentSettingsObject` accessor, so a field added here is usable at runtime before CodeGen next
- * regenerates the inline copy. Edit both in the same commit.
+ * @module @memberjunction/ai-core-plus
+ */
+
+import { IsPlainObject } from '@memberjunction/global';
+
+/**
+ * App-scoped agent configuration, stored as JSON in the `AgentSettings` column of `MJ: Applications`.
+ * Every field is optional — an app opts into exactly what it needs.
  */
 export interface IAgentSettings {
     /** The app's default/lead agent (conversational default AND realtime lead identity). Agent ID. */
@@ -85,4 +89,45 @@ export interface IAgentSettings {
             DisplayPolicy?: { [channelKey: string]: 'open-on-start' | 'on-demand' | 'headless' } | null;
         } | null;
     } | null;
+}
+
+/**
+ * Tolerantly parses the raw `AgentSettings` column.
+ *
+ * Returns `null` — never throws — for an absent, blank, malformed or non-object payload, because an
+ * app with no usable settings is simply an app with no app layer. Members of the right *container*
+ * type are passed through untouched (this is a typed view of stored JSON, not a validator): the
+ * consumers that interpret a member (`NormalizeRealtimeChannelsConfig`, the client-tool resolver)
+ * each re-validate what they read, so a hand-edited column degrades per-field instead of per-app.
+ *
+ * Arrays-valued members that arrive as a different type are dropped rather than coerced, so
+ * `settings.ClientTools` is always either absent or an array.
+ *
+ * @param json The raw column value (a JSON string), or `null`/`undefined`.
+ * @returns The parsed settings, or `null` when there are none.
+ */
+export function ParseAgentSettings(json: string | null | undefined): IAgentSettings | null {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+        return null;
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(json);
+    } catch {
+        return null;
+    }
+    if (!IsPlainObject(parsed)) {
+        return null;
+    }
+    const settings: IAgentSettings = { ...(parsed as IAgentSettings) };
+    if (settings.RelevantAgents !== undefined && !Array.isArray(settings.RelevantAgents)) {
+        delete settings.RelevantAgents;
+    }
+    if (settings.ClientTools !== undefined && !Array.isArray(settings.ClientTools)) {
+        delete settings.ClientTools;
+    }
+    if (settings.Realtime !== undefined && settings.Realtime !== null && !IsPlainObject(settings.Realtime)) {
+        delete settings.Realtime;
+    }
+    return settings;
 }

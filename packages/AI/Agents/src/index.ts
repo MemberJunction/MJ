@@ -79,6 +79,7 @@ export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-vendor-resolution';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-channel-server-host';
+export * from './realtime/realtime-channel-policy';
 export * from './realtime/whiteboard-channel-server';
 export * from './realtime/client-context-channel-server';
 export * from './realtime/meeting-controls-state';
