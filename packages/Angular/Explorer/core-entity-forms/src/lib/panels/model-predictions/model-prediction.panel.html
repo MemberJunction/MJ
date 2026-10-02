@@ -15,19 +15,19 @@
     <!-- Active prediction cards -->
     @if (Cards.length > 0) {
       <div class="mpp-cards">
-        @for (card of Cards; track card.bindingId) {
+        @for (card of Cards; track card.BindingId) {
           <div class="mpp-card">
 
             <!-- Header: label + provenance + history button -->
             <div class="mpp-card-head">
               <div class="mpp-head-left">
-                <div class="mpp-label">{{ card.label }}</div>
+                <div class="mpp-label">{{ card.Label }}</div>
                 <div class="mpp-provenance">
                   <i class="fa-solid fa-diagram-project mpp-prov-icon" aria-hidden="true"></i>
-                  <span>{{ card.provenance }}</span>
-                  @if (card.lastScored) {
+                  <span>{{ card.Provenance }}</span>
+                  @if (card.LastScored) {
                     <span class="mpp-dot" aria-hidden="true">·</span>
-                    <span class="mpp-scored">Scored {{ card.lastScored }}</span>
+                    <span class="mpp-scored">Scored {{ card.LastScored }}</span>
                   }
                 </div>
               </div>
@@ -41,30 +41,30 @@
 
             <!-- Value -->
             <div class="mpp-value-row">
-              <span class="mpp-value" [class.mpp-value-muted]="card.displayValue === '—'">
-                {{ card.displayValue }}
+              <span class="mpp-value" [class.mpp-value-muted]="card.DisplayValue === '—'">
+                {{ card.DisplayValue }}
               </span>
-              @if (card.statusLabel) {
-                <span class="mpp-status-badge" [class]="'mpp-badge-' + card.badgeColor">
-                  @if (card.badgeIcon) {
-                    <i [class]="'fa-solid ' + card.badgeIcon"></i>
+              @if (card.StatusLabel) {
+                <span class="mpp-status-badge" [class]="'mpp-badge-' + card.BadgeColor">
+                  @if (card.BadgeIcon) {
+                    <i [class]="'fa-solid ' + card.BadgeIcon"></i>
                   }
-                  <span>{{ card.statusLabel }}</span>
+                  <span>{{ card.StatusLabel }}</span>
                 </span>
               }
             </div>
 
             <!-- Probability gauge — semantic color matching outcome polarity -->
-            @if (card.isProbability) {
+            @if (card.IsProbability) {
               <div class="mpp-gauge" role="img"
-                   [attr.aria-label]="card.label + ' ' + card.displayValue + (card.statusLabel ? ', ' + card.statusLabel : '')">
+                   [attr.aria-label]="card.Label + ' ' + card.DisplayValue + (card.StatusLabel ? ', ' + card.StatusLabel : '')">
                 <div class="mpp-gauge-track">
                   <div class="mpp-gauge-fill"
-                       [class.mpp-band-low]="card.band === 'low'"
-                       [class.mpp-band-mid]="card.band === 'mid'"
-                       [class.mpp-band-high]="card.band === 'high'"
-                       [class]="'mpp-color-' + card.badgeColor"
-                       [style.width.%]="card.gaugePct"></div>
+                       [class.mpp-band-low]="card.Band === 'low'"
+                       [class.mpp-band-mid]="card.Band === 'mid'"
+                       [class.mpp-band-high]="card.Band === 'high'"
+                       [class]="'mpp-color-' + card.BadgeColor"
+                       [style.width.%]="card.GaugePct"></div>
                 </div>
                 <div class="mpp-gauge-scale">
                   <span>0%</span>
@@ -75,17 +75,17 @@
             }
 
             <!-- Top drivers (feature importance) — omitted cleanly when unavailable -->
-            @if (card.drivers.length > 0) {
+            @if (card.Drivers.length > 0) {
               <div class="mpp-drivers">
                 <div class="mpp-drivers-title">
                   <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
                   Top drivers
                 </div>
-                @for (driver of card.drivers; track driver.name) {
+                @for (driver of card.Drivers; track driver.name) {
                   <div class="mpp-driver">
                     <span class="mpp-driver-name" [title]="driver.name">{{ driver.name }}</span>
                     <span class="mpp-driver-bar-track">
-                      <span class="mpp-driver-bar-fill" [style.width.%]="driver.relativePct"></span>
+                      <span class="mpp-driver-bar-fill" [style.width.%]="driver.RelativePct"></span>
                     </span>
                   </div>
                 }
@@ -137,7 +137,7 @@
                           class="mpp-filter-pill" 
                           [class.active]="SelectedModelId === mod.modelId"
                           (click)="SelectModelFilter(mod.modelId)">
-                    {{ mod.modelName }} ({{ mod.count }})
+                    {{ mod.ModelName }} ({{ mod.count }})
                   </button>
                 }
               </div>
@@ -158,23 +158,23 @@
                 <tbody>
                   @for (item of FilteredHistory; track item.id) {
                     <tr class="mpp-history-row" [class.expanded]="ExpandedHistoryItemId === item.id">
-                      <td class="mpp-col-date">{{ item.formattedTime }}</td>
+                      <td class="mpp-col-date">{{ item.FormattedTime }}</td>
                       <td class="mpp-col-model">
-                        <div class="mpp-history-model-name">{{ item.modelName }}</div>
-                        <div class="mpp-history-model-prov">{{ item.provenance }}</div>
+                        <div class="mpp-history-model-name">{{ item.ModelName }}</div>
+                        <div class="mpp-history-model-prov">{{ item.Provenance }}</div>
                       </td>
                       <td class="mpp-col-pred">
                         <div class="mpp-pred-cell">
-                          <span class="mpp-history-pred-val">{{ item.displayValue }}</span>
-                          @if (item.predictedClass && item.numericValue != null && item.isProbability) {
-                            <span class="mpp-history-pred-sub">({{ (item.numericValue * 100) | number:'1.0-1' }}%)</span>
+                          <span class="mpp-history-pred-val">{{ item.DisplayValue }}</span>
+                          @if (item.PredictedClass && item.NumericValue != null && item.IsProbability) {
+                            <span class="mpp-history-pred-sub">({{ (item.NumericValue * 100) | number:'1.0-1' }}%)</span>
                           }
-                          @if (item.statusLabel) {
-                            <span class="mpp-status-badge mpp-badge-sm" [class]="'mpp-badge-' + item.badgeColor">
-                              @if (item.badgeIcon) {
-                                <i [class]="'fa-solid ' + item.badgeIcon"></i>
+                          @if (item.StatusLabel) {
+                            <span class="mpp-status-badge mpp-badge-sm" [class]="'mpp-badge-' + item.BadgeColor">
+                              @if (item.BadgeIcon) {
+                                <i [class]="'fa-solid ' + item.BadgeIcon"></i>
                               }
-                              <span>{{ item.statusLabel }}</span>
+                              <span>{{ item.StatusLabel }}</span>
                             </span>
                           }
                         </div>
@@ -204,20 +204,20 @@
                       <tr class="mpp-history-detail-row">
                         <td colspan="5">
                           <div class="mpp-history-detail-pane">
-                            @if (item.errorMessage) {
+                            @if (item.ErrorMessage) {
                               <div class="mpp-detail-error">
-                                <strong>Error:</strong> {{ item.errorMessage }}
+                                <strong>Error:</strong> {{ item.ErrorMessage }}
                               </div>
                             }
-                            @if (item.drivers.length > 0) {
+                            @if (item.Drivers.length > 0) {
                               <div class="mpp-detail-drivers">
                                 <div class="mpp-detail-subtitle"><i class="fa-solid fa-ranking-star"></i> Attributed Drivers</div>
                                 <div class="mpp-detail-driver-list">
-                                  @for (d of item.drivers; track d.name) {
+                                  @for (d of item.Drivers; track d.name) {
                                     <div class="mpp-detail-driver-item">
                                       <span class="mpp-driver-name">{{ d.name }}</span>
                                       <span class="mpp-driver-bar-track">
-                                        <span class="mpp-driver-bar-fill" [style.width.%]="d.relativePct"></span>
+                                        <span class="mpp-driver-bar-fill" [style.width.%]="d.RelativePct"></span>
                                       </span>
                                     </div>
                                   }
@@ -226,7 +226,7 @@
                             }
                             <div class="mpp-detail-payload">
                               <div class="mpp-detail-subtitle"><i class="fa-solid fa-file-code"></i> Result Payload</div>
-                              <pre class="mpp-payload-pre">{{ item.rawPayload | json }}</pre>
+                              <pre class="mpp-payload-pre">{{ item.RawPayload | json }}</pre>
                             </div>
                           </div>
                         </td>

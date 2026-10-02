@@ -114,6 +114,41 @@ This is why a page reload, a server restart, or the submitting run ending no lon
 and it is also why **cost cannot be totalled during the run** (see [Cost and
 tokens](#cost-and-tokens-the-seam)).
 
+### When a Flow agent runs in-process instead
+
+Dispatch is the default for a **top-level** Flow agent run. It is wrong for a caller that needs
+the workflow's result as part of its own work, because a dispatched run returns before any step has
+run. Those runs walk the flow in-process and return the final payload, as Flow agents did in 5.x:
+
+| The run | Where it executes | Why |
+|---|---|---|
+| Top-level, no option set | Dispatcher | Survives reloads and restarts; nobody is waiting on the payload |
+| Has a `parentRun` (a sub-agent step, including a Sub-Agent task inside a dispatched graph) | In-process | The calling run consumes the result |
+| `agentTypeParams.executionMode: 'inRun'` | In-process | The caller, such as an API handler, must answer with the payload |
+| Has a `parentRun` **and** `executionMode: 'dispatch'` | Refused | The parent would continue before any work had happened |
+
+```typescript
+const params: ExecuteAgentParams<MyContext, MyPayload, FlowAgentExecuteParams> = {
+    agent: flowAgent,
+    conversationMessages,
+    contextUser,
+    agentTypeParams: { executionMode: 'inRun' },
+};
+const result = await new AgentRunner().RunAgent(params);   // result.payload is the flow's final payload
+```
+
+The choice is recorded on the run as a completed `Decision` step named **"Workflow runs in this
+run"** or **"Workflow runs on the task-graph dispatcher"**, with the reason in its output data.
+
+What in-process execution gives up is exactly what dispatch adds: the steps live only as long as
+the run, they appear as ordinary `AIAgentRunStep` rows rather than `Task` rows, and a `Human` step
+is not supported. `startAtStep` works in-process and is refused under dispatch.
+
+Both modes choose outgoing paths with the same function (`SelectOutgoingEdges`), so a flow takes the
+same branches either way. One consequence differs from 5.x in both modes: a path whose destination
+step is not `Active` is not followed, so a flow whose only satisfied path leads to a disabled step
+now finishes with **Success** where 5.x reported *"No active steps found"*.
+
 ---
 
 ## The seven node kinds
@@ -232,9 +267,13 @@ graph LR
 
 ### The mapping dialect
 
-Both the in-run walker and the dispatcher call **one shared implementation**
+The dispatcher and BaseAgent's loop helpers call **one shared implementation**
 (`@memberjunction/ai-core-plus` → `payload-mapping.ts`). Two implementations would diverge exactly
 where the compile is supposed to be lossless.
+
+The in-run walker's Action step mappings are still the 5.x code in `FlowAgentType`
+(`PreProcessActionStep`, `applyActionOutputMapping`). They accept the same forms below, but they are
+a separate implementation, so a mapping bug fixed in one is not automatically fixed in the other.
 
 **Input values** — a literal unless prefixed (prefix matching is case-insensitive):
 

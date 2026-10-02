@@ -13,6 +13,7 @@ export * from "./generic/queryResultEnricher";
 export * from "./generic/interfaces";
 export * from "./generic/scoring/ReciprocalRankFusion";
 export * from "./generic/baseEntity";
+export * from "./generic/remoteEventRow";
 export * from "./generic/entityTransactionScope";
 export * from "./generic/entityCompanion";
 export * from "./generic/entitySavePlan";

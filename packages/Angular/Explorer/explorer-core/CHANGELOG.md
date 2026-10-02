@@ -1,5 +1,437 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 307da67: Make the Chat cross-entity search panel reachable and usable in Explorer.
+
+  `SearchPanelComponent` (search across conversations, messages, artifacts, collections
+  and tasks) was only ever rendered by `ConversationWorkspaceComponent`, which has no
+  consumers anywhere in the repo — Explorer composes the chat UI from resource wrappers
+  instead. The panel therefore never mounted, leaving the feature with no route to it from
+  any shipped surface. `ChatConversationsResourceComponent` now renders it.
+
+  The entry point is an escalation row beneath the conversation list, shown only while the
+  list's own filter is active: "Search all of Chat for …". It carries the term the user has
+  already typed into the panel, so the two scopes read as one continuum rather than two
+  identical-looking search boxes offering different reach. `mj-conversation-list` emits the
+  new `SearchEscalated` output rather than routing itself, per the widget layer's event
+  contract, and `SearchPanelComponent` accepts the term via a new `InitialQuery` input.
+  Ctrl+K is deliberately not the shortcut: Explorer's global command palette already owns it.
+
+  Search shows only what the user can already see:
+  - **Conversations and messages** match only the conversations the conversation list shows:
+    owned by the user or shared with them, not archived, and Global or Both scope. The rule
+    lives in the new `ConversationEngine.GetVisibleConversationsFilter`, which
+    `LoadConversations` also uses, so the list and search cannot drift apart. Unlike the list
+    load, it has no row cap.
+  - **Artifacts** match only artifacts the user can read, by the same rule as opening one:
+    owner, else an explicit grant, else a read grant on a collection that holds it. The rule
+    lives in the new `ArtifactPermissionService.GetReadableArtifactsFilter`.
+
+  Several defects made the surface look wired up while returning nothing:
+  - **Message search could never match.** The filter named `vwConversations` in a subquery,
+    unqualified, but the SQL login's default schema is `dbo`, so it resolved to nothing and the
+    query errored. Every sub-search reports failure as `return []`, so a hard SQL error and
+    "no matches" rendered identically. Message search now reads the visible conversation IDs
+    first, then filters messages by `ConversationID IN (...)`, so each filter names only its
+    own entity's columns and works on SQL Server and PostgreSQL.
+  - **Artifact results did not open.** Routing branched on `collectionId` then
+    `conversationId`, but the artifact mapper only ever sets `collectionId` — so an
+    artifact in no collection matched neither branch and the click did nothing. Artifacts
+    need no parent; `NavigationService.OpenArtifact` opens one directly.
+  - **Results did not render until an unrelated DOM event.** The emission does not reliably
+    schedule a change-detection pass, so results landed on the component while the panel
+    kept painting the previous state until a click or keypress triggered the next one.
+  - **Quadratic work per keystroke.** `isResultSelected()` is bound once per row and rebuilt
+    a flat array of every result on each call; the flat list is now cached per emission.
+  - **Focus theft.** `ngOnChanges` fired for every input, so a `currentUser` or
+    `environmentId` re-emit while the panel was open pulled focus out of whatever field the
+    user was in. Replaced with a setter keyed on the open transition.
+  - **The search icon escaped its input.** Explorer's app-wide `_shared-patterns.scss`
+    absolutely-positions any bare `.search-icon` and pairs that with a `padding-left` scoped
+    to three wrapper classes this panel does not use, so the icon positioned against the
+    overlay while the input slid into its vacated flex slot.
+
+  Also exports the `SearchResult` / `SearchResultType` types from
+  `@memberjunction/ng-conversations` — they are the payload of
+  `SearchPanelComponent.ResultSelected`, so consumers previously could not type a handler for it.
+
+- f78fd63: Ctrl/Cmd+/ opens the command palette, and the whiteboard's Sees dropdown closes on an
+  outside click.
+
+  Two components declared the same host event twice, silently disabling a handler. Angular
+  collects host listeners into an object keyed by event name, so a second `@HostListener`
+  for the same event **replaces** the first — no build error, no warning.
+  - `ShellComponent` declared `document:keydown` twice; the surviving handler did not
+    handle the command-palette chord, so Ctrl/Cmd+/ never fired for the entire life of
+    the feature.
+  - `RealtimeWhiteboardHostComponent` had the same bug for `document:click`, killing the
+    Sees dropdown's outside-click dismissal.
+
+  Both packages get a source-level guard test, because a behavioural test can only observe
+  the surviving handler — it cannot see that a second declaration clobbered the first.
+
+  With the chord live, Ctrl/Cmd+/ no longer collides with places that already used it:
+  - The shell leaves the chord to an element that already handled it, so Ctrl/Cmd+/ in a
+    code editor toggles a comment without also opening the palette.
+  - Component Studio's shortcuts panel opens with `?` only, and Data Explorer's `/` filter
+    shortcut ignores Ctrl/Cmd+/.
+
+  The palette could not be opened before, so two of its own bugs are fixed with it:
+  - It lists only the user's own apps — the same list Home, the app switcher and the
+    omnibar show — instead of every app in the system.
+  - Its search row, now "Search everything", opens Search Results; nothing handled its
+    event before. It shows only while the chrome shows search (`Shell.SearchBar.Enabled`),
+    like the header search.
+
+- 6aa41c7: Opening a saved view in its own tab no longer freezes Explorer.
+
+  `NavigationService.OpenView` stores the prefixed resource type (`MJ: User Views`) in the tab configuration. The loaded view component carries the stored ResourceType row name (`User Views`). `syncTabsWithConfiguration` compared the two exactly, so it saw every configuration emission as a content change. It then tore the tab down and reloaded it, and that reload emitted again, so the page never yielded.
+
+  The reload check now uses `TabContainerComponent.IsSameResourceType`, which ignores case and the `MJ: ` prefix. This is the same rule `findResourceTypeTolerant` already used to resolve the type. A tab that points at a different view or a different type still reloads.
+
+  Dynamic views (`NavigationService.OpenDynamicView`, e.g. `#Accounts` from the omnibar) all share the record ID `'dynamic'`, so the reload check now also compares the tab's `Entity`: opening `#Contacts` into a tab showing `#Accounts` reloads it instead of retitling the tab over the Accounts grid. `ComponentCacheManager` folds the entity into its key for the `'dynamic'` marker too, as it already did for an empty record ID. Without that, every dynamic view in an app shared one cache entry, so the reload was handed back the Accounts component it had just detached, and closing a dynamic tab left its component to be reused by the next dynamic view of any entity.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- 8a26af6: The My Profile dialog fits the screen and scrolls.
+
+  `ProfileDialogService` opens the dialog with a width and no height, so `.mj-dialog-container` is
+  `height: auto` with `max-height: 90vh`, and the boxes between it and the card are shrinkable flex
+  items. That already bounded the card at 90vh. What it could not bound was `.mj-profile__main`: the
+  card was `display: block`, so `__main`'s `height: 100%` had no definite height to resolve against,
+  computed to `auto`, and grew to its full content. The card's `overflow: hidden` then clipped the
+  bottom of it — the notification channels, the footer, Sign out — with nothing left to scroll.
+
+  The fix is a flex chain. The card is now a flex column, `.mj-profile__main` takes `flex: 1;
+min-height: 0` in place of `height: 100%`, and one new `.mj-profile__scroll` region (`flex: 1;
+min-height: 0; overflow-y: auto`) wraps the field list and the Command Palette and Notifications
+  sections. The hero, avatar, identity and footer hold their size, the footer stays pinned, and only
+  the settings rows scroll. The sections no longer scroll on their own: as two peer scrollers they
+  split the leftover height, each shrank to its padding on a short window, and Sign out went out of
+  reach again. With one region the only floor left is the fixed parts themselves — hero, avatar,
+  identity and footer — so the footer clips only on a window shorter than roughly 335px.
+
+  The card also caps itself at `max-height: 100dvh` (`100vh` first as the fallback), but that is only
+  a backstop. On desktop it never binds, because the container's 90vh is tighter. It can bind on a
+  phone, where the dialog forces the container to `height: 100vh` and a dynamic browser toolbar can
+  make `100dvh` shorter.
+
+  This is the same failure #4351 fixed for the user menu, one layer out: that was the dropdown under
+  the avatar, this is the dialog it opens.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [beacbb2]
+- Updated dependencies [520bd09]
+- Updated dependencies [2d4bf8d]
+- Updated dependencies [307da67]
+- Updated dependencies [d67c8c0]
+- Updated dependencies [f78fd63]
+- Updated dependencies [62e9e2d]
+- Updated dependencies [67f6c85]
+- Updated dependencies [62f0ebc]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [9845c00]
+- Updated dependencies [db975fa]
+- Updated dependencies [920bef8]
+- Updated dependencies [e2fa695]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ng-dashboards@6.2.0-edge.1
+  - @memberjunction/ng-query-viewer@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.1
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.1
+  - @memberjunction/ng-conversations@6.2.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.1
+  - @memberjunction/ng-base-forms@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/export-engine@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/interactive-component-types@6.2.0-edge.1
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.1
+  - @memberjunction/ng-artifacts@6.2.0-edge.1
+  - @memberjunction/ng-auth-services@6.2.0-edge.1
+  - @memberjunction/ng-base-application@6.2.0-edge.1
+  - @memberjunction/ng-composer@6.2.0-edge.1
+  - @memberjunction/ng-container-directives@6.2.0-edge.1
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.1
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.1
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.1
+  - @memberjunction/ng-export-service@6.2.0-edge.1
+  - @memberjunction/ng-feedback@6.2.0-edge.1
+  - @memberjunction/ng-file-storage@6.2.0-edge.1
+  - @memberjunction/ng-list-detail-grid@6.2.0-edge.1
+  - @memberjunction/ng-list-management@6.2.0-edge.1
+  - @memberjunction/ng-markdown@6.2.0-edge.1
+  - @memberjunction/ng-mj-livekit-room@6.2.0-edge.1
+  - @memberjunction/ng-notifications@6.2.0-edge.1
+  - @memberjunction/ng-react@6.2.0-edge.1
+  - @memberjunction/ng-record-changes@6.2.0-edge.1
+  - @memberjunction/ng-search@6.2.0-edge.1
+  - @memberjunction/ng-shared@6.2.0-edge.1
+  - @memberjunction/ng-shared-generic@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+  - @memberjunction/ng-user-avatar@6.2.0-edge.1
+  - @memberjunction/ng-word-cloud@6.2.0-edge.1
+  - @memberjunction/theme-engine@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+  - @memberjunction/ng-record-selector@6.2.0-edge.1
+  - @memberjunction/ng-record-tags@6.2.0-edge.1
+  - @memberjunction/entity-communications-client@6.2.0-edge.1
+  - @memberjunction/templates-base-types@6.2.0-edge.1
+  - @memberjunction/ng-generic-dialog@6.2.0-edge.1
+  - @memberjunction/ng-pagination@6.2.0-edge.1
+  - @memberjunction/lists-base@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- d122a41: DOM-grounded selection and replay scripts for Computer Use tests.
+
+  A Computer Use test currently pays full vision-model price on every run, re-deriving
+  the same sequence of clicks against a build that changed nothing it touches. This makes
+  the first passing run _compile_ a replay script that later runs _execute_ through the
+  same browser adapter — no screenshots, no model calls — with the model returning only
+  when replay stops working, which is exactly when a fresh derivation is worth paying for.
+
+  **DOM selection.** Element grounding hands the model an indexed list of the page's
+  interactive elements (role, accessible name, selector) so it acts by index instead of by
+  coordinate; a recorded target is then the element the model actually chose rather than
+  where its bounding box happened to be. `resolveActionLocator` narrows an ambiguous
+  selector to a single locator before acting — preferring visible matches, then the
+  smallest by area, which for a `:has-text()` ancestor chain is the element the model
+  meant. A multi-match is a guaranteed strict-mode throw today (and worse than a lost
+  click: the page does not change, so the loop detector ends the run as `LoopDetected`), so
+  disambiguating cannot regress any action that currently works.
+
+  **Replay.** Each step carries a multi-signal locator (selector primary; role + name as
+  the heal fallback), a fail-fast precondition, and a postcondition that confirms the step
+  advanced the page the way the recording did. Scripts are keyed by build hash, app
+  version, and goal hash: an exact build match replays with no healing expected, any
+  mismatch replays with healing, and a changed goal falls back to the model. Variable
+  _values_ are never stored — recording tokenizes them to `%name%` and replay substitutes
+  fresh values — so a script holds no credentials and stays valid when the values change.
+  A replayed run is scored by deterministic goal postconditions distilled from the passing
+  run, not by a model verdict, which is what keeps the tier free.
+
+  **Storage.** Scripts live in the test row, at `Configuration.ReplayScript` on
+  `MJ: Tests`. That column already exists, so there is **no migration** — this registers
+  JSONType metadata on it (`ITestConfiguration`, alongside the ~20 JSONType columns already
+  registered this way) and CodeGen emits a typed `ConfigurationObject` accessor. Reads are
+  free because the TestingEngine already caches the entity. `ITestConfiguration` declares
+  only framework-level properties over an index signature, so each driver's own
+  configuration passes through untouched and a future framework option is an interface edit
+  rather than a migration. The script shape necessarily exists twice — once as
+  `ComputerUseTrace`, once as the JSONType, because CodeGen emits the definition into
+  `core-entities`, which sits below the engine package. `__tests__/script-store.test-d.ts`
+  holds the two field-for-field with vitest `expectTypeOf`, checked by tsc through
+  `typecheck` in `vitest.config.ts` — the same idiom as the related-record-collection type
+  tests in `core-entities`. The assertions were confirmed to fail on injected drift rather
+  than assumed to work, since that precedent's own typecheck program was once empty and
+  every assertion passing for free.
+
+  **Fallback and review.** A diverged replay falls back to the model within the same
+  attempt. The re-derived script does not take effect on its own: it lands in
+  `PendingReplayScript` and replay keeps using the promoted `ReplayScript` until someone
+  runs `mj test scripts`, sees what changed, and promotes it — so a UI change can never
+  rewrite the suite unnoticed. The listing separates routine selector churn from a moved
+  target, verb, or URL. A test's first script skips the gate, having no baseline to be
+  diffed against. Until a pending script is promoted, the affected tests fall back on
+  every run: they stay green and pay full model price, which is the cost of not letting
+  the suite rewrite itself. The fallback restarts clean rather than inheriting
+  the failed replay's memo, and a replay is never re-recorded (that would launder healed
+  selectors into storage without re-deriving them). A test can refuse the pathway with
+  `Configuration.AllowLLMFallback: false`, which makes a divergence the result instead —
+  the right setting wherever a silent re-derivation would paper over the regression the
+  test exists to catch. Defaults to `true`.
+
+  Also adds `tier` and `ReplayTelemetry` (healed/diverged counts) to the testing-framework
+  result types, so drift is visible per attempt and survives a green fallback. Design doc:
+  `plans/regression-testing/dom-selection-and-replay-design.md`.
+
+  **MetadataSync — JSON sub-property externalization.** `pull.externalizeFields` accepted
+  entity fields only, so it could move a whole column into a side file but not a single
+  property inside a JSON column. An entry may now be a dotted path (`Configuration.ReplayScript`),
+  which externalizes that leaf and leaves an `@file:` reference in its place; push already
+  resolves nested references, so there is no push-side change. A property the record does not
+  carry is skipped entirely, and a whole-field config wins over its dotted paths. Pull's
+  existing-file discovery moved to `lib/existing-record-files.ts`.
+
+  **MJExplorer — a readiness beacon for automation.** The shell publishes `data-mj-ready="true"`
+  on `<html>` when the active route's resource has finished loading, so a browser-driven suite
+  can poll a fact instead of comparing screenshot hashes. The attribute is inert — nothing in
+  the product reads it and no styling keys off it — and it is published from the `loading`
+  accessor so all ~22 assignment sites stay correct.
+
+  **Prompt model change.** The Computer Use controller and judge prompts in core `metadata/prompts`
+  move from `Gemini 3.1 Flash-Lite` to `Gemini 3.6 Flash` and gain `Temperature`/`Seed` for
+  determinism. This applies to every instance that syncs `metadata/`, not only the regression suite.
+
+### Patch Changes
+
+- 90eea38: Record tabs restored at boot no longer load their content until the records region is actually shown.
+
+  The records Golden Layout initializes eagerly so the strip and the Records pill stay in step with the workspace, and as it builds GL fires `show` for every stack's active tab — while the region is still hidden behind the main surface. The shell loaded content on those shows, so every restored record hydrated at boot. An open AI Agent Run pulled its whole run tree (every prompt run, action log and step: 27 requests, ~7s on a slow API) before the user had looked at it, and client-side RunView coalescing folded the ACTIVE tab's own reads into those same requests, so the surface the user was looking at waited on records they were not. Measured on one deployment as a 24s boot with two records open against 5s with none.
+  - `TabShown` while `ShowRecordsRegion` is false now PARKS the show (tab id → container) instead of loading.
+  - Parked shows replay when the region becomes visible, against the LIVE container; a tab closed (or torn down by a breakpoint rebuild) while parked is dropped, and one GL already marked loaded is skipped.
+  - No change once the region is visible: shows load exactly as before.
+
+- a17a228: Consolidate metadata cache API methods and update PredictiveStudio outcome config score band semantics per review.
+  - **Metadata Cache API**:
+    - Make `HasCachedRecordName` and `GetCachedRecordNameOnlyIfCached` required methods on `IMetadataProvider`.
+    - Remove deprecated `GetCachedRecordNameSync` across core and UI consumers (`navigation.service.ts`, `record-origin-crumb.component.ts`, `app-routing.module.ts`).
+  - **Predictive Studio Outcome Config**:
+    - Score band assignment now uses clean half-open intervals `[Min, Max)` with the highest band inclusive `[Min, Max]`, eliminating floating-point sentinel tolerances.
+    - Non-finite and out-of-range normalized model scores (`< 0` or `> 1`) return `null` rather than silently clamping.
+    - Non-standard/neutral target variables default to neutral gray band styling without asserting polarity.
+    - Warn on JSON parse failures in `resolveOutcomeConfig`.
+  - **Lockfile & Dev Scripts**:
+    - Restored `@memberjunction/tag-engine-base` lockfile sync.
+    - Restored MJExplorer dev port 4201.
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [50241c8]
+- Updated dependencies [6207578]
+- Updated dependencies [5df9486]
+- Updated dependencies [5df9486]
+- Updated dependencies [e225ece]
+- Updated dependencies [c157749]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [2cd8411]
+- Updated dependencies [3977917]
+- Updated dependencies [d61b425]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [1ed606c]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [6ab86a7]
+- Updated dependencies [fc3da91]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/ng-conversations@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.0
+  - @memberjunction/ng-base-forms@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/ng-shared-generic@6.2.0-edge.0
+  - @memberjunction/ng-auth-services@6.2.0-edge.0
+  - @memberjunction/ng-dashboards@6.2.0-edge.0
+  - @memberjunction/ng-shared@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/ng-search@6.2.0-edge.0
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.0
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.0
+  - @memberjunction/ng-base-application@6.2.0-edge.0
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.0
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.0
+  - @memberjunction/ng-list-detail-grid@6.2.0-edge.0
+  - @memberjunction/ng-artifacts@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.0
+  - @memberjunction/ng-file-storage@6.2.0-edge.0
+  - @memberjunction/ng-list-management@6.2.0-edge.0
+  - @memberjunction/ng-notifications@6.2.0-edge.0
+  - @memberjunction/ng-query-viewer@6.2.0-edge.0
+  - @memberjunction/ng-react@6.2.0-edge.0
+  - @memberjunction/ng-record-changes@6.2.0-edge.0
+  - @memberjunction/ng-record-selector@6.2.0-edge.0
+  - @memberjunction/ng-record-tags@6.2.0-edge.0
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.0
+  - @memberjunction/ng-user-avatar@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/entity-communications-client@6.2.0-edge.0
+  - @memberjunction/templates-base-types@6.2.0-edge.0
+  - @memberjunction/ng-composer@6.2.0-edge.0
+  - @memberjunction/ng-container-directives@6.2.0-edge.0
+  - @memberjunction/ng-feedback@6.2.0-edge.0
+  - @memberjunction/ng-mj-livekit-room@6.2.0-edge.0
+  - @memberjunction/interactive-component-types@6.2.0-edge.0
+  - @memberjunction/ng-export-service@6.2.0-edge.0
+  - @memberjunction/ng-generic-dialog@6.2.0-edge.0
+  - @memberjunction/ng-markdown@6.2.0-edge.0
+  - @memberjunction/ng-ui-components@6.2.0-edge.0
+  - @memberjunction/ng-word-cloud@6.2.0-edge.0
+  - @memberjunction/ng-pagination@6.2.0-edge.0
+  - @memberjunction/lists-base@6.2.0-edge.0
+  - @memberjunction/export-engine@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/theme-engine@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

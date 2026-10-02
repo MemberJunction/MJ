@@ -115,8 +115,8 @@
             "ID": "CDAD6D7F-A1A2-40E4-A34C-A133B6DCBA1E"
           },
           "sync": {
-            "lastModified": "2026-03-26T22:05:18.876Z",
-            "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+            "lastModified": "2026-09-21T02:45:36.473Z",
+            "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
           }
         },
         {
@@ -171,7 +171,8 @@
             "ID": "0427003E-1B67-4D6F-90BE-ADA265541B31"
           },
           "deleteRecord": {
-            "delete": true
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.528Z"
           }
         }
       ],
@@ -293,8 +294,8 @@
                   "ID": "80761138-B0DA-4A63-94B4-EC89B45E6F2E"
                 },
                 "sync": {
-                  "lastModified": "2026-03-26T22:05:19.084Z",
-                  "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                  "lastModified": "2026-09-21T02:45:36.499Z",
+                  "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
                 }
               },
               {
@@ -321,7 +322,8 @@
                   "ID": "5FBCC196-BFEE-42A5-B539-9AAD4E6C819B"
                 },
                 "deleteRecord": {
-                  "delete": true
+                  "delete": true,
+                  "deletedAt": "2026-09-22T18:53:11.541Z"
                 }
               }
             ]
@@ -457,8 +459,8 @@
                   "ID": "658B7296-90D7-4C2F-BEFF-1485E981E46B"
                 },
                 "sync": {
-                  "lastModified": "2026-03-26T22:05:19.207Z",
-                  "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                  "lastModified": "2026-09-21T02:45:36.517Z",
+                  "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
                 }
               },
               {
@@ -485,7 +487,8 @@
                   "ID": "7F347B61-92EC-4D63-9545-5DD23EE25E0D"
                 },
                 "deleteRecord": {
-                  "delete": true
+                  "delete": true,
+                  "deletedAt": "2026-09-22T18:53:11.553Z"
                 }
               }
             ],

@@ -239,7 +239,7 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
         if (tools.length > 0) {
             session['tools'] = tools.map((tool) => HuggingFaceRealtime.MapToolToFunction(tool));
         }
-        const audio = HuggingFaceRealtime.BuildAudioConfig(params.Config ?? {});
+        const audio = HuggingFaceRealtime.buildAudioConfig(params.Config ?? {});
         if (Object.keys(audio).length > 0) {
             session['audio'] = audio;
         }
@@ -247,7 +247,7 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
     }
 
     /** Assembles the OpenAI-Realtime `audio` sub-object (output voice + optional input transcription). */
-    private static BuildAudioConfig(config: JSONObject): JSONObject {
+    private static buildAudioConfig(config: JSONObject): JSONObject {
         const audio: JSONObject = {};
         const voice = config['voice'];
         if (typeof voice === 'string' && voice.trim().length > 0) {

@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import chalk from 'chalk';
-import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider, RelatedRecordLoadMode, RelatedRecordRemovalMode } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
@@ -15,22 +15,22 @@ import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
-import { GraphProviderPool, GraphSettleOutcome, probeIndependentInstances } from '../lib/graph-provider-pool';
+import { GraphProviderPool, GraphSettleOutcome, ProbeIndependentInstances } from '../lib/graph-provider-pool';
 import {
   PushWriteMode,
-  resolveDirectoryMode,
-  graphBatchSizeFor,
-  isolatedModeWarning,
-  unusedBatchSizeWarning,
+  ResolveDirectoryMode,
+  GraphBatchSizeFor,
+  IsolatedModeWarning,
+  UnusedBatchSizeWarning,
 } from '../lib/push-write-mode';
-import { CommittedWrite, PushAbortedError, describeCommitFailure, describeRollbackOutcome } from '../lib/push-outcome';
+import { CommittedWrite, PushAbortedError, DescribeCommitFailure, DescribeRollbackOutcome } from '../lib/push-outcome';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
 import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
-import { resolveCollectionRelationship } from '../lib/collection-resolver';
+import { resolveCollectionRelationship } from '@memberjunction/record-graph';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Atomic pushes (the default) run one JSON-root graph at a time on the host provider, inside
@@ -69,12 +69,12 @@ export interface PushOptions {
  * --format=json | jq '.errors[]'` — instead of parsing the human log.
  */
 export interface PushRecordError {
-  entityName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Source file path of the offending record, when known. */
-  path?: string;
+  path?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Display form of the primary key, e.g. "ID=85B8…". */
-  primaryKey?: string;
-  message: string;
+  primaryKey?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  message: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface PushCallbacks {
@@ -101,12 +101,12 @@ export interface PushCallbacks {
  * "Changes" recap so actual mutations stand out from a sea of unchanged records.
  */
 export interface RecordChangeDetail {
-  entityName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Display form of the primary key, e.g. "ID: 85B8…14C7". */
-  primaryKey: string;
-  operation: 'created' | 'updated' | 'deleted';
+  primaryKey: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Operation: 'created' | 'updated' | 'deleted';
   /** Field-level diffs (updates only); empty for creates/deletes. */
-  fields: Array<{ field: string; oldValue: string; newValue: string }>;
+  fields: Array<{ field: string; oldValue: string; newValue: string }>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface PushResult {
@@ -124,13 +124,13 @@ export interface PushResult {
 }
 
 export interface EntityPushResult {
-  created: number;
-  updated: number;
-  unchanged: number;
-  deleted: number;
-  skipped: number;
-  deferred: number;
-  errors: number;
+  created: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  updated: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  unchanged: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  deleted: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  skipped: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  deferred: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  errors: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -242,7 +242,7 @@ export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
   private warnings: string[] = [];
-  private changeDetails: RecordChangeDetail[] = [];
+  protected changeDetails: RecordChangeDetail[] = [];
   private syncConfig: SyncConfig | null = null;
   private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
   private deferredRecords: DeferredRecord[] = [];
@@ -278,8 +278,13 @@ export class PushService {
   }
 
   /** Set or replace the state manager after construction. */
-  setStateManager(stateManager: SyncStateManager): void {
+  SetStateManager(stateManager: SyncStateManager): void {
     this.stateManager = stateManager;
+  }
+
+  /** @deprecated Use {@link SetStateManager}. */
+  setStateManager(stateManager: SyncStateManager): void {
+    return this.SetStateManager(stateManager);
   }
 
   /**
@@ -354,7 +359,7 @@ export class PushService {
     };
   }
 
-  async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
+  async Push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
     this.changeDetails = [];
     // Warnings the engine raises while resolving lookups belong in this push's result envelope,
@@ -546,6 +551,11 @@ export class PushService {
       throw error;
     }
   }
+
+  /** @deprecated Use {@link Push}. */
+  async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
+    return this.Push(options, callbacks);
+  }
   
   /** Open the SQL logging session when the config asks for one and this is not a dry run. */
   private async startSqlLogging(
@@ -674,7 +684,7 @@ export class PushService {
     const isolated: string[] = [];
     for (const entityDir of entityDirs) {
       const entityConfig = await loadEntityConfig(entityDir);
-      const resolved = resolveDirectoryMode({
+      const resolved = ResolveDirectoryMode({
         isolatedFlag: options.isolatedTransactions,
         entityIsolated: entityConfig?.push?.isolatedTransactions,
         rootIsolated: this.syncConfig?.push?.isolatedTransactions,
@@ -691,7 +701,7 @@ export class PushService {
     if (isolated.length > 0) {
       await this.confirmIsolatedTransactions(isolated, options, callbacks);
     } else if (options.parallelBatchSize !== undefined && options.parallelBatchSize !== 1) {
-      this.addWarning(unusedBatchSizeWarning(options.parallelBatchSize), callbacks);
+      this.addWarning(UnusedBatchSizeWarning(options.parallelBatchSize), callbacks);
     }
   }
 
@@ -701,7 +711,7 @@ export class PushService {
    * deadlock the graph pool exists to prevent.
    */
   private async confirmIsolatedTransactions(isolated: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
-    const reason = await probeIndependentInstances(this.hostProvider());
+    const reason = await ProbeIndependentInstances(this.hostProvider());
     if (reason) {
       this.addWarning(
         `Independent provider instances are not available (${reason}), so every directory runs in the shared ` +
@@ -714,14 +724,14 @@ export class PushService {
       return;
     }
     if (!options.dryRun) {
-      this.addWarning(isolatedModeWarning(isolated, graphBatchSizeFor('isolated', options.parallelBatchSize)), callbacks);
+      this.addWarning(IsolatedModeWarning(isolated, GraphBatchSizeFor('isolated', options.parallelBatchSize)), callbacks);
     }
   }
 
   /** Adopt one directory's mode for the work about to run in it. */
   private useDirectoryMode(entityDir: string, options: PushOptions): void {
     this.writeMode = this.directoryModes.get(entityDir) ?? 'shared';
-    this.graphBatchSize = graphBatchSizeFor(this.writeMode, options.parallelBatchSize);
+    this.graphBatchSize = GraphBatchSizeFor(this.writeMode, options.parallelBatchSize);
   }
 
   private addWarning(message: string, callbacks?: PushCallbacks): void {
@@ -732,6 +742,38 @@ export class PushService {
   /** The process-wide provider that owns the push transaction. */
   private hostProvider(): DatabaseProviderBase {
     return Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: mj sync is single-process; this provider owns the push transaction
+  }
+
+  /**
+   * When a directory wrote a metadata-dataset entity, reload inside the push transaction so the
+   * next directory sees those rows (MJ#4836). Dry runs never reload.
+   *
+   * `since` is an index into `changeDetails`. Pass the index from before one directory to reload
+   * only for that directory. Pass the index from the start of Phase 2 before Phase 2.5 so a
+   * deletion recorded after the per-directory reloads still reloads, without repeating them.
+   */
+  private async reloadMetadataIfTouched(since: number, dryRun: boolean): Promise<void> {
+    if (dryRun) {
+      return;
+    }
+    const host = this.hostProvider();
+    const touched = this.changeDetails.slice(since).some((change) => host.IsMetadataDatasetMember(change.entityName));
+    if (touched) {
+      await host.RefreshWithinTransaction();
+    }
+  }
+
+  /**
+   * After a rollback, drop any metadata the within-transaction reloads copied in. A pool read
+   * sees only committed rows. A failure here must not hide the rollback error.
+   */
+  private async refreshHostMetadataAfterRollback(callbacks?: PushCallbacks): Promise<void> {
+    try {
+      await this.hostProvider().Refresh();
+    } catch (refreshError) {
+      const message = refreshError instanceof Error ? refreshError.message : String(refreshError);
+      callbacks?.onWarn?.(`⚠️  Metadata could not be reloaded after the push rolled back: ${message}`);
+    }
   }
 
   /**
@@ -769,15 +811,23 @@ export class PushService {
     // PHASE 1: creates and updates
     const totals = await this.processAllEntityDirectories(run);
 
-    // PHASE 2: deletions in reverse dependency order
+    // Taken before any Phase 2 write. Each directory already reloaded after its own writes,
+    // so Phase 2 does not reload again. Phase 2.5 uses this index: a deletion lands in
+    // changeDetails after it, and that is the only reason to reload again (MJ#4836).
+    const changesBeforePhase2 = this.changeDetails.length;
+
+    // PHASE 2: deletions in reverse dependency order.
     if (run.deletionAudit && totals.errors === 0) {
       const deletionResult = await this.processDeletionsFromAudit(run.deletionAudit, options, callbacks);
       totals.deleted += deletionResult.deleted;
       totals.errors += deletionResult.errors;
     }
 
-    // PHASE 2.5: deferred records (circular dependencies)
+    // PHASE 2.5: deferred records (circular dependencies).
+    // Reload when a deletion since the start of Phase 2 touched a metadata dataset, so a
+    // deferred save sees that row gone. Directories already reloaded their own writes (MJ#4836).
     if (this.deferredRecords.length > 0 && totals.errors === 0) {
+      await this.reloadMetadataIfTouched(changesBeforePhase2, options.dryRun);
       const deferredResult = await this.processDeferredRecords(options, callbacks);
       totals.created += deferredResult.created;
       totals.updated += deferredResult.updated;
@@ -794,7 +844,7 @@ export class PushService {
     try {
       await transactionManager.commitTransaction();
     } catch (error) {
-      throw new Error(describeCommitFailure(error, this.hostProvider()?.PlatformKey), { cause: error });
+      throw new Error(DescribeCommitFailure(error, this.hostProvider()?.PlatformKey), { cause: error });
     }
   }
 
@@ -805,8 +855,13 @@ export class PushService {
     if (!options.dryRun) {
       callbacks?.onWarn?.('\n⚠️  Rolling back database transaction due to error...');
       rolledBack = await transactionManager.rollbackTransaction();
+      if (rolledBack) {
+        // The within-transaction reloads copied uncommitted rows into memory. A pool read
+        // puts back only what survived the rollback (MJ#4836).
+        await this.refreshHostMetadataAfterRollback(callbacks);
+      }
       await this.writeFilesWithCommittedRecords(run);
-      for (const line of describeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
+      for (const line of DescribeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
         callbacks?.onWarn?.(line);
       }
     }
@@ -909,9 +964,13 @@ export class PushService {
       const dirName = path.relative(process.cwd(), entityDir) || '.';
       this.useDirectoryMode(entityDir, options);
       this.announceDirectory(dirName, progressPrefix, entityConfig.entity, entityDir, options, callbacks);
+      const firstChange = this.changeDetails.length;
       const result = await this.processEntityDirectory(
         entityDir, entityConfig, options, run.fileBackupManager, callbacks, run.configDir
       );
+      // Nested relatedEntities land in changeDetails under their own entity name, so the
+      // directory's configured entity is not what decides the reload (MJ#4836).
+      await this.reloadMetadataIfTouched(firstChange, options.dryRun);
       this.reportDirectoryResult(progressPrefix, dirName, result, options, callbacks);
       addPushTotals(totals, result);
       addPushTotals(this.runningTotals, result);
@@ -1759,7 +1818,7 @@ export class PushService {
         this.changeDetails.push({
           entityName,
           primaryKey: primaryKeyDisplay.join(', '),
-          operation: 'updated',
+          Operation: 'updated',
           fields: fieldDiffs,
         });
 
@@ -1979,7 +2038,7 @@ export class PushService {
         this.changeDetails.push({
           entityName,
           primaryKey: primaryKeyDisplay.join(', '),
-          operation: 'created',
+          Operation: 'created',
           fields: [],
         });
       }
@@ -2160,7 +2219,7 @@ export class PushService {
     this.changeDetails.push({
       entityName,
       primaryKey: primaryKeyDisplay.join(', '),
-      operation: 'deleted',
+      Operation: 'deleted',
       fields: [],
     });
 
@@ -2993,28 +3052,20 @@ export class PushService {
           }
         }
 
-        // Dynamically register collection companion if entity supports DeclareRelatedRecords
-        if (!collectionCompanion && typeof (entity as unknown as { DeclareRelatedRecords?: unknown }).DeclareRelatedRecords === 'function') {
+        // Dynamically register collection companion if entity supports DeclareRelatedRecordsDynamic
+        if (!collectionCompanion && typeof (entity as BaseEntity).DeclareRelatedRecordsDynamic === 'function') {
           const entityInfo = entity.EntityInfo ?? new Metadata().EntityByName(entityName);
           const resolved = resolveCollectionRelationship(entityInfo, colName);
           if (resolved) {
-            const colOpts: {
-              Name: string;
-              RelatedEntity: string;
-              RelatedEntityJoinField: string;
-              Load?: string;
-              OnRemove?: string;
-              OrderBy?: string;
-            } = {
+            const colOpts = {
               Name: resolved.collectionName,
               RelatedEntity: resolved.relatedEntity,
               RelatedEntityJoinField: resolved.joinField,
-              Load: resolved.load,
-              OnRemove: resolved.onRemove,
+              Load: resolved.load as RelatedRecordLoadMode | undefined,
+              OnRemove: resolved.onRemove as RelatedRecordRemovalMode | undefined,
               ...(resolved.orderBy ? { OrderBy: resolved.orderBy } : {}),
             };
-            const declareFn = (entity as unknown as { DeclareRelatedRecords: (options: unknown) => unknown }).DeclareRelatedRecords.bind(entity);
-            collectionCompanion = declareFn(colOpts) as typeof collectionCompanion;
+            collectionCompanion = (entity as BaseEntity).DeclareRelatedRecordsDynamic(colOpts) as typeof collectionCompanion;
           }
         }
 

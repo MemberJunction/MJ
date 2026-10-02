@@ -12,11 +12,11 @@ import { LogError } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { FormMode } from '@memberjunction/interactive-component-types/forms';
 import { ComponentStudioStateService } from '../../services/component-studio-state.service';
-import { generateCodeFromCanvas } from '../../services/canvas-to-code';
-import { parseCanvasFromCode } from '../../services/code-to-canvas';
+import { GenerateCodeFromCanvas } from '../../services/canvas-to-code';
+import { ParseCanvasFromCode } from '../../services/code-to-canvas';
 import {
-    buildEmptyCanvas,
-    generateCanvasId,
+    BuildEmptyCanvas,
+    GenerateCanvasId,
     type FormCanvasElement,
     type FormCanvasModel,
     type FormCanvasSection,
@@ -57,7 +57,12 @@ export class FormBuilderTabComponent {
     public EntityPickerSearch = '';
     public EntityChoices: Array<{ Name: string; DisplayName: string }> = [];
 
-    public readonly state = inject(ComponentStudioStateService);
+    public readonly State = inject(ComponentStudioStateService);
+
+    /** @deprecated Use {@link State}. */
+    public get state() {
+        return this.State;
+    }
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly notifications = inject(MJNotificationService);
     private readonly destroy$ = new Subject<void>();
@@ -67,7 +72,7 @@ export class FormBuilderTabComponent {
     // ------------------------------------------------------------------
 
     ngOnInit(): void {
-        this.state.StateChanged.pipe(takeUntil(this.destroy$)).subscribe(() => {
+        this.State.StateChanged.pipe(takeUntil(this.destroy$)).subscribe(() => {
             this.cdr.markForCheck();
         });
         // Lazily hydrate the canvas if we have a target entity but no canvas
@@ -98,36 +103,36 @@ export class FormBuilderTabComponent {
 
     public OnEntityPicked(entityName: string): void {
         this.IsEntityPickerOpen = false;
-        const schema = this.state.BuildFormSchema(entityName);
+        const schema = this.State.BuildFormSchema(entityName);
         if (!schema) {
             this.notifications.CreateSimpleNotification(
                 `Couldn't load schema for ${entityName}.`, 'error', 4000,
             );
             return;
         }
-        this.state.FormTargetEntityName = entityName;
+        this.State.FormTargetEntityName = entityName;
         // Try to seed canvas from existing code first; otherwise start empty.
-        const existing = this.state.EditableCode ?? '';
+        const existing = this.State.EditableCode ?? '';
         if (existing.length > 0) {
-            const result = parseCanvasFromCode(existing, schema);
-            if (result.canvas) {
-                this.state.FormCanvas = result.canvas;
-                this.state.FormCodeOnlySectionsDetected = result.hasUnknownConstructs;
+            const result = ParseCanvasFromCode(existing, schema);
+            if (result.Canvas) {
+                this.State.FormCanvas = result.Canvas;
+                this.State.FormCodeOnlySectionsDetected = result.HasUnknownConstructs;
             } else {
-                this.state.FormCanvas = buildEmptyCanvas(entityName, schema.displayName);
-                this.state.FormCodeOnlySectionsDetected = true;
+                this.State.FormCanvas = BuildEmptyCanvas(entityName, schema.displayName);
+                this.State.FormCodeOnlySectionsDetected = true;
             }
         } else {
-            this.state.FormCanvas = buildEmptyCanvas(entityName, schema.displayName);
-            this.state.FormCodeOnlySectionsDetected = false;
+            this.State.FormCanvas = BuildEmptyCanvas(entityName, schema.displayName);
+            this.State.FormCodeOnlySectionsDetected = false;
         }
-        this.state.FormSelectedElementId = null;
-        this.state.FormSelectedSectionId = this.state.FormCanvas?.sections[0]?.id ?? null;
+        this.State.FormSelectedElementId = null;
+        this.State.FormSelectedSectionId = this.State.FormCanvas?.sections[0]?.id ?? null;
         this.regenerateCode();
         this.cdr.markForCheck();
     }
 
-    public get filteredEntityChoices(): Array<{ Name: string; DisplayName: string }> {
+    public get FilteredEntityChoices(): Array<{ Name: string; DisplayName: string }> {
         const q = this.EntityPickerSearch.trim().toLowerCase();
         if (!q) return this.EntityChoices;
         return this.EntityChoices.filter(e =>
@@ -135,8 +140,13 @@ export class FormBuilderTabComponent {
             e.DisplayName.toLowerCase().includes(q));
     }
 
+    /** @deprecated Use {@link FilteredEntityChoices}. */
+    public get filteredEntityChoices(): Array<{ Name: string; DisplayName: string }> {
+        return this.FilteredEntityChoices;
+    }
+
     private refreshEntityChoices(): void {
-        const provider = this.state.Provider;
+        const provider = this.State.Provider;
         if (!provider) {
             this.EntityChoices = [];
             return;
@@ -152,7 +162,7 @@ export class FormBuilderTabComponent {
     // ------------------------------------------------------------------
 
     public SetPreviewMode(mode: FormMode): void {
-        this.state.FormPreviewMode = mode;
+        this.State.FormPreviewMode = mode;
     }
 
     // ------------------------------------------------------------------
@@ -160,28 +170,28 @@ export class FormBuilderTabComponent {
     // ------------------------------------------------------------------
 
     public OnCanvasChanged(next: FormCanvasModel): void {
-        this.state.FormCanvas = next;
-        this.state.HasUnsavedChanges = true;
+        this.State.FormCanvas = next;
+        this.State.HasUnsavedChanges = true;
         this.regenerateCode();
     }
 
     public OnElementSelected(payload: { sectionId: string; elementId: string }): void {
-        this.state.FormSelectedSectionId = null;
-        this.state.FormSelectedElementId = payload.elementId;
+        this.State.FormSelectedSectionId = null;
+        this.State.FormSelectedElementId = payload.elementId;
     }
 
     public OnSectionSelected(sectionId: string): void {
-        this.state.FormSelectedElementId = null;
-        this.state.FormSelectedSectionId = sectionId;
+        this.State.FormSelectedElementId = null;
+        this.State.FormSelectedSectionId = sectionId;
     }
 
     public OnDeselected(): void {
-        this.state.FormSelectedElementId = null;
-        this.state.FormSelectedSectionId = null;
+        this.State.FormSelectedElementId = null;
+        this.State.FormSelectedSectionId = null;
     }
 
     public OnElementChanged(next: FormCanvasElement): void {
-        const canvas = this.state.FormCanvas;
+        const canvas = this.State.FormCanvas;
         if (!canvas) return;
         const updated: FormCanvasModel = {
             ...canvas,
@@ -194,7 +204,7 @@ export class FormBuilderTabComponent {
     }
 
     public OnSectionChanged(next: FormCanvasSection): void {
-        const canvas = this.state.FormCanvas;
+        const canvas = this.State.FormCanvas;
         if (!canvas) return;
         const updated: FormCanvasModel = {
             ...canvas,
@@ -204,7 +214,7 @@ export class FormBuilderTabComponent {
     }
 
     public OnElementDeleted(elementId: string): void {
-        const canvas = this.state.FormCanvas;
+        const canvas = this.State.FormCanvas;
         if (!canvas) return;
         const updated: FormCanvasModel = {
             ...canvas,
@@ -213,23 +223,23 @@ export class FormBuilderTabComponent {
                 elements: s.elements.filter(e => e.id !== elementId),
             })),
         };
-        this.state.FormSelectedElementId = null;
+        this.State.FormSelectedElementId = null;
         this.OnCanvasChanged(updated);
     }
 
     public OnSectionDeleted(sectionId: string): void {
-        const canvas = this.state.FormCanvas;
+        const canvas = this.State.FormCanvas;
         if (!canvas) return;
         const updated: FormCanvasModel = {
             ...canvas,
             sections: canvas.sections.filter(s => s.id !== sectionId),
         };
-        this.state.FormSelectedSectionId = null;
+        this.State.FormSelectedSectionId = null;
         this.OnCanvasChanged(updated);
     }
 
     public OnFieldAddedFromPalette(payload: { fieldName: string }): void {
-        const canvas = this.state.FormCanvas;
+        const canvas = this.State.FormCanvas;
         if (!canvas) return;
         const target = this.findFocusedSection(canvas);
         if (!target) return;
@@ -237,7 +247,7 @@ export class FormBuilderTabComponent {
             ...canvas,
             sections: canvas.sections.map(s => s.id === target.id
                 ? { ...s, elements: [...s.elements, {
-                    id: generateCanvasId('field'),
+                    id: GenerateCanvasId('field'),
                     type: 'field',
                     fieldName: payload.fieldName,
                     span: 1,
@@ -248,13 +258,13 @@ export class FormBuilderTabComponent {
     }
 
     private findFocusedSection(canvas: FormCanvasModel): FormCanvasSection | null {
-        if (this.state.FormSelectedSectionId) {
-            const s = canvas.sections.find(s => s.id === this.state.FormSelectedSectionId);
+        if (this.State.FormSelectedSectionId) {
+            const s = canvas.sections.find(s => s.id === this.State.FormSelectedSectionId);
             if (s) return s;
         }
-        if (this.state.FormSelectedElementId) {
+        if (this.State.FormSelectedElementId) {
             const s = canvas.sections.find(sec =>
-                sec.elements.some(e => e.id === this.state.FormSelectedElementId));
+                sec.elements.some(e => e.id === this.State.FormSelectedElementId));
             if (s) return s;
         }
         return canvas.sections[0] ?? null;
@@ -272,7 +282,7 @@ export class FormBuilderTabComponent {
      */
     public OnOpenInChat(): void {
         this.OpenInChatRequested.emit();
-        this.state.OpenInChatRequested.emit();
+        this.State.OpenInChatRequested.emit();
     }
 
     // ------------------------------------------------------------------
@@ -293,8 +303,8 @@ export class FormBuilderTabComponent {
     public OnKeyDown(event: KeyboardEvent): void {
         const target = event.target as HTMLElement;
         const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-        if (event.key === 'Delete' && !isInput && this.state.FormSelectedElementId) {
-            this.OnElementDeleted(this.state.FormSelectedElementId);
+        if (event.key === 'Delete' && !isInput && this.State.FormSelectedElementId) {
+            this.OnElementDeleted(this.State.FormSelectedElementId);
         }
         if (event.key === 'Escape' && !isInput) {
             this.OnDeselected();
@@ -312,20 +322,20 @@ export class FormBuilderTabComponent {
      * show a banner.
      */
     private hydrateCanvasFromState(): void {
-        const entity = this.state.FormTargetEntityName;
-        if (!entity || this.state.FormCanvas) return;
-        const schema = this.state.BuildFormSchema(entity);
+        const entity = this.State.FormTargetEntityName;
+        if (!entity || this.State.FormCanvas) return;
+        const schema = this.State.BuildFormSchema(entity);
         if (!schema) return;
-        const existing = this.state.EditableCode ?? '';
+        const existing = this.State.EditableCode ?? '';
         if (existing.length > 0) {
-            const result = parseCanvasFromCode(existing, schema);
-            if (result.canvas) {
-                this.state.FormCanvas = result.canvas;
-                this.state.FormCodeOnlySectionsDetected = result.hasUnknownConstructs;
+            const result = ParseCanvasFromCode(existing, schema);
+            if (result.Canvas) {
+                this.State.FormCanvas = result.Canvas;
+                this.State.FormCodeOnlySectionsDetected = result.HasUnknownConstructs;
                 return;
             }
         }
-        this.state.FormCanvas = buildEmptyCanvas(entity, schema.displayName);
+        this.State.FormCanvas = BuildEmptyCanvas(entity, schema.displayName);
     }
 
     /**
@@ -335,12 +345,12 @@ export class FormBuilderTabComponent {
      */
     private regenerateCode(): void {
         try {
-            const canvas = this.state.FormCanvas;
-            const schema = this.state.FormSchema;
+            const canvas = this.State.FormCanvas;
+            const schema = this.State.FormSchema;
             if (!canvas || !schema) return;
             const name = canvas.title?.trim() || schema.displayName;
-            const code = generateCodeFromCanvas(canvas, schema, name);
-            this.state.EditableCode = code;
+            const code = GenerateCodeFromCanvas(canvas, schema, name);
+            this.State.EditableCode = code;
         } catch (err) {
             LogError(`FormBuilderTab.regenerateCode: ${err instanceof Error ? err.message : String(err)}`);
         }

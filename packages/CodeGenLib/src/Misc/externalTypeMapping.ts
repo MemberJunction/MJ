@@ -39,7 +39,7 @@ const BINARY_TYPES = new Set(['bytea', 'binary', 'varbinary', 'blob', 'image', '
 const UUID_TYPES = new Set(['uuid', 'uniqueidentifier']);
 
 /** Map a verbatim native type string to an MJ EntityField type descriptor. */
-export function mapExternalNativeTypeToMJ(nativeType: string): MappedFieldType {
+export function MapExternalNativeTypeToMJ(nativeType: string): MappedFieldType {
   const raw = (nativeType ?? '').trim();
   // Separate the base type from any "(...)" arguments: "varchar(255)" -> base "varchar", args [255].
   // Oracle puts the precision INLINE, before a suffix (e.g. "TIMESTAMP(6) WITH TIME ZONE"), so derive
@@ -82,4 +82,9 @@ export function mapExternalNativeTypeToMJ(nativeType: string): MappedFieldType {
 
   // Unknown / complex (geometry, vectors, nested documents, arrays, ...) — store as text, refine later.
   return string(-1);
+}
+
+/** @deprecated Use {@link MapExternalNativeTypeToMJ}. */
+export function mapExternalNativeTypeToMJ(nativeType: string): MappedFieldType {
+  return MapExternalNativeTypeToMJ(nativeType);
 }

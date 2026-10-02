@@ -40,6 +40,8 @@ vi.mock('../BaseAIEngine', () => ({
 }));
 
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from '../AIAgentPermissionHelper';
+import { UserInfo } from '@memberjunction/core';
+import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 
 function createUser(id: string, roleIds: string[] = []): { ID: string; UserRoles: Array<{ RoleID: string }> } {
     return {
@@ -293,6 +295,106 @@ describe('AIAgentPermissionHelper', () => {
 
             expect(await AIAgentPermissionHelper.HasPermission('agent-1', user as never, 'delete')).toBe(false);
             expect(await AIAgentPermissionHelper.HasPermission('agent-1', user as never, 'edit')).toBe(true);
+        });
+    });
+
+    // The filter the Find Best Agent / Find Candidate Agents actions and agent decision discovery
+    // share. It moved here from the actions, and these tests moved with it.
+    describe('FilterRunnableAgents', () => {
+        /** A user with no roles, built from the mocked UserInfo class. */
+        function userWithID(id: string): UserInfo {
+            const user = new UserInfo();
+            user.ID = id;
+            return user;
+        }
+
+        function agent(id: string, status: MJAIAgentEntity['Status']): Pick<MJAIAgentEntity, 'ID' | 'Status'> {
+            return { ID: id, Status: status };
+        }
+
+        /** A permission row giving `userId` only the listed rights on `agentId`. */
+        function grant(agentId: string, userId: string, rights: { CanView?: boolean; CanRun?: boolean }): void {
+            mockAgentPermissions.push({
+                AgentID: agentId,
+                UserID: userId,
+                RoleID: null,
+                CanView: rights.CanView ?? false,
+                CanRun: rights.CanRun ?? false,
+                CanEdit: false,
+                CanDelete: false,
+            });
+        }
+
+        beforeEach(() => {
+            mockAgents.push(
+                { ID: 'agent-open', OwnerUserID: 'owner-1' },
+                { ID: 'agent-runner', OwnerUserID: 'owner-1' },
+                { ID: 'agent-viewer', OwnerUserID: 'owner-1' },
+                { ID: 'agent-other', OwnerUserID: 'owner-1' },
+                { ID: 'agent-inactive', OwnerUserID: 'owner-1' },
+            );
+            grant('agent-runner', 'user-2', { CanRun: true });
+            grant('agent-viewer', 'user-2', { CanView: true });
+            grant('agent-other', 'other-user', { CanRun: true });
+        });
+
+        it('keeps the agents the user may run, Active only, in their original order', async () => {
+            const agents = [
+                agent('agent-runner', 'Active'),
+                agent('agent-viewer', 'Active'),
+                agent('agent-other', 'Active'),
+                agent('agent-inactive', 'Disabled'),
+                agent('agent-open', 'Active'),
+            ];
+
+            const runnable = await AIAgentPermissionHelper.FilterRunnableAgents(agents, userWithID('user-2'));
+
+            // agent-viewer is view-only, agent-other is granted to someone else, agent-inactive is not Active.
+            expect(runnable.map(a => a.ID)).toEqual(['agent-runner', 'agent-open']);
+        });
+
+        it('keeps inactive agents the user may run when includeInactive is set', async () => {
+            const agents = [agent('agent-inactive', 'Disabled'), agent('agent-other', 'Active'), agent('agent-open', 'Pending')];
+
+            const runnable = await AIAgentPermissionHelper.FilterRunnableAgents(agents, userWithID('user-2'), true);
+
+            expect(runnable.map(a => a.ID)).toEqual(['agent-inactive', 'agent-open']);
+        });
+
+        it('checks the run permission, not view', async () => {
+            const spy = vi.spyOn(AIAgentPermissionHelper, 'GetAccessibleAgents');
+            const user = userWithID('user-2');
+
+            await AIAgentPermissionHelper.FilterRunnableAgents([agent('agent-open', 'Active')], user);
+
+            expect(spy).toHaveBeenCalledWith(user, 'run');
+        });
+
+        it('matches IDs whatever their case, and returns the objects it was given', async () => {
+            const upper = agent('AGENT-OPEN', 'Active');
+
+            const runnable = await AIAgentPermissionHelper.FilterRunnableAgents([upper], userWithID('user-2'));
+
+            expect(runnable).toEqual([upper]);
+            expect(runnable[0]).toBe(upper);
+        });
+
+        it('drops agents the engine does not know', async () => {
+            const runnable = await AIAgentPermissionHelper.FilterRunnableAgents([agent('agent-unknown', 'Active')], userWithID('user-2'));
+
+            expect(runnable).toEqual([]);
+        });
+    });
+
+    describe('IsDirectlyDiscoverable', () => {
+        it.each([
+            ['a top-level agent', 'Top-Level', null, true],
+            ['an agent invocable either way', 'Any', null, true],
+            ['a Sub-Agent', 'Sub-Agent', null, false],
+            ['a child agent', 'Top-Level', 'parent-1', false],
+            ['a child Sub-Agent', 'Sub-Agent', 'parent-1', false],
+        ] as const)('decides for %s', (_label, invocationMode, parentId, expected) => {
+            expect(AIAgentPermissionHelper.IsDirectlyDiscoverable({ InvocationMode: invocationMode, ParentID: parentId })).toBe(expected);
         });
     });
 });

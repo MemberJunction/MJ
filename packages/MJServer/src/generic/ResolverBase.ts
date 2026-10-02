@@ -4,6 +4,7 @@ import {
   BaseEntityEvent,
   CompositeKey,
   DatabaseProviderBase,
+  EntityFieldInfo,
   EntityFieldTSType,
   EntityInfo,
   EntityPermissionType,
@@ -40,8 +41,8 @@ import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, Is
 import { SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
-import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
@@ -51,7 +52,7 @@ export class ResolverBase {
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
 
   private static _eventSubscriptionKey: string = '___MJServer___ResolverBase___EventSubscriptions';
-  private get EventSubscriptions(): Map<string, Subscription> {
+  private get eventSubscriptions(): Map<string, Subscription> {
     // here we use the global object store instead of a static member becuase in some cases based on import code paths/bundling/etc, the static member
     // could actually be duplicated and we'd end up with multiple instances of the same map, which would be bad.
     const g = MJGlobal.Instance.GetGlobalObjectStore();
@@ -1450,16 +1451,24 @@ export class ResolverBase {
    * Publishes a CACHE_INVALIDATION event to connected browser clients after a successful
    * entity save or delete. Includes the originSessionId so the originating browser can
    * skip redundant re-fetches (it already handled the event locally).
+   *
+   * The row itself rides along ONLY for entities opted in via
+   * `cacheSettings.recordDataBroadcastEntities` — this event reaches every connected client
+   * unfiltered, so the row would otherwise be readable by sessions that could not read the record.
    */
   protected PublishCacheInvalidation(entityObject: BaseEntity, action: 'save' | 'delete', userPayload: UserPayload): void {
+    const entityName = entityObject.EntityInfo.Name;
     PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-      entityName: entityObject.EntityInfo.Name,
+      entityName,
       primaryKeyValues: JSON.stringify(entityObject.PrimaryKey.KeyValuePairs),
       action,
       sourceServerId: MJGlobal.Instance.ProcessUUID,
       timestamp: new Date(),
       originSessionId: userPayload?.sessionId || null,
-      recordData: action === 'save' ? JSON.stringify(entityObject.GetAll()) : undefined,
+      recordData:
+        action === 'save' && MayBroadcastRecordData(entityName)
+          ? JSON.stringify(entityObject.GetAll())
+          : undefined,
     });
   }
 
@@ -1472,7 +1481,7 @@ export class ResolverBase {
    * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
    */
   protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
-    publishStatusUpdate(pubSub, {
+    PublishStatusUpdate(pubSub, {
       sessionId,
       ownerUserId: userPayload?.userRecord?.ID ?? '',
       message,
@@ -1485,7 +1494,7 @@ export class ResolverBase {
     // cause issues with multiple messages for the same event.
     const uniqueKey = entityObject.EntityInfo.Name;
 
-    if (!this.EventSubscriptions.has(uniqueKey)) {
+    if (!this.eventSubscriptions.has(uniqueKey)) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
       LogDebug(`ResolverBase.ListenForEntityMessages: About to call MJGlobal.Instance.GetEventListener() to get the event listener subscription for ${uniqueKey}`);
       const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
@@ -1518,7 +1527,7 @@ export class ResolverBase {
           }
         }
       });
-      this.EventSubscriptions.set(uniqueKey, theSub);
+      this.eventSubscriptions.set(uniqueKey, theSub);
     }
   }
 
@@ -1684,7 +1693,7 @@ export class ResolverBase {
             await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, userInfo);
           } else {
             // no OldValues, so we can just set the new values from input
-            entityObject.SetMany(input);
+            entityObject.SetMany(clientNewValues);
           }
         } else {
           // Use a generic message to avoid leaking whether a record exists — distinguishing
@@ -1696,8 +1705,11 @@ export class ResolverBase {
       } else {
         // we get here if we are NOT tracking changes and we DO have OldValues, so we can load from them
         const oldValues = {};
-        // for each item in the oldValues array, add it to the oldValues object
-        input.OldValues___?.forEach((item) => (oldValues[item.Key] = item.Value));
+        // for each item in the oldValues array, add it to the oldValues object, typed like the field
+        input.OldValues___?.forEach((item) => {
+          const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
+          oldValues[item.Key] = field ? this.ClientOldValueToFieldValue(field, item.Value) : item.Value;
+        });
 
         // 1) load the old values, this will be the initial state of the object
         await entityObject.LoadFromData(oldValues);
@@ -1764,6 +1776,11 @@ export class ResolverBase {
    *
    * Ordered so the boolean flag is evaluated last: the extra load lands only on entities that have
    * the feature switched on, which is almost none of them.
+   *
+   * `MJ: Record Changes` always loads from the database: its server class allows an update only when
+   * Comments is the one dirty field, and "dirty" compared against client-supplied OldValues lets a
+   * caller pin forged audit columns as both old and new values. It doesn't track its own changes, so
+   * nothing else forces the load.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
@@ -1773,6 +1790,7 @@ export class ResolverBase {
   ): boolean {
     return (
       entityInfo.TrackRecordChanges ||
+      entityInfo.Name.trim().toLowerCase() === 'mj: record changes' ||
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
@@ -1910,6 +1928,41 @@ export class ResolverBase {
   }
 
   /**
+   * Converts one client-sent old value (always a string on the wire; dates as epoch milliseconds,
+   * the GraphQL Timestamp form) to the field's TypeScript type, so it compares equal to the stored
+   * value. Both the OldValues comparison and the load-from-OldValues path use it: without it a date
+   * old value becomes an Invalid Date and an unchanged date field reads as edited.
+   */
+  protected ClientOldValueToFieldValue(field: EntityFieldInfo | undefined, raw: unknown): string | number | boolean | Date | null {
+    let val: unknown = raw;
+    if ((val === null || val === undefined) && field && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull)
+      val = field.DefaultValue; // set default value as the field was never set and it does NOT allow nulls
+    if (val === undefined) val = null;
+    // A null old value stays null, except a boolean, which the comparison has always read as false.
+    if (field?.TSType === EntityFieldTSType.Boolean && val === null) return false;
+    if (val === null) return null;
+    if (!field) {
+      // No field metadata to convert by: pass scalars through, stringify anything else.
+      return typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' || val instanceof Date ? val : String(val);
+    }
+
+    const text = String(val);
+    switch (field.TSType) {
+      case EntityFieldTSType.Number: {
+        const integer = ['int', 'smallint', 'bigint', 'tinyint'].includes((field.Type as string).toLowerCase());
+        return integer ? parseInt(text) : parseFloat(text);
+      }
+      case EntityFieldTSType.Boolean:
+        return !(text === 'false' || text === '0' || parseInt(text) === 0);
+      case EntityFieldTSType.Date:
+        // Epoch milliseconds (the GraphQL Timestamp form) arrive as a numeric string.
+        return new Date(text.trim() !== '' && !isNaN(Number(text)) ? parseInt(text) : text);
+      default:
+        return text; // already a string
+    }
+  }
+
+  /**
    * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client
    * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values
    * and the ClientOldValues are not 100% the same, so long as there is no overlap in the specific FIELDS that are different.
@@ -1923,52 +1976,7 @@ export class ResolverBase {
     input.OldValues___.forEach((item) => {
       // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
       const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
-      let val = item.Value;
-      if ((val === null || val === undefined) && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull)
-        val = field.DefaultValue; // set default value as the field was never set and it does NOT allow nulls
-
-      if (field) {
-        switch (field.TSType) {
-          case EntityFieldTSType.Number:
-            if (val == null && val == undefined) {
-              val = null;
-            }
-            else {
-              let typeLowered = (field.Type as string).toLowerCase();
-
-              switch (typeLowered) {
-                case 'int':
-                case 'smallint':
-                case 'bigint':
-                case 'tinyint':
-                  val = parseInt(val);
-                  break;
-                case 'money':
-                case 'smallmoney':
-                case 'decimal':
-                case 'numeric':
-                case 'float':
-                  val = parseFloat(val);
-                  break;
-                default:
-                  val = parseFloat(val);
-                  break;
-              }
-            }
-            break;
-          case EntityFieldTSType.Boolean:
-            val = val === null || val === undefined || val === 'false' || val === '0' || parseInt(val) === 0 ? false : true;
-            break;
-          case EntityFieldTSType.Date:
-            // first, if val is a string and it is actually a number (milliseconds since epoch), convert it to a number.
-            if (val !== null && val !== undefined && val.toString().trim() !== '' && !isNaN(val)) val = parseInt(val);
-
-            val = val !== null && val !== undefined ? new Date(val) : null;
-            break;
-          default:
-            break; // already a string
-        }
-      }
+      const val = this.ClientOldValueToFieldValue(field, item.Value);
       clientOldValues[item.Key] = val;
     });
 

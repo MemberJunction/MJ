@@ -28,19 +28,19 @@ export type QueueOp = 'update' | 'create';
  */
 export type OfflineMutation = {
     /** Stable unique id for this queue entry (used by {@link remove}). */
-    id: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** MJ entity name the mutation targets (e.g. `'Users'`). */
-    entityName: string;
+    entityName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Serialized primary key for an update; `null` for a create. */
-    primaryKey: string | null;
+    primaryKey: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** The scalar field values to apply on replay, keyed by field name. */
-    changedFields: Record<string, QueueScalar>;
+    changedFields: Record<string, QueueScalar>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Whether this replays as an update to an existing row or a create. */
-    op: QueueOp;
+    op: QueueOp;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Epoch-ms timestamp of when the mutation was queued (for FIFO / display). */
-    queuedAt: number;
+    queuedAt: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** The most recent replay error, when a prior replay attempt failed transiently. */
-    lastError?: string;
+    lastError?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** The caller-supplied shape for {@link enqueue}; `id`/`queuedAt` are assigned here. */
@@ -107,7 +107,7 @@ function notify(count: number): void {
  * @param input The mutation to queue (entity, key, changed fields, op).
  * @returns The stored {@link OfflineMutation}, including its generated `id`.
  */
-export function enqueue(input: OfflineMutationInput): OfflineMutation {
+export function Enqueue(input: OfflineMutationInput): OfflineMutation {
     const entry: OfflineMutation = { ...input, id: nextId(), queuedAt: Date.now() };
     const entries = readQueue();
     entries.push(entry);
@@ -115,22 +115,37 @@ export function enqueue(input: OfflineMutationInput): OfflineMutation {
     return entry;
 }
 
+/** @deprecated Use {@link Enqueue}. */
+export function enqueue(input: OfflineMutationInput): OfflineMutation {
+    return Enqueue(input);
+}
+
 /**
  * List the pending mutations in FIFO order (oldest first).
  * @returns A snapshot array of the current queue (safe to iterate/mutate locally).
  */
-export function list(): OfflineMutation[] {
+export function List(): OfflineMutation[] {
     return readQueue();
+}
+
+/** @deprecated Use {@link List}. */
+export function list(): OfflineMutation[] {
+    return List();
 }
 
 /**
  * Remove a single mutation by id (a no-op if it is not present).
  * @param id The {@link OfflineMutation.id} to remove.
  */
-export function remove(id: string): void {
+export function Remove(id: string): void {
     const entries = readQueue();
     const next = entries.filter((e) => e.id !== id);
     if (next.length !== entries.length) writeQueue(next);
+}
+
+/** @deprecated Use {@link Remove}. */
+export function remove(id: string): void {
+    return Remove(id);
 }
 
 /**
@@ -153,18 +168,33 @@ export function RecordError(id: string, message: string): void {
     if (changed) writeQueue(entries);
 }
 
+/** @deprecated Use {@link RecordError}. */
+export function recordError(id: string, message: string): void {
+    return RecordError(id, message);
+}
+
 /**
  * Count the pending mutations.
  * @returns The number of queued mutations.
  */
-export function count(): number {
+export function Count(): number {
     return readQueue().length;
 }
 
+/** @deprecated Use {@link Count}. */
+export function count(): number {
+    return Count();
+}
+
 /** Remove every queued mutation. */
-export function clear(): void {
+export function Clear(): void {
     if (readQueue().length === 0) return;
     writeQueue([]);
+}
+
+/** @deprecated Use {@link Clear}. */
+export function clear(): void {
+    return Clear();
 }
 
 /**
@@ -174,9 +204,14 @@ export function clear(): void {
  * @param listener Called with the new pending count on each change.
  * @returns An unsubscribe function.
  */
-export function subscribe(listener: QueueListener): () => void {
+export function Subscribe(listener: QueueListener): () => void {
     listeners.add(listener);
     return () => {
         listeners.delete(listener);
     };
+}
+
+/** @deprecated Use {@link Subscribe}. */
+export function subscribe(listener: QueueListener): () => void {
+    return Subscribe(listener);
 }

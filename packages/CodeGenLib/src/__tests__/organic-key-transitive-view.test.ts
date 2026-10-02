@@ -249,7 +249,7 @@ describe('processOrganicKeyConfig — transitive bridge view DDL', () => {
 
   beforeEach(() => {
     logged = [];
-    vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue(organicKeyConfig);
+    vi.spyOn(ManageMetadataBase, 'GetSoftPKFKConfig').mockReturnValue(organicKeyConfig);
     vi.spyOn(SQLLogging, 'LogSQLAndExecute').mockImplementation(async (...args: LoggedCall) => {
       logged.push(args);
       return [];
@@ -310,7 +310,7 @@ describe('processOrganicKeyConfig — transitive bridge view DDL', () => {
         },
       ],
     };
-    vi.mocked(ManageMetadataBase.getSoftPKFKConfig).mockReturnValue(twoKeys);
+    vi.mocked(ManageMetadataBase.GetSoftPKFKConfig).mockReturnValue(twoKeys);
     const provider = new PostgreSQLCodeGenProvider();
 
     const result = await new TestableOrganicKeys(provider).Run(createConnection(provider.Dialect));
@@ -328,7 +328,7 @@ describe('processOrganicKeyConfig — transitive bridge view DDL', () => {
         organicKeyConfig.hr[0],
       ],
     };
-    vi.mocked(ManageMetadataBase.getSoftPKFKConfig).mockReturnValue(config);
+    vi.mocked(ManageMetadataBase.GetSoftPKFKConfig).mockReturnValue(config);
     const provider = new PostgreSQLCodeGenProvider();
 
     const result = await new TestableOrganicKeys(provider).Run(createConnection(provider.Dialect, ['Ghost']));
@@ -349,7 +349,7 @@ describe('processOrganicKeyConfig — transitive bridge view DDL', () => {
         { ...goodRelated, TableName: 'MissingAttribute', TransitiveView: undefined },
       ],
     };
-    vi.mocked(ManageMetadataBase.getSoftPKFKConfig).mockReturnValue({ hr: [{ TableName: 'Employee', OrganicKeys: [halfKey, goodKey] }] });
+    vi.mocked(ManageMetadataBase.GetSoftPKFKConfig).mockReturnValue({ hr: [{ TableName: 'Employee', OrganicKeys: [halfKey, goodKey] }] });
     const provider = new PostgreSQLCodeGenProvider();
 
     const result = await new TestableOrganicKeys(provider).Run(createConnection(provider.Dialect, ['MissingAttribute']));

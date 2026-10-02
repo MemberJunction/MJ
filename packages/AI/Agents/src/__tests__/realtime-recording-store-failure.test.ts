@@ -24,7 +24,7 @@ vi.mock('@memberjunction/storage', () => ({
     },
 }));
 
-import { storeRealtimeRecording } from '../realtime/realtime-recording-store';
+import { StoreRealtimeRecording } from '../realtime/realtime-recording-store';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 const GOOGLE_QUOTA_MESSAGE = 'Service Accounts do not have storage quota. Leverage shared drives instead.';
@@ -62,7 +62,7 @@ describe('storeRealtimeRecording failure reporting', () => {
     it('surfaces the underlying storage failure message rather than a bare null', async () => {
         uploadFileMock.mockRejectedValueOnce(new Error(`FileStorageEngine.UploadFile failed: ${GOOGLE_QUOTA_MESSAGE}`));
 
-        const result = await storeRealtimeRecording(input());
+        const result = await StoreRealtimeRecording(input());
 
         expect(result.FileID).toBeNull();
         expect(result.ErrorMessage).toContain(GOOGLE_QUOTA_MESSAGE);
@@ -71,14 +71,14 @@ describe('storeRealtimeRecording failure reporting', () => {
     it('never throws — a non-Error rejection still yields a reason', async () => {
         uploadFileMock.mockRejectedValueOnce('storage went away');
 
-        const result = await storeRealtimeRecording(input());
+        const result = await StoreRealtimeRecording(input());
 
         expect(result.FileID).toBeNull();
         expect(result.ErrorMessage).toBe('storage went away');
     });
 
     it('returns the file id and no error when the upload succeeds', async () => {
-        const result = await storeRealtimeRecording(input());
+        const result = await StoreRealtimeRecording(input());
 
         expect(result.FileID).toBe('file-1');
         expect(result.ErrorMessage).toBeNull();

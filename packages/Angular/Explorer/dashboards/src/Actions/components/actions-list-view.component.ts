@@ -18,37 +18,163 @@ interface CategoryTreeNode {
   styleUrls: ['./actions-list-view.component.css']
 })
 export class ActionsListViewComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
 
   public isLoading = true;
-  public actions: MJActionEntity[] = [];
-  public filteredActions: MJActionEntity[] = [];
-  public categories: Map<string, MJActionCategoryEntity> = new Map();
-  public categoryTree: CategoryTreeNode[] = [];
-  public categoryDescendants: Map<string, Set<string>> = new Map();
+  public Actions: MJActionEntity[] = [];
 
-  public searchTerm$ = new BehaviorSubject<string>('');
-  public selectedStatus$ = new BehaviorSubject<string>('all');
-  public selectedType$ = new BehaviorSubject<string>('all');
-  public selectedCategory$ = new BehaviorSubject<string>('all');
-  public expandedCategories: Set<string> = new Set();
+  /** @deprecated Use {@link Actions}. */
+  public get actions(): MJActionEntity[] {
+    return this.Actions;
+  }
+  /** @deprecated Use {@link Actions}. */
+  public set actions(value: MJActionEntity[]) {
+    this.Actions = value;
+  }
+  public FilteredActions: MJActionEntity[] = [];
 
-  public statusOptions = [
+  /** @deprecated Use {@link FilteredActions}. */
+  public get filteredActions(): MJActionEntity[] {
+    return this.FilteredActions;
+  }
+  /** @deprecated Use {@link FilteredActions}. */
+  public set filteredActions(value: MJActionEntity[]) {
+    this.FilteredActions = value;
+  }
+  public Categories: Map<string, MJActionCategoryEntity> = new Map();
+
+  /** @deprecated Use {@link Categories}. */
+  public get categories(): Map<string, MJActionCategoryEntity> {
+    return this.Categories;
+  }
+  /** @deprecated Use {@link Categories}. */
+  public set categories(value: Map<string, MJActionCategoryEntity>) {
+    this.Categories = value;
+  }
+  public CategoryTree: CategoryTreeNode[] = [];
+
+  /** @deprecated Use {@link CategoryTree}. */
+  public get categoryTree(): CategoryTreeNode[] {
+    return this.CategoryTree;
+  }
+  /** @deprecated Use {@link CategoryTree}. */
+  public set categoryTree(value: CategoryTreeNode[]) {
+    this.CategoryTree = value;
+  }
+  public CategoryDescendants: Map<string, Set<string>> = new Map();
+
+  /** @deprecated Use {@link CategoryDescendants}. */
+  public get categoryDescendants(): Map<string, Set<string>> {
+    return this.CategoryDescendants;
+  }
+  /** @deprecated Use {@link CategoryDescendants}. */
+  public set categoryDescendants(value: Map<string, Set<string>>) {
+    this.CategoryDescendants = value;
+  }
+
+  public SearchTerm$ = new BehaviorSubject<string>('');
+
+  /** @deprecated Use {@link SearchTerm$}. */
+  public get searchTerm$() {
+    return this.SearchTerm$;
+  }
+  /** @deprecated Use {@link SearchTerm$}. */
+  public set searchTerm$(value) {
+    this.SearchTerm$ = value;
+  }
+  public SelectedStatus$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedStatus$}. */
+  public get selectedStatus$() {
+    return this.SelectedStatus$;
+  }
+  /** @deprecated Use {@link SelectedStatus$}. */
+  public set selectedStatus$(value) {
+    this.SelectedStatus$ = value;
+  }
+  public SelectedType$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedType$}. */
+  public get selectedType$() {
+    return this.SelectedType$;
+  }
+  /** @deprecated Use {@link SelectedType$}. */
+  public set selectedType$(value) {
+    this.SelectedType$ = value;
+  }
+  public SelectedCategory$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedCategory$}. */
+  public get selectedCategory$() {
+    return this.SelectedCategory$;
+  }
+  /** @deprecated Use {@link SelectedCategory$}. */
+  public set selectedCategory$(value) {
+    this.SelectedCategory$ = value;
+  }
+  public ExpandedCategories: Set<string> = new Set();
+
+  /** @deprecated Use {@link ExpandedCategories}. */
+  public get expandedCategories(): Set<string> {
+    return this.ExpandedCategories;
+  }
+  /** @deprecated Use {@link ExpandedCategories}. */
+  public set expandedCategories(value: Set<string>) {
+    this.ExpandedCategories = value;
+  }
+
+  public StatusOptions = [
     { text: 'All Statuses', value: 'all' },
     { text: 'Active', value: 'Active' },
     { text: 'Pending', value: 'Pending' },
     { text: 'Disabled', value: 'Disabled' }
   ];
 
-  public typeOptions = [
+  /** @deprecated Use {@link StatusOptions}. */
+  public get statusOptions() {
+    return this.StatusOptions;
+  }
+  /** @deprecated Use {@link StatusOptions}. */
+  public set statusOptions(value) {
+    this.StatusOptions = value;
+  }
+
+  public TypeOptions = [
     { text: 'All Types', value: 'all' },
     { text: 'AI Generated', value: 'Generated' },
     { text: 'Custom', value: 'Custom' }
   ];
 
-  public categoryOptions: Array<{text: string; value: string}> = [
+  /** @deprecated Use {@link TypeOptions}. */
+  public get typeOptions() {
+    return this.TypeOptions;
+  }
+  /** @deprecated Use {@link TypeOptions}. */
+  public set typeOptions(value) {
+    this.TypeOptions = value;
+  }
+
+  public CategoryOptions: Array<{text: string; value: string}> = [
     { text: 'All Categories', value: 'all' }
   ];
+
+  /** @deprecated Use {@link CategoryOptions}. */
+  public get categoryOptions(): Array<{text: string; value: string}> {
+    return this.CategoryOptions;
+  }
+  /** @deprecated Use {@link CategoryOptions}. */
+  public set categoryOptions(value: Array<{text: string; value: string}>) {
+    this.CategoryOptions = value;
+  }
 
   private destroy$ = new Subject<void>();
 
@@ -66,10 +192,10 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
 
   private setupFilters(): void {
     combineLatest([
-      this.searchTerm$.pipe(debounceTime(300), distinctUntilChanged()),
-      this.selectedStatus$.pipe(distinctUntilChanged()),
-      this.selectedType$.pipe(distinctUntilChanged()),
-      this.selectedCategory$.pipe(distinctUntilChanged())
+      this.SearchTerm$.pipe(debounceTime(300), distinctUntilChanged()),
+      this.SelectedStatus$.pipe(distinctUntilChanged()),
+      this.SelectedType$.pipe(distinctUntilChanged()),
+      this.SelectedCategory$.pipe(distinctUntilChanged())
     ]).pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
@@ -106,7 +232,7 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
       const actions = (actionsResult.Results || []) as MJActionEntity[];
       const categories = (categoriesResult.Results || []) as MJActionCategoryEntity[];
        
-      this.actions = actions;
+      this.Actions = actions;
       this.populateCategoriesMap(categories);
       this.buildCategoryOptions(categories);
       this.applyFilters();
@@ -121,9 +247,9 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
 
 
   private populateCategoriesMap(categories: MJActionCategoryEntity[]): void {
-    this.categories.clear();
+    this.Categories.clear();
     categories.forEach(category => {
-      this.categories.set(category.ID, category);
+      this.Categories.set(category.ID, category);
     });
     
     // Build the category tree
@@ -134,7 +260,7 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
   }
 
   private buildCategoryOptions(categories: MJActionCategoryEntity[]): void {
-    this.categoryOptions = [
+    this.CategoryOptions = [
       { text: 'All Categories', value: 'all' },
       ...categories.map(category => ({
         text: category.Name,
@@ -175,20 +301,20 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
     };
     sortChildren(rootNodes);
     
-    this.categoryTree = rootNodes;
+    this.CategoryTree = rootNodes;
   }
 
   private buildDescendantMapping(categories: MJActionCategoryEntity[]): void {
-    this.categoryDescendants.clear();
+    this.CategoryDescendants.clear();
     
     // Initialize each category with itself
     categories.forEach(category => {
-      this.categoryDescendants.set(category.ID, new Set([category.ID]));
+      this.CategoryDescendants.set(category.ID, new Set([category.ID]));
     });
     
     // Build descendant sets
     const addDescendants = (categoryId: string, descendantId: string) => {
-      const descendants = this.categoryDescendants.get(categoryId);
+      const descendants = this.CategoryDescendants.get(categoryId);
       if (descendants) {
         descendants.add(descendantId);
       }
@@ -200,7 +326,7 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
         let currentParentId: string | null = category.ParentID;
         while (currentParentId) {
           addDescendants(currentParentId, category.ID);
-          const parent = this.categories.get(currentParentId);
+          const parent = this.Categories.get(currentParentId);
           currentParentId = parent?.ParentID || null;
         }
       }
@@ -208,10 +334,10 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
   }
 
   private applyFilters(): void {
-    let filtered = [...this.actions];
+    let filtered = [...this.Actions];
 
     // Apply search filter
-    const searchTerm = this.searchTerm$.value.toLowerCase();
+    const searchTerm = this.SearchTerm$.value.toLowerCase();
     if (searchTerm) {
       filtered = filtered.filter(action => 
         action.Name.toLowerCase().includes(searchTerm) ||
@@ -220,21 +346,21 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
     }
 
     // Apply status filter
-    const status = this.selectedStatus$.value;
+    const status = this.SelectedStatus$.value;
     if (status !== 'all') {
       filtered = filtered.filter(action => action.Status === status);
     }
 
     // Apply type filter
-    const type = this.selectedType$.value;
+    const type = this.SelectedType$.value;
     if (type !== 'all') {
       filtered = filtered.filter(action => action.Type === type);
     }
 
     // Apply category filter (includes descendants)
-    const categoryId = this.selectedCategory$.value;
+    const categoryId = this.SelectedCategory$.value;
     if (categoryId !== 'all') {
-      const descendantIds = this.categoryDescendants.get(categoryId);
+      const descendantIds = this.CategoryDescendants.get(categoryId);
       if (descendantIds) {
         // Filter actions that belong to the selected category or any of its descendants
         filtered = filtered.filter(action => 
@@ -246,38 +372,68 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
       }
     }
 
-    this.filteredActions = filtered;
+    this.FilteredActions = filtered;
   }
 
+  public OnSearchChange(searchTerm: string): void {
+    this.SearchTerm$.next(searchTerm);
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
   public onSearchChange(searchTerm: string): void {
-    this.searchTerm$.next(searchTerm);
+    return this.OnSearchChange(searchTerm);
   }
 
+  public OnStatusFilterChange(status: string): void {
+    this.SelectedStatus$.next(status);
+  }
+
+  /** @deprecated Use {@link OnStatusFilterChange}. */
   public onStatusFilterChange(status: string): void {
-    this.selectedStatus$.next(status);
+    return this.OnStatusFilterChange(status);
   }
 
+  public OnTypeFilterChange(type: string): void {
+    this.SelectedType$.next(type);
+  }
+
+  /** @deprecated Use {@link OnTypeFilterChange}. */
   public onTypeFilterChange(type: string): void {
-    this.selectedType$.next(type);
+    return this.OnTypeFilterChange(type);
   }
 
+  public OnCategoryFilterChange(categoryId: string): void {
+    this.SelectedCategory$.next(categoryId);
+  }
+
+  /** @deprecated Use {@link OnCategoryFilterChange}. */
   public onCategoryFilterChange(categoryId: string): void {
-    this.selectedCategory$.next(categoryId);
+    return this.OnCategoryFilterChange(categoryId);
   }
 
-  public openAction(action: MJActionEntity): void {
-    this.openEntityRecord.emit({
+  public OpenAction(action: MJActionEntity): void {
+    this.OpenEntityRecord.emit({
       entityName: 'MJ: Actions',
       recordId: action.ID
     });
   }
 
-  public getCategoryName(categoryId: string | null): string {
-    if (!categoryId) return 'No Category';
-    return this.categories.get(categoryId)?.Name || 'Unknown Category';
+  /** @deprecated Use {@link OpenAction}. */
+  public openAction(action: MJActionEntity): void {
+    return this.OpenAction(action);
   }
 
-  public getStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
+  public GetCategoryName(categoryId: string | null): string {
+    if (!categoryId) return 'No Category';
+    return this.Categories.get(categoryId)?.Name || 'Unknown Category';
+  }
+
+  /** @deprecated Use {@link GetCategoryName}. */
+  public getCategoryName(categoryId: string | null): string {
+    return this.GetCategoryName(categoryId);
+  }
+
+  public GetStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
     switch (status) {
       case 'Active': return 'success';
       case 'Pending': return 'warning';
@@ -286,7 +442,12 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
     }
   }
 
-  public getTypeIcon(type: string): string {
+  /** @deprecated Use {@link GetStatusColor}. */
+  public getStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
+    return this.GetStatusColor(status);
+  }
+
+  public GetTypeIcon(type: string): string {
     switch (type) {
       case 'Generated': return 'fa-solid fa-robot';
       case 'Custom': return 'fa-solid fa-code';
@@ -294,43 +455,87 @@ export class ActionsListViewComponent extends BaseAngularComponent implements On
     }
   }
 
+  /** @deprecated Use {@link GetTypeIcon}. */
+  public getTypeIcon(type: string): string {
+    return this.GetTypeIcon(type);
+  }
+
   /**
    * Gets the icon class for an action
    * Falls back to type-based icon if no IconClass is set
    */
+  public GetActionIcon(action: MJActionEntity): string {
+    return action?.IconClass || this.GetTypeIcon(action.Type);
+  }
+
+  /** @deprecated Use {@link GetActionIcon}. */
   public getActionIcon(action: MJActionEntity): string {
-    return action?.IconClass || this.getTypeIcon(action.Type);
+    return this.GetActionIcon(action);
   }
 
   // Tree view methods
-  public toggleCategoryExpanded(categoryId: string): void {
-    if (this.expandedCategories.has(categoryId)) {
-      this.expandedCategories.delete(categoryId);
+  public ToggleCategoryExpanded(categoryId: string): void {
+    if (this.ExpandedCategories.has(categoryId)) {
+      this.ExpandedCategories.delete(categoryId);
     } else {
-      this.expandedCategories.add(categoryId);
+      this.ExpandedCategories.add(categoryId);
     }
   }
 
+  /** @deprecated Use {@link ToggleCategoryExpanded}. */
+  public toggleCategoryExpanded(categoryId: string): void {
+    return this.ToggleCategoryExpanded(categoryId);
+  }
+
+  public IsCategoryExpanded(categoryId: string): boolean {
+    return this.ExpandedCategories.has(categoryId);
+  }
+
+  /** @deprecated Use {@link IsCategoryExpanded}. */
   public isCategoryExpanded(categoryId: string): boolean {
-    return this.expandedCategories.has(categoryId);
+    return this.IsCategoryExpanded(categoryId);
   }
 
+  public SelectCategory(categoryId: string): void {
+    this.SelectedCategory$.next(categoryId);
+  }
+
+  /** @deprecated Use {@link SelectCategory}. */
   public selectCategory(categoryId: string): void {
-    this.selectedCategory$.next(categoryId);
+    return this.SelectCategory(categoryId);
   }
 
-  public getCategoryActionCount(categoryId: string): number {
-    const descendantIds = this.categoryDescendants.get(categoryId);
+  public GetCategoryActionCount(categoryId: string): number {
+    const descendantIds = this.CategoryDescendants.get(categoryId);
     if (!descendantIds) return 0;
     
-    return this.actions.filter(action => 
+    return this.Actions.filter(action => 
       action.CategoryID && descendantIds.has(action.CategoryID)
     ).length;
   }
 
-  public showCategoryTree = false;
+  /** @deprecated Use {@link GetCategoryActionCount}. */
+  public getCategoryActionCount(categoryId: string): number {
+    return this.GetCategoryActionCount(categoryId);
+  }
 
+  public ShowCategoryTree = false;
+
+  /** @deprecated Use {@link ShowCategoryTree}. */
+  public get showCategoryTree() {
+    return this.ShowCategoryTree;
+  }
+  /** @deprecated Use {@link ShowCategoryTree}. */
+  public set showCategoryTree(value) {
+    this.ShowCategoryTree = value;
+  }
+
+  public ToggleCategoryTree(): void {
+    this.ShowCategoryTree = !this.ShowCategoryTree;
+  }
+
+  /** @deprecated Use {@link ToggleCategoryTree}. */
   public toggleCategoryTree(): void {
-    this.showCategoryTree = !this.showCategoryTree;
+    return this.ToggleCategoryTree();
   }
 }

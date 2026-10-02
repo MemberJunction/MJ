@@ -10,22 +10,22 @@ export class Color {
 
   @Field(() => String)
   @Public()
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String)
   @Public()
-  createdZ: string;
+  createdZ: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class ColorNotification {
   @Public()
   @Field(() => String, { nullable: true })
-  message?: string;
+  message?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Public()
   @Field((_type) => Date)
-  date!: Date;
+  date!: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 export interface ColorNotificationPayload {
@@ -36,13 +36,13 @@ export interface ColorNotificationPayload {
 export class ColorResolver {
   @Subscription(() => ColorNotification, { topics: 'COLOR' })
   @Public()
-  colorSubscription(@Root() { message }: ColorNotificationPayload): ColorNotification {
+  colorSubscription(@Root() { message }: ColorNotificationPayload): ColorNotification {  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     return { message, date: new Date() };
   }
 
   @Query(() => [Color])
   @Public()
-  async colors(@Ctx() _ctx: AppContext, @PubSub() pubSub: PubSubEngine) {
+  async colors(@Ctx() _ctx: AppContext, @PubSub() pubSub: PubSubEngine) {  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     const createdZ = new Date().toISOString();
 
     pubSub.publish('COLOR', {

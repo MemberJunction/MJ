@@ -33,11 +33,11 @@ import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { BuildSingleStaticParamConfiguration, ResolveActionJobTypeID } from '../../../shared/action-scheduled-job';
 import { CronToHumanReadable } from '../autotagging/shared/classify.format';
 import {
-    buildVectorAgentContext,
-    resolveSyncRow,
+    BuildVectorAgentContext,
+    ResolveSyncRow,
     VectorSyncRowCandidate,
 } from './vector-management-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 import { withoutSensitiveFields, sensitiveFieldsInTemplate } from './sensitive-fields';
 import {
     ENTITY_DOCUMENT_TYPE_BY_USE_CASE,
@@ -165,8 +165,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.EditDocID = doc.ID;
         this.EditDocName = doc.Name;
         this.EditDocEntityName = doc.Entity || '';
-        this.EditDocVectorDBID = doc.VectorDatabaseID;
-        this.EditDocAIModelID = doc.AIModelID;
+        this.EditDocVectorDBID = doc.VectorDatabaseID ?? '';
+        this.EditDocAIModelID = doc.AIModelID ?? '';
         this.EditDocVectorIndexID = doc.VectorIndexID || '';
         this.EditDocStatus = doc.Status;
         this.EditDocTemplate = '';
@@ -215,8 +215,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (!loaded) throw new Error('Could not load entity document');
 
             doc.Name = this.EditDocName;
-            doc.VectorDatabaseID = this.EditDocVectorDBID;
-            doc.AIModelID = this.EditDocAIModelID;
+            doc.VectorDatabaseID = this.EditDocVectorDBID || null;
+            doc.AIModelID = this.EditDocAIModelID || null;
             doc.VectorIndexID = this.EditDocVectorIndexID || null;
             doc.Status = this.EditDocStatus as 'Active' | 'Inactive';
 
@@ -483,7 +483,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public ShowEntityPicker = false;
     public SelectedEntityIndex = -1;
     /** Reference to the entity search input for programmatic focus */
-    @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
+    @ViewChild('entitySearchInput') EntitySearchInput?: ElementRef<HTMLInputElement>;
+
+    /** @deprecated Use {@link EntitySearchInput}. */
+    get entitySearchInput(): ElementRef<HTMLInputElement> | undefined {
+        return this.EntitySearchInput;
+    }
+    /** @deprecated Use {@link EntitySearchInput}. */
+    set entitySearchInput(value: ElementRef<HTMLInputElement> | undefined) {
+        this.EntitySearchInput = value;
+    }
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
@@ -522,7 +531,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (this.HideToolbar) {
             return;
         }
-        this.navigationService.SetAgentContext(this, buildVectorAgentContext({
+        this.navigationService.SetAgentContext(this, BuildVectorAgentContext({
             TotalVectors: this.TotalVectors,
             EntityDocumentCount: this.SyncRows.length,
             SyncingCount: this.SyncingIds.size,
@@ -590,9 +599,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                     required: ['entityName'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['entityName'], 'entityName');
+                    const v = ValidateStringParam(params['entityName'], 'entityName');
                     if (!v.ok) return v.result;
-                    const resolved = resolveSyncRow(v.value, this.getSyncRowCandidates());
+                    const resolved = ResolveSyncRow(v.value, this.getSyncRowCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     if (this.IsSyncing(resolved.value.EntityDocumentID)) {
                         return { Success: false, ErrorMessage: `"${resolved.value.EntityName}" is already syncing` };
@@ -630,9 +639,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                     required: ['document'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['document'], 'document');
+                    const v = ValidateStringParam(params['document'], 'document');
                     if (!v.ok) return v.result;
-                    const resolved = resolveSyncRow(v.value, this.getSyncRowCandidates());
+                    const resolved = ResolveSyncRow(v.value, this.getSyncRowCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     await this.OpenEditPanel(resolved.value.EntityDocumentID);
                     return { Success: true, Data: { EntityName: resolved.value.EntityName, DocumentName: resolved.value.DocumentName } };
@@ -1021,8 +1030,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             this.cdr.detectChanges();
             // Focus search input after the @if block renders — deferred past the click event
             setTimeout(() => {
-                if (this.entitySearchInput?.nativeElement) {
-                    this.entitySearchInput.nativeElement.focus();
+                if (this.EntitySearchInput?.nativeElement) {
+                    this.EntitySearchInput.nativeElement.focus();
                 }
             }, 0);
         } else {

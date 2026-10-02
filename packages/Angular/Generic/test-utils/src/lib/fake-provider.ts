@@ -1,4 +1,4 @@
-import { EntityInfo, IMetadataProvider, RoleInfo, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, RoleInfo, RunQueryParams, RunQueryResult, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 
 /**
  * Options for {@link createFakeProvider}.
@@ -10,30 +10,32 @@ export interface FakeProviderOptions<T = unknown> {
    * Rows any `RunView` / `RunViews` call returns — a fixed array (same for every call) or a
    * function of the params (to vary by `EntityName` / `ExtraFilter`).
    */
-  runViewResults?: T[] | ((params: RunViewParams) => T[]);
+  runViewResults?: T[] | ((params: RunViewParams) => T[]);  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * Rows any `RunQuery` / `RunQueries` call returns — a fixed array or a function of the params.
+   */
+  RunQueryResults?: unknown[] | ((params: RunQueryParams) => unknown[]);
   /** The provider's `CurrentUser`. Merged over a stub default. */
-  currentUser?: Partial<UserInfo>;
+  currentUser?: Partial<UserInfo>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Resolver for `provider.EntityByName(name)`. Components that read entity metadata
    * (`this.ProviderToUse.EntityByName(...)`) need this — without it the default returns
    * `undefined`, which is the right behavior for exercising "entity not found" guard paths.
    */
-  entityByName?: (name: string) => EntityInfo | undefined;
-
+  entityByName?: (name: string) => EntityInfo | undefined;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Rows for `provider.Entities` — the entity-metadata array some components scan
    * (`md.Entities.find(e => e.Name === '...')`). Only the fields the component reads need to be
    * present (commonly `Name` + `ID`); pass minimal stubs. Defaults to `[]` (an empty catalog,
    * which exercises the "entity not found" guard).
    */
-  entities?: Array<Partial<EntityInfo>>;
-
+  entities?: Array<Partial<EntityInfo>>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Rows for `provider.Roles` — the role catalog components read for permission/role UIs
    * (`md.Roles.find(r => r.Name === '...')`). Only the fields the component reads need to be
    * present (commonly `Name` + `ID`); pass minimal stubs. Defaults to `[]`.
    */
-  roles?: Array<Partial<RoleInfo>>;
+  roles?: Array<Partial<RoleInfo>>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -48,11 +50,17 @@ export interface FakeProviderOptions<T = unknown> {
  * const provider = createFakeProvider({ runViewResults: [{ ID: '1', Name: 'Ada' }] }); // T inferred
  * const f = renderComponentFixture(MyDataComponent, { inputs: { Provider: provider } });
  */
-export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> = {}): IMetadataProvider {
+export function CreateFakeProvider<T = unknown>(options: FakeProviderOptions<T> = {}): IMetadataProvider {
   const rowsFor = (params: RunViewParams): T[] =>
     typeof options.runViewResults === 'function' ? options.runViewResults(params) : (options.runViewResults ?? []);
 
   const toResult = (rows: T[]): RunViewResult => ({ Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length }) as RunViewResult;
+
+  const queryRowsFor = (params: RunQueryParams): unknown[] =>
+    typeof options.RunQueryResults === 'function' ? options.RunQueryResults(params) : (options.RunQueryResults ?? []);
+
+  const toQueryResult = (rows: unknown[]): RunQueryResult =>
+    ({ Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTimeMS: 1 } as unknown as RunQueryResult);
 
   const fake = {
     CurrentUser: { ID: 'test-user-id', Name: 'Test User', Email: 'test@example.com', ...options.currentUser },
@@ -60,6 +68,8 @@ export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
     Roles: options.roles ?? [],
     RunView: async (params: RunViewParams): Promise<RunViewResult> => toResult(rowsFor(params)),
     RunViews: async (paramsList: RunViewParams[]): Promise<RunViewResult[]> => paramsList.map((p) => toResult(rowsFor(p))),
+    RunQuery: async (params: RunQueryParams): Promise<RunQueryResult> => toQueryResult(queryRowsFor(params)),
+    RunQueries: async (paramsList: RunQueryParams[]): Promise<RunQueryResult[]> => paramsList.map((p) => toQueryResult(queryRowsFor(p))),
     EntityByName: (name: string): EntityInfo | undefined => options.entityByName?.(name),
   };
 
@@ -71,10 +81,18 @@ export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
   return fake as unknown as IMetadataProvider;
 }
 
+/** @deprecated Use {@link CreateFakeProvider}. */
+export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> = {}): IMetadataProvider {
+  return CreateFakeProvider(options);
+}
+
 /**
  * Minimal stub provider for tests that only resolve entity metadata via `EntityByName`.
  */
-export const fakeMetadataProvider = <T extends { Name: string; DisplayName?: string }>(entities: T[]) => ({
+export const FakeMetadataProvider = <T extends { Name: string; DisplayName?: string }>(entities: T[]) => ({
   Entities: entities,
   EntityByName: (n: string) => entities.find(e => e.Name.trim().toLowerCase() === n?.trim().toLowerCase()),
 });
+
+/** @deprecated Use {@link FakeMetadataProvider}. */
+export const fakeMetadataProvider = FakeMetadataProvider;

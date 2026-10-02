@@ -32,8 +32,13 @@ export class GroqLLM extends BaseLLM {
     /**
      * Read only getter method to get the Groq client instance
      */
-    public get client(): Groq {
+    public get Client(): Groq {
         return this.GroqClient;
+    }
+
+    /** @deprecated Use {@link Client}. */
+    public get client(): Groq {
+        return this.Client;
     }
     
     /**
@@ -365,7 +370,7 @@ export class GroqLLM extends BaseLLM {
         // underlying HTTP socket rather than merely abandoning this promise.
         let chatResponse: ChatCompletion;
         try {
-            chatResponse = await this.client.chat.completions.create(groqParams, { signal: params.cancellationToken });
+            chatResponse = await this.Client.chat.completions.create(groqParams, { signal: params.cancellationToken });
         } catch (error) {
             if (this.isCancellation(error, params.cancellationToken)) {
                 return this.buildCancelledResult(startTime);
@@ -529,7 +534,7 @@ export class GroqLLM extends BaseLLM {
         
         // Forward the cancellation token so an abort closes the streaming socket, and wrap the stream
         // so the abort is reported as a cancellation rather than a truncated success.
-        const stream = await this.client.chat.completions.create(groqParams, { signal: params.cancellationToken });
+        const stream = await this.Client.chat.completions.create(groqParams, { signal: params.cancellationToken });
         return this.iterateWithCancellation(stream, params.cancellationToken);
     }
 
