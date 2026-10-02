@@ -266,7 +266,8 @@ export class TagEngine extends BaseSingleton<TagEngine> {
 
         // Always initialize the vector service — even when empty — so new tags
         // created during a pipeline run can be embedded and added on-the-fly.
-        this._tagVectorService = new SimpleVectorService<TagEmbeddingMetadata>();
+        // float32: embeddings are float32 at the source, and it halves the pool's memory
+        this._tagVectorService = new SimpleVectorService<TagEmbeddingMetadata>({ Precision: 'float32' });
 
         const tags = this.Tags;
         if (tags.length === 0) {
@@ -877,7 +878,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         // the suggestion-band path needs the raw score.
         const lowestThreshold = 0;
 
-        const results = this._tagVectorService.FindNearest(
+        const results = await this._tagVectorService.FindNearestAsync(
             queryVector,
             1,
             lowestThreshold,

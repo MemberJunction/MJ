@@ -153,6 +153,7 @@ vi.mock('@memberjunction/ai-vectors-memory', () => {
     class MockSimpleVectorService {
         LoadVectors = mockLoadVectors;
         FindNearest = mockFindNearest;
+        FindNearestAsync = (...args: Parameters<typeof mockFindNearest>) => Promise.resolve(mockFindNearest(...args));
         AddVector = mockAddVector;
     }
     return {

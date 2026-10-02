@@ -178,8 +178,9 @@ import {
     SaveEntityGraphOperation,
 } from '@memberjunction/core';
 
-// @memberjunction/ai-vectors-memory (2 classes)
+// @memberjunction/ai-vectors-memory (3 classes)
 import {
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
@@ -1345,6 +1346,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     xAIRealtime,
     ZhipuLLM,
     SaveEntityGraphOperation,
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     PgVectorColocatedDatabase,
@@ -1497,11 +1499,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
-    MJComponentLibraryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
@@ -1701,11 +1703,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
-    MJScopedPromptConfigEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
@@ -1905,11 +1907,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FacebookRespondToCommentsAction,
     FacebookSchedulePostAction,
     FacebookSearchPostsAction,
-    GetAccountAnalyticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetAccountAnalyticsAction,
     GetCommentsAction,
     GetTrendingHashtagsAction,
     GetUserVideosAction,
@@ -2109,11 +2111,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
-    MJEntityEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
@@ -2311,7 +2313,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 982;
+export const CLASS_REGISTRATIONS_COUNT = 983;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -87,6 +87,7 @@
     "@memberjunction/ai-siliconflow": "6.2.0-edge.1",
     "@memberjunction/ai-vector-dupe": "6.2.0-edge.1",
     "@memberjunction/ai-vectors-memory": "6.2.0-edge.1",
+    "@memberjunction/ai-vectors-memory-server": "6.2.0-edge.1",
     "@memberjunction/ai-vectors-pgvector": "6.2.0-edge.1",
     "@memberjunction/ai-vectors-pinecone": "6.2.0-edge.1",
     "@memberjunction/ai-vectors-qdrant": "6.2.0-edge.1",

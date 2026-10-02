@@ -316,17 +316,45 @@ results.forEach(r => {
 });
 ```
 
+## Storage and Precision
+
+Vectors are stored packed — one contiguous typed array for the whole service, with each row's sum of squares cached — rather than one `number[]` per key. Searches allocate nothing per row, cosine needs only a dot product, and top-K selection is a bounded insertion instead of a full sort.
+
+```typescript
+// Default: float64. Every value and score is exactly as before.
+const general = new SimpleVectorService();
+
+// Model embeddings: float32 halves memory. Embeddings are float32 at the source,
+// so scores differ from float64 only around the 7th significant digit.
+const embeddings = new SimpleVectorService({ Precision: 'float32' });
+embeddings.ReserveCapacity(rowCount, 1536); // optional: one allocation for a bulk load
+```
+
+Behaviour is unchanged from the `Map`-based implementation: same scores (bit-for-bit at float64), same tie-breaking (insertion order), same `topK` / threshold / filter semantics. `GetVector` and `ExportVectors` now return **copies**, so mutating a returned array no longer changes the stored vector. Subclasses that override a metric method (`CalculateDistance`, `CosineSimilarity`, …) keep working — the service detects the override and scores row by row through it.
+
+## Async Search and Server Acceleration
+
+`FindNearestAsync`, `KMeansClusterAsync` and `DBSCANClusterAsync` take the same arguments and return the same results as their synchronous forms. In a browser, or anywhere no accelerator is registered, they run in-process. On a server that loads [`@memberjunction/ai-vectors-memory-server`](../MemoryServer/README.md), large searches and every clustering run move to a worker-thread pool reading the store through shared memory, optionally using a native SIMD backend — so the event loop keeps serving other requests.
+
+```typescript
+const matches = await service.FindNearestAsync(queryVector, 10, 0.5, 'cosine', m => m.agentId === id);
+const clusters = await service.KMeansClusterAsync(5);
+```
+
+The seam is `BaseVectorAccelerator`, resolved through the ClassFactory (`VECTOR_ACCELERATOR_KEY`). An accelerator only proposes candidate rows; the service re-scores them against its live store, so an accelerator — or a write racing a worker — can never surface a wrong score. Prefer the async forms in server code paths that handle requests.
+
 ## Performance Characteristics
 
 | Operation | Complexity | Notes |
 |---|---|---|
-| AddVector / LoadVectors | O(1) per vector | Map-based storage |
-| FindNearest (no filter) | O(n) | Linear scan with sort |
-| FindNearest (with filter) | O(m) where m < n | Filter reduces candidate set |
-| KMeansCluster | O(n * k * iterations) | K-Means++ initialization |
-| DBSCANCluster | O(n^2) | Neighborhood pre-computation |
+| AddVector / LoadVectors | O(1) amortized per vector | Packed storage; LoadVectors pre-sizes |
+| RemoveVector | O(1) amortized | Tombstone; order-preserving compaction when >25% removed |
+| FindNearest (no filter) | O(n·d) | Single pass, bounded top-K buffer, no sort |
+| FindNearest (with filter) | O(n + m·d), m < n | Filter runs first; only matches are scored |
+| KMeansCluster | O(n · k · d · iterations) | K-Means++ initialization |
+| DBSCANCluster | O(n² · d) | Neighborhood pre-computation |
 
-**Memory usage**: approximately `8 bytes * dimensions + ~100 bytes` per vector. Example: 10,000 vectors at 384 dimensions is roughly 31 MB.
+**Memory usage**: `dimensions × 8 bytes` per vector at float64, `× 4 bytes` at float32, plus a few bytes of bookkeeping. Example: 20,000 embeddings at 1,536 dimensions is about 123 MB at float32.
 
 ## VectorDBBase Providers
 
@@ -351,18 +379,18 @@ const result = await provider.QueryIndex(
 // result.data.matches[i].metadata.RecordID is the parent record's ID
 ```
 
-**Lazy cache:** `Map<EntityDocumentID, LoadedIndex>` with TTL eviction (default 15 minutes). After the vector-sync pipeline writes back fresh embeddings, call `SimpleVectorServiceProvider.InvalidateIndex(entityDocumentId)` for deterministic cache refresh; TTL is the safety net.
+**Incrementally maintained cache:** one loaded index per `EntityDocumentID`, held at float32. Saves and deletes of `MJ: Entity Record Documents` rows — local, or on another server via `remote-invalidate` — are applied to the loaded index **row by row**; the index is never thrown away because one row changed. Remote changes use the broadcast record when the host opts the entity into record-data broadcast, otherwise only the changed rows are re-read (batched). Once the TTL (default 15 minutes) passes, the index keeps serving while it reloads in the background. Call `SimpleVectorServiceProvider.InvalidateIndex(entityDocumentId)` only after writing `VectorJSON` by a path that bypasses `BaseEntity` (raw SQL, external tools); it forces the next query to reload first.
 
 **Read-only:** ingestion methods (`CreateRecord`, `UpdateRecord`, etc.) throw via the `unsupported()` path. The vector-sync pipeline writes `EntityRecordDocument.VectorJSON` directly; this driver just rehydrates from those rows.
 
-**When NOT to use:** > a few thousand `EntityRecordDocument` rows per `EntityDocument`, multi-process deployments, scenarios that need a real ANN index (HNSW / IVF). For those, configure a remote provider (Pinecone, Qdrant, pgvector) on the `EntityDocument`'s `VectorDatabaseID` instead.
+**When NOT to use:** many hundreds of thousands of `EntityRecordDocument` rows per `EntityDocument`, or scenarios that need a persistent ANN index. For those, configure a colocated or remote provider (pgvector, SQL Server, Qdrant, Pinecone) on the `EntityDocument`'s `VectorDatabaseID` instead. (A server running `@memberjunction/ai-vectors-memory-server` can opt into an in-memory HNSW index for large stores.)
 
 ## Dependencies
 
 | Package | Purpose |
 |---|---|
-| `@memberjunction/core` | `LogError`, `RunView`, `UserInfo` |
-| `@memberjunction/global` | `RegisterClass` for VectorDBBase registrations |
+| `@memberjunction/core` | `LogError`, `RunView`, `UserInfo`, `BaseEntityEvent` |
+| `@memberjunction/global` | `RegisterClass` / ClassFactory for VectorDBBase and accelerator registrations, `BaseSingleton`, `EscapeSQLString` |
 | `@memberjunction/ai-vectordb` | `VectorDBBase` contract that the two providers implement |
 
 This package has minimal dependencies, making it lightweight and suitable for both server-side and client-side use.

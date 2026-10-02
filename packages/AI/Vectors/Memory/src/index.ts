@@ -5,11 +5,15 @@
 
 export {
   SimpleVectorService,
+  SimpleVectorServiceOptions,
   VectorEntry,
   VectorSearchResult,
-  DistanceMetric,
   ClusterResult
 } from './models/SimpleVectorService';
+
+export * from './models/VectorKernels';
+export * from './models/VectorStore';
+export * from './models/VectorAccelerator';
 
 export { SimpleVectorDatabase, LoadSimpleVectorDatabase } from './models/SimpleVectorDatabase';
 export { SimpleVectorServiceProvider, SimpleVectorIndexCache, LoadSimpleVectorServiceProvider } from './models/SimpleVectorServiceProvider';

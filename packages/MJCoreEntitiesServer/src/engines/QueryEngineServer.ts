@@ -215,7 +215,8 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
             }
         }
 
-        this._queryVectorService = new SimpleVectorService<QueryEmbeddingMetadata>();
+        // float32: embeddings are float32 at the source, and it halves the pool's memory
+        this._queryVectorService = new SimpleVectorService<QueryEmbeddingMetadata>({ Precision: 'float32' });
         if (entries.length > 0) {
             this._queryVectorService.LoadVectors(entries);
         }
@@ -296,7 +297,7 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
             throw new Error('Failed to generate embedding for search text');
         }
 
-        const results = this._queryVectorService.FindNearest(
+        const results = await this._queryVectorService.FindNearestAsync(
             embedding.result.vector,
             topK,
             minSimilarity,

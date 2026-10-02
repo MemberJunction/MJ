@@ -136,6 +136,7 @@ vi.mock('@memberjunction/ai-vectors-memory', () => ({
         AddVector = vi.fn();
         RemoveVector = h.removeVector;
         FindNearest = h.findNearest;
+        FindNearestAsync = (...args: Parameters<typeof h.findNearest>) => Promise.resolve(h.findNearest(...args));
     },
     VectorEntry: class {},
 }));

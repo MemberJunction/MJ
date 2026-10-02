@@ -27,8 +27,9 @@ import {
     SaveEntityGraphOperation,
 } from '@memberjunction/core';
 
-// @memberjunction/ai-vectors-memory (2 classes)
+// @memberjunction/ai-vectors-memory (3 classes)
 import {
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
@@ -791,6 +792,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAIRealtimeClient,
     xAIRealtimeClient,
     SaveEntityGraphOperation,
+    BaseVectorAccelerator,
     SimpleVectorDatabase,
     SimpleVectorServiceProvider,
     AIAgentPermissionProvider,
@@ -982,11 +984,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
-    MJDataContextEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDataContextEntity,
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
@@ -1186,11 +1188,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTestSuiteEntity,
     MJTestSuiteRunEntity,
     MJTestSuiteTestEntity,
-    MJTestTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTestTypeEntity,
     MJThemeEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
@@ -1390,11 +1392,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EntityIntegrationComponent,
     EventMonitorComponent,
     FeaturePipelinesResourceComponent,
-    FormBuilderResourceComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     GridWidthLabComponent,
     HomeApplication,
@@ -1480,7 +1482,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 671;
+export const CLASS_REGISTRATIONS_COUNT = 672;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

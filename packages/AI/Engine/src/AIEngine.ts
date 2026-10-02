@@ -719,7 +719,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 metadata: this.packageNoteMetadata(note)
             }));
 
-            this._noteVectorService = new SimpleVectorService();
+            // float32: embeddings are float32 at the source, and it halves the pool's memory
+            this._noteVectorService = new SimpleVectorService({ Precision: 'float32' });
             this._noteVectorService.LoadVectors(entries);
         } catch (error) {
             LogError(`AIEngine: Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
@@ -824,7 +825,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 metadata: this.packageExampleMetadata(example)
             }));
 
-            this._exampleVectorService = new SimpleVectorService();
+            this._exampleVectorService = new SimpleVectorService({ Precision: 'float32' });
             this._exampleVectorService.LoadVectors(entries);
         } catch (error) {
             LogError(`AIEngine: Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
@@ -1183,7 +1184,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         const composedFilter = this.composeNoteFilters(agentId, userId, companyId, additionalFilter);
 
-        const results = this._noteVectorService.FindNearest(
+        // Async: on a server the scan runs off the event loop (worker pool / native backend)
+        const results = await this._noteVectorService.FindNearestAsync(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
@@ -1296,7 +1298,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         const composedFilter = this.composeExampleFilters(agentId, userId, companyId, additionalFilter);
 
-        const results = this._exampleVectorService.FindNearest(
+        const results = await this._exampleVectorService.FindNearestAsync(
             queryEmbedding.result.vector,
             topK,
             minSimilarity,
