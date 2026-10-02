@@ -244,12 +244,6 @@ vi.mock('@memberjunction/core-entities', () => ({
             EntityDocuments: [],
             VectorIndexes: [],
             GetEntityDocumentByID: vi.fn().mockImplementation(() => testState.entityDocument),
-            GetVectorIndexByID: vi.fn().mockReturnValue({
-                ID: 'vi-1',
-                Name: 'mj-knowledge-index',
-                VectorDatabaseID: 'vdb-1',
-                EmbeddingModelID: 'model-1',
-            }),
         },
     },
 }));
@@ -329,6 +323,14 @@ vi.mock('@memberjunction/aiengine', () => ({
         Instance: {
             Models: [{ ID: 'model-1', AIModelType: 'Embeddings', DriverClass: 'TestDriver' }],
             VectorDatabases: [{ ID: 'vdb-1', ClassKey: 'TestVDB' }],
+            GetVectorIndexByID: vi.fn().mockReturnValue({
+                ID: 'vi-1',
+                Name: 'mj-knowledge-index',
+                VectorDatabaseID: 'vdb-1',
+                EmbeddingModelID: 'model-1',
+            }),
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: vi.fn((v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name),
         },
     },
 }));
@@ -547,6 +549,32 @@ describe('DuplicateRecordDetector', () => {
                     Description: expect.stringContaining('Duplicate detection single record'),
                 })
             );
+        });
+
+        it('queries the vector index by the engine-resolved provider name, not its MJ display Name', async () => {
+            const { AIEngine } = await import('@memberjunction/aiengine');
+            const vectorIndex = {
+                ID: 'vi-1',
+                Name: 'Contacts Index (Pinecone)',
+                ExternalID: 'contacts-index',
+                VectorDatabaseID: 'vdb-1',
+                EmbeddingModelID: 'model-1',
+            };
+            vi.mocked(AIEngine.Instance.GetVectorIndexByID).mockReturnValueOnce(vectorIndex as never);
+            testState.entityDocument = {
+                ID: 'doc-1',
+                Name: 'Contacts Doc',
+                EntityID: 'entity-1',
+                AIModelID: 'model-1',
+                VectorDatabaseID: 'vdb-1',
+                VectorIndexID: 'vi-1',
+                Type: 'Template',
+                TemplateID: 'tmpl-1',
+            };
+            await detector.CheckSingleRecord('doc-1', new CompositeKey(), {}, new UserInfo());
+
+            expect(AIEngine.Instance.GetProviderIndexName).toHaveBeenCalledWith(vectorIndex);
+            expect((detector as unknown as { indexName: string }).indexName).toBe('contacts-index');
         });
     });
 
