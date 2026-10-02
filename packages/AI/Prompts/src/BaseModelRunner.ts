@@ -437,7 +437,7 @@ export abstract class BaseModelRunner {
       // Expiry is evaluated by the engine rather than compared here, so this
       // failover path honors the same policy — including any grace period —
       // that getCredential() would apply a few lines below.
-      const expiration = CredentialEngine.Instance.getExpirationStatus(credential);
+      const expiration = CredentialEngine.Instance.GetExpirationStatus(credential);
       if (!expiration.usable) {
         if (verbose) {
           this.logStatus(
@@ -532,7 +532,7 @@ export abstract class BaseModelRunner {
       UUIDsEqual(c.CredentialTypeID, credentialTypeId) &&
       c.IsDefault === true &&
       c.IsActive === true &&
-      CredentialEngine.Instance.getExpirationStatus(c).usable
+      CredentialEngine.Instance.GetExpirationStatus(c).usable
     ) || null;
   }
 

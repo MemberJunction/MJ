@@ -83,7 +83,7 @@ export interface CredentialExpirationEvaluation {
 
     /**
      * The normalized expiry instant, or null when the credential never expires
-     * (or carried an unparseable value — see {@link evaluateExpiration}).
+     * (or carried an unparseable value — see {@link EvaluateExpiration}).
      */
     expiresAt: Date | null;
 
@@ -161,7 +161,7 @@ function toWholeDays(ms: number): number {
  * @param config - Expiration configuration. Defaults to {@link DEFAULT_EXPIRATION_CONFIG}.
  * @param now - The instant to evaluate against. Injectable for testing; defaults to the current time.
  */
-export function evaluateExpiration(
+export function EvaluateExpiration(
     expiresAt: Date | string | null | undefined,
     config: CredentialExpirationConfig = DEFAULT_EXPIRATION_CONFIG,
     now: Date = new Date()
@@ -216,8 +216,8 @@ export function evaluateExpiration(
  * Convenience predicate for callers that only need a yes/no answer and do not
  * care about the warning window or grace period.
  */
-export function isExpired(expiresAt: Date | string | null | undefined, now: Date = new Date()): boolean {
-    return evaluateExpiration(expiresAt, DEFAULT_EXPIRATION_CONFIG, now).status === 'expired';
+export function IsExpired(expiresAt: Date | string | null | undefined, now: Date = new Date()): boolean {
+    return EvaluateExpiration(expiresAt, DEFAULT_EXPIRATION_CONFIG, now).status === 'expired';
 }
 
 /**
@@ -247,13 +247,13 @@ export class CredentialExpiredError extends CredentialResolutionError {
     public readonly credentialId: string | null;
 
     /** The credential's name as requested. */
-    public readonly credentialName: string;
+    public readonly CredentialName: string;
 
     /** The instant the credential expired. */
-    public readonly expiresAt: Date;
+    public readonly ExpiresAt: Date;
 
     /** Whole days since expiry (positive). */
-    public readonly daysSinceExpiration: number;
+    public readonly DaysSinceExpiration: number;
 
     constructor(credentialName: string, expiresAt: Date, credentialId: string | null, daysSinceExpiration: number) {
         super(
@@ -262,9 +262,9 @@ export class CredentialExpiredError extends CredentialResolutionError {
             `or clear ExpiresAt if it no longer expires.`
         );
         this.credentialId = credentialId;
-        this.credentialName = credentialName;
-        this.expiresAt = expiresAt;
-        this.daysSinceExpiration = daysSinceExpiration;
+        this.CredentialName = credentialName;
+        this.ExpiresAt = expiresAt;
+        this.DaysSinceExpiration = daysSinceExpiration;
     }
 }
 
@@ -276,10 +276,10 @@ export class CredentialExpiredError extends CredentialResolutionError {
  */
 export class CredentialNotFoundError extends CredentialResolutionError {
     /** The credential name that was requested. */
-    public readonly credentialName: string;
+    public readonly CredentialName: string;
 
     constructor(credentialName: string) {
         super(`Credential not found: ${credentialName}`);
-        this.credentialName = credentialName;
+        this.CredentialName = credentialName;
     }
 }

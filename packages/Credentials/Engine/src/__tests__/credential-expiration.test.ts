@@ -8,8 +8,8 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-    evaluateExpiration,
-    isExpired,
+    EvaluateExpiration,
+    IsExpired,
     DEFAULT_EXPIRATION_CONFIG,
     DEFAULT_EXPIRATION_WARNING_WINDOW_MS,
     CredentialExpirationConfig,
@@ -35,9 +35,9 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-describe('evaluateExpiration - no expiry set', () => {
+describe('EvaluateExpiration - no expiry set', () => {
     it('treats null as valid forever', () => {
-        const result = evaluateExpiration(null, config(), NOW);
+        const result = EvaluateExpiration(null, config(), NOW);
         expect(result.status).toBe('valid');
         expect(result.expiresAt).toBeNull();
         expect(result.msUntilExpiration).toBeNull();
@@ -46,52 +46,52 @@ describe('evaluateExpiration - no expiry set', () => {
     });
 
     it('treats undefined and empty string as valid forever', () => {
-        expect(evaluateExpiration(undefined, config(), NOW).status).toBe('valid');
-        expect(evaluateExpiration('', config(), NOW).status).toBe('valid');
+        expect(EvaluateExpiration(undefined, config(), NOW).status).toBe('valid');
+        expect(EvaluateExpiration('', config(), NOW).status).toBe('valid');
     });
 });
 
-describe('evaluateExpiration - future expiry', () => {
+describe('EvaluateExpiration - future expiry', () => {
     it('reports valid when expiry is beyond the warning window', () => {
-        const result = evaluateExpiration(offset(90 * DAY), config(), NOW);
+        const result = EvaluateExpiration(offset(90 * DAY), config(), NOW);
         expect(result.status).toBe('valid');
         expect(result.usable).toBe(true);
         expect(result.daysUntilExpiration).toBe(90);
     });
 
     it('reports expiring-soon inside the warning window', () => {
-        const result = evaluateExpiration(offset(10 * DAY), config(), NOW);
+        const result = EvaluateExpiration(offset(10 * DAY), config(), NOW);
         expect(result.status).toBe('expiring-soon');
         expect(result.usable).toBe(true);
         expect(result.daysUntilExpiration).toBe(10);
     });
 
     it('treats the warning window edge as expiring-soon', () => {
-        const result = evaluateExpiration(offset(DEFAULT_EXPIRATION_WARNING_WINDOW_MS), config(), NOW);
+        const result = EvaluateExpiration(offset(DEFAULT_EXPIRATION_WARNING_WINDOW_MS), config(), NOW);
         expect(result.status).toBe('expiring-soon');
     });
 
     it('treats one millisecond beyond the warning window as valid', () => {
-        const result = evaluateExpiration(offset(DEFAULT_EXPIRATION_WARNING_WINDOW_MS + 1), config(), NOW);
+        const result = EvaluateExpiration(offset(DEFAULT_EXPIRATION_WARNING_WINDOW_MS + 1), config(), NOW);
         expect(result.status).toBe('valid');
     });
 
     it('rounds a partial day up, so hours remaining never reads as zero days', () => {
-        const result = evaluateExpiration(offset(8 * 60 * 60 * 1000), config(), NOW);
+        const result = EvaluateExpiration(offset(8 * 60 * 60 * 1000), config(), NOW);
         expect(result.daysUntilExpiration).toBe(1);
         expect(result.status).toBe('expiring-soon');
     });
 
     it('honors a custom warning window', () => {
         const narrow = config({ warningWindowMs: 2 * DAY });
-        expect(evaluateExpiration(offset(10 * DAY), narrow, NOW).status).toBe('valid');
-        expect(evaluateExpiration(offset(DAY), narrow, NOW).status).toBe('expiring-soon');
+        expect(EvaluateExpiration(offset(10 * DAY), narrow, NOW).status).toBe('valid');
+        expect(EvaluateExpiration(offset(DAY), narrow, NOW).status).toBe('expiring-soon');
     });
 });
 
-describe('evaluateExpiration - expired', () => {
+describe('EvaluateExpiration - expired', () => {
     it('blocks an expired credential under the default policy', () => {
-        const result = evaluateExpiration(offset(-DAY), config(), NOW);
+        const result = EvaluateExpiration(offset(-DAY), config(), NOW);
         expect(result.status).toBe('expired');
         expect(result.usable).toBe(false);
         expect(result.withinGrace).toBe(false);
@@ -100,7 +100,7 @@ describe('evaluateExpiration - expired', () => {
     });
 
     it('treats the expiry instant itself as expired', () => {
-        const result = evaluateExpiration(NOW, config(), NOW);
+        const result = EvaluateExpiration(NOW, config(), NOW);
         expect(result.status).toBe('expired');
         expect(result.usable).toBe(false);
         // Exactly at the boundary there is no partial day either way.
@@ -108,14 +108,14 @@ describe('evaluateExpiration - expired', () => {
     });
 
     it('allows an expired credential through under a warn policy', () => {
-        const result = evaluateExpiration(offset(-30 * DAY), config({ policy: 'warn' }), NOW);
+        const result = EvaluateExpiration(offset(-30 * DAY), config({ policy: 'warn' }), NOW);
         expect(result.status).toBe('expired');
         expect(result.usable).toBe(true);
     });
 
     it('still reports expired inside the grace period, but marks it usable', () => {
         const withGrace = config({ graceMs: 3 * DAY });
-        const result = evaluateExpiration(offset(-DAY), withGrace, NOW);
+        const result = EvaluateExpiration(offset(-DAY), withGrace, NOW);
         // Status must stay truthful so dashboards and audit logs are not misled.
         expect(result.status).toBe('expired');
         expect(result.withinGrace).toBe(true);
@@ -124,54 +124,54 @@ describe('evaluateExpiration - expired', () => {
 
     it('blocks once the grace period is exhausted', () => {
         const withGrace = config({ graceMs: 3 * DAY });
-        const result = evaluateExpiration(offset(-4 * DAY), withGrace, NOW);
+        const result = EvaluateExpiration(offset(-4 * DAY), withGrace, NOW);
         expect(result.withinGrace).toBe(false);
         expect(result.usable).toBe(false);
     });
 
     it('treats the grace boundary as still within grace', () => {
         const withGrace = config({ graceMs: 3 * DAY });
-        expect(evaluateExpiration(offset(-3 * DAY), withGrace, NOW).withinGrace).toBe(true);
+        expect(EvaluateExpiration(offset(-3 * DAY), withGrace, NOW).withinGrace).toBe(true);
     });
 
     it('ignores a negative grace period rather than extending validity', () => {
-        const result = evaluateExpiration(offset(-1), config({ graceMs: -DAY }), NOW);
+        const result = EvaluateExpiration(offset(-1), config({ graceMs: -DAY }), NOW);
         expect(result.usable).toBe(false);
     });
 });
 
-describe('evaluateExpiration - input shapes', () => {
+describe('EvaluateExpiration - input shapes', () => {
     it('accepts an ISO string, as delivered over a JSON transport', () => {
-        const result = evaluateExpiration(offset(5 * DAY).toISOString(), config(), NOW);
+        const result = EvaluateExpiration(offset(5 * DAY).toISOString(), config(), NOW);
         expect(result.status).toBe('expiring-soon');
         expect(result.expiresAt).toBeInstanceOf(Date);
         expect(result.daysUntilExpiration).toBe(5);
     });
 
     it('accepts a Date instance', () => {
-        expect(evaluateExpiration(offset(-DAY), config(), NOW).status).toBe('expired');
+        expect(EvaluateExpiration(offset(-DAY), config(), NOW).status).toBe('expired');
     });
 
     it('treats an unparseable value as non-expiring and logs it', () => {
         // A malformed timestamp is a data-integrity bug. Failing closed on it
         // would turn that bug into an outage, so it fails open, loudly.
-        const result = evaluateExpiration('not-a-date', config(), NOW);
+        const result = EvaluateExpiration('not-a-date', config(), NOW);
         expect(result.status).toBe('valid');
         expect(result.usable).toBe(true);
         expect(result.expiresAt).toBeNull();
     });
 });
 
-describe('isExpired', () => {
+describe('IsExpired', () => {
     it('answers the yes/no question without policy nuance', () => {
-        expect(isExpired(offset(-DAY), NOW)).toBe(true);
-        expect(isExpired(offset(DAY), NOW)).toBe(false);
-        expect(isExpired(null, NOW)).toBe(false);
+        expect(IsExpired(offset(-DAY), NOW)).toBe(true);
+        expect(IsExpired(offset(DAY), NOW)).toBe(false);
+        expect(IsExpired(null, NOW)).toBe(false);
     });
 
     it('reports expired even where a grace period would allow use', () => {
-        // isExpired describes the credential, not the policy decision.
-        expect(isExpired(offset(-1), NOW)).toBe(true);
+        // IsExpired describes the credential, not the policy decision.
+        expect(IsExpired(offset(-1), NOW)).toBe(true);
     });
 });
 
@@ -184,10 +184,10 @@ describe('typed resolution errors', () => {
         expect(err).toBeInstanceOf(CredentialResolutionError);
         expect(err).toBeInstanceOf(Error);
         expect(err.name).toBe('CredentialExpiredError');
-        expect(err.credentialName).toBe('OpenAI');
+        expect(err.CredentialName).toBe('OpenAI');
         expect(err.credentialId).toBe('cred-123');
-        expect(err.expiresAt).toBe(expiresAt);
-        expect(err.daysSinceExpiration).toBe(2);
+        expect(err.ExpiresAt).toBe(expiresAt);
+        expect(err.DaysSinceExpiration).toBe(2);
         expect(err.message).toContain('Credential expired: OpenAI');
         expect(err.message).toContain(expiresAt.toISOString());
     });
@@ -197,7 +197,7 @@ describe('typed resolution errors', () => {
         const err = new CredentialNotFoundError('SendGrid');
         expect(err.message).toBe('Credential not found: SendGrid');
         expect(err).toBeInstanceOf(CredentialResolutionError);
-        expect(err.credentialName).toBe('SendGrid');
+        expect(err.CredentialName).toBe('SendGrid');
     });
 
     it('distinguishes expired from not-found', () => {

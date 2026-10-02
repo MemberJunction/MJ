@@ -3,8 +3,8 @@ export { CredentialEngine } from './CredentialEngine';
 
 // Expiration policy, evaluation, and typed resolution errors
 export {
-    evaluateExpiration,
-    isExpired,
+    EvaluateExpiration,
+    IsExpired,
     DEFAULT_EXPIRATION_CONFIG,
     DEFAULT_EXPIRATION_WARNING_WINDOW_MS,
     CredentialResolutionError,

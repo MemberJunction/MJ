@@ -160,7 +160,7 @@ Callers that keep their own credential lists should ask the engine rather than
 comparing dates by hand, so they inherit the same window and grace period:
 
 ```typescript
-const expiration = CredentialEngine.Instance.getExpirationStatus(credential);
+const expiration = CredentialEngine.Instance.GetExpirationStatus(credential);
 if (!expiration.usable) {
     // skip this one and fall back to the next candidate
 }

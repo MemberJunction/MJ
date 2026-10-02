@@ -31,7 +31,7 @@ import {
     CredentialExpiredError,
     CredentialNotFoundError,
     DEFAULT_EXPIRATION_CONFIG,
-    evaluateExpiration
+    EvaluateExpiration
 } from "./expiration";
 
 
@@ -227,14 +227,14 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * @param credential - The credential to evaluate.
      * @param policyOverride - Optional per-call policy override.
      */
-    public getExpirationStatus(
+    public GetExpirationStatus(
         credential: MJCredentialEntity,
         policyOverride?: CredentialExpirationConfig['policy']
     ): CredentialExpirationEvaluation {
         const config = policyOverride
             ? { ...this._expirationConfig, policy: policyOverride }
             : this._expirationConfig;
-        return evaluateExpiration(credential.ExpiresAt, config);
+        return EvaluateExpiration(credential.ExpiresAt, config);
     }
 
     // ====================================
@@ -268,7 +268,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
 
         return this._credentials.find(c =>
             UUIDsEqual(c.CredentialTypeID, credType.ID) && c.IsDefault && c.IsActive &&
-            this.getExpirationStatus(c).usable
+            this.GetExpirationStatus(c).usable
         );
     }
 
@@ -282,7 +282,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      *
      * Deliberately unfiltered: addressing a credential by its primary key is an
      * exact request, and administration/rotation tooling must be able to load an
-     * expired record in order to replace it. Check {@link getExpirationStatus}
+     * expired record in order to replace it. Check {@link GetExpirationStatus}
      * if you need to know whether the result is still usable.
      */
     public GetCredentialById(credentialId: string): MJCredentialEntity | undefined {
@@ -308,7 +308,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             UUIDsEqual(c.CredentialTypeID, credType.ID) &&
             c.Name.trim().toLowerCase() === credentialName.trim().toLowerCase() &&
             c.IsActive &&
-            this.getExpirationStatus(c).usable
+            this.GetExpirationStatus(c).usable
         );
     }
 
@@ -355,7 +355,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         let source: 'database' | 'request' = 'database';
         // Values supplied by the caller have a lifetime the caller owns, so they
         // are reported valid unless a database record says otherwise.
-        let expiration: CredentialExpirationEvaluation = evaluateExpiration(null);
+        let expiration: CredentialExpirationEvaluation = EvaluateExpiration(null);
 
         try {
             // Ensure engine is loaded
@@ -372,7 +372,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                 if (credential) {
                     // Expiry is checked before the values are read, so a blocked
                     // credential is never decrypted and never reaches the caller.
-                    expiration = this.getExpirationStatus(credential, options.expirationPolicy);
+                    expiration = this.GetExpirationStatus(credential, options.expirationPolicy);
                     if (!expiration.usable) {
                         throw new CredentialExpiredError(
                             credential.Name,
