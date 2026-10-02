@@ -7,13 +7,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    isValidArchiveRunStatusFilter,
-    computeArchiveRunStatusCounts,
-    filterArchiveRunsByStatus,
-    buildArchiveConfigAgentContext,
-    buildArchiveRunsAgentContext,
-    capArchiveNames,
-    resolveArchiveRun,
+    IsValidArchiveRunStatusFilter,
+    ComputeArchiveRunStatusCounts,
+    FilterArchiveRunsByStatus,
+    BuildArchiveConfigAgentContext,
+    BuildArchiveRunsAgentContext,
+    CapArchiveNames,
+    ResolveArchiveRun,
     ARCHIVE_RUN_STATUS_FILTERS,
     ARCHIVE_NAME_LIST_CAP,
     ArchiveRunStatusSnapshot,
@@ -32,22 +32,22 @@ function fullRun(id: string, name: string, status = 'Complete'): ArchiveRunSnaps
 describe('isValidArchiveRunStatusFilter', () => {
     it('accepts every known filter value', () => {
         for (const f of ARCHIVE_RUN_STATUS_FILTERS) {
-            expect(isValidArchiveRunStatusFilter(f)).toBe(true);
+            expect(IsValidArchiveRunStatusFilter(f)).toBe(true);
         }
     });
 
     it('rejects unknown / non-string values', () => {
-        expect(isValidArchiveRunStatusFilter('Bogus')).toBe(false);
-        expect(isValidArchiveRunStatusFilter('')).toBe(false);
-        expect(isValidArchiveRunStatusFilter(undefined)).toBe(false);
-        expect(isValidArchiveRunStatusFilter(42)).toBe(false);
-        expect(isValidArchiveRunStatusFilter(null)).toBe(false);
+        expect(IsValidArchiveRunStatusFilter('Bogus')).toBe(false);
+        expect(IsValidArchiveRunStatusFilter('')).toBe(false);
+        expect(IsValidArchiveRunStatusFilter(undefined)).toBe(false);
+        expect(IsValidArchiveRunStatusFilter(42)).toBe(false);
+        expect(IsValidArchiveRunStatusFilter(null)).toBe(false);
     });
 });
 
 describe('computeArchiveRunStatusCounts', () => {
     it('buckets Complete and PartialSuccess as successful', () => {
-        const counts = computeArchiveRunStatusCounts([
+        const counts = ComputeArchiveRunStatusCounts([
             run('Complete'),
             run('PartialSuccess'),
             run('Failed'),
@@ -63,14 +63,14 @@ describe('computeArchiveRunStatusCounts', () => {
     });
 
     it('is case-insensitive about status', () => {
-        const counts = computeArchiveRunStatusCounts([run('complete'), run('FAILED'), run('running')]);
+        const counts = ComputeArchiveRunStatusCounts([run('complete'), run('FAILED'), run('running')]);
         expect(counts.SuccessfulRuns).toBe(1);
         expect(counts.FailedRuns).toBe(1);
         expect(counts.RunningRuns).toBe(1);
     });
 
     it('handles an empty list', () => {
-        expect(computeArchiveRunStatusCounts([])).toEqual({
+        expect(ComputeArchiveRunStatusCounts([])).toEqual({
             TotalRuns: 0,
             SuccessfulRuns: 0,
             FailedRuns: 0,
@@ -79,7 +79,7 @@ describe('computeArchiveRunStatusCounts', () => {
     });
 
     it('counts Cancelled toward total only (not any outcome bucket)', () => {
-        const counts = computeArchiveRunStatusCounts([run('Cancelled'), run('Cancelled')]);
+        const counts = ComputeArchiveRunStatusCounts([run('Cancelled'), run('Cancelled')]);
         expect(counts.TotalRuns).toBe(2);
         expect(counts.SuccessfulRuns).toBe(0);
         expect(counts.FailedRuns).toBe(0);
@@ -91,23 +91,23 @@ describe('filterArchiveRunsByStatus', () => {
     const runs = [run('Complete'), run('Failed'), run('Complete'), run('Running')];
 
     it('returns all runs (a copy) when filter is "all"', () => {
-        const result = filterArchiveRunsByStatus(runs, 'all');
+        const result = FilterArchiveRunsByStatus(runs, 'all');
         expect(result).toHaveLength(4);
         expect(result).not.toBe(runs);
     });
 
     it('keeps only matching runs (case-insensitive)', () => {
-        expect(filterArchiveRunsByStatus(runs, 'Complete')).toHaveLength(2);
-        expect(filterArchiveRunsByStatus(runs, 'Failed')).toHaveLength(1);
-        expect(filterArchiveRunsByStatus(runs, 'Running')).toHaveLength(1);
-        expect(filterArchiveRunsByStatus(runs, 'Cancelled')).toHaveLength(0);
+        expect(FilterArchiveRunsByStatus(runs, 'Complete')).toHaveLength(2);
+        expect(FilterArchiveRunsByStatus(runs, 'Failed')).toHaveLength(1);
+        expect(FilterArchiveRunsByStatus(runs, 'Running')).toHaveLength(1);
+        expect(FilterArchiveRunsByStatus(runs, 'Cancelled')).toHaveLength(0);
     });
 });
 
 describe('capArchiveNames', () => {
     it('caps at ARCHIVE_NAME_LIST_CAP and never mutates the input', () => {
         const names = Array.from({ length: ARCHIVE_NAME_LIST_CAP + 10 }, (_, i) => `P${i}`);
-        const capped = capArchiveNames(names);
+        const capped = CapArchiveNames(names);
         expect(capped).toHaveLength(ARCHIVE_NAME_LIST_CAP);
         expect(names).toHaveLength(ARCHIVE_NAME_LIST_CAP + 10);
         expect(capped).not.toBe(names);
@@ -118,35 +118,35 @@ describe('resolveArchiveRun', () => {
     const runs = [fullRun('id-1', 'Nightly Members', 'Complete'), fullRun('id-2', 'Weekly Logs', 'Failed')];
 
     it('matches by exact ID (case-insensitive)', () => {
-        const r = resolveArchiveRun('ID-1', runs);
-        expect(r.ok && r.run.ConfigurationName).toBe('Nightly Members');
+        const r = ResolveArchiveRun('ID-1', runs);
+        expect(r.Ok && r.Run.ConfigurationName).toBe('Nightly Members');
     });
 
     it('matches by exact name then by contains', () => {
-        const exact = resolveArchiveRun('weekly logs', runs);
-        expect(exact.ok && exact.run.ID).toBe('id-2');
-        const contains = resolveArchiveRun('members', runs);
-        expect(contains.ok && contains.run.ID).toBe('id-1');
+        const exact = ResolveArchiveRun('weekly logs', runs);
+        expect(exact.Ok && exact.Run.ID).toBe('id-2');
+        const contains = ResolveArchiveRun('members', runs);
+        expect(contains.Ok && contains.Run.ID).toBe('id-1');
     });
 
     it('returns a tolerant error listing available runs on a miss', () => {
-        const r = resolveArchiveRun('nonexistent', runs);
-        expect(r.ok).toBe(false);
-        if (!r.ok) {
-            expect(r.error).toContain('Nightly Members');
-            expect(r.error).toContain('Weekly Logs');
+        const r = ResolveArchiveRun('nonexistent', runs);
+        expect(r.Ok).toBe(false);
+        if (!r.Ok) {
+            expect(r.Error).toContain('Nightly Members');
+            expect(r.Error).toContain('Weekly Logs');
         }
     });
 
     it('errors on empty input and empty run list', () => {
-        expect(resolveArchiveRun('  ', runs).ok).toBe(false);
-        expect(resolveArchiveRun('anything', []).ok).toBe(false);
+        expect(ResolveArchiveRun('  ', runs).Ok).toBe(false);
+        expect(ResolveArchiveRun('anything', []).Ok).toBe(false);
     });
 });
 
 describe('buildArchiveConfigAgentContext', () => {
     it('shapes the read-only config context with bounded names (no scheduling fields)', () => {
-        const ctx = buildArchiveConfigAgentContext({
+        const ctx = BuildArchiveConfigAgentContext({
             PolicyCount: 3,
             ActivePolicyCount: 2,
             EntitiesUnderArchive: 7,
@@ -167,7 +167,7 @@ describe('buildArchiveConfigAgentContext', () => {
     });
 
     it('omits name fields when the lists are empty', () => {
-        const ctx = buildArchiveConfigAgentContext({
+        const ctx = BuildArchiveConfigAgentContext({
             PolicyCount: 0,
             ActivePolicyCount: 0,
             EntitiesUnderArchive: 0,
@@ -181,7 +181,7 @@ describe('buildArchiveConfigAgentContext', () => {
 
     it('caps name lists and surfaces the true total when truncated', () => {
         const policies = Array.from({ length: ARCHIVE_NAME_LIST_CAP + 4 }, (_, i) => `P${i}`);
-        const ctx = buildArchiveConfigAgentContext({
+        const ctx = BuildArchiveConfigAgentContext({
             PolicyCount: policies.length,
             ActivePolicyCount: policies.length,
             EntitiesUnderArchive: 0,
@@ -201,7 +201,7 @@ describe('buildArchiveRunsAgentContext', () => {
     ];
 
     it('shapes the read-only runs context with selected run + recent runs', () => {
-        const ctx = buildArchiveRunsAgentContext({
+        const ctx = BuildArchiveRunsAgentContext({
             Counts: { TotalRuns: 10, SuccessfulRuns: 6, FailedRuns: 3, RunningRuns: 1 },
             StatusFilter: 'Failed',
             FilteredRunCount: 3,
@@ -222,7 +222,7 @@ describe('buildArchiveRunsAgentContext', () => {
     });
 
     it('omits RecentRuns when empty and caps + counts when truncated', () => {
-        const empty = buildArchiveRunsAgentContext({
+        const empty = BuildArchiveRunsAgentContext({
             Counts: { TotalRuns: 0, SuccessfulRuns: 0, FailedRuns: 0, RunningRuns: 0 },
             StatusFilter: 'all',
             FilteredRunCount: 0,
@@ -239,7 +239,7 @@ describe('buildArchiveRunsAgentContext', () => {
             Name: `Run${i}`,
             Status: 'Complete',
         }));
-        const ctx = buildArchiveRunsAgentContext({
+        const ctx = BuildArchiveRunsAgentContext({
             Counts: { TotalRuns: many.length, SuccessfulRuns: many.length, FailedRuns: 0, RunningRuns: 0 },
             StatusFilter: 'all',
             FilteredRunCount: many.length,

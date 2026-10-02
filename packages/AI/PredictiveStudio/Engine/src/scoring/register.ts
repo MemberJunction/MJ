@@ -52,8 +52,13 @@ export const ML_INFERENCE_WORK_TYPES: readonly string[] = [ML_INFERENCE_WORK_TYP
  *
  * @param workType the `MJ: Record Processes.WorkType` value
  */
-export function isMLInferenceWorkType(workType: string | null | undefined): boolean {
+export function IsMLInferenceWorkType(workType: string | null | undefined): boolean {
   return workType != null && ML_INFERENCE_WORK_TYPES.includes(workType);
+}
+
+/** @deprecated Use {@link IsMLInferenceWorkType}. */
+export function isMLInferenceWorkType(workType: string | null | undefined): boolean {
+  return IsMLInferenceWorkType(workType);
 }
 
 /**
@@ -65,11 +70,11 @@ export function isMLInferenceWorkType(workType: string | null | undefined): bool
  * @param workType the Record Process `WorkType` value (`'ML Model'` / `'MLModelInference'`)
  * @param options the model id + injected seams to construct the processor with
  */
-export function resolveMLInferenceProcessor(
+export function ResolveMLInferenceProcessor(
   workType: string | null | undefined,
   options: MLModelInferenceProcessorOptions,
 ): IRecordProcessor | null {
-  if (!isMLInferenceWorkType(workType)) {
+  if (!IsMLInferenceWorkType(workType)) {
     return null;
   }
   // CreateInstance dynamically returns the highest-priority registration for the
@@ -82,6 +87,14 @@ export function resolveMLInferenceProcessor(
     options,
   );
   return instance ?? new MLModelInferenceProcessor(options);
+}
+
+/** @deprecated Use {@link ResolveMLInferenceProcessor}. */
+export function resolveMLInferenceProcessor(
+  workType: string | null | undefined,
+  options: MLModelInferenceProcessorOptions,
+): IRecordProcessor | null {
+  return ResolveMLInferenceProcessor(workType, options);
 }
 
 /**
@@ -112,7 +125,7 @@ export interface MLScoringConfiguration {
  *
  * @param deps the injected runtime seams the ML scorer needs (model loader, artifact loader, sidecar)
  */
-export function registerMLScoringProcessor(deps: MLInferenceDeps): void {
+export function RegisterMLScoringProcessor(deps: MLInferenceDeps): void {
   const factory = (context: RecordProcessorBuildContext): IRecordProcessor => {
     const config = context.Configuration ? SafeJSONParse<MLScoringConfiguration>(context.Configuration) : undefined;
     if (!config || !config.modelId) {
@@ -127,13 +140,18 @@ export function registerMLScoringProcessor(deps: MLInferenceDeps): void {
       datedSources: config.datedSources,
     };
     // Resolve through the ClassFactory so a higher-priority subclass registration (if any) wins.
-    return resolveMLInferenceProcessor(context.WorkType, options) ?? new MLModelInferenceProcessor(options);
+    return ResolveMLInferenceProcessor(context.WorkType, options) ?? new MLModelInferenceProcessor(options);
   };
 
   const registry = RecordProcessorRegistry.Instance;
   for (const workType of ML_INFERENCE_WORK_TYPES) {
     registry.Register(workType, factory);
   }
+}
+
+/** @deprecated Use {@link RegisterMLScoringProcessor}. */
+export function registerMLScoringProcessor(deps: MLInferenceDeps): void {
+  return RegisterMLScoringProcessor(deps);
 }
 
 /**

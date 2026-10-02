@@ -270,7 +270,7 @@ export class AutotagWebsite extends AutotagBase {
      * The canonical implementation lives here; the array-returning
      * `SetContentItemsToProcess` is a thin collector wrapper around this.
      */
-    public async *streamContentItemsToProcess(contentSources: MJContentSourceEntity[]): AsyncIterable<MJContentItemEntity> {
+    public async *streamContentItemsToProcess(contentSources: MJContentSourceEntity[]): AsyncIterable<MJContentItemEntity> {  // case-violation-ok-legacy-back-compat: generator — a delegating stub would return the generator, not yield from it
         for (const contentSource of contentSources) {
             // Reset instance state to defaults before applying per-source overrides.
             // Without this, knobs set on the previous source would leak into the next.
@@ -389,7 +389,7 @@ export class AutotagWebsite extends AutotagBase {
      * legitimate pages here.
      */
     protected async processSingleURL(url: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity | null> {
-        const { text, checksum: newHash } = await this.fetchAndExtract(url);
+        const { text, checksum: newHash } = await this.FetchAndExtract(url);
 
         const rv = new RunView();
         const results = await rv.RunViews<MJContentItemEntity>([
@@ -450,12 +450,17 @@ export class AutotagWebsite extends AutotagBase {
         return contentItem;
     }
 
-    public async fetchPageContent(url: string): Promise<string> {
+    public async FetchPageContent(url: string): Promise<string> {
         const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
         return data;
     }
 
-    public getTextWithLineBreaks(element: AnyNode, $: cheerio.CheerioAPI): string {
+    /** @deprecated Use {@link FetchPageContent}. */
+    public async fetchPageContent(url: string): Promise<string> {
+        return this.FetchPageContent(url);
+    }
+
+    public GetTextWithLineBreaks(element: AnyNode, $: cheerio.CheerioAPI): string {
         let text = '';
         const children = $(element).contents();
 
@@ -464,11 +469,16 @@ export class AutotagWebsite extends AutotagBase {
             if (el.type === 'text') {
                 text += $(el).text().trim() + ' ';
             } else if (el.type === 'tag') {
-                text += '\n' + this.getTextWithLineBreaks(el, $) + '\n';
+                text += '\n' + this.GetTextWithLineBreaks(el, $) + '\n';
             }
         }
 
         return text;
+    }
+
+    /** @deprecated Use {@link GetTextWithLineBreaks}. */
+    public getTextWithLineBreaks(element: AnyNode, $: cheerio.CheerioAPI): string {
+        return this.GetTextWithLineBreaks(element, $);
     }
 
     /**
@@ -480,7 +490,7 @@ export class AutotagWebsite extends AutotagBase {
         const $ = cheerio.load(html);
         const body = $('body')[0];
         if (!body) return '';
-        return this.getTextWithLineBreaks(body, $);
+        return this.GetTextWithLineBreaks(body, $);
     }
 
     /**
@@ -495,11 +505,16 @@ export class AutotagWebsite extends AutotagBase {
      * extracted text is what users actually mean by "did the content
      * change?"
      */
-    public async fetchAndExtract(url: string): Promise<{ text: string; checksum: string }> {
+    public async FetchAndExtract(url: string): Promise<{ text: string; checksum: string }> {
         const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
         const text = this.extractTextFromHTML(String(data));
         const checksum = await this.engine.getChecksumFromText(text);
         return { text, checksum };
+    }
+
+    /** @deprecated Use {@link FetchAndExtract}. */
+    public async fetchAndExtract(url: string): Promise<{ text: string; checksum: string }> {
+        return this.FetchAndExtract(url);
     }
 
     /**
@@ -507,15 +522,20 @@ export class AutotagWebsite extends AutotagBase {
      * that just want the text — internal change-detection now uses
      * `fetchAndExtract` to avoid redundant fetches.
      */
-    public async parseWebPage(url: string): Promise<string> {
+    public async ParseWebPage(url: string): Promise<string> {
         try {
-            const pageContent: string = await this.fetchPageContent(url);
+            const pageContent: string = await this.FetchPageContent(url);
             return this.extractTextFromHTML(pageContent);
         }
         catch (error) {
             console.error(`Error processing ${url}:`, error);
             return '';
         }
+    }
+
+    /** @deprecated Use {@link ParseWebPage}. */
+    public async parseWebPage(url: string): Promise<string> {
+        return this.ParseWebPage(url);
     }
 
     /**

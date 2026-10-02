@@ -28,10 +28,10 @@ import {
   RunComputerUseGoalOptions,
 } from '@memberjunction/remote-browser-base';
 import { ActionExecutionResult, PlaywrightBrowserAdapter, RunComputerUseParams, ScreencastFrame, ScreencastOptions } from '@memberjunction/computer-use';
-import { mapHumanInput, mapRemoteBrowserAction } from './map-action';
+import { MapHumanInput, MapRemoteBrowserAction } from './map-action';
 import { ICdpAudioCaptureHandle, ICdpSessionBackend } from './cdp-session-backend';
-import { ComputerUseGoalEngineFactory, defaultComputerUseGoalEngineFactory } from './computer-use-goal-engine';
-import { wrapAdapterWithContext } from './context-injection';
+import { ComputerUseGoalEngineFactory, DefaultComputerUseGoalEngineFactory } from './computer-use-goal-engine';
+import { WrapAdapterWithContext } from './context-injection';
 
 /**
  * The shared, CDP-backed live remote-browser session. Constructed by
@@ -45,7 +45,7 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    * Defaults to the base `ComputerUseEngine` (requires a controller model); bind
    * `MJComputerUseEngine` here at startup for vision-model auto-selection, or a fake in tests.
    */
-  private static goalEngineFactory: ComputerUseGoalEngineFactory = defaultComputerUseGoalEngineFactory;
+  private static goalEngineFactory: ComputerUseGoalEngineFactory = DefaultComputerUseGoalEngineFactory;
 
   /**
    * Overrides the computer-use goal-engine factory (the injection seam — production binds the MJ engine;
@@ -179,7 +179,7 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    * @inheritdoc
    */
   public async ExecuteAction(action: RemoteBrowserAction): Promise<RemoteBrowserActionResult> {
-    const result = await this.adapter.ExecuteAction(mapRemoteBrowserAction(action));
+    const result = await this.adapter.ExecuteAction(MapRemoteBrowserAction(action));
     // After a navigation-class action settles, force a fresh frame so the live view reflects the new
     // page immediately even if CDP hasn't fired a repaint frame yet (best-effort; the agent narrates
     // "I opened the page" and the user should SEE it without waiting for the next incidental repaint).
@@ -297,7 +297,7 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    */
   public RouteHumanInput(input: RemoteBrowserHumanInput): void {
     this.requireFeature('HumanTakeover');
-    void this.adapter.ExecuteAction(mapHumanInput(input)).catch((err: unknown) => {
+    void this.adapter.ExecuteAction(MapHumanInput(input)).catch((err: unknown) => {
       LogError(`CdpRemoteBrowserSession.RouteHumanInput failed: ${this.errorDetail(err)}`);
     });
   }
@@ -347,7 +347,7 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     const engine = CdpRemoteBrowserSession.goalEngineFactory();
     // Model-blind credential/context injection: when a Context is supplied, drive a proxy adapter that
     // resolves `{{label}}` tokens to real values at the CDP boundary — neither model ever sees the value.
-    const adapter = options?.Context ? wrapAdapterWithContext(this.adapter, options.Context) : this.adapter;
+    const adapter = options?.Context ? WrapAdapterWithContext(this.adapter, options.Context) : this.adapter;
     engine.SetBrowserAdapter(adapter);
     if (options?.OnProgress) {
       engine.OnProgress = (p) => options.OnProgress?.({ Step: p.Step, Message: p.Message, Url: p.Url });

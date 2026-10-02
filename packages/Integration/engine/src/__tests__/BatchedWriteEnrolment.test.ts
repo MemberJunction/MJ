@@ -145,6 +145,6 @@ describe('entityMapHasIdentityOnlyPK — batching is decided per entity map', ()
         // observes what the writes do, and an empty group still reports success. Same reason the
         // BatchedSubmit assignment has its own pin.
         const source = fs.readFileSync(new URL('../IntegrationEngine.ts', import.meta.url), 'utf-8');
-        expect(source).toMatch(/const batchedWrites\s*=\s*this\.ReadWriteMode\([^)]*\)\s*===\s*'batched'\s*\n?\s*&&\s*!this\.entityMapHasIdentityOnlyPK\(entityMap\)/);
+        expect(source).toMatch(/const batchedWrites\s*=\s*this\.readWriteMode\([^)]*\)\s*===\s*'batched'\s*\n?\s*&&\s*!this\.entityMapHasIdentityOnlyPK\(entityMap\)/);
     });
 });

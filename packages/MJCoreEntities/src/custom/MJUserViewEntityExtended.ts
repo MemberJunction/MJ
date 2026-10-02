@@ -23,7 +23,7 @@ import { ResourcePermissionEngine } from "./ResourcePermissions/ResourcePermissi
 
 @RegisterClass(BaseEntity, 'MJ: User Views')
 export class MJUserViewEntityExtended extends MJUserViewEntity  {
-    private _ViewEntityInfo: EntityInfo = null
+    private _ViewEntityInfo: EntityInfo = null  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
 
     /**
      * This is a read-only property that returns the filters for this view. This information
@@ -270,7 +270,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      */
     public get UserCanEdit(): boolean {
         if (this._cachedCanUserEdit === null) {
-            this._cachedCanUserEdit = this.CalculateUserCanEdit()
+            this._cachedCanUserEdit = this.calculateUserCanEdit()
         }
         return this._cachedCanUserEdit;
     }
@@ -282,11 +282,11 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      */
     public get UserCanView(): boolean {
         if (this._cachedCanUserView === null) {
-            this._cachedCanUserView = this.CalculateUserCanView()
+            this._cachedCanUserView = this.calculateUserCanView()
         }
         return this._cachedCanUserView;
     }
-    private CalculateUserCanView(): boolean {
+    private calculateUserCanView(): boolean {
         const md = this.ProviderToUse as unknown as IMetadataProvider;
         // Prefer the context user (set on server-side / per-request rendering) over the global
         // current user, consistent with CalculateUserCanEdit/CalculateUserCanDelete. Without this,
@@ -326,7 +326,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      */
     public get UserCanDelete(): boolean {
         if (this._cachedUserCanDelete === null) {
-            this._cachedUserCanDelete = this.CalculateUserCanDelete()
+            this._cachedUserCanDelete = this.calculateUserCanDelete()
         }
         return this._cachedUserCanDelete;
     }
@@ -339,7 +339,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         this._cachedCanUserView = null;
     }
 
-    private CalculateUserCanDelete(): boolean {
+    private calculateUserCanDelete(): boolean {
         if (!this.IsSaved)
             return false; // new records can't be deleted
         else {
@@ -358,7 +358,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         }
     }
 
-    private CalculateUserCanEdit(): boolean {
+    private calculateUserCanEdit(): boolean {
         if (!this.IsSaved) {
             return this.CheckPermissions(EntityPermissionType.Create, false); // new records an be edited so long as we have Create permissions
         }
@@ -383,16 +383,16 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      * Returns the ID of the Resource Type metadata record that corresponds to the User Views entity
      */
     public get ViewResourceTypeID(): string {
-        if (!this._ViewResourceTypeID) {
+        if (!this._viewResourceTypeID) {
             const rt = ResourcePermissionEngine.Instance.ResourceTypes;
             const rtUV = rt.find(r => r.Entity === 'MJ: User Views');
             if (!rtUV)
                 throw new Error('Unable to find Resource Type for User Views entity');
-            this._ViewResourceTypeID = rtUV.ID;
+            this._viewResourceTypeID = rtUV.ID;
         }
-        return this._ViewResourceTypeID;
+        return this._viewResourceTypeID;
     }
-    private _ViewResourceTypeID: string = null
+    private _viewResourceTypeID: string = null
 
     override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         // first load up the view info, use the superclass to do this
@@ -856,23 +856,23 @@ export class ViewColumnInfo extends BaseInfo {
     /** Display name for column header (from entity metadata) */
     DisplayName: string = null
     /** User-defined display name override for column header */
-    userDisplayName?: string = null
+    userDisplayName?: string = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Whether column is hidden */
-    hidden: boolean = null
+    hidden: boolean = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /** Column width in pixels */
     width?: number = null
     /** Column order index */
-    orderIndex?: number = null
+    orderIndex?: number = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     // AG Grid-specific properties
     /** Column pinning position ('left', 'right', or null for not pinned) */
-    pinned?: 'left' | 'right' | null = null
+    pinned?: 'left' | 'right' | null = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Flex grow factor (for auto-sizing columns) */
-    flex?: number = null
+    flex?: number = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Minimum column width */
-    minWidth?: number = null
+    minWidth?: number = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Maximum column width */
-    maxWidth?: number = null
+    maxWidth?: number = null  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Column formatting configuration */
     format?: ColumnFormat = null
@@ -895,13 +895,13 @@ export type ViewFilterLogicInfo = typeof ViewFilterLogicInfo[keyof typeof ViewFi
 
 
 export class ViewFilterInfo extends BaseInfo {
-    logicOperator: ViewFilterLogicInfo = null
+    logicOperator: ViewFilterLogicInfo = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     field: string = null
-    operator: string = null
-    value: string = null
+    operator: string = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    value: string = null  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
-    filters: ViewFilterInfo[] = []
+    filters: ViewFilterInfo[] = []  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor (initData: any = null) {
         super()
@@ -941,13 +941,13 @@ export class ViewSortInfo extends BaseInfo {
  */
 export class ViewGridState {
     /** Sort settings - array of field/direction pairs */
-    sortSettings?: ViewGridSortSetting[];
+    sortSettings?: ViewGridSortSetting[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Column settings - visibility, width, order, pinning, etc. */
-    columnSettings?: ViewGridColumnSetting[];
+    columnSettings?: ViewGridColumnSetting[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Filter state (Kendo-compatible format) */
-    filter?: ViewFilterInfo;
+    filter?: ViewFilterInfo;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Aggregate calculations and display configuration */
-    aggregates?: ViewGridAggregatesConfig;
+    aggregates?: ViewGridAggregatesConfig;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**

@@ -1,4 +1,4 @@
-import { traverse, NodePath, findClosestMatch } from '../lint-utils';
+import { Traverse, NodePath, FindClosestMatch } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -30,7 +30,7 @@ export class EventParameterValidationRule extends BaseLintRule {
     const eventTypeMap = buildEventTypeMap(componentSpec);
     if (eventTypeMap.size === 0) return violations;
 
-    traverse(ast, {
+    Traverse(ast, {
       JSXOpeningElement: (path: NodePath<t.JSXOpeningElement>) => {
         checkJSXEventHandlers(path, eventTypeMap, violations);
       },
@@ -384,7 +384,7 @@ function analyzeDestructuredParam(
     if (!keyName) continue;
     if (validProperties.has(keyName)) continue;
 
-    const suggestion = findClosestMatch(keyName, validProperties);
+    const suggestion = FindClosestMatch(keyName, validProperties);
     const validList = Array.from(validProperties).join(', ');
 
     violations.push({
@@ -418,7 +418,7 @@ function analyzeParameterAccess(
 
   const seen = new Set<string>();
 
-  traverse(tempFile, {
+  Traverse(tempFile, {
     MemberExpression(innerPath: NodePath<t.MemberExpression>) {
       if (!t.isIdentifier(innerPath.node.object) || innerPath.node.object.name !== paramName) return;
       if (innerPath.node.computed) return;
@@ -432,7 +432,7 @@ function analyzeParameterAccess(
       if (seen.has(key)) return;
       seen.add(key);
 
-      const suggestion = findClosestMatch(accessedProp, validProperties);
+      const suggestion = FindClosestMatch(accessedProp, validProperties);
       const validList = Array.from(validProperties).join(', ');
 
       violations.push({

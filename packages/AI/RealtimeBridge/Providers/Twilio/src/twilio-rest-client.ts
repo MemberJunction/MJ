@@ -78,7 +78,7 @@ export interface TwilioRestCredentials {
  * is impossible here (optional peer SDK, may be uninstalled in non-telephony deployments); the
  * `optionalDependencies` entry keeps it in the dependency graph (CLAUDE rule 8, category 2).
  */
-export const defaultTwilioRestModuleLoader: TwilioRestModuleLoader = async (): Promise<TwilioModuleFactory> => {
+export const DefaultTwilioRestModuleLoader: TwilioRestModuleLoader = async (): Promise<TwilioModuleFactory> => {
     try {
         const mod: unknown = await import('twilio');
         const factory = unwrapTwilioFactory(mod);
@@ -94,6 +94,9 @@ export const defaultTwilioRestModuleLoader: TwilioRestModuleLoader = async (): P
         );
     }
 };
+
+/** @deprecated Use {@link DefaultTwilioRestModuleLoader}. */
+export const defaultTwilioRestModuleLoader: TwilioRestModuleLoader = DefaultTwilioRestModuleLoader;
 
 /** Unwraps the twilio factory from CJS/ESM interop (`module` or `module.default`). */
 function unwrapTwilioFactory(mod: unknown): unknown {
@@ -124,7 +127,7 @@ export class RealTwilioRestClient implements ITwilioRestLike {
      * @param credentials Resolved Twilio credentials (account SID + auth token or API key pair).
      * @param loadModule The `twilio` module loader (defaults to the lazy dynamic import).
      */
-    constructor(credentials: TwilioRestCredentials, loadModule: TwilioRestModuleLoader = defaultTwilioRestModuleLoader) {
+    constructor(credentials: TwilioRestCredentials, loadModule: TwilioRestModuleLoader = DefaultTwilioRestModuleLoader) {
         this.credentials = credentials;
         this.loadModule = loadModule;
     }

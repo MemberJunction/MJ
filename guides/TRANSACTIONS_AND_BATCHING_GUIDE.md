@@ -80,10 +80,13 @@ disagree. If you called any of them, switch to `BeginEntityTransaction()` — or
 
 > **Concurrency note.** The ambient transaction lives on the *provider instance*, not a global.
 > MJServer builds per-request providers, so an ambient transaction is effectively request-scoped.
-> Long-lived CLI tools (`mj sync push`) must not share one provider across parallel Saves.
-> `DatabaseProviderBase.CreateIndependentInstance()` forks a provider that **shares the connection
-> pool and metadata cache** but has its own transaction stack (SQL Server and PostgreSQL). Default
-> `--parallel-batch-size` is 10. Do not default to 1 to paper over a shared provider.
+> Long-lived CLI tools must not run parallel Saves on one provider instance. `mj sync push` is
+> atomic by default: every save runs on the host provider inside the push transaction, **one
+> JSON-root graph at a time**, so nothing interleaves. An entity directory that opts into isolated
+> transactions (`push.isolatedTransactions`, or `--isolated-transactions`) runs its graphs
+> in parallel on `DatabaseProviderBase.CreateIndependentInstance()`, which forks a provider that
+> **shares the connection pool and metadata cache** but has its own transaction stack (SQL Server and
+> PostgreSQL). Those saves commit as they go and are not rolled back with the push.
 > `ReleaseIndependentInstance()` must not close the pool.
 
 ### Client-side
@@ -209,6 +212,11 @@ standalone save.
 
 The root additionally raises `graph_save_started` and `graph_save`, so a UI can refresh once per unit
 of work rather than once per line.
+
+If a node fails, the graph rolls back, and every record in it (IS-A parents included) goes back in
+memory to how it was before `Save()`, so the same call can be retried. A delete works the same way,
+whether it's a graph or an IS-A chain: each record it deletes is reset with `NewRecord()` only once
+the unit of work commits, so a rollback leaves every record saved, under the same key.
 
 ### Loading children
 

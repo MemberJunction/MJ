@@ -62,7 +62,7 @@ function coldFilter(tag: string): string {
 }
 
 /** Fixture SQL runner (server transport only — ctx.Pool is always present there). Shared with fls-lifecycle. */
-export async function q<T>(ctx: IntegrationCheckContext, sqlText: string): Promise<T[]> {
+export async function Q<T>(ctx: IntegrationCheckContext, sqlText: string): Promise<T[]> {
     if (!ctx.Pool) {
         throw new Error('fls-enforcement requires the server transport (no SQL pool on this context)');
     }
@@ -70,31 +70,61 @@ export async function q<T>(ctx: IntegrationCheckContext, sqlText: string): Promi
     return result.recordset as T[];
 }
 
-export function schemaOf(ctx: IntegrationCheckContext): string {
+/** @deprecated Use {@link Q}. */
+export async function q<T>(ctx: IntegrationCheckContext, sqlText: string): Promise<T[]> {
+    return Q(ctx, sqlText);
+}
+
+export function SchemaOf(ctx: IntegrationCheckContext): string {
     return ctx.Schema ?? '__mj';
 }
 
+/** @deprecated Use {@link SchemaOf}. */
+export function schemaOf(ctx: IntegrationCheckContext): string {
+    return SchemaOf(ctx);
+}
+
 /** The FLS entity's live EntityInfo — re-resolved every time because Refresh() rebuilds metadata objects. */
-export function flsEntity(ctx: IntegrationCheckContext): EntityInfo {
+export function FlsEntity(ctx: IntegrationCheckContext): EntityInfo {
     const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
     Assert(entity != null, `'${SEEDED_FLS_ENTITY}' not found in provider metadata`);
     return entity!;
 }
 
-export function fieldOf(entity: EntityInfo, name: string): EntityFieldInfo {
+/** @deprecated Use {@link FlsEntity}. */
+export function flsEntity(ctx: IntegrationCheckContext): EntityInfo {
+    return FlsEntity(ctx);
+}
+
+export function FieldOf(entity: EntityInfo, name: string): EntityFieldInfo {
     const field = entity.Fields.find(f => f.Name.trim().toLowerCase() === name.trim().toLowerCase());
     Assert(field != null, `field '${name}' not found on '${entity.Name}'`);
     return field!;
 }
 
+/** @deprecated Use {@link FieldOf}. */
+export function fieldOf(entity: EntityInfo, name: string): EntityFieldInfo {
+    return FieldOf(entity, name);
+}
+
 /** Restrictable fields = everything except PKs, __mj_ columns, and unrestrictable entities. */
-export function restrictableFields(entity: EntityInfo): EntityFieldInfo[] {
+export function RestrictableFields(entity: EntityInfo): EntityFieldInfo[] {
     return entity.Fields.filter(f => !f.IsUnrestrictableField && !f.IsOnUnrestrictableEntity);
 }
 
+/** @deprecated Use {@link RestrictableFields}. */
+export function restrictableFields(entity: EntityInfo): EntityFieldInfo[] {
+    return RestrictableFields(entity);
+}
+
 /** Distinct role IDs holding entity-level Read — the roles snapshot initialization must cover. */
-export function rolesWithRead(entity: EntityInfo): string[] {
+export function RolesWithRead(entity: EntityInfo): string[] {
     return [...new Set(entity.Permissions.filter(p => p.CanRead).map(p => p.RoleID.toLowerCase()))];
+}
+
+/** @deprecated Use {@link RolesWithRead}. */
+export function rolesWithRead(entity: EntityInfo): string[] {
+    return RolesWithRead(entity);
 }
 
 /**
@@ -102,7 +132,7 @@ export function rolesWithRead(entity: EntityInfo): string[] {
  * `EnableError` also leaves Usable false, but FLS1 has already FAILED loudly on it by the time
  * later checks consult this — one real failure, nineteen quiet skips, no masking.
  */
-export function skipIfUnusable(fx: FlsFixture | undefined, checkId: string): fx is FlsFixture {
+export function SkipIfUnusable(fx: FlsFixture | undefined, checkId: string): fx is FlsFixture {
     if (!fx || !fx.Usable) {
         console.warn(
             `  ⚠ ${checkId} SKIPPED — FLS fixture not usable ` +
@@ -114,17 +144,29 @@ export function skipIfUnusable(fx: FlsFixture | undefined, checkId: string): fx 
     return true;
 }
 
+/** @deprecated Use {@link SkipIfUnusable}. */
+export function skipIfUnusable(fx: FlsFixture | undefined, checkId: string): fx is FlsFixture {
+    return SkipIfUnusable(fx, checkId);
+}
+
 /** Load the single EntityFieldPermission row for (field, role) through the entity path. */
-export async function loadEfpRow(
+export async function LoadEfpRow(
     ctx: IntegrationCheckContext, fieldId: string, roleId: string
 ): Promise<MJEntityFieldPermissionEntity> {
-    const rows = await q<{ ID: string }>(ctx,
-        `SELECT ID FROM [${schemaOf(ctx)}].EntityFieldPermission ` +
+    const rows = await Q<{ ID: string }>(ctx,
+        `SELECT ID FROM [${SchemaOf(ctx)}].EntityFieldPermission ` +
         `WHERE EntityFieldID='${fieldId}' AND RoleID='${roleId}'`);
     Assert(rows.length === 1, `expected exactly one permission row for field ${fieldId} / role ${roleId}, got ${rows.length}`);
     const efp = await ctx.Provider.GetEntityObject<MJEntityFieldPermissionEntity>('MJ: Entity Field Permissions', ctx.User);
     Assert(await efp.Load(rows[0].ID), `failed to load EntityFieldPermission ${rows[0].ID}`);
     return efp;
+}
+
+/** @deprecated Use {@link LoadEfpRow}. */
+export async function loadEfpRow(
+    ctx: IntegrationCheckContext, fieldId: string, roleId: string
+): Promise<MJEntityFieldPermissionEntity> {
+    return LoadEfpRow(ctx, fieldId, roleId);
 }
 
 /** Rewrite one (field, role) rule through the real entity path; returns [ok, message]. */
@@ -134,7 +176,7 @@ async function setRule(
     update: MJEntityFieldPermissionEntity['UpdateAccess'],
     create: MJEntityFieldPermissionEntity['CreateAccess']
 ): Promise<[boolean, string]> {
-    const efp = await loadEfpRow(ctx, fieldId, roleId);
+    const efp = await LoadEfpRow(ctx, fieldId, roleId);
     efp.ReadAccess = read;
     efp.UpdateAccess = update;
     efp.CreateAccess = create;
@@ -190,7 +232,7 @@ function resolveFixtureRoles(ctx: IntegrationCheckContext, fx: FlsFixture): bool
 
 /** Enable field security on the target entity through the REAL server entity path (the snapshot). */
 async function enableFieldSecurity(ctx: IntegrationCheckContext, fx: FlsFixture): Promise<void> {
-    const entity = flsEntity(ctx);
+    const entity = FlsEntity(ctx);
     const ent = await ctx.Provider.GetEntityObject<MJEntityEntity>('MJ: Entities', ctx.User);
     Assert(await ent.Load(entity.ID), `failed to load '${SEEDED_FLS_ENTITY}' entity record`);
     ent.EnableFieldLevelSecurity = true;
@@ -207,18 +249,18 @@ async function enableFieldSecurity(ctx: IntegrationCheckContext, fx: FlsFixture)
 
 /** Seed one fixture Employee row (+ a Company when the table is empty) via fixture SQL. */
 async function seedFixtureEmployee(ctx: IntegrationCheckContext, fx: FlsFixture): Promise<void> {
-    const schema = schemaOf(ctx);
-    const companies = await q<{ ID: string }>(ctx, `SELECT TOP 1 ID FROM [${schema}].Company`);
+    const schema = SchemaOf(ctx);
+    const companies = await Q<{ ID: string }>(ctx, `SELECT TOP 1 ID FROM [${schema}].Company`);
     if (companies.length > 0) {
         fx.CompanyID = companies[0].ID;
     } else {
-        const inserted = await q<{ ID: string }>(ctx,
+        const inserted = await Q<{ ID: string }>(ctx,
             `INSERT INTO [${schema}].Company (Name, Description) OUTPUT INSERTED.ID ` +
             `VALUES ('IT FLS Fixture Co', 'FLS integration-test fixture (mj-integration-test — safe to delete)')`);
         fx.CompanyID = inserted[0].ID;
     }
     const email = `it-fls-fixture-${Date.now()}@integration.test`;
-    const emp = await q<{ ID: string }>(ctx,
+    const emp = await Q<{ ID: string }>(ctx,
         `INSERT INTO [${schema}].Employee (FirstName, LastName, CompanyID, Email, Title, Phone) OUTPUT INSERTED.ID ` +
         `VALUES ('Fixture', 'Employee (mj-integration-test)', '${fx.CompanyID}', '${email}', 'FLS Fixture Title', '555-0100')`);
     fx.FixtureEmployeeID = emp[0].ID;
@@ -253,14 +295,14 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement', {
         if (!fx || (!fx.Usable && !fx.EnableError)) {
             return; // nothing was mutated
         }
-        const schema = schemaOf(ctx);
+        const schema = SchemaOf(ctx);
         // Fixture + check-created Employee rows (fixture SQL, best-effort).
         const ids = [...fx.CreatedEmployeeIds, ...(fx.FixtureEmployeeID ? [fx.FixtureEmployeeID] : [])];
         if (ids.length > 0) {
-            await q(ctx, `DELETE FROM [${schema}].Employee WHERE ID IN (${ids.map(id => `'${id}'`).join(',')})`)
+            await Q(ctx, `DELETE FROM [${schema}].Employee WHERE ID IN (${ids.map(id => `'${id}'`).join(',')})`)
                 .catch(() => undefined);
         }
-        await q(ctx, `DELETE FROM [${schema}].Company WHERE Name LIKE 'IT FLS Fixture Co%'`).catch(() => undefined);
+        await Q(ctx, `DELETE FROM [${schema}].Company WHERE Name LIKE 'IT FLS Fixture Co%'`).catch(() => undefined);
         // Restore the flag through the entity path (disable is always permitted — 2.5).
         try {
             const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
@@ -273,12 +315,12 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement', {
             }
         } catch { /* best-effort — the SQL fallback below still runs */ }
         // Remove every permission row the snapshot wrote for this entity (flag is off, rows are inert).
-        await q(ctx,
+        await Q(ctx,
             `DELETE p FROM [${schema}].EntityFieldPermission p ` +
             `JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID ` +
             `JOIN [${schema}].Entity e ON e.ID = f.EntityID WHERE e.Name = '${SEEDED_FLS_ENTITY}'`
         ).catch(() => undefined);
-        await q(ctx, `UPDATE [${schema}].Entity SET EnableFieldLevelSecurity = 0 WHERE Name = '${SEEDED_FLS_ENTITY}'`)
+        await Q(ctx, `UPDATE [${schema}].Entity SET EnableFieldLevelSecurity = 0 WHERE Name = '${SEEDED_FLS_ENTITY}'`)
             .catch(() => undefined);
         await ctx.Provider.Refresh().catch(() => undefined);
     }
@@ -293,7 +335,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement', {
  * "field security cannot be enabled on any entity" guard collision — so a fixture whose seed
  * is present but whose enable FAILED is a FAILURE here, never a skip.
  */
-export async function CheckFls1_EnableSnapshotShape(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckFls1EnableSnapshotShape(ctx: IntegrationCheckContext): Promise<void> {
     const fx = ctx.FlsFixture;
     if (!fx || (!fx.Usable && !fx.EnableError)) {
         console.warn(`  ⚠ fls-enforcement.FLS1 SKIPPED — ${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\`.`);
@@ -301,22 +343,27 @@ export async function CheckFls1_EnableSnapshotShape(ctx: IntegrationCheckContext
     }
     Assert(!fx.EnableError, `enabling field security on '${SEEDED_FLS_ENTITY}' through the entity path FAILED: ${fx.EnableError}`);
 
-    const schema = schemaOf(ctx);
-    const entity = flsEntity(ctx);
+    const schema = SchemaOf(ctx);
+    const entity = FlsEntity(ctx);
     Assert(entity.EnableFieldLevelSecurity, 'EnableFieldLevelSecurity should be true in refreshed metadata');
 
-    const expected = restrictableFields(entity).length * rolesWithRead(entity).length;
-    const rows = await q<{ n: number }>(ctx,
+    const expected = RestrictableFields(entity).length * RolesWithRead(entity).length;
+    const rows = await Q<{ n: number }>(ctx,
         `SELECT COUNT(*) AS n FROM [${schema}].EntityFieldPermission p ` +
         `JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
     AssertEqual(rows[0].n, expected,
-        `snapshot rows: expected ${expected} (${restrictableFields(entity).length} restrictable fields × ${rolesWithRead(entity).length} read-holding roles)`);
+        `snapshot rows: expected ${expected} (${RestrictableFields(entity).length} restrictable fields × ${RolesWithRead(entity).length} read-holding roles)`);
 
-    const badTargets = await q<{ n: number }>(ctx,
+    const badTargets = await Q<{ n: number }>(ctx,
         `SELECT COUNT(*) AS n FROM [${schema}].EntityFieldPermission p ` +
         `JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID ` +
         `WHERE f.EntityID = '${entity.ID}' AND (f.IsPrimaryKey = 1 OR f.Name LIKE '__mj[_]%')`);
     AssertEqual(badTargets[0].n, 0, 'no snapshot row may target a primary key or __mj_ system column');
+}
+
+/** @deprecated Use {@link CheckFls1EnableSnapshotShape}. */
+export async function CheckFls1_EnableSnapshotShape(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls1EnableSnapshotShape(ctx);
 }
 
 /**
@@ -332,16 +379,16 @@ export async function CheckFls1_EnableSnapshotShape(ctx: IntegrationCheckContext
  * grant the snapshot deliberately withholds, so the split is asserted here instead: it is the
  * stronger statement of the two.
  */
-export async function CheckFls2_SnapshotDefaultsChangeNothing(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS2')) return;
+export async function CheckFls2SnapshotDefaultsChangeNothing(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS2')) return;
     const fx = ctx.FlsFixture!;
-    const schema = schemaOf(ctx);
-    const entity = flsEntity(ctx);
+    const schema = SchemaOf(ctx);
+    const entity = FlsEntity(ctx);
 
     // Grouped by writability as well as by verb triple. Within the snapshot set (primary keys and
     // `__mj_` columns are already excluded from it), `AllowUpdateAPI = 0` IS the read-only test —
     // the same one `EntityFieldInfo.ReadOnly` reduces to there.
-    const shapes = await q<{ RoleID: string; ReadAccess: string; UpdateAccess: string; CreateAccess: string; Writable: number; n: number }>(ctx,
+    const shapes = await Q<{ RoleID: string; ReadAccess: string; UpdateAccess: string; CreateAccess: string; Writable: number; n: number }>(ctx,
         `SELECT p.RoleID, p.ReadAccess, p.UpdateAccess, p.CreateAccess, ` +
         `CAST(f.AllowUpdateAPI AS int) AS Writable, COUNT(*) AS n ` +
         `FROM [${schema}].EntityFieldPermission p JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID ` +
@@ -377,15 +424,20 @@ export async function CheckFls2_SnapshotDefaultsChangeNothing(ctx: IntegrationCh
     Assert('Email' in fixtureRow!, 'pre-tightening: Email still present for the reader (enabling changed nothing)');
 }
 
+/** @deprecated Use {@link CheckFls2SnapshotDefaultsChangeNothing}. */
+export async function CheckFls2_SnapshotDefaultsChangeNothing(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls2SnapshotDefaultsChangeNothing(ctx);
+}
+
 /**
  * FLS3 — the bundle's tightenings all go through the REAL entity path and every one must be
  * PERMITTED (they aim only at non-system roles — test-plan 4.7d's "stays freely restrictable"
  * half), and after a metadata refresh the aggregation reflects them.
  */
-export async function CheckFls3_TightenNonSystemRoles(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS3')) return;
+export async function CheckFls3TightenNonSystemRoles(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS3')) return;
     const fx = ctx.FlsFixture!;
-    const entity = flsEntity(ctx);
+    const entity = FlsEntity(ctx);
     const roleIds = fx.RoleIDs!;
 
     const edits: Array<[string, string, MJEntityFieldPermissionEntity['ReadAccess'], MJEntityFieldPermissionEntity['UpdateAccess'], MJEntityFieldPermissionEntity['CreateAccess']]> = [
@@ -395,33 +447,48 @@ export async function CheckFls3_TightenNonSystemRoles(ctx: IntegrationCheckConte
         [FLS_READER_DENIED_FIELD, roleIds.Reader, 'Deny', 'No Access', 'No Access'],
     ];
     for (const [fieldName, roleId, r, u, c] of edits) {
-        const [ok, msg] = await setRule(ctx, fieldOf(entity, fieldName).ID, roleId, r, u, c);
+        const [ok, msg] = await setRule(ctx, FieldOf(entity, fieldName).ID, roleId, r, u, c);
         Assert(ok, `tightening ${fieldName} for a NON-system role must be permitted, was refused: ${msg}`);
     }
 
     // 4.4's precondition: remove the reader's row for one field entirely (missing row ⇒ fail closed).
-    const missing = await loadEfpRow(ctx, fieldOf(entity, FLS_MISSING_ROW_FIELD).ID, roleIds.Reader);
+    const missing = await LoadEfpRow(ctx, FieldOf(entity, FLS_MISSING_ROW_FIELD).ID, roleIds.Reader);
     Assert(await missing.Delete(), `deleting a non-system-role permission row must be permitted: ${missing.LatestResult?.CompleteMessage ?? ''}`);
 
     await ctx.Provider.Refresh();
-    Assert(flsEntity(ctx).GetDeniedReadFields(fx.Reader!).has(FLS_READER_DENIED_FIELD.toLowerCase()),
+    Assert(FlsEntity(ctx).GetDeniedReadFields(fx.Reader!).has(FLS_READER_DENIED_FIELD.toLowerCase()),
         `after refresh, the reader must be read-denied on ${FLS_READER_DENIED_FIELD}`);
 }
 
+/** @deprecated Use {@link CheckFls3TightenNonSystemRoles}. */
+export async function CheckFls3_TightenNonSystemRoles(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls3TightenNonSystemRoles(ctx);
+}
+
 /** FLS4 — Deny beats Allow across roles (4.1): multi holds Writer(Allow) + Denier(Deny) on Title ⇒ denied. */
-export async function CheckFls4_DenyBeatsAllow(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS4')) return;
+export async function CheckFls4DenyBeatsAllow(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS4')) return;
     const fx = ctx.FlsFixture!;
-    Assert(flsEntity(ctx).GetDeniedReadFields(fx.Multi!).has(FLS_DENY_READ_FIELD.toLowerCase()),
+    Assert(FlsEntity(ctx).GetDeniedReadFields(fx.Multi!).has(FLS_DENY_READ_FIELD.toLowerCase()),
         `Deny must beat Allow: multi (Writer=Allow + Denier=Deny) must be read-denied on ${FLS_DENY_READ_FIELD}`);
 }
 
+/** @deprecated Use {@link CheckFls4DenyBeatsAllow}. */
+export async function CheckFls4_DenyBeatsAllow(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls4DenyBeatsAllow(ctx);
+}
+
 /** FLS5 — 'No Access' is neutral (4.2): multi holds Writer(Allow) + Neutral(No Access) on LastName ⇒ allowed. */
-export async function CheckFls5_NoAccessIsNeutral(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS5')) return;
+export async function CheckFls5NoAccessIsNeutral(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS5')) return;
     const fx = ctx.FlsFixture!;
-    Assert(!flsEntity(ctx).GetDeniedReadFields(fx.Multi!).has(FLS_NEUTRAL_FIELD.toLowerCase()),
+    Assert(!FlsEntity(ctx).GetDeniedReadFields(fx.Multi!).has(FLS_NEUTRAL_FIELD.toLowerCase()),
         `'No Access' must be neutral: multi (Writer=Allow + Neutral=No Access) must keep read on ${FLS_NEUTRAL_FIELD}`);
+}
+
+/** @deprecated Use {@link CheckFls5NoAccessIsNeutral}. */
+export async function CheckFls5_NoAccessIsNeutral(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls5NoAccessIsNeutral(ctx);
 }
 
 /**
@@ -429,10 +496,10 @@ export async function CheckFls5_NoAccessIsNeutral(ctx: IntegrationCheckContext):
  * Denier denies Read. Each row is individually legal; only the post-aggregation clamp can
  * make the combination update-denied.
  */
-export async function CheckFls6_ReadRequiredClamp(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS6')) return;
+export async function CheckFls6ReadRequiredClamp(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS6')) return;
     const fx = ctx.FlsFixture!;
-    const field = fieldOf(flsEntity(ctx), FLS_DENY_READ_FIELD);
+    const field = FieldOf(FlsEntity(ctx), FLS_DENY_READ_FIELD);
 
     const writerPerms = field.GetUserFieldPermissions(fx.Writer!, true);
     Assert(writerPerms.CanRead && writerPerms.CanUpdate, `precondition: the Writer role alone allows read+update on ${FLS_DENY_READ_FIELD}`);
@@ -444,12 +511,22 @@ export async function CheckFls6_ReadRequiredClamp(ctx: IntegrationCheckContext):
         `(got Update=${multiPerms.CanUpdate}, Create=${multiPerms.CanCreate})`);
 }
 
+/** @deprecated Use {@link CheckFls6ReadRequiredClamp}. */
+export async function CheckFls6_ReadRequiredClamp(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls6ReadRequiredClamp(ctx);
+}
+
 /** FLS7 — a MISSING row on an enabled entity fails CLOSED (4.4): the reader's BCMID row was deleted ⇒ denied. */
-export async function CheckFls7_MissingRowFailsClosed(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS7')) return;
+export async function CheckFls7MissingRowFailsClosed(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS7')) return;
     const fx = ctx.FlsFixture!;
-    Assert(flsEntity(ctx).GetDeniedReadFields(fx.Reader!).has(FLS_MISSING_ROW_FIELD.toLowerCase()),
+    Assert(FlsEntity(ctx).GetDeniedReadFields(fx.Reader!).has(FLS_MISSING_ROW_FIELD.toLowerCase()),
         `fail closed: with its permission row deleted, the reader must be denied ${FLS_MISSING_ROW_FIELD}`);
+}
+
+/** @deprecated Use {@link CheckFls7MissingRowFailsClosed}. */
+export async function CheckFls7_MissingRowFailsClosed(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls7MissingRowFailsClosed(ctx);
 }
 
 /**
@@ -458,19 +535,24 @@ export async function CheckFls7_MissingRowFailsClosed(ctx: IntegrationCheckConte
  * initialization wrote Allow rows for the standard roles it holds — so with the bundle's
  * tightenings in place (which never touch system-user roles) its denied set must be empty.
  */
-export async function CheckFls8_SystemUserAccessIsData(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS8')) return;
+export async function CheckFls8SystemUserAccessIsData(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS8')) return;
     const sysUser = UserCache.Instance.GetSystemUser();
     Assert(sysUser != null, 'the MJ system user must be resolvable from the user cache');
-    const denied = flsEntity(ctx).GetDeniedReadFields(sysUser!);
+    const denied = FlsEntity(ctx).GetDeniedReadFields(sysUser!);
     AssertEqual(denied.size, 0,
         `the system user must be denied nothing — its access comes from ordinary Allow rows, not a bypass ` +
         `(denied: ${[...denied].join(', ') || 'none'})`);
 }
 
+/** @deprecated Use {@link CheckFls8SystemUserAccessIsData}. */
+export async function CheckFls8_SystemUserAccessIsData(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls8SystemUserAccessIsData(ctx);
+}
+
 /** FLS9 — RunView as the reader OMITS the denied columns from every row (3.1), while keeping allowed ones. */
-export async function CheckFls9_RunViewStripsDeniedColumns(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS9')) return;
+export async function CheckFls9RunViewStripsDeniedColumns(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS9')) return;
     const fx = ctx.FlsFixture!;
     const res = await new RunView().RunView<Record<string, unknown>>(
         { EntityName: SEEDED_FLS_ENTITY, ExtraFilter: coldFilter(`fls9-${Date.now()}`), ResultType: 'simple' }, fx.Reader!);
@@ -484,9 +566,14 @@ export async function CheckFls9_RunViewStripsDeniedColumns(ctx: IntegrationCheck
     Assert(fixtureRow != null && 'FirstName' in fixtureRow, 'allowed columns must survive the projection');
 }
 
+/** @deprecated Use {@link CheckFls9RunViewStripsDeniedColumns}. */
+export async function CheckFls9_RunViewStripsDeniedColumns(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls9RunViewStripsDeniedColumns(ctx);
+}
+
 /** FLS10 — the same query as an UNRESTRICTED user still returns the column (3.2). */
-export async function CheckFls10_UnrestrictedUserUnaffected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS10')) return;
+export async function CheckFls10UnrestrictedUserUnaffected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS10')) return;
     const fx = ctx.FlsFixture!;
     const res = await new RunView().RunView<Record<string, unknown>>(
         { EntityName: SEEDED_FLS_ENTITY, ExtraFilter: coldFilter(`fls10-${Date.now()}`), ResultType: 'simple' }, fx.Writer!);
@@ -497,6 +584,11 @@ export async function CheckFls10_UnrestrictedUserUnaffected(ctx: IntegrationChec
         `${FLS_READER_DENIED_FIELD} must still reach the unrestricted writer (only the reader is denied)`);
 }
 
+/** @deprecated Use {@link CheckFls10UnrestrictedUserUnaffected}. */
+export async function CheckFls10_UnrestrictedUserUnaffected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls10UnrestrictedUserUnaffected(ctx);
+}
+
 /**
  * FLS11 — the cache CANNOT leak across users (3.3), proven at the mechanism level. The
  * server's slots are full-width and SHARED (no FLS fingerprint segment); per-user narrowing
@@ -504,8 +596,8 @@ export async function CheckFls10_UnrestrictedUserUnaffected(ctx: IntegrationChec
  * slot; the reader's identical query is served WITHOUT a new slot write (shared slot — the
  * exact surface a leak would use) and STILL comes back without the denied column.
  */
-export async function CheckFls11_SharedCacheSlotStillStrips(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS11')) return;
+export async function CheckFls11SharedCacheSlotStillStrips(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS11')) return;
     const fx = ctx.FlsFixture!;
     const tag = `fls11-${Date.now()}`;
     const params = (): RunViewParams => ({ EntityName: SEEDED_FLS_ENTITY, ExtraFilter: coldFilter(tag), ResultType: 'simple' });
@@ -528,9 +620,14 @@ export async function CheckFls11_SharedCacheSlotStillStrips(ctx: IntegrationChec
     }
 }
 
+/** @deprecated Use {@link CheckFls11SharedCacheSlotStillStrips}. */
+export async function CheckFls11_SharedCacheSlotStillStrips(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls11SharedCacheSlotStillStrips(ctx);
+}
+
 /** FLS12 — ExtraFilter referencing a denied field is REJECTED with exactly the ambiguous message (3.4 + 3.12). */
-export async function CheckFls12_ExtraFilterRejected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS12')) return;
+export async function CheckFls12ExtraFilterRejected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS12')) return;
     const fx = ctx.FlsFixture!;
     const message = await runViewExpectRejection(
         { EntityName: SEEDED_FLS_ENTITY, ExtraFilter: `${FLS_READER_DENIED_FIELD} LIKE '%@%'`, ResultType: 'simple' }, fx.Reader!);
@@ -540,9 +637,14 @@ export async function CheckFls12_ExtraFilterRejected(ctx: IntegrationCheckContex
         `(expected '${expected}', got '${message}')`);
 }
 
+/** @deprecated Use {@link CheckFls12ExtraFilterRejected}. */
+export async function CheckFls12_ExtraFilterRejected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls12ExtraFilterRejected(ctx);
+}
+
 /** FLS13 — OrderBy on a denied field is rejected (3.5): row ordering reconstructs values. */
-export async function CheckFls13_OrderByRejected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS13')) return;
+export async function CheckFls13OrderByRejected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS13')) return;
     const fx = ctx.FlsFixture!;
     const message = await runViewExpectRejection(
         { EntityName: SEEDED_FLS_ENTITY, OrderBy: `${FLS_READER_DENIED_FIELD} DESC`, ResultType: 'simple' }, fx.Reader!);
@@ -550,9 +652,14 @@ export async function CheckFls13_OrderByRejected(ctx: IntegrationCheckContext): 
         `ambiguous denial wording expected, got '${message}'`);
 }
 
+/** @deprecated Use {@link CheckFls13OrderByRejected}. */
+export async function CheckFls13_OrderByRejected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls13OrderByRejected(ctx);
+}
+
 /** FLS14 — an Aggregate expression on a denied field is rejected (3.6): MIN(x) returns exact values. */
-export async function CheckFls14_AggregatesRejected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS14')) return;
+export async function CheckFls14AggregatesRejected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS14')) return;
     const fx = ctx.FlsFixture!;
     const message = await runViewExpectRejection(
         { EntityName: SEEDED_FLS_ENTITY, Aggregates: [{ expression: `MIN(${FLS_READER_DENIED_FIELD})`, alias: 'probe' }], ResultType: 'simple' }, fx.Reader!);
@@ -560,15 +667,25 @@ export async function CheckFls14_AggregatesRejected(ctx: IntegrationCheckContext
         `ambiguous denial wording expected, got '${message}'`);
 }
 
+/** @deprecated Use {@link CheckFls14AggregatesRejected}. */
+export async function CheckFls14_AggregatesRejected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls14AggregatesRejected(ctx);
+}
+
 /** FLS15 — UserSearchString is NOT rejected (3.7): denied fields are excluded from the searched set instead. */
-export async function CheckFls15_UserSearchStringNotRejected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS15')) return;
+export async function CheckFls15UserSearchStringNotRejected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS15')) return;
     const fx = ctx.FlsFixture!;
     const res = await new RunView().RunView(
         { EntityName: SEEDED_FLS_ENTITY, UserSearchString: 'zzz-fls-search-probe', ResultType: 'simple' }, fx.Reader!);
     Assert(res.Success,
         `UserSearchString must NOT be rejected for a restricted user (the platform excludes denied fields from ` +
         `the searched set instead): ${res.ErrorMessage}`);
+}
+
+/** @deprecated Use {@link CheckFls15UserSearchStringNotRejected}. */
+export async function CheckFls15_UserSearchStringNotRejected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls15UserSearchStringNotRejected(ctx);
 }
 
 /**
@@ -583,8 +700,8 @@ export async function CheckFls15_UserSearchStringNotRejected(ctx: IntegrationChe
  * discreet. The ambiguous wording stays where it earns its keep: READ denials, where a caller
  * probing a predicate must not learn which columns a deployment treats as sensitive.
  */
-export async function CheckFls16_UpdateDeniedFieldRejected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS16')) return;
+export async function CheckFls16UpdateDeniedFieldRejected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS16')) return;
     const fx = ctx.FlsFixture!;
     const emp = await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, fx.Multi!);
     Assert(await emp.Load(fx.FixtureEmployeeID!), 'multi must be able to load the fixture employee');
@@ -606,9 +723,14 @@ export async function CheckFls16_UpdateDeniedFieldRejected(ctx: IntegrationCheck
     Assert(!message.includes(FieldSecurityDenialMessage(FLS_UPDATE_DENY_FIELD, SEEDED_FLS_ENTITY)),
         `a READABLE field's write refusal must not hide behind the ambiguous wording, got '${message}'`);
 
-    const db = await q<{ Phone: string }>(ctx,
-        `SELECT Phone FROM [${schemaOf(ctx)}].Employee WHERE ID = '${fx.FixtureEmployeeID}'`);
+    const db = await Q<{ Phone: string }>(ctx,
+        `SELECT Phone FROM [${SchemaOf(ctx)}].Employee WHERE ID = '${fx.FixtureEmployeeID}'`);
     AssertEqual(db[0].Phone, '555-0100', 'the stored Phone value must be untouched by the rejected save');
+}
+
+/** @deprecated Use {@link CheckFls16UpdateDeniedFieldRejected}. */
+export async function CheckFls16_UpdateDeniedFieldRejected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls16UpdateDeniedFieldRejected(ctx);
 }
 
 /**
@@ -616,11 +738,11 @@ export async function CheckFls16_UpdateDeniedFieldRejected(ctx: IntegrationCheck
  * the fields they cannot read keep their stored values (framework-internal reads are exempt
  * from the accessor gate, which is what keeps the round trip lossless).
  */
-export async function CheckFls17_RoundTripSafety(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS17')) return;
+export async function CheckFls17RoundTripSafety(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS17')) return;
     const fx = ctx.FlsFixture!;
-    const schema = schemaOf(ctx);
-    const before = await q<{ Title: string; Email: string }>(ctx,
+    const schema = SchemaOf(ctx);
+    const before = await Q<{ Title: string; Email: string }>(ctx,
         `SELECT Title, Email FROM [${schema}].Employee WHERE ID = '${fx.FixtureEmployeeID}'`);
 
     const emp = await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, fx.Multi!);
@@ -628,7 +750,7 @@ export async function CheckFls17_RoundTripSafety(ctx: IntegrationCheckContext): 
     emp.FirstName = 'RoundTrip';
     Assert(await emp.Save(), `editing an allowed field must save: ${emp.LatestResult?.CompleteMessage ?? ''}`);
 
-    const after = await q<{ FirstName: string; Title: string; Email: string }>(ctx,
+    const after = await Q<{ FirstName: string; Title: string; Email: string }>(ctx,
         `SELECT FirstName, Title, Email FROM [${schema}].Employee WHERE ID = '${fx.FixtureEmployeeID}'`);
     AssertEqual(after[0].FirstName, 'RoundTrip', 'the edited field must persist');
     AssertEqual(after[0].Title, before[0].Title, `read-denied ${FLS_DENY_READ_FIELD} must survive a restricted round trip unchanged`);
@@ -639,14 +761,19 @@ export async function CheckFls17_RoundTripSafety(ctx: IntegrationCheckContext): 
     Assert(await emp.Save(), 'restoring the fixture employee must save');
 }
 
+/** @deprecated Use {@link CheckFls17RoundTripSafety}. */
+export async function CheckFls17_RoundTripSafety(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls17RoundTripSafety(ctx);
+}
+
 /**
  * FLS18 — create suppression (3.11): a value supplied for a create-denied field is silently
  * DROPPED and the column takes its default; the insert itself succeeds. Rejecting would name
  * the field; defaulting gives the restricted user the same record shape as anyone who left it
  * blank.
  */
-export async function CheckFls18_CreateSuppression(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS18')) return;
+export async function CheckFls18CreateSuppression(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS18')) return;
     const fx = ctx.FlsFixture!;
     const emp = await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, fx.Multi!);
     emp.NewRecord();
@@ -659,10 +786,15 @@ export async function CheckFls18_CreateSuppression(ctx: IntegrationCheckContext)
     Assert(await emp.Save(), `the create must SUCCEED (suppression, not rejection): ${emp.LatestResult?.CompleteMessage ?? ''}`);
     fx.CreatedEmployeeIds.push(emp.ID);
 
-    const db = await q<{ Phone: string | null }>(ctx,
-        `SELECT Phone FROM [${schemaOf(ctx)}].Employee WHERE ID = '${emp.ID}'`);
+    const db = await Q<{ Phone: string | null }>(ctx,
+        `SELECT Phone FROM [${SchemaOf(ctx)}].Employee WHERE ID = '${emp.ID}'`);
     Assert(db.length === 1, 'the created row must exist');
     Assert(db[0].Phone === null, `the create-denied ${FLS_UPDATE_DENY_FIELD} must take its default (NULL), got '${db[0].Phone}'`);
+}
+
+/** @deprecated Use {@link CheckFls18CreateSuppression}. */
+export async function CheckFls18_CreateSuppression(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls18CreateSuppression(ctx);
 }
 
 // ───────────────────────────────────────────── Record Changes payload security
@@ -686,7 +818,7 @@ type RecordChangeRow = {
 async function readFixtureRecordChanges(
     ctx: IntegrationCheckContext, user: UserInfo, employeeID: string, tag: string
 ): Promise<RecordChangeRow[]> {
-    const employeesEntityID = flsEntity(ctx).ID;
+    const employeesEntityID = FlsEntity(ctx).ID;
     const res = await new RunView().RunView<RecordChangeRow>({
         EntityName: RECORD_CHANGES_ENTITY,
         ExtraFilter: `EntityID = '${employeesEntityID}' AND RecordID LIKE '%${employeeID}%' AND ${coldFilter(tag)}`,
@@ -704,7 +836,7 @@ async function readFixtureRecordChanges(
  * actually be tracked, or no audit row exists to project.
  */
 function recordChangeChecksUsable(ctx: IntegrationCheckContext, fx: FlsFixture, checkId: string): boolean {
-    if (!flsEntity(ctx).TrackRecordChanges) {
+    if (!FlsEntity(ctx).TrackRecordChanges) {
         console.warn(`  ⚠ ${checkId} SKIPPED — '${SEEDED_FLS_ENTITY}' has TrackRecordChanges off, so no audit row exists to project.`);
         return false;
     }
@@ -780,8 +912,8 @@ function assertPayloadIsClean(row: RecordChangeRow, marker: string, context: str
  * (seeded). The writer is denied nothing, and is the control: the same rows must reach it whole,
  * so this proves projection rather than blanket suppression.
  */
-export async function CheckFls22_RecordChangePayloadProjected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS22')) return;
+export async function CheckFls22RecordChangePayloadProjected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS22')) return;
     const fx = ctx.FlsFixture!;
     if (!recordChangeChecksUsable(ctx, fx, 'fls-enforcement.FLS22')) return;
 
@@ -806,6 +938,11 @@ export async function CheckFls22_RecordChangePayloadProjected(ctx: IntegrationCh
     });
 }
 
+/** @deprecated Use {@link CheckFls22RecordChangePayloadProjected}. */
+export async function CheckFls22_RecordChangePayloadProjected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls22RecordChangePayloadProjected(ctx);
+}
+
 /**
  * FLS23 — the audit projection holds on the SHARED cache slot, the same mechanism-level proof
  * FLS11 gives for ordinary reads.
@@ -816,8 +953,8 @@ export async function CheckFls22_RecordChangePayloadProjected(ctx: IntegrationCh
  * write, and the payload must still come back narrowed. This is the exact path the original
  * cross-user leak ran through.
  */
-export async function CheckFls23_RecordChangeCacheSlotStillProjects(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS23')) return;
+export async function CheckFls23RecordChangeCacheSlotStillProjects(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS23')) return;
     const fx = ctx.FlsFixture!;
     if (!recordChangeChecksUsable(ctx, fx, 'fls-enforcement.FLS23')) return;
 
@@ -844,11 +981,16 @@ export async function CheckFls23_RecordChangeCacheSlotStillProjects(ctx: Integra
     });
 }
 
+/** @deprecated Use {@link CheckFls23RecordChangeCacheSlotStillProjects}. */
+export async function CheckFls23_RecordChangeCacheSlotStillProjects(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls23RecordChangeCacheSlotStillProjects(ctx);
+}
+
 /** FLS19 — rows targeting unrestrictable fields (primary keys) are rejected at save time (4.6). */
-export async function CheckFls19_UnrestrictableTargetRejected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS19')) return;
+export async function CheckFls19UnrestrictableTargetRejected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS19')) return;
     const fx = ctx.FlsFixture!;
-    const entity = flsEntity(ctx);
+    const entity = FlsEntity(ctx);
     const pk = entity.Fields.find(f => f.IsPrimaryKey);
     Assert(pk != null, 'the FLS entity must have a primary key field');
 
@@ -871,13 +1013,18 @@ export async function CheckFls19_UnrestrictableTargetRejected(ctx: IntegrationCh
     }
 }
 
+/** @deprecated Use {@link CheckFls19UnrestrictableTargetRejected}. */
+export async function CheckFls19_UnrestrictableTargetRejected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls19UnrestrictableTargetRejected(ctx);
+}
+
 /**
  * FLS20 — the typed-accessor gate: reading a read-denied field BY NAME throws the ambiguous
  * message (a restricted field surfaces as a clear failure, not a silent blank), while allowed
  * fields read normally.
  */
-export async function CheckFls20_AccessorGateThrows(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS20')) return;
+export async function CheckFls20AccessorGateThrows(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS20')) return;
     const fx = ctx.FlsFixture!;
     const emp = await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, fx.Reader!);
     Assert(await emp.Load(fx.FixtureEmployeeID!), 'the reader must be able to load the fixture employee');
@@ -894,6 +1041,11 @@ export async function CheckFls20_AccessorGateThrows(ctx: IntegrationCheckContext
         'the accessor gate must use exactly the ambiguous wording');
 }
 
+/** @deprecated Use {@link CheckFls20AccessorGateThrows}. */
+export async function CheckFls20_AccessorGateThrows(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls20AccessorGateThrows(ctx);
+}
+
 /**
  * FLS21 — the COST of permission-change propagation, measured. Every write to a metadata member
  * entity (an Entity Field Permission row included) schedules one debounced full metadata refresh
@@ -905,8 +1057,8 @@ export async function CheckFls20_AccessorGateThrows(ctx: IntegrationCheckContext
  * wider than the window pay it again. Deliberately NO wall-clock assertion beyond a generous
  * sanity ceiling — machine speed varies and this check exists for visibility, not gating.
  */
-export async function CheckFls21_RefreshCostVisibility(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS21')) return;
+export async function CheckFls21RefreshCostVisibility(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS21')) return;
 
     const t1 = performance.now();
     Assert(await ctx.Provider.Refresh(), 'the first hard metadata refresh must succeed');
@@ -920,31 +1072,36 @@ export async function CheckFls21_RefreshCostVisibility(ctx: IntegrationCheckCont
     Assert(second < 60_000, `a full metadata refresh took ${second.toFixed(0)}ms — over the 60s sanity ceiling, something is structurally wrong`);
 }
 
+/** @deprecated Use {@link CheckFls21RefreshCostVisibility}. */
+export async function CheckFls21_RefreshCostVisibility(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFls21RefreshCostVisibility(ctx);
+}
+
 /** The 'fls-enforcement' bundle (server transport). Order is load-bearing: FLS3 applies the tightenings. */
 export const FlsEnforcementChecks: NamedCheck[] = [
-    { Id: 'fls-enforcement.FLS1', Name: 'FLS1: enabling field security via the real entity path succeeds; the snapshot covers (restrictable fields × read-holding roles) and never targets PKs or __mj_ columns', Fn: CheckFls1_EnableSnapshotShape },
-    { Id: 'fls-enforcement.FLS2', Name: 'FLS2: snapshot defaults mirror entity permissions (Allow/Allow/Allow vs Allow/No Access/No Access) and enabling changes NOTHING until tightened', Fn: CheckFls2_SnapshotDefaultsChangeNothing },
-    { Id: 'fls-enforcement.FLS3', Name: 'FLS3: non-system roles are freely restrictable — every tightening through the real entity path is permitted and takes effect after refresh', Fn: CheckFls3_TightenNonSystemRoles },
-    { Id: 'fls-enforcement.FLS4', Name: 'FLS4: Deny beats Allow across roles', Fn: CheckFls4_DenyBeatsAllow },
-    { Id: 'fls-enforcement.FLS5', Name: 'FLS5: No Access is neutral across roles', Fn: CheckFls5_NoAccessIsNeutral },
-    { Id: 'fls-enforcement.FLS6', Name: 'FLS6: the cross-role read-required clamp — read-denied forces update/create denied despite another role\'s Update=Allow', Fn: CheckFls6_ReadRequiredClamp },
-    { Id: 'fls-enforcement.FLS7', Name: 'FLS7: a missing permission row on an enabled entity fails CLOSED', Fn: CheckFls7_MissingRowFailsClosed },
-    { Id: 'fls-enforcement.FLS8', Name: 'FLS8: the system user is NOT exempt — its full access aggregates from ordinary Allow rows', Fn: CheckFls8_SystemUserAccessIsData },
-    { Id: 'fls-enforcement.FLS9', Name: 'FLS9: RunView as the restricted user omits denied columns from every row', Fn: CheckFls9_RunViewStripsDeniedColumns },
-    { Id: 'fls-enforcement.FLS10', Name: 'FLS10: the same query as an unrestricted user still returns the column', Fn: CheckFls10_UnrestrictedUserUnaffected },
-    { Id: 'fls-enforcement.FLS11', Name: 'FLS11: the shared full-width cache slot cannot cross-serve — reader is served from the writer-warmed slot WITHOUT the denied column', Fn: CheckFls11_SharedCacheSlotStillStrips },
-    { Id: 'fls-enforcement.FLS12', Name: 'FLS12: ExtraFilter on a denied field is rejected with exactly the ambiguous message', Fn: CheckFls12_ExtraFilterRejected },
-    { Id: 'fls-enforcement.FLS13', Name: 'FLS13: OrderBy on a denied field is rejected', Fn: CheckFls13_OrderByRejected },
-    { Id: 'fls-enforcement.FLS14', Name: 'FLS14: an Aggregate expression on a denied field is rejected (value-reconstruction hole)', Fn: CheckFls14_AggregatesRejected },
-    { Id: 'fls-enforcement.FLS15', Name: 'FLS15: UserSearchString is NOT rejected — denied fields are excluded from the searched set', Fn: CheckFls15_UserSearchStringNotRejected },
-    { Id: 'fls-enforcement.FLS16', Name: 'FLS16: a save modifying an update-denied field is rejected server-side and the stored value is untouched', Fn: CheckFls16_UpdateDeniedFieldRejected },
-    { Id: 'fls-enforcement.FLS17', Name: 'FLS17: round-trip safety — a restricted user\'s save of an unrelated field leaves denied columns\' stored values intact', Fn: CheckFls17_RoundTripSafety },
-    { Id: 'fls-enforcement.FLS18', Name: 'FLS18: create suppression — a supplied create-denied value is dropped and the column takes its default; the insert succeeds', Fn: CheckFls18_CreateSuppression },
-    { Id: 'fls-enforcement.FLS19', Name: 'FLS19: a permission row targeting a primary key is rejected at save time', Fn: CheckFls19_UnrestrictableTargetRejected },
-    { Id: 'fls-enforcement.FLS20', Name: 'FLS20: the typed-accessor gate throws the ambiguous message on a read-denied field', Fn: CheckFls20_AccessorGateThrows },
-    { Id: 'fls-enforcement.FLS22', Name: 'FLS22: the Record Changes payload is projected against the entity each row is ABOUT — denied keys dropped from ChangesJSON/FullRecordJSON, ChangesDescription withheld, and an unrestricted caller still gets everything', Fn: CheckFls22_RecordChangePayloadProjected },
-    { Id: 'fls-enforcement.FLS23', Name: 'FLS23: the Record Changes projection holds on the SHARED cache slot — the reader is served from the writer-warmed slot and still gets a narrowed payload', Fn: CheckFls23_RecordChangeCacheSlotStillProjects },
-    { Id: 'fls-enforcement.FLS21', Name: 'FLS21: full-metadata-refresh cost is measured and recorded (the per-debounced-burst price of a permission change)', Fn: CheckFls21_RefreshCostVisibility }
+    { Id: 'fls-enforcement.FLS1', Name: 'FLS1: enabling field security via the real entity path succeeds; the snapshot covers (restrictable fields × read-holding roles) and never targets PKs or __mj_ columns', Fn: CheckFls1EnableSnapshotShape },
+    { Id: 'fls-enforcement.FLS2', Name: 'FLS2: snapshot defaults mirror entity permissions (Allow/Allow/Allow vs Allow/No Access/No Access) and enabling changes NOTHING until tightened', Fn: CheckFls2SnapshotDefaultsChangeNothing },
+    { Id: 'fls-enforcement.FLS3', Name: 'FLS3: non-system roles are freely restrictable — every tightening through the real entity path is permitted and takes effect after refresh', Fn: CheckFls3TightenNonSystemRoles },
+    { Id: 'fls-enforcement.FLS4', Name: 'FLS4: Deny beats Allow across roles', Fn: CheckFls4DenyBeatsAllow },
+    { Id: 'fls-enforcement.FLS5', Name: 'FLS5: No Access is neutral across roles', Fn: CheckFls5NoAccessIsNeutral },
+    { Id: 'fls-enforcement.FLS6', Name: 'FLS6: the cross-role read-required clamp — read-denied forces update/create denied despite another role\'s Update=Allow', Fn: CheckFls6ReadRequiredClamp },
+    { Id: 'fls-enforcement.FLS7', Name: 'FLS7: a missing permission row on an enabled entity fails CLOSED', Fn: CheckFls7MissingRowFailsClosed },
+    { Id: 'fls-enforcement.FLS8', Name: 'FLS8: the system user is NOT exempt — its full access aggregates from ordinary Allow rows', Fn: CheckFls8SystemUserAccessIsData },
+    { Id: 'fls-enforcement.FLS9', Name: 'FLS9: RunView as the restricted user omits denied columns from every row', Fn: CheckFls9RunViewStripsDeniedColumns },
+    { Id: 'fls-enforcement.FLS10', Name: 'FLS10: the same query as an unrestricted user still returns the column', Fn: CheckFls10UnrestrictedUserUnaffected },
+    { Id: 'fls-enforcement.FLS11', Name: 'FLS11: the shared full-width cache slot cannot cross-serve — reader is served from the writer-warmed slot WITHOUT the denied column', Fn: CheckFls11SharedCacheSlotStillStrips },
+    { Id: 'fls-enforcement.FLS12', Name: 'FLS12: ExtraFilter on a denied field is rejected with exactly the ambiguous message', Fn: CheckFls12ExtraFilterRejected },
+    { Id: 'fls-enforcement.FLS13', Name: 'FLS13: OrderBy on a denied field is rejected', Fn: CheckFls13OrderByRejected },
+    { Id: 'fls-enforcement.FLS14', Name: 'FLS14: an Aggregate expression on a denied field is rejected (value-reconstruction hole)', Fn: CheckFls14AggregatesRejected },
+    { Id: 'fls-enforcement.FLS15', Name: 'FLS15: UserSearchString is NOT rejected — denied fields are excluded from the searched set', Fn: CheckFls15UserSearchStringNotRejected },
+    { Id: 'fls-enforcement.FLS16', Name: 'FLS16: a save modifying an update-denied field is rejected server-side and the stored value is untouched', Fn: CheckFls16UpdateDeniedFieldRejected },
+    { Id: 'fls-enforcement.FLS17', Name: 'FLS17: round-trip safety — a restricted user\'s save of an unrelated field leaves denied columns\' stored values intact', Fn: CheckFls17RoundTripSafety },
+    { Id: 'fls-enforcement.FLS18', Name: 'FLS18: create suppression — a supplied create-denied value is dropped and the column takes its default; the insert succeeds', Fn: CheckFls18CreateSuppression },
+    { Id: 'fls-enforcement.FLS19', Name: 'FLS19: a permission row targeting a primary key is rejected at save time', Fn: CheckFls19UnrestrictableTargetRejected },
+    { Id: 'fls-enforcement.FLS20', Name: 'FLS20: the typed-accessor gate throws the ambiguous message on a read-denied field', Fn: CheckFls20AccessorGateThrows },
+    { Id: 'fls-enforcement.FLS22', Name: 'FLS22: the Record Changes payload is projected against the entity each row is ABOUT — denied keys dropped from ChangesJSON/FullRecordJSON, ChangesDescription withheld, and an unrestricted caller still gets everything', Fn: CheckFls22RecordChangePayloadProjected },
+    { Id: 'fls-enforcement.FLS23', Name: 'FLS23: the Record Changes projection holds on the SHARED cache slot — the reader is served from the writer-warmed slot and still gets a narrowed payload', Fn: CheckFls23RecordChangeCacheSlotStillProjects },
+    { Id: 'fls-enforcement.FLS21', Name: 'FLS21: full-metadata-refresh cost is measured and recorded (the per-debounced-burst price of a permission change)', Fn: CheckFls21RefreshCostVisibility }
 ];
 
 for (const check of FlsEnforcementChecks) {

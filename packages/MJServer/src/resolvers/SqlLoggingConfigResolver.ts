@@ -5,7 +5,7 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { loadConfig } from '../config.js';
+import { LoadConfig } from '../config.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { UserCache, SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
@@ -18,187 +18,187 @@ import { UserCache, SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memb
 export class SqlLoggingOptions {
   /** Whether to format SQL output as a database migration file with proper headers */
   @Field(() => Boolean, { nullable: true })
-  formatAsMigration?: boolean;
+  formatAsMigration?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Optional description or notes for this logging configuration */
   @Field(() => String, { nullable: true })
-  description?: string;
+  description?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Types of SQL statements to capture: 'queries', 'mutations', or 'both' */
   @Field(() => String, { nullable: true })
-  statementTypes?: 'queries' | 'mutations' | 'both';
+  statementTypes?: 'queries' | 'mutations' | 'both';  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** String separator to use between SQL statements (e.g., 'GO' for SQL Server) */
   @Field(() => String, { nullable: true })
-  batchSeparator?: string;
+  batchSeparator?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to format SQL with proper indentation and line breaks */
   @Field(() => Boolean, { nullable: true })
-  prettyPrint?: boolean;
+  prettyPrint?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to include metadata about record changes in the log output */
   @Field(() => Boolean, { nullable: true })
-  logRecordChangeMetadata?: boolean;
+  logRecordChangeMetadata?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to keep log files even if they contain no SQL statements */
   @Field(() => Boolean, { nullable: true })
-  retainEmptyLogFiles?: boolean;
+  retainEmptyLogFiles?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Email address to filter SQL statements by user (when filtering is enabled) */
   @Field(() => String, { nullable: true })
-  filterByUserId?: string;
+  filterByUserId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Array of regex/wildcard patterns to filter SQL statements */
   @Field(() => [String], { nullable: true })
-  filterPatterns?: string[];
+  filterPatterns?: string[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** How to apply patterns: 'include' or 'exclude' (default: exclude) */
   @Field(() => String, { nullable: true })
-  filterType?: 'include' | 'exclude';
+  filterType?: 'include' | 'exclude';  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to output verbose debug information to console */
   @Field(() => Boolean, { nullable: true })
-  verboseOutput?: boolean;
+  verboseOutput?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Default schema name for Flyway migration placeholder replacement */
   @Field(() => String, { nullable: true })
-  defaultSchemaName?: string;
+  defaultSchemaName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Human-readable name for the logging session */
   @Field(() => String, { nullable: true })
-  sessionName?: string;
+  sessionName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class SqlLoggingSession {
   /** Unique identifier for this logging session */
   @Field(() => String)
-  id: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Absolute file path where SQL statements are being logged */
   @Field(() => String)
-  filePath: string;
+  filePath: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Timestamp when this logging session was started */
   @Field(() => Date)
-  startTime: Date;
+  startTime: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Number of SQL statements captured so far in this session */
   @Field(() => Int)
-  statementCount: number;
+  statementCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Configuration options applied to this logging session */
   @Field(() => SqlLoggingOptions)
-  options: SqlLoggingOptions;
+  options: SqlLoggingOptions;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Human-readable name for this logging session */
   @Field(() => String, { nullable: true })
-  sessionName?: string;
+  sessionName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Email address of user whose SQL is being filtered (if filtering enabled) */
   @Field(() => String, { nullable: true })
-  filterByUserId?: string;
+  filterByUserId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @InputType()
 export class SqlLoggingOptionsInput {
   /** Whether to format SQL output as a database migration file with proper headers */
   @Field(() => Boolean, { nullable: true })
-  formatAsMigration?: boolean;
+  formatAsMigration?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Optional description or notes for this logging configuration */
   @Field(() => String, { nullable: true })
-  description?: string;
+  description?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Types of SQL statements to capture: 'queries', 'mutations', or 'both' */
   @Field(() => String, { nullable: true })
-  statementTypes?: 'queries' | 'mutations' | 'both';
+  statementTypes?: 'queries' | 'mutations' | 'both';  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** String separator to use between SQL statements (e.g., 'GO' for SQL Server) */
   @Field(() => String, { nullable: true })
-  batchSeparator?: string;
+  batchSeparator?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to format SQL with proper indentation and line breaks */
   @Field(() => Boolean, { nullable: true })
-  prettyPrint?: boolean;
+  prettyPrint?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to include metadata about record changes in the log output */
   @Field(() => Boolean, { nullable: true })
-  logRecordChangeMetadata?: boolean;
+  logRecordChangeMetadata?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to keep log files even if they contain no SQL statements */
   @Field(() => Boolean, { nullable: true })
-  retainEmptyLogFiles?: boolean;
+  retainEmptyLogFiles?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Email address to filter SQL statements by user (when filtering is enabled) */
   @Field(() => String, { nullable: true })
-  filterByUserId?: string;
+  filterByUserId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Array of regex/wildcard patterns to filter SQL statements */
   @Field(() => [String], { nullable: true })
-  filterPatterns?: string[];
+  filterPatterns?: string[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** How to apply patterns: 'include' or 'exclude' (default: exclude) */
   @Field(() => String, { nullable: true })
-  filterType?: 'include' | 'exclude';
+  filterType?: 'include' | 'exclude';  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to output verbose debug information to console */
   @Field(() => Boolean, { nullable: true })
-  verboseOutput?: boolean;
+  verboseOutput?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Default schema name for Flyway migration placeholder replacement */
   @Field(() => String, { nullable: true })
-  defaultSchemaName?: string;
+  defaultSchemaName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Human-readable name for the logging session */
   @Field(() => String, { nullable: true })
-  sessionName?: string;
+  sessionName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @InputType()
 export class StartSqlLoggingInput {
   /** Optional custom filename for the SQL log file (auto-generated if not provided) */
   @Field(() => String, { nullable: true })
-  fileName?: string;
+  fileName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Configuration options for the logging session (merged with server defaults) */
   @Field(() => SqlLoggingOptionsInput, { nullable: true })
-  options?: SqlLoggingOptionsInput;
+  options?: SqlLoggingOptionsInput;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to filter SQL statements to only those from the current user */
   @Field(() => Boolean, { nullable: true })
-  filterToCurrentUser?: boolean;
+  filterToCurrentUser?: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class SqlLoggingConfig {
   /** Whether SQL logging is enabled in the server configuration */
   @Field(() => Boolean)
-  enabled: boolean;
+  enabled: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Default logging options applied to new sessions (can be overridden) */
   @Field(() => SqlLoggingOptions)
-  defaultOptions: SqlLoggingOptions;
+  defaultOptions: SqlLoggingOptions;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Directory path where SQL log files are allowed to be created */
   @Field(() => String)
-  allowedLogDirectory: string;
+  allowedLogDirectory: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Maximum number of concurrent SQL logging sessions allowed */
   @Field(() => Int)
-  maxActiveSessions: number;
+  maxActiveSessions: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Whether to automatically delete log files that contain no SQL statements */
   @Field(() => Boolean)
-  autoCleanupEmptyFiles: boolean;
+  autoCleanupEmptyFiles: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Timeout in milliseconds after which inactive sessions are automatically stopped */
   @Field(() => Int)
-  sessionTimeout: number;
+  sessionTimeout: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** Current number of active SQL logging sessions */
   @Field(() => Int)
-  activeSessionCount: number;
+  activeSessionCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -312,9 +312,9 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * ```
    */
   @Query(() => SqlLoggingConfig)
-  async sqlLoggingConfig(@Ctx() context: AppContext): Promise<SqlLoggingConfig> {
+  async sqlLoggingConfig(@Ctx() context: AppContext): Promise<SqlLoggingConfig> {  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     await this.checkOwnerAccess(context);
-    const config = await loadConfig();
+    const config = await LoadConfig();
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
     const activeSessions = provider.GetActiveSqlLoggingSessions();
 
@@ -368,7 +368,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * ```
    */
   @Query(() => [SqlLoggingSession])
-  async activeSqlLoggingSessions(@Ctx() context: AppContext): Promise<SqlLoggingSession[]> {
+  async activeSqlLoggingSessions(@Ctx() context: AppContext): Promise<SqlLoggingSession[]> {  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     await this.checkOwnerAccess(context);
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
     const sessions = provider.GetActiveSqlLoggingSessions();
@@ -422,12 +422,12 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * ```
    */
   @Mutation(() => SqlLoggingSession)
-  async startSqlLogging(
+  async startSqlLogging(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     @Arg('input', () => StartSqlLoggingInput) input: StartSqlLoggingInput,
     @Ctx() context: AppContext
   ): Promise<SqlLoggingSession> {
     await this.checkOwnerAccess(context);
-    const config = await loadConfig();
+    const config = await LoadConfig();
     
     // Check if SQL logging is enabled
     if (!config.sqlLogging?.enabled) {
@@ -516,7 +516,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * ```
    */
   @Mutation(() => Boolean)
-  async stopSqlLogging(
+  async stopSqlLogging(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     @Arg('sessionId', () => String) sessionId: string,
     @Ctx() context: AppContext
   ): Promise<boolean> {
@@ -562,7 +562,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * ```
    */
   @Mutation(() => Boolean)
-  async stopAllSqlLogging(@Ctx() context: AppContext): Promise<boolean> {
+  async stopAllSqlLogging(@Ctx() context: AppContext): Promise<boolean> {  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     await this.checkOwnerAccess(context);
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true}) as unknown as SQLServerDataProvider;
     await provider.DisposeAllSqlLoggingSessions();
@@ -597,14 +597,14 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * ```
    */
   @Mutation(() => SqlLoggingOptions)
-  async updateSqlLoggingDefaults(
+  async updateSqlLoggingDefaults(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     @Arg('options', () => SqlLoggingOptionsInput) options: SqlLoggingOptionsInput,
     @Ctx() context: AppContext
   ): Promise<SqlLoggingOptions> {
     await this.checkOwnerAccess(context);
     // Note: This updates the runtime configuration only, not the file
     // In a production system, you might want to persist this to a database
-    const config = await loadConfig();
+    const config = await LoadConfig();
     if (!config.sqlLogging) {
       throw new Error('SQL logging configuration not found');
     }
@@ -640,13 +640,13 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * ```
    */
   @Query(() => String)
-  async readSqlLogFile(
+  async readSqlLogFile(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     @Arg('sessionId', () => String) sessionId: string,
     @Arg('maxLines', () => Int, { nullable: true }) maxLines: number | null,
     @Ctx() context: AppContext
   ): Promise<string> {
     await this.checkOwnerAccess(context);
-    const config = await loadConfig();
+    const config = await LoadConfig();
     
     // Check if SQL logging is enabled
     if (!config.sqlLogging?.enabled) {
@@ -707,7 +707,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * @throws Error if user doesn't have Owner privileges
    */
   @Query(() => String)
-  async debugCurrentUserEmail(@Ctx() context: AppContext): Promise<string> {
+  async debugCurrentUserEmail(@Ctx() context: AppContext): Promise<string> {  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     await this.checkOwnerAccess(context);
 
     const contextUserEmail = context.userPayload?.email || 'NOT_SET';

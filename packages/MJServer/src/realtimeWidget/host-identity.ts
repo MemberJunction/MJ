@@ -20,18 +20,18 @@ export type { HostAssertionError };
 
 /** The visitor identity a host asserts. Standard OIDC-ish claims so synthesis is uniform. */
 export interface HostAssertedIdentity {
-    email: string;
-    firstName?: string;
-    lastName?: string;
+    email: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    firstName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    lastName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** The host's opaque user id for this visitor (audit correlation; not an MJ user id). */
-    hostUserId?: string;
+    hostUserId?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /** Result of verifying a host assertion. `identity` is present iff `ok` is true. */
 export interface HostAssertionResult {
-    ok: boolean;
-    identity?: HostAssertedIdentity;
-    errorCode?: HostAssertionError;
+    ok: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Identity?: HostAssertedIdentity;
+    errorCode?: HostAssertionError;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -52,7 +52,7 @@ const hostIdentityProvider = new HostIdentityProvider({
  * asserted visitor identity. Thin adapter over {@link HostIdentityProvider.VerifyHostAssertion} (the single
  * implementation, registered in the AuthProviderFactory) preserving this module's result shape. Never throws.
  */
-export function verifyHostAssertion(
+export function VerifyHostAssertion(
     assertion: string | undefined,
     hostPublicKeyPem: string | undefined,
     expectedAudience: string,
@@ -63,7 +63,7 @@ export function verifyHostAssertion(
     }
     return {
         ok: true,
-        identity: {
+        Identity: {
             email: result.userInfo.email,
             firstName: result.userInfo.firstName,
             lastName: result.userInfo.lastName,
@@ -72,8 +72,17 @@ export function verifyHostAssertion(
     };
 }
 
+/** @deprecated Use {@link VerifyHostAssertion}. */
+export function verifyHostAssertion(
+    assertion: string | undefined,
+    hostPublicKeyPem: string | undefined,
+    expectedAudience: string,
+): HostAssertionResult {
+    return VerifyHostAssertion(assertion, hostPublicKeyPem, expectedAudience);
+}
+
 /** Pulls the visitor identity from a verified host-assertion payload (delegates to the provider). */
-export function extractHostIdentity(payload: jwt.JwtPayload): HostAssertedIdentity {
+export function ExtractHostIdentity(payload: jwt.JwtPayload): HostAssertedIdentity {
     const info = hostIdentityProvider.extractUserInfo(payload);
     return {
         email: info.email ?? '',
@@ -81,4 +90,9 @@ export function extractHostIdentity(payload: jwt.JwtPayload): HostAssertedIdenti
         lastName: info.lastName,
         hostUserId: typeof payload.sub === 'string' ? payload.sub : undefined,
     };
+}
+
+/** @deprecated Use {@link ExtractHostIdentity}. */
+export function extractHostIdentity(payload: jwt.JwtPayload): HostAssertedIdentity {
+    return ExtractHostIdentity(payload);
 }

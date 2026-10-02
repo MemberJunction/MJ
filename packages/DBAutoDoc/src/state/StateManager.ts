@@ -20,7 +20,7 @@ export class StateManager {
   /**
    * Load state from file
    */
-  public async load(): Promise<DatabaseDocumentation | null> {
+  public async Load(): Promise<DatabaseDocumentation | null> {
     try {
       const exists = await this.fileExists();
       if (!exists) {
@@ -55,7 +55,7 @@ export class StateManager {
           totalColumns: 0,
           estimatedCost: 0
         };
-        this.updateSummary(state);
+        this.UpdateSummary(state);
       } else {
         // Migrate timing fields into summary if they exist at top level
         if ((state as any).createdAt && !state.summary.createdAt) {
@@ -75,10 +75,15 @@ export class StateManager {
     }
   }
 
+  /** @deprecated Use {@link Load}. */
+  public async load(): Promise<DatabaseDocumentation | null> {
+    return this.Load();
+  }
+
   /**
    * Save state to file
    */
-  public async save(state: DatabaseDocumentation): Promise<void> {
+  public async Save(state: DatabaseDocumentation): Promise<void> {
     try {
       // Update lastModified timestamp in summary
       state.summary.lastModified = new Date().toISOString();
@@ -95,10 +100,15 @@ export class StateManager {
     }
   }
 
+  /** @deprecated Use {@link Save}. */
+  public async save(state: DatabaseDocumentation): Promise<void> {
+    return this.Save(state);
+  }
+
   /**
    * Create initial empty state
    */
-  public createInitialState(
+  public CreateInitialState(
     databaseName: string,
     serverName: string
   ): DatabaseDocumentation {
@@ -130,10 +140,18 @@ export class StateManager {
     };
   }
 
+  /** @deprecated Use {@link CreateInitialState}. */
+  public createInitialState(
+    databaseName: string,
+    serverName: string
+  ): DatabaseDocumentation {
+    return this.CreateInitialState(databaseName, serverName);
+  }
+
   /**
    * Start a new analysis run
    */
-  public createAnalysisRun(
+  public CreateAnalysisRun(
     state: DatabaseDocumentation,
     modelUsed: string,
     vendor: string,
@@ -169,10 +187,22 @@ export class StateManager {
     return run;
   }
 
+  /** @deprecated Use {@link CreateAnalysisRun}. */
+  public createAnalysisRun(
+    state: DatabaseDocumentation,
+    modelUsed: string,
+    vendor: string,
+    temperature: number,
+    topP?: number,
+    topK?: number
+  ): AnalysisRun {
+    return this.CreateAnalysisRun(state, modelUsed, vendor, temperature, topP, topK);
+  }
+
   /**
    * Update table description with new iteration
    */
-  public updateTableDescription(
+  public UpdateTableDescription(
     table: TableDefinition,
     description: string,
     reasoning: string,
@@ -194,10 +224,22 @@ export class StateManager {
     table.description = description;
   }
 
+  /** @deprecated Use {@link UpdateTableDescription}. */
+  public updateTableDescription(
+    table: TableDefinition,
+    description: string,
+    reasoning: string,
+    confidence: number,
+    modelUsed: string,
+    triggeredBy: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check' | 'ground_truth' | 'existing_db_description'
+  ): void {
+    return this.UpdateTableDescription(table, description, reasoning, confidence, modelUsed, triggeredBy);
+  }
+
   /**
    * Update column description with new iteration
    */
-  public updateColumnDescription(
+  public UpdateColumnDescription(
     column: ColumnDefinition,
     description: string,
     reasoning: string,
@@ -214,10 +256,20 @@ export class StateManager {
     column.description = description;
   }
 
+  /** @deprecated Use {@link UpdateColumnDescription}. */
+  public updateColumnDescription(
+    column: ColumnDefinition,
+    description: string,
+    reasoning: string,
+    modelUsed: string
+  ): void {
+    return this.UpdateColumnDescription(column, description, reasoning, modelUsed);
+  }
+
   /**
    * Update schema description
    */
-  public updateSchemaDescription(
+  public UpdateSchemaDescription(
     schema: SchemaDefinition,
     description: string,
     reasoning: string,
@@ -235,10 +287,20 @@ export class StateManager {
     schema.description = description;
   }
 
+  /** @deprecated Use {@link UpdateSchemaDescription}. */
+  public updateSchemaDescription(
+    schema: SchemaDefinition,
+    description: string,
+    reasoning: string,
+    modelUsed: string
+  ): void {
+    return this.UpdateSchemaDescription(schema, description, reasoning, modelUsed);
+  }
+
   /**
    * Find a table in the state
    */
-  public findTable(
+  public FindTable(
     state: DatabaseDocumentation,
     schemaName: string,
     tableName: string
@@ -251,10 +313,19 @@ export class StateManager {
     return schema.tables.find(t => t.name === tableName) || null;
   }
 
+  /** @deprecated Use {@link FindTable}. */
+  public findTable(
+    state: DatabaseDocumentation,
+    schemaName: string,
+    tableName: string
+  ): TableDefinition | null {
+    return this.FindTable(state, schemaName, tableName);
+  }
+
   /**
    * Get all unapproved tables
    */
-  public getUnapprovedTables(state: DatabaseDocumentation): TableDefinition[] {
+  public GetUnapprovedTables(state: DatabaseDocumentation): TableDefinition[] {
     const unapproved: TableDefinition[] = [];
 
     for (const schema of state.schemas) {
@@ -268,10 +339,15 @@ export class StateManager {
     return unapproved;
   }
 
+  /** @deprecated Use {@link GetUnapprovedTables}. */
+  public getUnapprovedTables(state: DatabaseDocumentation): TableDefinition[] {
+    return this.GetUnapprovedTables(state);
+  }
+
   /**
    * Get low-confidence tables
    */
-  public getLowConfidenceTables(
+  public GetLowConfidenceTables(
     state: DatabaseDocumentation,
     threshold: number
   ): Array<{ schema: string; table: string; confidence: number; description: string; reasoning: string }> {
@@ -315,10 +391,18 @@ export class StateManager {
     return lowConfidence;
   }
 
+  /** @deprecated Use {@link GetLowConfidenceTables}. */
+  public getLowConfidenceTables(
+    state: DatabaseDocumentation,
+    threshold: number
+  ): Array<{ schema: string; table: string; confidence: number; description: string; reasoning: string }> {
+    return this.GetLowConfidenceTables(state, threshold);
+  }
+
   /**
    * Get tables that need processing (no descriptions yet)
    */
-  public getUnprocessedTables(state: DatabaseDocumentation): Array<{ schema: string; table: string }> {
+  public GetUnprocessedTables(state: DatabaseDocumentation): Array<{ schema: string; table: string }> {
     const unprocessed: Array<{ schema: string; table: string }> = [];
 
     for (const schema of state.schemas) {
@@ -333,6 +417,11 @@ export class StateManager {
     }
 
     return unprocessed;
+  }
+
+  /** @deprecated Use {@link GetUnprocessedTables}. */
+  public getUnprocessedTables(state: DatabaseDocumentation): Array<{ schema: string; table: string }> {
+    return this.GetUnprocessedTables(state);
   }
 
   /**
@@ -357,7 +446,7 @@ export class StateManager {
   /**
    * Update summary statistics from current state and analysis runs
    */
-  public updateSummary(state: DatabaseDocumentation): void {
+  public UpdateSummary(state: DatabaseDocumentation): void {
     // Count schemas, tables, columns
     let totalTables = 0;
     let totalColumns = 0;
@@ -402,10 +491,15 @@ export class StateManager {
     };
   }
 
+  /** @deprecated Use {@link UpdateSummary}. */
+  public updateSummary(state: DatabaseDocumentation): void {
+    return this.UpdateSummary(state);
+  }
+
   /**
    * Delete state file
    */
-  public async delete(): Promise<void> {
+  public async Delete(): Promise<void> {
     try {
       const exists = await this.fileExists();
       if (exists) {
@@ -414,5 +508,10 @@ export class StateManager {
     } catch (error) {
       throw new Error(`Failed to delete state file: ${(error as Error).message}`);
     }
+  }
+
+  /** @deprecated Use {@link Delete}. */
+  public async delete(): Promise<void> {
+    return this.Delete();
   }
 }

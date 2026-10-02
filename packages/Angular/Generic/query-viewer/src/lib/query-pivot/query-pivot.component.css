@@ -1,0 +1,47 @@
+:host {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.mj-query-pivot-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    position: relative;
+    background-color: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+}
+
+.mj-query-pivot-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--mj-space-6);
+    background-color: var(--mj-bg-surface);
+}
+
+.mj-query-pivot-error {
+    display: flex;
+    align-items: center;
+    padding: var(--mj-space-2) var(--mj-space-4);
+    margin: var(--mj-space-1);
+    background-color: var(--mj-status-error-bg);
+    border: 1px solid var(--mj-status-error-border);
+    border-radius: var(--mj-radius-sm);
+    color: var(--mj-status-error-text);
+    font-size: var(--mj-text-sm);
+}
+
+.mj-query-pivot-grid-wrapper {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.mj-query-pivot-dimmed {
+    opacity: 0.6;
+    pointer-events: none;
+}

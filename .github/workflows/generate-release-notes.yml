@@ -321,7 +321,12 @@ jobs:
             echo "## Changesets consumed by this release"
           } > /tmp/release-context.md
 
-          REL=$(git log --format='%H %s' "$PREV..$TAG" | awk '/RELEASING:/{print $1; exit}')
+          # Filter in git, not in a consumer that exits early. `git log | awk '{...; exit}'`
+          # closes the pipe after the first match while git is still writing the rest of the
+          # range; git takes SIGPIPE and, under `pipefail`, the step fails with exit 141. The
+          # race fires only when the range outruns the pipe buffer, so it passed for months
+          # and then killed the 5.51.3 and 6.1.2 runs on 2026-09-16.
+          REL=$(git log --format='%H' --grep='^RELEASING:' -n 1 "$PREV..$TAG")
           if [ -z "$REL" ]; then
             echo "::warning::no RELEASING commit found in $PREV..$TAG; notes will rest on commit messages alone."
             echo "_(none recovered — the release commit could not be located)_" >> /tmp/release-context.md

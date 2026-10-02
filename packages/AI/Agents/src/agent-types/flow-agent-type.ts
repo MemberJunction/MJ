@@ -12,10 +12,28 @@
  */
 
 import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
-import { SelectOutgoingEdges, type IConditionEvaluator } from '@memberjunction/ai-core-plus';
+import {
+    CollectDecisionStepKeys,
+    DecisionHoldReason,
+    DecisionReferencesIn,
+    NO_DECISIONS,
+    ReadFlowDecisionStepConfiguration,
+    ResolveDecisionState,
+    ResolveDecisionStepAnswers,
+    SelectOutgoingEdges,
+    ValidateTaskGraphSpec,
+    type AgentDecisionAnswerSummary,
+    type ConditionHold,
+    type DecisionStepAnswers,
+    type FlowCompileResult,
+    type FlowDecisionStepConfiguration,
+    type GraphDecisions,
+    type IConditionEvaluator,
+    type TaskGraphSpec,
+} from '@memberjunction/ai-core-plus';
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
-import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors } from './flow-graph-executor';
-import { BaseAgentType } from './base-agent-type';
+import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors, FormatFlowValidationErrors } from './flow-graph-executor';
+import { BaseAgentType, type AgentTypeExecutionRouting } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
@@ -34,6 +52,54 @@ interface FlowAgentNextStep<P = any> extends BaseAgentNextStep<P> {
     flowPromptStepId?: string;
 }
 
+/** The paths a step may take next, or why it may not choose among them yet. */
+type FlowPathSelection = {
+    /** The followable paths, highest priority first. */
+    Paths: MJAIAgentStepPathEntity[];
+    /**
+     * Set when a path ranked at or above every followable one reads a decision that is not usable:
+     * the answer it needed and why it is missing. The walker then stops rather than pick around it.
+     */
+    HoldReason: string | null;
+};
+
+/**
+ * A Decision step's `stepResult`, in the shape a Prompt step's has.
+ *
+ * `result` is the payload the step handed on, which carries no answers — what the dispatched path
+ * exposes as a Decision node's result, less the output copy of its answers that a condition may not
+ * read anyway. A condition reads answers through the `decisions` root, where the hold applies; a
+ * raw answer here would let `stepResult.result.intent.value` route on one below its `minConfidence`.
+ */
+type FlowDecisionStepResult<P> = {
+    Success: boolean;
+    step: 'Success' | 'Failed';
+    result: P;
+};
+
+/** How a Decision step ended, as the shared answer rules read it. */
+type FlowDecisionOutcome =
+    | { Status: 'Complete'; Answers: Record<string, AgentDecisionAnswerSummary> }
+    | { Status: 'Failed'; ErrorMessage: string }
+    | { Status: 'Skipped' };
+
+/**
+ * Where a Flow agent's steps execute.
+ *
+ * - `'dispatch'`: the flow compiles to a task graph and the durable task-graph dispatcher runs it.
+ *   The run submits the graph and returns before any step has run. This survives page reloads and
+ *   server restarts, and is the default for a top-level run.
+ * - `'inRun'`: this agent run walks the flow itself and returns the flow's final payload. Anything
+ *   that needs the result as part of its own work uses it: a parent agent, or an API request that
+ *   must answer its client. It is chosen automatically for a sub-agent run.
+ *
+ * Both modes choose outgoing paths with the same engine (`SelectOutgoingEdges`), so a flow takes
+ * the same branches either way.
+ *
+ * @since 6.1.3
+ */
+export type FlowExecutionMode = 'dispatch' | 'inRun';
+
 /**
  * Flow execution state that tracks the progress through the workflow.
  * This is maintained by the Flow Agent Type during execution.
@@ -43,30 +109,73 @@ interface FlowAgentNextStep<P = any> extends BaseAgentNextStep<P> {
  */
 export class FlowExecutionState {
     /** The agent ID for this flow execution */
-    agentId: string;
+    agentId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** The current step being executed */
-    currentStepId?: string;
+    currentStepId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Set of completed step IDs */
-    completedStepIds: Set<string> = new Set();
+    completedStepIds: Set<string> = new Set();  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Map of step results by step ID */
-    stepResults: Map<string, unknown> = new Map();
+    stepResults: Map<string, unknown> = new Map();  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Ordered list of step IDs in execution order */
-    executionPath: string[] = [];
+    executionPath: string[] = [];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+
+    /**
+     * Where this run's steps execute. Decided once by `DetermineInitialStep` and read by every
+     * later hook, so a run never switches engines part-way through.
+     */
+    executionMode: FlowExecutionMode = 'dispatch';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+
+    /** Why {@link executionMode} was chosen. Unset until `DetermineInitialStep` has decided. */
+    executionModeReason?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Special fields from action output mappings (message, reasoning, confidence) */
-    specialFields?: {
+    specialFields?: {  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
         message?: string;
         reasoning?: string;
         confidence?: number;
     };
 
+    /**
+     * What this run's Decision steps have answered, keyed by each step's `key` and then by question.
+     *
+     * `Answers` holds the answers a path condition may act on, and is what the `decisions` root
+     * reads. `Unresolved` says why each of the rest is not usable (the call failed, the answer fell
+     * below its question's `minConfidence`, or the step was skipped), and a condition that reads one
+     * of them holds. Never written into the payload.
+     */
+    Decisions: GraphDecisions = NO_DECISIONS;
+
+    /**
+     * The keys of the Decision steps whose call failed in this run.
+     *
+     * A walker cannot retry, so such a decision never answers in this run, and a path reading it can
+     * never be taken: it is passed over, and a recovery path ranked below it can be. An answer below
+     * its `minConfidence` is different — the path might have been the one to take — and holds.
+     */
+    FailedDecisionKeys = new Set<string>();
+
     constructor(agentId: string) {
         this.agentId = agentId;
     }
+}
+
+/** A run's decisions with one Decision step's answers replacing whatever that step gave before. */
+function withDecisionStep(
+    decisions: GraphDecisions,
+    config: FlowDecisionStepConfiguration,
+    resolved: DecisionStepAnswers
+): GraphDecisions {
+    const answers = { ...decisions.Answers };
+    const unresolved = { ...decisions.Unresolved };
+    delete answers[config.key];
+    delete unresolved[config.key];
+    if (Object.keys(resolved.Answers).length > 0) answers[config.key] = resolved.Answers;
+    if (Object.keys(resolved.Unresolved).length > 0) unresolved[config.key] = resolved.Unresolved;
+    return { Answers: answers, Unresolved: unresolved };
 }
 
 /**
@@ -115,6 +224,10 @@ export interface FlowAgentExecuteParams {
      *
      * The step must belong to the agent being executed.
      * Use AIEngine.Instance.GetAgentSteps(agentId) to retrieve available steps.
+     *
+     * A Decision step's answers are held by the run, never written into the payload, so a run started
+     * past a Decision step has none from it: every path that reads that decision stops the run with
+     * the reason. Start at or before the Decision step to route on it.
      */
     startAtStep?: MJAIAgentStepEntity;
 
@@ -132,6 +245,21 @@ export interface FlowAgentExecuteParams {
      * The step's output mapping is not applied when skipped.
      */
     skipSteps?: MJAIAgentStepEntity[];
+
+    /**
+     * Where the flow's steps execute. See {@link FlowExecutionMode}.
+     *
+     * Set `'inRun'` when the caller needs the flow's result in the same request, for example an API
+     * handler that returns the final payload to its client. A dispatched run returns as soon as its
+     * steps are scheduled, so such a caller would otherwise continue before any work had happened.
+     *
+     * When omitted, a sub-agent run (one with `parentRun`) executes `'inRun'`, because its parent
+     * consumes the result, and a top-level run executes `'dispatch'`. Setting `'dispatch'` on a
+     * sub-agent run is refused for the same reason.
+     *
+     * @since 6.1.3
+     */
+    executionMode?: FlowExecutionMode;
 }
 
 /**
@@ -143,7 +271,12 @@ export interface FlowAgentExecuteParams {
  * - Conditional path evaluation using safe boolean expressions
  * - Support for Actions, Sub-Agents, and Prompts as step types
  * - Deterministic execution with optional AI-driven decision points
- * 
+ *
+ * **Two ways to run.** A top-level run compiles the flow to a task graph and hands it to the durable
+ * task-graph dispatcher. A run whose caller needs the result (a sub-agent run, or a caller that sets
+ * `agentTypeParams.executionMode = 'inRun'`) walks the flow in this process and returns the final
+ * payload. See {@link FlowExecutionMode}.
+ *
  * @class FlowAgentType
  * @extends BaseAgentType
  * 
@@ -177,30 +310,27 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
-     * Refuses to execute a workflow step inside the agent run.
+     * Refuses to walk a flow step in this process unless the run chose in-run execution.
      *
-     * **Disabled, not deleted.** The in-run walker below is the differential suite's oracle — the
-     * only independent statement of what a flow *used* to do, and therefore the only thing the
-     * compiled graph can be checked against. Deleting it would leave the compiler unfalsifiable.
-     * But leaving it *runnable* would be worse: a routing mistake would fall back to the old engine
-     * and produce a run that looks correct while proving nothing, which is exactly the failure mode
-     * a cutover has to rule out.
-     *
-     * So it stays compiled, stays tested, and refuses at the door. A workflow that runs at all ran
-     * on the dispatcher.
+     * **A safety net, not a switch.** `DetermineInitialStep` decides the mode once and records it on
+     * the run's {@link FlowExecutionState}. A dispatched run ends on its `Tasks` step, so the walker
+     * should never see it. If a routing mistake ever sends one here, running the walker would
+     * produce a run that looks correct while the dispatcher also runs the same graph. Refusing keeps
+     * "this dispatched workflow ran on the dispatcher" a fact rather than an assumption.
      *
      * Declared `void` rather than `never` on purpose. `never` would narrow everything after each
-     * call site to unreachable, and TypeScript then refuses to type-check the retained walker at
-     * all — which would defeat the "stays compiled" half of the arrangement and let the oracle rot.
+     * call site to unreachable, and TypeScript would stop type-checking the walker behind it.
      *
-     * @throws always — the message names the step so the refusal is diagnosable, not mysterious
+     * @throws when the run is not in `'inRun'` mode. The message names the step so the refusal is
+     * diagnosable.
      * @private
      */
-    private refuseInRunFlowExecution(context: string): void {
+    private refuseUnlessInRun(flowState: FlowExecutionState, context: string): void {
+        if (flowState.executionMode === 'inRun') return;
         throw new Error(
-            `The in-run workflow executor is disabled: ${context} was routed to it. ` +
-            `Workflows now compile to a task graph and execute on the task-graph dispatcher. ` +
-            `Reaching this code means the compile-and-dispatch path in DetermineInitialStep was bypassed.`
+            `The in-run workflow executor was reached by a dispatched run: ${context}. ` +
+            `This run's workflow was compiled to a task graph for the task-graph dispatcher, so it must ` +
+            `not also be walked in-process. Reaching this code means DetermineInitialStep's routing was bypassed.`
         );
     }
 
@@ -225,12 +355,12 @@ export class FlowAgentType extends BaseAgentType {
         agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P>> {
         try {
-            // A dispatched workflow terminates on the Tasks step, so this is unreachable. Refusing
-            // inside the try turns the refusal into a legible Failed step rather than an escaped
-            // exception — see refuseInRunFlowExecution for why it is refused rather than deleted.
-            this.refuseInRunFlowExecution('DetermineNextStep');
-
             const flowState = agentTypeState as FlowExecutionState;
+
+            // Only an in-run flow reaches this: a dispatched one ends on its Tasks step. Refusing
+            // inside the try turns a routing mistake into a legible Failed step rather than an
+            // escaped exception. See refuseUnlessInRun.
+            this.refuseUnlessInRun(flowState, 'DetermineNextStep');
 
             // If no current step, this should have been handled by DetermineInitialStep
             if (!flowState.currentStepId) {
@@ -302,8 +432,12 @@ export class FlowAgentType extends BaseAgentType {
 
             // Find valid paths from current step
             // Pass params to enable data/context access in path conditions (Phase 1)
-            const paths = await this.getValidPaths(flowState.currentStepId, payload, flowState, params);
-            
+            const selection = await this.getValidPaths(flowState.currentStepId, payload, flowState, params);
+            if (selection.HoldReason) {
+                return this.stopOnHeldPath(flowState.currentStepId, selection.HoldReason, payload);
+            }
+            const paths = selection.Paths;
+
             if (paths.length === 0) {
                 // No valid paths - flow is complete
                 return this.createSuccessStep({
@@ -422,6 +556,7 @@ export class FlowAgentType extends BaseAgentType {
      * - flowContext: Flow execution metadata (current step, completed steps, path)
      * - data: Transient template data from ExecuteAgentParams (NEW in Phase 1)
      * - context: Runtime context from ExecuteAgentParams (NEW in Phase 1)
+     * - decisions: The usable answers of the run's Decision steps, by key (`decisions.<key>.<question>`)
      *
      * This allows path conditions to access runtime parameters like:
      * - `data.userApproval === true`
@@ -449,13 +584,18 @@ export class FlowAgentType extends BaseAgentType {
         payload: unknown,
         flowState: FlowExecutionState,
         params: ExecuteAgentParams<unknown, P>
-    ): Promise<MJAIAgentStepPathEntity[]> {
+    ): Promise<FlowPathSelection> {
         const repo = new AIEngineGraphRepository(flowState.agentId);
+        // The Decision hold runs BEFORE any condition is evaluated, on every step's paths: a later
+        // step's condition can read an earlier Decision step's answer. A condition reading an answer
+        // that is not usable is never evaluated, because `undefined === 'billing'` is a confident,
+        // wrong `false`.
         const selection = SelectOutgoingEdges(
             stepId,
             repo,
             this._conditionEvaluator,
-            this.buildConditionContext(payload, flowState, params)
+            this.buildConditionContext(payload, flowState, params),
+            (condition) => this.decisionHold(condition, flowState)
         );
 
         for (const rejection of selection.Rejected) {
@@ -463,7 +603,9 @@ export class FlowAgentType extends BaseAgentType {
             // is not shaped the way its author thinks", and each previously vanished: a broken
             // expression was logged as if it were a false one, and a dangling edge failed the run
             // with a message that named the missing ID but not the edge that pointed at it.
-            if (rejection.Reason === 'ConditionFalse') continue;
+            // ConditionHeld is quiet too: one that outranks the choice stops the run with its reason,
+            // and one ranked below the choice could not have won.
+            if (rejection.Reason === 'ConditionFalse' || rejection.Reason === 'ConditionHeld') continue;
             LogError(
                 `Flow path ${rejection.EdgeId} from step ${stepId} not followed (${rejection.Reason})` +
                 `${rejection.Detail ? `: ${rejection.Detail}` : ''}`
@@ -471,9 +613,55 @@ export class FlowAgentType extends BaseAgentType {
         }
 
         const byId = new Map(AIEngine.Instance.GetPathsFromStep(stepId).map(p => [p.ID, p]));
-        return selection.Edges
-            .map(e => byId.get(e.id))
-            .filter((p): p is MJAIAgentStepPathEntity => !!p);
+        return {
+            Paths: selection.Edges
+                .map(e => byId.get(e.id))
+                .filter((p): p is MJAIAgentStepPathEntity => !!p),
+            HoldReason: selection.Held?.Detail ?? null
+        };
+    }
+
+    /**
+     * Why a path condition must not be evaluated, because of a decision it reads, or `null`.
+     *
+     * A condition reading a decision whose call failed is UNANSWERABLE in this run: a walker has no
+     * retry, so the path can never be taken, and a recovery path ranked below it is taken instead.
+     * Any other unusable answer — below its `minConfidence`, or not given — holds, because the path
+     * might have been the one to take.
+     */
+    private decisionHold(condition: string, flowState: FlowExecutionState): ConditionHold | null {
+        const reason = DecisionHoldReason(condition, flowState.Decisions);
+        if (!reason) return null;
+        const failed = DecisionReferencesIn(condition).References.find(r => flowState.FailedDecisionKeys.has(r.NodeId));
+        if (!failed) return { Detail: reason };
+        const unresolved = flowState.Decisions.Unresolved[failed.NodeId];
+        return { Detail: unresolved?.[failed.QuestionKey] ?? reason, Unanswerable: true };
+    }
+
+    /**
+     * Stops the run because a step cannot choose its next step without guessing.
+     *
+     * A path ranked at or above every followable one reads a decision that is not usable, so it
+     * might have been the one to take. The dispatcher holds such a fork; a walker cannot wait, so it
+     * fails the run with the reason instead, and never takes a lower-ranked path in its place.
+     */
+    private stopOnHeldPath<P>(stepId: string, holdReason: string, payload: P): BaseAgentNextStep<P> {
+        const stepName = AIEngine.Instance.GetAgentStepByID(stepId)?.Name ?? stepId;
+        return this.stopFlow(
+            `Step "${stepName}" cannot choose its next step: a path from it that ranks at or above the ` +
+            `others reads a decision that is not usable, because ${holdReason}. The flow stops rather than guess.`,
+            payload
+        );
+    }
+
+    /** A failed step that ends the run: no recovery path is taken after it. */
+    private stopFlow<P>(errorMessage: string, payload: P): BaseAgentNextStep<P> {
+        return this.createNextStep<P>('Failed', {
+            errorMessage,
+            terminate: true,
+            newPayload: payload,
+            previousPayload: payload
+        });
     }
 
     /**
@@ -501,7 +689,9 @@ export class FlowAgentType extends BaseAgentType {
                 stepCount: flowState.completedStepIds.size
             },
             data: params.data || {},
-            context: params.context || {}
+            context: params.context || {},
+            // Only the usable answers. A condition reading any other one holds before it is evaluated.
+            decisions: flowState.Decisions.Answers
         };
     }
 
@@ -669,11 +859,10 @@ export class FlowAgentType extends BaseAgentType {
         payload: P,
         flowState: FlowExecutionState
     ): Promise<BaseAgentNextStep<P>> {
-        // THE CHOKE POINT. Every in-run traversal path — initial step, next step, and the
-        // post-action/post-sub-agent re-evaluation — turns a flow node into an executable step
-        // here, and nowhere else. One refusal here disables the entire legacy executor, which is
-        // what makes "this workflow ran on the dispatcher" a fact rather than an assumption.
-        this.refuseInRunFlowExecution(`step '${node.Name}'`);
+        // THE CHOKE POINT. Every in-run traversal path (initial step, next step, and the
+        // post-action/post-sub-agent re-evaluation) turns a flow node into an executable step
+        // here, and nowhere else. Guarding here is what keeps a dispatched run off the walker.
+        this.refuseUnlessInRun(flowState, `step '${node.Name}'`);
 
         // Check if this step should be skipped
         const flowParams = params.agentTypeParams as FlowAgentExecuteParams | undefined;
@@ -690,8 +879,17 @@ export class FlowAgentType extends BaseAgentType {
             // Store a skip marker as the step result
             flowState.stepResults.set(node.ID, { skipped: true, stepName: node.Name });
 
+            // A skipped Decision step answered nothing, so every condition that reads it holds.
+            if (node.StepType === 'Decision') {
+                this.recordDecisionOutcome(flowState, node, { Status: 'Skipped' });
+            }
+
             // Find the next step by evaluating paths from this skipped step
-            const paths = await this.getValidPaths(node.ID, payload, flowState, params);
+            const selection = await this.getValidPaths(node.ID, payload, flowState, params);
+            if (selection.HoldReason) {
+                return this.stopOnHeldPath(node.ID, selection.HoldReason, payload);
+            }
+            const paths = selection.Paths;
 
             if (paths.length === 0) {
                 // No more paths - flow is complete
@@ -827,6 +1025,9 @@ export class FlowAgentType extends BaseAgentType {
             case 'While':
                 return await this.convertWhileStepToOperation(node, payload, flowState, params);
 
+            case 'Decision':
+                return this.createDecisionStep(node, payload);
+
             default:
                 return this.createNextStep('Failed', {
                     errorMessage: `Unknown step type: ${node.StepType}`,
@@ -856,6 +1057,130 @@ export class FlowAgentType extends BaseAgentType {
         const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
         return agent?.Name || null;
     }
+
+    /**
+     * Turns a Decision step into the `'Decision'` next step BaseAgent runs.
+     *
+     * The same hand-off a Prompt step makes with its marker: the walker does not call a model
+     * itself. BaseAgent runs the request through its own decision execution, so the call gets the
+     * prompt default, state resolution and error handling every agent decision gets, and is logged
+     * as a `Decision` run step. The answers come back to {@link completeDecisionStep}.
+     *
+     * A configuration that cannot be read, or a prompt that no longer exists, ends the run: the
+     * dispatched path refuses the same flow before it starts.
+     *
+     * A state the dispatched path refuses — missing, or empty, `{}` and whitespace-only text
+     * included — is refused here by the same rule (`ResolveDecisionState`), before any model is
+     * asked. The step then fails as a failed call does, so its recovery path runs.
+     */
+    private createDecisionStep<P>(node: MJAIAgentStepEntity, payload: P): BaseAgentNextStep<P> {
+        const read = ReadFlowDecisionStepConfiguration(node.Configuration);
+        if ('Error' in read) {
+            return this.stopFlow(`Decision step "${node.Name}" cannot run: ${read.Error}.`, payload);
+        }
+        const promptName = this.decisionPromptName(node);
+        if (promptName === null) {
+            return this.stopFlow(
+                `Decision step "${node.Name}" refers to a prompt that no longer exists (${node.PromptID}). ` +
+                `Point it at an existing one, or clear it to use the Default Decision prompt.`,
+                payload
+            );
+        }
+
+        const { key, state, questions } = read.Config;
+        const resolved = ResolveDecisionState(state, payload);
+        if ('ErrorMessage' in resolved) {
+            return this.decisionNotAsked(key, resolved.ErrorMessage, payload);
+        }
+        return this.createNextStep<P>('Decision' as BaseAgentNextStep['step'], {
+            decisions: [{ id: key, state: state ?? 'payload', questions }],
+            ...(promptName ? { decisionPromptName: promptName } : {}),
+            newPayload: payload,
+            previousPayload: payload
+        });
+    }
+
+    /**
+     * A Decision step that is not asked, handed back the way BaseAgent hands back a failed call: a
+     * `'Retry'` carrying one failed result. {@link completeDecisionStep} then fails the step, so a
+     * condition reading its answers holds or is passed over, and its recovery path is taken, as
+     * after any failed call. No model is asked and no Decision run step is logged; the dispatched
+     * path logs none for a step it does not ask either.
+     */
+    private decisionNotAsked<P>(key: string, reason: string, payload: P): BaseAgentNextStep<P> {
+        return this.createNextStep<P>('Retry', {
+            decisionResults: [{ id: key, success: false, error: `it was not asked: ${reason}` }],
+            newPayload: payload,
+            previousPayload: payload
+        });
+    }
+
+    /**
+     * A Decision step's prompt by name: `undefined` when it has none (BaseAgent then uses
+     * `Default Decision`), `null` when the prompt it names is gone.
+     */
+    private decisionPromptName(node: MJAIAgentStepEntity): string | undefined | null {
+        if (!node.PromptID) return undefined;
+        return AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, node.PromptID))?.Name ?? null;
+    }
+
+    /**
+     * Records what the current Decision step answered, and turns BaseAgent's `'Retry'` into the
+     * step's outcome.
+     *
+     * A call that succeeded makes the step `'Success'`; one that failed makes it `'Failed'`, so a
+     * failed decision takes the same recovery handling as any failed step: the paths that read its
+     * answers are passed over, and a recovery path is taken whatever its rank.
+     *
+     * @param payload the payload the step hands on, which is its `stepResult.result`
+     */
+    private completeDecisionStep<P>(
+        step: BaseAgentNextStep<P>,
+        flowState: FlowExecutionState,
+        payload: P
+    ): { Next: BaseAgentNextStep<P>; StepResult: FlowDecisionStepResult<P> } {
+        const node = flowState.currentStepId ? AIEngine.Instance.GetAgentStepByID(flowState.currentStepId) : null;
+        const result = step.decisionResults?.[0];
+        const answers = result?.success && result.answers && !Array.isArray(result.answers) ? result.answers : null;
+        const outcome: FlowDecisionOutcome = answers
+            ? { Status: 'Complete', Answers: answers }
+            : { Status: 'Failed', ErrorMessage: result?.error || 'the decision returned no answers' };
+        if (node) this.recordDecisionOutcome(flowState, node, outcome);
+
+        if (outcome.Status === 'Complete') {
+            return {
+                Next: { ...step, step: 'Success' },
+                StepResult: { Success: true, step: 'Success', result: payload }
+            };
+        }
+        const errorMessage = `Decision step "${node?.Name ?? flowState.currentStepId}" failed: ${outcome.ErrorMessage}`;
+        return {
+            Next: { ...step, step: 'Failed', errorMessage },
+            StepResult: { Success: false, step: 'Failed', result: payload }
+        };
+    }
+
+    /**
+     * Puts a Decision step's answers into the flow state under its key, replacing any it gave on an
+     * earlier visit. The shared answer rules decide which are usable and say why the rest are not.
+     */
+    private recordDecisionOutcome(flowState: FlowExecutionState, node: MJAIAgentStepEntity, outcome: FlowDecisionOutcome): void {
+        const read = ReadFlowDecisionStepConfiguration(node.Configuration);
+        // A step whose settings cannot be read has no key, so nothing can name it: a condition that
+        // tries still holds, on "no Decision step has answered".
+        if ('Error' in read) return;
+
+        const run = {
+            Name: node.Name,
+            Status: outcome.Status,
+            ErrorMessage: outcome.Status === 'Failed' ? outcome.ErrorMessage : null
+        };
+        const given = outcome.Status === 'Complete' ? outcome.Answers : {};
+        const resolved = ResolveDecisionStepAnswers(run, read.Config.questions, given);
+        flowState.Decisions = withDecisionStep(flowState.Decisions, read.Config, resolved);
+        if (outcome.Status === 'Failed') flowState.FailedDecisionKeys.add(read.Config.key);
+        else flowState.FailedDecisionKeys.delete(read.Config.key);
+    }
     
     /**
      * Processes action results and applies output mapping if configured
@@ -863,7 +1188,7 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @public
      */
-    public processActionResult<P>(
+    public ProcessActionResult<P>(
         actionResult: Record<string, unknown>,
         _stepId: string,
         outputMapping?: string,
@@ -877,6 +1202,16 @@ export class FlowAgentType extends BaseAgentType {
         // Note: Special fields are ignored in this legacy method
         // Use PostProcessActionStep for full special field support
         return result.payloadChange;
+    }
+
+    /** @deprecated Use {@link ProcessActionResult}. */
+    public processActionResult<P>(
+        actionResult: Record<string, unknown>,
+        _stepId: string,
+        outputMapping?: string,
+        currentPayload?: P
+    ): AgentPayloadChangeRequest<P> | null {
+        return this.ProcessActionResult(actionResult, _stepId, outputMapping, currentPayload);
     }
     
     /**
@@ -1165,76 +1500,133 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
-     * Compiles the flow and hands it to the task-graph dispatcher (C1.3).
+     * Decides where this flow runs, records the decision, and returns its first step.
      *
-     * **This is the whole of a Flow agent's execution now.** The agent does not walk its own graph;
-     * it compiles its persisted steps and paths into a `TaskGraphSpec` and returns a `Tasks` step,
-     * which `BaseAgent.executeTasksStep` submits and detaches from. Everything after that —
-     * claiming, conditions, exclusive choice, skip cascade, retry, failure semantics — belongs to
-     * the dispatcher, which is the point: one traversal engine, one set of rules, one place a bug
-     * can be fixed. The in-run walker below is retained as the differential suite's oracle and is
-     * unreachable at runtime (see {@link refuseInRunFlowExecution}).
+     * **The rule: a run that needs the flow's result runs in-process; everything else is
+     * dispatched.** A dispatched flow submits a task graph and returns before any step has run.
+     * That is right for a person starting a workflow, and wrong for anything that consumes the
+     * result: a parent agent, or an API handler answering its client. Those callers get the in-run
+     * walker, which returns the flow's final payload. See {@link FlowExecutionMode}.
      *
-     * **Compile failures are authoring failures, and are reported as such.** A flow with no
-     * starting step or a loop in it is something the user can fix in the editor, so the message
-     * names the step and the problem rather than reporting an internal error.
+     * The decision is made once, here, and stored on the run's {@link FlowExecutionState}. Every
+     * later hook reads it, and BaseAgent records it on the run through
+     * {@link DescribeExecutionRouting}.
      *
      * @param {ExecuteAgentParams} params - The full execution parameters
-     * @returns {Promise<BaseAgentNextStep<P> | null>} The `Tasks` step carrying the compiled graph
+     * @returns The first in-run step, or the `Tasks` step carrying the compiled graph
      *
      * @override
      * @since 2.76.0
      */
     public async DetermineInitialStep<P = any, ATS = any>(params: ExecuteAgentParams<P>, payload: P, agentTypeState: ATS): Promise<BaseAgentNextStep<P> | null> {
-        // Starting part-way through a flow means compiling a subgraph, which the dispatched model
-        // does not do yet. Refusing loudly beats silently starting from the top — that would run
-        // steps the caller explicitly asked to skip.
+        const flowState = agentTypeState as FlowExecutionState;
         const flowParams = params.agentTypeParams as FlowAgentExecuteParams | undefined;
+
+        // A sub-agent that asks to be dispatched would return to its parent before doing any work,
+        // and the parent would carry on as though it had. Refused rather than silently run in-run,
+        // because the caller asked for something specific.
+        if (params.parentRun && flowParams?.executionMode === 'dispatch') {
+            return this.createNextStep('Failed', {
+                errorMessage:
+                    `'${params.agent.Name}' was started as a sub-agent with executionMode 'dispatch'. A dispatched ` +
+                    `workflow returns as soon as its steps are scheduled, so the calling agent would continue before ` +
+                    `any of the work had happened. Omit executionMode, or set it to 'inRun'.`
+            });
+        }
+
+        this.applyExecutionMode(flowState, params, flowParams);
+        LogStatus(`Flow Agent '${params.agent.Name}': executionMode '${flowState.executionMode}' (${flowState.executionModeReason})`);
+
+        return flowState.executionMode === 'inRun'
+            ? this.determineInitialStepInRun(params, payload, flowState)
+            : this.determineInitialStepForDispatch(params, payload, flowParams);
+    }
+
+    /**
+     * Stores the run's execution mode and the reason for it on the flow state.
+     *
+     * An explicit `'inRun'` wins. Otherwise a sub-agent run is in-run, because its parent consumes
+     * the result. That covers Sub-Agent tasks inside a dispatched graph too: the task-graph agent
+     * runner passes the submitting run as `parentRun`, so a flow nested in a flow returns its result
+     * to the task that started it.
+     *
+     * @private
+     */
+    private applyExecutionMode<P>(
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<P>,
+        flowParams: FlowAgentExecuteParams | undefined
+    ): void {
+        const requested = flowParams?.executionMode;
+        if (requested === 'inRun') {
+            flowState.executionMode = 'inRun';
+            flowState.executionModeReason = 'requested by the caller';
+        } else if (params.parentRun) {
+            flowState.executionMode = 'inRun';
+            flowState.executionModeReason = 'running as a sub-agent, so the calling run needs its result';
+        } else {
+            flowState.executionMode = 'dispatch';
+            flowState.executionModeReason = requested === 'dispatch'
+                ? 'requested by the caller'
+                : 'default for a top-level run';
+        }
+    }
+
+    /**
+     * Records which engine ran this flow and why, as a `Decision` step on the run.
+     *
+     * @override
+     * @since 6.1.3
+     */
+    public override DescribeExecutionRouting<ATS>(agentTypeState: ATS): AgentTypeExecutionRouting | null {
+        const flowState = agentTypeState as FlowExecutionState;
+        if (!flowState?.executionModeReason) return null;
+
+        const label = flowState.executionMode === 'inRun' ? 'in this run' : 'on the task-graph dispatcher';
+        return {
+            StepName: `Workflow runs ${label}`,
+            Reason: flowState.executionModeReason,
+            Detail: { executionMode: flowState.executionMode }
+        };
+    }
+
+    /**
+     * Compiles the flow and hands it to the task-graph dispatcher (C1.3).
+     *
+     * The agent does not walk its own graph in this mode. It compiles its persisted steps and paths
+     * into a `TaskGraphSpec` and returns a `Tasks` step, which `BaseAgent.executeTasksStep` submits
+     * and detaches from. Claiming, conditions, exclusive choice, skip cascade, retry and failure
+     * semantics all belong to the dispatcher from there.
+     *
+     * **Compile failures are authoring failures, and are reported as such.** A flow with no
+     * starting step or a loop in it is something the user can fix in the editor, so the message
+     * names the step and the problem rather than reporting an internal error.
+     *
+     * @private
+     */
+    private determineInitialStepForDispatch<P>(
+        params: ExecuteAgentParams<P>,
+        payload: P,
+        flowParams: FlowAgentExecuteParams | undefined
+    ): BaseAgentNextStep<P> {
+        // Starting part-way through a flow means compiling a subgraph, which the dispatched model
+        // does not do yet. Refusing loudly beats silently starting from the top, which would run
+        // steps the caller explicitly asked to skip. In-run execution supports it.
         if (flowParams?.startAtStep) {
             return this.createNextStep('Failed', {
                 errorMessage:
-                    `Starting at a specific step ('${flowParams.startAtStep.Name}') is not supported now that workflows ` +
-                    `run on the task-graph dispatcher. Run the workflow from its starting step, or split it so the ` +
-                    `portion you want is its own workflow.`
+                    `Starting at a specific step ('${flowParams.startAtStep.Name}') is not supported when a workflow ` +
+                    `runs on the task-graph dispatcher. Set agentTypeParams.executionMode to 'inRun', run the ` +
+                    `workflow from its starting step, or split it so the portion you want is its own workflow.`
             });
         }
 
-        // A workflow SUBMITS and detaches — it returns a handle, not a result. That is right for a
-        // person starting one, and wrong for anything that needs the answer: a caller awaiting this
-        // gets "started" and proceeds as though the work were done, on a payload the workflow has not
-        // produced yet. Refusing loudly is the only honest option until an await path exists, because
-        // the alternative is success-before-work, silently, at every call site.
-        if (params.parentRun) {
-            return this.createNextStep('Failed', {
-                errorMessage:
-                    `'${params.agent.Name}' is a workflow, and a workflow cannot be used as a sub-agent step yet. ` +
-                    `It returns as soon as its steps are scheduled, so the calling agent would continue before any ` +
-                    `of the work had happened. Start it on its own, or fold its steps into the calling workflow.`
-            });
+        const prepared = this.compileAndValidateFlow(params);
+        if ('ErrorMessage' in prepared) {
+            return this.createNextStep('Failed', { errorMessage: prepared.ErrorMessage });
         }
 
-        const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
-        if (!compiled.Success || !compiled.Spec) {
-            return this.createNextStep('Failed', {
-                errorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}`
-            });
-        }
-
-        // Excluded steps are reported, never dropped in silence: a user who disabled a step or left
-        // one unconnected should be able to read that off the run rather than wonder why it did
-        // nothing.
-        if (compiled.Excluded.length > 0) {
-            LogStatus(
-                `Flow Agent '${params.agent.Name}': ${compiled.Excluded.length} step(s) excluded from the run — ` +
-                compiled.Excluded.map((e) => `${e.StepID} (${e.Reason})`).join(', ')
-            );
-        }
-
-        LogStatusEx({
-            message: `Flow Agent '${params.agent.Name}': compiled ${compiled.Spec.tasks.length} step(s) for dispatch`,
-            verboseOnly: true,
-            isVerboseEnabled: IsVerboseLoggingEnabled
-        });
+        this.logCompiledGraph(params.agent.Name, prepared.Spec.tasks.length, prepared.Excluded);
 
         // 'Tasks' is not in the BaseAgentNextStep step union — it is non-terminal in the same sense
         // as 'ClientTools'/'Plan' (see that type's doc comment), and BaseAgent routes it to
@@ -1242,25 +1634,99 @@ export class FlowAgentType extends BaseAgentType {
         return {
             step: 'Tasks' as BaseAgentNextStep<P>['step'],
             terminate: false,
-            taskGraph: { spec: compiled.Spec, folded: false },
+            taskGraph: { spec: prepared.Spec, folded: false },
             previousPayload: payload,
             newPayload: payload
         };
     }
 
     /**
-     * The original in-run flow walker's entry point — **retained, unrouted, and refused at runtime.**
+     * Compiles the flow and holds it to the checks `Submit` makes, or says why it cannot run.
      *
-     * Kept because it is the oracle the differential suite compares the compiler against: deleting
-     * it would leave nothing to prove the compiled graph behaves like the flow it replaced. It is
-     * no longer called by {@link DetermineInitialStep}, and {@link createStepForFlowNode} refuses if
-     * anything reaches it, so a workflow that runs at all provably ran on the dispatcher.
+     * The dispatched path runs this before it submits, and the in-run walker before its first step
+     * when the flow has a Decision step, so a flow one mode accepts the other cannot refuse — an
+     * incomplete Choice fork, a decision read before it can answer, or one read through the payload
+     * is refused in both. The refusal names the author's steps: a compiled graph's tempIds are step
+     * IDs, and an incomplete fork, for one, is reported by its group, which is its origin's ID.
+     */
+    private compileAndValidateFlow<P>(
+        params: ExecuteAgentParams<P>
+    ): { Spec: TaskGraphSpec; Excluded: FlowCompileResult['Excluded'] } | { ErrorMessage: string } {
+        const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
+        if (!compiled.Success || !compiled.Spec) {
+            return { ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}` };
+        }
+
+        const validation = ValidateTaskGraphSpec(compiled.Spec);
+        if (!validation.Valid) {
+            return {
+                ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowValidationErrors(validation.Errors, compiled.Spec)}`
+            };
+        }
+        return { Spec: compiled.Spec, Excluded: compiled.Excluded };
+    }
+
+    /**
+     * Logs what the compile produced.
+     *
+     * Excluded steps are reported, never dropped in silence: a user who disabled a step or left one
+     * unconnected should be able to read that off the run rather than wonder why it did nothing.
+     *
+     * @private
+     */
+    private logCompiledGraph(
+        agentName: string,
+        taskCount: number,
+        excluded: ReadonlyArray<{ StepID: string; Reason: string }>
+    ): void {
+        if (excluded.length > 0) {
+            LogStatus(
+                `Flow Agent '${agentName}': ${excluded.length} step(s) excluded from the run — ` +
+                excluded.map((e) => `${e.StepID} (${e.Reason})`).join(', ')
+            );
+        }
+
+        LogStatusEx({
+            message: `Flow Agent '${agentName}': compiled ${taskCount} step(s) for dispatch`,
+            verboseOnly: true,
+            isVerboseEnabled: IsVerboseLoggingEnabled
+        });
+    }
+
+    /**
+     * The in-run walker's entry point, used when the run's mode is `'inRun'`.
+     *
+     * Honours `startAtStep`, which the dispatched path cannot. Apart from path selection, which now
+     * goes through the shared `SelectOutgoingEdges` engine, the walker is the one MJ 5.x shipped.
      *
      * @private
      */
     private async determineInitialStepInRun<P = any, ATS = any>(params: ExecuteAgentParams<P>, payload: P, agentTypeState: ATS): Promise<BaseAgentNextStep<P> | null> {
         const flowState = agentTypeState as FlowExecutionState;
         const payloadToUse = payload || {} as P;
+
+        // The compiler's own key check, over every active step: the walker can start anywhere
+        // (startAtStep), so it cannot limit itself to what the entry reaches. A shared key would
+        // leave a condition's `decisions.<key>` naming two steps, and the dispatched path refuses
+        // the same flow before it starts.
+        const activeSteps = AIEngine.Instance.GetAgentSteps(flowState.agentId, 'Active') ?? [];
+        const duplicateKeys = CollectDecisionStepKeys(activeSteps).Errors;
+        if (duplicateKeys.length > 0) {
+            return this.stopFlow(
+                `Workflow '${params.agent.Name}' cannot run:\n${FormatFlowCompileErrors({ Success: false, Errors: duplicateKeys, Excluded: [] })}`,
+                payloadToUse
+            );
+        }
+
+        // A flow with a Decision step gets the dispatched path's whole check, once, before its first
+        // step: an incomplete Choice fork ends the flow "successfully" on the option nobody drew a
+        // path for, and in-run is the default mode for every sub-agent flow. So such a flow must be
+        // one the dispatcher would accept — which also rules out a loop drawn with a path back. A
+        // flow without a Decision step is walked as it always was.
+        if (activeSteps.some(s => s.StepType === 'Decision')) {
+            const prepared = this.compileAndValidateFlow(params);
+            if ('ErrorMessage' in prepared) return this.stopFlow(prepared.ErrorMessage, payloadToUse);
+        }
 
         // Check for startAtStep in agentTypeParams (FlowAgentExecuteParams)
         const flowParams = params.agentTypeParams as FlowAgentExecuteParams | undefined;
@@ -1312,22 +1778,25 @@ export class FlowAgentType extends BaseAgentType {
      * @since 2.76.0
      */
     public async PreProcessNextStep<P = any, ATS = any>(
-        _params: ExecuteAgentParams<P>,
-        _step: BaseAgentNextStep<P>,
-        _payload: P,
-        _agentTypeState: ATS
+        params: ExecuteAgentParams<P>,
+        step: BaseAgentNextStep<P>,
+        payload: P,
+        agentTypeState: ATS
     ): Promise<BaseAgentNextStep<P> | null> {
-        // Null means "no custom handling" — which is now always true. This hook existed to advance
-        // the in-run walker after an action or sub-agent returned; under dispatch there is nothing
-        // in-run to advance, and the terminal Success that follows submission must be allowed
-        // through untouched. Returning null here (rather than refusing) is deliberate: this method
-        // IS reached on the dispatched path, so a throw would break the very run it is guarding.
-        // The retained walker is {@link preProcessNextStepInRun}.
+        // In-run: this is what advances the walker after an action, sub-agent or prompt returns.
+        // Without it BaseAgent falls through to HandleStepFallback, which ends the run with Success
+        // after the first step.
+        if ((agentTypeState as FlowExecutionState).executionMode === 'inRun') {
+            return this.preProcessNextStepInRun(params, step, payload, agentTypeState);
+        }
+
+        // Dispatched: null means "no custom handling". This method IS reached on the dispatched path
+        // (the terminal Success after submission), so it must let that through rather than refuse.
         return null;
     }
 
     /**
-     * The in-run walker's post-step hook — **retained, unrouted** (see {@link refuseInRunFlowExecution}).
+     * The in-run walker's post-step hook, used when the run's mode is `'inRun'`.
      *
      * @private
      */
@@ -1369,9 +1838,15 @@ export class FlowAgentType extends BaseAgentType {
             });
         }
 
+        // A Decision step's answers come back on the 'Retry' BaseAgent returns after running it. They
+        // are recorded first, so this step's paths, and every later step's, can read them. From here
+        // on the step is its outcome: Success, or Failed when the call failed.
+        const decision = step.decisionResults ? this.completeDecisionStep(step, flowState, currentPayload) : null;
+        const finished = decision?.Next ?? step;
+
         // Store the step result so path conditions can access it via stepResult
         // The step parameter contains the result from the just-completed step (Sub-Agent, Action, or Prompt)
-        flowState.stepResults.set(flowState.currentStepId, step);
+        flowState.stepResults.set(flowState.currentStepId, decision ? decision.StepResult : step);
 
         // Add to execution path if not already present
         if (!flowState.executionPath.includes(flowState.currentStepId)) {
@@ -1383,18 +1858,22 @@ export class FlowAgentType extends BaseAgentType {
 
         // Find valid paths from current step using updated payload
         // Pass params to enable data/context access in path conditions (Phase 1)
-        const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState, params);
+        const selection = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState, params);
+        if (selection.HoldReason) {
+            return this.stopOnHeldPath(flowState.currentStepId, selection.HoldReason, currentPayload);
+        }
+        const paths = selection.Paths;
 
         if (paths.length === 0) {
             // No valid paths found
             // If the previous step failed, propagate the failure with its error message
-            if (step.step === 'Failed') {
+            if (finished.step === 'Failed') {
                 LogStatusEx({
-                    message: `⚠️ Flow Agent: Step failed with no recovery path. Error: ${step.errorMessage || 'No error message'}`,
+                    message: `⚠️ Flow Agent: Step failed with no recovery path. Error: ${finished.errorMessage || 'No error message'}`,
                     verboseOnly: false
                 });
                 return this.createNextStep('Failed', {
-                    errorMessage: step.errorMessage || 'Flow step failed with no recovery path',
+                    errorMessage: finished.errorMessage || 'Flow step failed with no recovery path',
                     newPayload: currentPayload,
                     previousPayload: currentPayload,
                     terminate: true
@@ -1429,7 +1908,7 @@ export class FlowAgentType extends BaseAgentType {
         }
 
         // Log when we're navigating to a recovery path after a failure
-        if (step.step === 'Failed') {
+        if (finished.step === 'Failed') {
             LogStatusEx({
                 message: `🔄 Flow Agent: Failure detected, navigating to recovery path: '${nextStep.Name}'`,
                 verboseOnly: false
@@ -1442,7 +1921,7 @@ export class FlowAgentType extends BaseAgentType {
             for (let i = 1; i < paths.length; i++) {
                 const alternateStep = await this.getStepById(paths[i].DestinationStepID);
                 if (alternateStep && alternateStep.Status === 'Active') {
-                    if (step.step === 'Failed') {
+                    if (finished.step === 'Failed') {
                         LogStatusEx({
                             message: `🔄 Flow Agent: Using alternate recovery path: '${alternateStep.Name}'`,
                             verboseOnly: false
@@ -1698,11 +2177,22 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
+     * Flow action nodes are chosen by the graph, not by a model: failure paths may re-run a node
+     * with the same mapped inputs, and no model reads a failure directive. The breaker's rules
+     * would only block those retries, so Flow opts out (see BaseAgentType.UsesActionCircuitBreaker).
+     * @override
+     */
+    public get UsesActionCircuitBreaker(): boolean {
+        return false;
+    }
+
+    /**
      * Provides Flow-specific guidance for prompt configuration
      * @override
      */
     public GetPromptConfigurationGuidance(): string {
         return `   - Flow agents use step-level prompts (StepType="Prompt" with PromptID)\n` +
+               `   - Decision steps (StepType="Decision") use PromptID for their decision prompt; empty means "Default Decision"\n` +
                `   - Prompts should be configured in agent steps, not AI Agent Prompts relationship\n` +
                `   - Verify that prompts exist in AI Prompts table and are active`;
     }

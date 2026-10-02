@@ -110,7 +110,7 @@ export class LiveKitConnectionOverlayComponent {
   @Output() public Retry = new EventEmitter<void>();
 
   /** A friendly title for the disconnected state based on the reason. */
-  public get disconnectTitle(): string {
+  public get disconnectTitle(): string {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     switch (this.DisconnectReason) {
       case 'participant-removed':
         return 'You were removed from the room';

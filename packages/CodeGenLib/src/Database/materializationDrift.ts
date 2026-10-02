@@ -14,9 +14,9 @@
 
 /** Resolved drift-relevant facts for one materialization (gathered against current metadata). */
 export interface MaterializationDriftFacts {
-    sourceType: 'Query' | 'EntityBaseView';
+    sourceType: 'Query' | 'EntityBaseView';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** EntityBaseView case (1:1 copy of a source entity). */
-    baseView?: {
+    baseView?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         /** The source entity (SourceEntityID) still resolves in current metadata. */
         sourceEntityExists: boolean;
         /** Current field names on the source entity. */
@@ -25,7 +25,7 @@ export interface MaterializationDriftFacts {
         materializedColumns: string[];
     };
     /** Query case (provenance via QueryEntity / QueryField / QueryDependency). */
-    query?: {
+    query?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         /** Names/IDs of QueryEntity source entities that no longer exist. */
         missingSourceEntities: string[];
         /** `Entity.Field` provenance refs (QueryField.SourceEntityID+SourceFieldName) that no longer resolve. */
@@ -43,8 +43,8 @@ export interface MaterializationDriftFacts {
 
 /** The drift verdict for one materialization. */
 export interface MaterializationDriftVerdict {
-    drift: boolean;
-    reason?: string;
+    drift: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 const lc = (s: string) => s.trim().toLowerCase();
@@ -60,7 +60,7 @@ const lc = (s: string) => s.trim().toLowerCase();
  * positives from incomplete provenance — the §10 bias runs the other way for drift (only flag on a
  * definite broken dependency).
  */
-export function evaluateMaterializationDrift(facts: MaterializationDriftFacts): MaterializationDriftVerdict {
+export function EvaluateMaterializationDrift(facts: MaterializationDriftFacts): MaterializationDriftVerdict {
     if (facts.sourceType === 'EntityBaseView' && facts.baseView) {
         const bv = facts.baseView;
         if (!bv.sourceEntityExists) {
@@ -120,4 +120,9 @@ export function evaluateMaterializationDrift(facts: MaterializationDriftFacts): 
     }
 
     return { drift: false };
+}
+
+/** @deprecated Use {@link EvaluateMaterializationDrift}. */
+export function evaluateMaterializationDrift(facts: MaterializationDriftFacts): MaterializationDriftVerdict {
+    return EvaluateMaterializationDrift(facts);
 }
