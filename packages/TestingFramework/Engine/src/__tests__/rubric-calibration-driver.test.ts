@@ -59,7 +59,7 @@ describe('RubricCalibrationTestDriver', () => {
                     goldSet: { subjects: [{ entity: 'MJ: Documents', recordID: 'subject' }] },
                     evaluator: { type: 'Deterministic' },
                 }),
-                ExpectedOutcomes: '{}',
+                ExpectedOutcomes: JSON.stringify({ minSampleSize: 1 }),
             },
             contextUser: { ID: 'user' },
         } as never);

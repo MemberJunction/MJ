@@ -98,6 +98,8 @@ export interface CalibrationThresholds {
     minWeightedKappa?: number;
     maxMeanAbsoluteError?: number;
     minExactAgreement?: number;
+    /** Paired subjects required before a kappa is reported. Defaults to 20. */
+    minSampleSize?: number;
 }
 
 export interface CalibrationExpectation extends CalibrationThresholds {
@@ -192,6 +194,20 @@ export function CalibrationOracles(pairs: CalibrationPair[], expected: Calibrati
         return {
             score: 0,
             oracles: [{ oracleType: 'rubric-calibration', passed: false, score: 0, message: 'No human and AI scores to compare.', details: { sampleSize: 0 } }],
+        };
+    }
+    const minSampleSize = expected.minSampleSize ?? 20;
+    const sampleSize = criteria.reduce((sum, row) => sum + row.sampleSize, 0);
+    if (sampleSize < minSampleSize) {
+        return {
+            score: 0,
+            oracles: [{
+                oracleType: 'rubric-calibration',
+                passed: false,
+                score: 0,
+                message: 'InsufficientData',
+                details: { sampleSize, minSampleSize, scope: 'overall' },
+            }],
         };
     }
     const overallKappa = criteria.reduce((sum, row) => sum + row.weightedKappa, 0) / criteria.length;

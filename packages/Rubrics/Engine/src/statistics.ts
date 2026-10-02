@@ -129,15 +129,25 @@ export function getDiagnostics(criteria: { key: string; scores: (number | null)[
     return GetDiagnostics(criteria);
 }
 
-/** Quadratic-weighted Cohen's kappa. Categories are the distinct rating values, ordered. */
-export function QuadraticKappa(pairs: readonly (readonly [number, number])[]): number {
-    const categories = [...new Set(pairs.flat())].sort((a, b) => a - b);
-    const index = new Map(categories.map((value, position) => [value, position]));
-    const k = categories.length;
+/**
+ * Quadratic-weighted Cohen's kappa on the full scale.
+ * A level value is its index. Unobserved levels stay in the scale, so 0 and 2
+ * are not pulled together just because 1 was not used.
+ * `categoryCount` is the scale length. When omitted, the scale runs through the highest level.
+ */
+export function QuadraticKappa(pairs: readonly (readonly [number, number])[], categoryCount?: number): number {
+    if (pairs.length === 0) return 1;
+    const highest = pairs.reduce((max, [left, right]) => Math.max(max, left, right), 0);
+    const k = categoryCount ?? highest + 1;
     if (k < 2) return 1;
-    const grid = Array.from({ length: k }, () => Array(k).fill(0));
-    for (const [a, b] of pairs) grid[index.get(a)!][index.get(b)!] += 1;
-    const n = pairs.length;
+    const grid = Array.from({ length: k }, () => Array<number>(k).fill(0));
+    let n = 0;
+    for (const [left, right] of pairs) {
+        if (!Number.isInteger(left) || !Number.isInteger(right) || left < 0 || right < 0 || left >= k || right >= k) continue;
+        grid[left][right] += 1;
+        n += 1;
+    }
+    if (n === 0) return 1;
     const row = grid.map(line => line.reduce((sum, value) => sum + value, 0));
     const col = grid[0].map((_, column) => grid.reduce((sum, line) => sum + line[column], 0));
     let observed = 0;

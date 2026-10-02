@@ -297,6 +297,17 @@ describe('agreement and consensus', () => {
             ...Array.from({ length: 15 }, () => [1, 1] as [number, number]),
         ];
         expect(QuadraticKappa(pairs)).toBeCloseTo(0.4, 6);
+        const raw: [number, number][] = [
+            ...Array.from({ length: 10 }, () => [0, 0] as [number, number]),
+            ...Array.from({ length: 10 }, () => [1, 1] as [number, number]),
+            ...Array.from({ length: 10 }, () => [3, 3] as [number, number]),
+            ...Array.from({ length: 4 }, () => [0, 1] as [number, number]),
+            ...Array.from({ length: 4 }, () => [0, 3] as [number, number]),
+            ...Array.from({ length: 4 }, () => [1, 3] as [number, number]),
+        ];
+        const remapped = raw.map(([left, right]) => [left === 3 ? 2 : left, right === 3 ? 2 : right] as [number, number]);
+        expect(QuadraticKappa(raw)).not.toBeCloseTo(QuadraticKappa(remapped), 5);
+        expect(QuadraticKappa(raw, 4)).toBeCloseTo(QuadraticKappa(raw), 6);
         const small = GetAgreement([[1, 1], [1, 2], [2, 2]]);
         expect(small.Withheld).toBe(true);
         expect(small.Kappa).toBeUndefined();
