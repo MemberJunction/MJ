@@ -1,26 +1,26 @@
-:host { color-scheme: light; color: var(--mj-color-neutral-800); }
+:host { color: var(--mj-text-primary); }
 
 .rubric-panel {
   display: flex;
   flex-direction: column;
   gap: var(--mj-space-4, 1rem);
-  color: var(--mj-color-neutral-800);
+  color: var(--mj-text-primary);
 }
 
 input,
 select,
 textarea,
 button {
-  color-scheme: light;
+  color-scheme: inherit;
   font: inherit;
 }
 
 input:not([type='checkbox']),
 select,
 textarea {
-  background: var(--mj-color-neutral-0);
-  color: var(--mj-color-neutral-800);
-  border: 1px solid var(--mj-color-neutral-300);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-sm, 4px);
   padding: 0.35rem 0.55rem;
 }
