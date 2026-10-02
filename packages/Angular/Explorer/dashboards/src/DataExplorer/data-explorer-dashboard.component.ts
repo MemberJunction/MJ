@@ -465,13 +465,31 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Total count of entities matching current filters (across all groups or flat list)
+   * Count of DISTINCT entities matching the current filters (across all groups, or the flat
+   * list in single-application mode).
+   *
+   * Distinct is the whole point. `buildAppEntityGroups` deliberately assigns an entity to
+   * EVERY application it belongs to, so summing `group.entities.length` counts a
+   * multi-application entity once per application. On a stock install that made the header
+   * read "2195 entities" while the sibling label eight lines up the page read
+   * "2134 entities available" — two counts of the same set, on the same screen, differing by
+   * the number of multi-app memberships. Neither number was wrong for what it measured; they
+   * were measuring different things while claiming the same words.
+   *
+   * Both labels now count entities. Membership totals, if ever wanted, belong in a label that
+   * says "memberships".
    */
   get FilteredEntityCount(): number {
     if (this.EntityFilter?.applicationId) {
       return this.FlatFilteredEntities.length;
     }
-    return this.FilteredAppEntityGroups.reduce((sum, g) => sum + g.entities.length, 0);
+    const distinct = new Set<string>();
+    for (const group of this.FilteredAppEntityGroups) {
+      for (const entity of group.entities) {
+        distinct.add(entity.ID);
+      }
+    }
+    return distinct.size;
   }
 
   /** @deprecated Use {@link FilteredEntityCount}. */

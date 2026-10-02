@@ -1628,6 +1628,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private reconcileInFlight: Promise<void> | null = null;
   /** Reason for one more reconcile pass, requested while a pass was running. */
   private reconcileRerunReason: string | null = null;
+  /**
+   * Set when a TRANSPORT reconnect asks for a pass; consumed by the next pass that starts. Held as a
+   * flag rather than read off the pass's reason because {@link ReconcileNow} folds requests that
+   * arrive mid-pass into one follow-up carrying only the LAST reason — a reconnect followed by a
+   * tab-visible would otherwise lose the window refresh the reconnect needs.
+   */
+  private reconcileWindowRefreshPending = false;
   public IsProcessing: boolean = false;
 
   /** @deprecated Use {@link IsProcessing}. */
@@ -6614,6 +6621,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * @param reason What prompted it — carried only for logging.
    */
   public async ReconcileNow(reason: string): Promise<void> {
+    if (ConversationChatAreaComponent.TRANSPORT_RECONNECT_REASONS.includes(reason)) {
+      this.reconcileWindowRefreshPending = true;
+    }
     if (this.reconcileInFlight) {
       this.reconcileRerunReason = reason;
       return this.reconcileInFlight;
@@ -6636,6 +6646,55 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /**
+   * Supervisor reasons that mean the transport itself was down, so anything published meanwhile
+   * was dropped. Only these pay for {@link refreshNewestWindow}; the other triggers
+   * (tab-visible, browser-online, message-liveness, completion-for-unloaded-message) keep the
+   * narrow run-row refresh alone.
+   */
+  private static readonly TRANSPORT_RECONNECT_REASONS: readonly string[] = ['socket-reconnected', 'stream-reconnected'];
+
+  /**
+   * After a transport reconnect, re-read the newest window page before reconciling, when any AI
+   * message is still unsettled.
+   *
+   * Two things {@link refreshAgentRunsForInProgress} alone does not cover:
+   *
+   * - **Error-status messages.** {@link correctStaleErrorMessages} can repair a message the client
+   *   marked Error while the server went on to complete the run — but only against a fresh run
+   *   row, and the narrow refresh reads runs for In-Progress messages only. Rebuilding the
+   *   peripherals from the refreshed window gives it current runs for every message in view.
+   * - **Rows written while the socket was down.** Their events were dropped, so only a re-read
+   *   brings them into the window.
+   *
+   * Newest page only, the same choice the poll-completion path makes: a full-history refresh
+   * would replace the loaded window with every row. Only called when
+   * {@link hasUnsettledAgentReplies} is true, so a quiet conversation costs one array scan.
+   *
+   * @returns false when the conversation changed underneath, so the caller abandons the pass.
+   */
+  private async refreshNewestWindow(conversationId: string, loadToken: number): Promise<boolean> {
+    await this.windowStore.RefreshLatest(this.currentUser);
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return false;
+    }
+
+    const refreshed = this.windowStore.GetSnapshot();
+    this.messages = refreshed.Details;
+    // loadPeripheralData short-circuits when it has already run for this conversation; clearing
+    // the marker is what lets it rebuild the run map from the fresh window.
+    this.lastLoadedConversationId = null;
+    await this.loadPeripheralData(conversationId, refreshed, loadToken);
+    return this.isActiveConversationLoad(conversationId, loadToken);
+  }
+
+  /** Whether any agent reply is still In-Progress, or is Error and may have completed server-side. */
+  private hasUnsettledAgentReplies(): boolean {
+    return (this.messages ?? []).some(
+      m => m.Role === 'AI' && (m.Status === 'In-Progress' || m.Status === 'Error')
+    );
+  }
+
   /** One reconcile pass over the in-progress messages of the active conversation. */
   private async reconcileOnce(reason: string): Promise<void> {
     const conversationId = this.conversationId;
@@ -6650,6 +6709,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     LogStatusEx({ message: `🔁 Reconciling in-progress runs (${reason})`, verboseOnly: true });
     try {
+      if (this.reconcileWindowRefreshPending) {
+        this.reconcileWindowRefreshPending = false;
+        // Decided synchronously so a pass with nothing unsettled adds no await to next's path.
+        if (this.hasUnsettledAgentReplies()) {
+          const stillActive = await this.refreshNewestWindow(conversationId, loadToken);
+          if (!stillActive) {
+            return;
+          }
+        }
+      }
       await this.refreshAgentRunsForInProgress(conversationId, loadToken);
       if (!this.isActiveConversationLoad(conversationId, loadToken)) {
         return;
