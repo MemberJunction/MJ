@@ -68,7 +68,7 @@ export class CloudflareDecision extends BaseSystemOneDecision {
         this._apiToken = key.APIToken;
         this._accountID = this.Credential.AccountID ?? key.AccountID ?? readEnv(CloudflareDecision.ACCOUNT_ID_ENV_VAR);
         const base = nonEmpty(baseURL) ?? this.Credential.Endpoint ?? readEnv(CloudflareDecision.BASE_URL_ENV_VAR) ?? CloudflareDecision.DEFAULT_BASE_URL;
-        this._baseURL = base.replace(/\/+$/, '');
+        this._baseURL = trimTrailingSlashes(base);
     }
 
     /** The Cloudflare account ID, from the credential, the API key or `CLOUDFLARE_ACCOUNT_ID`; undefined when none has one. */
@@ -156,6 +156,15 @@ function splitAccountFromToken(apiKey: string): CloudflareKey {
         return { APIToken: key };
     }
     return { AccountID: nonEmpty(key.slice(0, colon)), APIToken: key.slice(colon + 1).trim() };
+}
+
+/** The value without trailing slashes. A loop, not `/\/+$/`, which is polynomial on untrusted text (CodeQL js/polynomial-redos). */
+function trimTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 47) {
+        end--;
+    }
+    return value.slice(0, end);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {

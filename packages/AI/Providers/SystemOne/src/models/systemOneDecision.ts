@@ -105,11 +105,20 @@ export class SystemOneDecision extends BaseSystemOneDecision {
  * URL already ends with it, or `/systemone` when it ends in `/v1`.
  */
 export function ToSystemOneURL(baseURL: string): string {
-    const base = baseURL.trim().replace(/\/+$/, '');
+    const base = trimTrailingSlashes(baseURL.trim());
     if (base.endsWith(SYSTEMONE_PATH)) {
         return base;
     }
     return base.endsWith('/v1') ? `${base}/systemone` : `${base}${SYSTEMONE_PATH}`;
+}
+
+/** The value without trailing slashes. A loop, not `/\/+$/`, which is polynomial on untrusted text (CodeQL js/polynomial-redos). */
+function trimTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 47) {
+        end--;
+    }
+    return value.slice(0, end);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
