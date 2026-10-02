@@ -546,6 +546,8 @@ export function KeepEditedRowKey(
  * take over a named panel. A key is what makes one contribution replace another, so it is
  * written when a replacement is meant and left for the write path to derive otherwise — the
  * duplicate check compares those strings literally, and two algorithms would not agree.
+ * The proposal's `configuration` is carried through, with `fields` set to the chosen fields
+ * for a field claim and removed for any other placement.
  */
 export function ResolvePlacementDecision(
     state: FormPlacementState,
@@ -603,7 +605,24 @@ export function ResolvePlacementDecision(
         contribution.sectionPosition = state.SectionPosition;
     }
 
+    syncConfigurationFields(contribution);
     return { Contribution: contribution, ActivateNow: state.ActivateNow, KeepOff: !state.ActivateNow && state.KeepOff };
+}
+
+/**
+ * Keeps `configuration.fields` equal to the field claim. A field panel reads its fields from
+ * `configuration.fields`, and the host applies edits only for the claimed fields, so a claim
+ * lists exactly the chosen fields and any other placement lists none. A `configuration` left
+ * empty is removed.
+ */
+function syncConfigurationFields(contribution: FormContributionSpec): void {
+    if (contribution.replacesFieldNames) {
+        contribution.configuration = { ...(contribution.configuration ?? {}), fields: [...contribution.replacesFieldNames] };
+        return;
+    }
+    if (!contribution.configuration || !('fields' in contribution.configuration)) return;
+    delete contribution.configuration.fields;
+    if (Object.keys(contribution.configuration).length === 0) delete contribution.configuration;
 }
 
 /**
