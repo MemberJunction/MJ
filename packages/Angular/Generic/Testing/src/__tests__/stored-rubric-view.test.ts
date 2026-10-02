@@ -18,6 +18,12 @@ describe('stored rubric result', () => {
         );
         expect(view.result.completeness).toBeNull();
         expect(view.result.gateFailed).toBe(true);
+        expect(view.result.scoringEngineVersion).toBe('');
+        expect(StoredRubricView(
+            { ID: 'eval-2', ScoringEngineVersion: '2.0' },
+            [],
+            [],
+        ).result.scoringEngineVersion).toBe('2.0');
         expect(view.result.bandId).toBe('band-good');
         expect(view.version.nodes[0].name).toBe('Cites the sources');
         expect(view.version.nodes[0].name).not.toBe('cites-sources');

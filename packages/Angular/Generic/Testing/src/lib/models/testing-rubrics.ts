@@ -304,7 +304,7 @@ export function StoredRubricView(
             passThresholdApplied: numberOrNull(evaluation.PassThresholdApplied),
             bandId: text(evaluation.BandID) ?? null,
             confidence: numberOrNull(evaluation.Confidence),
-            scoringEngineVersion: '1.0',
+            scoringEngineVersion: String(evaluation.ScoringEngineVersion ?? '') as RubricScoreResult['scoringEngineVersion'],
             nodes: nodes.map(node => ({
                 id: node.id, key: node.key, normalizedScore: node.normalizedScore, effectiveWeight: node.weight,
                 overallContribution: node.normalizedScore, gateFailed: node.gateFailed, isNotApplicable: false, isAdvisory: false,
