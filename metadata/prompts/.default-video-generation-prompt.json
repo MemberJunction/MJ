@@ -1,0 +1,42 @@
+[
+  {
+    "fields": {
+      "Name": "Default Video Generation",
+      "Description": "The carrier prompt AIVideoRunner uses when no other is named. Its bindings choose the video model and its failover settings apply; every call is recorded as an AI Prompt Run. Avatars and assets belong to one provider account, so failover stays on the selected model's vendors (SameModelDifferentVendor). The request goes straight to the model and nothing in the template is rendered or sent.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Text To Video (TTV)",
+      "TemplateText": "@file:templates/system/default-video-generation.template.md",
+      "Status": "Active",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
+      "SelectionStrategy": "Specific",
+      "RequireSpecificModels": true,
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "ResponseFormat": "Any",
+      "OutputType": "string",
+      "ValidationBehavior": "None",
+      "MaxRetries": 0,
+      "FailoverStrategy": "SameModelDifferentVendor",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=HeyGen",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=HeyGen",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "A708D490-AEA0-496D-A9A5-0A882B24B895"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "91B6B032-9DB4-452F-9FF6-FF171D329697"
+    }
+  }
+]

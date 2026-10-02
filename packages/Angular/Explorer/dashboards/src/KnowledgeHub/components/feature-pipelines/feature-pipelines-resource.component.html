@@ -58,7 +58,10 @@
               <i class="fp-card__icon" [class]="WorkTypeIcon(pipeline.WorkType)"></i>
               <div class="fp-card__title">
                 <h3 [title]="pipeline.Name">{{ pipeline.Name }}</h3>
-                <span class="fp-card__worktype">{{ pipeline.WorkType }}</span>
+                <div class="fp-card__subhead">
+                  <span class="fp-card__worktype">{{ pipeline.WorkType }}</span>
+                  <span class="fp-type-badge" [class.fp-type-badge--decision]="pipeline.PipelineType === 'Decision'">{{ pipeline.PipelineType }}</span>
+                </div>
               </div>
               <span class="fp-status" [class]="RunStatusClass(pipeline.LastRunStatus)">
                 {{ RunStatusLabel(pipeline.LastRunStatus) }}

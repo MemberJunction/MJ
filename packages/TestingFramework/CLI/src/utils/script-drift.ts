@@ -22,19 +22,19 @@ export type ScriptStepDriftKind =
 
 export interface ScriptStepDrift {
     /** 0-based index into the promoted script's steps. */
-    index: number;
-    kind: ScriptStepDriftKind;
-    detail: string;
+    index: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    kind: ScriptStepDriftKind;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    detail: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface ScriptDrift {
-    addedSteps: number;
-    removedSteps: number;
-    changes: ScriptStepDrift[];
+    AddedSteps: number;
+    RemovedSteps: number;
+    Changes: ScriptStepDrift[];
     /** Changes excluding routine selector churn — the "the UI moved" count. */
-    meaningfulDrift: number;
+    MeaningfulDrift: number;
     /** One line for the review listing. */
-    summary: string;
+    Summary: string;
 }
 
 /**
@@ -46,17 +46,17 @@ export interface ScriptDrift {
  * Both read the same fields, and this one only has to be good enough for a human
  * to decide with.
  */
-export function summarizeScriptDrift(
+export function SummarizeScriptDrift(
     promoted: MJTestEntity_IReplayScript | undefined,
     pending: MJTestEntity_IReplayScript
 ): ScriptDrift {
     if (!promoted) {
         return {
-            addedSteps: pending.Steps?.length ?? 0,
-            removedSteps: 0,
-            changes: [],
-            meaningfulDrift: 0,
-            summary: `new script — ${pending.Steps?.length ?? 0} step(s), no promoted script to compare against`,
+            AddedSteps: pending.Steps?.length ?? 0,
+            RemovedSteps: 0,
+            Changes: [],
+            MeaningfulDrift: 0,
+            Summary: `new script — ${pending.Steps?.length ?? 0} step(s), no promoted script to compare against`,
         };
     }
 
@@ -76,7 +76,15 @@ export function summarizeScriptDrift(
     const meaningfulDrift =
         changes.filter(c => c.kind !== 'selector-drift').length + addedSteps + removedSteps;
 
-    return { addedSteps, removedSteps, changes, meaningfulDrift, summary: buildSummary(changes, addedSteps, removedSteps, meaningfulDrift) };
+    return { AddedSteps: addedSteps, RemovedSteps: removedSteps, Changes: changes, MeaningfulDrift: meaningfulDrift, Summary: buildSummary(changes, addedSteps, removedSteps, meaningfulDrift) };
+}
+
+/** @deprecated Use {@link SummarizeScriptDrift}. */
+export function summarizeScriptDrift(
+    promoted: MJTestEntity_IReplayScript | undefined,
+    pending: MJTestEntity_IReplayScript
+): ScriptDrift {
+    return SummarizeScriptDrift(promoted, pending);
 }
 
 /** The first difference that matters, or null when the two steps agree. */

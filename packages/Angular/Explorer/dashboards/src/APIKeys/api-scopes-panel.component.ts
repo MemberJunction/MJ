@@ -152,7 +152,7 @@ export class APIScopesPanelComponent extends BaseAngularComponent implements OnI
     /**
      * Open create dialog for new scope
      */
-    public openCreateDialog(parentScope: MJAPIScopeEntity | null = null): void {
+    public OpenCreateDialog(parentScope: MJAPIScopeEntity | null = null): void {
         this.EditName = '';
         this.EditDescription = '';
         this.EditCategory = parentScope?.Category || 'Entities';
@@ -164,10 +164,15 @@ export class APIScopesPanelComponent extends BaseAngularComponent implements OnI
         this.ShowCreateDialog = true;
     }
 
+    /** @deprecated Use {@link OpenCreateDialog}. */
+    public openCreateDialog(parentScope: MJAPIScopeEntity | null = null): void {
+      return this.OpenCreateDialog(parentScope);
+    }
+
     /**
      * Open edit dialog for existing scope
      */
-    public openEditDialog(scope: MJAPIScopeEntity): void {
+    public OpenEditDialog(scope: MJAPIScopeEntity): void {
         this.EditingScope = scope;
         this.EditName = scope.Name;
         this.EditDescription = scope.Description || '';
@@ -181,10 +186,15 @@ export class APIScopesPanelComponent extends BaseAngularComponent implements OnI
         this.ShowEditDialog = true;
     }
 
+    /** @deprecated Use {@link OpenEditDialog}. */
+    public openEditDialog(scope: MJAPIScopeEntity): void {
+      return this.OpenEditDialog(scope);
+    }
+
     /**
      * Save scope (create or update)
      */
-    public async saveScope(): Promise<void> {
+    public async SaveScope(): Promise<void> {
         this.IsSaving = true;
         this.ErrorMessage = '';
 
@@ -211,7 +221,7 @@ export class APIScopesPanelComponent extends BaseAngularComponent implements OnI
                 this.SuccessMessage = this.EditingScope
                     ? 'Scope updated successfully'
                     : 'Scope created successfully';
-                this.closeDialogs();
+                this.CloseDialogs();
                 await this.loadData();
                 this.ScopeUpdated.emit();
                 setTimeout(() => this.SuccessMessage = '', 3000);
@@ -226,17 +236,27 @@ export class APIScopesPanelComponent extends BaseAngularComponent implements OnI
         }
     }
 
+    /** @deprecated Use {@link SaveScope}. */
+    public async saveScope(): Promise<void> {
+      return this.SaveScope();
+    }
+
     /**
      * Toggle node expansion
      */
-    public toggleExpanded(node: ScopeTreeNode): void {
+    public ToggleExpanded(node: ScopeTreeNode): void {
         node.expanded = !node.expanded;
+    }
+
+    /** @deprecated Use {@link ToggleExpanded}. */
+    public toggleExpanded(node: ScopeTreeNode): void {
+      return this.ToggleExpanded(node);
     }
 
     /**
      * Expand all nodes
      */
-    public expandAll(): void {
+    public ExpandAll(): void {
         const expand = (nodes: ScopeTreeNode[]) => {
             for (const node of nodes) {
                 node.expanded = true;
@@ -246,10 +266,15 @@ export class APIScopesPanelComponent extends BaseAngularComponent implements OnI
         expand(this.ScopeTree);
     }
 
+    /** @deprecated Use {@link ExpandAll}. */
+    public expandAll(): void {
+      return this.ExpandAll();
+    }
+
     /**
      * Collapse all nodes
      */
-    public collapseAll(): void {
+    public CollapseAll(): void {
         const collapse = (nodes: ScopeTreeNode[]) => {
             for (const node of nodes) {
                 node.expanded = false;
@@ -259,20 +284,30 @@ export class APIScopesPanelComponent extends BaseAngularComponent implements OnI
         collapse(this.ScopeTree);
     }
 
+    /** @deprecated Use {@link CollapseAll}. */
+    public collapseAll(): void {
+      return this.CollapseAll();
+    }
+
     /**
      * Close all dialogs
      */
-    public closeDialogs(): void {
+    public CloseDialogs(): void {
         this.ShowCreateDialog = false;
         this.ShowEditDialog = false;
         this.EditingScope = null;
         this.SelectedParentScope = null;
     }
 
+    /** @deprecated Use {@link CloseDialogs}. */
+    public closeDialogs(): void {
+      return this.CloseDialogs();
+    }
+
     /**
      * Get parent scopes for dropdown (exclude self and descendants)
      */
-    public getParentOptions(): MJAPIScopeEntity[] {
+    public GetParentOptions(): MJAPIScopeEntity[] {
         if (!this.EditingScope) {
             return this.FlatScopes;
         }
@@ -292,24 +327,44 @@ export class APIScopesPanelComponent extends BaseAngularComponent implements OnI
         return this.FlatScopes.filter(s => !excludeIds.has(s.ID));
     }
 
+    /** @deprecated Use {@link GetParentOptions}. */
+    public getParentOptions(): MJAPIScopeEntity[] {
+      return this.GetParentOptions();
+    }
+
     /**
      * Get category color
      */
-    public getCategoryColor(category: string | null): string {
+    public GetCategoryColor(category: string | null): string {
         return this.CategoryColors[category || 'Other'] || this.CategoryColors['Other'];
+    }
+
+    /** @deprecated Use {@link GetCategoryColor}. */
+    public getCategoryColor(category: string | null): string {
+      return this.GetCategoryColor(category);
     }
 
     /**
      * Get count of total scopes
      */
-    public getTotalCount(): number {
+    public GetTotalCount(): number {
         return this.FlatScopes.length;
+    }
+
+    /** @deprecated Use {@link GetTotalCount}. */
+    public getTotalCount(): number {
+      return this.GetTotalCount();
     }
 
     /**
      * Get count of active scopes
      */
-    public getActiveCount(): number {
+    public GetActiveCount(): number {
         return this.FlatScopes.filter(s => s.IsActive).length;
+    }
+
+    /** @deprecated Use {@link GetActiveCount}. */
+    public getActiveCount(): number {
+      return this.GetActiveCount();
     }
 }

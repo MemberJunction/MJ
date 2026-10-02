@@ -171,10 +171,15 @@ export function RemoveAppPackages(options: PackageManagerOptions): PackageOperat
 /**
  * Detects which package manager is in use by checking for lockfiles.
  */
-export function detectPackageManager(repoRoot: string): PackageManagerType {
+export function DetectPackageManager(repoRoot: string): PackageManagerType {
   if (existsSync(resolve(repoRoot, 'pnpm-lock.yaml'))) return 'pnpm';
   if (existsSync(resolve(repoRoot, 'yarn.lock'))) return 'yarn';
   return 'npm';
+}
+
+/** @deprecated Use {@link DetectPackageManager}. */
+export function detectPackageManager(repoRoot: string): PackageManagerType {
+  return DetectPackageManager(repoRoot);
 }
 
 /** The sentinel `mj dev workspace` writes at the parent directory that joins sibling repos into one pnpm workspace. */
@@ -213,14 +218,14 @@ export function ResolveInstallRoot(repoRoot: string, packageManager?: PackageMan
       // an unreadable sentinel is not a workspace claim — install in the repo itself
     }
   }
-  return { Root: repoRoot, PackageManager: packageManager ?? detectPackageManager(repoRoot) };
+  return { Root: repoRoot, PackageManager: packageManager ?? DetectPackageManager(repoRoot) };
 }
 
 /**
  * Checks if the pnpm-workspace.yaml has a catalog section.
  * Returns true if there's a `catalog:` or `catalogs:` key in the file.
  */
-export function hasPnpmCatalog(repoRoot: string): boolean {
+export function HasPnpmCatalog(repoRoot: string): boolean {
   const wsPath = resolve(repoRoot, 'pnpm-workspace.yaml');
   if (!existsSync(wsPath)) return false;
   try {
@@ -229,6 +234,11 @@ export function hasPnpmCatalog(repoRoot: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** @deprecated Use {@link HasPnpmCatalog}. */
+export function hasPnpmCatalog(repoRoot: string): boolean {
+  return HasPnpmCatalog(repoRoot);
 }
 
 /**
@@ -368,8 +378,8 @@ function resolveVersionString(options: PackageManagerOptions): string {
     case 'workspace':
       return 'workspace:*';
     case 'auto': {
-      const pm = options.PackageManager ?? detectPackageManager(options.RepoRoot);
-      if (pm === 'pnpm' && hasPnpmCatalog(options.RepoRoot)) {
+      const pm = options.PackageManager ?? DetectPackageManager(options.RepoRoot);
+      if (pm === 'pnpm' && HasPnpmCatalog(options.RepoRoot)) {
         return 'catalog:';
       }
       return `^${options.Version}`;

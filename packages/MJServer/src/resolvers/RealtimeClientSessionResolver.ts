@@ -26,7 +26,7 @@
  */
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
+import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
 import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
@@ -62,7 +62,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
-import { resolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -382,6 +382,31 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     private readonly sessionManager = new SessionManager(this.clientSessionService);
 
     /**
+     * The reason a `Save()`/`Delete()` returned false, for a log line. `CompleteMessage` renders
+     * `Message`, `Error` and every `Errors[]` entry (validation errors included, since `Save()`
+     * runs `Validate()` and records its errors there), so there is no separate `Validate()` call.
+     * When a subclass refused the write without recording anything, say so explicitly instead of
+     * "unknown error", which is what hid MJ#4791.
+     *
+     * Only a NULL `LatestResult` proves the refusal happened before the provider (nothing was
+     * registered at all). A SUCCESS `LatestResult` is an earlier save on the same instance — the
+     * refusal registered nothing — so its text must never be reported as this failure's reason.
+     */
+    private describeSaveFailure(entity: BaseEntity): string {
+        const latest = entity.LatestResult;
+        if (!latest) {
+            return `no failure detail recorded (LatestResult null; ResultHistory length ${entity.ResultHistory.length}) ` +
+                '— the write was refused before reaching the provider';
+        }
+        if (latest.Success) {
+            return 'no failure detail recorded (latest result entry is a prior success; ' +
+                `ResultHistory length ${entity.ResultHistory.length})`;
+        }
+        const detail = latest.CompleteMessage?.trim();
+        return detail || `no failure detail recorded (LatestResult empty; ResultHistory length ${entity.ResultHistory.length})`;
+    }
+
+    /**
      * Start a client-direct realtime voice session targeting `targetAgentId`.
      *
      * Flow:
@@ -593,7 +618,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // Junction-link any artifacts the delegated run produced into the session's conversation
         // history (best-effort) — so chat, session review, and resume carryover can all see them.
         // Runs as `runUser`: the junction entity is not among an anonymous caller's relay grants.
-        await this.linkDelegatedArtifactsToConversation(session, Artifacts, runUser, provider);
+        // The hidden anchor detail it may need to create, though, is written by the CALLER (#4791)
+        // — same reason `persistDirectActionTurn` is: the System user is not the conversation owner.
+        await this.linkDelegatedArtifactsToConversation(session, Artifacts, runUser, contextUser, provider);
 
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         return ResultJson;
@@ -657,7 +684,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         session.Config_ = JSON.stringify(next);
         if (!(await session.Save())) {
             LogError(
-                `RealtimeClientSessionResolver.updatePendingFeedbackRunID save failed: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.updatePendingFeedbackRunID save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
             );
         }
     }
@@ -1812,7 +1839,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const saved = await session.Save();
         if (!saved) {
             LogError(
-                `RealtimeClientSessionResolver.persistObservabilityRunIDs save failed: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.persistObservabilityRunIDs save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
             );
         }
     }
@@ -1930,7 +1957,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!saved) {
             LogError(
                 `SaveSessionChannelState: save failed for session ${agentSessionID} / channel ${channelID}: ` +
-                    `${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    `${this.describeSaveFailure(row)}`,
             );
         }
         return saved;
@@ -2313,7 +2340,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         artifact.UserID = contextUser.ID;
         artifact.Visibility = 'Always';
         if (!(await artifact.Save())) {
-            const message = `SaveSessionChannelArtifact: artifact save failed: ${artifact.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+            const message = `SaveSessionChannelArtifact: artifact save failed for session ${session.ID}: ${this.describeSaveFailure(artifact)}`;
             LogError(message);
             return { Success: false, ErrorMessage: message, ConversationDetailLinked: false };
         }
@@ -2325,7 +2352,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         version.Content = contentJson;
         version.UserID = contextUser.ID;
         if (!(await version.Save())) {
-            const message = `SaveSessionChannelArtifact: artifact version save failed: ${version.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+            const message = `SaveSessionChannelArtifact: artifact version save failed for session ${session.ID} (artifact ${artifact.ID}): ${this.describeSaveFailure(version)}`;
             LogError(message);
             return { Success: false, ErrorMessage: message, ArtifactID: artifact.ID, ConversationDetailLinked: false };
         }
@@ -2383,13 +2410,22 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * queries (which scan junctions across ALL details) still surface the artifact. This is the
      * least-invasive correct anchor — no fake visible message, no orphaned artifact.
      *
+     * TWO PRINCIPALS, deliberately: the lookup (`findLatestSessionDetailID`) and the junction row
+     * itself (`saveDetailArtifactJunction`, `MJ: Conversation Detail Artifacts`) run as `runUser`
+     * (elevated for a scoped-anonymous caller) — that junction entity is outside an anonymous
+     * caller's relay grants. The hidden ANCHOR `Conversation Detail` this may need to create runs as
+     * `callerUser` instead: like every other `MJ: Conversation Details` write, the System user is
+     * refused because it is not the conversation's owner (see {@link persistDirectActionTurn},
+     * issue #4791) — only the actual caller can create it.
+     *
      * Strictly best-effort: every failure path logs and returns; a relayed tool call NEVER fails
      * because history linking did.
      */
     private async linkDelegatedArtifactsToConversation(
         session: MJAIAgentSessionEntity,
         artifacts: DelegatedRunArtifact[] | undefined,
-        contextUser: UserInfo,
+        runUser: UserInfo,
+        callerUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<void> {
         if (!artifacts || artifacts.length === 0 || !session.ConversationID) {
@@ -2397,13 +2433,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         try {
             const detailID =
-                (await this.findLatestSessionDetailID(session, contextUser, provider)) ??
-                (await this.createHiddenSessionAnchorDetail(session, contextUser, provider));
+                (await this.findLatestSessionDetailID(session, runUser, provider)) ??
+                (await this.createHiddenSessionAnchorDetail(session, callerUser, provider));
             if (!detailID) {
                 return; // anchor unavailable — logged in the helpers
             }
             for (const artifact of artifacts) {
-                await this.saveDetailArtifactJunction(detailID, artifact.ArtifactVersionID, contextUser, provider);
+                await this.saveDetailArtifactJunction(detailID, artifact.ArtifactVersionID, runUser, provider);
             }
         } catch (error) {
             LogError(`ExecuteRealtimeSessionTool: delegated-artifact history link failed: ${(error as Error).message}`);
@@ -2444,25 +2480,25 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      */
     private async createHiddenSessionAnchorDetail(
         session: MJAIAgentSessionEntity,
-        contextUser: UserInfo,
+        callerUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<string | null> {
-        const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, contextUser);
+        const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, callerUser);
         detail.NewRecord();
         detail.ConversationID = session.ConversationID;
         detail.Role = 'AI';
         detail.HiddenToUser = true;
         detail.Message = 'Artifacts produced during a realtime session (system anchor).';
         detail.AgentSessionID = session.ID;
-        // Attribute the anchor to the SESSION owner, not the (possibly elevated) writer — identical
-        // for every non-elevated caller, whose ownership of the session is already proven.
+        // Attribute to the SESSION owner — the caller writing this row, whose ownership
+        // `loadOwnedActiveSession` already proved.
         detail.UserID = session.UserID;
         if (await detail.Save()) {
             return detail.ID;
         }
         LogError(
             `ExecuteRealtimeSessionTool: hidden anchor detail save failed for session ${session.ID}: ` +
-                `${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `${this.describeSaveFailure(detail)}`,
         );
         return null;
     }
@@ -2489,7 +2525,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!saved) {
             LogError(
                 `RealtimeClientSessionResolver: artifact junction save failed for detail ${conversationDetailID} / version ${artifactVersionID}: ` +
-                    `${junction.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    `${this.describeSaveFailure(junction)}`,
             );
         }
         return saved;
@@ -2529,7 +2565,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             if (!(await row.Save())) {
                 LogError(
                     `SaveSessionChannelArtifact: LastActiveAt stamp failed for session ${agentSessionID} / channel ${channelID}: ` +
-                        `${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                        `${this.describeSaveFailure(row)}`,
                 );
             }
         } catch (error) {
@@ -2668,17 +2704,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         userPayload: UserPayload,
         providers: AppContext['providers'],
     ): Promise<number | undefined> {
-        const elevation = await resolveWidgetGuestRunContext(userPayload, GetReadWriteProvider(providers));
-        const minutes = elevation?.widget.VoiceMaxSessionMinutes;
+        const elevation = await ResolveWidgetGuestRunContext(userPayload, GetReadWriteProvider(providers));
+        const minutes = elevation?.Widget.VoiceMaxSessionMinutes;
         return minutes && minutes > 0 ? minutes * 60 : undefined;
     }
 
-    /**
-     * Persists a single transcript turn as a `Conversation Detail` stamped with the session's
-     * conversation, the mapped role, the turn text, the session id, and the owning user.
-     *
-     * @returns The boolean save result (logs `CompleteMessage` on failure).
-     */
     /**
      * Stamps `RecordingStartedAt` (the recording `t0` alignment origin) + `RecordingMedia` on a
      * just-started session when the browser captured WITH consent. Best-effort: a parse/save failure
@@ -2705,11 +2735,18 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         session.RecordingMedia = 'Audio';
         if (!(await session.Save())) {
             LogError(
-                `RealtimeClientSessionResolver.stampRecordingStart save failed: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.stampRecordingStart save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
             );
         }
     }
 
+    /**
+     * Persists a single transcript turn as a `Conversation Detail` stamped with the session's
+     * conversation, the mapped role, the turn text, the session id, and the owning user.
+     *
+     * @returns The boolean save result. On failure it logs the session, the write user and the
+     * reason from {@link describeSaveFailure}.
+     */
     private async persistTranscriptTurn(
         session: MJAIAgentSessionEntity,
         role: string,
@@ -2739,7 +2776,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const saved = await detail.Save();
         if (!saved) {
             LogError(
-                `RealtimeClientSessionResolver.persistTranscriptTurn save failed: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.persistTranscriptTurn save failed for session ${session.ID} (write user ${contextUser.ID}): ${this.describeSaveFailure(detail)}`,
             );
         }
         return saved;
@@ -2780,8 +2817,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // ⚠️ ELEVATING INSTEAD WAS TRIED AND IS A TRAP. `ResolveScopedAnonymousRunUser` returns
         // `UserCache.GetSystemUser()`, which on this deployment resolves to the unconfigured
         // placeholder `not.set@nowhere.com` ("Configured provisioning user not found; falling back
-        // to an Owner"). Saving as a user that does not exist returns false with a NULL
-        // `LatestResult` — indistinguishable from a permission denial, and just as silent.
+        // to an Owner"). That user EXISTS — it is not a missing/invalid principal — and even carries
+        // full CRUD on `MJ: Conversation Details`. It is refused anyway:
+        // `MJConversationDetailEntityExtended`'s owner gate accepts only the conversation's OWNER or
+        // an Edit/Owner Resource Permission grantee, and the System user is neither. Measured on
+        // MJ#4791 (before the core-entities fix that now records the denial): `Save()` → `false`,
+        // `LatestResult` null — indistinguishable from a permission denial, and just as silent. The
+        // denial itself still happens; that fix only made it stop being silent.
         const writeUser = contextUser;
         const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJConversationDetailEntity>(
@@ -2802,8 +2844,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         //
         // `ResultType: 'entity_object'` hands back hydrated entities, but they do not carry the
         // context user the way `GetEntityObject(entity, user)` does — so `Save()` ran with no
-        // principal and failed with an EMPTY message ("unknown error"), which is what the elevation
-        // fix above looked like when it was still broken. The insert path beside this one has
+        // principal and failed with an EMPTY message ("unknown error"), which is what an empty-message
+        // failure here looked like before the re-load. The insert path beside this one has
         // always used `GetEntityObject`; this now matches it, which is also why they now succeed
         // and fail for the same reasons.
         const previous = await provider.GetEntityObject<MJConversationDetailEntity>(
@@ -2835,7 +2877,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 `RealtimeClientSessionResolver.replacePreviousTranscriptTurn save failed for session `
                 + `${session.ID} — the ${mappedRole} turn keeps its PREVIOUS, shorter text and the `
                 + `transcript now understates what was said: `
-                + `${previous.LatestResult?.CompleteMessage || JSON.stringify(previous.LatestResult ?? null)}`,
+                + `${this.describeSaveFailure(previous)}`,
             );
         }
         return saved;
@@ -2855,6 +2897,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * Stored as stable facts (Role: 'AI', HiddenToUser: true, ExternalID: callId, CompletionTime: durationMs,
      * Message: JSON-serialized tool facts) so that session review can reconstruct the action card dynamically
      * on load (Option 1) without polluting user-facing speech chat bubbles.
+     *
+     * Writes as the CALLER, never the elevated run user (issue #4791). Owning the session
+     * (`loadOwnedActiveSession`'s gate has already run on every path here) does NOT imply owning
+     * the conversation: the conversation id was client-supplied at session start. What authorizes
+     * this write is the save itself, evaluated for the caller — the conversation owner gate in
+     * `MJConversationDetailEntityExtended`, plus the caller's own entity permission and Create RLS
+     * on `MJ: Conversation Details` (for the magic-link role that RLS scopes by the invite's
+     * `ScopeResourceID`, and the role belongs to a downstream app, not MJ core). That is why
+     * writing as the caller is safe even though the conversation id originated client-side.
+     * Elevating to the System user would bypass RLS entirely, and the owner gate refuses it anyway
+     * because the System user is not the conversation owner. Measured on MJ#4791 (before the
+     * core-entities fix that now records the denial): `Save()` returned `false` with a NULL `LatestResult` and an empty
+     * `ResultHistory` — indistinguishable from any other silent failure. Elevating this write is
+     * what silently dropped both hidden tool-execution turns of a real magic-link session; the
+     * denial itself still happens today, only its silence was fixed separately.
+     * `ResolveScopedAnonymousRunUser` elevates AI-**run**-entity writes only (prompt runs, agent
+     * runs, the relayed dispatch itself) — never this one.
      */
     private async persistDirectActionTurn(
         session: MJAIAgentSessionEntity,
@@ -2870,10 +2929,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return false;
         }
         try {
-            const writeUser = ResolveScopedAnonymousRunUser(contextUser);
             const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
                 CONVERSATION_DETAIL_ENTITY,
-                writeUser,
+                contextUser,
             );
             detail.NewRecord();
             detail.ConversationID = session.ConversationID;
@@ -2915,13 +2973,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             const saved = await detail.Save();
             if (!saved) {
                 LogError(
-                    `RealtimeClientSessionResolver.persistDirectActionTurn save failed: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    `RealtimeClientSessionResolver.persistDirectActionTurn save failed for session ${session.ID} (tool '${toolName}', call ${callId ?? 'n/a'}, write user ${contextUser.ID}): ${this.describeSaveFailure(detail)}`,
                 );
             }
             return saved;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            LogError(`RealtimeClientSessionResolver.persistDirectActionTurn unexpected error: ${message}`);
+            LogError(`RealtimeClientSessionResolver.persistDirectActionTurn unexpected error for session ${session.ID}: ${message}`);
             return false;
         }
     }

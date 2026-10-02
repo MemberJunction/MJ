@@ -6,10 +6,10 @@ import { SafeFetch } from "@memberjunction/network-utils";
 import {
     FeedArticle,
     ScoredFeedArticle,
-    filterByAge,
-    filterRelevant,
-    parseFeedArticles,
-    scoreAndRankArticles,
+    FilterByAge,
+    FilterRelevant,
+    ParseFeedArticles,
+    ScoreAndRankArticles,
 } from "./rss-feed-parsing";
 
 /** One feed to read. `Name` is what a merged result set is attributed to. */
@@ -139,9 +139,9 @@ export class ReadRSSFeedAction extends BaseAction {
             };
         }
 
-        const aged = filterByAge(allArticles, maxAgeDays, now, includeUndated);
-        const ranked = scoreAndRankArticles(aged.kept, keywords, maxAgeDays, now);
-        const relevant = filterRelevant(ranked, keywords);
+        const aged = FilterByAge(allArticles, maxAgeDays, now, includeUndated);
+        const ranked = ScoreAndRankArticles(aged.kept, keywords, maxAgeDays, now);
+        const relevant = FilterRelevant(ranked, keywords);
         const top = relevant.slice(0, maxResults);
 
         LogStatus(
@@ -225,7 +225,7 @@ export class ReadRSSFeedAction extends BaseAction {
 
     private async fetchAndParse(feed: RSSFeedInput): Promise<FeedArticle[]> {
         const xml = await this.FetchFeed(feed.url);
-        return parseFeedArticles(xml, feed.name);
+        return ParseFeedArticles(xml, feed.name);
     }
 
     /**

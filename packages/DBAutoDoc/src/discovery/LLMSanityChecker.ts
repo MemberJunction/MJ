@@ -7,26 +7,26 @@
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { AIConfig } from '../types/config.js';
-import { createLLMInstance } from '../utils/llm-factory.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 
 export interface SanityCheckResult {
-  invalidPKs: Array<{
+  invalidPKs: Array<{  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     schema: string;
     table: string;
     column: string;
     reason: string;
   }>;
-  invalidFKs: Array<{
+  invalidFKs: Array<{  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     schema: string;
     table: string;
     column: string;
    reason: string;
   }>;
-  suggestions: string[];
-  tokensUsed: number;
-  inputTokens: number;
-  outputTokens: number;
+  Suggestions: string[];
+  tokensUsed: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  InputTokens: number;
+  OutputTokens: number;
 }
 
 export class LLMSanityChecker {
@@ -34,14 +34,14 @@ export class LLMSanityChecker {
 
   constructor(private aiConfig: AIConfig, private statsCache?: ColumnStatsCache) {
     // Create LLM instance using shared factory (DRY principle)
-    this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
+    this.llm = CreateLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
 
   /**
    * Review all detected PKs and FKs for obvious errors
    * This is a one-time macro review after statistical detection
    */
-  public async reviewCandidates(
+  public async ReviewCandidates(
     pkCandidates: PKCandidate[],
     fkCandidates: FKCandidate[]
   ): Promise<SanityCheckResult> {
@@ -76,10 +76,10 @@ export class LLMSanityChecker {
       return {
         invalidPKs: [],
         invalidFKs: [],
-        suggestions: [],
+        Suggestions: [],
         tokensUsed: 0,
-        inputTokens: 0,
-        outputTokens: 0
+        InputTokens: 0,
+        OutputTokens: 0
       };
     }
 
@@ -99,10 +99,10 @@ export class LLMSanityChecker {
       return {
         invalidPKs: result.invalidPKs,
         invalidFKs: result.invalidFKs,
-        suggestions: result.suggestions || [],
+        Suggestions: result.suggestions || [],
         tokensUsed: usage?.totalTokens || 0,
-        inputTokens: usage?.promptTokens || 0,
-        outputTokens: usage?.completionTokens || 0
+        InputTokens: usage?.promptTokens || 0,
+        OutputTokens: usage?.completionTokens || 0
       };
     } catch (parseError) {
       console.error(`[LLMSanityChecker] Failed to parse LLM response: ${(parseError as Error).message}`);
@@ -110,12 +110,20 @@ export class LLMSanityChecker {
       return {
         invalidPKs: [],
         invalidFKs: [],
-        suggestions: [],
+        Suggestions: [],
         tokensUsed: usage?.totalTokens || 0,
-        inputTokens: usage?.promptTokens || 0,
-        outputTokens: usage?.completionTokens || 0
+        InputTokens: usage?.promptTokens || 0,
+        OutputTokens: usage?.completionTokens || 0
       };
     }
+  }
+
+  /** @deprecated Use {@link ReviewCandidates}. */
+  public async reviewCandidates(
+    pkCandidates: PKCandidate[],
+    fkCandidates: FKCandidate[]
+  ): Promise<SanityCheckResult> {
+    return this.ReviewCandidates(pkCandidates, fkCandidates);
   }
 
   /**

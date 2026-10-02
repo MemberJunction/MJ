@@ -84,12 +84,21 @@ function failureData(error: unknown, dryRun: boolean): Record<string, unknown> |
 export class SyncPushPlugin extends BaseCLIPlugin {
   static description = 'Push local file changes to the database';
 
-  static examples = [
+  static Examples = [
     `<%= config.bin %> <%= command.id %>`,
     `<%= config.bin %> <%= command.id %> --dry-run`,
     `<%= config.bin %> <%= command.id %> --dir="ai-prompts"`,
     `<%= config.bin %> <%= command.id %> --ci --format=json`,
   ];
+
+  /** @deprecated Use {@link Examples}. */
+  static get examples() {
+    return this.Examples;
+  }
+  /** @deprecated Use {@link Examples}. */
+  static set examples(value) {
+    this.Examples = value;
+  }
 
   static flags = {
     dir: Flags.string({ description: 'Specific entity directory to push' }),
@@ -395,11 +404,20 @@ export class SyncPushPlugin extends BaseCLIPlugin {
 export class SyncPullPlugin extends BaseCLIPlugin {
   static description = 'Pull metadata from database to local files';
 
-  static examples = [
+  static Examples = [
     `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts"`,
     `<%= config.bin %> <%= command.id %> --entity="MJ: AI Agents" --merge-strategy=overwrite`,
     `<%= config.bin %> <%= command.id %> --entity="Templates" --dry-run --verbose`,
   ];
+
+  /** @deprecated Use {@link Examples}. */
+  static get examples() {
+    return this.Examples;
+  }
+  /** @deprecated Use {@link Examples}. */
+  static set examples(value) {
+    this.Examples = value;
+  }
 
   static flags = {
     entity: Flags.string({ description: 'Entity name to pull', required: true }),

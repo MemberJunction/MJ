@@ -18,6 +18,7 @@
 
 import {
     BaseEntity,
+    SerializeCloneChangeContext,
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
@@ -86,7 +87,7 @@ import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
-import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
+import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
@@ -722,6 +723,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
+                undefined,
+                entity.CloneContext ? 'Clone' : 'Internal',
+                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
             )
             : null;
 
@@ -1078,7 +1082,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * invocation in lockstep.
      */
     public UseJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType): boolean {
-        return useJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
+        return UseJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
     }
 
     /**************************************************************************/
@@ -1379,6 +1383,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 user,
                 entity.RestoreContext,
                 "'",
+                entity.CloneContext,
             );
             if (payload) {
                 saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
@@ -4158,7 +4163,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     let matTotalRowCount: number;
                     let matExecutionTime: number;
                     if (matUseSQLPaging) {
-                        const paging = QueryPagingEngine.WrapWithPaging(materializedSQL, params.StartRow!, params.MaxRows!, this.PlatformKey as DatabasePlatform);
+                        const matStartRow = QueryPagingEngine.ResolveStartRow(params.StartRow);
+                        const paging = QueryPagingEngine.WrapWithPaging(materializedSQL, matStartRow, params.MaxRows!, this.PlatformKey as DatabasePlatform);
                         const start = Date.now();
                         const [dataResult, countResult] = await Promise.all([
                             this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, matPlan.parameters, undefined, contextUser),
@@ -4185,7 +4191,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         Results: rows,
                         RowCount: rows.length,
                         TotalRowCount: matTotalRowCount,
-                        PageNumber: matUseSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                        PageNumber: matUseSQLPaging
+                            ? Math.floor(QueryPagingEngine.ResolveStartRow(params.StartRow) / params.MaxRows!) + 1
+                            : undefined,
                         PageSize: matUseSQLPaging ? params.MaxRows! : undefined,
                         ExecutionTime: matExecutionTime,
                         ErrorMessage: '',
@@ -4236,7 +4244,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
                 const paging = QueryPagingEngine.WrapWithPaging(
                     finalSQL,
-                    params.StartRow!,
+                    QueryPagingEngine.ResolveStartRow(params.StartRow),
                     params.MaxRows!,
                     this.PlatformKey as DatabasePlatform,
                 );
@@ -4294,7 +4302,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Results: paginatedResult,
                 RowCount: paginatedResult.length,
                 TotalRowCount: totalRowCount,
-                PageNumber: useSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                PageNumber: useSQLPaging
+                    ? Math.floor(QueryPagingEngine.ResolveStartRow(params.StartRow) / params.MaxRows!) + 1
+                    : undefined,
                 PageSize: useSQLPaging ? params.MaxRows! : undefined,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
@@ -5182,9 +5192,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * work, so it must never land on a transaction's connection beside its COMMIT (#4514). Every
      * other dataset keeps joining the ambient transaction: a caller that writes and then loads a
      * dataset inside one transaction expects to see its own rows.
+     *
+     * {@link ProviderBase.RefreshWithinTransaction} is the exception: the caller owns the
+     * transaction and is waiting for the reload, so the metadata reads join that transaction and
+     * see the caller's uncommitted rows (MJ#4836).
      */
     protected datasetReadsOnPool(datasetName: string): boolean {
-        return datasetName === GenericDatabaseProvider._mjMetadataDatasetName;
+        return datasetName === GenericDatabaseProvider._mjMetadataDatasetName
+            && !this.MetadataReadsJoinTransaction;
     }
 
     /**
@@ -5508,8 +5523,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
+        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) };
         const items = await provider.ExecuteSQL<Record<string, unknown>>(
-            sSQL, [datasetName], { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) }, contextUser,
+            sSQL, [datasetName], readOptions, contextUser,
         );
 
         if (!items || items.length === 0) {
@@ -5577,7 +5593,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         let batchResults: Record<string, unknown>[][] = [];
         try {
-            batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
+            batchResults = await provider.ExecuteSQLBatch(
+                queries, undefined, { ignoreAmbientTransaction: readOptions.ignoreAmbientTransaction }, contextUser,
+            );
         } catch (err) {
             LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
         }

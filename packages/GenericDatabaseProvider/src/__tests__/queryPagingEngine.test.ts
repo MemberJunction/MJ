@@ -15,12 +15,41 @@ describe('QueryPagingEngine.ShouldPage', () => {
         expect(QueryPagingEngine.ShouldPage(0, 0)).toBe(false);
     });
 
-    it('returns false when StartRow is undefined', () => {
-        expect(QueryPagingEngine.ShouldPage(undefined, 50)).toBe(false);
+    // CHANGED: this previously asserted false. Requiring an explicit StartRow meant a
+    // caller asking only to CAP a result — rather than walk pages — silently fell through
+    // to "execute full query, apply in-memory pagination": the database returned every row
+    // and the whole set crossed the network before being sliced. RunView already treats
+    // MaxRows alone as row-limiting; RunQuery now matches.
+    it('pages on MaxRows alone — an absent StartRow means page zero', () => {
+        expect(QueryPagingEngine.ShouldPage(undefined, 50)).toBe(true);
+        expect(QueryPagingEngine.ResolveStartRow(undefined)).toBe(0);
+    });
+
+    it('still refuses a negative StartRow', () => {
+        expect(QueryPagingEngine.ShouldPage(-1, 50)).toBe(false);
     });
 
     it('returns false when both are undefined', () => {
         expect(QueryPagingEngine.ShouldPage(undefined, undefined)).toBe(false);
+    });
+
+    it('MaxRows remains the deciding factor — no ceiling, no paging', () => {
+        // Guards the inverse mistake: a StartRow with no MaxRows must not start paging,
+        // which would turn an unbounded query into an arbitrarily truncated one.
+        expect(QueryPagingEngine.ShouldPage(100, undefined)).toBe(false);
+        expect(QueryPagingEngine.ShouldPage(100, 0)).toBe(false);
+    });
+});
+
+describe('QueryPagingEngine.ResolveStartRow', () => {
+    it('passes through a real offset', () => {
+        expect(QueryPagingEngine.ResolveStartRow(250)).toBe(250);
+        expect(QueryPagingEngine.ResolveStartRow(0)).toBe(0);
+    });
+
+    it('treats absent or nonsensical offsets as page zero', () => {
+        expect(QueryPagingEngine.ResolveStartRow(undefined)).toBe(0);
+        expect(QueryPagingEngine.ResolveStartRow(-5)).toBe(0);
     });
 });
 

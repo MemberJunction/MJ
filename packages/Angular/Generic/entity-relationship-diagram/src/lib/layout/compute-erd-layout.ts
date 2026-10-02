@@ -29,75 +29,75 @@ export interface LaidOutNode extends ERDNode {
     width: number;
     height: number;
     /** Fields rendered on the card (subset of `fields` based on expansion + keys-only mode). */
-    visibleFields: ERDField[];
+    visibleFields: ERDField[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** True when the node has more fields than `visibleFields` shows. */
-    hasMore: boolean;
+    hasMore: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface LaidOutEdge {
-    id: string;
-    sourceId: string;
-    targetId: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    sourceId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    targetId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Source Y coordinate (row of the source field in the card). */
-    sourceY: number;
+    sourceY: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Polyline points for the edge, screen coordinates. */
-    points: Array<[number, number]>;
+    points: Array<[number, number]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** True when source === target. */
-    selfReference: boolean;
+    selfReference: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** True when the edge exits right of the source (vs. left). */
-    goingRight: boolean;
+    goingRight: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The source field that owns the FK. */
-    sourceField: ERDField;
+    sourceField: ERDField;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface LaidOutBand {
-    schemaName: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
+    schemaName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    x: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    y: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    width: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    height: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ErdLayout {
-    nodes: LaidOutNode[];
-    edges: LaidOutEdge[];
-    bands: LaidOutBand[];
-    totalWidth: number;
-    totalHeight: number;
+    nodes: LaidOutNode[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    edges: LaidOutEdge[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    bands: LaidOutBand[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalWidth: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalHeight: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ErdLayoutOptions {
     /** Width of every node card. Default 220. */
-    nodeWidth?: number;
+    nodeWidth?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Header row height. Default 36. */
-    headerHeight?: number;
+    HeaderHeight?: number;
     /** Per-field row height. Default 22. */
-    fieldHeight?: number;
+    fieldHeight?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Reserved footer height for the "+N more" toggle. Default 22. */
-    moreToggleHeight?: number;
+    MoreToggleHeight?: number;
     /** Horizontal gap between nodes in the same schema. Default 48. */
-    nodeGapX?: number;
+    NodeGapX?: number;
     /** Vertical gap between nodes in the same schema column. Default 30. */
-    nodeGapY?: number;
+    NodeGapY?: number;
     /** Gap between schema bands. Default 80. */
-    schemaGapX?: number;
+    SchemaGapX?: number;
     /** Inner horizontal padding inside a band. Default 28. */
-    bandPadX?: number;
+    BandPadX?: number;
     /** Height reserved for the band title row. Default 56. */
-    bandTitleHeight?: number;
+    BandTitleHeight?: number;
     /** Bottom padding inside a band. Default 28. */
-    bandPadBottom?: number;
+    BandPadBottom?: number;
     /** Outer canvas padding. Default 40. */
-    canvasPad?: number;
+    CanvasPad?: number;
     /** Set of node IDs currently expanded to show all fields. */
-    expandedNodeIds?: ReadonlySet<string>;
+    expandedNodeIds?: ReadonlySet<string>;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /**
      * When true, all fields are shown on each node regardless of PK/FK status —
      * "+N more" toggle is not drawn.  Default: false.
      */
-    showAllFields?: boolean;
+    showAllFields?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Order of schemas from left to right.  Inferred from nodes if not provided. */
-    schemaOrder?: ReadonlyArray<string>;
+    SchemaOrder?: ReadonlyArray<string>;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -109,18 +109,18 @@ const DEFAULT_SCHEMA = '_';
 /**
  * Compute a schema-grouped grid layout for the given nodes.  Pure function.
  */
-export function computeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {}): ErdLayout {
+export function ComputeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {}): ErdLayout {
     const nodeW = options.nodeWidth ?? 220;
-    const headerH = options.headerHeight ?? 36;
+    const headerH = options.HeaderHeight ?? 36;
     const fieldH = options.fieldHeight ?? 22;
-    const moreH = options.moreToggleHeight ?? 22;
-    const gapX = options.nodeGapX ?? 48;
-    const gapY = options.nodeGapY ?? 30;
-    const schemaGap = options.schemaGapX ?? 80;
-    const bandPadX = options.bandPadX ?? 28;
-    const bandTitleH = options.bandTitleHeight ?? 56;
-    const bandPadBottom = options.bandPadBottom ?? 28;
-    const canvasPad = options.canvasPad ?? 40;
+    const moreH = options.MoreToggleHeight ?? 22;
+    const gapX = options.NodeGapX ?? 48;
+    const gapY = options.NodeGapY ?? 30;
+    const schemaGap = options.SchemaGapX ?? 80;
+    const bandPadX = options.BandPadX ?? 28;
+    const bandTitleH = options.BandTitleHeight ?? 56;
+    const bandPadBottom = options.BandPadBottom ?? 28;
+    const canvasPad = options.CanvasPad ?? 40;
     const expandedIds = options.expandedNodeIds ?? new Set<string>();
     const showAll = options.showAllFields ?? false;
 
@@ -134,7 +134,7 @@ export function computeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {
     }
 
     // 2. Determine schema order.
-    const schemas = options.schemaOrder?.slice() ?? [...bySchema.keys()].sort();
+    const schemas = options.SchemaOrder?.slice() ?? [...bySchema.keys()].sort();
     for (const [s] of bySchema) {
         if (!schemas.includes(s)) schemas.push(s);
     }
@@ -201,6 +201,11 @@ export function computeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {
     const edges = buildEdges(laidOutNodes, headerH, fieldH);
 
     return { nodes: laidOutNodes, edges, bands, totalWidth, totalHeight };
+}
+
+/** @deprecated Use {@link ComputeErdLayout}. */
+export function computeErdLayout(nodes: ERDNode[], options: ErdLayoutOptions = {}): ErdLayout {
+    return ComputeErdLayout(nodes, options);
 }
 
 /**
@@ -343,18 +348,23 @@ function routeEdge(r: RouteInput): LaidOutEdge {
 }
 
 /** Convert a polyline to an SVG path string. */
-export function pointsToPath(points: ReadonlyArray<readonly [number, number]>): string {
+export function PointsToPath(points: ReadonlyArray<readonly [number, number]>): string {
     if (!points || points.length === 0) return '';
     let d = `M${points[0][0]} ${points[0][1]}`;
     for (let i = 1; i < points.length; i++) d += ` L${points[i][0]} ${points[i][1]}`;
     return d;
 }
 
+/** @deprecated Use {@link PointsToPath}. */
+export function pointsToPath(points: ReadonlyArray<readonly [number, number]>): string {
+    return PointsToPath(points);
+}
+
 /**
  * Return the set of node IDs one hop from the given node (inclusive).
  * Used for focus and hover highlight modes.
  */
-export function getNeighbors(nodes: ReadonlyArray<ERDNode>, id: string): Set<string> {
+export function GetNeighbors(nodes: ReadonlyArray<ERDNode>, id: string): Set<string> {
     const result = new Set<string>([id]);
     for (const n of nodes) {
         for (const f of n.fields) {
@@ -366,4 +376,9 @@ export function getNeighbors(nodes: ReadonlyArray<ERDNode>, id: string): Set<str
         }
     }
     return result;
+}
+
+/** @deprecated Use {@link GetNeighbors}. */
+export function getNeighbors(nodes: ReadonlyArray<ERDNode>, id: string): Set<string> {
+    return GetNeighbors(nodes, id);
 }

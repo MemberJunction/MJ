@@ -3,9 +3,9 @@ import { MJVersionLabelEntity } from '@memberjunction/core-entities';
 import { CreateLabelParams, LabelFilter, VersionLabelStatus } from './types';
 import {
     ENTITY_VERSION_LABELS,
-    sqlEquals,
-    sqlContains,
-    loadEntityById,
+    SqlEquals,
+    SqlContains,
+    LoadEntityById,
 } from './constants';
 
 /**
@@ -56,7 +56,7 @@ export class LabelManager {
      * Load a single version label by ID.
      */
     public async GetLabel(labelId: string, contextUser: UserInfo): Promise<MJVersionLabelEntity> {
-        const label = await loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
+        const label = await LoadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
         if (!label) {
             throw new Error(`Version label '${labelId}' not found`);
         }
@@ -160,26 +160,26 @@ export class LabelManager {
         const clauses: string[] = [];
 
         if (filter.Scope) {
-            clauses.push(sqlEquals('Scope', filter.Scope));
+            clauses.push(SqlEquals('Scope', filter.Scope));
         }
         if (filter.Status) {
-            clauses.push(sqlEquals('Status', filter.Status));
+            clauses.push(SqlEquals('Status', filter.Status));
         }
         if (filter.EntityName) {
             const md = this.ProviderToUse;
             const entityInfo = md.EntityByName(filter.EntityName);
             if (entityInfo) {
-                clauses.push(sqlEquals('EntityID', entityInfo.ID));
+                clauses.push(SqlEquals('EntityID', entityInfo.ID));
             }
         }
         if (filter.RecordID) {
-            clauses.push(sqlEquals('RecordID', filter.RecordID));
+            clauses.push(SqlEquals('RecordID', filter.RecordID));
         }
         if (filter.CreatedByUserID) {
-            clauses.push(sqlEquals('CreatedByUserID', filter.CreatedByUserID));
+            clauses.push(SqlEquals('CreatedByUserID', filter.CreatedByUserID));
         }
         if (filter.NameContains) {
-            clauses.push(sqlContains('Name', filter.NameContains));
+            clauses.push(SqlContains('Name', filter.NameContains));
         }
 
         return clauses;

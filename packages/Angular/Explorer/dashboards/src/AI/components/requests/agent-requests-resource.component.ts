@@ -144,10 +144,15 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
     }
 
     /** Reset only the popover filters (Status/Type/Priority) — leave SearchTerm alone. */
-    public resetPopoverFilters(): void {
+    public ResetPopoverFilters(): void {
         this.Filters = { ...this.Filters, Status: '', RequestType: '', Priority: '' };
         this.applyFilters();
         this.saveUserSettings();
+    }
+
+    /** @deprecated Use {@link ResetPopoverFilters}. */
+    public resetPopoverFilters(): void {
+        return this.ResetPopoverFilters();
     }
 
     /** Number of currently-applied filter criteria inside the popover (excludes SearchTerm — surfaced separately). */
@@ -160,7 +165,7 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
     }
 
     /** Values record consumed by the centralized <mj-filter-panel>. */
-    public get requestFilterValues(): Record<string, unknown> {
+    public get RequestFilterValues(): Record<string, unknown> {
         return {
             Status:      this.Filters.Status,
             RequestType: this.Filters.RequestType,
@@ -168,8 +173,13 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
         };
     }
 
+    /** @deprecated Use {@link RequestFilterValues}. */
+    public get requestFilterValues(): Record<string, unknown> {
+        return this.RequestFilterValues;
+    }
+
     /** Field config consumed by the centralized <mj-filter-panel>. */
-    public get requestFilterFields(): FilterFieldConfig[] {
+    public get RequestFilterFields(): FilterFieldConfig[] {
         return [
             {
                 key: 'Status',
@@ -205,8 +215,13 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
         ];
     }
 
+    /** @deprecated Use {@link RequestFilterFields}. */
+    public get requestFilterFields(): FilterFieldConfig[] {
+        return this.RequestFilterFields;
+    }
+
     /** Receive the updated values record from <mj-filter-panel> and apply it. */
-    public onFilterValuesChange(values: Record<string, unknown>): void {
+    public OnFilterValuesChange(values: Record<string, unknown>): void {
         this.Filters = {
             ...this.Filters,
             Status:      (values['Status']      as string) ?? '',
@@ -215,6 +230,11 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
         };
         this.applyFilters();
         this.saveUserSettings();
+    }
+
+    /** @deprecated Use {@link OnFilterValuesChange}. */
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+        return this.OnFilterValuesChange(values);
     }
 
     /** Get the request type name by ID */

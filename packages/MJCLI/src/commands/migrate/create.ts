@@ -1,5 +1,5 @@
 import { Command, Args, Flags } from '@oclif/core';
-import { getValidatedConfig } from '../../config';
+import { GetValidatedConfig } from '../../config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -49,7 +49,7 @@ export default class MigrateCreate extends Command {
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(MigrateCreate);
-    const config = getValidatedConfig();
+    const config = GetValidatedConfig();
 
     const platform = (flags.platform ?? config.dbPlatform ?? 'sqlserver') as 'sqlserver' | 'postgresql';
     const isPG = platform === 'postgresql';

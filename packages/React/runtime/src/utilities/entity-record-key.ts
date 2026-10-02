@@ -86,7 +86,7 @@ function coerceToCompositeKey(key: EntityRecordKeyInput): CompositeKey | null {
  *   the global default, so a host on a non-default provider resolves against its own server.
  * @param contextUser The acting user, for server-side callers.
  */
-export async function resolveEntityRecordKey(
+export async function ResolveEntityRecordKey(
   entityName: string,
   key: EntityRecordKeyInput,
   provider: IMetadataProvider,
@@ -139,4 +139,14 @@ export async function resolveEntityRecordKey(
   return CompositeKey.FromKeyValuePairs(
     entity.PrimaryKeys.map((pk) => ({ FieldName: pk.Name, Value: row[pk.Name] }) as KeyValuePair)
   );
+}
+
+/** @deprecated Use {@link ResolveEntityRecordKey}. */
+export async function resolveEntityRecordKey(
+  entityName: string,
+  key: EntityRecordKeyInput,
+  provider: IMetadataProvider,
+  contextUser?: UserInfo
+): Promise<CompositeKey | null> {
+  return ResolveEntityRecordKey(entityName, key, provider, contextUser);
 }

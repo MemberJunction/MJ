@@ -5,7 +5,7 @@ import { BrowserAction, ActionExecutionResult, CookieEntry } from '../types/brow
 import { RunComputerUseParams } from '../types/params.js';
 import { AppProfile, SettleConfig } from '../types/app-profile.js';
 import { JudgePromptRequest, JudgePromptResponse } from '../types/controller.js';
-import { wallClockCeilingMs } from '../engine/step-control.js';
+import { WallClockCeilingMs } from '../engine/step-control.js';
 
 /**
  * The engine must be able to stop WAITING on a step it cannot finish.
@@ -102,7 +102,7 @@ describe('ComputerUseEngine — a blocked step cannot strand the run', () => {
         const run = engine.Run(hangingParams());
         // Past the ceiling the run was always supposed to end by. Without a
         // deadline that races the step, nothing here ever resolves.
-        await vi.advanceTimersByTimeAsync(wallClockCeilingMs(BUDGET_MS) + 1000);
+        await vi.advanceTimersByTimeAsync(WallClockCeilingMs(BUDGET_MS) + 1000);
 
         const result = await run;
 
@@ -156,7 +156,7 @@ describe('expiry aborts the orphaned step (review: non-blocking)', () => {
         engine.SetBrowserAdapter(adapter);
 
         const run = engine.Run(hangingParams());
-        await vi.advanceTimersByTimeAsync(wallClockCeilingMs(BUDGET_MS) + 1000);
+        await vi.advanceTimersByTimeAsync(WallClockCeilingMs(BUDGET_MS) + 1000);
         const result = await run;
 
         expect(result.Status).toBe('TimeBudgetExceeded');
@@ -195,7 +195,7 @@ describe('Replay is bounded the same way as the LLM tier (review: non-blocking)'
         ] } as never;
 
         const replay = engine.Replay(trace, hangingParams());
-        await vi.advanceTimersByTimeAsync(wallClockCeilingMs(BUDGET_MS) + 1000);
+        await vi.advanceTimersByTimeAsync(WallClockCeilingMs(BUDGET_MS) + 1000);
 
         const result = await replay;
         expect(result.Status).toBe('TimeBudgetExceeded');

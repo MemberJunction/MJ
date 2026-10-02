@@ -73,11 +73,16 @@ export class DashboardShareAdapter implements ResourceShareAdapter {
     }
 
     /** Resolve the owner's display name for a dashboard by owner user ID. */
-    static resolveOwnerName(ownerUserID: string | null | undefined): string | null {
+    static ResolveOwnerName(ownerUserID: string | null | undefined): string | null {
         if (!ownerUserID) return null;
         const dashboards = DashboardEngine.Instance.Dashboards;
         const match = dashboards.find((d) => d.UserID && UUIDsEqual(d.UserID, ownerUserID));
         return match?.User ?? null;
+    }
+
+    /** @deprecated Use {@link ResolveOwnerName}. */
+    static resolveOwnerName(ownerUserID: string | null | undefined): string | null {
+        return this.ResolveOwnerName(ownerUserID);
     }
 
     private flagsToLevel(permission: MJDashboardPermissionEntity): ResourceShareLevel {

@@ -36,32 +36,32 @@ describe('chart-spec', () => {
         it('maps bar-family hints to "bar"', () => {
             for (const t of ['bar', 'column', 'histogram', 'BAR', ' Column ']) {
                 const spec = ParseChartSpec({ chartType: t, data: [{ label: 'A', value: 1 }] });
-                expect(spec?.kind).toBe('bar');
+                expect(spec?.Kind).toBe('bar');
             }
         });
 
         it('maps line-family hints to "line"', () => {
             for (const t of ['line', 'area', 'spline']) {
                 const spec = ParseChartSpec({ type: t, data: [{ label: 'A', value: 1 }] });
-                expect(spec?.kind).toBe('line');
+                expect(spec?.Kind).toBe('line');
             }
         });
 
         it('maps pie-family hints to "pie"', () => {
             for (const t of ['pie', 'donut', 'doughnut']) {
                 const spec = ParseChartSpec({ chart: t, data: [{ label: 'A', value: 1 }] });
-                expect(spec?.kind).toBe('pie');
+                expect(spec?.Kind).toBe('pie');
             }
         });
 
         it('reads the type discriminator from any of the common field names', () => {
-            expect(ParseChartSpec({ kind: 'pie', data: [{ label: 'A', value: 1 }] })?.kind).toBe('pie');
+            expect(ParseChartSpec({ kind: 'pie', data: [{ label: 'A', value: 1 }] })?.Kind).toBe('pie');
         });
 
         it('defaults to "bar" when only a series field is present (no explicit kind)', () => {
             const spec = ParseChartSpec({ series: [1, 2], labels: ['a', 'b'] });
-            expect(spec?.kind).toBe('bar');
-            expect(spec?.data).toHaveLength(2);
+            expect(spec?.Kind).toBe('bar');
+            expect(spec?.Data).toHaveLength(2);
         });
     });
 
@@ -74,7 +74,7 @@ describe('chart-spec', () => {
                     { label: 'B', value: 2 },
                 ],
             });
-            expect(spec?.data).toEqual([
+            expect(spec?.Data).toEqual([
                 { label: 'A', value: 1 },
                 { label: 'B', value: 2 },
             ]);
@@ -89,7 +89,7 @@ describe('chart-spec', () => {
                     { category: 'C', amount: 5 },
                 ],
             });
-            expect(spec?.data).toEqual([
+            expect(spec?.Data).toEqual([
                 { label: 'A', value: 3 },
                 { label: 'B', value: 4 },
                 { label: 'C', value: 5 },
@@ -98,7 +98,7 @@ describe('chart-spec', () => {
 
         it('coerces numeric strings and synthesizes a label when missing', () => {
             const spec = ParseChartSpec({ chartType: 'bar', data: [{ value: '3.5' }] });
-            expect(spec?.data).toEqual([{ label: '#1', value: 3.5 }]);
+            expect(spec?.Data).toEqual([{ label: '#1', value: 3.5 }]);
         });
 
         it('skips rows whose value cannot be coerced to a finite number', () => {
@@ -110,7 +110,7 @@ describe('chart-spec', () => {
                     { label: 'C', value: 3 },
                 ],
             });
-            expect(spec?.data).toEqual([
+            expect(spec?.Data).toEqual([
                 { label: 'A', value: 1 },
                 { label: 'C', value: 3 },
             ]);
@@ -124,7 +124,7 @@ describe('chart-spec', () => {
                 labels: ['A', 'B', 'C'],
                 datasets: [{ data: [10, 20, 30] }],
             });
-            expect(spec?.data).toEqual([
+            expect(spec?.Data).toEqual([
                 { label: 'A', value: 10 },
                 { label: 'B', value: 20 },
                 { label: 'C', value: 30 },
@@ -139,7 +139,7 @@ describe('chart-spec', () => {
                     { label: 'Y', value: 6 },
                 ],
             });
-            expect(spec?.data).toEqual([
+            expect(spec?.Data).toEqual([
                 { label: 'X', value: 5 },
                 { label: 'Y', value: 6 },
             ]);
@@ -147,7 +147,7 @@ describe('chart-spec', () => {
 
         it('zips a flat numeric series against labels', () => {
             const spec = ParseChartSpec({ type: 'line', series: [1, 2, 3], labels: ['a', 'b', 'c'] });
-            expect(spec?.data).toEqual([
+            expect(spec?.Data).toEqual([
                 { label: 'a', value: 1 },
                 { label: 'b', value: 2 },
                 { label: 'c', value: 3 },
@@ -156,7 +156,7 @@ describe('chart-spec', () => {
 
         it('falls back to synthetic labels when labels are shorter than values', () => {
             const spec = ParseChartSpec({ type: 'bar', values: [1, 2] });
-            expect(spec?.data).toEqual([
+            expect(spec?.Data).toEqual([
                 { label: '#1', value: 1 },
                 { label: '#2', value: 2 },
             ]);

@@ -1,5 +1,40 @@
 # @memberjunction/ai-elevenlabs
 
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- ddcd666: Adds ElevenLabs **Eleven v4** and **Eleven v4 Turbo** to the AI model catalog. Metadata only, no code change.
+  - New TTS models **Eleven v4** (`eleven_v4`) and **Eleven v4 Turbo** (`eleven_v4_turbo`), each with Eleven Labs as model developer and as inference provider through the existing `ElevenLabsAudioGenerator` driver. The driver hands `model_id` to the ElevenLabs API unchanged and the SDK types it as a plain string, so text-to-speech needs nothing else.
+  - No cost rows yet. ElevenLabs bills speech per character, and the catalog's price units (per token, minute, hour, image) have no per-character unit; the launch pricing also could not be confirmed against ElevenLabs' own pricing page.
+  - Not covered: the `ElevenLabsRealtime` (ElevenAgents) driver never sets a TTS model on its managed agent, so this change does not put v4 into realtime conversations. That needs a driver change.
+
+### Patch Changes
+
+- Updated dependencies [a50948e]
+- Updated dependencies [15a4333]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [e1dd673]
+- Updated dependencies [c261eb8]
+- Updated dependencies [1d43161]
+- Updated dependencies [80905a1]
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [575bfae]
+- Updated dependencies [e962151]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

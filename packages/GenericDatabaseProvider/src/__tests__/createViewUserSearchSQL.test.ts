@@ -169,8 +169,8 @@ function makeEntity(opts: { ftx?: boolean; ftxFunction?: string | null; pkName?:
     // touches FullTextSearchEnabled, FullTextSearchFunction, SchemaName,
     // FirstPrimaryKey?.Name, and Fields.
     const entity = Object.create(EntityInfo.prototype) as EntityInfo;
-    // Both `FirstPrimaryKey` and `Fields` are getters on EntityInfo (Fields → _Fields,
-    // FirstPrimaryKey → Fields.find(IsPrimaryKey)). We seed the private `_Fields` backing
+    // Both `FirstPrimaryKey` and `Fields` are getters on EntityInfo (Fields → _fields,
+    // FirstPrimaryKey → Fields.find(IsPrimaryKey)). We seed the private `_fields` backing
     // store with a synthetic PK plus the test fields, and the getters resolve naturally.
     // IncludeInUserSearchAPI defaults to null (falsy), so the per-field search loop skips the PK.
     const pkField = new EntityFieldInfo();
@@ -183,7 +183,7 @@ function makeEntity(opts: { ftx?: boolean; ftxFunction?: string | null; pkName?:
         // survive as null/'' rather than being defaulted away.
         FullTextSearchFunction: 'ftxFunction' in opts ? opts.ftxFunction : 'fnSearchTest',
         SchemaName: 'crm',
-        _Fields: [pkField, ...opts.fields],
+        _fields: [pkField, ...opts.fields],
     });
     return entity;
 }
