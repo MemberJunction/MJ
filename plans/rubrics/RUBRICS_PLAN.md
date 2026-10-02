@@ -809,10 +809,10 @@ that with permissions on the evaluation records.
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (say why in §16).
 
 **R — core**
-- [ ] **R0** Run the §9.2 procedure: CodeGen captures appended to 2342 and 2344, generated
+- [x] **R0** Run the §9.2 procedure: CodeGen captures appended to 2342 and 2344, generated
       entities committed, from-zero build green. Add `packages/Rubrics/*` to workspace globs.
       Layered flags stay in `metadata/entities/.layered-base-views.json` — no Entity UPDATE migration.
-      The tails, generated entities, workspace glob, and layered-flag file are in. A from-zero build of this head is not recorded green.
+      The tails, generated entities, workspace glob, and layered-flag file are in. The from-zero result is recorded at `813784223a`: migrate and CodeGen succeeded, the second metadata push created 0 and updated 0, the seven published hashes match `canonical.ts`, and Integration Tests — Deterministic passed 61/61.
 - [x] **R1** Metadata: JSONType interfaces + bridge records (§4.1); layered flags + `CascadeDeletes`
       in `metadata/entities`; `IsHierarchy` config on `RubricCriterion.ParentID` and
       `RubricCategory.ParentID` (see `guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md`);
@@ -882,7 +882,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
-- **2026-10-02** — §15 rechecked against the branch. R0 is open: the CodeGen tails, generated entities, `packages/Rubrics/*` glob, and layered-flag file are in, and a from-zero build of this head is not recorded green. R1, R5, R7, T2, T3, T8, T9, T10, U2, U3, and S1 stay done. A5 stays done with Get Rubric Consensus removed.
+- **2026-10-02** — R0 is ticked. `813784223a` records the from-zero result: migrate and CodeGen succeeded, the second metadata push created 0 and updated 0, the seven published hashes match `canonical.ts`, and Integration Tests — Deterministic passed 61/61.
+- **2026-10-02** — §15 rechecked against the branch. The CodeGen tails, generated entities, `packages/Rubrics/*` glob, and layered-flag file are in. R1, R5, R7, T2, T3, T8, T9, T10, U2, U3, and S1 stay done. A5 stays done with Get Rubric Consensus removed.
 - **2026-10-01** — R7 adds the rest of the deterministic Rubrics bundle. It is IT98 at sequence 49.
   Raw SQL covers 51101–51110. Publish classifies Initial then Major. Submit is compared
   with `RubricScoring`. Supersede and withdraw, and the cohort mean against the engine Mean,
