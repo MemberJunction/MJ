@@ -17,9 +17,22 @@ Not-applicable answers follow the criterion's policy, or the version's policy wh
 - **Fail the evaluation** makes the outcome Not Applicable Failure.
 - **Not allowed** refuses the answer.
 
-The outcome is chosen in this order: completeness below the minimum, a not-applicable failure, an unanswered applicable leaf, a failed gate, a score below the pass threshold, and otherwise Scored when there is no threshold. `Passed` is true only for Passed.
+A Percentage scale is a Numeric scale named Percentage, or any Numeric scale whose minimum is 0 and maximum is 100. The answer is the raw number, not a level.
 
-Scores are rounded to six decimal places. The same answers on the same scoring hash produce the same score. The widgets do not implement a second copy of this math. The author preview and the server submit both call `RubricScoring`.
+The outcome is the first match:
+
+| Order | Outcome | When |
+|---|---|---|
+| 1 | Incomplete | Completeness is below the version's minimum. Both sides are rounded to six places before the comparison. |
+| 2 | NotApplicableFailure | A not-applicable answer used Fail the evaluation. |
+| 3 | Incomplete | The overall score is null. An unanswered applicable leaf was dropped, and nothing included remains to roll up. |
+| 4 | GateFailed | A non-advisory gate is unanswered, or its rounded score is below that criterion's gate minimum. The minimum is 0 when the criterion does not set one. |
+| 5 | Passed or BelowThreshold | A pass threshold is set. Passed when the rounded score is at least the rounded threshold. Otherwise BelowThreshold. |
+| 6 | Scored | No pass threshold, and none of the earlier rows matched. |
+
+`Passed` is true only for the Passed outcome. It is null for Scored, and for Incomplete when the version has no threshold and no gate. Every other outcome sets it false.
+
+Scores are rounded to six decimal places after the arithmetic. Threshold, gate, band, and completeness comparisons use that rounding. The same answers on the same scoring hash produce the same score. The widgets do not implement a second copy of this math. The author preview and the server submit both call `RubricScoring`.
 
 ## Versions
 
@@ -27,14 +40,52 @@ A rubric has at most one draft. Publishing is what assigns numbers.
 
 | Bump | When |
 |---|---|
-| Initial | The first publish. It becomes 1.0.0. |
-| Major | A non-advisory criterion was added or removed, or its key, parent, type, weight, scale, advisory flag, gate, not-applicable policy, rollup, or evaluator config changed. Scores from the new major are not comparable with the previous major. |
-| Minor | The pass threshold, completeness minimum, bands, or required rationale and evidence changed. |
-| Patch | Wording only: names, guidance, instructions, anchors, and display range. |
+| Initial | The first publish. There is no Published or Retired version to diff against. It becomes 1.0.0. |
+| Major | A non-advisory node was added or removed. Or a non-advisory node's parent, type, weight, scale, gate, gate minimum, not-applicable policy, rollup, or evaluator config changed. Or IsAdvisory flipped. Or the version's not-applicable policy changed. Or a scale used by a non-advisory node changed its type, range, step, or direction, or a level's value or normalized value was added, removed, or changed. Scores from the new major are not comparable with the previous major. A node that is advisory on both sides does not make those scoring-field edits Major. |
+| Minor | The pass threshold or minimum completeness changed. A band was added or removed, or its range or tone changed. An advisory node was added or removed, or an advisory node's parent, type, weight, scale, gate, gate minimum, rollup, or evaluator config changed. Evidence or rationale became required or stopped being required. |
+| Patch | Wording and order only: names, descriptions, guidance, instructions, anchor text, level labels and descriptions, band labels and wording, sequence, and the display range. A band is matched by label. A renamed label on the same band is Patch, not a removed band plus a new one. |
 
-An author may request a higher bump, not a lower one. A draft that is identical to the version it was based on cannot be published.
+Parent links are compared by the parent key. A clone's new ids are not a Major bump. The highest change wins. The author may request a higher bump, not a lower one. A draft that is identical to the version it was based on cannot be published. The base is the highest Published or Retired version, not another draft.
 
 Published and retired versions are frozen. The database rejects a change with errors 51101 through 51110. The only status move on a published version is between Published and Retired. A submitted evaluation can be superseded by a newer one or withdrawn. It cannot be edited or deleted.
+
+## Evaluators
+
+`EvaluatorType` is one of Human, AIPrompt, Agent, Deterministic, Self, or External. A Human evaluation requires `EvaluatorUserID`. On the prompt path, an evaluator named AI is stored as Agent, Deterministic is stored as Deterministic, and any other value is stored as AIPrompt. Submit Human Rubric stores Human.
+
+Self is the subject's own assertion. It is stored and shown. It is not part of consensus.
+
+## Consensus
+
+Consensus is computed when you read it. `ConsensusForSubject` loads Submitted evaluations for one subject and one major version, leaves out Self, and leaves out every other major. When the caller does not pass a major, the latest Published major is used. A context on the call matches that context. A call without a context uses evaluations whose context is null.
+
+The method is Mean unless the caller asks for Median or TrimmedMean. Mean matches the average on the score view. TrimmedMean drops `floor(trim × n)` scores from each end. The default trim is 0.1. The result also carries the population standard deviation, the range, and the sample size.
+
+The score view already stores `CriterionCohortHumanMeanScore` and `CriterionCohortAIMeanScore` for the same subject, context, rubric, and major version. The human column averages Human scores. The AI column averages AIPrompt and Agent scores. Self is excluded from the cohort. Deterministic and External are not in either column. A second score row in that cohort does not change the means. Review reads those columns. It does not average a sample of score rows.
+
+Agreement is separate. Quadratic-weighted Cohen's kappa is for two raters. Krippendorff's alpha is for two or more. Both are omitted when the number of subjects is below 20. The sample size is still returned.
+
+## Blinding
+
+Core does not hide peer scores. There is no `GetVisibleEvaluations`, and there is no blinding mode of None, UntilSubmitted, or Always. Anyone who can read a score row can read its cohort columns. Keeping a reviewer's draft invisible to the other reviewers is a permission on the evaluation records, not a rule inside scoring.
+
+## Knockout gates
+
+A knockout is a gate. `ImportMatrix` reads a requirements CSV of path, name, weight, and knockout. A path such as 3.2.1 nests under 3.2. The knockout cell sets the gate when it is yes, true, 1, or knockout. A non-advisory gate fails the evaluation when it is unanswered or its rounded score is below `GateMinimumScore`. An advisory node is never a gate. GateFailed is chosen before the pass threshold, so a high weighted score does not save a failed knockout.
+
+## CLI
+
+These commands read or score. None of them publish a version.
+
+```
+mj rubric list
+mj rubric show <rubric>[@version]
+mj rubric diff <rubric> <version> <version>
+mj rubric validate <file>
+mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator LLM|Deterministic]
+```
+
+The default evaluator is LLM, which is stored as AIPrompt. Deterministic is stored as Deterministic. `mj test run --rubric <rubric>[@version]` and the same flag on `mj test suite` pin that rubric for the run. `mj test promote-criteria <test>` copies the test's inline judge criteria onto a Draft rubric and sets `Test.RubricID`. That draft is not published. A test that already has an `llm-judge` oracle keeps that judge when the rubric choice came from the agent.
 
 ## The three screens
 
