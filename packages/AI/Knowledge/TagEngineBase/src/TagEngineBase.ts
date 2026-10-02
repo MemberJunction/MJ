@@ -71,7 +71,9 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: Tags',
-                PropertyName: '_tags'
+                PropertyName: '_tags',
+                // Binary vector column: loaded server-side (TagEngine reads it), skipped over the wire.
+                IncludeBinaryFields: 'DatabaseProviderOnly',
             },
             {
                 Type: 'entity',

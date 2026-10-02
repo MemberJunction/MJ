@@ -3,8 +3,8 @@
  *
  * Use this driver when you want SearchScope multi-provider fusion to include
  * vector search WITHOUT standing up a remote store (Pinecone / pgvector /
- * Qdrant). It reads the rows of a single MJ entity, parses each row's
- * `EmbeddingVector` JSON column, and uses {@link SimpleVectorService} for
+ * Qdrant). It reads the rows of a single MJ entity, decodes each row's
+ * vector column(s), and uses {@link SimpleVectorService} for
  * cosine ranking — exactly the same primitive `AgentContextInjector` already
  * uses for its `FindSimilarAgentNotes` path.
  *
@@ -24,7 +24,7 @@
  * @module @memberjunction/ai-vectors-memory
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { CompositeKey, EntityInfo, Metadata, RunView, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import type {
@@ -32,7 +32,9 @@ import type {
     IndexList, ListVectorIDsParams, ListVectorIDsResult, UpdateOptions, VectorRecord,
 } from '@memberjunction/ai-vectordb';
 import type { QueryOptions } from '@memberjunction/ai-vectordb';
-import { SimpleVectorService } from './SimpleVectorService';
+import { SimpleVectorService, VectorValues } from './SimpleVectorService';
+import { DecodeVectorBinary, ParseVectorJSON } from './StoredVector';
+import { CompileMetadataFilter, MetadataFieldReader, MetadataFilterPredicate } from './MetadataFilterEvaluator';
 
 /** Shape of the optional ProviderConfig JSON on the MJVectorIndex row.
  *  Tells the driver which entity column it's reading from. */
@@ -41,6 +43,14 @@ interface SimpleVectorProviderConfig {
     entityName: string;
     /** Field on that entity that holds the JSON-serialized embedding vector. */
     vectorField: string;
+    /**
+     * Optional binary companion of `vectorField` (e.g. `EmbeddingVectorBinary`): a varbinary/bytea
+     * column holding the same vector as little-endian float32 bytes. When set, the driver fetches it
+     * (binary fields are omitted from RunView by default) and prefers it over the JSON column —
+     * decoding is a copy instead of a JSON parse. Rows whose binary value is empty or invalid fall
+     * back to `vectorField`.
+     */
+    binaryVectorField?: string;
     /** Optional ExtraFilter — useful for `Status='Active'`-style row scoping. */
     filter?: string;
     /** Optional title field for QueryIndex result metadata. Defaults to first
@@ -51,16 +61,20 @@ interface SimpleVectorProviderConfig {
 }
 
 /**
- * Per-call cache of (indexName → loaded entity rows + parsed vectors).
- * Lives at module scope so repeated queries inside one process don't re-read
- * the DB. Cleared on `DeleteAllRecords` or when the entity row count changes.
+ * Per-index cache of the parsed vectors (indexName → service + rows), so a
+ * query whose rows have not changed skips re-parsing every vector. The rows
+ * themselves are still read on every query, as the calling user. Cleared on
+ * `DeleteAllRecords`; an entry is reused only when the index config and the
+ * fingerprint of the rows just read both match (see `rowsFingerprint`).
  */
 const indexCache = new Map<string, {
-    config: SimpleVectorProviderConfig;
+    /** The index's ProviderConfig the entry was built from, serialized */
+    configJSON: string;
     /** Metadata for `config.entityName` — supplies the real primary key column(s) used to key rows. */
     entity: EntityInfo;
     service: SimpleVectorService;
-    rowCount: number;
+    /** Fingerprint of the rows the entry was built from */
+    rowsFingerprint: string;
     rowsByID: Map<string, Record<string, unknown>>;
 }>();
 
@@ -83,7 +97,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
         const rv = new RunView();
         const r = await rv.RunView<{ ID: string; ProviderConfig: string | null }>({
             EntityName: 'MJ: Vector Indexes',
-            ExtraFilter: `Name='${indexName.replace(/'/g, "''")}'`,
+            ExtraFilter: `Name='${EscapeSQLString(indexName)}'`,
             Fields: ['ID', 'ProviderConfig'],
             ResultType: 'simple',
             MaxRows: 1,
@@ -110,6 +124,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
             return {
                 entityName: parsed.entityName,
                 vectorField: parsed.vectorField,
+                binaryVectorField: parsed.binaryVectorField || undefined,
                 filter: parsed.filter,
                 titleField: parsed.titleField,
                 snippetField: parsed.snippetField,
@@ -123,13 +138,16 @@ export class SimpleVectorDatabase extends VectorDBBase {
     /** Materialize the index — load rows from the configured entity, parse
      *  each row's vector, and pack them into a `SimpleVectorService`.
      *
-     *  **Cache freshness model:** the cache key is `indexName` and the
-     *  validity signal is `rowCount`. This means in-place edits of an
-     *  existing row's `EmbeddingVector` (without changing the row count)
-     *  are NOT detected by the cache — the stale vector will be returned
-     *  until the process restarts or the row is deleted/inserted.
-     *  This is acceptable for the dev/agent-memory positioning of this
-     *  driver; production-scale corpora should use Pinecone/Qdrant. */
+     *  **Cache freshness model:** the rows are read on every query, as the
+     *  calling user, so row-level security always applies. The parsed
+     *  vectors are reused only when the index config is unchanged and the
+     *  rows just read have the same keys, `__mj_UpdatedAt` values and
+     *  vector presence as the rows they were built from. A user who sees a
+     *  different set of rows therefore never receives another user's
+     *  vectors. An edit that bypasses `BaseEntity` (raw SQL that changes a
+     *  vector without touching `__mj_UpdatedAt`) is not detected; call
+     *  `DeleteAllRecords` after one. Production-scale corpora should use
+     *  Pinecone/Qdrant. */
     private async loadIndex(indexName: string, contextUser: UserInfo | undefined): Promise<{
         config: SimpleVectorProviderConfig;
         entity: EntityInfo;
@@ -143,14 +161,36 @@ export class SimpleVectorDatabase extends VectorDBBase {
         if (fetched == null) return null;
         const { entity, rows } = fetched;
 
+        const configJSON = JSON.stringify(config);
+        const rowsFingerprint = this.rowsFingerprint(rows, config, entity);
         const cached = indexCache.get(indexName);
-        if (cached && cached.rowCount === rows.length) {
-            return { config: cached.config, entity: cached.entity, service: cached.service, rowsByID: cached.rowsByID };
+        if (cached && cached.configJSON === configJSON && cached.rowsFingerprint === rowsFingerprint) {
+            return { config, entity: cached.entity, service: cached.service, rowsByID: cached.rowsByID };
         }
 
         const { service, rowsByID } = this.buildServiceFromRows(rows, config, entity);
-        indexCache.set(indexName, { config, entity, service, rowCount: rows.length, rowsByID });
+        indexCache.set(indexName, { configJSON, entity, service, rowsFingerprint, rowsByID });
         return { config, entity, service, rowsByID };
+    }
+
+    /**
+     * Identifies the rows a cached index was built from: each row's primary
+     * key, `__mj_UpdatedAt` and whether it has a vector, in the order read.
+     * Far cheaper than re-parsing every vector, and it differs whenever the
+     * rows a query sees differ — another user's row-level security, an
+     * insert-plus-delete that keeps the count, or a vector added or edited.
+     */
+    private rowsFingerprint(rows: Array<Record<string, unknown>>, config: SimpleVectorProviderConfig, entity: EntityInfo): string {
+        const parts: string[] = new Array(rows.length);
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const key = CompositeKey.FromEntityRecord(entity, row);
+            const updatedAt = row['__mj_UpdatedAt'];
+            const stamp = updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt ?? '');
+            const hasBinary = config.binaryVectorField && row[config.binaryVectorField] ? 1 : 0;
+            parts[i] = `${key.ToURLSegment()}\u0001${stamp}\u0001${row[config.vectorField] ? 1 : 0}${hasBinary}`;
+        }
+        return parts.join('\u0002');
     }
 
     /** Run RunView for the configured entity; returns null if the entity is
@@ -171,6 +211,8 @@ export class SimpleVectorDatabase extends VectorDBBase {
             ExtraFilter: config.filter,
             ResultType: 'simple',
             BypassCache: true,
+            // Binary columns are omitted from RunView unless asked for; fetch the companion when configured.
+            ...(config.binaryVectorField ? { IncludeBinaryFields: true } : {}),
         }, contextUser);
         if (!r.Success) {
             LogError(`SimpleVectorDatabase.loadIndex: RunView on "${config.entityName}" failed: ${r.ErrorMessage}`);
@@ -179,40 +221,67 @@ export class SimpleVectorDatabase extends VectorDBBase {
         return { entity, rows: r.Results ?? [] };
     }
 
-    /** Parse each row's vector field, validate it's a numeric array, and
+    /** Decode each row's vector (binary companion first, then the JSON field), and
      *  pack the survivors into a fresh `SimpleVectorService` plus the
      *  ID→row map used to enrich match metadata. Rows with missing IDs,
      *  missing vector columns, or unparseable JSON are silently skipped
      *  — callers haven't necessarily embedded every row yet (e.g. only
-     *  `Status='Active'` rows have embeddings), so logging would spam. */
+     *  `Status='Active'` rows have embeddings), so logging would spam.
+     *  Rows whose vector size differs from the first one are skipped too,
+     *  with one log line, since they point at an embedding-model mix-up. */
     private buildServiceFromRows(
         rows: Array<Record<string, unknown>>,
         config: SimpleVectorProviderConfig,
         entity: EntityInfo,
     ): { service: SimpleVectorService; rowsByID: Map<string, Record<string, unknown>> } {
         const service = new SimpleVectorService();
-        const entries: Array<{ key: string; vector: number[]; metadata: Record<string, unknown> }> = [];
+        const entries: Array<{ key: string; vector: VectorValues; metadata: Record<string, unknown> }> = [];
         const rowsByID = new Map<string, Record<string, unknown>>();
+        let dims: number | null = null;
+        let mismatched = 0;
         for (const row of rows) {
             // Key each vector by the row's full primary key — any column name(s) — in the prefixed
             // CompositeKey segment form vector metadata carries. `row['ID']` skipped every row of an
             // entity whose key isn't called ID, leaving the index silently empty.
             const key = CompositeKey.FromEntityRecord(entity, row);
-            const vecRaw = row[config.vectorField];
-            if (!key.HasValue || !vecRaw) continue;
-            const id = key.ToURLSegment();
-            try {
-                const vector = typeof vecRaw === 'string' ? JSON.parse(vecRaw) : vecRaw;
-                if (Array.isArray(vector) && vector.every(v => typeof v === 'number')) {
-                    entries.push({ key: id, vector: vector as number[], metadata: row });
-                    rowsByID.set(id, row);
-                }
-            } catch {
-                // Vector column is unparseable — silently skip (see JSDoc above).
+            if (!key.HasValue) continue;
+            const vector = this.readRowVector(row, config);
+            if (!vector) continue;
+            // One vector of another size (a re-embed with a different model in progress)
+            // must not fail the whole index: skip it, and report the count once below.
+            dims ??= vector.length;
+            if (vector.length !== dims) {
+                mismatched++;
+                continue;
             }
+            const id = key.ToURLSegment();
+            entries.push({ key: id, vector, metadata: row });
+            rowsByID.set(id, row);
+        }
+        if (mismatched > 0) {
+            LogError(`SimpleVectorDatabase: skipped ${mismatched} "${config.entityName}" row(s) whose ${config.vectorField} has a different dimension count than the rest (${dims}) — re-embed them with one model`);
         }
         service.LoadVectors(entries);
         return { service, rowsByID };
+    }
+
+    /**
+     * Reads one row's vector: the binary companion when configured and valid, else the JSON field
+     * (a JSON string, or an already-parsed numeric array). Returns null for a row with no usable
+     * vector — callers haven't necessarily embedded every row yet.
+     */
+    private readRowVector(row: Record<string, unknown>, config: SimpleVectorProviderConfig): VectorValues | null {
+        if (config.binaryVectorField) {
+            const binary = row[config.binaryVectorField];
+            const decoded = typeof binary === 'string' ? DecodeVectorBinary(binary) : null;
+            if (decoded) return decoded;
+        }
+        const raw = row[config.vectorField];
+        if (typeof raw === 'string') return ParseVectorJSON(raw);
+        if (Array.isArray(raw) && raw.length > 0 && raw.every(v => typeof v === 'number' && Number.isFinite(v))) {
+            return raw as number[];
+        }
+        return null;
     }
 
     /** Build the metadata bag returned in QueryIndex matches. Mirrors what
@@ -245,24 +314,32 @@ export class SimpleVectorDatabase extends VectorDBBase {
         // fit cleanly into either QueryByRecordId or QueryByVectorValues
         // taken alone — the union members don't share `id`+`vector`. We
         // narrow via property-existence to handle both fields.
-        const p = params as { id?: string; vector?: number[]; topK?: number };
+        const p = params as { id?: string; vector?: number[]; topK?: number; filter?: object };
         const indexName = String(p.id ?? '');
         const queryVector = p.vector;
         const topK = Number(p.topK ?? 10);
         // contextUser is required for RunView's server-side guard. Remote
         // drivers (Pinecone/Qdrant) ignore it; in-process drivers like this
         // one need it to honor row-level security on the source entity.
-        if (!indexName || !Array.isArray(queryVector)) {
+        if (!indexName || !Array.isArray(queryVector) || queryVector.length === 0) {
             LogError(`SimpleVectorDatabase.QueryIndex: missing indexName="${indexName}" or vector (length ${Array.isArray(queryVector) ? queryVector.length : 'n/a'})`);
             return { success: false, message: 'Missing indexName or vector', data: null };
+        }
+        // Compile the filter BEFORE loading anything: a search scope's tenant / permission push-down
+        // lives in it, so a filter this driver cannot apply fails the query instead of being ignored.
+        const compiled = CompileMetadataFilter(p.filter);
+        if (compiled.Status === 'unsupported') {
+            LogError(`SimpleVectorDatabase.QueryIndex: index="${indexName}" cannot apply its metadata filter — ${compiled.Reason}. The query is refused rather than run unfiltered.`);
+            return { success: false, message: `Unsupported metadata filter: ${compiled.Reason}`, data: null };
         }
         const loaded = await this.loadIndex(indexName, contextUser);
         if (!loaded) {
             // loadIndex / loadIndexConfig already logged the specific failure reason
             return { success: false, message: `Index "${indexName}" not configured`, data: null };
         }
-        LogStatus(`SimpleVectorDatabase.QueryIndex: index="${indexName}" loaded ${loaded.service.Size} vectors, querying topK=${topK}`);
-        const matches = loaded.service.FindNearest(queryVector, topK, 0);
+        LogStatus(`SimpleVectorDatabase.QueryIndex: index="${indexName}" loaded ${loaded.service.Size} vectors, querying topK=${topK}${compiled.Status === 'ok' ? ' with a metadata filter' : ''}`);
+        const rowFilter = compiled.Status === 'ok' ? this.rowFilter(compiled.Predicate, loaded.config, loaded.entity) : undefined;
+        const matches = loaded.service.FindNearest(queryVector, topK, 0, 'cosine', rowFilter);
         return {
             success: true,
             message: `Returned ${matches.length} match(es)`,
@@ -274,6 +351,42 @@ export class SimpleVectorDatabase extends VectorDBBase {
                 })),
             },
         };
+    }
+
+    /**
+     * Adapts a compiled metadata filter to the service's per-row filter. The filter sees the row's
+     * own columns plus the fields remote drivers store as vector metadata, so one filter means the
+     * same thing on every driver: `Entity` and `EntityName` (the configured entity name —
+     * `VectorSearchProvider` filters on the first, `SharedIndexFilterOptions.EntityNames` on the
+     * second), `RecordID` (the prefixed primary-key segment) and `SourceType` (`'entity'` — every row
+     * here is an entity record). These names take precedence over a row column of the same name.
+     */
+    private rowFilter(predicate: MetadataFilterPredicate, config: SimpleVectorProviderConfig, entity: EntityInfo): (row: Record<string, unknown>) => boolean {
+        return row => {
+            const read: MetadataFieldReader = field => {
+                switch (field) {
+                    case 'Entity':
+                    case 'EntityName': return config.entityName;
+                    case 'SourceType': return 'entity';
+                    case 'RecordID': return CompositeKey.FromEntityRecord(entity, row).ToURLSegment();
+                    default: return row[field];
+                }
+            };
+            return predicate(read);
+        };
+    }
+
+    // ── Driver capabilities ───────────────────────────────────────────────
+
+    /** Vectors live in entity rows written by `BaseEntity` saves; this driver never ingests, so
+     *  ingestion pipelines should skip it instead of logging an "unsupported" error per batch. */
+    public override get IsReadOnly(): boolean {
+        return true;
+    }
+
+    /** In-process — it reads entity rows through `RunView` and calls no external service, so it needs no API key. */
+    public override get RequiresAPIKey(): boolean {
+        return false;
     }
 
     // The remaining VectorDBBase methods are not exercised by the SearchEngine
@@ -297,8 +410,14 @@ export class SimpleVectorDatabase extends VectorDBBase {
         indexCache.clear();
         return { success: true, message: 'cache cleared', data: null };
     }
+    /**
+     * Lists no IDs. The vectors are rows of the configured entity, readable only as a calling user
+     * (row-level security applies), and this contract carries no user — so there is no honest list
+     * to return. Callers that reconcile a remote store against its source skip read-only drivers.
+     */
     public ListVectorIDs(_p: ListVectorIDsParams): Promise<ListVectorIDsResult> {
-        return Promise.resolve({ IDs: [], NextCursor: undefined });
+        const result: ListVectorIDsResult = { IDs: [], NextPaginationToken: undefined };
+        return Promise.resolve(result);
     }
 
     private unsupported(name: string): BaseResponse {

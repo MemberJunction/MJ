@@ -81,7 +81,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsByteArray, TryBase64ToBytes, UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -1277,11 +1277,15 @@ export class SQLServerDataProvider
       const varName = `@${f.CodeName}${uniqueSuffix}`;
       declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
 
-      if (value !== null && value !== undefined) {
-        setStatements.push(`SET ${varName} = ${this.generateSetStatementValue(f, value)}`);
+      // A binary value is rendered to its hex literal ONCE and reused below: the literal is twice
+      // the size of the bytes, and the SET block and the simple-params form both carry it.
+      const hasValue = value !== null && value !== undefined;
+      const binaryLiteral = hasValue && f.IsBinaryFieldType ? this.FormatBinaryLiteral(f, value) : undefined;
+      if (hasValue) {
+        setStatements.push(`SET ${varName} = ${binaryLiteral ?? this.generateSetStatementValue(f, value)}`);
       }
       execParams.push(`@${f.CodeName}=${varName}`);
-      simpleParams += this.generateSingleSPParam(f, value as string, bFirst);
+      simpleParams += this.generateSingleSPParam(f, value as string, bFirst, binaryLiteral);
       bFirst = false;
 
       if ((value === null || value === undefined) && f.NeedsClearCompanion) {
@@ -1470,6 +1474,7 @@ export class SQLServerDataProvider
    * @returns SQL value string
    */
   private generateSetStatementValue(f: EntityFieldInfo, value: any): string {
+    if (f.IsBinaryFieldType) return this.FormatBinaryLiteral(f, value);
     let val: any = value;
     
     switch (f.TSType) {
@@ -1521,7 +1526,11 @@ export class SQLServerDataProvider
     }
   }
 
-  private generateSingleSPParam(f: EntityFieldInfo, value: string, isFirst: boolean): string {
+  private generateSingleSPParam(f: EntityFieldInfo, value: string, isFirst: boolean, binaryLiteral?: string): string {
+    if (f.IsBinaryFieldType) {
+      const literal = value === null || value === undefined ? 'NULL' : (binaryLiteral ?? this.FormatBinaryLiteral(f, value));
+      return `${isFirst ? '' : ',\n                '}@${f.CodeName}=${literal}`;
+    }
     let sRet: string = '';
     let quotes: string = '';
     let val: any = value;
@@ -1558,6 +1567,48 @@ export class SQLServerDataProvider
     sRet += `@${f.CodeName}=${this.packageSPParam(val, quotes, f.UnicodePrefix)}`;
 
     return sRet;
+  }
+
+  /**
+   * Renders a binary field value as a T-SQL hexadecimal literal (`0x…`).
+   *
+   * A binary field's value in a `BaseEntity` is a base64 string. SQL Server has no implicit
+   * conversion from a quoted string to `varbinary` — a quoted base64 value would either fail or be
+   * stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
+   * which is unambiguous, needs no escaping and works on every SQL Server version. A byte array
+   * (e.g. a Buffer set by server code) is accepted as well.
+   *
+   * @param field - The binary field being written; named in the error message.
+   * @param value - Base64 string or byte array.
+   * @returns The literal, e.g. `0x0A0B` (`0x` for zero bytes).
+   * @throws Error when the value is neither a byte array nor valid base64, so a corrupt value fails
+   *   the save instead of being stored as garbage.
+   */
+  /**
+   * Largest binary value, in decoded bytes, that a save will inline as a `0x…` hex literal.
+   *
+   * A save is one T-SQL batch, and SQL Server caps a batch at 65,536 × the network packet size
+   * (256 MB at the default 4 KB). The batch is UTF-16, so the literal costs 4 bytes per blob byte,
+   * and with Record Changes on an update the same bytes travel again as base64 in `ChangesJSON`
+   * (old and new) and `FullRecordJSON` — about 12 bytes per blob byte, a ceiling near 20 MB. Node
+   * also holds the hex, the batch and those JSON strings at once. Above this limit the save fails
+   * here with a message that says so, instead of a batch-size error from the server.
+   */
+  public static MaxInlineBinaryBytes: number = 32 * 1024 * 1024;
+
+  protected FormatBinaryLiteral(field: EntityFieldInfo, value: unknown): string {
+    const bytes = IsByteArray(value) ? value : TryBase64ToBytes(typeof value === 'string' ? value : null);
+    if (!bytes) {
+      throw new Error(`Field "${field.Name}" is binary (${field.Type}); its value must be a base64 string, but it is not valid base64`);
+    }
+    if (bytes.byteLength > SQLServerDataProvider.MaxInlineBinaryBytes) {
+      throw new Error(
+        `Field "${field.Name}" holds ${bytes.byteLength.toLocaleString()} bytes, more than the ${SQLServerDataProvider.MaxInlineBinaryBytes.toLocaleString()}-byte ` +
+        `limit for a value inlined into a save batch (SQLServerDataProvider.MaxInlineBinaryBytes). Store large binary content through file storage, ` +
+        `or raise the limit if the batch size and Record Changes cost are acceptable.`,
+      );
+    }
+    return `0x${Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('hex').toUpperCase()}`;
   }
 
   /**
@@ -1803,17 +1854,6 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IMetadataProvider
   /**************************************************************************/
-
-  /**
-   * Public backward-compatible wrapper that delegates to PostProcessRows (inherited from GenericDP).
-   * Used by SQLServerTransactionGroup which needs a public entry point for row processing.
-   *
-   * PostProcessRows (GenericDP) handles: AdjustDatetimeFields → encryption decryption.
-   */
-  public async ProcessEntityRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, contextUser?: UserInfo): Promise<Record<string, unknown>[]> {
-    if (!rows || rows.length === 0) return rows;
-    return this.PostProcessRows(rows, entityInfo, contextUser as UserInfo);
-  }
 
   /**
    * SQL Server-specific datetime field adjustments.

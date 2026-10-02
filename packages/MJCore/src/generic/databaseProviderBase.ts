@@ -10,7 +10,7 @@ import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
+import { FormatBinaryChangeValue, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -617,12 +617,25 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
             const bDiff = this.isFieldDifferent(f, oldData[key], newData[key]);
             if (bDiff) {
+                if (f.IsBinaryFieldType) {
+                    // A binary value (base64, possibly megabytes) is recorded by size, not content:
+                    // the record snapshot (FullRecordJSON) keeps the bytes for restore, so the diff
+                    // does not need to carry them twice more. Readers get a readable change either way.
+                    changes[key] = { field: key, oldValue: this.describeBinaryForDiff(oldData[key]), newValue: this.describeBinaryForDiff(newData[key]) };
+                    continue;
+                }
                 const o = this.escapeValueForDiff(oldData[key], quoteToEscape);
                 const n = this.escapeValueForDiff(newData[key], quoteToEscape);
                 changes[key] = { field: key, oldValue: o, newValue: n };
             }
         }
         return changes;
+    }
+
+    /** The diff entry for a binary field: its size, never its base64 (null and undefined pass through). */
+    private describeBinaryForDiff(value: unknown): unknown {
+        if (value === null || value === undefined) return value;
+        return FormatBinaryChangeValue(typeof value === 'string' ? value : String(value));
     }
 
     /**

@@ -3167,6 +3167,29 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/AI/Vectors/MemoryServer:
+    dependencies:
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.2.0-edge.1
+        version: link:../Memory
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJGlobal
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+    optionalDependencies:
+      usearch:
+        specifier: 2.26.2
+        version: 2.26.2
+
   packages/AI/Vectors/Providers/Pinecone:
     dependencies:
       '@memberjunction/ai-vectordb':
@@ -14557,6 +14580,9 @@ importers:
       '@memberjunction/ai-vectors-memory':
         specifier: 6.2.0-edge.1
         version: link:../AI/Vectors/Memory
+      '@memberjunction/ai-vectors-memory-server':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Vectors/MemoryServer
       '@memberjunction/ai-vectors-pgvector':
         specifier: 6.2.0-edge.1
         version: link:../AI/Vectors/Providers/pgvector
@@ -27266,6 +27292,10 @@ packages:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
     hasBin: true
 
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
+    hasBin: true
+
   node-gyp@12.2.0:
     resolution: {integrity: sha512-q23WdzrQv48KozXlr0U1v9dwO/k59NHeSzn6loGcasyf0UnSrtzs8kRxM+mfwJSf0DkX0s43hcqgnSO4/VNthQ==}
     engines: {node: ^20.17.0 || >=22.9.0}
@@ -29980,6 +30010,10 @@ packages:
     resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
     peerDependencies:
       react: 19.1.0
+
+  usearch@2.26.2:
+    resolution: {integrity: sha512-jz4MKg09LFn6CP/fh9MwY7NV3qQUcXrQIt92LV7CMx44AEnGP1QenhHReua3ETqzgoIYcISJ+SsDoX0DOpFh9Q==}
+    engines: {node: '>=22'}
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
@@ -45591,6 +45625,9 @@ snapshots:
       detect-libc: 2.1.2
     optional: true
 
+  node-gyp-build@4.8.4:
+    optional: true
+
   node-gyp@12.2.0:
     dependencies:
       env-paths: 2.2.1
@@ -48769,6 +48806,13 @@ snapshots:
   use-sync-external-store@1.6.0(react@19.1.0):
     dependencies:
       react: 19.1.0
+
+  usearch@2.26.2:
+    dependencies:
+      bindings: 1.5.0
+      node-addon-api: 8.8.0
+      node-gyp-build: 4.8.4
+    optional: true
 
   util-deprecate@1.0.2: {}
 

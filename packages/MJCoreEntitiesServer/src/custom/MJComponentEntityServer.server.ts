@@ -10,12 +10,14 @@ export class MJComponentEntityServer extends MJComponentEntityExtended  {
             { 
                 fieldName: "FunctionalRequirements", 
                 vectorFieldName: "FunctionalRequirementsVector", 
-                modelFieldName: "FunctionalRequirementsVectorEmbeddingModelID" 
+                modelFieldName: "FunctionalRequirementsVectorEmbeddingModelID",
+                binaryVectorFieldName: "FunctionalRequirementsVectorBinary"
             },
             { 
                 fieldName: "TechnicalDesign", 
                 vectorFieldName: "TechnicalDesignVector", 
-                modelFieldName: "TechnicalDesignVectorEmbeddingModelID" 
+                modelFieldName: "TechnicalDesignVectorEmbeddingModelID",
+                binaryVectorFieldName: "TechnicalDesignVectorBinary"
             }
         ]);
         const saveResult: boolean = await super.Save(options);
