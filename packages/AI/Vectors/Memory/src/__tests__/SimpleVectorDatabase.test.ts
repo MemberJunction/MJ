@@ -908,6 +908,11 @@ describe('SimpleVectorDatabase', () => {
             expect(driver().ListIndexes()).toEqual({ indexes: [] });
         });
 
+        it('reports itself read-only and keyless', () => {
+            expect(driver().IsReadOnly).toBe(true);
+            expect(driver().RequiresAPIKey).toBe(false);
+        });
+
         it('lists no vector ids', async () => {
             const result = await driver().ListVectorIDs({ IndexName: 'notes-index' });
             expect(result.IDs).toEqual([]);
@@ -1032,6 +1037,60 @@ describe('SimpleVectorDatabase', () => {
         });
     });
 
+    describe('QueryIndex — metadata filter', () => {
+        function filtered(filter: object, topK = 10): Promise<BaseResponse> {
+            return new SimpleVectorDatabase().QueryIndex({ id: 'notes-index', vector: [1, 0, 0], topK, filter }, USER);
+        }
+
+        beforeEach(() => {
+            defineIndex('notes-index', NOTES_CONFIG);
+            setRows(NOTES.Name, [
+                note('a', [1, 0, 0], { Status: 'Active' }),
+                note('b', [1, 1, 0], { Status: 'Archived' }),
+                note('c', [0, 1, 0], { Status: 'Active' }),
+            ]);
+        });
+
+        it('keeps only rows whose columns pass the filter', async () => {
+            const result = await filtered({ Status: 'Active' });
+
+            expect(result.success).toBe(true);
+            expect(matchesOf(result).map(m => m.id)).toEqual(['ID|a', 'ID|c']);
+        });
+
+        it('applies topK after filtering, not before', async () => {
+            expect(matchesOf(await filtered({ Status: 'Archived' }, 1)).map(m => m.id)).toEqual(['ID|b']);
+        });
+
+        it('resolves Entity, EntityName, SourceType and RecordID the way the remote drivers store them', async () => {
+            expect(matchesOf(await filtered({ Entity: { $in: [NOTES.Name] } }))).toHaveLength(3);
+            expect(matchesOf(await filtered({ EntityName: NOTES.Name }))).toHaveLength(3);
+            expect(matchesOf(await filtered({ Entity: 'Other Entity' }))).toHaveLength(0);
+            expect(matchesOf(await filtered({ SourceType: 'entity' }))).toHaveLength(3);
+            expect(matchesOf(await filtered({ RecordID: { $nin: ['ID|a', 'ID|b'] } })).map(m => m.id)).toEqual(['ID|c']);
+        });
+
+        it('lets the driver-supplied Entity win over a row column of the same name', async () => {
+            setRows(NOTES.Name, [note('a', [1, 0, 0], { Entity: 'Spoofed' })]);
+
+            expect(matchesOf(await filtered({ Entity: NOTES.Name })).map(m => m.id)).toEqual(['ID|a']);
+        });
+
+        it('refuses an unsupported filter without reading any row', async () => {
+            const result = await filtered({ Title: { $regex: '^Note' } });
+
+            expect(result.success).toBe(false);
+            expect(result.data).toBeNull();
+            expect(result.message).toBe('Unsupported metadata filter: unsupported operator "$regex" on "Title"');
+            expect(rowQueries()).toHaveLength(0);
+            expect(loggedErrors().some(e => e.includes('$regex'))).toBe(true);
+        });
+
+        it('treats an empty filter as no filter', async () => {
+            expect(matchesOf(await filtered({}))).toHaveLength(3);
+        });
+    });
+
     describe('inherited query entry points', () => {
         it('routes MetadataFilteredQuery through QueryIndex with the index name intact', async () => {
             defineIndex('notes-index', NOTES_CONFIG);
@@ -1042,6 +1101,21 @@ describe('SimpleVectorDatabase', () => {
 
             expect(result.success).toBe(true);
             expect(matchesOf(result).map(m => m.id)).toEqual(['ID|a']);
+        });
+
+        it('honours EntityNames through MetadataFilteredQuery', async () => {
+            defineIndex('notes-index', NOTES_CONFIG);
+            setRows(NOTES.Name, [note('a', [1, 0, 0])]);
+            const driver = new SimpleVectorDatabase();
+
+            const kept = await driver.MetadataFilteredQuery(
+                { id: 'notes-index', vector: [1, 0, 0], topK: 5, metadataFilter: { EntityNames: [NOTES.Name] } }, USER);
+            const dropped = await driver.MetadataFilteredQuery(
+                { id: 'notes-index', vector: [1, 0, 0], topK: 5, metadataFilter: { EntityNames: ['Other Entity'] } }, USER);
+
+            expect(matchesOf(kept).map(m => m.id)).toEqual(['ID|a']);
+            expect(dropped.success).toBe(true);
+            expect(matchesOf(dropped)).toEqual([]);
         });
     });
 });

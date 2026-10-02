@@ -721,8 +721,13 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
         SimpleVectorServiceProvider.InvalidateAll();
         return { success: true, message: 'cache cleared', data: null };
     }
+    /**
+     * Lists no IDs: the vectors are `MJ: Entity Record Documents` rows, readable only as a calling
+     * user, and this contract carries no user. Read-only drivers are skipped by reconciliation.
+     */
     public ListVectorIDs(_p: ListVectorIDsParams): Promise<ListVectorIDsResult> {
-        return Promise.resolve({ IDs: [], NextCursor: undefined });
+        const result: ListVectorIDsResult = { IDs: [], NextPaginationToken: undefined };
+        return Promise.resolve(result);
     }
 
     private unsupported(name: string): BaseResponse {

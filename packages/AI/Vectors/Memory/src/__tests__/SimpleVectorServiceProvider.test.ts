@@ -1294,7 +1294,7 @@ describe('SimpleVectorServiceProvider', () => {
 
         it('ListVectorIDs returns an empty, final page', async () => {
             await expect(new SimpleVectorServiceProvider().ListVectorIDs({ IndexName: 'doc-1' }))
-                .resolves.toEqual({ IDs: [], NextCursor: undefined });
+                .resolves.toEqual({ IDs: [], NextPaginationToken: undefined });
         });
 
         it('LoadSimpleVectorServiceProvider is a callable no-op anchor for tree-shaking', () => {

@@ -839,5 +839,11 @@ deliberately rather than as part of the vector wiring.
 - **Single-process.** Two MJAPI replicas each maintain their own
   in-memory cache. For sticky-session deployments that's fine; for
   load-balanced multi-replica setups, prefer Pinecone/Qdrant.
+- **Metadata filters are evaluated in memory.** The scope's
+  `MetadataFilter` and the `Entity` push-down are applied to each row
+  (`Entity` / `EntityName`, `RecordID` and `SourceType` resolve as on
+  the remote drivers; anything else reads the row's column). A filter
+  using an operator outside `$eq $ne $gt $gte $lt $lte $in $nin $exists
+  $and $or` fails the query instead of running unfiltered.
 
 - Re-ranker catalog entity + visual configuration UI.

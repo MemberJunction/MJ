@@ -45,6 +45,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * Generates an embedding from composite text (Name + UserQuestion + Description) for richer semantic search.
      * Stores the vector in EmbeddingVector (JSON) and EmbeddingVectorBinary (float32 bytes, base64), and the
      * model reference in EmbeddingModelID.
+     *
+     * Same contract as `MJTagEntityServer`: when no vector comes back — empty text, an empty result or an
+     * embedder error — all three columns are cleared, so a query whose text changed never keeps a vector
+     * computed from its old text. An embedder error is logged and does not fail the save; the query simply
+     * has no semantic match until its next successful embedding.
      */
     protected async GenerateCompositeEmbedding(): Promise<void> {
         const parts = [
@@ -54,19 +59,30 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         ].filter(p => p.trim().length > 0);
 
         if (parts.length === 0) {
-            this.EmbeddingVector = null;
-            this.EmbeddingVectorBinary = null;
-            this.EmbeddingModelID = null;
+            this.clearEmbedding();
             return;
         }
 
         const compositeText = parts.join(' | ');
-        const result = await this.EmbedTextLocal(compositeText);
-        if (result && result.vector && result.vector.length > 0) {
-            this.EmbeddingVector = JSON.stringify(result.vector);
-            this.EmbeddingVectorBinary = Float32VectorToBase64(result.vector);
-            this.EmbeddingModelID = result.modelID;
+        try {
+            const result = await this.EmbedTextLocal(compositeText);
+            if (result?.vector && result.vector.length > 0) {
+                this.EmbeddingVector = JSON.stringify(result.vector);
+                this.EmbeddingVectorBinary = Float32VectorToBase64(result.vector);
+                this.EmbeddingModelID = result.modelID;
+                return;
+            }
+        } catch (error) {
+            LogError(`[MJQueryEntityServer] Embedding refresh failed for query "${this.Name}": ${error instanceof Error ? error.message : String(error)}`);
         }
+        this.clearEmbedding();
+    }
+
+    /** Clears the stored vector (both forms) and the model it was computed with. */
+    private clearEmbedding(): void {
+        this.EmbeddingVector = null;
+        this.EmbeddingVectorBinary = null;
+        this.EmbeddingModelID = null;
     }
 
     // ─── Save / Delete Overrides ─────────────────────────────────────────────────

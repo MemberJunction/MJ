@@ -13,8 +13,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Base64ToFloat32Vector } from '@memberjunction/global';
 import type { SimpleEmbeddingResult } from '@memberjunction/core';
 
-const { stubState, superSave, generateEmbeddingByFieldName, generateEmbeddingsByFieldName, embedTextLocalHelper, aiEngineStub, tagEngineStub } =
+const { logError, stubState, superSave, generateEmbeddingByFieldName, generateEmbeddingsByFieldName, embedTextLocalHelper, aiEngineStub, tagEngineStub } =
     vi.hoisted(() => ({
+        logError: vi.fn(),
         /** Drives the stub's IsSaved / GetFieldByName(...).Dirty answers. */
         stubState: { isSaved: false, dirty: new Set<string>() },
         superSave: vi.fn(),
@@ -37,6 +38,11 @@ const { stubState, superSave, generateEmbeddingByFieldName, generateEmbeddingsBy
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
     return { ...actual, RegisterClass: () => (target: unknown) => target };
+});
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return { ...actual, LogError: logError };
 });
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => {
@@ -238,6 +244,42 @@ describe('MJQueryEntityServer embedding columns', () => {
         expect(query.EmbeddingVector).toBeNull();
         expect(query.EmbeddingVectorBinary).toBeNull();
         expect(query.EmbeddingModelID).toBeNull();
+    });
+
+    /** A query whose stored vector predates the change being saved. */
+    function staleQuery(): TestableQueryEntityServer {
+        const query = create(TestableQueryEntityServer);
+        query.Name = 'Active Members';
+        query.UserQuestion = null;
+        query.Description = 'Members with an active status';
+        query.EmbeddingVector = JSON.stringify(VECTOR);
+        query.EmbeddingVectorBinary = 'c3RhbGU=';
+        query.EmbeddingModelID = MODEL_ID;
+        return query;
+    }
+
+    it('GenerateCompositeEmbedding clears a stale vector when the embedding comes back empty', async () => {
+        embedTextLocalHelper.mockResolvedValue(embeddingResult([]));
+        const query = staleQuery();
+
+        await query.RunGenerateCompositeEmbedding();
+
+        expect(query.EmbeddingVector).toBeNull();
+        expect(query.EmbeddingVectorBinary).toBeNull();
+        expect(query.EmbeddingModelID).toBeNull();
+        expect(logError).not.toHaveBeenCalled();
+    });
+
+    it('GenerateCompositeEmbedding clears a stale vector and logs when the embedder throws', async () => {
+        embedTextLocalHelper.mockRejectedValue(new Error('no model'));
+        const query = staleQuery();
+
+        await query.RunGenerateCompositeEmbedding();
+
+        expect(query.EmbeddingVector).toBeNull();
+        expect(query.EmbeddingVectorBinary).toBeNull();
+        expect(query.EmbeddingModelID).toBeNull();
+        expect(logError).toHaveBeenCalledWith('[MJQueryEntityServer] Embedding refresh failed for query "Active Members": no model');
     });
 
     it('Save clears both columns when nothing is dirty and the description is empty', async () => {

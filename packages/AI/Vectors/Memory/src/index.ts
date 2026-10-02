@@ -17,6 +17,7 @@ export * from './models/VectorKernels';
 export * from './models/VectorStore';
 export * from './models/VectorAccelerator';
 export * from './models/StoredVector';
+export * from './models/MetadataFilterEvaluator';
 
 export { SimpleVectorDatabase, LoadSimpleVectorDatabase } from './models/SimpleVectorDatabase';
 export { SimpleVectorServiceProvider, SimpleVectorIndexCache, LoadSimpleVectorServiceProvider } from './models/SimpleVectorServiceProvider';

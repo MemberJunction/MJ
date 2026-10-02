@@ -393,6 +393,10 @@ When the index's ProviderConfig names a `binaryVectorField`, the driver fetches 
 { "entityName": "MJ: AI Agent Notes", "vectorField": "EmbeddingVector", "binaryVectorField": "EmbeddingVectorBinary" }
 ```
 
+**Metadata filters.** `QueryIndex` applies `QueryOptions.filter` in memory, using the same Pinecone/MongoDB-style language the remote drivers accept: a bare value (equality), `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists`, `$and` and `$or`. The filter sees the row's columns plus `Entity` / `EntityName` (the configured entity), `RecordID` (the prefixed primary-key segment) and `SourceType` (`'entity'`), so a search scope's filter means the same thing here as on Pinecone. A filter it cannot apply — an unknown operator, a malformed operand — fails the query with `Unsupported metadata filter: …` rather than running unfiltered, because a scope's tenant push-down lives in that filter. The evaluator is exported as `CompileMetadataFilter` for other in-process drivers.
+
+The driver reports `IsReadOnly = true` and `RequiresAPIKey = false`, so ingestion pipelines skip it and it loads without a key. `ListVectorIDs` returns `{ IDs: [] }`: the contract carries no user, and rows are only readable as a calling user.
+
 ### `SimpleVectorServiceProvider` (new in v5.38)
 
 **EntityDocument-keyed** in-process driver, purpose-built for `Provider.SearchEntities()` and any other `EntityDocument`-backed search. Each "index" corresponds to one `MJ: Entity Documents` row; vectors come from `MJ: Entity Record Documents` rows filtered by `EntityDocumentID` — `VectorBinary` when valid, falling back to `VectorJSON` (both are fetched), and matches surface the **underlying entity record's RecordID** in their metadata (not the EntityRecordDocument PK).

@@ -34,6 +34,7 @@ import type {
 import type { QueryOptions } from '@memberjunction/ai-vectordb';
 import { SimpleVectorService, VectorValues } from './SimpleVectorService';
 import { DecodeVectorBinary, ParseVectorJSON } from './StoredVector';
+import { CompileMetadataFilter, MetadataFieldReader, MetadataFilterPredicate } from './MetadataFilterEvaluator';
 
 /** Shape of the optional ProviderConfig JSON on the MJVectorIndex row.
  *  Tells the driver which entity column it's reading from. */
@@ -313,7 +314,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
         // fit cleanly into either QueryByRecordId or QueryByVectorValues
         // taken alone — the union members don't share `id`+`vector`. We
         // narrow via property-existence to handle both fields.
-        const p = params as { id?: string; vector?: number[]; topK?: number };
+        const p = params as { id?: string; vector?: number[]; topK?: number; filter?: object };
         const indexName = String(p.id ?? '');
         const queryVector = p.vector;
         const topK = Number(p.topK ?? 10);
@@ -324,13 +325,21 @@ export class SimpleVectorDatabase extends VectorDBBase {
             LogError(`SimpleVectorDatabase.QueryIndex: missing indexName="${indexName}" or vector (length ${Array.isArray(queryVector) ? queryVector.length : 'n/a'})`);
             return { success: false, message: 'Missing indexName or vector', data: null };
         }
+        // Compile the filter BEFORE loading anything: a search scope's tenant / permission push-down
+        // lives in it, so a filter this driver cannot apply fails the query instead of being ignored.
+        const compiled = CompileMetadataFilter(p.filter);
+        if (compiled.Status === 'unsupported') {
+            LogError(`SimpleVectorDatabase.QueryIndex: index="${indexName}" cannot apply its metadata filter — ${compiled.Reason}. The query is refused rather than run unfiltered.`);
+            return { success: false, message: `Unsupported metadata filter: ${compiled.Reason}`, data: null };
+        }
         const loaded = await this.loadIndex(indexName, contextUser);
         if (!loaded) {
             // loadIndex / loadIndexConfig already logged the specific failure reason
             return { success: false, message: `Index "${indexName}" not configured`, data: null };
         }
-        LogStatus(`SimpleVectorDatabase.QueryIndex: index="${indexName}" loaded ${loaded.service.Size} vectors, querying topK=${topK}`);
-        const matches = loaded.service.FindNearest(queryVector, topK, 0);
+        LogStatus(`SimpleVectorDatabase.QueryIndex: index="${indexName}" loaded ${loaded.service.Size} vectors, querying topK=${topK}${compiled.Status === 'ok' ? ' with a metadata filter' : ''}`);
+        const rowFilter = compiled.Status === 'ok' ? this.rowFilter(compiled.Predicate, loaded.config, loaded.entity) : undefined;
+        const matches = loaded.service.FindNearest(queryVector, topK, 0, 'cosine', rowFilter);
         return {
             success: true,
             message: `Returned ${matches.length} match(es)`,
@@ -342,6 +351,42 @@ export class SimpleVectorDatabase extends VectorDBBase {
                 })),
             },
         };
+    }
+
+    /**
+     * Adapts a compiled metadata filter to the service's per-row filter. The filter sees the row's
+     * own columns plus the fields remote drivers store as vector metadata, so one filter means the
+     * same thing on every driver: `Entity` and `EntityName` (the configured entity name —
+     * `VectorSearchProvider` filters on the first, `SharedIndexFilterOptions.EntityNames` on the
+     * second), `RecordID` (the prefixed primary-key segment) and `SourceType` (`'entity'` — every row
+     * here is an entity record). These names take precedence over a row column of the same name.
+     */
+    private rowFilter(predicate: MetadataFilterPredicate, config: SimpleVectorProviderConfig, entity: EntityInfo): (row: Record<string, unknown>) => boolean {
+        return row => {
+            const read: MetadataFieldReader = field => {
+                switch (field) {
+                    case 'Entity':
+                    case 'EntityName': return config.entityName;
+                    case 'SourceType': return 'entity';
+                    case 'RecordID': return CompositeKey.FromEntityRecord(entity, row).ToURLSegment();
+                    default: return row[field];
+                }
+            };
+            return predicate(read);
+        };
+    }
+
+    // ── Driver capabilities ───────────────────────────────────────────────
+
+    /** Vectors live in entity rows written by `BaseEntity` saves; this driver never ingests, so
+     *  ingestion pipelines should skip it instead of logging an "unsupported" error per batch. */
+    public override get IsReadOnly(): boolean {
+        return true;
+    }
+
+    /** In-process — it reads entity rows through `RunView` and calls no external service, so it needs no API key. */
+    public override get RequiresAPIKey(): boolean {
+        return false;
     }
 
     // The remaining VectorDBBase methods are not exercised by the SearchEngine
@@ -365,8 +410,14 @@ export class SimpleVectorDatabase extends VectorDBBase {
         indexCache.clear();
         return { success: true, message: 'cache cleared', data: null };
     }
+    /**
+     * Lists no IDs. The vectors are rows of the configured entity, readable only as a calling user
+     * (row-level security applies), and this contract carries no user — so there is no honest list
+     * to return. Callers that reconcile a remote store against its source skip read-only drivers.
+     */
     public ListVectorIDs(_p: ListVectorIDsParams): Promise<ListVectorIDsResult> {
-        return Promise.resolve({ IDs: [], NextCursor: undefined });
+        const result: ListVectorIDsResult = { IDs: [], NextPaginationToken: undefined };
+        return Promise.resolve(result);
     }
 
     private unsupported(name: string): BaseResponse {
