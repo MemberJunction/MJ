@@ -17,7 +17,7 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
-import { buildNoModelFoundMessage, NOT_EVALUATED_REASON } from './no-model-found-message';
+import { BuildNoModelFoundMessage, NOT_EVALUATED_REASON } from './no-model-found-message';
 import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -1380,7 +1380,7 @@ export class AIPromptRunner extends BaseModelRunner {
       const modelsConsidered: Array<{
         model: MJAIModelEntityExtended;
         vendor?: MJAIVendorEntity;
-        /** The provider implementation, e.g. `OpenRouterLLM`. See summarizeDriverClasses. */
+        /** The provider implementation, e.g. `OpenRouterLLM`. See SummarizeDriverClasses. */
         driverClass?: string;
         priority: number;
         available: boolean;
@@ -1527,7 +1527,7 @@ export class AIPromptRunner extends BaseModelRunner {
     modelsConsidered: Array<{
       model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
-      /** The provider implementation, e.g. `OpenRouterLLM`. See summarizeDriverClasses. */
+      /** The provider implementation, e.g. `OpenRouterLLM`. See SummarizeDriverClasses. */
       driverClass?: string;
       priority: number;
       available: boolean;
@@ -1563,7 +1563,7 @@ export class AIPromptRunner extends BaseModelRunner {
     consideredModels: Array<{
       model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
-      /** The provider implementation, e.g. `OpenRouterLLM`. See summarizeDriverClasses. */
+      /** The provider implementation, e.g. `OpenRouterLLM`. See SummarizeDriverClasses. */
       driverClass?: string;
       priority: number;
       available: boolean;
@@ -1583,7 +1583,7 @@ export class AIPromptRunner extends BaseModelRunner {
     const consideredModels: Array<{
       model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
-      /** The provider implementation, e.g. `OpenRouterLLM`. See summarizeDriverClasses. */
+      /** The provider implementation, e.g. `OpenRouterLLM`. See SummarizeDriverClasses. */
       driverClass?: string;
       priority: number;
       available: boolean;
@@ -1697,7 +1697,7 @@ export class AIPromptRunner extends BaseModelRunner {
    * against its own copy rather than this code.
    */
   private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
-    return buildNoModelFoundMessage(promptName, selectionInfo);
+    return BuildNoModelFoundMessage(promptName, selectionInfo);
   }
 
   /**

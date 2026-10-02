@@ -20,17 +20,24 @@ export const NOT_EVALUATED_REASON =
 
 /** The fields of one considered model/vendor row that the message actually reads. */
 export interface ConsideredModelSummary {
+  // case-violation-ok-legacy-back-compat: mirrors the camelCase row shape of AIModelSelectionInfo.modelsConsidered, which callers pass straight in
   model: { Name?: string | null };
+  // case-violation-ok-legacy-back-compat: mirrors the camelCase row shape of AIModelSelectionInfo.modelsConsidered, which callers pass straight in
   vendor?: { Name?: string | null } | null;
+  // case-violation-ok-legacy-back-compat: mirrors the camelCase row shape of AIModelSelectionInfo.modelsConsidered, which callers pass straight in
   available: boolean;
+  // case-violation-ok-legacy-back-compat: mirrors the camelCase row shape of AIModelSelectionInfo.modelsConsidered, which callers pass straight in
   unavailableReason?: string;
   /** The provider implementation (e.g. `OpenRouterLLM`), when the caller recorded it. */
+  // case-violation-ok-legacy-back-compat: mirrors the camelCase row shape of AIModelSelectionInfo.modelsConsidered, which callers pass straight in
   driverClass?: string;
 }
 
 /** The fields of `AIModelSelectionInfo` that the message actually reads. */
 export interface NoModelFoundSelectionInfo {
+  // case-violation-ok-legacy-back-compat: mirrors AIModelSelectionInfo's camelCase accessors, which callers (and plain-object fixtures) pass straight in
   modelsConsidered?: ConsideredModelSummary[];
+  // case-violation-ok-legacy-back-compat: mirrors AIModelSelectionInfo's camelCase accessors, which callers (and plain-object fixtures) pass straight in
   selectionReason?: string;
 }
 
@@ -47,7 +54,7 @@ export interface NoModelFoundSelectionInfo {
  * Returns an empty string when no row carries a `driverClass`, so callers can append it
  * unconditionally without changing the message for callers that do not record one.
  */
-export function summarizeDriverClasses(considered: ConsideredModelSummary[]): string {
+export function SummarizeDriverClasses(considered: ConsideredModelSummary[]): string {
   const classes = new Map<string, boolean>();
   let notEvaluated = 0;
   for (const row of considered) {
@@ -83,7 +90,7 @@ export function summarizeDriverClasses(considered: ConsideredModelSummary[]): st
  * models were considered and why they were unavailable, so the error is actionable for an operator
  * (most often: missing API credentials).
  */
-export function buildNoModelFoundMessage(
+export function BuildNoModelFoundMessage(
   promptName: string,
   selectionInfo?: NoModelFoundSelectionInfo
 ): string {
@@ -100,7 +107,7 @@ export function buildNoModelFoundMessage(
   }
 
   const considered = selectionInfo.modelsConsidered;
-  const summary = summarizeDriverClasses(considered);
+  const summary = SummarizeDriverClasses(considered);
   const summarySuffix = summary ? ` ${summary}` : '';
 
   // Check if all models were unavailable due to missing credentials

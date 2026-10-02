@@ -16,7 +16,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { AIErrorInfo, AIErrorType, ErrorSeverity, ErrorAnalyzer } from '@memberjunction/ai';
-import { buildNoModelFoundMessage, NOT_EVALUATED_REASON } from '../no-model-found-message';
+import { BuildNoModelFoundMessage, NOT_EVALUATED_REASON } from '../no-model-found-message';
 
 // ============================================================================
 // Mock Types
@@ -88,7 +88,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'No API keys found for any model-vendor combination'
             };
 
-            const message = buildNoModelFoundMessage('Sage - System Prompt', selectionInfo);
+            const message = BuildNoModelFoundMessage('Sage - System Prompt', selectionInfo);
 
             expect(message).toContain('No suitable model found');
             expect(message).toContain('Sage - System Prompt');
@@ -105,7 +105,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'No suitable model candidates found'
             };
 
-            const message = buildNoModelFoundMessage('My Prompt', selectionInfo);
+            const message = BuildNoModelFoundMessage('My Prompt', selectionInfo);
 
             expect(message).toContain('No suitable model found');
             expect(message).toContain('No model-vendor candidates were available');
@@ -113,7 +113,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
         });
 
         it('should handle undefined selectionInfo', () => {
-            const message = buildNoModelFoundMessage('My Prompt', undefined);
+            const message = BuildNoModelFoundMessage('My Prompt', undefined);
 
             expect(message).toContain('No suitable model found');
             expect(message).toContain('No model-vendor candidates were available');
@@ -139,7 +139,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'Model filtered out by configuration constraints'
             };
 
-            const message = buildNoModelFoundMessage('Test Prompt', selectionInfo);
+            const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
 
             // Should use the selectionReason since not ALL models are unavailable
             expect(message).toContain('Model filtered out by configuration constraints');
@@ -160,7 +160,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'No API keys found'
             };
 
-            const message = buildNoModelFoundMessage('Test', selectionInfo);
+            const message = BuildNoModelFoundMessage('Test', selectionInfo);
 
             expect(message).toContain('Model-0/Vendor-0');
             expect(message).toContain('Model-4/Vendor-4');
@@ -182,7 +182,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'No API keys found'
             };
 
-            const message = buildNoModelFoundMessage('Prompt', selectionInfo);
+            const message = BuildNoModelFoundMessage('Prompt', selectionInfo);
 
             expect(message).toContain('GPT-4/default');
         });
@@ -193,7 +193,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
             // Simulate what happens in ExecutePrompt's catch block:
             // 1. buildNoModelFoundMessage creates the error message
             // 2. ErrorAnalyzer.analyzeError classifies it
-            const errorMessage = buildNoModelFoundMessage('System Prompt', {
+            const errorMessage = BuildNoModelFoundMessage('System Prompt', {
                 modelsConsidered: [
                     {
                         model: { ID: 'm1', Name: 'GPT-4' },
@@ -215,7 +215,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
         });
 
         it('should classify errors from empty model list as NoCredentials', () => {
-            const errorMessage = buildNoModelFoundMessage('Test Prompt', undefined);
+            const errorMessage = BuildNoModelFoundMessage('Test Prompt', undefined);
             const error = new Error(errorMessage);
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'AIPromptRunner');
 
@@ -233,7 +233,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
 // badly configured chain and sends an operator to rebuild it, when all 101 rows are one driver
 // class with no key and the fix is delivering that key.
 // ============================================================================
-describe('buildNoModelFoundMessage — naming the provider implementations', () => {
+describe('BuildNoModelFoundMessage — naming the provider implementations', () => {
     /** The observed shape: one driver class repeated across a long candidate list, no key. */
     function platformCreditTenant(rows: number): MockSelectionInfo {
         return {
@@ -250,7 +250,7 @@ describe('buildNoModelFoundMessage — naming the provider implementations', () 
     }
 
     it('collapses a long one-provider list to the fact that actually explains it', () => {
-        const message = buildNoModelFoundMessage('DbAutoDoc - Describe Table', platformCreditTenant(101));
+        const message = BuildNoModelFoundMessage('DbAutoDoc - Describe Table', platformCreditTenant(101));
 
         expect(message).toContain('101 candidates over 1 driver class (OpenRouterLLM)');
         expect(message).toContain('credentialed: none');
@@ -267,7 +267,7 @@ describe('buildNoModelFoundMessage — naming the provider implementations', () 
             selectionReason: 'Model filtered out by configuration constraints'
         };
 
-        const message = buildNoModelFoundMessage('Test Prompt', selectionInfo);
+        const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
 
         expect(message).toContain('2 candidates over 2 driver classes (OpenAILLM, AnthropicLLM)');
         expect(message).toContain('credentialed: OpenAILLM');
@@ -286,7 +286,7 @@ describe('buildNoModelFoundMessage — naming the provider implementations', () 
             selectionReason: 'No API keys found'
         };
 
-        const message = buildNoModelFoundMessage('Test Prompt', selectionInfo);
+        const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
 
         expect(message).toContain('credentialed: none (1 not probed)');
     });
@@ -304,7 +304,7 @@ describe('buildNoModelFoundMessage — naming the provider implementations', () 
             selectionReason: 'No API keys found'
         };
 
-        const message = buildNoModelFoundMessage('Test Prompt', selectionInfo);
+        const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
 
         expect(message).toContain('(OpenAILLM, AnthropicLLM, GroqLLM, +2 more)');
         expect(message).not.toContain('CohereLLM');
@@ -320,7 +320,7 @@ describe('buildNoModelFoundMessage — naming the provider implementations', () 
             selectionReason: 'No API keys found'
         };
 
-        const message = buildNoModelFoundMessage('Test Prompt', selectionInfo);
+        const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
 
         expect(message).not.toContain('driver class');
         expect(message).toContain('Tried: GPT-4/OpenAI.');
