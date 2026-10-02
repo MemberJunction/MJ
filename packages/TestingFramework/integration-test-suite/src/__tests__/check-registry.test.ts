@@ -46,6 +46,7 @@ import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { CloudflareClefChecks } from '../checks/cloudflare-clef.checks';
 import { SystemOneKevChecks } from '../checks/systemone-kev.checks';
+import { PerplexityDeciderChecks } from '../checks/perplexity-decider.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
@@ -153,6 +154,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['cloudflare-clef', CloudflareClefChecks, 6], // CF1-CF6 Clef/Clef-flash metadata, driver registration, runner calls through an HTTP stand-in: envelope failures and failover, a bare response, a JSON credential's account (IT99)
         ['systemone-kev', SystemOneKevChecks, 9], // KV1-KV9 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter (IT100)
+        ['perplexity-decider', PerplexityDeciderChecks, 5], // PX1-PX5 Perplexity Decider metadata, PerplexityDecision registration, runner calls through an HTTP stand-in: the quickstart request and response, a bound credential's token, Default Decision selection and failover (IT101)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
@@ -280,6 +282,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'nested-transactions': 11,
         'open-app-teardown': 2,
         'permission-engine': 15,
+        'perplexity-decider': 5,
         'predictive-studio': 5,
         'prompt-runner': 1,
         'queue': 7,
@@ -344,7 +347,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(100);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(101);
     });
 });
 
