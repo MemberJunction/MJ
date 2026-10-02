@@ -13,10 +13,20 @@ describe('rubric load failures', () => {
             expect(source).not.toMatch(/catch\s*\{/);
         }
         expect(review).toContain('DisagreementError');
-        expect(review).toContain('evaluations.Success');
+        expect(review).toContain('scores.Success');
+        expect(review).toContain('CohortDisagreement');
+        expect(review).toContain('CriterionCohortHumanMeanScore');
+        expect(review).toContain('CriterionKey <code>{{ row.key }}</code>');
+        expect(review).toContain("OpenEntityRecord('MJ: Test Runs'");
+        expect(review).not.toContain('disagreementFromScores');
         expect(analytics).toContain('RubricAnalyticsError');
         expect(analytics).toContain('VersionMetricsError');
-        expect(analytics).toContain('runs.Success');
+        expect(analytics).toContain('evaluations.Success');
+        expect(analytics).toContain('RubricScoreTrend');
+        expect(analytics).toContain('CriterionKey <code>{{ rate.key }}</code>');
+        expect(analytics).toContain("OpenEntityRecord('MJ: Test Runs'");
+        expect(analytics).not.toContain('MJ: Test Suite Runs');
+        expect(analytics).not.toContain('runs.Success');
         expect(drift).toContain('LoadError');
         expect(drift).toContain("QueryName: 'RubricDriftPeriodMeans'");
         expect(drift).toContain('result.Success');

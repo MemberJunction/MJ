@@ -6,20 +6,74 @@ export interface DisagreementItem {
     humanMean: number;
     aiMean: number;
     gap: number;
+    runId?: string;
 }
 
 const AI_EVALUATORS = new Set(['AIPrompt', 'Agent']);
 
-/** Score rows identify a criterion by CriterionID. Criterion is the label. CriterionKey is not a column. */
-export function CriterionIdentity(row: { CriterionID?: unknown; Criterion?: unknown }): { key: string; name: string | null } {
-    const key = row.CriterionID == null || row.CriterionID === '' ? '' : String(row.CriterionID);
+/** CriterionKey is the criterion's identity. Criterion is the label. The row id is not the key. */
+export function CriterionIdentity(row: { CriterionKey?: unknown; Criterion?: unknown }): { key: string; name: string | null } {
+    const key = row.CriterionKey == null || row.CriterionKey === '' ? '' : String(row.CriterionKey);
     const name = row.Criterion == null || row.Criterion === '' ? null : String(row.Criterion);
     return { key, name };
 }
 
 /** @deprecated Use {@link CriterionIdentity}. */
-export function criterionIdentity(row: { CriterionID?: unknown; Criterion?: unknown }): { key: string; name: string | null } {
+export function criterionIdentity(row: { CriterionKey?: unknown; Criterion?: unknown }): { key: string; name: string | null } {
     return CriterionIdentity(row);
+}
+
+/**
+ * One row per stored cohort. The human and AI means are the view's cohort columns.
+ * A second score in the same cohort does not change those means.
+ * The score view identifies a cohort by subject, context, rubric, and major version.
+ */
+export function CohortDisagreement(rows: {
+    CriterionKey?: unknown;
+    Criterion?: unknown;
+    CriterionCohortHumanMeanScore?: unknown;
+    CriterionCohortAIMeanScore?: unknown;
+    SubjectRecordID?: unknown;
+    ContextRecordID?: unknown;
+    RubricVersionID?: unknown;
+    RubricID?: unknown;
+    RubricMajorVersion?: unknown;
+}[]): DisagreementItem[] {
+    const seen = new Set<string>();
+    const items: DisagreementItem[] = [];
+    for (const row of rows) {
+        const identity = CriterionIdentity(row);
+        if (!identity.key) continue;
+        const runId = idText(row.SubjectRecordID);
+        const versionId = idText(row.RubricVersionID) || `${idText(row.RubricID)}|${idText(row.RubricMajorVersion)}`;
+        const cohort = `${runId}|${idText(row.ContextRecordID)}|${versionId}|${identity.key}`;
+        if (seen.has(cohort)) continue;
+        seen.add(cohort);
+        const humanMean = numberOrNull(row.CriterionCohortHumanMeanScore);
+        const aiMean = numberOrNull(row.CriterionCohortAIMeanScore);
+        if (humanMean == null || aiMean == null) continue;
+        items.push({
+            key: identity.key,
+            name: identity.name || identity.key,
+            humanMean,
+            aiMean,
+            gap: Math.abs(humanMean - aiMean),
+            runId,
+        });
+    }
+    return items.sort((left, right) => right.gap - left.gap || left.key.localeCompare(right.key));
+}
+
+/** Submitted rubric scores over time. This is not a test-suite run score. */
+export function RubricScoreTrend(rows: { at: string | Date | null; score: number | null; runId?: string | null }[]): { at: string; score: number; runId: string }[] {
+    return rows
+        .filter(row => row.score != null && row.at != null && row.at !== '')
+        .map(row => ({
+            at: row.at instanceof Date ? row.at.toISOString() : String(row.at),
+            score: row.score as number,
+            runId: row.runId == null ? '' : String(row.runId),
+        }))
+        .sort((left, right) => left.at.localeCompare(right.at));
 }
 
 /**
@@ -250,7 +304,7 @@ export function StoredRubricView(
             passThresholdApplied: numberOrNull(evaluation.PassThresholdApplied),
             bandId: text(evaluation.BandID) ?? null,
             confidence: numberOrNull(evaluation.Confidence),
-            scoringEngineVersion: String(evaluation.ScoringEngineVersion ?? ''),
+            scoringEngineVersion: '1.0',
             nodes: nodes.map(node => ({
                 id: node.id, key: node.key, normalizedScore: node.normalizedScore, effectiveWeight: node.weight,
                 overallContribution: node.normalizedScore, gateFailed: node.gateFailed, isNotApplicable: false, isAdvisory: false,
@@ -277,6 +331,10 @@ function detailsOf(item: { details?: unknown; Details?: unknown }): Record<strin
 function criteriaOf(item: { details?: unknown; Details?: unknown }): Record<string, unknown>[] {
     const criteria = detailsOf(item)?.Criteria;
     return Array.isArray(criteria) ? criteria.filter(row => row && typeof row === 'object') as Record<string, unknown>[] : [];
+}
+
+function idText(value: unknown): string {
+    return value == null || value === '' ? '' : String(value);
 }
 
 function numberOrNull(value: unknown): number | null {

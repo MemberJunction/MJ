@@ -18,8 +18,9 @@ import {
   EvaluationSummaryMetrics
 } from '../services/testing-instrumentation.service';
 import { UUIDsEqual } from '@memberjunction/global';
-import { RunView } from '@memberjunction/core';
-import { criterionIdentity, disagreementFromScores, type DisagreementItem } from '@memberjunction/ng-testing';
+import { CompositeKey, RunView } from '@memberjunction/core';
+import { SharedService } from '@memberjunction/ng-shared';
+import { CohortDisagreement, type DisagreementItem } from '@memberjunction/ng-testing';
 
 type ViewMode = 'queue' | 'history';
 type HistorySort = 'date' | 'rating' | 'test-name';
@@ -72,8 +73,15 @@ interface ReviewFormState {
       @if (Disagreement.length) {
         <section class="rubric-disagreement" aria-label="Rubric disagreement">
           <h3>Rubric disagreement</h3>
-          @for (row of Disagreement; track row.key) {
-            <p>{{ row.name }} — human {{ row.humanMean }} / AI {{ row.aiMean }}</p>
+          @for (row of Disagreement; track $index) {
+            <p>
+              {{ row.name }}
+              CriterionKey <code>{{ row.key }}</code>
+              — human {{ row.humanMean }} / AI {{ row.aiMean }}
+              @if (row.runId) {
+                <button type="button" mjButton variant="secondary" size="sm" (click)="OpenRun(row.runId)">Open run</button>
+              }
+            </p>
           }
         </section>
       }
@@ -1178,41 +1186,29 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
     void this.LoadDisagreement();
   }
 
-  /** Per-criterion human–AI gap, largest first. An empty result leaves the section hidden. */
+  /** Stored cohort means, largest gap first. The view computes the means; this screen does not average a sample. */
   async LoadDisagreement(): Promise<void> {
     try {
       const provider = this.instrumentationService.Provider;
       if (!provider) return;
       const view = RunView.FromMetadataProvider(provider);
-      const evaluations = await view.RunView({
-        EntityName: 'MJ: Rubric Evaluations',
-        ExtraFilter: `Status='Submitted'`,
-        ResultType: 'simple',
-        MaxRows: 500,
-      });
-      if (!evaluations.Success) throw new Error(evaluations.ErrorMessage || 'Could not load evaluations.');
       const scores = await view.RunView({
         EntityName: 'MJ: Rubric Evaluation Scores',
-        ExtraFilter: 'NormalizedScore IS NOT NULL',
+        ExtraFilter: `EvaluationStatus = 'Submitted' AND CriterionCohortHumanMeanScore IS NOT NULL AND CriterionCohortAIMeanScore IS NOT NULL`,
         ResultType: 'simple',
         MaxRows: 1000,
       });
       if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not load scores.');
-      const evaluationRows = (evaluations.Results ?? []) as Record<string, unknown>[];
-      this.Disagreement = disagreementFromScores({
-        evaluations: evaluationRows.map(row => ({
-          id: String(row.ID ?? ''),
-          subjectId: String(row.SubjectRecordID ?? ''),
-          versionId: String(row.RubricVersionID ?? ''),
-          evaluatorType: String(row.EvaluatorType ?? ''),
-          status: String(row.Status ?? ''),
-        })),
-        scores: ((scores.Results ?? []) as Record<string, unknown>[]).map(row => ({
-          evaluationId: String(row.EvaluationID ?? ''),
-          ...criterionIdentity(row),
-          normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
-        })),
-      });
+      this.Disagreement = CohortDisagreement(((scores.Results ?? []) as Record<string, unknown>[]).map(row => ({
+        CriterionKey: row.CriterionKey,
+        Criterion: row.Criterion,
+        CriterionCohortHumanMeanScore: row.CriterionCohortHumanMeanScore,
+        CriterionCohortAIMeanScore: row.CriterionCohortAIMeanScore,
+        SubjectRecordID: row.SubjectRecordID,
+        ContextRecordID: row.ContextRecordID,
+        RubricID: row.RubricID,
+        RubricMajorVersion: row.RubricMajorVersion,
+      })));
       this.DisagreementError = '';
       this.cdr.markForCheck();
     } catch (error) {
@@ -1220,6 +1216,11 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
       this.DisagreementError = error instanceof Error ? error.message : 'Could not load disagreement.';
       this.cdr.markForCheck();
     }
+  }
+
+  OpenRun(runId: string): void {
+    if (!runId) return;
+    SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(runId));
   }
 
   /** @deprecated Use {@link LoadDisagreement}. */
