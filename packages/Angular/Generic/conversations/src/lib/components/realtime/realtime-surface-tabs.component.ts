@@ -122,6 +122,12 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    */
   @Output() WideChanged = new EventEmitter<boolean>();
 
+  /**
+   * The channel whose tab the user is looking at changed (`null` when a non-channel tab, such as Activity, is active).
+   * Lets the session show the model the surface the user is on when it can only watch one.
+   */
+  @Output() ActiveChannelChange = new EventEmitter<string | null>();
+
   /** The panel's tab state (add / focus / dedupe / flash) — see the model for the rules. */
   public readonly Model = new RealtimeSurfaceTabsModel();
 
@@ -284,10 +290,23 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
 
   /** On model changes: schedule the flash clear, report a wide-tier flip, re-render. */
   private onModelChanged(): void {
+    this.emitActiveChannelIfChanged();
     this.scheduleFlashClear();
     this.syncWide();
     this.evaluateOnboarding();
     this.cdr.markForCheck();
+  }
+
+  /** The channel key last reported through {@link ActiveChannelChange}. */
+  private lastReportedChannel: string | null = null;
+
+  /** Reports the focused channel when it differs from the last one reported. */
+  private emitActiveChannelIfChanged(): void {
+    const key = this.Model.ActiveChannelKey;
+    if (key !== this.lastReportedChannel) {
+      this.lastReportedChannel = key;
+      this.ActiveChannelChange.emit(key);
+    }
   }
 
   /**

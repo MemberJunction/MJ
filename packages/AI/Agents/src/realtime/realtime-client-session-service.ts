@@ -43,6 +43,7 @@ import {
     AIAPIKey,
     AIAPIKeyResolver,
     IRealtimeSession,
+    IsZeroDataRetention,
     JSONObject,
     RealtimeSessionParams,
     RealtimeToolCall,
@@ -889,7 +890,7 @@ export class RealtimeClientSessionService {
         // Channel scoping + client-tool tiers: narrows the declared tools to the scope's decision and
         // folds the app tier into the capability manifest the prompt renders. The scoped input is what
         // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
-        const scoped = await this.scopeSessionInput(input, effectiveConfig, contextUser, provider);
+        const scoped = await this.scopeSessionInput(input, effectiveConfig, contextUser, provider, this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID));
         const sessionParams = await this.buildSessionParams(
             scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
             resolution.ModelID, resolution.ModelVendorID,
@@ -922,7 +923,8 @@ export class RealtimeClientSessionService {
         input: PrepareClientSessionInput,
         effectiveConfig: RealtimeCoAgentConfig,
         contextUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        modelHasZeroDataRetention = false
     ): Promise<{ Input: PrepareClientSessionInput; ClientPolicy?: RealtimeSessionClientPolicy }> {
         const tiers = await this.resolveSessionClientToolTiers(input.ApplicationID, input.TargetAgentID, contextUser);
         const appContext = this.withAppToolTier(input.AppContext, tiers.App, input.TargetAgentID);
@@ -936,11 +938,33 @@ export class RealtimeClientSessionService {
             Registry: this.readChannelRegistry(provider),
             ClientTools: input.ExtraTools,
             ClientToolTiers: tiers,
+            ModelHasZeroDataRetention: modelHasZeroDataRetention,
         });
         return {
             Input: { ...input, ExtraTools: outcome.ClientTools, AppContext: appContext },
             ClientPolicy: outcome.Policy,
         };
+    }
+
+    /**
+     * Whether the session model's effective catalog configuration (type < model < vendor < model-vendor)
+     * declares `Privacy.ZeroDataRetention: true`. Fails closed: a model or vendor row that cannot be
+     * resolved, or a catalog lookup that throws, reads as "not declared", so an agent that REQUIRES zero
+     * data retention loses exposure rather than gaining it. Overridable seam.
+     *
+     * @param modelID The resolved `MJ: AI Models` id.
+     * @param modelVendorID The resolved model-vendor row id (the cascade's most specific layer).
+     */
+    protected modelHasZeroDataRetention(modelID: string | undefined, modelVendorID: string | undefined): boolean {
+        if (!modelID) {
+            return false;
+        }
+        try {
+            return IsZeroDataRetention(AIEngine.Instance.GetEffectiveModelConfiguration(modelID, modelVendorID));
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.modelHasZeroDataRetention failed for model '${modelID}': ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+        }
     }
 
     /**

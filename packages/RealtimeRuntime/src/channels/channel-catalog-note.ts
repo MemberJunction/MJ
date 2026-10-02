@@ -17,8 +17,10 @@
  */
 
 import {
+    DescribeExposureLimit,
     REALTIME_CHANNEL_LEGACY_CONTRACT_VERSION,
     type RealtimeChannelDescriptor,
+    type RealtimeChannelExposure,
     type RealtimeChannelVerb,
 } from '@memberjunction/ai-core-plus';
 import { CHANNEL_OPEN_ACTION } from './channel-action-dispatcher';
@@ -32,6 +34,19 @@ export interface ChannelCatalogEntry {
     IsOpen: boolean;
     /** Whether the channel's tools were declared natively at mint (so they already describe themselves). */
     HasNativeTools: boolean;
+    /**
+     * Set when exposure policy (the agent's configuration, a zero-data-retention requirement, or the
+     * user's choice) holds what the model may perceive of this channel below what it could. The note
+     * tells the agent what it receives and why, so it never assumes it can see what it cannot.
+     */
+    ExposureLimit?: {
+        /** What the model actually receives. */
+        Effective: RealtimeChannelExposure;
+        /** The most the channel could expose. */
+        Ceiling: RealtimeChannelExposure;
+        /** Why it is lower, as sentences. */
+        Reasons: readonly string[];
+    };
 }
 
 /** Longest instruction text sent per channel. */
@@ -96,8 +111,9 @@ function renderEntry(entry: ChannelCatalogEntry): string[] {
  */
 export function BuildChannelCatalogNote(entries: ReadonlyArray<ChannelCatalogEntry>): string | null {
     const described = entries.filter(needsEntry);
+    const limits = renderVisibilityLimits(entries);
     if (described.length === 0) {
-        return null;
+        return limits.length > 0 ? limits.join('\n') : null;
     }
     const header = [
         '[channels] Interactive channels in this session.',
@@ -117,5 +133,19 @@ export function BuildChannelCatalogNote(entries: ReadonlyArray<ChannelCatalogEnt
     if (omitted > 0) {
         lines.push(`(${omitted} more channel(s) omitted for length.)`);
     }
+    lines.push(...limits);
     return lines.join('\n');
+}
+
+/** The "visibility limits" section: what the agent perceives of each channel whose exposure is held down, and why. */
+function renderVisibilityLimits(entries: ReadonlyArray<ChannelCatalogEntry>): string[] {
+    const lines: string[] = [];
+    for (const entry of entries) {
+        const limit = entry.ExposureLimit;
+        const sentence = limit ? DescribeExposureLimit(limit.Effective, limit.Ceiling, limit.Reasons) : null;
+        if (sentence) {
+            lines.push(`- ${entry.Descriptor.DisplayName} (channel "${entry.Descriptor.Key}"): ${sentence}`);
+        }
+    }
+    return lines.length > 0 ? ['[channels] Visibility limits — what you perceive of these channels without asking:', ...lines] : [];
 }

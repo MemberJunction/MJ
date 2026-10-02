@@ -73,5 +73,24 @@
       "lastModified": "2026-07-01T17:33:47.066Z",
       "checksum": "ffeda37729d2c7bd1d9c054a52d36a32de68eef23ff803218daa25badc19485a"
     }
+  },
+  {
+    "fields": {
+      "Name": "InteractiveComponent",
+      "Description": "Shows the user any interactive component artifact (dashboard, report, chart, form) next to the voice call and lets the agent operate it. MULTI-INSTANCE and self-describing: the actions, state and events the agent sees are derived from the open component's own spec (custom and standard methods, events, properties), so a component nobody wrote channel code for is operable from its spec. CLIENT-DIRECT: the browser loads the artifact through the signed-in user's own access, renders it, and drives it; the server channel plugin contributes no server tools and persists no state. Opt-in per agent or app (DefaultAvailability 'opt-in'); delegated component artifacts can open automatically via channels.config.InteractiveComponent.autoOpenDelegatedComponents.",
+      "ServerPluginClass": "InteractiveComponentChannelServer",
+      "ClientPluginClass": "RealtimeInteractiveComponentChannel",
+      "TransportType": "PubSub",
+      "IsActive": true,
+      "UIConfig": {
+        "DisplayName": "Interactive Components",
+        "GroupName": "Content",
+        "Icon": "fa-solid fa-cubes",
+        "Color": "--mj-brand-primary"
+      }
+    },
+    "primaryKey": {
+      "ID": "2CA05669-8E08-40D9-8E3D-1E691D57A829"
+    }
   }
 ]

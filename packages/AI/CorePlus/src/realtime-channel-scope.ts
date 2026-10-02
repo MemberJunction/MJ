@@ -42,6 +42,7 @@
 
 import type { JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
 import { IsPlainObject } from '@memberjunction/global';
+import { ReadConfiguredMaxExposure, ResolvePolicyExposure, type RealtimeExposureLimit } from './realtime-channel-exposure';
 import type {
     RealtimeChannelAvailability,
     RealtimeChannelDisplayPolicy,
@@ -87,6 +88,30 @@ export interface RealtimeChannelsConfig {
     config?: Record<string, JSONObject>; // case-violation-ok-legacy-back-compat: mirrors the persisted realtime cascade JSON key
     /** Per-channel display override. */
     displayPolicy?: Record<string, RealtimeChannelDisplayPolicy>; // case-violation-ok-legacy-back-compat: mirrors the persisted realtime cascade JSON key
+    /**
+     * Exposure levels that need a zero-data-retention model. When the session model's configuration
+     * does not declare `Privacy.ZeroDataRetention: true`, exposure is lowered to below the lowest level
+     * listed (see `ResolveChannelExposure`). Applies to every channel in the session. Accumulates as a
+     * UNION across layers: a stricter layer's requirement is never loosened by another.
+     */
+    requireZeroDataRetentionFor?: RealtimeZeroDataRetentionLevel[]; // case-violation-ok-legacy-back-compat: mirrors the persisted realtime cascade JSON key
+}
+
+/** An exposure level a ZDR requirement can name (`'none'` exposes nothing, so it can never need one). */
+export type RealtimeZeroDataRetentionLevel = 'state' | 'pixels';
+
+/** Reads a `requireZeroDataRetentionFor` list: valid levels only, de-duplicated, in a stable order. */
+function readZeroDataRetentionLevels(raw: unknown): RealtimeZeroDataRetentionLevel[] {
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    const levels = new Set<RealtimeZeroDataRetentionLevel>();
+    for (const item of raw) {
+        if (item === 'state' || item === 'pixels') {
+            levels.add(item);
+        }
+    }
+    return (['state', 'pixels'] as const).filter((level) => levels.has(level));
 }
 
 /** Normalizes a channel key for comparison: trimmed and lower-cased (channel keys are case-insensitive). */
@@ -143,6 +168,10 @@ export function NormalizeRealtimeChannelsConfig(raw: unknown): RealtimeChannelsC
     if (displayPolicy) {
         result.displayPolicy = displayPolicy;
     }
+    const zeroDataRetention = readZeroDataRetentionLevels(raw['requireZeroDataRetentionFor']);
+    if (zeroDataRetention.length > 0) {
+        result.requireZeroDataRetentionFor = zeroDataRetention;
+    }
     return Object.keys(result).length > 0 ? result : undefined;
 }
 
@@ -197,7 +226,8 @@ function mergeJsonObjects(base: JSONObject, overlay: JSONObject): JSONObject {
  * wholesale: an app layer's `exclude: ['Media']` would silently erase the agent layer's
  * `exclude: ['RemoteBrowser']`. (Allowed-agent accumulation exists for the same reason.)
  *
- * `config` and `displayPolicy` merge per channel key, later layers winning.
+ * `config` and `displayPolicy` merge per channel key, later layers winning. `requireZeroDataRetentionFor`
+ * is a union (a requirement is only ever added to).
  *
  * @param layers Raw `channels` sections, lowest precedence first. Absent/invalid ones are skipped.
  * @returns The folded config, or `undefined` when no layer contributed anything.
@@ -206,6 +236,7 @@ export function AccumulateRealtimeChannelsConfig(layers: ReadonlyArray<unknown>)
     const decisions = new Map<string, { Key: string; On: boolean }>();
     const config = new Map<string, { Key: string; Value: JSONObject }>();
     const displayPolicy = new Map<string, { Key: string; Value: RealtimeChannelDisplayPolicy }>();
+    const zeroDataRetention = new Set<RealtimeZeroDataRetentionLevel>();
 
     for (const layer of layers) {
         const normalized = NormalizeRealtimeChannelsConfig(layer);
@@ -226,6 +257,9 @@ export function AccumulateRealtimeChannelsConfig(layers: ReadonlyArray<unknown>)
         for (const [key, value] of Object.entries(normalized.displayPolicy ?? {})) {
             displayPolicy.set(NormalizeChannelKey(key), { Key: key, Value: value });
         }
+        for (const level of normalized.requireZeroDataRetentionFor ?? []) {
+            zeroDataRetention.add(level);
+        }
     }
 
     const result: RealtimeChannelsConfig = {};
@@ -242,6 +276,10 @@ export function AccumulateRealtimeChannelsConfig(layers: ReadonlyArray<unknown>)
     }
     if (displayPolicy.size > 0) {
         result.displayPolicy = Object.fromEntries([...displayPolicy.values()].map((d) => [d.Key, d.Value]));
+    }
+    const requiredLevels = readZeroDataRetentionLevels([...zeroDataRetention]);
+    if (requiredLevels.length > 0) {
+        result.requireZeroDataRetentionFor = requiredLevels;
     }
     return Object.keys(result).length > 0 ? result : undefined;
 }
@@ -285,8 +323,17 @@ export interface ResolvedRealtimeChannel {
     Key: string;
     /** Resolved display: config override, else the host's, else the channel's code default. */
     DisplayPolicy: RealtimeChannelDisplayPolicy;
-    /** The ceiling the channel can reach (policy lowers it later; scoping never raises it). */
+    /** The ceiling the channel can reach (scoping never raises it). */
     MaxExposure: RealtimeChannelExposure;
+    /**
+     * The exposure the SERVER allows: the ceiling lowered by the agent's per-channel `maxExposure` and by
+     * any zero-data-retention requirement the session model does not meet. The browser takes its own
+     * minimum of this and the user's choice and can never raise it. Absent on a policy from a server
+     * that predates exposure policy, which readers treat as {@link MaxExposure}.
+     */
+    Exposure?: RealtimeChannelExposure;
+    /** Why {@link Exposure} is below {@link MaxExposure}, each limit with a reason the agent can be told. Absent when nothing lowered it. */
+    ExposureLimits?: RealtimeExposureLimit[];
     /** What put the channel in the session. */
     Source: RealtimeChannelScopeSource;
     /** Resolved per-channel config: the host's defaults beneath agent/app config. Absent when there is none. */
@@ -326,6 +373,12 @@ export interface RealtimeChannelScopeInput {
     Candidates: ReadonlyArray<RealtimeChannelScopeCandidate>;
     /** The folded agent + app configuration (see {@link AccumulateRealtimeChannelsConfig}). */
     Config?: RealtimeChannelsConfig | null;
+    /**
+     * Whether the session model's configuration declares `Privacy.ZeroDataRetention: true`. Only the
+     * server knows the model's catalog row, so a local (no-server) scope leaves this unset, which also
+     * means no agent requirement applies there (the agent's configuration is the server's too).
+     */
+    ModelHasZeroDataRetention?: boolean;
 }
 
 /** Looks up a case-insensitive key in a keyed record, returning the first match. */
@@ -383,6 +436,20 @@ function resolveChannelConfig(candidate: RealtimeChannelScopeCandidate, config: 
     return layered ?? candidate.HostConfig;
 }
 
+/** Resolves a channel's server-decided exposure and records it, with the limits that bind it, on the resolved channel. */
+function applyExposurePolicy(resolved: ResolvedRealtimeChannel, config: RealtimeChannelsConfig, modelHasZeroDataRetention: boolean): void {
+    const policy = ResolvePolicyExposure({
+        Ceiling: resolved.MaxExposure,
+        ConfiguredMax: ReadConfiguredMaxExposure(resolved.Config),
+        RequireZeroDataRetentionFor: config.requireZeroDataRetentionFor,
+        ModelHasZeroDataRetention: modelHasZeroDataRetention,
+    });
+    resolved.Exposure = policy.Exposure;
+    if (policy.Limits.length > 0) {
+        resolved.ExposureLimits = policy.Limits;
+    }
+}
+
 /**
  * Decides which candidate channels are in a session. Pure; see the module documentation for the
  * layering rules (and the two things the layering deliberately is not).
@@ -415,6 +482,7 @@ export function ResolveRealtimeChannelScope(input: RealtimeChannelScopeInput): R
         if (channelConfig) {
             resolved.Config = channelConfig;
         }
+        applyExposurePolicy(resolved, config, input.ModelHasZeroDataRetention === true);
         result.Channels.push(resolved);
     }
     return result;

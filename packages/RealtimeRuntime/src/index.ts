@@ -52,6 +52,16 @@ export {
     type RealtimeSessionStartOptions,
 } from './session/channel-session-scope';
 
+// The user's own per-channel choice of how much the agent may perceive (the "agent can see" control's store).
+export {
+    InMemoryChannelExposurePreferences,
+    ParseExposurePreferences,
+    SerializeExposurePreferences,
+    UserSettingsExposurePreferences,
+    VISUAL_PERCEPTION_SETTING_KEY,
+    type IChannelExposurePreferences,
+} from './session/channel-exposure-preferences';
+
 // Owner-keyed registration of the client tools a host can run for the `ContextTool` proxy.
 export {
     DEFAULT_APP_TOOL_OWNER,
@@ -72,6 +82,7 @@ export {
     type RealtimeSurfaceComponentType,
     type ChannelOnboardingDetails,
     type VisualPerceptionOptions,
+    type ChannelExposureSettings,
 } from './channels/base-realtime-channel-client';
 
 // Channel contract v2 — the runtime half (events, outputs, verb results, `ContextTool` addressing).

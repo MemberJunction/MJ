@@ -218,3 +218,93 @@ describe('NormalizeChannelKey', () => {
         expect(NormalizeChannelKey('  Remote Browser ')).toBe('remote browser');
     });
 });
+
+describe('requireZeroDataRetentionFor in the cascade', () => {
+    it('normalizes to valid levels only, de-duplicated, in a stable order', () => {
+        expect(NormalizeRealtimeChannelsConfig({ requireZeroDataRetentionFor: ['pixels', 'state', 'pixels', 'none', 3, 'PIXELS'] })).toEqual({
+            requireZeroDataRetentionFor: ['state', 'pixels'],
+        });
+        expect(NormalizeRealtimeChannelsConfig({ requireZeroDataRetentionFor: 'pixels' })).toBeUndefined();
+        expect(NormalizeRealtimeChannelsConfig({ requireZeroDataRetentionFor: [] })).toBeUndefined();
+    });
+
+    it('accumulates as a UNION across layers: a stricter layer is never loosened', () => {
+        const folded = AccumulateRealtimeChannelsConfig([
+            { requireZeroDataRetentionFor: ['pixels'] },
+            { requireZeroDataRetentionFor: ['state'] },
+            { exclude: ['Media'] },
+        ]);
+        expect(folded?.requireZeroDataRetentionFor).toEqual(['state', 'pixels']);
+    });
+
+    it('an empty or absent layer leaves an earlier requirement standing', () => {
+        const folded = AccumulateRealtimeChannelsConfig([{ requireZeroDataRetentionFor: ['pixels'] }, { requireZeroDataRetentionFor: [] }, undefined]);
+        expect(folded?.requireZeroDataRetentionFor).toEqual(['pixels']);
+    });
+});
+
+describe('ResolveRealtimeChannelScope — exposure policy', () => {
+    const wb = candidate('Whiteboard', { MaxExposure: 'pixels' });
+
+    it('with no config the server exposure is the channel ceiling', () => {
+        const [channel] = ResolveRealtimeChannelScope({ Candidates: [wb] }).Channels;
+        expect(channel.MaxExposure).toBe('pixels');
+        expect(channel.Exposure).toBe('pixels');
+        expect(channel.ExposureLimits).toBeUndefined();
+    });
+
+    it("the agent's channels.config.<Key>.maxExposure lowers it (case-insensitive key)", () => {
+        const [channel] = ResolveRealtimeChannelScope({
+            Candidates: [wb],
+            Config: { config: { whiteboard: { maxExposure: 'state' } } },
+        }).Channels;
+        expect(channel.Exposure).toBe('state');
+        expect(channel.ExposureLimits).toHaveLength(1);
+        expect(channel.ExposureLimits?.[0].Source).toBe('agent');
+    });
+
+    it('a host-declared maxExposure is a default the agent layer overrides', () => {
+        const hostOnly = ResolveRealtimeChannelScope({
+            Candidates: [candidate('PageWidget', { MaxExposure: 'pixels', Registry: 'none', HostDeclared: true, HostConfig: { maxExposure: 'state' } })],
+        }).Channels[0];
+        expect(hostOnly.Exposure).toBe('state');
+        const overridden = ResolveRealtimeChannelScope({
+            Candidates: [candidate('PageWidget', { MaxExposure: 'pixels', Registry: 'none', HostDeclared: true, HostConfig: { maxExposure: 'state' } })],
+            Config: { config: { PageWidget: { maxExposure: 'none' } } },
+        }).Channels[0];
+        expect(overridden.Exposure).toBe('none');
+    });
+
+    it('downgrades pixels to state when the agent requires zero data retention and the model lacks it', () => {
+        const [channel] = ResolveRealtimeChannelScope({
+            Candidates: [wb],
+            Config: { requireZeroDataRetentionFor: ['pixels'] },
+            ModelHasZeroDataRetention: false,
+        }).Channels;
+        expect(channel.Exposure).toBe('state');
+        expect(channel.ExposureLimits?.[0].Source).toBe('zero-data-retention');
+    });
+
+    it('does not downgrade when the model has zero data retention', () => {
+        const [channel] = ResolveRealtimeChannelScope({
+            Candidates: [wb],
+            Config: { requireZeroDataRetentionFor: ['pixels'] },
+            ModelHasZeroDataRetention: true,
+        }).Channels;
+        expect(channel.Exposure).toBe('pixels');
+    });
+
+    it('treats an unspecified model as NOT having zero data retention (fail closed)', () => {
+        const [channel] = ResolveRealtimeChannelScope({ Candidates: [wb], Config: { requireZeroDataRetentionFor: ['pixels'] } }).Channels;
+        expect(channel.Exposure).toBe('state');
+    });
+
+    it('applies per channel: a state-only channel is unaffected by a pixels requirement', () => {
+        const result = ResolveRealtimeChannelScope({
+            Candidates: [wb, candidate('Form', { MaxExposure: 'state' })],
+            Config: { requireZeroDataRetentionFor: ['pixels'] },
+        });
+        expect(result.Channels.map((c) => [c.Key, c.Exposure])).toEqual([['Whiteboard', 'state'], ['Form', 'state']]);
+        expect(result.Channels[1].ExposureLimits).toBeUndefined();
+    });
+});

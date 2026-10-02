@@ -6,10 +6,14 @@ import {
 } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, type BaseRealtimeClient, type IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
 import {
+  CompareExposure,
+  DescribeExposureLimit,
+  MinExposure,
   ValidateJsonAgainstSchemaSubset,
   type AppContextSnapshot,
   type RealtimeChannelActor,
   type RealtimeChannelDescriptor,
+  type RealtimeChannelExposure,
 } from '@memberjunction/ai-core-plus';
 import type {
   RealtimeChannelEvent,
@@ -22,6 +26,7 @@ import { SynthesizeChannelDescriptor } from './channel-descriptor-synthesis';
 import { ChannelPerceptionCoalescer, DEFAULT_CHANNEL_PERCEPTION_OPTIONS, type ChannelPerceptionOptions } from './channel-perception';
 import { FormatChannelNote } from './channel-state-delta';
 import { VisualPerceptionPump, type VisualFrameReason } from './channel-visual-pump';
+import type { ParsedDelegationArtifact } from '../session/delegation-result-parser';
 
 /**
  * A UI framework's component-class reference, as far as this runtime is concerned.
@@ -546,8 +551,11 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * Default `[]`.
    */
   public GetSourcedTracks(): readonly RealtimeTrackDescriptor[] {
-    // A channel that enabled visual perception sources the inbound video track the pump writes to.
-    return this.visualFrameProvider ? [CHANNEL_INBOUND_VIDEO_TRACK] : [];
+    // A channel that enabled visual perception sources the inbound video track the pump writes to — unless the
+    // agent's policy has already ruled pixels out (the user's own toggle does not: a user who turns the agent's
+    // view back on mid-call needs the track to exist). Not requesting video is also what keeps a session out of
+    // the shorter session limits video carries.
+    return this.visualFrameProvider && this.policyAllowsPixels() ? [CHANNEL_INBOUND_VIDEO_TRACK] : [];
   }
 
   /**
@@ -744,11 +752,19 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
     if (opened && !opened.Success) {
       return opened;
     }
-    const state = this.GetState();
-    this.ensurePerception().SetBaseline(state);
-    this.EmitChannelEvent('opened', { inputs });
-    this.Context?.SendContextNote(FormatChannelNote(descriptor.Key, this.InstanceId, 'opened', { state }));
-    return { Success: true, Result: { opened: true, channel: descriptor.Key, instance: this.InstanceId } };
+    // A multi-instance channel names the instance it just created; every other channel has one id.
+    const instanceId = opened?.Instance ?? this.InstanceId;
+    this.EmitChannelEvent('opened', { inputs }, undefined, instanceId);
+    if (this.Exposure === 'none') {
+      // The agent opened it and may use it, but exposure policy keeps what it holds from the model.
+      this.Context?.SendContextNote(FormatChannelNote(descriptor.Key, instanceId, 'opened', { exposure: 'none' }));
+    } else {
+      const state = this.GetState();
+      this.ensurePerception().SetBaseline(state);
+      this.Context?.SendContextNote(FormatChannelNote(descriptor.Key, instanceId, 'opened', { state }));
+    }
+    const extra = opened && IsPlainObject(opened.Result) ? (opened.Result as JSONObject) : {};
+    return { Success: true, Result: { opened: true, channel: descriptor.Key, instance: instanceId, ...extra } };
   }
 
   /**
@@ -766,8 +782,9 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * {@link StrictStateChecks} is on; a mismatch is logged, never swallowed into silence or thrown.
    *
    * @param output What the channel hands back.
+   * @param instanceId The instance that completed, for a multi-instance channel (default: the primary instance).
    */
-  public Complete(output: JSONObject): void {
+  public Complete(output: JSONObject, instanceId: string = this.InstanceId): void {
     const descriptor = this.GetDescriptor();
     if (descriptor.Output && BaseRealtimeChannelClient.StrictStateChecks) {
       const issues = ValidateJsonAgainstSchemaSubset(output, descriptor.Output, '$');
@@ -775,9 +792,13 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
         console.warn(`[RealtimeChannel:${descriptor.Key}] Complete() output does not match the descriptor's Output schema: ${issues.join('; ')}`);
       }
     }
-    this.channelOutputSubject.next({ Channel: descriptor.Key, Instance: this.InstanceId, Output: output, OccurredAt: Date.now() });
-    this.EmitChannelEvent('completed', output);
-    this.Context?.SendContextNote(FormatChannelNote(descriptor.Key, this.InstanceId, 'completed', output));
+    this.channelOutputSubject.next({ Channel: descriptor.Key, Instance: instanceId, Output: output, OccurredAt: Date.now() });
+    this.EmitChannelEvent('completed', output, undefined, instanceId);
+    // The output is what the channel holds (a submitted form, a chosen option): state exposure decides
+    // whether the model is told it, or only that the channel finished.
+    this.Context?.SendContextNote(
+      FormatChannelNote(descriptor.Key, instanceId, 'completed', this.Exposure === 'none' ? { exposure: 'none' } : output)
+    );
   }
 
   // ── Contract v2: change tracking + structured perception ───────────────────
@@ -816,7 +837,8 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   protected RecordChange(options: { Author?: RealtimeChannelActor | 'system'; Perceive?: boolean } = {}): number {
     const id = ++this.channelChangeSeq;
     this.EmitChannelEvent('state_changed', options.Author ? { author: options.Author } : {}, id);
-    if (options.Perceive !== false) {
+    // Observers of Events$ see every change; the MODEL is told only what exposure policy lets it perceive.
+    if (options.Perceive !== false && this.Exposure !== 'none') {
       this.ensurePerception().Record(id);
     }
     return id;
@@ -829,11 +851,12 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * @param name The event name (declare it in the descriptor's `Events`).
    * @param payload The event payload.
    * @param changeId The change id the event relates to, when it relates to one.
+   * @param instanceId The instance the event is about, for a multi-instance channel (default: the primary instance).
    */
-  protected EmitChannelEvent(name: string, payload: JSONObject = {}, changeId?: number): void {
+  protected EmitChannelEvent(name: string, payload: JSONObject = {}, changeId?: number, instanceId: string = this.InstanceId): void {
     const event: RealtimeChannelEvent = {
       Channel: this.ChannelName,
-      Instance: this.InstanceId,
+      Instance: instanceId,
       Name: name,
       Payload: payload,
       OccurredAt: Date.now()
@@ -889,6 +912,144 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
     }
     this.warnedStateIssueKeys.add(key);
     console.warn(`[RealtimeChannel:${this.ChannelName}] ${message}`);
+  }
+
+  // ── Contract v2: artifacts from delegated runs ─────────────────────────────
+
+  /**
+   * Whether this channel wants to be offered the artifacts a delegated run just produced (the agent asked
+   * Skip or Sage to build something, and it came back as artifacts). A channel that hosts artifacts says yes
+   * for the ones it can show — and for an artifact it ALREADY shows, so a newer version replaces it in place.
+   *
+   * Asked of every channel in the session, mounted or merely advertised. For an advertised channel it is
+   * asked before the channel has been initialized, so it must not depend on {@link Context}; the channel's
+   * resolved configuration is passed in for exactly that reason. Saying yes for an advertised channel
+   * mounts it, so only answer yes when you will do something with the artifacts.
+   *
+   * Default: `false` — a channel that does not host artifacts is never bothered.
+   *
+   * @param artifacts What the delegated run produced.
+   * @param config This channel's resolved configuration (host defaults beneath agent/app config).
+   */
+  public AcceptsDelegationArtifacts(_artifacts: readonly ParsedDelegationArtifact[], _config: JSONObject): boolean {
+    return false;
+  }
+
+  /**
+   * A delegated run produced artifacts this channel said it wants ({@link AcceptsDelegationArtifacts}). The
+   * channel is mounted and initialized by now. Never throw into the runtime: handle your own failures and
+   * report them (the runtime logs anything that escapes, but cannot recover the work).
+   *
+   * Default: nothing.
+   *
+   * @param artifacts What the delegated run produced.
+   */
+  public OnDelegationArtifacts(_artifacts: readonly ParsedDelegationArtifact[]): void | Promise<void> {
+    // default: a channel that does not host artifacts ignores them
+  }
+
+  // ── Contract v2: exposure (how much of this channel the model may perceive) ──
+
+  /** The exposure the SERVER's policy allows (agent cap, zero data retention); `undefined` until the runtime applies one. */
+  private policyExposure: RealtimeChannelExposure | undefined;
+  /** The user's own choice for this channel; `undefined` when they made none. */
+  private userExposure: RealtimeChannelExposure | undefined;
+  /** Why exposure is below the channel's ceiling, as sentences the agent can be told. */
+  private exposureReasons: string[] = [];
+
+  /**
+   * How much of this channel the model may perceive without asking: the lowest of the channel's own ceiling
+   * (`GetDescriptor().MaxExposure`), the server policy and the user's choice. A channel nobody has applied a
+   * policy to simply has its ceiling, which is what every channel had before exposure policy existed.
+   *
+   * - `'none'`: no state notes and no frames.
+   * - `'state'`: structured state notes; no frames.
+   * - `'pixels'`: state notes and frames.
+   *
+   * It governs what flows to the model UNPROMPTED (perception notes, the contents of `opened` / `completed`
+   * notes, frames). It does not rewrite what a verb the agent itself invokes returns: that is the
+   * channel's declared contract, so a channel whose verbs would return sensitive data should say so in
+   * its own `MaxExposure` and not return it.
+   */
+  public get Exposure(): RealtimeChannelExposure {
+    return MinExposure(this.GetDescriptor().MaxExposure, this.policyExposure, this.userExposure);
+  }
+
+  /** Why {@link Exposure} is below the channel's ceiling; empty when it is not. */
+  public get ExposureReasons(): readonly string[] {
+    return this.exposureReasons;
+  }
+
+  /**
+   * Whether the server policy (not the user) leaves room for pixels. Deliberately does not consult the
+   * descriptor: a synthesized descriptor derives its `MaxExposure` from {@link GetSourcedTracks}, which asks
+   * this, so reading it here would recurse. A channel that enabled visual perception has declared pixels.
+   */
+  private policyAllowsPixels(): boolean {
+    return this.policyExposure === undefined || this.policyExposure === 'pixels';
+  }
+
+  /**
+   * Applies exposure policy: the server's decision and the user's own choice. The runtime calls this when
+   * it mounts the channel and again whenever the user changes their choice.
+   *
+   * Withdrawing exposure takes effect immediately: a pending perception note is dropped, a pending frame
+   * is dropped, and the channel's video source stops being forwarded. Restoring it re-baselines (the
+   * model's picture of the channel is stale, so the next note is a full snapshot) and sends a fresh frame.
+   * When the call is live the model is told about the change, with the reason, so it never assumes it
+   * can still see what it can't.
+   *
+   * @param settings `Policy` — the server-decided exposure; `User` — the user's choice (omit for none);
+   *   `Reasons` — why the policy lowered it, from the server's limits.
+   */
+  public ApplyExposure(settings: ChannelExposureSettings): void {
+    const previous = this.Exposure;
+    this.policyExposure = settings.Policy;
+    this.userExposure = settings.User;
+    this.exposureReasons = [...(settings.Reasons ?? [])];
+    const next = this.Exposure;
+    if (previous === next) {
+      return;
+    }
+    this.applyExposureEffects(previous, next);
+    this.announceExposureChange(previous, next);
+  }
+
+  /** Makes a change in exposure real: stops what is no longer allowed, restarts what is again. */
+  private applyExposureEffects(previous: RealtimeChannelExposure, next: RealtimeChannelExposure): void {
+    const hadState = CompareExposure(previous, 'state') >= 0;
+    const hasState = CompareExposure(next, 'state') >= 0;
+    if (hadState && !hasState) {
+      this.channelPerception?.CancelPending();
+    } else if (!hadState && hasState) {
+      // The model's picture of this channel went stale while it could not see it.
+      this.channelPerception?.ResetBaseline();
+      if (this.Context?.Client) {
+        this.ensurePerception().Record(this.channelChangeSeq);
+      }
+    }
+    const hadPixels = previous === 'pixels';
+    const hasPixels = next === 'pixels';
+    this.VisualVideoBridge?.SetSourceEnabled?.(hasPixels, false);
+    if (hadPixels && !hasPixels) {
+      this.visualFramePump?.CancelPending();
+    } else if (!hadPixels && hasPixels) {
+      void this.NotifyVisualChange();
+    }
+  }
+
+  /** Emits the change on {@link Events$} and, when the call is live, tells the model what it can now perceive and why. */
+  private announceExposureChange(previous: RealtimeChannelExposure, next: RealtimeChannelExposure): void {
+    const ceiling = this.GetDescriptor().MaxExposure;
+    const limit = DescribeExposureLimit(next, ceiling, this.exposureReasons);
+    const payload: JSONObject = { exposure: next, was: previous };
+    if (limit) {
+      payload['limit'] = limit;
+    }
+    this.EmitChannelEvent('exposure_changed', payload);
+    if (this.Context?.Client) {
+      this.Context.SendContextNote(FormatChannelNote(this.ChannelName, this.InstanceId, 'exposure_changed', payload));
+    }
   }
 
   // ── Contract v2: visual perception (the change-driven frame pump) ──────────
@@ -961,8 +1122,24 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    */
   protected EnsureVideoBridge(): ChannelInboundVideoBridge | null {
     if (!this.VisualVideoBridge && this.Context && this.visualFrameProvider) {
-      this.VisualVideoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this.visualFrameProvider);
+      // The channel registers as a SOURCE with the session's video arbiter (the single writer of inbound
+      // video) rather than writing to the model itself, so when several sources are live the arbiter decides
+      // which one the model sees and tells it. The id and label are how the "agent can see" UI names it.
+      const descriptor = this.GetDescriptor();
+      this.VisualVideoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this.visualFrameProvider, {
+        SourceID: `${descriptor.Key}#${this.InstanceId}`,
+        Label: descriptor.DisplayName,
+        Kind: 'surface',
+        ChannelKey: descriptor.Key,
+      });
+      if (this.Exposure !== 'pixels') {
+        this.VisualVideoBridge.SetSourceEnabled?.(false, false);
+      }
     }
+    // List the source with the arbiter as soon as the video track is up, so the user can see and switch it
+    // before it has sent a frame (a source switched off never sends one, and would otherwise be unlistable).
+    // (Optional call: channels' tests install minimal bridge stubs that predate source registration, as with Start below.)
+    this.VisualVideoBridge?.Register?.();
     if (
       this.visualPerceptionOptions.StartBridgePoller &&
       this.VisualVideoBridge &&
@@ -979,6 +1156,7 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
     return new VisualPerceptionPump({
       GetSink: () => this.EnsureVideoBridge(),
       IsInboundVideoEstablished: () => this.Context?.Client?.IsTrackEstablished('video', 'inbound') ?? false,
+      IsPermitted: () => this.Exposure === 'pixels',
       GetCadenceMs: () => this.getNegotiatedVisualCadenceMs(),
       CaptureFrame: async () => provider.GetLatestFrame(),
       GetChangeId: () => this.channelChangeSeq,
@@ -1040,6 +1218,18 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
 
 /** The primary instance id of a single-instance channel. */
 const PRIMARY_CHANNEL_INSTANCE_ID = '1';
+
+/**
+ * Settings for {@link BaseRealtimeChannelClient.ApplyExposure}.
+ */
+export interface ChannelExposureSettings {
+  /** The exposure the server's policy allows (agent cap and zero-data-retention requirement). Omit when no server policy applies. */
+  Policy?: RealtimeChannelExposure;
+  /** The user's own choice for this channel. Omit when they made none. */
+  User?: RealtimeChannelExposure;
+  /** Why the policy lowered exposure, as sentences the agent can be told. */
+  Reasons?: readonly string[];
+}
 
 /**
  * Options for {@link BaseRealtimeChannelClient.EnableVisualPerception}.

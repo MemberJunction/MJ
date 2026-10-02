@@ -1,0 +1,31 @@
+@if (Sources.length > 0) {
+  <div class="perception-chip" [class.perception-chip--off]="EnabledSources.length === 0">
+    <button type="button" mjButton variant="outline" size="sm" class="perception-chip__trigger"
+            aria-haspopup="true"
+            [attr.aria-expanded]="Expanded"
+            [attr.aria-label]="TriggerLabel"
+            (click)="TogglePanel()">
+      <i class="fa-solid" [class.fa-eye]="EnabledSources.length > 0" [class.fa-eye-slash]="EnabledSources.length === 0"
+         aria-hidden="true"></i>
+      <span class="perception-chip__summary">{{ Summary }}</span>
+    </button>
+
+    @if (Expanded) {
+      <div class="perception-chip__panel" role="group" aria-label="What the agent can see">
+        <p class="perception-chip__hint">Turn a source off and the agent stops seeing it.</p>
+        <ul class="perception-chip__list">
+          @for (source of Sources; track TrackSource($index, source)) {
+            <li class="perception-chip__row">
+              <span class="perception-chip__label">{{ source.Label }}</span>
+              <span class="perception-chip__status"
+                    [class.perception-chip__status--live]="source.Enabled && source.Active">{{ StatusText(source) }}</span>
+              <mj-switch [AriaLabel]="SwitchLabel(source)"
+                         [ngModel]="source.Enabled"
+                         (ngModelChange)="OnSwitch(source, $event)"></mj-switch>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+}

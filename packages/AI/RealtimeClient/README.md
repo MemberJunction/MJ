@@ -83,6 +83,8 @@ Errors (`RealtimeClientError`): `Fatal: true` means the session is unusable (tra
 - **Audio**: client → model is 16-bit PCM @ 16 kHz mono via the shared `createPcmMicCapture` worklet pipeline; model → client is PCM @ 24 kHz, scheduled gaplessly by `GeminiPcmPlayback` (a thin specialization of the shared `RealtimePcmPlayback`), which also backs `IsAudioPlaying` and flushes on barge-in (obligation #3).
 - The server-built `SessionConfig` carries `{ model, config }` (system instruction, tools, transcription, modalities); the client applies it at `live.connect`.
 
+- **Inbound video**: `maxInboundVideoStreams` and `maxInboundVideoRate` come from the minted `SessionConfig` (the model profile: Gemini 3.8 Live and Extended Thinking take one stream; a model without video input takes none). `negotiateTracks` keys requested tracks by direction + modality + `SourceID` and marks streams beyond the model's maximum `'unsupported'` with the reason.
+
 ### `ElevenLabsRealtimeClient` — `@RegisterClass(BaseRealtimeClient, 'elevenlabs')`
 
 - **Transport**: raw WebSocket against the server-minted **signed URL** — the `EphemeralToken` *is* the `wss://…&token=…` URL (no API key in the browser). Handshake: open → send `conversation_initiation_client_data` carrying the server-authored prompt override (from the `SessionConfig` pact `{ agentId, overrides, config }`) → wait for `conversation_initiation_metadata` → negotiate PCM rates from the metadata's audio-format tags → build the audio plane → `'listening'` (obligation #7). Non-PCM telephony formats (`ulaw_8000`) degrade loudly to the 16 kHz default with a warning.
@@ -107,6 +109,17 @@ The three websocket drivers (Gemini, ElevenLabs, AssemblyAI — everyone whose a
 - **`pcmUtils.ts`** — base64 ↔ `ArrayBuffer` and PCM conversion helpers.
 
 Drivers expose these through overridable `protected` creation seams (`createMicCapture` / `createPlayback`), so tests run with no audio hardware.
+
+## Video sources and the arbiter (`src/media/`)
+
+Several things can offer the model pictures at once (a whiteboard, a remote browser, a component, a camera, a shared screen); a model accepts a bounded number of inbound video streams (`MaxInboundVideoStreams`, 1 for Gemini Live today). `VideoSourceArbiter` is the **single writer** of inbound video per connection (`VideoSourceArbiter.ForSink(client)`), so there is exactly one place that decides what the model sees:
+
+* sources `RegisterSource({ SourceID, Label, Kind, ChannelKey })` and push frames with `PushFrame(sourceId, base64, mime)`; the arbiter forwards up to the model's stream count (N-stream models pass every enabled source through) and **paces** to the negotiated rate with jitter headroom (`MinVideoFrameSpacingMs`).
+* with more enabled sources than streams it picks by a **policy that is data** (`DEFAULT_VIDEO_SOURCE_POLICY`: user pick, most recently started capture, the focused surface, newest), and sends `[The agent is now viewing: <label>]` as a context note on every switch (and when sources are turned off or on while arbitrating).
+* `SelectSource`, `SetFocusedSource` / `SetFocusedChannel`, `SetSourceEnabled(id, enabled, notify)`, `GetSources()`, `OnChange()` back the "agent can see" control.
+* it talks to a narrow `IVideoFrameSink` (stream count, rate, `SendVideoFrame(data, mime, sourceId?)`, `SendContextNote`), so a driver other than Gemini adopts it by implementing four members.
+
+`ChannelInboundVideoBridge` (the old per-channel poller) now registers its channel as a source instead of writing to the model itself; its exports and options are unchanged (`Rate` is deprecated: the poll follows the negotiated rate).
 
 ## Driver-author obligations
 

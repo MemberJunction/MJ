@@ -30,6 +30,8 @@ class PictureChannel extends BaseRealtimeChannelClient {
                 started.count++;
             },
             Stop: () => undefined,
+            Register: () => true,
+            SetSourceEnabled: () => undefined,
             PushFrame: (frame: string) => {
                 this.Pushed.push(frame);
                 return true;

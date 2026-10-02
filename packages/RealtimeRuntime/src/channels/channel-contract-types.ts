@@ -29,6 +29,12 @@ export interface RealtimeChannelVerbResult {
     Error?: string;
     /** Specifics of the failure (e.g. each schema violation). */
     Details?: string[];
+    /**
+     * The instance a successful open created (or acted on), for a {@link RealtimeChannelDescriptor.MultiInstance}
+     * channel. Returned from `OnOpen` so the opened note, the `opened` event and the open result name the
+     * instance that was just created rather than the channel's primary one. Ignored by single-instance channels.
+     */
+    Instance?: string;
 }
 
 /** One event a channel emitted on {@link BaseRealtimeChannelClient.Events$}. */

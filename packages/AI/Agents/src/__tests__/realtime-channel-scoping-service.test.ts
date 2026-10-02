@@ -171,6 +171,67 @@ describe('PrepareClientSession — channel scoping', () => {
     });
 });
 
+describe('PrepareClientSession — exposure policy (agent cap and zero data retention)', () => {
+    const wb = (): RealtimeChannelCandidate => candidate('Whiteboard', { MaxExposure: 'pixels' });
+    const config = (channels: object): string => JSON.stringify({ realtime: { channels } });
+
+    async function prepare(channels: object | null, model: { Privacy?: { ZeroDataRetention?: boolean } } | null | 'throws') {
+        const svc = new ScopingService();
+        svc.Tiers = {};
+        svc.Registry = [{ Name: 'Whiteboard', IsActive: true }];
+        const spy = vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue(model === 'throws' ? null : model);
+        if (model === 'throws') {
+            // Only the zero-data-retention lookup (the first call, made while scoping) fails; the later
+            // session-bag lookup is unrelated and must keep working.
+            spy.mockImplementationOnce(() => {
+                throw new Error('catalog unavailable');
+            });
+        }
+        const result = await svc.PrepareClientSession(
+            input({ ChannelCandidates: [wb()], ConfigOverridesJson: channels ? config(channels) : undefined }),
+            user,
+            provider,
+        );
+        return result.ClientPolicy?.Channels[0];
+    }
+
+    it('with no exposure configuration the server exposure is the channel ceiling', async () => {
+        const channel = await prepare(null, null);
+        expect(channel).toMatchObject({ MaxExposure: 'pixels', Exposure: 'pixels' });
+        expect(channel?.ExposureLimits).toBeUndefined();
+    });
+
+    it("the agent's channels.config.<Key>.maxExposure lowers what rides in the policy", async () => {
+        const channel = await prepare({ config: { Whiteboard: { maxExposure: 'state' } } }, null);
+        expect(channel?.Exposure).toBe('state');
+        expect(channel?.ExposureLimits?.[0]).toMatchObject({ Source: 'agent', Level: 'state' });
+    });
+
+    it('DOWNGRADES pixels to state when the agent requires zero data retention and the model does not declare it', async () => {
+        const channel = await prepare({ requireZeroDataRetentionFor: ['pixels'] }, { Privacy: { ZeroDataRetention: false } });
+        expect(channel?.Exposure).toBe('state');
+        expect(channel?.ExposureLimits?.[0].Source).toBe('zero-data-retention');
+        expect(channel?.ExposureLimits?.[0].Reason).toMatch(/zero-data-retention model/);
+    });
+
+    it('does NOT downgrade when the model declares Privacy.ZeroDataRetention: true', async () => {
+        const channel = await prepare({ requireZeroDataRetentionFor: ['pixels'] }, { Privacy: { ZeroDataRetention: true } });
+        expect(channel?.Exposure).toBe('pixels');
+    });
+
+    it('fails CLOSED: a model whose catalog row cannot be read counts as not declaring zero data retention', async () => {
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const channel = await prepare({ requireZeroDataRetentionFor: ['pixels'] }, 'throws');
+        expect(channel?.Exposure).toBe('state');
+        logged.mockRestore();
+    });
+
+    it('an agent with no requirement is unaffected by a model that lacks zero data retention', async () => {
+        const channel = await prepare({ include: ['Whiteboard'] }, null);
+        expect(channel?.Exposure).toBe('pixels');
+    });
+});
+
 describe('PrepareClientSession — the app client-tool tier', () => {
     it('layers the app\'s tools beneath the surface manifest, through the unified resolver, in the prompt', async () => {
         const svc = new ScopingService();
