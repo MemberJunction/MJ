@@ -1,8 +1,8 @@
 import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { CompositeKey, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJRubricCriterionLevelEntity } from '@memberjunction/core-entities';
-import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { CategoryParentChoices, HostSnapshot, PriorPublishedVersion, ScaleIsFrozen } from './form-hosts.model';
+import { Frozen, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { CategoryParentChoices, HostSnapshot, PriorPublishedVersion } from './form-hosts.model';
 import { PublishPreview } from './model.js';
 import { RubricCategoryEditorComponent, RubricCriterionEditorComponent, RubricScaleLevelEditorComponent } from './record-editors.component';
 import { RubricVersionDiffComponent } from './version-diff.component';
@@ -83,7 +83,7 @@ export class RubricScaleLevelHostComponent implements OnChanges {
         const versionIds = [...new Set(criteria.map(row => String(row.RubricVersionID ?? '')).filter(id => id))];
         if (versionIds.length === 0) { this.Frozen = false; return; }
         const versions = await rows(this.Provider, 'MJ: Rubric Versions', `ID IN (${versionIds.map(id => `'${quote(id)}'`).join(', ')}) AND Status='Published'`);
-        this.Frozen = ScaleIsFrozen(versions.length > 0 ? [this.ScaleId] : [], this.ScaleId);
+        this.Frozen = Frozen(versions.length > 0 ? [this.ScaleId] : [], this.ScaleId);
     }
 }
 

@@ -44,6 +44,11 @@ describe('catalog row', () => {
         expect(source).not.toContain('export function planNodeSave');
         expect(source).not.toContain('export function planBandSave');
         expect(source).not.toContain('@deprecated Use {@link PublishPreview}');
+        expect(source).not.toContain('export function WeightShares');
+        expect(source).not.toContain('export function DraftProblems');
+        expect(source).not.toContain('export function BandFor');
+        expect(source).toContain('BandFor, DraftProblems');
+        expect(source).toContain('WeightShares');
     });
 
     it('names the published version, the previewed draft, and the category', () => {

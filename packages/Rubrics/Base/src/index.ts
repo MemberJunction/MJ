@@ -9,6 +9,7 @@ export type {
     RubricScaleRecord,
     RubricVersionRecord,
 } from './RubricEngineBase.js';
+export { BandFor, DraftProblems, Frozen, WeightShares } from './authoring.js';
 export { EvidenceJson, type QuoteEvidence } from './evidence.js';
 export { RubricScoring, RubricValidationError, SCORING_ENGINE_VERSION } from './RubricScoring.js';
 export { HighestNonDraftVersion, RubricVersionDiff } from './RubricVersionDiff.js';

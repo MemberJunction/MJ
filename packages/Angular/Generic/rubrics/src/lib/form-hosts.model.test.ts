@@ -3,7 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { VersionRows } from './model';
-import { CategoryParentChoices, HostSnapshot, PriorPublishedVersion, ScaleIsFrozen } from './form-hosts.model';
+import { Frozen } from '@memberjunction/rubrics-base';
+import { CategoryParentChoices, HostSnapshot, PriorPublishedVersion } from './form-hosts.model';
 
 describe('rubric form hosts', () => {
     it('does not keep a camelCase parent-choice alias', () => {
@@ -40,7 +41,12 @@ describe('rubric form hosts', () => {
     });
 
     it('freezes a level only when a published version uses its scale', () => {
-        expect(ScaleIsFrozen(['used'], 'used')).toBe(true);
-        expect(ScaleIsFrozen(['used'], 'draft-scale')).toBe(false);
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'form-hosts.model.ts'), 'utf8');
+        const host = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'form-hosts.component.ts'), 'utf8');
+        expect(source).not.toContain('function ScaleIsFrozen');
+        expect(host).toContain('Frozen(');
+        expect(Frozen(['used'], 'used')).toBe(true);
+        expect(Frozen(['USED'], 'used')).toBe(true);
+        expect(Frozen(['used'], 'draft-scale')).toBe(false);
     });
 });

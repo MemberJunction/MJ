@@ -29,6 +29,8 @@ The outcome is the first match:
 
 `SnapshotFromRows` builds the snapshot those functions score. `EvidenceJson` turns plain text into a quote list and leaves an evidence array as JSON.
 
+`BandFor` names the band for a 0..1 score. `WeightShares` is each node's percent of its non-advisory siblings. `DraftProblems` names a tree that cannot be published. `Frozen` is true when a published version uses the scale. The author widgets call these. They do not keep a second copy.
+
 ## CLI
 
 This package does not talk to the database. The commands that do are:

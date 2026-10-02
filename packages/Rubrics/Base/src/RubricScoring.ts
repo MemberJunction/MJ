@@ -1,4 +1,5 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BandFor, round6 } from './authoring.js';
 import type {
     NotApplicablePolicy,
     RollupMethod,
@@ -329,15 +330,7 @@ export class RubricScoring {
 
     /** Half-open ranges. The band whose max is 1 also contains 1. */
     private static bandId(version: RubricVersionSnapshot, score: number): string | null {
-        const rounded = round6(score);
-        const bands = [...version.bands].sort((a, b) => a.minScore - b.minScore || a.maxScore - b.maxScore);
-        for (const band of bands) {
-            const min = round6(band.minScore);
-            const max = round6(band.maxScore);
-            const top = max === 1 && rounded === 1;
-            if (rounded >= min && (rounded < max || top)) return band.id;
-        }
-        return null;
+        return BandFor(score, version.bands)?.id ?? null;
     }
 
     private static confidence(leaves: Calc[]): number | null {
@@ -380,6 +373,3 @@ export class RubricScoring {
     }
 }
 
-function round6(value: number): number {
-    return Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000;
-}

@@ -1,7 +1,7 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { EvidenceJson, NodeSnapshotFromRecord, RubricScoring, RubricVersionDiff, SnapshotFromRows, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type SnapshotRows, type VersionChange } from '@memberjunction/rubrics-base';
+import { BandFor, DraftProblems, EvidenceJson, NodeSnapshotFromRecord, RubricScoring, RubricVersionDiff, SnapshotFromRows, WeightShares, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type SnapshotRows, type VersionChange } from '@memberjunction/rubrics-base';
 
-export { EvidenceJson };
+export { BandFor, DraftProblems, EvidenceJson, WeightShares };
 
 /** One answer on the scoring form. Groups are not answered. */
 export interface RubricFormAnswer {
@@ -13,49 +13,6 @@ export interface RubricFormAnswer {
     evidence?: string;
     /** Numeric and Percentage scales. Level scales leave this empty. */
     rawValue?: number | null;
-}
-
-/** Live weight share among a node's included siblings, as a percent. Advisory nodes are left out. */
-export function WeightShares(nodes: RubricNodeSnapshot[]): Map<string, number> {
-    const shares = new Map<string, number>();
-    const groups = new Map<string, RubricNodeSnapshot[]>();
-    for (const node of nodes) {
-        const key = node.parentId ?? '';
-        const list = groups.get(key) ?? [];
-        list.push(node);
-        groups.set(key, list);
-    }
-    for (const siblings of groups.values()) {
-        const included = siblings.filter(node => !node.isAdvisory);
-        const total = included.reduce((sum, node) => sum + node.weight, 0);
-        for (const node of siblings) {
-            if (node.isAdvisory || total <= 0) {
-                shares.set(node.id, 0);
-                continue;
-            }
-            shares.set(node.id, (node.weight / total) * 100);
-        }
-    }
-    return shares;
-}
-
-/** Problems that block a draft from being a publishable tree. */
-export function DraftProblems(nodes: RubricNodeSnapshot[], scales: RubricScaleSnapshot[]): string[] {
-    const problems: string[] = [];
-    const keys = new Set<string>();
-    const ids = new Set(nodes.map(node => node.id));
-    for (const node of nodes) {
-        if (keys.has(node.key)) problems.push(`Duplicate key ${node.key}.`);
-        keys.add(node.key);
-        if (node.parentId && !ids.has(node.parentId)) problems.push(`${node.key} points at a missing parent.`);
-        if (isAncestor(nodes, node.id, node.parentId ?? null)) problems.push(`${node.key} is inside its own descendant.`);
-        if (node.nodeType === 'Criterion' && !node.scaleId) problems.push(`${node.key} needs a scale.`);
-        if (node.scaleId && !scales.some(scale => scale.id === node.scaleId)) problems.push(`${node.key} names a missing scale.`);
-        if (node.isGate && (node.gateMinimumScore === undefined || node.gateMinimumScore === null)) {
-            problems.push(`${node.key} is a gate with no minimum.`);
-        }
-    }
-    return problems;
 }
 
 /** A new group or leaf. The host saves the draft. The widget does not publish. */
@@ -245,20 +202,6 @@ export function PreviewScore(version: RubricVersionSnapshot, answers: RubricForm
 export function DisplayScore(normalized: number | null, min: number, max: number): number | null {
     if (normalized === null) return null;
     return min + normalized * (max - min);
-}
-
-/**
- * The same half-open rule as RubricScoring.bandId. A score equal to a band's max
- * belongs to the next band. The band whose max is 1 also contains 1.
- */
-export function BandFor(normalized: number | null, bands: RubricBandSnapshot[]): RubricBandSnapshot | null {
-    if (normalized === null) return null;
-    const ordered = [...bands].sort((a, b) => a.minScore - b.minScore || a.maxScore - b.maxScore);
-    for (const band of ordered) {
-        const top = band.maxScore === 1 && normalized === 1;
-        if (normalized >= band.minScore && (normalized < band.maxScore || top)) return band;
-    }
-    return null;
 }
 
 /** True when `ancestorId` sits on the parent chain of `nodeId`, including a cycle back to itself. */
