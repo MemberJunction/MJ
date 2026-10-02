@@ -90,7 +90,7 @@ vi.mock('@memberjunction/generic-database-provider', () => {
         Refresh: mockRefresh,
         GetSystemUser: vi.fn(),
         /**
-         * The real cache falls back to a database read on a miss (plan §15). The stub answers from
+         * The real cache falls back to a database read on a miss. The stub answers from
          * the same array `Users` exposes, so these tests still describe the cache's behaviour.
          */
         FindUser: vi.fn(async ({ Email }: { Email?: string }) =>

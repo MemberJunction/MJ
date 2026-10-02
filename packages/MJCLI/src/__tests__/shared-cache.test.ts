@@ -1,7 +1,10 @@
 /**
- * The shared-cache clear that follows `mj sync push` / `mj codegen` / `mj migrate` (#4083,
- * plans/engine-cache-architecture-plan.md item 2.1). The Redis call is mocked; the real-Redis
- * behaviour is covered in @memberjunction/redis-provider's integration tests.
+ * The shared-cache clear that follows `mj sync push` / `mj codegen` / `mj migrate`.
+ *
+ * Those commands change the database without touching the shared cache, so every server keeps
+ * serving what it cached beforehand until the affected categories are cleared. The Redis call is
+ * mocked here; the real-Redis behaviour is covered in @memberjunction/redis-provider's
+ * integration tests.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -118,7 +121,7 @@ describe('shared cache clear after a CLI write', () => {
       process.env.REDIS_URL = 'redis://h:6379';
       // ClearSharedCacheCategories reports per-category outcomes and returns normally on a partial
       // failure — it does not throw. Reading only the counts told the operator "servers will
-      // reload" about a category that was never cleared (plan §22).
+      // reload" about a category that was never cleared.
       clearMock.mockResolvedValue([
         { Category: 'RunViewCache', KeyCount: 3, Ok: false, Error: 'READONLY You can not write against a read only replica' },
         { Category: 'RunQueryCache', KeyCount: 0, Ok: true },

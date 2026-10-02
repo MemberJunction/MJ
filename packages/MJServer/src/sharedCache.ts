@@ -8,7 +8,6 @@
  * cross-instance push-status delivery (MJ #4222). Both live here rather than at the call site so
  * that "what is our Redis used for" has a single answer.
  *
- * See plans/engine-cache-architecture-plan.md (F11, N1).
  */
 import { BaseEngineSweeper, CacheCategory, LocalCacheManager, LogError, LogStatusEx } from '@memberjunction/core';
 import type { CacheChangedEvent, LocalCacheManagerConfig, ProviderBase } from '@memberjunction/core';
@@ -79,7 +78,7 @@ export function CreateSharedCacheFromEnvironment(settings: CacheSettingsConfig |
 
 /** `LocalCacheManager` settings from `cacheSettings` in mj.config.cjs (plan N5). */
 /**
- * The warm-up lease MJAPI hands to `StartupManager`, in milliseconds (plan §16.3 #21 — it used to
+ * The warm-up lease MJAPI hands to `StartupManager`, in milliseconds (plan — it used to
  * be a constant no host could change).
  */
 export function WarmupLeaseMsFromSettings(settings: CacheSettingsConfig | undefined): number {
@@ -171,7 +170,7 @@ async function runMetadataSweep(provider: ProviderBase | undefined, leaseMs: num
 /**
  * Starts the periodic user-cache staleness check at `cacheSettings.userCacheCheckIntervalSeconds`
  * (default 300; 0 leaves it off). The cache refreshes on MJ writes by itself — this covers users
- * and roles changed outside MJ (plan §15).
+ * and roles changed outside MJ.
  * @returns The interval in milliseconds, 0 when disabled.
  */
 export function StartUserCacheChecks(settings: CacheSettingsConfig | undefined): number {

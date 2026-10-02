@@ -125,7 +125,7 @@ function makeProviderStub(
     const stub = {
         MJCoreSchemaName: '__mj',
         // Saves raise their events inside the transaction that made them; the cache must wait for
-        // it to settle before reloading (plan §16.3 #7).
+        // it to settle before reloading.
         TransactionDepth: rows.transactionDepth ?? 0,
         // Metadata, when the host has loaded it: the views come from the entities, not from
         // hardcoded names. `entities` is empty by default, exercising the bootstrap fallback.
@@ -354,7 +354,7 @@ describe('UserCache', () => {
 
         it('should re-arm with the same provider after the interval elapses', async () => {
             // The periodic reload reads the database only for entities that declare they can change
-            // without an event, so this re-arm fixture declares it (plan §26 / §29).
+            // without an event, so this re-arm fixture declares it.
             const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], entities: [
                 { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: false },
                 { Name: 'MJ: User Roles', SchemaName: '__mj', BaseView: 'vwUserRoles', TrustServerCacheCompletely: false },
@@ -496,7 +496,7 @@ describe('UserCache', () => {
     });
 
     // -----------------------------------------------------------------
-    // Staying current (plan §15) — the cache no longer depends on whoever calls Refresh
+    // Staying current — the cache no longer depends on whoever calls Refresh
     // -----------------------------------------------------------------
     describe('staying current', () => {
         beforeEach(() => {
@@ -617,7 +617,7 @@ describe('UserCache', () => {
     });
 
     // -----------------------------------------------------------------
-    // Reloading around the transaction that made the change (plan §16.3 #7)
+    // Reloading around the transaction that made the change
     // -----------------------------------------------------------------
     describe('reloading waits for the writing transaction', () => {
         beforeEach(() => { vi.useFakeTimers(); });
@@ -651,7 +651,7 @@ describe('UserCache', () => {
             // cache reads through the process-wide provider, whose depth is always 0. Watching the
             // wrong provider is the same as not waiting at all — and a single stub playing both
             // roles cannot tell the difference, which is why the first version of this fix passed
-            // its tests and would not have worked on a server (plan §22).
+            // its tests and would not have worked on a server.
             const reader = makeProviderStub({ users: [], roles: [], sharedStore: true });
             await UserCache.Instance.Refresh(reader.Provider);
             reader.Queries.length = 0;
@@ -713,7 +713,7 @@ describe('UserCache', () => {
 
         it('does NOT read the database on its timer when both entities trust their cache', async () => {
             // This timer reloads every user and role unconditionally, every interval, forever. On
-            // Azure SQL serverless that alone prevents auto-pause — the cost §26 exists to remove.
+            // Azure SQL serverless that alone prevents auto-pause — the cost exists to remove.
             // When nothing declares out-of-band writes there is nothing for it to discover: saves
             // raise events, a peer's save publishes the stamp, and FindUser falls back to an
             // authoritative read on a miss.
@@ -760,7 +760,7 @@ describe('UserCache', () => {
         /**
          * Entity metadata declaring that these rows CAN change without an event — which is the only
          * thing a periodic database check can discover, and therefore the only case it runs in.
-         * `TrustServerCacheCompletely: false` is that declaration (plan §26).
+         * `TrustServerCacheCompletely: false` is that declaration.
          */
         const DECLARES_RAW_SQL = [
             { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: false },

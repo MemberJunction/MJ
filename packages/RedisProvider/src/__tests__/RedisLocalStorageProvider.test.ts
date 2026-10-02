@@ -1377,7 +1377,7 @@ describe('RedisLocalStorageProvider', () => {
     });
 
     /**
-     * Found in review (plan §16.3 #2 and #3). Neither is visible to a happy-path test: the first
+     * Found in review. Neither is visible to a happy-path test: the first
      * needs the pipeline reply to come back unusable, the second needs two keys written in order
      * and then compared for expiry.
      */
@@ -1400,7 +1400,7 @@ describe('RedisLocalStorageProvider', () => {
             await provider.GetIndexGroupKeys('RunViewCache', 'Users');
 
             // Every step happens inside the script: no client-side SMEMBERS/SREM/DEL, which is what
-            // opened the window a peer's SADD could fall into (plan §22).
+            // opened the window a peer's SADD could fall into.
             expect(client.eval).toHaveBeenCalled();
             expect(client.smembers).not.toHaveBeenCalled();
             expect(client.srem).not.toHaveBeenCalled();

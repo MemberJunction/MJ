@@ -2084,7 +2084,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (!suppressEmit) {
             // A caller that rebuilds derived state afterwards emits itself, once, AFTER the
             // rebuild — subscribers must never observe a property whose derived state is still
-            // the previous load's (the invariant stated on OnExternalCacheChange; §16.3 #20).
+            // the previous load's (the invariant stated on OnExternalCacheChange).
             this.emitPropertyChange(config.PropertyName);
         }
     }
@@ -2430,7 +2430,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // Fallback: reload this config from the database. This also replaces the property, so the
         // derived state has to be rebuilt here too — and the reload must NOT emit on its own, or a
         // subscriber wakes between the new rows and the rebuild and reads derived state still
-        // pointing at the instances this reload discarded (plan §22).
+        // pointing at the instances this reload discarded.
         await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
         await this.RebuildDerivedState(this._contextUser);
         this.emitPropertyChange(config.PropertyName);
@@ -2548,7 +2548,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Exposed so a caller can decide whether the engine is worth the cost of asking. The fleet
      * sweeper takes a cross-process lease per engine per interval; on an installation where nothing
      * declares out-of-band writes, every one of those leases would be claimed only to discover there
-     * is nothing to compare. Reading this first is an in-memory check (plan §30).
+     * is nothing to compare. Reading this first is an in-memory check.
      */
     public HasSweepableConfigs(): boolean {
         return this.sweepableConfigs().length > 0;
@@ -2586,7 +2586,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * better than a short one. Gating here makes the cost proportional to the declared risk: an
      * install where nothing writes out of band sweeps nothing and issues no queries, with no knob to
      * find. Operators who do write out of band mark those entities — which they must do anyway for
-     * the cache to be correct at all — and get the backstop exactly there (plan §26).
+     * the cache to be correct at all — and get the backstop exactly there.
      *
      * An entity absent from metadata answers false: the sweep cannot establish that it drifts, and
      * guessing in favour of a recurring query is the expensive guess.
@@ -2623,7 +2623,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * EVERY row carries one (it also backs an identity hash, which needs them all). Comparing a
      * census stamp with a SQL `MAX` made one un-stamped row in a config mean "stale" on every
      * sweep, forever: a reload every interval, each one rewriting the shared slot and making every
-     * peer reload too (plan §16.3 #10). Two sides that both have no stamp at all agree; one with
+     * peer reload too. Two sides that both have no stamp at all agree; one with
      * and one without is a real difference.
      */
     private heldRowsMatchDatabase(config: BaseEnginePropertyConfig, status: RunViewDatabaseStatus): boolean {
@@ -2686,10 +2686,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // Never the clock: a stamp the database cannot reproduce makes the slot permanently
         // "stale" — every currency check sees a different value and refetches, and the next sweep
         // stamps it again with a newer one. `''` is what the database's own MAX reports for rows
-        // with no timestamp, and what the other two write funnels store (plan §16.3 #19, §22).
+        // with no timestamp, and what the other two write funnels store.
         const maxUpdatedAt = LocalCacheManager.MaxUpdatedAtOfRows(plainRows) ?? '';
         // Under the slot's cross-process lock: a peer may be part-way through its own
-        // read-modify-write of this slot, and an unlocked replace would clobber it (§16.3 #6).
+        // read-modify-write of this slot, and an unlocked replace would clobber it.
         await cache.ReplaceRunViewResultLocked(this.configFingerprint(config), params, plainRows, maxUpdatedAt, plainRows.length, this.ProviderToUse);
 
     }
@@ -2832,7 +2832,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * anything a subclass derived from the previous instances — grouped child collections, memoized
      * lookups — refers to objects the engine has just discarded. This is also the callback the
      * expiration timer fires, so without the rebuild a config with an expiry quietly served stale
-     * derived state until something else happened to rebuild it (plan §22).
+     * derived state until something else happened to rebuild it.
      *
      * @param propertyName - The name of the property to refresh
      */

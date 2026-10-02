@@ -1,6 +1,6 @@
 /**
  * Two failure modes the fleet rig could not see, because both need a specific *order* of calls or a
- * specific kind of store (plan §16.3 #1 and #9, found in review).
+ * specific kind of store (found in review).
  *
  * 1. **A host's cache settings must survive a provider that initialized the cache first.** Every
  *    database provider initializes `LocalCacheManager` from inside its own `Config()`, with no
@@ -146,7 +146,7 @@ describe('LocalCacheManager eviction against a shared store', () => {
         // written, so the store expires the key by itself. Deleting it locally as well means every
         // server in the fleet removes the same key on its own clock and publishes a `removed` for
         // it, and every peer reloads the affected engine. The TTL branch was already gated on this;
-        // this branch was not (plan §22.3).
+        // this branch was not.
         const store = makeStore(true);
         await LocalCacheManager.Instance.Initialize(store, { defaultTTLMs: 0, evictionSweepIntervalMs: 0 });
         await cacheOneExpiredEntry(store);

@@ -1,5 +1,5 @@
 /**
- * The last five review items (plan §16.3 #12, #18, #19, #21, #22). Each is a behaviour no existing
+ * The last five review items (#18, #19, #21, #22). Each is a behaviour no existing
  * test exercised: they need a second writer, an expired slot, an alternative timestamp column, a
  * slow load, or a steady stream of notices.
  */

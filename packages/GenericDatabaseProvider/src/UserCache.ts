@@ -42,7 +42,7 @@ const USER_ENTITY_NAMES: ReadonlySet<string> = new Set([USERS_ENTITY.toLowerCase
  * `ExecuteSQL` / `QuoteSchemaAndView`, so SQL Server and PostgreSQL processes share one
  * implementation rather than each hand-rolling a `vwUsers` + `vwUserRoles` load.
  *
- * **Staying current (plan §15).** This cache used to be refreshed only by whichever process happened
+ * **Staying current.** This cache used to be refreshed only by whichever process happened
  * to call {@link Refresh}, so a user created on one server was invisible to every other server until
  * it restarted — and consumers read a miss as "no such user" (a new organization's first API key was
  * rejected as "invalid or expired" until the next restart). It now keeps itself current:
@@ -85,7 +85,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      * The providers that raised the pending changes, so the reload waits for THEIR transactions.
      * MJServer builds a provider per request, and a resolver's save runs on that one — not on the
      * process-wide provider this cache reads through, whose depth is always 0. Waiting on the
-     * wrong provider is the same as not waiting at all (plan §22).
+     * wrong provider is the same as not waiting at all.
      */
     private readonly _pendingWriters = new Set<DatabaseProviderBase>();
     /**
@@ -93,7 +93,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      * change and an incoming peer notice collapse into one reload: carrying the intent on the timer
      * meant whichever event scheduled last decided it, so a peer notice landing inside the debounce
      * window demoted a local write to "someone else's change" and no peer ever heard about it. The
-     * transaction wait stretches that window to seconds (plan §22.3).
+     * transaction wait stretches that window to seconds.
      */
     private _announcePending: boolean = false;
     private _stalenessTimer: ReturnType<typeof setInterval> | null = null;
@@ -210,7 +210,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      *
      * **Why not `RunView`?** `DatabaseProviderBase` is an `IRunViewProvider`, so this could go
      * through the standard read path and inherit its shared-cache invalidation. It deliberately does
-     * not, for three reasons (plan §15):
+     * not, for three reasons:
      * 1. **Bootstrap.** Server-side `RunView` requires a `contextUser` and throws without one
      *    (`CheckUserReadPermissions`). This cache is what produces the system user MJAPI then passes
      *    to everything else, so at first load there is no `UserInfo` to read as.
@@ -235,7 +235,7 @@ export class UserCache extends BaseSingleton<UserCache> {
         return undefined;
       }
       // A single-user read must not scan the whole role table: FindUser runs this on every miss,
-      // and a login attempt with an unknown address is a miss (plan §16.3 #8).
+      // and a login attempt with an unknown address is a miss.
       const rolesWhere = whereClause ? this.rolesForUsersPredicate(provider, users) : '';
       const roles = rolesWhere === null
         ? []
@@ -351,7 +351,7 @@ export class UserCache extends BaseSingleton<UserCache> {
     /**
      * Remembers that the database did not have this lookup either, pruning as it goes: the map is
      * keyed by whatever a caller asked for, so a credential-stuffing run of distinct addresses
-     * would otherwise grow it without limit (plan §16.3 #8).
+     * would otherwise grow it without limit.
      */
     private rememberMiss(key: string): void {
       const now = Date.now();
@@ -462,7 +462,7 @@ export class UserCache extends BaseSingleton<UserCache> {
         // provisioning handler) all save inside one. Reloading now reads the database WITHOUT the
         // uncommitted row — on PostgreSQL or under RCSI it simply is not there — so the cache
         // would be rebuilt without the very user that triggered it, and the peer notice would make
-        // every other server reload too early. Wait for the transaction to settle (plan §16.3 #7).
+        // every other server reload too early. Wait for the transaction to settle.
         if (this.transactionStillOpen()) {
           this._transactionWaits++;
           this.scheduleRefresh(UserCache.TransactionWaitMs, false); // the flag already carries the intent
@@ -650,7 +650,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      * `Entity.TrustServerCacheCompletely` is that declaration: true (the default) means every
      * mutation flows through `BaseEntity.Save()`, which this cache already hears. Polling such an
      * entity buys nothing and costs a recurring query, which on Azure SQL serverless prevents
-     * auto-pause outright — the interval cannot fix that, only not running can (plan §26).
+     * auto-pause outright — the interval cannot fix that, only not running can.
      *
      * Nothing is lost for the case that motivated this cache's rework (#4247, a new user unable to
      * log in): a save in any process raises an event, a save in another process publishes the shared

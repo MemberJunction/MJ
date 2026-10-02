@@ -35,7 +35,7 @@ export type ResolvedCacheCategories = {
  * `RunViewCache` and not `runviewcache`. But Redis keys ARE case-sensitive, so accepting a
  * spelling and then using it verbatim scanned `{prefix}:runviewcache:*`, matched nothing, and
  * reported a successful clear of 0 keys — the operator is told the fleet will reload and it never
- * does. Accept the spelling, then hand the store the canonical name (plan §22.3).
+ * does. Accept the spelling, then hand the store the canonical name.
  */
 export function ResolveCacheCategories(requested: readonly string[] | undefined): ResolvedCacheCategories {
     if (!requested?.length) {
@@ -72,7 +72,7 @@ export type MigrationOutcome = {
  * Whether a migration run may have changed the database, and so whether the fleet's cache is stale.
  *
  * On success the count is authoritative: a run that found nothing pending must NOT make every server
- * drop its cache and reload every engine for nothing (§16.3 #13).
+ * drop its cache and reload every engine for nothing.
  *
  * On a failure — including one that threw rather than returning — the count is not trustworthy and
  * neither is the detail list, which can be empty precisely because the run died before assembling
@@ -155,7 +155,7 @@ export async function ClearSharedCacheAfterWrite(commandName: string, skipFlag?:
         // A category can fail on its own: ClearSharedCacheCategories reports per-category Ok/Error
         // and returns normally on a partial failure. Reporting the whole clear as a success then
         // told the operator "servers will reload" about categories that were never cleared, which
-        // is the same false-success the per-category outcomes were added to expose (plan §22).
+        // is the same false-success the per-category outcomes were added to expose.
         const failed = categories.filter(c => c.Ok === false);
         if (failed.length > 0) {
             const detail = failed.map(c => `${c.Category} (${c.Error ?? 'unknown error'})`).join('; ');

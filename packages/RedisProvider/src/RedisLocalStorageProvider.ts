@@ -100,7 +100,6 @@ export interface RedisProviderConfig {
      * `_date` key after its blob — so under one blanket TTL the proxy outlives what it vouches for,
      * and a reader finds a freshness claim with nothing behind it. A server booting into that
      * window adopted the timestamps and served empty metadata as current; the dataset check threw.
-     * Plan §16.3 #3.
      */
     categoryTTLSeconds?: Readonly<Record<string, number>>;
 
@@ -224,7 +223,7 @@ const SCAN_BATCH = 500;
  * separate round trips (SMEMBERS, a pipeline of EXISTS, then SREM/DEL), a peer adding a key after
  * the read was removed by a DEL that had never seen it, and that slot lost its invalidation hook
  * permanently: no later save could find it through the index, so every server served it stale until
- * it expired. Plan §22.
+ * it expired.
  *
  * KEYS[1] = the group set, ARGV[1] = the `{prefix}:{category}:` prefix of a member's own key.
  * @internal
@@ -246,7 +245,7 @@ end
 if #dead > 0 then
   if #alive == 0 then
     -- Deleting beats emptying: a set made persistent by a member without expiry stays persistent
-    -- once that member goes, and a volatile-* maxmemory policy can never evict it (§16.3 #11).
+    -- once that member goes, and a volatile-* maxmemory policy can never evict it.
     redis.call('DEL', KEYS[1])
   else
     redis.call('SREM', KEYS[1], unpack(dead))
@@ -290,7 +289,7 @@ const KEY_LOCK_RENEW_MS = 3000;
  * The longest a lock is renewed for. Renewal keeps a slow read-modify-write safe; without a cap it
  * also keeps a HUNG one holding the key forever, which is worse than the expiry it replaced — no
  * other process could ever take that slot again. Past this, renewal stops and the lock expires on
- * its own TTL, as it did before renewal existed (plan §22).
+ * its own TTL, as it did before renewal existed.
  * @internal
  */
 const KEY_LOCK_MAX_HOLD_MS = 60000;
@@ -307,7 +306,7 @@ return 0
  * Thrown by {@link RedisLocalStorageProvider.WithKeyLock} when the lock could not be taken in
  * time — distinct from anything `work` itself throws, so a caller can tell "another process is
  * holding this slot" (fall back to invalidating it) from "my own read-modify-write is broken"
- * (a bug, which must not be silently downgraded to an invalidation). Plan §16.3 #12.
+ * (a bug, which must not be silently downgraded to an invalidation).
  */
 export class KeyLockTimeoutError extends Error {
     public constructor(public readonly LockKey: string, waitedMs: number) {
@@ -500,7 +499,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         this._defaultTTLSeconds = config.defaultTTLSeconds ?? DEFAULT_TTL_SECONDS;
         // Merged over the built-in map, never replacing it: the `default` category's "no expiry"
         // is an invariant of what that category HOLDS (proxy keys), so a host that only wants, say,
-        // a dataset TTL must not silently reinstate the bug §16.3 fixed. Naming `default`
+        // a dataset TTL must not silently reinstate the bug fixed. Naming `default`
         // explicitly still overrides it, which is the only way that should be possible.
         this._categoryTTLSeconds = { ...DEFAULT_CATEGORY_TTL_SECONDS, ...(config.categoryTTLSeconds ?? {}) };
         this._enableLogging = config.enableLogging ?? true;
@@ -1088,7 +1087,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * {@link ClearCategory}, but reporting what happened instead of swallowing it. An administrator
      * running `mj cache clear` needs to know a category did NOT go: the old path logged (with
      * logging off, by default, in the CLI) and returned normally, so the command printed a key
-     * count and "servers will reload" for a clear that never happened (plan §16.3 #15).
+     * count and "servers will reload" for a clear that never happened.
      *
      * While Redis is unreachable the clear is recorded for the reconnect flush and reported as not
      * done — the flush will clear it, but reporting success now would be exactly the lie this
@@ -1159,7 +1158,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      *
      * Members whose key has expired or been removed are dropped from the group set as a side
      * effect, so the set shrinks back to the live keys whenever it is read. The read and the prune
-     * are one Lua script: a peer's `SADD` cannot land between them and be pruned unseen (§22).
+     * are one Lua script: a peer's `SADD` cannot land between them and be pruned unseen.
      *
      * @param category - The category the keys were written to
      * @param group - The index group (for the RunView cache, the entity name)
@@ -1195,7 +1194,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         // Work longer than the TTL used to lose the lock silently: it expired, another process took
         // it, and both wrote — the very lost update this lock exists to prevent. The lock is now
         // extended while the work runs, and a lock that was lost anyway (a stalled renewal, a
-        // failover) is reported rather than ignored (plan §16.3 #12).
+        // failover) is reported rather than ignored.
         const renewUntil = Date.now() + KEY_LOCK_MAX_HOLD_MS;
         // When the lock was last known to be ours. Every successful renewal moves it forward; it is
         // what the post-work check falls back on when Redis cannot be read at all.
@@ -1239,7 +1238,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * one connection, so a read that throws means the renewals have been throwing too, and the
      * lock is most likely expired — the one case where "still mine" is both unverifiable and
      * probably false. The clock is the evidence that remains: a lock cannot outlive its TTL
-     * measured from the last time we know it was ours (plan §22.3).
+     * measured from the last time we know it was ours.
      * @internal
      */
     private async stillHoldsLock(lockKey: string, token: string, confirmedAt: number): Promise<boolean> {

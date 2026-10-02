@@ -240,7 +240,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         // Belt and braces: whatever route the rollback took, this instance is going away, so it
         // must not leave an entity-event batch behind. A batch whose owner is collected is
         // unreachable while its entities keep counting as pending, which makes every cached read
-        // of them miss for the life of the process (plan §16.3 #5).
+        // of them miss for the life of the process.
         await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
     }
 

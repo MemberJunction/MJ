@@ -126,7 +126,7 @@ export class EntityEventBatchSet {
      * abandon explicitly), but MJServer builds a provider per request and never disposes one, so a
      * third-party or future caller that begins without settling is unrecoverable rather than merely
      * wrong. Collection is non-deterministic and this must never be the primary path — it is the
-     * floor under it (plan §22).
+     * floor under it.
      */
     private readonly abandoned = typeof FinalizationRegistry === 'function'
         ? new FinalizationRegistry<EntityEventBatch>((batch) => this.releasePending(batch))
@@ -188,7 +188,7 @@ export class EntityEventBatchSet {
      * unreachable (the batch map is weak, so it disappears with the owner) while `pendingEntities`
      * is a strong map that keeps counting it: `HasPendingChanges` then answers true for those
      * entities for the life of the process, and every cached read of them misses while every fill
-     * is skipped. Plan §16.3 #5.
+     * is skipped.
      *
      * @returns The dropped batch, so the caller can invalidate what it touched, or null.
      */

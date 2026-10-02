@@ -34,7 +34,7 @@ export default class CacheClear extends Command {
     const target = this.resolveTarget(flags.url, flags.prefix);
     const chosen = flags.category?.length ? flags.category : undefined;
     // An unknown category is a typo, and a typo used to be a silent no-op that still printed
-    // "servers will reload" (plan §16.3 #15). Names are matched case-insensitively and then
+    // "servers will reload". Names are matched case-insensitively and then
     // CANONICALISED, because the store's keys are not.
     const { Categories: categories, Unknown: unknown } = ResolveCacheCategories(chosen);
     if (unknown.length > 0) {

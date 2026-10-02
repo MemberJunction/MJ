@@ -211,7 +211,7 @@ export default class Migrate extends Command {
       }
       await this.refreshMetadataAfterOpenAppMigrate(config, targetSchema, flags.verbose);
       // Only when the database actually changed: a run that found nothing pending used to make the
-      // whole fleet drop its cache and reload every engine for no reason (plan §16.3 #13).
+      // whole fleet drop its cache and reload every engine for no reason.
       await this.clearSharedCache(flags['skip-cache-clear'], MigrationChangedDatabase({
         Threw: false, Succeeded: true, MigrationsApplied: result.MigrationsApplied, StartedApplying: lastMigrationStarted !== undefined,
       }));
@@ -222,7 +222,7 @@ export default class Migrate extends Command {
       // Clear for the whole failure branch, not only when the detail list happens to name a
       // succeeded migration. `Details` can be empty precisely because the run died before
       // assembling it, and a migration that began and failed can still have committed statements —
-      // DDL is not transactional across batches on SQL Server (plan §22.3).
+      // DDL is not transactional across batches on SQL Server.
       await this.clearSharedCache(flags['skip-cache-clear'], MigrationChangedDatabase({
         Threw: false, Succeeded: false, MigrationsApplied: result.MigrationsApplied,
         StartedApplying: lastMigrationStarted !== undefined,

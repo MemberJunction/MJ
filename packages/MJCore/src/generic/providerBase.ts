@@ -810,7 +810,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * How long a peer notice may be deferred by later notices before the check runs anyway. The
      * debounce timer is reset by each arrival, so a fleet publishing steadily — exactly what a bulk
-     * import looks like — could postpone the check indefinitely (plan §16.3 #22).
+     * import looks like — could postpone the check indefinitely.
      */
     public static PeerMetadataNoticeMaxDeferralMs: number = 15000;
 
@@ -858,7 +858,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // The deferral budget is deliberately NOT cleared here: it bounds how long one check
             // may be put off, and the check has not run yet. Clearing it as the timer fires ended
             // the budget exactly when deferral began, leaving the retry count as the only real
-            // bound (plan §22.3).
+            // bound.
             if (this.MetadataMemberRefreshMustWait) {
                 this.handlePeerMetadataNoticeRetry();
                 return;
@@ -879,7 +879,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * check that has now happened. The retry count in particular used to be cleared only on the
      * re-armed path, so a check that ran on the direct path — which is what happens when a fresh
      * notice arrives after the transaction closed — left its count behind for the next deferral to
-     * inherit (plan §22.3).
+     * inherit.
      */
     private runPeerMetadataCheck(): void {
         this._peerMetadataNoticeRetries = 0;
@@ -4349,7 +4349,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Delegates so the RunView write path and the engine/slot path cannot drift apart: they
         // used to be two implementations with different fallback columns and different answers for
         // timestamp-less rows, which stamped the same rows differently depending on which funnel
-        // wrote the slot (plan §16.3 #19).
+        // wrote the slot.
         //
         // Empty string, never the current time, for empty or timestamp-less results: a clock value
         // would make such a slot perpetually "stale", since every check would see a new timestamp.
@@ -4796,7 +4796,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // settings to give it, so a LATER caller that does (StartupManager, passing the host's
         // cacheSettings) is not a no-op: Initialize applies that configuration to the already
         // initialized manager rather than discarding it, which is what made cacheSettings inert
-        // before (plan §16 N5, §18).
+        // before.
         if (!LocalCacheManager.Instance.IsInitialized) {
             const storageProvider = this.LocalStorageProvider;
             await LocalCacheManager.Instance.Initialize(storageProvider);
@@ -5977,10 +5977,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * - **No counts to compare.** A status reporting no `EntityUpdateDates` never touches the blob
      *   and is judged on its timestamp alone, so it answers `true`. Returning `false` here instead
      *   looks strictly safer and is not: it makes such a dataset permanently stale, reloading on
-     *   every check (plan §24.1 — the `dataset-cache.DS2` regression).
+     *   every check (plan — the `dataset-cache.DS2` regression).
      * - **A count to compare but no blob.** The blob and its `_date` proxy expire independently and
      *   a clear removes them in order, so the date can outlive the blob. Counts then cannot be
-     *   compared, which is `false` — refetch (plan §16.3 #3). A blob present but missing `Results`
+     *   compared, which is `false` — refetch. A blob present but missing `Results`
      *   answers `false` for the same reason rather than throwing, which is what the pre-unification
      *   copy in the warm path would have done the moment that path started running.
      *
@@ -6077,7 +6077,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * leave behind a blob nothing removes. An explicit TTL bounds that growth, and the store
      * prefers a per-write value over any category or global setting — which is also why giving
      * datasets their own category did not change how long one lives. Providers that do not
-     * implement expiry ignore it (plan §22.3, §25).
+     * implement expiry ignore it.
      */
     public static readonly DatasetCacheTTLSeconds = 3600;
 
@@ -6342,7 +6342,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // two keys do not disappear together: the timestamps key is written last (and removed
             // last by a cache clear), so it outlives the payload under any per-key expiry. Adopting
             // them alone left this process claiming to be current while holding no metadata at all
-            // — the staleness check then confirms "current" and nothing ever reloads (plan §16.3 #3).
+            // — the staleness check then confirms "current" and nothing ever reloads.
             const claimUsable = !!tsRaw && !!raw;
             if (claimUsable) {
                 this._latestLocalMetadataTimestamps = JSON.parse(tsRaw as string);

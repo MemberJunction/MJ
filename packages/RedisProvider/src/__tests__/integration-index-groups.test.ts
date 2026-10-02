@@ -168,7 +168,7 @@ describeRedis('Integration: index groups and TTL', () => {
         expect(await provider.GetItem('___MJCore_Metadata_Timestamps', 'default')).toBeNull();
     });
 
-    it('renews a held lock so work outlasting the TTL is not overtaken (plan §16.3 #12)', async () => {
+    it('renews a held lock so work outlasting the TTL is not overtaken', async () => {
         // The lock's own TTL is 10 s; this work runs past a renewal interval and must still hold it.
         const start = Date.now();
         await provider.WithKeyLock('renewed', 'LockTest', async () => {

@@ -773,7 +773,7 @@ const setupComplete$ = new ReplaySubject(1);
 
   // The database provider already initialized LocalCacheManager from inside its own Config(), with
   // no settings — this call is what makes `cacheSettings` take effect (Initialize merges a config
-  // handed to it later; plan §16.3 #1). Unconditional on purpose: the guard that used to sit here
+  // handed to it later). Unconditional on purpose: the guard that used to sit here
   // skipped exactly the case that needed it.
   await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheManagerConfig); // global-provider-ok: bootstrap
   if (sharedCache) {

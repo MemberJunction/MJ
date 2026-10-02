@@ -318,7 +318,7 @@ describe('an owner released with a batch still open', () => {
      * ReleaseIndependentInstance the batch stays open forever — and because the batch map is weak
      * while the pending-entity counts are strong, it becomes unreachable *and* permanent: every
      * cached read of those entities misses and every fill is skipped for the life of the process
-     * (plan §16.3 #5). MetadataSync's graph-provider pool releases instances exactly this way.
+     *. MetadataSync's graph-provider pool releases instances exactly this way.
      */
     class ReleasableProvider {
         public depth = 1;

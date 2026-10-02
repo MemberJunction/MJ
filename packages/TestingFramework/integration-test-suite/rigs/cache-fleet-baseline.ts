@@ -1,6 +1,6 @@
 /**
  * cache-fleet-baseline.ts — fleet-shaped measurement rig for the engine/cache investigation.
- * SCRATCH TOOL (plans/engine-cache-architecture-plan.md §7). Findings graduate into checks
+ * SCRATCH TOOL. Findings graduate into checks
  * under src/checks/; this file is not part of any suite and never runs in CI.
  *
  * Spawns R replica processes (rigs/lib/cache-fleet-replica.ts), each booting exactly the way
@@ -17,10 +17,10 @@
  *   snapshot F11  one replica saves its metadata snapshot (what a metadata refresh does) → what peers receive
  *   expiry   1.2  an engine's slot expires under running replicas → a later save must still reach
  *                 them; per-entity index sets shrink back once their slots expire
- *   users    §15  a user created / given a role / deactivated on replica 0 must reach the other
+ *   users  a user created / given a role / deactivated on replica 0 must reach the other
  *                 replicas' UserCache without a restart and without an opted-in poll, and must NOT
  *                 reach a replica whose cache is not shared (the control)
- *   cli-ops  §14  the REAL `mj` binary (sync push / migrate / codegen, with REDIS_URL set) runs while
+ *   cli-ops  the REAL `mj` binary (sync push / migrate / codegen, with REDIS_URL set) runs while
  *                 every replica reads continuously → reader failures, convergence, reloads, and a
  *                 replica booting mid-command (--ops=push,push-metadata,migrate,codegen; default push)
  *
@@ -510,7 +510,7 @@ async function phaseBurst(reps: Replica[]): Promise<void> {
  * Plan 3.1 gate: a raw SQL change (no event, no cache clear) reaches every replica within the
  * sweep interval, and on a shared cache one replica does the reload.
  *
- * **Precondition since §26: `MJ: AI Models` must carry `TrustServerCacheCompletely = 0` in the
+ * **Precondition since: `MJ: AI Models` must carry `TrustServerCacheCompletely = 0` in the
  * database BEFORE the replicas boot.** The sweep now visits only entities that declare their rows
  * can change without firing an event, which is exactly what this phase does by raw SQL. Without the
  * declaration the sweep correctly ignores the entity, `recoveredMs` comes back null, and the phase
@@ -521,7 +521,7 @@ async function phaseBurst(reps: Replica[]): Promise<void> {
  */
 async function phaseSweep(reps: Replica[]): Promise<void> {
     console.log(`\n[sweep] engine sweep every ${SWEEP_MS} ms …`);
-    console.log('[sweep] precondition: MJ: AI Models must have TrustServerCacheCompletely = 0 (see §26); a null recoveredMs with 0 sweeps usually means it does not.');
+    console.log('[sweep] precondition: MJ: AI Models must have TrustServerCacheCompletely = 0 before the replicas boot; a null recoveredMs with 0 sweeps usually means it does not.');
     const model = await reps[0].Call<{ id: string; description: string | null }>('pick-model');
     await Promise.all(reps.map(x => x.Call('start-sweeper', { intervalMs: SWEEP_MS })));
     const trial = async (value: string | null) => {
@@ -833,7 +833,7 @@ async function phaseCliOps(reps: Replica[], redisUrl: string): Promise<void> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────────────────────
-// users: the user cache across processes (plan §15)
+// users: the user cache across processes
 // ────────────────────────────────────────────────────────────────────────────────────────────
 
 interface CacheView { found: boolean; isActive: boolean | null; roleCount: number | null }

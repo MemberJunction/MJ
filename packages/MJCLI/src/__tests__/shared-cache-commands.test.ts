@@ -153,7 +153,7 @@ describe('shared cache clear in CLI commands', () => {
   it('codegen clears after a FAILED run too — it applies schema as it goes', async () => {
     // A codegen run writes views, stored procedures and entity metadata as it goes, so a failure at
     // a later stage leaves the database changed and every server holding the old shape. Same policy
-    // as mj migrate and mj sync push (plan §22).
+    // as mj migrate and mj sync push.
     state.result = { success: false, command: 'x', durationSeconds: 0 };
     await run(CodeGen);
     expect(clearAfterWrite).toHaveBeenCalledWith('mj codegen (failed)', undefined);
