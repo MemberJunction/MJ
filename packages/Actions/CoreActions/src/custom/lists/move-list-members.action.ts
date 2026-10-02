@@ -6,11 +6,11 @@ import type { MJListDetailEntity } from '@memberjunction/core-entities';
 import { ListOperations } from '@memberjunction/lists';
 
 import {
-  addOutputParam,
-  getBooleanParam,
-  getJsonParam,
-  getStringParam,
-  missingParam,
+  AddOutputParam,
+  GetBooleanParam,
+  GetJsonParam,
+  GetStringParam,
+  MissingParam,
 } from './_action-helpers';
 
 /**
@@ -30,11 +30,11 @@ import {
 @RegisterClass(BaseAction, 'Move List Members')
 export class MoveListMembersAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const sourceListId = getStringParam(params, 'SourceListID');
-    const targetListId = getStringParam(params, 'TargetListID');
-    const recordIds = getJsonParam<string[]>(params, 'RecordIDs');
-    if (!sourceListId) return missingParam('SourceListID');
-    if (!targetListId) return missingParam('TargetListID');
+    const sourceListId = GetStringParam(params, 'SourceListID');
+    const targetListId = GetStringParam(params, 'TargetListID');
+    const recordIds = GetJsonParam<string[]>(params, 'RecordIDs');
+    if (!sourceListId) return MissingParam('SourceListID');
+    if (!targetListId) return MissingParam('TargetListID');
     if (!recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
       return {
         Success: false,
@@ -42,7 +42,7 @@ export class MoveListMembersAction extends BaseAction {
         Message: "'RecordIDs' must be a JSON-stringified non-empty string array",
       };
     }
-    const mode = (getStringParam(params, 'Mode') ?? 'move').toLowerCase();
+    const mode = (GetStringParam(params, 'Mode') ?? 'move').toLowerCase();
     if (mode !== 'move' && mode !== 'copy') {
       return {
         Success: false,
@@ -50,7 +50,7 @@ export class MoveListMembersAction extends BaseAction {
         Message: `Mode must be 'move' or 'copy' (got '${mode}')`,
       };
     }
-    const confirmDrops = getBooleanParam(params, 'ConfirmDrops', false);
+    const confirmDrops = GetBooleanParam(params, 'ConfirmDrops', false);
     if (mode === 'move' && !confirmDrops) {
       return {
         Success: false,
@@ -140,10 +140,10 @@ export class MoveListMembersAction extends BaseAction {
       }
     }
 
-    addOutputParam(params, 'Added', added);
-    addOutputParam(params, 'Removed', removed);
-    addOutputParam(params, 'Failed', failedAdds);
-    addOutputParam(params, 'Errors', errors);
+    AddOutputParam(params, 'Added', added);
+    AddOutputParam(params, 'Removed', removed);
+    AddOutputParam(params, 'Failed', failedAdds);
+    AddOutputParam(params, 'Errors', errors);
 
     const success = failedAdds === 0 && errors.length === failedAdds;
     return {

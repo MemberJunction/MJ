@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 import {
-  createScoringProcess,
+  CreateScoringProcess,
   type CreateScoringProcessOptions,
 } from '../scoring-process';
 
@@ -169,7 +169,7 @@ function setup(
 describe('createScoringProcess — assembled on-demand Record Process', () => {
   it('sets Active status, ML Model work type, on-demand ON, schedule OFF, no cron, and resolves the entity id', async () => {
     const { opts, rp } = setup();
-    const result = await createScoringProcess(opts);
+    const result = await CreateScoringProcess(opts);
 
     expect(result.recordProcess as unknown as FakeRecordProcess).toBe(rp);
     expect(rp.NewRecordCalled).toBe(true);
@@ -185,37 +185,37 @@ describe('createScoringProcess — assembled on-demand Record Process', () => {
 
   it('writes Configuration with modelId + default ID primaryKeyField', async () => {
     const { opts, rp } = setup();
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(JSON.parse(rp.Configuration as string)).toEqual({ modelId: 'model-1', primaryKeyField: 'ID' });
   });
 
   it('honors a custom primaryKeyField in Configuration', async () => {
     const { opts, rp } = setup({ primaryKeyField: 'MembershipID' });
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(JSON.parse(rp.Configuration as string).primaryKeyField).toBe('MembershipID');
   });
 
   it('writes OutputMapping mapping the output field to $.score by default', async () => {
     const { opts, rp } = setup();
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(JSON.parse(rp.OutputMapping as string)).toEqual({ fields: { RenewalScore: '$.score' } });
   });
 
   it('writes OutputMapping mapping to $.class when valueKind=class', async () => {
     const { opts, rp } = setup({ valueKind: 'class', outputField: 'RenewalSegment' });
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(JSON.parse(rp.OutputMapping as string)).toEqual({ fields: { RenewalSegment: '$.class' } });
   });
 
   it('generates a descriptive default name (with the write-back column + On Demand) when none is supplied', async () => {
     const { opts, rp } = setup();
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(rp.Name).toBe('Score Memberships with model model-1 → RenewalScore (On Demand)');
   });
 
   it('uses a supplied name verbatim', async () => {
     const { opts, rp } = setup({ name: 'Renewal Scoring (manual)' });
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(rp.Name).toBe('Renewal Scoring (manual)');
   });
 });
@@ -225,7 +225,7 @@ describe('createScoringProcess — assembled on-demand Record Process', () => {
 describe('createScoringProcess — scoring binding (lineage row)', () => {
   it('upserts a binding with the model, record-process, target-entity, target-column, and Mode=OnDemand', async () => {
     const { opts, rp, binding } = setup();
-    const result = await createScoringProcess(opts);
+    const result = await CreateScoringProcess(opts);
 
     expect(binding.SaveCalled).toBe(true);
     expect(binding.MLModelID).toBe('model-1');
@@ -239,7 +239,7 @@ describe('createScoringProcess — scoring binding (lineage row)', () => {
 
   it('binds the resolved target entity id (not a re-resolved one) and the configured output field', async () => {
     const { opts, binding } = setup({ outputField: 'RenewalSegment' });
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(binding.TargetEntityID).toBe(ENTITY_ID);
     expect(binding.TargetColumn).toBe('RenewalSegment');
   });
@@ -247,7 +247,7 @@ describe('createScoringProcess — scoring binding (lineage row)', () => {
   it('throws (and does not swallow) when the binding fails to save after the RP saved', async () => {
     // RP saves OK (true); the binding save fails (false) with a message.
     const { opts, rp, binding } = setup({}, true, undefined, false, 'binding duplicate key');
-    await expect(createScoringProcess(opts)).rejects.toThrow(/binding duplicate key/);
+    await expect(CreateScoringProcess(opts)).rejects.toThrow(/binding duplicate key/);
     // The RP WAS saved (the failure is surfaced, not rolled back — no cross-row txn).
     expect(rp.SaveCalled).toBe(true);
     expect(binding.SaveCalled).toBe(true);
@@ -259,7 +259,7 @@ describe('createScoringProcess — scoring binding (lineage row)', () => {
 describe('createScoringProcess — generic output (no outputField)', () => {
   it('omits OutputMapping and creates no binding (binding is null), keeping the RP otherwise intact', async () => {
     const { opts, rp, binding } = setup({ outputField: undefined });
-    const result = await createScoringProcess(opts);
+    const result = await CreateScoringProcess(opts);
 
     // Generic mode: no write-back mapping, no lineage binding row.
     expect(rp.OutputMapping).toBeNull();
@@ -280,7 +280,7 @@ describe('createScoringProcess — generic output (no outputField)', () => {
 
   it('generates a column-free default name in generic mode', async () => {
     const { opts, rp } = setup({ outputField: undefined });
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(rp.Name).toBe('Score Memberships with model model-1 (On Demand)');
   });
 });
@@ -290,7 +290,7 @@ describe('createScoringProcess — generic output (no outputField)', () => {
 describe('createScoringProcess — scope → ScopeType', () => {
   it('maps a filter scope to ScopeType=Filter + ScopeFilter', async () => {
     const { opts, rp } = setup({ scope: { filter: 'RenewalDue=1' } });
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(rp.ScopeType).toBe('Filter');
     expect(rp.ScopeFilter).toBe('RenewalDue=1');
     expect(rp.ScopeViewID).toBeNull();
@@ -299,7 +299,7 @@ describe('createScoringProcess — scope → ScopeType', () => {
 
   it('maps a view scope to ScopeType=View + ScopeViewID', async () => {
     const { opts, rp } = setup({ scope: { viewId: 'view-42' } });
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(rp.ScopeType).toBe('View');
     expect(rp.ScopeViewID).toBe('view-42');
     expect(rp.ScopeFilter).toBeNull();
@@ -307,14 +307,14 @@ describe('createScoringProcess — scope → ScopeType', () => {
 
   it('maps a list scope to ScopeType=List + ScopeListID', async () => {
     const { opts, rp } = setup({ scope: { listId: 'list-7' } });
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(rp.ScopeType).toBe('List');
     expect(rp.ScopeListID).toBe('list-7');
   });
 
   it('maps a whole-entity scope (all: true) to ScopeType=Filter + the all-rows predicate (1=1)', async () => {
     const { opts, rp } = setup({ scope: { all: true } });
-    await createScoringProcess(opts);
+    await CreateScoringProcess(opts);
     expect(rp.ScopeType).toBe('Filter');
     expect(rp.ScopeFilter).toBe('(1=1)');
     expect(rp.ScopeViewID).toBeNull();
@@ -327,41 +327,41 @@ describe('createScoringProcess — scope → ScopeType', () => {
 describe('createScoringProcess — validation', () => {
   it('throws when modelId is missing', async () => {
     const { opts } = setup({ modelId: '' });
-    await expect(createScoringProcess(opts)).rejects.toThrow(/`modelId` is required/);
+    await expect(CreateScoringProcess(opts)).rejects.toThrow(/`modelId` is required/);
   });
 
   it('throws when targetEntityName is missing', async () => {
     const { opts } = setup({ targetEntityName: '  ' });
-    await expect(createScoringProcess(opts)).rejects.toThrow(/`targetEntityName` is required/);
+    await expect(CreateScoringProcess(opts)).rejects.toThrow(/`targetEntityName` is required/);
   });
 
   it('does NOT throw when outputField is omitted (generic output is valid)', async () => {
     const { opts } = setup({ outputField: undefined });
-    await expect(createScoringProcess(opts)).resolves.toMatchObject({ binding: null });
+    await expect(CreateScoringProcess(opts)).resolves.toMatchObject({ binding: null });
   });
 
   it('throws when no scope selector is populated', async () => {
     const { opts } = setup({ scope: {} });
-    await expect(createScoringProcess(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId, all/);
+    await expect(CreateScoringProcess(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId, all/);
   });
 
   it('throws when more than one scope selector is populated', async () => {
     const { opts } = setup({ scope: { filter: 'x=1', viewId: 'v1' } });
-    await expect(createScoringProcess(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId, all/);
+    await expect(CreateScoringProcess(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId, all/);
   });
 
   it('throws when two selectors are populated including all (all + filter)', async () => {
     const { opts } = setup({ scope: { all: true, filter: 'x=1' } });
-    await expect(createScoringProcess(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId, all/);
+    await expect(CreateScoringProcess(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId, all/);
   });
 
   it('throws when the target entity is unknown to metadata', async () => {
     const { opts } = setup({ targetEntityName: 'Ghosts' });
-    await expect(createScoringProcess(opts)).rejects.toThrow(/'Ghosts' was not found in metadata/);
+    await expect(CreateScoringProcess(opts)).rejects.toThrow(/'Ghosts' was not found in metadata/);
   });
 
   it('throws (with the save message) when the Record Process fails to save', async () => {
     const { opts } = setup({}, false, 'duplicate key');
-    await expect(createScoringProcess(opts)).rejects.toThrow(/failed to save Record Process.*duplicate key/s);
+    await expect(CreateScoringProcess(opts)).rejects.toThrow(/failed to save Record Process.*duplicate key/s);
   });
 });

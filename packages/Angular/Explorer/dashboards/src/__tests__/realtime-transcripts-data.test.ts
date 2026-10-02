@@ -20,7 +20,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
 }));
 
 import type { IMetadataProvider } from '@memberjunction/core';
-import { LoadMeetingRooms, attributeLine } from '../AI/components/analytics/realtime/realtime-transcripts-data';
+import { LoadMeetingRooms, AttributeLine } from '../AI/components/analytics/realtime/realtime-transcripts-data';
 
 const provider = { CurrentUser: { ID: 'u1' } } as unknown as IMetadataProvider;
 
@@ -33,28 +33,28 @@ describe('realtime-transcripts-data — attributeLine (diarization attribution)'
     const row = (over: Record<string, unknown>) => ({ ID: 'd1', __mj_CreatedAt: '2026-06-20T00:00:00Z', ...over });
 
     it('AI line → agent name from AgentID (falls back to "Agent")', () => {
-        expect(attributeLine(row({ Role: 'AI', Message: 'hi', AgentID: 'A1' }), participants, agents))
+        expect(AttributeLine(row({ Role: 'AI', Message: 'hi', AgentID: 'A1' }), participants, agents))
             .toMatchObject({ Kind: 'agent', Speaker: 'Sage', Message: 'hi' });
-        expect(attributeLine(row({ Role: 'AI', Message: 'hi', AgentID: 'who' }), participants, agents).Speaker).toBe('Agent');
+        expect(AttributeLine(row({ Role: 'AI', Message: 'hi', AgentID: 'who' }), participants, agents).Speaker).toBe('Agent');
     });
 
     it('User line with a diarized HUMAN participant → human + display name', () => {
-        expect(attributeLine(row({ Role: 'User', Message: 'hey', ExternalID: 'human-42' }), participants, agents))
+        expect(AttributeLine(row({ Role: 'User', Message: 'hey', ExternalID: 'human-42' }), participants, agents))
             .toMatchObject({ Kind: 'human', Speaker: 'Alice' });
     });
 
     it('User line whose diarized speaker is ANOTHER AGENT → agent + name (not lumped as a generic user)', () => {
-        expect(attributeLine(row({ Role: 'User', Message: 'data', ExternalID: 'agent-x' }), participants, agents))
+        expect(AttributeLine(row({ Role: 'User', Message: 'data', ExternalID: 'agent-x' }), participants, agents))
             .toMatchObject({ Kind: 'agent', Speaker: 'Marketing' });
     });
 
     it('User line with no diarization label → generic Participant', () => {
-        expect(attributeLine(row({ Role: 'User', Message: 'who?' }), participants, agents))
+        expect(AttributeLine(row({ Role: 'User', Message: 'who?' }), participants, agents))
             .toMatchObject({ Kind: 'human', Speaker: 'Participant' });
     });
 
     it('Error line → error kind, message from Error column', () => {
-        expect(attributeLine(row({ Role: 'Error', Error: 'boom' }), participants, agents))
+        expect(AttributeLine(row({ Role: 'Error', Error: 'boom' }), participants, agents))
             .toMatchObject({ Kind: 'error', Speaker: 'Error', Message: 'boom' });
     });
 });

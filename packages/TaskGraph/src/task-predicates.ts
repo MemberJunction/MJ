@@ -30,7 +30,10 @@
 export type ColumnQuoter = (column: string) => string;
 
 /** For `RunView.ExtraFilter`, which takes bare column names. */
-export const BARE_COLUMNS: ColumnQuoter = (column) => column;
+export const BARECOLUMNS: ColumnQuoter = (column) => column;
+
+/** @deprecated Use {@link BARECOLUMNS}. */
+export const BARE_COLUMNS: ColumnQuoter = BARECOLUMNS;
 
 /**
  * The columns that assign a task to an executor, in the order claim routing tries them.
@@ -57,7 +60,7 @@ export type TaskAssignment = {
  * abandoned by a crash. A human task's `In Progress` — if it ever reaches it — is a person's state
  * to own, not a claim to reclaim.
  */
-export function MachineTaskSQL(quote: ColumnQuoter = BARE_COLUMNS): string {
+export function MachineTaskSQL(quote: ColumnQuoter = BARECOLUMNS): string {
     return `(${EXECUTOR_COLUMNS.map((c) => `${quote(c)} IS NOT NULL`).join(' OR ')})`;
 }
 
@@ -69,7 +72,7 @@ export function MachineTaskSQL(quote: ColumnQuoter = BARE_COLUMNS): string {
  * `StepType='Human'` filter — asked, never settled, never expired, dead forever. This is the wide
  * form the reopen path already used; the settle and expiry paths were narrower, which is B4.
  */
-export function HumanTaskSQL(quote: ColumnQuoter = BARE_COLUMNS): string {
+export function HumanTaskSQL(quote: ColumnQuoter = BARECOLUMNS): string {
     return `(${quote('StepType')} = 'Human' OR (${quote('StepType')} IS NULL AND ${quote('UserID')} IS NOT NULL))`;
 }
 

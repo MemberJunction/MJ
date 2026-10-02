@@ -12,7 +12,8 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
-import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
+import { MJButtonDirective, MJClickableDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -59,6 +60,7 @@ import { AnalyticsModelPerformanceComponent, LoadAnalyticsModelPerformance } fro
 import { AnalyticsCostBudgetComponent, LoadAnalyticsCostBudget } from './AI/components/analytics/cost-budget/cost-budget.component';
 import { AnalyticsErrorAnalysisComponent, LoadAnalyticsErrorAnalysis } from './AI/components/analytics/error-analysis/error-analysis.component';
 import { AnalyticsUsagePatternsComponent, LoadAnalyticsUsagePatterns } from './AI/components/analytics/usage-patterns/usage-patterns.component';
+import { UsageExplorerComponent, LoadUsageExplorer } from './AI/components/analytics/usage-explorer/usage-explorer.component';
 import { AnalyticsRealtimeOverviewComponent, LoadAnalyticsRealtimeOverview } from './AI/components/analytics/realtime/realtime-overview.component';
 import { AnalyticsRealtimeSessionsComponent, LoadAnalyticsRealtimeSessions } from './AI/components/analytics/realtime/realtime-sessions.component';
 import { RealtimeManagementComponent, LoadRealtimeManagement } from './AI/components/analytics/realtime/realtime-management.component';
@@ -157,6 +159,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsCostBudgetComponent,
     AnalyticsErrorAnalysisComponent,
     AnalyticsUsagePatternsComponent,
+    UsageExplorerComponent,
     AnalyticsRealtimeOverviewComponent,
     AnalyticsRealtimeSessionsComponent,
     RealtimeManagementComponent,
@@ -178,7 +181,9 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedDashboardWidgetsModule,
     SharedPipesModule,
     SearchModule,
+    QueryViewerModule,
     MJButtonDirective,
+    MJClickableDirective,
     MJComboboxComponent,
     MJDropdownComponent,
     MJSwitchComponent,
@@ -241,6 +246,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsCostBudgetComponent,
     AnalyticsErrorAnalysisComponent,
     AnalyticsUsagePatternsComponent,
+    UsageExplorerComponent,
     AnalyticsRealtimeOverviewComponent,
     AnalyticsRealtimeSessionsComponent,
     RealtimeManagementComponent,
@@ -266,6 +272,7 @@ export class AIDashboardsModule {
         LoadAnalyticsCostBudget();
         LoadAnalyticsErrorAnalysis();
         LoadAnalyticsUsagePatterns();
+        LoadUsageExplorer();
         LoadAnalyticsRealtimeOverview();
         LoadAnalyticsRealtimeSessions();
         LoadRealtimeManagement();

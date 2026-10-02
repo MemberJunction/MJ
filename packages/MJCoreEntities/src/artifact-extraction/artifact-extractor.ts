@@ -118,7 +118,7 @@ export class ArtifactExtractor {
                 }
 
                 // Execute the extractor function with timeout
-                const value = await this.ExecuteExtractor(config.content, rule.extractor, timeout);
+                const value = await this.executeExtractor(config.content, rule.extractor, timeout);
 
                 attributes.push({
                     name: rule.name,
@@ -179,7 +179,7 @@ export class ArtifactExtractor {
      *
      * @private
      */
-    private static async ExecuteExtractor(content: string, extractorCode: string, timeoutMs: number): Promise<any> {
+    private static async executeExtractor(content: string, extractorCode: string, timeoutMs: number): Promise<any> {
         return new Promise((resolve, reject) => {
             // Set up timeout
             const timeoutId = setTimeout(() => {

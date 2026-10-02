@@ -69,12 +69,17 @@ const HAND_WRITTEN_OBJECT_ALLOWLIST = new Set(['vwentitieswithexternalchangetrac
  * Split SQL into GO batches and classify each by its leading statement.
  * Pure function — no I/O.
  */
-export function splitByStatement(sql: string): StatementBatch[] {
+export function SplitByStatement(sql: string): StatementBatch[] {
   return sql
     .split(GO_SPLIT)
     .map((b) => b.trim())
     .filter((b) => b.length > 0)
     .map(classifyBatch);
+}
+
+/** @deprecated Use {@link SplitByStatement}. */
+export function splitByStatement(sql: string): StatementBatch[] {
+  return SplitByStatement(sql);
 }
 
 /** Classify one GO batch by its first meaningful statement. */
@@ -155,11 +160,16 @@ function mk(kind: StatementKind, sql: string, evidence: string): StatementBatch 
 }
 
 /** Roll up a classified batch list into per-kind counts (for census/reporting). */
-export function summarizeStatements(batches: StatementBatch[]): Record<StatementKind, number> {
+export function SummarizeStatements(batches: StatementBatch[]): Record<StatementKind, number> {
   const out = {
     'schema-ddl': 0, comment: 0, 'role-setup': 0, 'codegen-object': 0,
     grant: 0, 'metadata-dml': 0, 'hand-procedural': 0, noise: 0, unknown: 0,
   } as Record<StatementKind, number>;
   for (const b of batches) out[b.kind]++;
   return out;
+}
+
+/** @deprecated Use {@link SummarizeStatements}. */
+export function summarizeStatements(batches: StatementBatch[]): Record<StatementKind, number> {
+  return SummarizeStatements(batches);
 }

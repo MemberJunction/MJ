@@ -36,7 +36,7 @@ export interface ModelUsageOverrides {
  * 5 completion tokens, cost 0.001 — so `totalTokens` is 15 out of the box
  * (the shape the AI-stack tests have standardized on).
  */
-export function makeModelUsage(overrides: ModelUsageOverrides = {}): ModelUsage {
+export function MakeModelUsage(overrides: ModelUsageOverrides = {}): ModelUsage {
   const cost = 'cost' in overrides ? overrides.cost : 0.001;
   const usage = new ModelUsage(
     overrides.promptTokens ?? 10,
@@ -50,6 +50,11 @@ export function makeModelUsage(overrides: ModelUsageOverrides = {}): ModelUsage 
   if (overrides.promptTime !== undefined) usage.promptTime = overrides.promptTime;
   if (overrides.completionTime !== undefined) usage.completionTime = overrides.completionTime;
   return usage;
+}
+
+/** @deprecated Use {@link MakeModelUsage}. */
+export function makeModelUsage(overrides: ModelUsageOverrides = {}): ModelUsage {
+  return MakeModelUsage(overrides);
 }
 
 /** Options for {@link makeSuccessChatResult}. */
@@ -68,7 +73,7 @@ export interface SuccessChatResultOptions {
  * Builds a successful {@link ChatResult} the way real drivers do: one assistant
  * choice carrying `content`, a real {@link ModelUsage}, `statusText: 'success'`.
  */
-export function makeSuccessChatResult(content = 'test response', options: SuccessChatResultOptions = {}): ChatResult {
+export function MakeSuccessChatResult(content = 'test response', options: SuccessChatResultOptions = {}): ChatResult {
   const startTime = options.startTime ?? new Date();
   const endTime = options.endTime ?? startTime;
   const result = new ChatResult(true, startTime, endTime);
@@ -81,9 +86,14 @@ export function makeSuccessChatResult(content = 'test response', options: Succes
   result.data = {
     choices: [choice],
     model: options.model,
-    usage: options.usage ?? makeModelUsage(),
+    usage: options.usage ?? MakeModelUsage(),
   };
   return result;
+}
+
+/** @deprecated Use {@link MakeSuccessChatResult}. */
+export function makeSuccessChatResult(content = 'test response', options: SuccessChatResultOptions = {}): ChatResult {
+  return MakeSuccessChatResult(content, options);
 }
 
 /** Options for {@link makeFailedChatResult}. */
@@ -109,7 +119,7 @@ export interface FailedChatResultOptions {
  * `statusText: 'error'`. `errorInfo` is only attached when supplied, so tests
  * can model both diagnosed and undiagnosed failures.
  */
-export function makeFailedChatResult(options: FailedChatResultOptions = {}): ChatResult {
+export function MakeFailedChatResult(options: FailedChatResultOptions = {}): ChatResult {
   const startTime = options.startTime ?? new Date();
   const endTime = options.endTime ?? startTime;
   const result = new ChatResult(false, startTime, endTime);
@@ -127,6 +137,11 @@ export function makeFailedChatResult(options: FailedChatResultOptions = {}): Cha
   return result;
 }
 
+/** @deprecated Use {@link MakeFailedChatResult}. */
+export function makeFailedChatResult(options: FailedChatResultOptions = {}): ChatResult {
+  return MakeFailedChatResult(options);
+}
+
 /**
  * Builds a failed {@link ChatResult} exactly the way real provider drivers do:
  * the `errorInfo` comes from the REAL `ErrorAnalyzer`, so `errorType`,
@@ -135,19 +150,24 @@ export function makeFailedChatResult(options: FailedChatResultOptions = {}): Cha
  * logic — drivers catch provider errors internally and RETURN this shape rather
  * than throwing (the historical failover bug class).
  */
-export function makeDriverFailureChatResult(error: Error, providerName = 'TestLLM'): ChatResult {
-  return makeFailedChatResult({
+export function MakeDriverFailureChatResult(error: Error, providerName = 'TestLLM'): ChatResult {
+  return MakeFailedChatResult({
     errorMessage: error.message,
     exception: error,
     errorInfo: ErrorAnalyzer.analyzeError(error, providerName),
   });
 }
 
+/** @deprecated Use {@link MakeDriverFailureChatResult}. */
+export function makeDriverFailureChatResult(error: Error, providerName = 'TestLLM'): ChatResult {
+  return MakeDriverFailureChatResult(error, providerName);
+}
+
 /**
  * Builds a real {@link AIErrorInfo} with sensible defaults
  * (`Unknown` / `Retriable` / failover-eligible), overridable per test.
  */
-export function makeErrorInfo(overrides: Partial<AIErrorInfo> = {}): AIErrorInfo {
+export function MakeErrorInfo(overrides: Partial<AIErrorInfo> = {}): AIErrorInfo {
   return {
     errorType: 'Unknown',
     severity: 'Retriable',
@@ -156,15 +176,25 @@ export function makeErrorInfo(overrides: Partial<AIErrorInfo> = {}): AIErrorInfo
   };
 }
 
+/** @deprecated Use {@link MakeErrorInfo}. */
+export function makeErrorInfo(overrides: Partial<AIErrorInfo> = {}): AIErrorInfo {
+  return MakeErrorInfo(overrides);
+}
+
 /**
  * Builds a real {@link ChatParams} instance (so class-level defaults like
  * `enableCaching` behave exactly as in production) with a default model and a
  * single user message, overridable per test.
  */
-export function makeChatParams(overrides: Partial<ChatParams> = {}): ChatParams {
+export function MakeChatParams(overrides: Partial<ChatParams> = {}): ChatParams {
   const params = new ChatParams();
   params.model = 'test-model';
   params.messages = [{ role: 'user', content: 'Hello from makeChatParams' }];
   Object.assign(params, overrides);
   return params;
+}
+
+/** @deprecated Use {@link MakeChatParams}. */
+export function makeChatParams(overrides: Partial<ChatParams> = {}): ChatParams {
+  return MakeChatParams(overrides);
 }

@@ -11,7 +11,7 @@ import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { RunHistoryRow, RunDetailRow } from '../shared/classify.types';
-import { formatNumber, formatDate, computeDuration, displayStatus, formatTokenCount, mapRunDetailRecords } from '../shared/classify.format';
+import { FormatNumber, FormatDate, ComputeDuration, DisplayStatus, FormatTokenCount, MapRunDetailRecords } from '../shared/classify.format';
 
 @Component({
     standalone: false,
@@ -53,8 +53,13 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
      */
     @Output() ItemSelected = new EventEmitter<string>();
 
-    public onItemSelected(itemID: string): void {
+    public OnItemSelected(itemID: string): void {
         this.ItemSelected.emit(itemID);
+    }
+
+    /** @deprecated Use {@link OnItemSelected}. */
+    public onItemSelected(itemID: string): void {
+        return this.OnItemSelected(itemID);
     }
 
     /** Whether more runs exist in the DB than are currently loaded. */
@@ -62,8 +67,13 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
         return this.TotalRunCount > this._runs.length;
     }
 
-    public onLoadMore(): void {
+    public OnLoadMore(): void {
         this.LoadMoreRequested.emit();
+    }
+
+    /** @deprecated Use {@link OnLoadMore}. */
+    public onLoadMore(): void {
+        return this.OnLoadMore();
     }
 
     /** Shown while the host reloads the run list in response to RefreshRequested. */
@@ -88,7 +98,7 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
     public IsLoadingRunDetail = false;
 
     // Template-facing formatters
-    public readonly FormatTokenCount = formatTokenCount;
+    public readonly FormatTokenCount = FormatTokenCount;
 
     /**
      * Ask the host to reload the run history. Data is host-owned, so we surface a
@@ -105,7 +115,7 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
             const status = (run['Status'] as string) ?? 'Unknown';
             const startTime = run['StartTime'] as string | null;
             const endTime = run['EndTime'] as string | null;
-            const duration = computeDuration(startTime, endTime);
+            const duration = ComputeDuration(startTime, endTime);
             const processedItems = run['ProcessedItems'] as number | null;
             const errorCount = run['ErrorCount'] as number | null;
             const statusLower = status.toLowerCase();
@@ -115,14 +125,14 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
 
             return {
                 ID: run['ID'] as string,
-                Status: displayStatus(status),
+                Status: DisplayStatus(status),
                 StatusClass: isFailed ? 'failed' : isRunning ? 'running' : 'complete',
                 SourceName: (run['Source'] as string) ?? 'Unknown',
-                StartedDisplay: startTime ? formatDate(startTime) : '—',
+                StartedDisplay: startTime ? FormatDate(startTime) : '—',
                 Duration: duration,
-                Items: processedItems != null ? formatNumber(processedItems) : '—',
+                Items: processedItems != null ? FormatNumber(processedItems) : '—',
                 Tags: '—',
-                Errors: hasErrors ? formatNumber(errorCount!) : (isFailed ? status : '0'),
+                Errors: hasErrors ? FormatNumber(errorCount!) : (isFailed ? status : '0'),
                 ErrorClass: isFailed || hasErrors ? 'run-error-text' : ''
             };
         });
@@ -150,7 +160,7 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
      * Filter fields for the Run History section, rendered inside an
      * `<mj-filter-popover>` (many values, single-select → popover with dropdown).
      */
-    public get historyFilterFields(): FilterFieldConfig[] {
+    public get HistoryFilterFields(): FilterFieldConfig[] {
         return [
             {
                 key: 'source',
@@ -178,24 +188,49 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
         ];
     }
 
-    public get historyFilterValues(): Record<string, unknown> {
+    /** @deprecated Use {@link HistoryFilterFields}. */
+    public get historyFilterFields(): FilterFieldConfig[] {
+        return this.HistoryFilterFields;
+    }
+
+    public get HistoryFilterValues(): Record<string, unknown> {
         return { source: this.HistorySourceFilter, status: this.HistoryStatusFilter };
     }
 
-    public get historyActiveFilterCount(): number {
+    /** @deprecated Use {@link HistoryFilterValues}. */
+    public get historyFilterValues(): Record<string, unknown> {
+        return this.HistoryFilterValues;
+    }
+
+    public get HistoryActiveFilterCount(): number {
         return (this.HistorySourceFilter ? 1 : 0) + (this.HistoryStatusFilter ? 1 : 0);
     }
 
-    public onHistoryFilterChange(values: Record<string, unknown>): void {
+    /** @deprecated Use {@link HistoryActiveFilterCount}. */
+    public get historyActiveFilterCount(): number {
+        return this.HistoryActiveFilterCount;
+    }
+
+    public OnHistoryFilterChange(values: Record<string, unknown>): void {
         this.HistorySourceFilter = (values['source'] as string) ?? '';
         this.HistoryStatusFilter = (values['status'] as string) ?? '';
         this.FilterRunHistory();
     }
 
-    public onHistoryFilterReset(): void {
+    /** @deprecated Use {@link OnHistoryFilterChange}. */
+    public onHistoryFilterChange(values: Record<string, unknown>): void {
+        return this.OnHistoryFilterChange(values);
+    }
+
+    public OnHistoryFilterReset(): void {
         this.HistorySourceFilter = '';
         this.HistoryStatusFilter = '';
         this.FilterRunHistory();
+    }
+
+    /** @deprecated Use {@link OnHistoryFilterReset}. */
+    public onHistoryFilterReset(): void {
+        return this.OnHistoryFilterReset();
     }
 
     /** Open (or toggle closed) the detail view for a run, loading its per-source detail rows. */
@@ -231,7 +266,7 @@ export class ClassifyHistoryTabComponent extends BaseAngularComponent {
             ResultType: 'simple',
         });
         if (result.Success) {
-            this.RunDetailRows = mapRunDetailRecords(result.Results);
+            this.RunDetailRows = MapRunDetailRecords(result.Results);
         }
     }
 }

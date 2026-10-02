@@ -46,6 +46,15 @@ the format **here**; the prompts do not need editing.
 - ...
 ```
 
+**Every 6.x file carries the licence line as its standing context**, verbatim, after the TL;DR prose and the
+`Upgrade Notes apply` flag (and after the Edge prerelease line, when there is one):
+
+> MemberJunction 6.x is released under the [Business Source License 1.1](https://github.com/MemberJunction/MJ/blob/next/LICENSE); 5.x and earlier stay ISC. What the licence grants, and what needs certification, is in the [licence section of the v6 upgrade guide](https://github.com/MemberJunction/MJ/blob/next/UPGRADE-v6.0.md#license-change--read-this-first).
+
+6.x is the first line under the BUSL and the release notes are where a reader upgrading from 5.x meets
+the change, so the line is not optional and not a candidate for trimming. It is a licence statement,
+not prose about the release, which is why it is fixed text rather than something each release rewrites.
+
 Omit any section with no content — a patch release usually has only `## Bug Fixes`.
 `## Upgrade Notes` appears **only** when a deployment could have depended on the old
 behaviour; most patches need none, and inventing one is worse than omitting it.

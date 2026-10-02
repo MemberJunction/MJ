@@ -134,7 +134,7 @@ export class ExportService {
       return this._provider ?? Metadata.Provider;
   }
 
-  async exportConversation(
+  async ExportConversation(
     conversationId: string,
     format: ExportFormat,
     currentUser: UserInfo,
@@ -143,6 +143,16 @@ export class ExportService {
     const conversation = await this.loadConversationData(conversationId, currentUser);
     const { content, filename, mimeType } = await this.BuildExportContent(conversation, format, options);
     this.downloadFile(content, filename, mimeType);
+  }
+
+  /** @deprecated Use {@link ExportConversation}. */
+  async exportConversation(
+    conversationId: string,
+    format: ExportFormat,
+    currentUser: UserInfo,
+    options: ExportOptions = {}
+  ): Promise<void> {
+    return this.ExportConversation(conversationId, format, currentUser, options);
   }
 
   /**

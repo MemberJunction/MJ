@@ -78,7 +78,16 @@ export class MJNotificationService {
 
   private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
-  tabChange$ = this.tabChange.asObservable();
+  TabChange$ = this.tabChange.asObservable();
+
+  /** @deprecated Use {@link TabChange$}. */
+  get tabChange$() {
+    return this.TabChange$;
+  }
+  /** @deprecated Use {@link TabChange$}. */
+  set tabChange$(value) {
+    this.TabChange$ = value;
+  }
 
   /**
    * Observable stream of the current user's notifications, derived from
@@ -258,14 +267,14 @@ export class MJNotificationService {
   /**
    * Instance method to access Notifications$ observable
    */
-  public get notifications$(): Observable<MJUserNotificationEntity[]> {
+  public get notifications$(): Observable<MJUserNotificationEntity[]> {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return MJNotificationService.Notifications$;
   }
 
   /**
    * Instance method to access UnreadCount$ observable
    */
-  public get unreadCount$(): Observable<number> {
+  public get unreadCount$(): Observable<number> {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return MJNotificationService.UnreadCount$;
   }
 

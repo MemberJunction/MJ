@@ -4,6 +4,7 @@
  */
 
 import { IOracle } from './IOracle';
+import { BuildJudgeTrace, ReadJudgeCriteria, ReadJudgeTimeoutMS } from './judge-trace';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -15,12 +16,18 @@ import { AIEngine } from '@memberjunction/aiengine';
  * Uses an LLM to evaluate output quality based on custom criteria.
  * Provides semantic evaluation beyond deterministic checks.
  *
+ * Criteria come from `expectedOutput.judgeValidationCriteria`, or else from `config.criteria`. Each is
+ * a string or `{ "criterion": "...", "weight": 2 }`, as for {@link DecisionJudgeOracle}; this judge
+ * sends each criterion's text and ignores its weight. Malformed criteria fail the oracle without a call.
+ *
  * Configuration:
  * - criteria: Array of validation criteria (required)
  * - model: Model to use for judging (default: from prompt or default model)
  * - temperature: Temperature for LLM (default: 0.1 for consistency)
  * - promptTemplate: Custom prompt template (optional, uses default if not provided)
  * - strictMode: Require all criteria to pass (default: false, uses weighted scoring)
+ * - timeoutMS: How long to wait for each judge model call, in milliseconds (default: 120000, two
+ *   minutes). A call that runs over fails the oracle.
  *
  * @example
  * ```typescript
@@ -91,16 +98,15 @@ Respond in JSON format:
             await AIEngine.Instance.Config(false, input.contextUser);
 
             // Get criteria from expected outcomes or config
-            const criteria = ((input.expectedOutput as any)?.judgeValidationCriteria as string[]) ||
-                           (config.criteria as string[]);
+            const criteria = ReadJudgeCriteria(input, config);
 
-            if (!criteria || criteria.length === 0) {
-                return {
-                    oracleType: this.type,
-                    passed: false,
-                    score: 0,
-                    message: 'No validation criteria provided'
-                };
+            if (!criteria.Success) {
+                return this.failed(criteria.ErrorMessage);
+            }
+
+            const timeout = ReadJudgeTimeoutMS(config);
+            if (!timeout.Success) {
+                return this.failed(timeout.ErrorMessage);
             }
 
             // Find the LLM Judge prompt from AIEngine
@@ -109,26 +115,17 @@ Respond in JSON format:
             );
 
             if (!judgePrompt) {
-                return {
-                    oracleType: this.type,
-                    passed: false,
-                    score: 0,
-                    message: 'LLM Judge prompt not found in AIEngine.Instance.Prompts. Please create a prompt named "Test LLM Judge".'
-                };
+                return this.failed('LLM Judge prompt not found in AIEngine.Instance.Prompts. Please create a prompt named "Test LLM Judge".');
             }
 
             // Prepare data for prompt template
-            const inputDefinition = input.test.InputDefinition ?
-                (typeof input.test.InputDefinition === 'string' ?
-                    JSON.parse(input.test.InputDefinition) :
-                    input.test.InputDefinition) :
-                {};
+            const trace = BuildJudgeTrace(input);
 
             const promptData = {
-                input: JSON.stringify(inputDefinition, null, 2),
-                expected: JSON.stringify(input.expectedOutput, null, 2),
-                actual: JSON.stringify(input.actualOutput, null, 2),
-                criteria: criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')
+                input: trace.Input,
+                expected: trace.Expected,
+                actual: trace.Actual,
+                criteria: criteria.Value.map((c, i) => `${i + 1}. ${c.Criterion}`).join('\n')
             };
 
             // Execute LLM judgment
@@ -136,17 +133,13 @@ Respond in JSON format:
             promptParams.prompt = judgePrompt;
             promptParams.data = promptData;
             promptParams.contextUser = input.contextUser;
+            promptParams.timeoutMS = timeout.Value;
 
             const runner = new AIPromptRunner();
             const result = await runner.ExecutePrompt(promptParams);
 
             if (!result.success) {
-                return {
-                    oracleType: this.type,
-                    passed: false,
-                    score: 0,
-                    message: `LLM judgment failed: ${result.errorMessage}`
-                };
+                return this.failed(`LLM judgment failed: ${result.errorMessage}`);
             }
 
             // Parse LLM response
@@ -171,13 +164,13 @@ Respond in JSON format:
             };
 
         } catch (error) {
-            return {
-                oracleType: this.type,
-                passed: false,
-                score: 0,
-                message: `LLM judge error: ${(error as Error).message}`
-            };
+            return this.failed(`LLM judge error: ${(error as Error).message}`);
         }
+    }
+
+    /** A failed result with this message and a score of 0. */
+    private failed(message: string): OracleResult {
+        return { oracleType: this.type, passed: false, score: 0, message };
     }
 
     /**

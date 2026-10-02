@@ -30,10 +30,13 @@ import { ApplicationSettingEngine, ConversationEngine } from '@memberjunction/co
 import { ClientToolRegistry } from '@memberjunction/ai-agent-client';
 
 import { MentionParser } from './mentions/MentionParser';
+import { MentionAutocomplete } from './mentions/MentionAutocomplete';
 import { ConversationBridge } from './bridge/ConversationBridge';
 import { DefaultAgentResolver } from './default-agent/DefaultAgentResolver';
 import { SessionsObserver } from './sessions/SessionsObserver';
 import { ConversationStreaming } from './streaming/ConversationStreaming';
+import { ConversationLiveness } from './streaming/ConversationLiveness';
+import { ConversationTail } from './streaming/ConversationTail';
 import { ConversationAgentRunner } from './agent-runner/ConversationAgentRunner';
 import {
     INotificationAdapter,
@@ -179,11 +182,25 @@ export class ConversationsRuntime
     // back to `this` (for adapter access) and we want all field initializers to
     // complete before they capture us.
     private _streaming?: ConversationStreaming;
+    private _liveness?: ConversationLiveness;
+    private _tail?: ConversationTail;
     private _agentRunner?: ConversationAgentRunner;
 
     /** Mention parser — pure string logic. See {@link MentionParser}. */
     public get Mentions(): MentionParser {
         return this._mentions;
+    }
+
+    /**
+     * Mention autocomplete — the permission-filtered caches and per-trigger ranking behind the
+     * `@`, `#` and `/` pickers. See {@link MentionAutocomplete}.
+     *
+     * A `BaseSingleton` in its own right, so this accessor is a convenience rather than the only
+     * way in: trigger providers instantiated outside any DI container reach the same instance via
+     * `MentionAutocomplete.Instance`, and share its one cache warm-up.
+     */
+    public get MentionSuggestions(): MentionAutocomplete {
+        return MentionAutocomplete.Instance;
     }
 
     /** Overlay ⇄ workspace coordination bus. See {@link ConversationBridge}. */
@@ -230,6 +247,42 @@ export class ConversationsRuntime
             this._streaming = new ConversationStreaming(this);
         }
         return this._streaming;
+    }
+
+    /**
+     * Liveness supervisor — emits when client state may have fallen behind the server and a
+     * reconciliation against durable state is needed. See {@link ConversationLiveness}.
+     *
+     * Wired to {@link Streaming} so a stream re-subscribe counts as a reconciliation trigger
+     * alongside the socket-level one. Hosts additionally feed it DOM events (`visibilitychange`,
+     * `online`), which this package cannot observe itself because it is documented as
+     * Node-consumable.
+     *
+     * Initialized on every access, not only the first. An access that comes before the data
+     * provider exists cannot attach the socket signal, and a later access attaches it. Once
+     * attached, `Initialize` returns at once.
+     */
+    public get Liveness(): ConversationLiveness {
+        if (!this._liveness) {
+            this._liveness = new ConversationLiveness();
+        }
+        this._liveness.Initialize(this.Streaming.StreamReconnected$);
+        return this._liveness;
+    }
+
+    /**
+     * Durable tail over agent-run progress, with a read cursor per message. See
+     * {@link ConversationTail}.
+     *
+     * The counterpart to {@link Streaming}: the subscription is the fast path, this is the one that
+     * survives a dropped frame. Cursors live on the runtime, not on a component, so switching
+     * conversations does not replay a run from the start.
+     */
+    public get Tail(): ConversationTail {
+        if (!this._tail) {
+            this._tail = new ConversationTail();
+        }
+        return this._tail;
     }
 
     /**

@@ -7,7 +7,7 @@ export class FormattingService {
     /**
      * Format validation result as JSON
      */
-    public formatValidationResultAsJson(result: ValidationResult): string {
+    public FormatValidationResultAsJson(result: ValidationResult): string {
         const output = {
             isValid: result.isValid,
             summary: {
@@ -38,13 +38,18 @@ export class FormattingService {
         
         return JSON.stringify(output, null, 2);
     }
+
+    /** @deprecated Use {@link FormatValidationResultAsJson}. */
+    public formatValidationResultAsJson(result: ValidationResult): string {
+        return this.FormatValidationResultAsJson(result);
+    }
     /**
      * Flatten a failed {@link ValidationResult} into the CLI's machine-readable error
      * list, so `--format json` / `--ci` runs carry the same entity/field/file detail
      * that the human report prints. Without this a CI log shows only "Validation
      * failed" and nobody can tell which record in which file is wrong.
      */
-    public formatValidationResultAsCLIErrors(result: ValidationResult, command: 'push' | 'pull'): MJCLIResultError[] {
+    public FormatValidationResultAsCLIErrors(result: ValidationResult, command: 'push' | 'pull'): MJCLIResultError[] {
         const detail: MJCLIResultError[] = result.errors.map(e => ({
             context: [e.entity, e.field].filter(Boolean).join('.') || e.file,
             message: `${e.message} — ${e.file}`,
@@ -56,6 +61,11 @@ export class FormattingService {
             { context: 'validation', message: `Validation failed. Cannot proceed with ${command}.`, code: 'E_VALIDATION_FAILED' as const },
             ...detail
         ];
+    }
+
+    /** @deprecated Use {@link FormatValidationResultAsCLIErrors}. */
+    public formatValidationResultAsCLIErrors(result: ValidationResult, command: 'push' | 'pull'): MJCLIResultError[] {
+        return this.FormatValidationResultAsCLIErrors(result, command);
     }
 
     private readonly symbols = {
@@ -79,7 +89,7 @@ export class FormattingService {
     /**
      * Format validation result for terminal output
      */
-    public formatValidationResult(result: ValidationResult, verbose: boolean = false): string {
+    public FormatValidationResult(result: ValidationResult, verbose: boolean = false): string {
         const lines: string[] = [];
         
         // Header
@@ -130,10 +140,15 @@ export class FormattingService {
         return lines.join('\n');
     }
 
+    /** @deprecated Use {@link FormatValidationResult}. */
+    public formatValidationResult(result: ValidationResult, verbose: boolean = false): string {
+        return this.FormatValidationResult(result, verbose);
+    }
+
     /**
      * Format push/pull summary report
      */
-    public formatSyncSummary(
+    public FormatSyncSummary(
         operation: 'push' | 'pull',
         stats: {
             created: number;
@@ -168,7 +183,7 @@ export class FormattingService {
 
         // Divider, then totals row.
         lines.push(chalk.cyan('├' + '─'.repeat(innerWidth) + '┤'));
-        lines.push(this.boxRow(innerWidth, 'Total', `${num(total)} records`, 'Duration', this.formatDuration(stats.duration)));
+        lines.push(this.boxRow(innerWidth, 'Total', `${num(total)} records`, 'Duration', this.FormatDuration(stats.duration)));
         lines.push(chalk.cyan('╰' + '─'.repeat(innerWidth) + '╯'));
 
         // Errors stand out in red below the box (kept out of the box to avoid ANSI-width math).
@@ -177,6 +192,23 @@ export class FormattingService {
         }
 
         return lines.join('\n');
+    }
+
+    /** @deprecated Use {@link FormatSyncSummary}. */
+    public formatSyncSummary(
+        operation: 'push' | 'pull',
+        stats: {
+            created: number;
+            updated: number;
+            deleted: number;
+            skipped: number;
+            errors: number;
+            duration: number;
+            unchanged?: number;
+            deferred?: number;
+        }
+    ): string {
+        return this.FormatSyncSummary(operation, stats);
     }
 
     /**
@@ -206,24 +238,24 @@ export class FormattingService {
      * For full per-record detail use `--verbose` (streams diffs inline during the push) or
      * `--change-detail` (writes the report from `formatChangesReport()` to a file).
      */
-    public formatChangesRecap(changes: RecordChangeDetail[]): string {
+    public FormatChangesRecap(changes: RecordChangeDetail[]): string {
         if (!changes || changes.length === 0) {
             return '';
         }
 
         // Group by operation + entity name, accumulating counts.
-        const groups = new Map<string, { operation: RecordChangeDetail['operation']; entityName: string; count: number }>();
+        const groups = new Map<string, { operation: RecordChangeDetail['Operation']; entityName: string; count: number }>();
         for (const c of changes) {
-            const key = `${c.operation}|${c.entityName}`;
+            const key = `${c.Operation}|${c.entityName}`;
             const existing = groups.get(key);
             if (existing) {
                 existing.count++;
             } else {
-                groups.set(key, { operation: c.operation, entityName: c.entityName, count: 1 });
+                groups.set(key, { operation: c.Operation, entityName: c.entityName, count: 1 });
             }
         }
 
-        const opOrder: Record<RecordChangeDetail['operation'], number> = { created: 0, updated: 1, deleted: 2 };
+        const opOrder: Record<RecordChangeDetail['Operation'], number> = { created: 0, updated: 1, deleted: 2 };
         const sorted = [...groups.values()].sort(
             (a, b) => opOrder[a.operation] - opOrder[b.operation] || a.entityName.localeCompare(b.entityName)
         );
@@ -245,12 +277,17 @@ export class FormattingService {
         return lines.join('\n');
     }
 
+    /** @deprecated Use {@link FormatChangesRecap}. */
+    public formatChangesRecap(changes: RecordChangeDetail[]): string {
+        return this.FormatChangesRecap(changes);
+    }
+
     /**
      * Render the FULL per-record change report as plain text (no ANSI), suitable for writing
      * to a file via `--change-detail`. Lists every record's operation, entity, primary key,
      * and — for updates — the field-level diffs.
      */
-    public formatChangesReport(changes: RecordChangeDetail[], generatedAt: string): string {
+    public FormatChangesReport(changes: RecordChangeDetail[], generatedAt: string): string {
         const lines: string[] = [];
         lines.push('MemberJunction Metadata Sync — Detailed Change Report');
         lines.push(`Generated: ${generatedAt}`);
@@ -258,13 +295,18 @@ export class FormattingService {
         lines.push('');
 
         for (const c of changes) {
-            lines.push(`[${c.operation.toUpperCase()}] ${c.entityName}  (${c.primaryKey})`);
+            lines.push(`[${c.Operation.toUpperCase()}] ${c.entityName}  (${c.primaryKey})`);
             for (const f of c.fields) {
                 lines.push(`    ${f.field}: ${f.oldValue} -> ${f.newValue}`);
             }
         }
 
         return lines.join('\n') + '\n';
+    }
+
+    /** @deprecated Use {@link FormatChangesReport}. */
+    public formatChangesReport(changes: RecordChangeDetail[], generatedAt: string): string {
+        return this.FormatChangesReport(changes, generatedAt);
     }
 
     private formatHeader(title: string): string {
@@ -449,10 +491,15 @@ export class FormattingService {
         return filePath;
     }
 
-    public formatDuration(ms: number): string {
+    public FormatDuration(ms: number): string {
         if (ms < 1000) return `${ms}ms`;
         if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
         return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
+    }
+
+    /** @deprecated Use {@link FormatDuration}. */
+    public formatDuration(ms: number): string {
+        return this.FormatDuration(ms);
     }
     
     /**
@@ -480,7 +527,7 @@ export class FormattingService {
     /**
      * Format validation result as markdown
      */
-    public formatValidationResultAsMarkdown(result: ValidationResult): string {
+    public FormatValidationResultAsMarkdown(result: ValidationResult): string {
         const lines: string[] = [];
         const timestamp = new Date();
         const dateStr = timestamp.toLocaleDateString('en-US', { 
@@ -771,5 +818,10 @@ export class FormattingService {
         lines.push('</div>');
         
         return lines.join('\n');
+    }
+
+    /** @deprecated Use {@link FormatValidationResultAsMarkdown}. */
+    public formatValidationResultAsMarkdown(result: ValidationResult): string {
+        return this.FormatValidationResultAsMarkdown(result);
     }
 }

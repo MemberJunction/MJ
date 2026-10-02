@@ -128,9 +128,38 @@ export function CreateTraversalState(): TraversalState {
 export type EdgeRejection = {
     EdgeId: string;
     DestinationNodeId: string;
-    Reason: 'ConditionFalse' | 'ConditionError' | 'DestinationMissing' | 'DestinationInactive';
+    /**
+     * `ConditionHeld` means the condition was never evaluated: it reads a fact that is not settled
+     * (see {@link ConditionHoldCheck}), so neither "true" nor "false" would be an answer.
+     */
+    Reason: 'ConditionFalse' | 'ConditionError' | 'ConditionHeld' | 'DestinationMissing' | 'DestinationInactive';
     Detail?: string;
 };
+
+/** Why a condition must not be evaluated, as a {@link ConditionHoldCheck} reports it. */
+export type ConditionHold = {
+    /** Why, in words for the log and for a run that stops on it. */
+    Detail: string;
+    /**
+     * True when the fact can never become known in this traversal — a decision whose call failed,
+     * which only a retry could ask again. Such an edge can never be followed, so it is passed over
+     * like a false one and does not stop a lower-ranked edge (a recovery path) from being taken.
+     *
+     * False or absent when the edge might yet have been the one to follow (an answer below its
+     * `minConfidence`, a decision not asked yet): it is HELD, and outranks what comes after it.
+     */
+    Unanswerable?: boolean;
+};
+
+/**
+ * Why a condition must not be evaluated, or `null` when it may be.
+ *
+ * Injected, like the evaluator, so the engine stays free of what the facts are. A Flow agent passes
+ * the Decision hold check: a condition reading a decision that failed, fell below its question's
+ * `minConfidence`, or was never asked is never evaluated, because `undefined === 'billing'` is a
+ * confident, wrong `false`.
+ */
+export type ConditionHoldCheck = (condition: string) => ConditionHold | null;
 
 /** The outcome of evaluating one node's outgoing edges. */
 export type EdgeSelection = {
@@ -138,6 +167,18 @@ export type EdgeSelection = {
     Edges: GraphEdge[];
     /** Every edge that was not followed, and why. */
     Rejected: EdgeRejection[];
+    /**
+     * The highest-ranked HELD edge, when it outranks every followable edge (or none is followable).
+     *
+     * Its condition could not be evaluated, so it might have been the one to follow. A caller that
+     * takes the first followable edge must not take it past this one: set only when a hold check was
+     * given and such an edge exists. A held edge ranked below the first followable edge could not
+     * have won, and does not set it.
+     *
+     * An unanswerable edge never outranks anything, but when NOTHING is followable the first one is
+     * reported here: the node cannot say where to go, which is not the same as having nowhere to go.
+     */
+    Held?: EdgeRejection;
 };
 
 /** Total, stable ordering: priority descending, then edge id so ties never depend on array order. */
@@ -172,19 +213,43 @@ function compareEdges(a: GraphEdge, b: GraphEdge): number {
  * unreachable: unconditional edges are already collected in the main pass, so the fallback filter
  * could only ever run when every edge had a condition — in which case it matched nothing. Fallbacks
  * work, and always did, by writing an unconditional edge at low priority.
+ *
+ * **With a hold check, a held condition is never evaluated.** Its edge is rejected as
+ * `ConditionHeld`, and the first such edge ranked above every followable one is reported as `Held`
+ * — the same question the dispatcher asks of an exclusive group ("could an unevaluable edge have
+ * beaten the winner?"). A held edge into a missing or inactive step is rejected for that instead:
+ * it could never have been followed, so it cannot have been the winner.
+ *
+ * An UNANSWERABLE condition is not evaluated either, but it does not hold: its edge can never be
+ * followed in this traversal, so the edges after it are considered as if it were false. Only when
+ * no edge is followable is it reported as `Held`.
  */
 export function SelectOutgoingEdges(
     nodeId: string,
     repo: IGraphRepository,
     evaluator: IConditionEvaluator,
     context: TraversalContext,
+    holdCheck?: ConditionHoldCheck,
 ): EdgeSelection {
     const edges = [...repo.GetOutgoingEdges(nodeId)].sort(compareEdges);
     const followable: GraphEdge[] = [];
     const rejected: EdgeRejection[] = [];
+    let held: EdgeRejection | undefined;
+    let unanswerable: EdgeRejection | undefined;
 
     for (const edge of edges) {
         const condition = edge.condition?.trim();
+        const hold = condition && holdCheck ? holdCheck(condition) : null;
+        if (hold) {
+            const rejection: EdgeRejection = destinationRejection(edge, repo)
+                ?? { EdgeId: edge.id, DestinationNodeId: edge.destinationNodeId, Reason: 'ConditionHeld', Detail: hold.Detail };
+            rejected.push(rejection);
+            if (rejection.Reason === 'ConditionHeld') {
+                if (hold.Unanswerable) unanswerable ??= rejection;
+                else if (!held && followable.length === 0) held = rejection;
+            }
+            continue;
+        }
         if (condition) {
             const result = evaluator.Evaluate(condition, context);
             if (!result.Success) {
@@ -202,25 +267,35 @@ export function SelectOutgoingEdges(
             }
         }
 
-        const destination = repo.GetNode(edge.destinationNodeId);
-        if (!destination) {
-            rejected.push({ EdgeId: edge.id, DestinationNodeId: edge.destinationNodeId, Reason: 'DestinationMissing' });
-            continue;
-        }
-        if (destination.status && destination.status !== 'Active') {
-            rejected.push({
-                EdgeId: edge.id,
-                DestinationNodeId: edge.destinationNodeId,
-                Reason: 'DestinationInactive',
-                Detail: destination.status,
-            });
+        const unenterable = destinationRejection(edge, repo);
+        if (unenterable) {
+            rejected.push(unenterable);
             continue;
         }
 
         followable.push(edge);
     }
 
-    return { Edges: followable, Rejected: rejected };
+    // Nowhere to go because the only way on reads what cannot be known is a stop, not an end.
+    const blocking = held ?? (followable.length === 0 ? unanswerable : undefined);
+    return blocking ? { Edges: followable, Rejected: rejected, Held: blocking } : { Edges: followable, Rejected: rejected };
+}
+
+/** Why an edge's destination cannot be entered, or `null` when it can. */
+function destinationRejection(edge: GraphEdge, repo: IGraphRepository): EdgeRejection | null {
+    const destination = repo.GetNode(edge.destinationNodeId);
+    if (!destination) {
+        return { EdgeId: edge.id, DestinationNodeId: edge.destinationNodeId, Reason: 'DestinationMissing' };
+    }
+    if (destination.status && destination.status !== 'Active') {
+        return {
+            EdgeId: edge.id,
+            DestinationNodeId: edge.destinationNodeId,
+            Reason: 'DestinationInactive',
+            Detail: destination.status,
+        };
+    }
+    return null;
 }
 
 /**

@@ -1,5 +1,122 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [beacbb2]
+- Updated dependencies [520bd09]
+- Updated dependencies [2d4bf8d]
+- Updated dependencies [307da67]
+- Updated dependencies [d67c8c0]
+- Updated dependencies [f78fd63]
+- Updated dependencies [6aa41c7]
+- Updated dependencies [67f6c85]
+- Updated dependencies [a7da50b]
+- Updated dependencies [2cb5498]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [87aa6e0]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [8a26af6]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [9845c00]
+- Updated dependencies [e2fa695]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.1
+  - @memberjunction/ng-conversations@6.2.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/ng-explorer-core@6.2.0-edge.1
+  - @memberjunction/ai-realtime-client@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/ng-artifacts@6.2.0-edge.1
+  - @memberjunction/ng-auth-services@6.2.0-edge.1
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.1
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.1
+  - @memberjunction/ng-file-storage@6.2.0-edge.1
+  - @memberjunction/ng-shared@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/entity-communications-base@6.2.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- f0db019: Regenerate the class-registration manifests so `RecordProcessFormComponentExtended` and `RecordProcessFormPolicy` are wired in. Both were added with `@RegisterClassEx` in #4636 without regenerating the manifests, leaving `Build` red on `next` at the freshness gate — and, more importantly, leaving the policy eligible for tree-shaking in bundled apps, which would silently drop the Record Processes form's lead-group decoration.
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [50241c8]
+- Updated dependencies [6207578]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [5df9486]
+- Updated dependencies [90eea38]
+- Updated dependencies [e225ece]
+- Updated dependencies [c157749]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [3977917]
+- Updated dependencies [d61b425]
+- Updated dependencies [104125c]
+- Updated dependencies [dc04823]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/ng-conversations@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.0
+  - @memberjunction/ng-explorer-core@6.2.0-edge.0
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.0
+  - @memberjunction/ai-realtime-client@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/ng-auth-services@6.2.0-edge.0
+  - @memberjunction/ng-shared@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/ng-artifacts@6.2.0-edge.0
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.0
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.0
+  - @memberjunction/ng-file-storage@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/entity-communications-base@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

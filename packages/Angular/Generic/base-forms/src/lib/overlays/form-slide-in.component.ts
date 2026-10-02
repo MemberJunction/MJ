@@ -56,11 +56,16 @@ export class MjFormSlideInComponent extends BaseFormOverlay implements OnInit {
   }
 
   /** Persist the user's resize, scoped per-entity (cross-device via User Settings). */
-  onWidthChanged(width: number): void {
+  OnWidthChanged(width: number): void {
     this.WidthPx = width;
     if (this.widthEntity) {
       UserInfoEngine.Instance.SetSettingDebounced(this.widthKey(this.widthEntity), String(width));
     }
+  }
+
+  /** @deprecated Use {@link OnWidthChanged}. */
+  onWidthChanged(width: number): void {
+    return this.OnWidthChanged(width);
   }
 
   private widthKey(entity: string): string {

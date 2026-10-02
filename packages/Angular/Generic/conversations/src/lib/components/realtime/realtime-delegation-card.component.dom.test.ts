@@ -4,7 +4,7 @@ import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, text, capture, click } from '@memberjunction/ng-test-utils';
 import { RealtimeDelegationCardComponent } from './realtime-delegation-card.component';
 import type { RealtimeDelegationCardVM } from './realtime-session-state';
-import type { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import type { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
 /**
  * DOM spec for <mj-realtime-delegation-card>. Renders one delegation two ways off the

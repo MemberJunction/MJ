@@ -468,8 +468,8 @@ describe('Parameter Merge Logic', () => {
                 isRequired: true, // LLM got isRequired wrong
                 description: 'Geographic region filter',
                 usage: ['WHERE clause'],
-                defaultValue: null,
-                sampleValue: 'West',
+                DefaultValue: null,
+                SampleValue: 'West',
             }];
 
             const result = MergeParametersWithLLM(det, llmResult(llm));
@@ -478,7 +478,7 @@ describe('Parameter Merge Logic', () => {
             expect(result[0].type).toBe('string'); // deterministic wins over LLM's "number"
             expect(result[0].isRequired).toBe(false); // deterministic wins over LLM's "true"
             expect(result[0].description).toBe('Geographic region filter'); // LLM enrichment
-            expect(result[0].sampleValue).toBe('West'); // LLM enrichment
+            expect(result[0].SampleValue).toBe('West'); // LLM enrichment
         });
 
         it('should use heuristic description when LLM is null', () => {
@@ -494,7 +494,7 @@ describe('Parameter Merge Logic', () => {
             const result = MergeParametersWithLLM(det, null);
             expect(result).toHaveLength(1);
             expect(result[0].description).toBe('Optional numeric value for Min Activity Count');
-            expect(result[0].sampleValue).toBe('10'); // heuristic for number
+            expect(result[0].SampleValue).toBe('10'); // heuristic for number
         });
 
         it('should use heuristic description when LLM parameter not found', () => {
@@ -513,13 +513,13 @@ describe('Parameter Merge Logic', () => {
                 isRequired: true,
                 description: 'Something else',
                 usage: [],
-                defaultValue: null,
-                sampleValue: null,
+                DefaultValue: null,
+                SampleValue: null,
             }];
 
             const result = MergeParametersWithLLM(det, llmResult(llm));
             expect(result[0].description).toBe('Required date value for Start Date');
-            expect(result[0].sampleValue).toBe('2024-01-01');
+            expect(result[0].SampleValue).toBe('2024-01-01');
         });
 
         it('should use default value as sample when available', () => {
@@ -533,8 +533,8 @@ describe('Parameter Merge Logic', () => {
             }];
 
             const result = MergeParametersWithLLM(det, null);
-            expect(result[0].defaultValue).toBe('25');
-            expect(result[0].sampleValue).toBe('25'); // uses default as sample
+            expect(result[0].DefaultValue).toBe('25');
+            expect(result[0].SampleValue).toBe('25'); // uses default as sample
         });
 
         it('should fall back to string type when deterministic says unknown and LLM unavailable', () => {
@@ -567,8 +567,8 @@ describe('Parameter Merge Logic', () => {
                 isRequired: true,
                 description: 'A numeric value',
                 usage: [],
-                defaultValue: null,
-                sampleValue: '42',
+                DefaultValue: null,
+                SampleValue: '42',
             }];
 
             const result = MergeParametersWithLLM(det, llmResult(llm));
@@ -591,13 +591,13 @@ describe('Parameter Merge Logic', () => {
                 isRequired: true,
                 description: 'Minimum activity threshold',
                 usage: [],
-                defaultValue: null,
-                sampleValue: '5',
+                DefaultValue: null,
+                SampleValue: '5',
             }];
 
             const result = MergeParametersWithLLM(det, llmResult(llm));
             expect(result[0].description).toBe('Minimum activity threshold');
-            expect(result[0].sampleValue).toBe('5');
+            expect(result[0].SampleValue).toBe('5');
         });
 
         it('should only return parameters found by deterministic extraction', () => {
@@ -612,8 +612,8 @@ describe('Parameter Merge Logic', () => {
             }];
 
             const llm: ExtractedParameter[] = [
-                { name: 'Region', type: 'string', isRequired: false, description: 'Region filter', usage: [], defaultValue: null, sampleValue: 'West' },
-                { name: 'HallucinatedParam', type: 'string', isRequired: true, description: 'Does not exist', usage: [], defaultValue: null, sampleValue: 'fake' },
+                { name: 'Region', type: 'string', isRequired: false, description: 'Region filter', usage: [], DefaultValue: null, SampleValue: 'West' },
+                { name: 'HallucinatedParam', type: 'string', isRequired: true, description: 'Does not exist', usage: [], DefaultValue: null, SampleValue: 'fake' },
             ];
 
             const result = MergeParametersWithLLM(det, llmResult(llm));
@@ -629,10 +629,10 @@ describe('Parameter Merge Logic', () => {
 
             const ptContext = new Map<string, PassthroughParamContext>([
                 ['numdays', {
-                    description: 'Number of days to look back for changes',
-                    sampleValue: '30',
-                    depQueryName: 'Recent Entity Changes',
-                    depParamName: 'lookbackDays',
+                    Description: 'Number of days to look back for changes',
+                    SampleValue: '30',
+                    DepQueryName: 'Recent Entity Changes',
+                    DepParamName: 'lookbackDays',
                 }],
             ]);
 
@@ -641,7 +641,7 @@ describe('Parameter Merge Logic', () => {
             expect(result[0].description).toBe(
                 'Number of days to look back for changes (passed through to "Recent Entity Changes" as "lookbackDays")'
             );
-            expect(result[0].sampleValue).toBe('30');
+            expect(result[0].SampleValue).toBe('30');
         });
 
         it('should prefer LLM description over inherited passthrough description', () => {
@@ -653,21 +653,21 @@ describe('Parameter Merge Logic', () => {
             const llm: ExtractedParameter[] = [{
                 name: 'numDays', type: 'number', isRequired: true,
                 description: 'LLM-generated description for numDays',
-                usage: [], defaultValue: null, sampleValue: '14',
+                usage: [], DefaultValue: null, SampleValue: '14',
             }];
 
             const ptContext = new Map<string, PassthroughParamContext>([
                 ['numdays', {
-                    description: 'Inherited description',
-                    sampleValue: '30',
-                    depQueryName: 'Q',
-                    depParamName: 'lookbackDays',
+                    Description: 'Inherited description',
+                    SampleValue: '30',
+                    DepQueryName: 'Q',
+                    DepParamName: 'lookbackDays',
                 }],
             ]);
 
             const result = MergeParametersWithLLM(det, llmResult(llm), ptContext);
             expect(result[0].description).toBe('LLM-generated description for numDays'); // LLM wins
-            expect(result[0].sampleValue).toBe('14'); // LLM wins
+            expect(result[0].SampleValue).toBe('14'); // LLM wins
         });
 
         it('should use heuristic description with passthrough suffix when dependency has no description', () => {
@@ -678,10 +678,10 @@ describe('Parameter Merge Logic', () => {
 
             const ptContext = new Map<string, PassthroughParamContext>([
                 ['fiscalyear', {
-                    description: null, // Dependency param has no description
-                    sampleValue: null,
-                    depQueryName: 'Sales Summary',
-                    depParamName: 'year',
+                    Description: null, // Dependency param has no description
+                    SampleValue: null,
+                    DepQueryName: 'Sales Summary',
+                    DepParamName: 'year',
                 }],
             ]);
 
@@ -690,7 +690,7 @@ describe('Parameter Merge Logic', () => {
                 'Required numeric value for fiscal Year (passed through to "Sales Summary" as "year")'
             );
             // sampleValue falls through to heuristic since both LLM and ptContext are null
-            expect(result[0].sampleValue).toBe('10');
+            expect(result[0].SampleValue).toBe('10');
         });
 
         it('should inherit sampleValue from passthrough even when description comes from LLM', () => {
@@ -702,21 +702,21 @@ describe('Parameter Merge Logic', () => {
             const llm: ExtractedParameter[] = [{
                 name: 'region', type: 'string', isRequired: false,
                 description: 'LLM description',
-                usage: [], defaultValue: null, sampleValue: null, // LLM didn't provide sample
+                usage: [], DefaultValue: null, SampleValue: null, // LLM didn't provide sample
             }];
 
             const ptContext = new Map<string, PassthroughParamContext>([
                 ['region', {
-                    description: 'Inherited desc',
-                    sampleValue: 'West',
-                    depQueryName: 'Q',
-                    depParamName: 'r',
+                    Description: 'Inherited desc',
+                    SampleValue: 'West',
+                    DepQueryName: 'Q',
+                    DepParamName: 'r',
                 }],
             ]);
 
             const result = MergeParametersWithLLM(det, llmResult(llm), ptContext);
             expect(result[0].description).toBe('LLM description'); // LLM wins
-            expect(result[0].sampleValue).toBe('West'); // Inherited wins over heuristic
+            expect(result[0].SampleValue).toBe('West'); // Inherited wins over heuristic
         });
 
         it('should give caller-provided parameter hints highest priority for sampleValue', () => {
@@ -727,13 +727,13 @@ describe('Parameter Merge Logic', () => {
 
             const llm: ExtractedParameter[] = [{
                 name: 'Region', type: 'string', isRequired: true,
-                description: 'Region filter', usage: [], defaultValue: null, sampleValue: 'LLMValue',
+                description: 'Region filter', usage: [], DefaultValue: null, SampleValue: 'LLMValue',
             }];
 
             const hints = new Map<string, string>([['Region', 'TestedValue']]);
 
             const result = MergeParametersWithLLM(det, llmResult(llm), new Map<string, PassthroughParamContext>(), hints);
-            expect(result[0].sampleValue).toBe('TestedValue'); // hint beats LLM
+            expect(result[0].SampleValue).toBe('TestedValue'); // hint beats LLM
             expect(result[0].description).toBe('Region filter'); // description untouched by hints
         });
 
@@ -746,7 +746,7 @@ describe('Parameter Merge Logic', () => {
             const hints = new Map<string, string>([['mincount', '99']]);
 
             const result = MergeParametersWithLLM(det, null, new Map<string, PassthroughParamContext>(), hints);
-            expect(result[0].sampleValue).toBe('99');
+            expect(result[0].SampleValue).toBe('99');
         });
 
         // The old mirrored suite returned the raw default ('Attended') here — the REAL
@@ -759,11 +759,11 @@ describe('Parameter Merge Logic', () => {
             }];
 
             const result = MergeParametersWithLLM(det, null);
-            expect(result[0].defaultValue).toBe('["Attended"]');
+            expect(result[0].DefaultValue).toBe('["Attended"]');
             // NOTE (real behavior): sampleValue still reflects the RAW default,
             // not the normalized JSON array — GenerateSampleValue stringifies
             // dp.defaultValue before normalization is applied.
-            expect(result[0].sampleValue).toBe('Attended');
+            expect(result[0].SampleValue).toBe('Attended');
         });
     });
 
@@ -774,10 +774,10 @@ describe('Parameter Merge Logic', () => {
                 defaultValue: null, filters: [], usageLocations: [],
             };
             const context: PassthroughParamContext = {
-                description: 'How many days to look back',
-                sampleValue: '30',
-                depQueryName: 'Recent Changes',
-                depParamName: 'lookbackDays',
+                Description: 'How many days to look back',
+                SampleValue: '30',
+                DepQueryName: 'Recent Changes',
+                DepParamName: 'lookbackDays',
             };
             expect(BuildPassthroughDescription(param, context)).toBe(
                 'How many days to look back (passed through to "Recent Changes" as "lookbackDays")'
@@ -790,10 +790,10 @@ describe('Parameter Merge Logic', () => {
                 defaultValue: null, filters: [], usageLocations: [],
             };
             const context: PassthroughParamContext = {
-                description: null,
-                sampleValue: null,
-                depQueryName: 'Activity Query',
-                depParamName: 'minActivityCount',
+                Description: null,
+                SampleValue: null,
+                DepQueryName: 'Activity Query',
+                DepParamName: 'minActivityCount',
             };
             expect(BuildPassthroughDescription(param, context)).toBe(
                 'Optional numeric value for Min Count (passed through to "Activity Query" as "minActivityCount")'
@@ -1120,10 +1120,10 @@ JOIN {{query:"Q2(yr=fiscalYear)"}} b ON a.ID = b.ID`;
 
             const ctx = contextMap.get('numdays')!; // keyed by lowercased parent param name
             expect(ctx).toBeDefined();
-            expect(ctx.description).toBe('Number of days to look back for changes');
-            expect(ctx.sampleValue).toBe('30');
-            expect(ctx.depQueryName).toBe('Recent Entity Changes');
-            expect(ctx.depParamName).toBe('lookbackDays');
+            expect(ctx.Description).toBe('Number of days to look back for changes');
+            expect(ctx.SampleValue).toBe('30');
+            expect(ctx.DepQueryName).toBe('Recent Entity Changes');
+            expect(ctx.DepParamName).toBe('lookbackDays');
 
             // And the context feeds the real merge to produce the inherited description
             // (the suffix names the DEPENDENCY's parameter, not the parent's variable)
@@ -1153,7 +1153,7 @@ WHERE base.Region = {{ Region | sqlString }}
             // Passthrough from composition — also verify the SQL alias resolves
             const refs = ResolveCompositionReferences(sql, 'Parent Query', [dep]);
             expect(refs).toHaveLength(1);
-            expect(refs[0].alias).toBe('base');
+            expect(refs[0].Alias).toBe('base');
 
             const passthroughParams = BuildPassthroughParams(refs).params;
             expect(passthroughParams).toHaveLength(1);
@@ -1205,11 +1205,11 @@ function stubRef(
     queryFields: MJQueryFieldEntity[]
 ): ResolvedCompositionReference {
     return {
-        depQuery: stubQuery({ name: queryName, fields: queryFields }),
-        referencePath: `Category/${queryName}`,
-        alias,
-        parameterMapping: null,
-        passthroughMappings: [],
+        DepQuery: stubQuery({ name: queryName, fields: queryFields }),
+        ReferencePath: `Category/${queryName}`,
+        Alias: alias,
+        ParameterMapping: null,
+        PassthroughMappings: [],
     };
 }
 

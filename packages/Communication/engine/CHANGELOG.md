@@ -1,5 +1,69 @@
 # Change Log - @memberjunction/communication-engine
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 9d4a28a: fix: cache/dispose provider and driver instances that were being silently rebuilt or leaked on every call
+
+  Memory-leak audit findings (Round 15, 2026-09-19):
+  - **`CommunicationEngine.GetProvider()`** constructed a brand-new provider instance (Twilio/Gmail/MSGraph/etc.) via `ClassFactory.CreateInstance` on every single send — including once per recipient during a bulk `SendMessages()` call. Because each provider's own SDK-client cache (`MJLruCache`) lives on the instance, this silently defeated the earlier fix that added those caches: they were rebuilt empty and thrown away on every call in production, causing sawtooth GC pressure and SDK-client/socket churn on every bulk send. `GetProvider()` now caches resolved provider instances by name, bounded by the small, admin-managed number of registered communication providers.
+  - **`FileStorageEngine.RefreshDriverCache()`** dropped every cached storage driver — including live SDK clients (S3Client, BlobServiceClient, etc.) — with no disposal, and is reachable from ordinary end-user activity (`UploadFile()` force-refreshes the whole driver cache any time a requested `storageAccountId` isn't found). `FileStorageBase` gains a `Dispose()` hook (no-op by default, since most of the storage SDKs used here expose no explicit teardown API); `AWSFileStorage` overrides it to destroy its `S3Client`, mirroring the destroy-before-reassign it already does internally on re-init. `FileStorageEngine` now disposes every cached driver before clearing the cache.
+  - **`AuthProviderFactory.register()`/`clear()`** dropped the previous `BaseAuthProvider` instance — each holding a live `https.Agent` keep-alive socket pool and `jwksClient` — with no cleanup, on every admin-triggered auth-catalog refresh. `BaseAuthProvider` now retains its HTTP agent and exposes `Dispose()` to destroy it; `IAuthProvider.Dispose()` is optional. `register()` disposes the provider it's replacing (but not when the same instance re-registers itself); `clear()` disposes every provider first.
+
+  No behavior changes to any success path. 19 new unit tests cover the caching/disposal semantics, including edge cases (failed lookups aren't cached, throwing `Dispose()` doesn't block disposing sibling drivers, same-instance re-registration isn't disposed, providers with no `Dispose()` method are tolerated).
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/lists@6.2.0-edge.1
+  - @memberjunction/lists-base@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/lists@6.2.0-edge.0
+  - @memberjunction/lists-base@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes
