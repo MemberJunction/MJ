@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { HttpGet, HttpPost, IsHttpError } from "@memberjunction/network-utils";
-import { getApiIntegrationsConfig } from "../../config";
+import { GetApiIntegrationsConfig } from "../../config";
 
 /** Response from Gamma's `POST /v0.2/generations`. */
 interface GammaGenerationResponse {
@@ -110,7 +110,7 @@ export class GammaGeneratePresentationAction extends BaseAction {
             }
 
             // Get API key from config
-            const apiConfig = getApiIntegrationsConfig();
+            const apiConfig = GetApiIntegrationsConfig();
             const apiKey = apiConfig.gammaApiKey;
             if (!apiKey) {
                 return this.createErrorResult(

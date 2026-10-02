@@ -1,0 +1,68 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "marketing-dispatch-editor-01 [gemini-3.7-flash · Google · native-implicit]",
+    "Description": "Draft exists; the next specialist is the Editor, not the Copywriter again. Sequencing across five sibling sub-agents.",
+    "InputDefinition": {
+      "payload": {
+        "draft": {
+          "headline": "Announcing Analytics",
+          "body": "Today we are thrilled to announce..."
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Write a launch announcement for our new analytics dashboard."
+        },
+        {
+          "role": "user",
+          "content": "[Sub-Agent Result] Copywriter Agent completed. Draft written to payload.draft."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "marketing-dispatch-editor-01",
+      "expect": {
+        "kind": "subAgent",
+        "subAgents": [
+          "Editor Agent"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Marketing Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "subAgent",
+            "subAgents": [
+              "Editor Agent"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "4CF4E79F-C588-4A0E-A0C6-88A273C788A4"
+  }
+}

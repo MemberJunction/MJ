@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { CountsContributeToAggregate } from './types.js';
+import { DefaultRunArtifactRoot } from './RunArtifactRoot.js';
 import type {
     IntegrationProgressEvent,
     IntegrationProgressEventType,
@@ -12,14 +13,18 @@ import type {
 } from './types.js';
 
 export interface EmitterOptions {
-    /** Root directory containing per-run subdirs. Defaults to ./logs/integration-runs. */
+    /**
+     * Root directory containing per-run subdirs. Defaults to {@link DefaultRunArtifactRoot} —
+     * `MJ_INTEGRATION_RUN_ARTIFACT_ROOT` when set, else `<cwd>/logs/integration-runs`.
+     */
     rootDir?: string;
     /** Optional human-facing console mirror (default false — file is the primary record). */
     consoleMirror?: boolean;
     /**
-     * Max number of per-run subdirs to retain under rootDir. On each new run, older run dirs beyond
-     * this count (by mtime) are pruned so the logs directory never grows unbounded across runs.
-     * Defaults to MJ_INTEGRATION_MAX_RUN_DIRS env or 200. Set 0 to disable pruning.
+     * Max number of per-run subdirs to retain under rootDir. On each new run, run dirs beyond this
+     * count are pruned so the logs directory never grows unbounded across runs. See
+     * {@link IntegrationProgressEmitter.pruneOldRuns} for WHICH runs go: finished ones first, oldest
+     * by run start time. Defaults to MJ_INTEGRATION_MAX_RUN_DIRS env or 200. Set 0 to disable pruning.
      */
     maxRunDirs?: number;
 }
@@ -60,6 +65,10 @@ interface ResumedRunState {
     latestCheckpointSeq?: number;
     /** Original run start, so `durationMs` spans the whole run rather than the resumed tail. */
     startMs: number;
+    /** Events already in the journal, so the terminal record's `eventCount` covers the whole run. */
+    eventCount: number;
+    /** Highest-sequence event already in the journal, so the terminal record's `latestEvent` is real. */
+    latestEvent?: IntegrationProgressEvent;
 }
 
 /** Thrown when a run cannot be resumed. Carries a machine-checkable reason. */
@@ -97,6 +106,14 @@ export class IntegrationProgressEmitter {
     private errors: NonNullable<IntegrationRunResult['errors']> = [];
     private warnings: SyncWarning[] = [];
     private latestCheckpointSeq?: number;
+    /**
+     * The run's journal line count and its highest-sequence event, tracked as events are written so
+     * {@link writeTerminal} can persist both. Without them a reader has to open the whole journal to
+     * count its lines and to recover its last line — two of the four full-file reads that made a run
+     * listing O(runs x filesize) (MJ-RUN-5/21).
+     */
+    private eventsWritten = 0;
+    private lastEvent?: IntegrationProgressEvent;
     private readonly startMs: number;
     /** True when this emitter re-attached to an existing run (see {@link Resume}). */
     private readonly resumed: boolean;
@@ -124,7 +141,7 @@ export class IntegrationProgressEmitter {
          */
         resumeState?: ResumedRunState
     ) {
-        this.root = opts.rootDir ?? join(process.cwd(), 'logs', 'integration-runs');
+        this.root = opts.rootDir ?? DefaultRunArtifactRoot();
         this.runDir = join(this.root, this.manifest.runID);
         this.progressPath = join(this.runDir, 'progress.jsonl');
         this.manifestPath = join(this.runDir, 'manifest.json');
@@ -140,6 +157,8 @@ export class IntegrationProgressEmitter {
             this.errors = [...resumeState.errors];
             this.warnings = [...resumeState.warnings];
             this.latestCheckpointSeq = resumeState.latestCheckpointSeq;
+            this.eventsWritten = resumeState.eventCount;
+            this.lastEvent = resumeState.latestEvent;
         }
         this.writeChain = this.bootstrap();
     }
@@ -189,7 +208,7 @@ export class IntegrationProgressEmitter {
      * @throws {IntegrationRunResumeError} when the run has no manifest, or is already terminal.
      */
     public static async Resume(runID: string, opts: EmitterOptions = {}): Promise<IntegrationProgressEmitter> {
-        const root = opts.rootDir ?? join(process.cwd(), 'logs', 'integration-runs');
+        const root = opts.rootDir ?? DefaultRunArtifactRoot();
         const runDir = join(root, runID);
 
         const manifestRaw = await fs.readFile(join(runDir, 'manifest.json'), 'utf-8').catch(() => undefined);
@@ -227,12 +246,14 @@ export class IntegrationProgressEmitter {
             errors: [],
             warnings: [],
             startMs: Number.isFinite(parsedStart) ? parsedStart : Date.now(),
+            eventCount: 0,
         };
         const raw = await fs.readFile(path, 'utf-8').catch(() => undefined);
         if (raw === undefined) return state;
 
         for (const line of raw.split('\n')) {
             if (!line.trim()) continue;
+            state.eventCount++;
             let ev: IntegrationProgressEvent;
             try {
                 ev = JSON.parse(line) as IntegrationProgressEvent;
@@ -242,6 +263,7 @@ export class IntegrationProgressEmitter {
             // MAX, not "last line": a torn tail can leave the highest seq anywhere in the file, and
             // handing back anything lower would mint a duplicate sequence number.
             if (typeof ev.seq === 'number' && ev.seq > state.lastSeq) state.lastSeq = ev.seq;
+            if (state.latestEvent === undefined || ev.seq >= state.latestEvent.seq) state.latestEvent = ev;
             if (ev.counts && CountsContributeToAggregate(ev.eventType)) {
                 state.aggregateCounts.processed += ev.counts.processed ?? 0;
                 state.aggregateCounts.succeeded += ev.counts.succeeded ?? 0;
@@ -267,7 +289,7 @@ export class IntegrationProgressEmitter {
     }
 
     /** Emit a generic event. */
-    public emit(
+    public Emit(
         eventType: IntegrationProgressEventType,
         partial: Partial<Omit<IntegrationProgressEvent, 'ts' | 'seq' | 'eventType'>> = {}
     ): void {
@@ -279,6 +301,10 @@ export class IntegrationProgressEmitter {
             ...partial,
         };
         if (eventType === 'checkpoint') this.latestCheckpointSeq = event.seq;
+        // Journal accounting, kept here because this is the one place a line is written. Persisted
+        // by writeTerminal so a finished run never has to be re-read to be summarised.
+        this.eventsWritten++;
+        this.lastEvent = event;
         // Count accumulation — applied vs. fetched distinction (see counts shape in types.ts).
         // `stage.complete` (and the terminal `run.complete`) carry the authoritative APPLIED
         // quartet {processed,succeeded,failed,skipped} for a finished stage/run. By contrast,
@@ -315,9 +341,22 @@ export class IntegrationProgressEmitter {
         this.writeChain = this.writeChain.then(() => fs.appendFile(this.progressPath, line, 'utf-8'));
     }
 
+    /** @deprecated Use {@link Emit}. */
+    public emit(
+        eventType: IntegrationProgressEventType,
+        partial: Partial<Omit<IntegrationProgressEvent, 'ts' | 'seq' | 'eventType'>> = {}
+    ): void {
+        return this.Emit(eventType, partial);
+    }
+
     /** Convenience helpers — sugared `emit()` for the common cases. */
+    public RunStart(message?: string): void {
+        this.Emit('run.start', { message, level: 'info' });
+    }
+
+    /** @deprecated Use {@link RunStart}. */
     public runStart(message?: string): void {
-        this.emit('run.start', { message, level: 'info' });
+        return this.RunStart(message);
     }
     /**
      * Announce that this process picked a killed run back up. Emits the already-declared
@@ -329,14 +368,20 @@ export class IntegrationProgressEmitter {
      * "these events are the continuation" from "these are a fresh run".
      */
     public runResumed(message?: string, data?: Record<string, unknown>): void {
-        this.emit('run.resumed', {
+        this.Emit('run.resumed', {
             message,
             level: 'info',
             data: { triggerType: 'Restart', resumedFromSeq: this.seq, ...(data ?? {}) },
         });
     }
+
+    public StageStart(stage: string, message?: string): void {
+        this.Emit('stage.start', { stage, message, level: 'info' });
+    }
+
+    /** @deprecated Use {@link StageStart}. */
     public stageStart(stage: string, message?: string): void {
-        this.emit('stage.start', { stage, message, level: 'info' });
+        return this.StageStart(stage, message);
     }
     /**
      * `counts` is the canonical quartet the reader aggregates. `data` carries anything a specific
@@ -344,83 +389,158 @@ export class IntegrationProgressEmitter {
      * the quartet folds into `succeeded` and which history has to show separately
      * (plan.md: "Synced is different between created and updated").
      */
-    public stageComplete(stage: string, counts?: IntegrationProgressEvent['counts'], data?: Record<string, unknown>): void {
-        this.emit('stage.complete', { stage, counts, data, level: 'info' });
+    public StageComplete(stage: string, counts?: IntegrationProgressEvent['counts'], data?: Record<string, unknown>): void {
+        this.Emit('stage.complete', { stage, counts, data, level: 'info' });
     }
+
+    /** @deprecated Use {@link StageComplete}. */
+    public stageComplete(stage: string, counts?: IntegrationProgressEvent['counts'], data?: Record<string, unknown>): void {
+        return this.StageComplete(stage, counts, data);
+    }
+    public StageError(stage: string, message: string, data?: Record<string, unknown>): void {
+        this.Emit('stage.error', { stage, message, level: 'error', data });
+    }
+
+    /** @deprecated Use {@link StageError}. */
     public stageError(stage: string, message: string, data?: Record<string, unknown>): void {
-        this.emit('stage.error', { stage, message, level: 'error', data });
+        return this.StageError(stage, message, data);
     }
     /**
      * Emit a non-fatal warning. Carries a structured {stage, code, message, data}
      * payload that the reader aggregates into the run result's `warnings[]` rollup.
      * Unlike `stageError`, a warning never fails the run.
      */
-    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
-        this.emit('warning', {
+    public Warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        this.Emit('warning', {
             stage,
             message,
             level: 'warn',
             data: { code, ...(data ?? {}) },
         });
     }
+
+    /** @deprecated Use {@link Warning}. */
+    public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
+        return this.Warning(stage, code, message, data);
+    }
+    public Heartbeat(stage: string, message: string, counts?: IntegrationProgressEvent['counts']): void {
+        this.Emit('progress.heartbeat', { stage, message, counts, level: 'info' });
+    }
+
+    /** @deprecated Use {@link Heartbeat}. */
     public heartbeat(stage: string, message: string, counts?: IntegrationProgressEvent['counts']): void {
-        this.emit('progress.heartbeat', { stage, message, counts, level: 'info' });
+        return this.Heartbeat(stage, message, counts);
     }
     /**
      * Write a resumable checkpoint. resumableState should carry enough subsystem-
      * specific data for the originating service to resume from this point.
      */
-    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
-        this.emit('checkpoint', { stage, resumableState, level: 'debug' });
+    public Checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+        this.Emit('checkpoint', { stage, resumableState, level: 'debug' });
     }
 
-    public externalCallStart(url: string, method: string, data?: Record<string, unknown>): void {
-        this.emit('external.call.start', { data: { url, method, ...(data ?? {}) }, level: 'debug' });
+    /** @deprecated Use {@link Checkpoint}. */
+    public checkpoint(stage: string, resumableState: Record<string, unknown>): void {
+        return this.Checkpoint(stage, resumableState);
     }
-    public externalCallComplete(url: string, method: string, status: number, durationMs: number): void {
-        this.emit('external.call.complete', {
+
+    public ExternalCallStart(url: string, method: string, data?: Record<string, unknown>): void {
+        this.Emit('external.call.start', { data: { url, method, ...(data ?? {}) }, level: 'debug' });
+    }
+
+    /** @deprecated Use {@link ExternalCallStart}. */
+    public externalCallStart(url: string, method: string, data?: Record<string, unknown>): void {
+        return this.ExternalCallStart(url, method, data);
+    }
+    public ExternalCallComplete(url: string, method: string, status: number, durationMs: number): void {
+        this.Emit('external.call.complete', {
             data: { url, method, status, durationMs },
             level: status >= 400 ? 'warn' : 'debug',
         });
     }
 
+    /** @deprecated Use {@link ExternalCallComplete}. */
+    public externalCallComplete(url: string, method: string, status: number, durationMs: number): void {
+        return this.ExternalCallComplete(url, method, status, durationMs);
+    }
+
+    public ObjectAdded(objectName: string, source: 'Declared' | 'Discovered' | 'Custom'): void {
+        this.Emit('discovery.object.added', { data: { objectName, source }, level: 'info' });
+    }
+
+    /** @deprecated Use {@link ObjectAdded}. */
     public objectAdded(objectName: string, source: 'Declared' | 'Discovered' | 'Custom'): void {
-        this.emit('discovery.object.added', { data: { objectName, source }, level: 'info' });
+        return this.ObjectAdded(objectName, source);
     }
+    public FieldAdded(objectName: string, fieldName: string, source: 'Declared' | 'Discovered' | 'Custom'): void {
+        this.Emit('discovery.field.added', { data: { objectName, fieldName, source }, level: 'debug' });
+    }
+
+    /** @deprecated Use {@link FieldAdded}. */
     public fieldAdded(objectName: string, fieldName: string, source: 'Declared' | 'Discovered' | 'Custom'): void {
-        this.emit('discovery.field.added', { data: { objectName, fieldName, source }, level: 'debug' });
+        return this.FieldAdded(objectName, fieldName, source);
     }
+    public PkClassifierInvoked(objectName: string): void {
+        this.Emit('pk.classifier.invoked', { data: { objectName }, level: 'info' });
+    }
+
+    /** @deprecated Use {@link PkClassifierInvoked}. */
     public pkClassifierInvoked(objectName: string): void {
-        this.emit('pk.classifier.invoked', { data: { objectName }, level: 'info' });
+        return this.PkClassifierInvoked(objectName);
     }
+    public PkClassifierResult(objectName: string, verdict: Record<string, unknown>): void {
+        this.Emit('pk.classifier.result', { data: { objectName, ...verdict }, level: 'info' });
+    }
+
+    /** @deprecated Use {@link PkClassifierResult}. */
     public pkClassifierResult(objectName: string, verdict: Record<string, unknown>): void {
-        this.emit('pk.classifier.result', { data: { objectName, ...verdict }, level: 'info' });
+        return this.PkClassifierResult(objectName, verdict);
     }
+    public EntityGenerated(objectName: string, mjEntityName: string): void {
+        this.Emit('entity.generated', { data: { objectName, mjEntityName }, level: 'info' });
+    }
+
+    /** @deprecated Use {@link EntityGenerated}. */
     public entityGenerated(objectName: string, mjEntityName: string): void {
-        this.emit('entity.generated', { data: { objectName, mjEntityName }, level: 'info' });
+        return this.EntityGenerated(objectName, mjEntityName);
     }
+    public EntitySkippedNoPK(objectName: string): void {
+        this.Emit('entity.skipped-no-pk', { data: { objectName }, level: 'warn' });
+    }
+
+    /** @deprecated Use {@link EntitySkippedNoPK}. */
     public entitySkippedNoPK(objectName: string): void {
-        this.emit('entity.skipped-no-pk', { data: { objectName }, level: 'warn' });
+        return this.EntitySkippedNoPK(objectName);
     }
 
     /** Terminate the run as success. */
-    public async complete(message?: string): Promise<void> {
+    public async Complete(message?: string): Promise<void> {
         if (this.terminated) return;
-        this.emit('run.complete', { message, level: 'info' });
+        this.Emit('run.complete', { message, level: 'info' });
         await this.writeTerminal({
             success: true,
             exitReason: 'completed',
         });
     }
 
+    /** @deprecated Use {@link Complete}. */
+    public async complete(message?: string): Promise<void> {
+        return this.Complete(message);
+    }
+
     /** Terminate the run as failure. */
-    public async fail(message: string, code?: string): Promise<void> {
+    public async Fail(message: string, code?: string): Promise<void> {
         if (this.terminated) return;
-        this.emit('run.fail', { message, level: 'error', data: code ? { code } : undefined });
+        this.Emit('run.fail', { message, level: 'error', data: code ? { code } : undefined });
         await this.writeTerminal({
             success: false,
             exitReason: code === 'budget-exhausted' ? 'budget-exhausted' : 'failed',
         });
+    }
+
+    /** @deprecated Use {@link Fail}. */
+    public async fail(message: string, code?: string): Promise<void> {
+        return this.Fail(message, code);
     }
 
     /**
@@ -429,18 +549,28 @@ export class IntegrationProgressEmitter {
      * finished — the persisted CompanyIntegrationRun has no 'Cancelled' status, so the artifact's
      * ExitReason is the GQL-visible signal that the run was stopped early (partial state is still durable).
      */
-    public async cancel(message?: string): Promise<void> {
+    public async Cancel(message?: string): Promise<void> {
         if (this.terminated) return;
-        this.emit('run.cancel', { message: message ?? 'Sync cancelled by user', level: 'warn' });
+        this.Emit('run.cancel', { message: message ?? 'Sync cancelled by user', level: 'warn' });
         await this.writeTerminal({
             success: false,
             exitReason: 'aborted',
         });
     }
 
+    /** @deprecated Use {@link Cancel}. */
+    public async cancel(message?: string): Promise<void> {
+        return this.Cancel(message);
+    }
+
     /** Await all pending writes. */
-    public async flush(): Promise<void> {
+    public async Flush(): Promise<void> {
         await this.writeChain;
+    }
+
+    /** @deprecated Use {@link Flush}. */
+    public async flush(): Promise<void> {
+        return this.Flush();
     }
 
     // ── Internals ──────────────────────────────────────────────────────
@@ -454,9 +584,11 @@ export class IntegrationProgressEmitter {
             //    treats a missing/unparseable manifest as "run does not exist" — so a client
             //    polling GetRun/Tail during that write would see the run VANISH mid-restart,
             //    which is strictly worse than the stale data it would have shown.
-            // 2. Retention pruning is NOT run. It deletes the oldest run dirs by mtime, and a
-            //    resumed run is by definition an OLD dir — pruning here could delete the very run
-            //    being resumed, or evict other runs on the strength of a run that is not new.
+            // 2. Retention pruning is NOT run. A resumed run is by definition an OLD dir, so
+            //    pruning here would evict other runs on the strength of a run that is not new.
+            //    (`pruneOldRuns` now also exempts the current dir and every result-less run, so it
+            //    could no longer delete the run being resumed — but it is still not this moment's
+            //    job to decide what else goes.)
             //
             // One thing IS repaired: a journal that does not end in a newline was torn by the kill
             // mid-append. Appending straight onto it would splice the first resumed event into the
@@ -487,8 +619,30 @@ export class IntegrationProgressEmitter {
     }
 
     /**
-     * Deletes the oldest per-run subdirs under the root, keeping the most recent `maxRunDirs` (by
-     * mtime). Disabled when maxRunDirs <= 0. Never removes the current run dir (it's the newest).
+     * Enforces the retention cap on run dirs under the root, sacrificing the runs whose evidence is
+     * worth least. Disabled when maxRunDirs <= 0; best-effort throughout.
+     *
+     * Two rules, and neither is cosmetic:
+     *
+     *  1. **Order by run START time, read from each manifest — never by mtime.** A run that stranded
+     *     stops being written to, so its mtime freezes at the moment it stranded. Under the previous
+     *     newest-first-by-mtime rule that sorted it to the BACK of the list, which made the evidence
+     *     for the one failure an operator most needs to explain the FIRST thing deleted. A start time
+     *     never moves. (The old doc comment claimed pruning "never removes the current run dir (it's
+     *     the newest)" — true of a live run, and exactly wrong about a stranded one.)
+     *  2. **A run with no `result.json` is sacrificed last.** No terminal record means the run is
+     *     either still in flight — including THIS one — or stranded; in both cases nothing else
+     *     records what it did, whereas a finished run's outcome is durable in its own `result.json`.
+     *     The cap stays a hard bound: when only result-less runs remain to delete, the oldest of them
+     *     go, so a fleet that strands runs cannot grow the directory without limit.
+     *
+     * The current run's own dir is exempt outright. Rule 2 already covers it (it has no result yet),
+     * but saying so makes the guarantee independent of what any manifest claims its start time is.
+     *
+     * Retention consequence worth stating plainly: a finished run's artifacts are now shorter-lived
+     * than they were, and an unfinished one's longer-lived. That is the trade — a completed run's
+     * numbers survive in its `result.json` and in the database; a stranded run's journal is the only
+     * account of it that exists.
      */
     private async pruneOldRuns(): Promise<void> {
         if (this.maxRunDirs <= 0) return;
@@ -500,17 +654,42 @@ export class IntegrationProgressEmitter {
         }
         const dirs = entries.filter(e => e.isDirectory());
         if (dirs.length <= this.maxRunDirs) return;
-        // Stat each for mtime, newest-first; delete everything past the retention count.
-        const withTime = await Promise.all(dirs.map(async d => {
+        const described = await Promise.all(dirs.map(async d => {
             const p = join(this.root, d.name);
-            try { return { p, mtime: (await fs.stat(p)).mtimeMs }; }
-            catch { return { p, mtime: 0 }; }
+            const [startMs, finished] = await Promise.all([
+                IntegrationProgressEmitter.runStartMs(p),
+                IntegrationProgressEmitter.hasTerminalRecord(p),
+            ]);
+            return { p, startMs, finished, isSelf: p === this.runDir };
         }));
-        withTime.sort((a, b) => b.mtime - a.mtime);
-        const toDelete = withTime.slice(this.maxRunDirs);
+        // Sacrifice order: finished before unfinished, oldest start first within each group.
+        const sacrificial = described
+            .filter(d => !d.isSelf)
+            .sort((a, b) => (a.finished === b.finished ? a.startMs - b.startMs : (a.finished ? -1 : 1)));
+        const toDelete = sacrificial.slice(0, described.length - this.maxRunDirs);
         await Promise.all(toDelete.map(d =>
             fs.rm(d.p, { recursive: true, force: true }).catch(() => { /* best-effort */ })
         ));
+    }
+
+    /**
+     * A run's start time, from its manifest. Falls back to the directory's mtime when the manifest is
+     * missing or unreadable — which is what a dir another process created moments ago looks like, and
+     * a fresh mtime keeps it at the safe end of the sacrifice order rather than deleting it as
+     * "oldest". Only then 0, meaning "nothing is known about this dir".
+     */
+    private static async runStartMs(runDir: string): Promise<number> {
+        try {
+            const raw = await fs.readFile(join(runDir, 'manifest.json'), 'utf-8');
+            const parsed = Date.parse((JSON.parse(raw) as IntegrationRunManifest).startedAt);
+            if (Number.isFinite(parsed)) return parsed;
+        } catch { /* fall through to mtime */ }
+        try { return (await fs.stat(runDir)).mtimeMs; } catch { return 0; }
+    }
+
+    /** Whether a run dir holds a terminal record — i.e. the run finished and said so. */
+    private static async hasTerminalRecord(runDir: string): Promise<boolean> {
+        return fs.access(join(runDir, 'result.json')).then(() => true).catch(() => false);
     }
 
     private async writeTerminal(partial: { success: boolean; exitReason: IntegrationRunResult['exitReason'] }): Promise<void> {
@@ -527,6 +706,8 @@ export class IntegrationProgressEmitter {
             warnings: this.warnings.length > 0 ? this.warnings : undefined,
             warningCount: this.warnings.length,
             resumableFromSeq: this.latestCheckpointSeq,
+            eventCount: this.eventsWritten,
+            latestEvent: this.lastEvent,
         };
         // `wx` — create-only. The terminal record is written exactly ONCE per run, ever. The
         // in-instance `terminated` flag cannot cover the case resume introduces: two emitters, in
@@ -564,9 +745,14 @@ export class IntegrationProgressEmitter {
         }
     }
 
-    public static newRunID(prefix?: string): string {
+    public static NewRunID(prefix?: string): string {
         const hi = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
         const lo = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
         return `${prefix ?? 'run'}-${Date.now()}-${hi}${lo}`;
+    }
+
+    /** @deprecated Use {@link NewRunID}. */
+    public static newRunID(prefix?: string): string {
+        return this.NewRunID(prefix);
     }
 }

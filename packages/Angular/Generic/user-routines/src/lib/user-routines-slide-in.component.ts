@@ -47,7 +47,7 @@ export class UserRoutinesSlideInComponent extends BaseAngularComponent {
                 // Declarative open ([(Visible)] binding) must honor InitialRoutineID /
                 // StartInNewRoutine exactly like the imperative Open() path. The command
                 // center mounts via @if — apply the initial view next tick.
-                Promise.resolve().then(() => this.applyInitialView());
+                Promise.resolve().then(() => this.ApplyInitialView());
             }
         }
     }
@@ -96,7 +96,7 @@ export class UserRoutinesSlideInComponent extends BaseAngularComponent {
         this.VisibleChange.emit(true);
         this.cdr.markForCheck();
         // The command center mounts via @if — apply the initial view next tick
-        Promise.resolve().then(() => this.applyInitialView());
+        Promise.resolve().then(() => this.ApplyInitialView());
     }
 
     /** Closes the slide-in. */
@@ -114,7 +114,7 @@ export class UserRoutinesSlideInComponent extends BaseAngularComponent {
     }
 
     /** Applies InitialRoutineID / StartInNewRoutine once the command center is mounted. */
-    public applyInitialView(): void {
+    public ApplyInitialView(): void {
         const cc = this.commandCenter;
         if (!cc) {
             return;
@@ -124,5 +124,10 @@ export class UserRoutinesSlideInComponent extends BaseAngularComponent {
         } else if (this.InitialRoutineID) {
             cc.ShowHistory(this.InitialRoutineID);
         }
+    }
+
+    /** @deprecated Use {@link ApplyInitialView}. */
+    public applyInitialView(): void {
+        return this.ApplyInitialView();
     }
 }

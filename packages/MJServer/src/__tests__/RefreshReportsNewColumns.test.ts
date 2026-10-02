@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { decideFieldMapReconcile } from '../integration/EntityMapLifecycle.js';
+import { DecideFieldMapReconcile } from '../integration/EntityMapLifecycle.js';
 
 /**
  * A REFRESH REPORTS the source's current shape; it does not adopt it. New objects and new columns
@@ -26,20 +26,20 @@ const fm = (SourceFieldName: string, Status: string) => ({ SourceFieldName, Stat
 
 describe('decideFieldMapReconcile — a refresh reports new columns, disabled', () => {
     it('creates a new column DISABLED on an enabled map, by default', () => {
-        const plan = decideFieldMapReconcile(['id', 'brand_new_col'], [fm('id', 'Active')], true);
+        const plan = DecideFieldMapReconcile(['id', 'brand_new_col'], [fm('id', 'Active')], true);
         expect(plan.Create).toEqual([{ SourceFieldName: 'brand_new_col', Status: 'Inactive' }]);
         expect(plan.Enable).toEqual([]);
         expect(plan.Disable).toEqual([]);
     });
 
     it('autoEnableNewColumns:true is the explicit opt-in for a connection that wants adoption', () => {
-        const plan = decideFieldMapReconcile(['id', 'brand_new_col'], [fm('id', 'Active')], true, true);
+        const plan = DecideFieldMapReconcile(['id', 'brand_new_col'], [fm('id', 'Active')], true, true);
         expect(plan.Create).toEqual([{ SourceFieldName: 'brand_new_col', Status: 'Active' }]);
     });
 
     it('a DISABLED map never gets an Active column — the map always bounds the column', () => {
         // Adopting new columns must not resurrect a map the user switched off.
-        const plan = decideFieldMapReconcile(['brand_new_col'], [], false, true);
+        const plan = DecideFieldMapReconcile(['brand_new_col'], [], false, true);
         expect(plan.Create).toEqual([{ SourceFieldName: 'brand_new_col', Status: 'Inactive' }]);
     });
 });
@@ -49,24 +49,24 @@ describe('decideFieldMapReconcile — retiring and restoring are both non-destru
         // That row is not new — it was disabled because the source stopped reporting the column, so
         // it returns to the state it had. Gating it would silently demote a column the user chose to
         // sync whenever the source flickered.
-        const plan = decideFieldMapReconcile(['came_back'], [fm('came_back', 'Inactive')], true, false);
+        const plan = DecideFieldMapReconcile(['came_back'], [fm('came_back', 'Inactive')], true, false);
         expect(plan.Enable).toEqual(['came_back']);
         expect(plan.Create).toEqual([]);   // reuses the row, never mints a second one
     });
 
     it('a column absent from the resolution is DISABLED, never deleted', () => {
-        const plan = decideFieldMapReconcile(['kept'], [fm('kept', 'Active'), fm('vanished', 'Active')], true);
+        const plan = DecideFieldMapReconcile(['kept'], [fm('kept', 'Active'), fm('vanished', 'Active')], true);
         expect(plan.Disable).toEqual(['vanished']);
         expect(plan.Enable).toEqual([]);   // survivor untouched
     });
 
     it('does not re-enable anything while the map itself is disabled', () => {
-        const plan = decideFieldMapReconcile(['came_back'], [fm('came_back', 'Inactive')], false);
+        const plan = DecideFieldMapReconcile(['came_back'], [fm('came_back', 'Inactive')], false);
         expect(plan.Enable).toEqual([]);
     });
 
     it('matches source field names case-insensitively on both sides', () => {
-        const plan = decideFieldMapReconcile(['ID', 'Name'], [fm('id', 'Active'), fm('name', 'Active')], true);
+        const plan = DecideFieldMapReconcile(['ID', 'Name'], [fm('id', 'Active'), fm('name', 'Active')], true);
         expect(plan.Create).toEqual([]);
         expect(plan.Disable).toEqual([]);
     });

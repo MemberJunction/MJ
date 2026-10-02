@@ -38,7 +38,7 @@ export class TagScopeFilterBuilder extends BaseSingleton<TagScopeFilterBuilder> 
      * The subquery uses the canonical `__mj`/`vwTagScopes` view — callers do
      * not need a separate JOIN.
      */
-    public buildVisibilityFilter(
+    public BuildVisibilityFilter(
         ctx?: TagScopeContext | null,
         provider?: IMetadataProvider
     ): string {
@@ -61,6 +61,14 @@ export class TagScopeFilterBuilder extends BaseSingleton<TagScopeFilterBuilder> 
         return `Status='Active' AND (IsGlobal=1 OR ID IN (${scopeSubquery}))`;
     }
 
+    /** @deprecated Use {@link BuildVisibilityFilter}. */
+    public buildVisibilityFilter(
+        ctx?: TagScopeContext | null,
+        provider?: IMetadataProvider
+    ): string {
+        return this.BuildVisibilityFilter(ctx, provider);
+    }
+
     /**
      * Predicate suitable for the SemanticVectorService's `subtreeFilter`
      * callback — given a `TagEmbeddingMetadata` entry's tag ID, the caller
@@ -71,7 +79,7 @@ export class TagScopeFilterBuilder extends BaseSingleton<TagScopeFilterBuilder> 
      * For callers that have the in-memory `MJTagEntity` cache, prefer
      * `buildInMemoryFilter`.
      */
-    public buildVisibleTagIDPredicate(
+    public BuildVisibleTagIDPredicate(
         ctx?: TagScopeContext | null,
         provider?: IMetadataProvider
     ): string {
@@ -91,6 +99,14 @@ export class TagScopeFilterBuilder extends BaseSingleton<TagScopeFilterBuilder> 
         return `(IsGlobal=1 OR ID IN (${scopeSubquery}))`;
     }
 
+    /** @deprecated Use {@link BuildVisibleTagIDPredicate}. */
+    public buildVisibleTagIDPredicate(
+        ctx?: TagScopeContext | null,
+        provider?: IMetadataProvider
+    ): string {
+        return this.BuildVisibleTagIDPredicate(ctx, provider);
+    }
+
     /**
      * In-memory predicate over a Tag entity instance — convenient when the
      * caller already has the `Tags` cache loaded and wants to filter rather
@@ -100,7 +116,7 @@ export class TagScopeFilterBuilder extends BaseSingleton<TagScopeFilterBuilder> 
      * Active tags always pass through Status; the scope test is only applied
      * when a context is supplied.
      */
-    public buildInMemoryFilter(
+    public BuildInMemoryFilter(
         ctx?: TagScopeContext | null,
         tagScopesByTagID?: Map<string, Array<{ScopeEntityID: string; ScopeRecordID: string}>>,
         provider?: IMetadataProvider
@@ -126,12 +142,21 @@ export class TagScopeFilterBuilder extends BaseSingleton<TagScopeFilterBuilder> 
         };
     }
 
+    /** @deprecated Use {@link BuildInMemoryFilter}. */
+    public buildInMemoryFilter(
+        ctx?: TagScopeContext | null,
+        tagScopesByTagID?: Map<string, Array<{ScopeEntityID: string; ScopeRecordID: string}>>,
+        provider?: IMetadataProvider
+    ): (tag: MJTagEntity) => boolean {
+        return this.BuildInMemoryFilter(ctx, tagScopesByTagID, provider);
+    }
+
     /**
      * Validate that a proposed child scope is a (non-strict) subset of its
      * parent's scope, OR the parent is global. Returns `{ ok: false }` when
      * the child would be visible somewhere the parent is not.
      */
-    public validateChildScope(
+    public ValidateChildScope(
         parentTag: MJTagEntity,
         proposedScopes: TagScopeContextEntry[],
         parentScopes: Array<{ScopeEntityID: string; ScopeRecordID: string}>,
@@ -155,6 +180,16 @@ export class TagScopeFilterBuilder extends BaseSingleton<TagScopeFilterBuilder> 
             }
         }
         return { ok: true };
+    }
+
+    /** @deprecated Use {@link ValidateChildScope}. */
+    public validateChildScope(
+        parentTag: MJTagEntity,
+        proposedScopes: TagScopeContextEntry[],
+        parentScopes: Array<{ScopeEntityID: string; ScopeRecordID: string}>,
+        provider?: IMetadataProvider
+    ): { ok: true } | { ok: false; reason: string } {
+        return this.ValidateChildScope(parentTag, proposedScopes, parentScopes, provider);
     }
 
     private buildScopeSubquery(

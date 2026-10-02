@@ -3,9 +3,9 @@ import { RegisterClass } from '@memberjunction/global';
 
 import { MJAccessControlRuleEntity } from '../../generated/entity_subclasses';
 import {
-    buildActionsSummary,
-    checkShareManagePermission,
-    dispatchShareNotificationAfterSave,
+    BuildActionsSummary,
+    CheckShareManagePermission,
+    DispatchShareNotificationAfterSave,
 } from './BaseShareEntityExtended';
 
 /**
@@ -25,7 +25,7 @@ export class MJAccessControlRuleEntityExtended extends MJAccessControlRuleEntity
     override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
         if (type === EntityPermissionType.Update || type === EntityPermissionType.Delete) {
             const user = this.ActiveUser;
-            if (user && checkShareManagePermission(user, this.GrantedByUserID)) return true;
+            if (user && CheckShareManagePermission(user, this.GrantedByUserID)) return true;
         }
         return super.CheckPermissions(type, throwError);
     }
@@ -34,7 +34,7 @@ export class MJAccessControlRuleEntityExtended extends MJAccessControlRuleEntity
         const isNewShare = !this.IsSaved;
         const saved = await super.Save(options);
         if (saved) {
-            await dispatchShareNotificationAfterSave(this, isNewShare, this.GrantedByUserID, (provider, grantorId) => {
+            await DispatchShareNotificationAfterSave(this, isNewShare, this.GrantedByUserID, (provider, grantorId) => {
                 // Only user grantees get individual notifications.
                 if (this.GranteeType !== 'User' || !this.GranteeID) return null;
 
@@ -57,7 +57,7 @@ export class MJAccessControlRuleEntityExtended extends MJAccessControlRuleEntity
     }
 
     private actionsSummary(): string {
-        return buildActionsSummary({
+        return BuildActionsSummary({
             view: this.CanRead,
             create: this.CanCreate,
             edit: this.CanUpdate,

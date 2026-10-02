@@ -18,7 +18,7 @@ import {
 } from '../generic/FileStorageBase';
 import { BoxDeveloperTokenAuth, BoxClient } from 'box-node-sdk';
 import { Readable } from 'stream';
-import { getProviderConfig } from '../config';
+import { GetProviderConfig } from '../config';
 
 interface BoxTokenResponse {
   access_token: string;
@@ -252,7 +252,7 @@ export class BoxFileStorage extends FileStorageBase {
     super();
 
     // Try to get config from centralized configuration
-    const config = getProviderConfig('box');
+    const config = GetProviderConfig('box');
 
     // Box auth can be via access token or refresh token
     this._accessToken = config?.accessToken || env.get('STORAGE_BOX_ACCESS_TOKEN').asString();

@@ -1,0 +1,24 @@
+# Docker build context excludes.
+#
+# The regression Dockerfiles do `COPY packages/ ./packages/` and install/build
+# inside the image, so anything here is either rebuilt in-image or actively
+# harmful to copy in.
+
+# Installed dependencies. pnpm links packages/*/node_modules into the root
+# .pnpm store; copying those symlinks into the image yields dangling links, and
+# every Dockerfile runs `pnpm install` itself anyway.
+node_modules
+**/node_modules
+
+# Build output — every image builds from source.
+**/dist
+
+# Local CodeGen artifacts (gitignored). These are regenerated per-environment:
+# Dockerfile.api overlays them from docker/regression/.docker-generated/, but
+# Dockerfile.db-setup does not, so a developer's stale copy leaks in and fails
+# the build against the checked-in GeneratedEntities (TS2305 on AssociationDemo*).
+packages/MJAPI/src/generated/class-registrations-manifest.ts
+
+# VCS + editor noise
+.git
+.vscode

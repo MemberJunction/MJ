@@ -19,7 +19,7 @@
  * first, so a migrated command always keeps its richer, curated metadata.
  */
 import { CLIPluginRegistry, type PluginUsage, type PluginUsageFlag } from '@memberjunction/cli-core';
-import { getDomainProfile } from './domain-profiles.js';
+import { GetDomainProfile } from './domain-profiles.js';
 
 /**
  * The slice of oclif's `Command.Loadable` this module reads.
@@ -29,21 +29,21 @@ import { getDomainProfile } from './domain-profiles.js';
  * in every caller.
  */
 export interface OclifCommandShape {
-  id: string;
-  description?: string;
-  summary?: string;
-  hidden?: boolean;
-  flags?: Record<string, OclifFlagShape | undefined>;
-  examples?: ReadonlyArray<string | { command?: string; description?: string }>;
+  Id: string;
+  Description?: string;
+  summary?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Hidden?: boolean;
+  Flags?: Record<string, OclifFlagShape | undefined>;
+  Examples?: ReadonlyArray<string | { command?: string; description?: string }>;
 }
 
 /** The slice of an oclif flag definition this module reads. */
 export interface OclifFlagShape {
-  type?: string;
-  description?: string;
-  char?: string;
-  options?: readonly string[];
-  required?: boolean;
+  type?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Description?: string;
+  Char?: string;
+  options?: readonly string[];  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Required?: boolean;
 }
 
 /**
@@ -59,8 +59,13 @@ function normalizeCommandKey(id: string): string {
 }
 
 /** The domain is the first segment: `sync:push` → `sync`, `codegen` → `codegen`. */
-export function domainOf(commandId: string): string {
+export function DomainOf(commandId: string): string {
   return normalizeCommandKey(commandId).split(':')[0] ?? commandId;
+}
+
+/** @deprecated Use {@link DomainOf}. */
+export function domainOf(commandId: string): string {
+  return DomainOf(commandId);
 }
 
 /**
@@ -76,7 +81,7 @@ function firstLine(text: string | undefined): string | undefined {
 }
 
 /** oclif accepts examples as strings or `{command, description}` objects. */
-function normalizeExamples(examples: OclifCommandShape['examples']): string[] | undefined {
+function normalizeExamples(examples: OclifCommandShape['Examples']): string[] | undefined {
   if (!examples?.length) return undefined;
   const out = examples
     .map((e) => (typeof e === 'string' ? e : e.command))
@@ -85,15 +90,15 @@ function normalizeExamples(examples: OclifCommandShape['examples']): string[] | 
 }
 
 /** Converts oclif's flag record to the usage surface's flag list, options included. */
-function normalizeFlags(flags: OclifCommandShape['flags']): PluginUsageFlag[] | undefined {
+function normalizeFlags(flags: OclifCommandShape['Flags']): PluginUsageFlag[] | undefined {
   if (!flags) return undefined;
   const out: PluginUsageFlag[] = [];
   for (const [name, def] of Object.entries(flags)) {
     if (!def) continue;
     const type = def.options?.length ? def.options.join('|') : (def.type ?? 'string');
-    const parts = [def.description ?? ''];
-    if (def.char) parts.push(`(-${def.char})`);
-    if (def.required) parts.push('(required)');
+    const parts = [def.Description ?? ''];
+    if (def.Char) parts.push(`(-${def.Char})`);
+    if (def.Required) parts.push('(required)');
     out.push({ name: `--${name}`, type, description: parts.filter(Boolean).join(' ').trim() });
   }
   return out.length > 0 ? out : undefined;
@@ -104,21 +109,26 @@ function normalizeFlags(flags: OclifCommandShape['flags']): PluginUsageFlag[] | 
  *
  * Exported for testing — the registration path below is what production calls.
  */
-export function deriveUsage(command: OclifCommandShape): PluginUsage {
-  const key = normalizeCommandKey(command.id);
-  const domain = domainOf(key);
-  const profile = getDomainProfile(domain);
-  const description = command.description ?? command.summary;
+export function DeriveUsage(command: OclifCommandShape): PluginUsage {
+  const key = normalizeCommandKey(command.Id);
+  const domain = DomainOf(key);
+  const profile = GetDomainProfile(domain);
+  const description = command.Description ?? command.summary;
 
   return {
     domain,
     command: key,
     summary: command.summary ?? firstLine(description) ?? `mj ${key.replace(/:/g, ' ')}`,
     description,
-    flags: normalizeFlags(command.flags),
-    examples: normalizeExamples(command.examples),
-    runtime: profile.runtime,
+    flags: normalizeFlags(command.Flags),
+    examples: normalizeExamples(command.Examples),
+    runtime: profile.Runtime,
   };
+}
+
+/** @deprecated Use {@link DeriveUsage}. */
+export function deriveUsage(command: OclifCommandShape): PluginUsage {
+  return DeriveUsage(command);
 }
 
 /**
@@ -132,14 +142,19 @@ export function deriveUsage(command: OclifCommandShape): PluginUsage {
  *
  * Returns the keys it registered, so a caller or test can assert coverage.
  */
-export function registerDerivedUsage(commands: readonly OclifCommandShape[]): string[] {
+export function RegisterDerivedUsage(commands: readonly OclifCommandShape[]): string[] {
   const registered: string[] = [];
   for (const command of commands) {
-    if (!command?.id || command.hidden) continue;
-    if (BUILT_IN_COMMANDS.has(normalizeCommandKey(command.id))) continue;
-    const usage = deriveUsage(command);
+    if (!command?.Id || command.Hidden) continue;
+    if (BUILT_IN_COMMANDS.has(normalizeCommandKey(command.Id))) continue;
+    const usage = DeriveUsage(command);
     CLIPluginRegistry.RegisterUsage(usage);
     registered.push(usage.command);
   }
   return registered;
+}
+
+/** @deprecated Use {@link RegisterDerivedUsage}. */
+export function registerDerivedUsage(commands: readonly OclifCommandShape[]): string[] {
+  return RegisterDerivedUsage(commands);
 }

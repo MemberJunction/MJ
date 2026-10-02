@@ -72,7 +72,7 @@ export class CredentialDialogService {
      * @param options - Optional configuration for the dialog
      * @returns Promise resolving to the dialog result
      */
-    public async openDialog(
+    public async OpenDialog(
         viewContainerRef: ViewContainerRef,
         options?: CredentialDialogOptions
     ): Promise<CredentialDialogResult> {
@@ -99,6 +99,14 @@ export class CredentialDialogService {
         return firstValueFrom(resultSubject);
     }
 
+    /** @deprecated Use {@link OpenDialog}. */
+    public async openDialog(
+        viewContainerRef: ViewContainerRef,
+        options?: CredentialDialogOptions
+    ): Promise<CredentialDialogResult> {
+        return this.OpenDialog(viewContainerRef, options);
+    }
+
     /**
      * Opens a dialog to create a new credential with optional pre-selections.
      * Convenience method that wraps openDialog with create-specific defaults.
@@ -108,17 +116,26 @@ export class CredentialDialogService {
      * @param preselectedCategoryId - Optional category to pre-select
      * @returns Promise resolving to the dialog result
      */
-    public async createCredential(
+    public async CreateCredential(
         viewContainerRef: ViewContainerRef,
         preselectedTypeId?: string,
         preselectedCategoryId?: string
     ): Promise<CredentialDialogResult> {
-        return this.openDialog(viewContainerRef, {
+        return this.OpenDialog(viewContainerRef, {
             credential: null,
             preselectedTypeId,
             preselectedCategoryId,
             title: 'Create Credential'
         });
+    }
+
+    /** @deprecated Use {@link CreateCredential}. */
+    public async createCredential(
+        viewContainerRef: ViewContainerRef,
+        preselectedTypeId?: string,
+        preselectedCategoryId?: string
+    ): Promise<CredentialDialogResult> {
+        return this.CreateCredential(viewContainerRef, preselectedTypeId, preselectedCategoryId);
     }
 
     /**
@@ -129,31 +146,49 @@ export class CredentialDialogService {
      * @param credential - The credential to edit
      * @returns Promise resolving to the dialog result
      */
+    public async EditCredential(
+        viewContainerRef: ViewContainerRef,
+        credential: MJCredentialEntity
+    ): Promise<CredentialDialogResult> {
+        return this.OpenDialog(viewContainerRef, {
+            credential,
+            title: `Edit Credential: ${credential.Name}`
+        });
+    }
+
+    /** @deprecated Use {@link EditCredential}. */
     public async editCredential(
         viewContainerRef: ViewContainerRef,
         credential: MJCredentialEntity
     ): Promise<CredentialDialogResult> {
-        return this.openDialog(viewContainerRef, {
-            credential,
-            title: `Edit Credential: ${credential.Name}`
-        });
+        return this.EditCredential(viewContainerRef, credential);
     }
 
     /**
      * Gets cached credential types or loads them if not cached.
      * Types are cached to avoid repeated database calls.
      */
-    public async getCredentialTypes(): Promise<MJCredentialTypeEntity[]> {
+    public async GetCredentialTypes(): Promise<MJCredentialTypeEntity[]> {
         return this.loadCredentialTypes();
+    }
+
+    /** @deprecated Use {@link GetCredentialTypes}. */
+    public async getCredentialTypes(): Promise<MJCredentialTypeEntity[]> {
+        return this.GetCredentialTypes();
     }
 
     /**
      * Clears the cached credential types.
      * Call this if you need to refresh the list after adding new types.
      */
-    public clearCache(): void {
+    public ClearCache(): void {
         this._credentialTypes = null;
         this._credentialTypesLoadPromise = null;
+    }
+
+    /** @deprecated Use {@link ClearCache}. */
+    public clearCache(): void {
+        return this.ClearCache();
     }
 
     private async loadCredentialTypes(): Promise<MJCredentialTypeEntity[]> {

@@ -152,7 +152,7 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
         if (this._loading && this._loadingPromise) return this._loadingPromise;
 
         this._loading = true;
-        this._loadingPromise = this.InnerLoad(forceRefresh, contextUser, provider);
+        this._loadingPromise = this.innerLoad(forceRefresh, contextUser, provider);
         try {
             await this._loadingPromise;
         } finally {
@@ -161,7 +161,7 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
         }
     }
 
-    private async InnerLoad(
+    private async innerLoad(
         forceRefresh?: boolean,
         contextUser?: UserInfo,
         provider?: IMetadataProvider
@@ -176,7 +176,7 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
             this.RefreshQueryEmbeddings();
 
             // 3. Subscribe to DataChange$ for ongoing updates (only once)
-            this.SubscribeToDataChanges();
+            this.subscribeToDataChanges();
 
             this._loaded = true;
         } catch (error) {
@@ -249,7 +249,7 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
      * BaseEngine's auto-refresh already debounces entity events (default 5000ms).
      * By the time DataChange$ fires, this.Base.Queries is already updated.
      */
-    private SubscribeToDataChanges(): void {
+    private subscribeToDataChanges(): void {
         if (this._dataChangeSubscription) return;
 
         this._dataChangeSubscription = this.Base.DataChange$.subscribe(event => {

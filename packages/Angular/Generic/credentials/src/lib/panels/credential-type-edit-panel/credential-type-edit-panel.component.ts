@@ -24,27 +24,117 @@ interface SchemaField {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class CredentialTypeEditPanelComponent extends BaseAngularComponent implements OnInit {
-    @Input() credentialType: MJCredentialTypeEntity | null = null;
-    @Input() isOpen = false;
+    @Input() CredentialType: MJCredentialTypeEntity | null = null;
+
+    /** @deprecated Use {@link CredentialType}. */
+    @Input() set credentialType(value: MJCredentialTypeEntity | null) {
+      this.CredentialType = value;
+    }
+    /** @deprecated Use {@link CredentialType}. */
+    get credentialType(): MJCredentialTypeEntity | null {
+      return this.CredentialType;
+    }
+    @Input() IsOpen = false;
+
+    /** @deprecated Use {@link IsOpen}. */
+    @Input() set isOpen(value: CredentialTypeEditPanelComponent['IsOpen']) {
+      this.IsOpen = value;
+    }
+    /** @deprecated Use {@link IsOpen}. */
+    get isOpen(): CredentialTypeEditPanelComponent['IsOpen'] {
+      return this.IsOpen;
+    }
 
     @Output() close = new EventEmitter<void>();
-    @Output() saved = new EventEmitter<MJCredentialTypeEntity>();
-    @Output() deleted = new EventEmitter<string>();
+    @Output() Saved = new EventEmitter<MJCredentialTypeEntity>();
+
+    /**
+     * @deprecated Use {@link Saved}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (saved) keeps working. Must stay AFTER Saved: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() saved = this.Saved;
+    @Output() Deleted = new EventEmitter<string>();
+
+    /**
+     * @deprecated Use {@link Deleted}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (deleted) keeps working. Must stay AFTER Deleted: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() deleted = this.Deleted;
 
     public isLoading = false;
-    public isSaving = false;
-    public isNew = false;
+    public IsSaving = false;
+
+    /** @deprecated Use {@link IsSaving}. */
+    public get isSaving() {
+      return this.IsSaving;
+    }
+    /** @deprecated Use {@link IsSaving}. */
+    public set isSaving(value) {
+      this.IsSaving = value;
+    }
+    public IsNew = false;
+
+    /** @deprecated Use {@link IsNew}. */
+    public get isNew() {
+      return this.IsNew;
+    }
+    /** @deprecated Use {@link IsNew}. */
+    public set isNew(value) {
+      this.IsNew = value;
+    }
 
     // Form fields
     public name = '';
     public description = '';
     public category: CategoryType = 'Integration';
-    public iconClass = '';
-    public validationEndpoint = '';
-    public schemaFields: SchemaField[] = [];
+    public IconClass = '';
+
+    /** @deprecated Use {@link IconClass}. */
+    public get iconClass() {
+      return this.IconClass;
+    }
+    /** @deprecated Use {@link IconClass}. */
+    public set iconClass(value) {
+      this.IconClass = value;
+    }
+    public ValidationEndpoint = '';
+
+    /** @deprecated Use {@link ValidationEndpoint}. */
+    public get validationEndpoint() {
+      return this.ValidationEndpoint;
+    }
+    /** @deprecated Use {@link ValidationEndpoint}. */
+    public set validationEndpoint(value) {
+      this.ValidationEndpoint = value;
+    }
+    public SchemaFields: SchemaField[] = [];
+
+    /** @deprecated Use {@link SchemaFields}. */
+    public get schemaFields(): SchemaField[] {
+      return this.SchemaFields;
+    }
+    /** @deprecated Use {@link SchemaFields}. */
+    public set schemaFields(value: SchemaField[]) {
+      this.SchemaFields = value;
+    }
 
     // Available categories
-    public categories: CategoryType[] = ['AI', 'Authentication', 'Communication', 'Database', 'Integration', 'Storage'];
+    public Categories: CategoryType[] = ['AI', 'Authentication', 'Communication', 'Database', 'Integration', 'Storage'];
+
+    /** @deprecated Use {@link Categories}. */
+    public get categories(): CategoryType[] {
+      return this.Categories;
+    }
+    /** @deprecated Use {@link Categories}. */
+    public set categories(value: CategoryType[]) {
+      this.Categories = value;
+    }
 
     private get _metadata() { return this.ProviderToUse; }
 
@@ -52,19 +142,29 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
 
     ngOnInit(): void {}
 
-    public get panelTitle(): string {
-        return this.isNew ? 'Create Credential Type' : 'Edit Credential Type';
+    public get PanelTitle(): string {
+        return this.IsNew ? 'Create Credential Type' : 'Edit Credential Type';
     }
 
-    public get canSave(): boolean {
+    /** @deprecated Use {@link PanelTitle}. */
+    public get panelTitle(): string {
+      return this.PanelTitle;
+    }
+
+    public get CanSave(): boolean {
         return this.name.trim().length > 0 && this.category.length > 0;
     }
 
-    public async open(credentialType: MJCredentialTypeEntity | null): Promise<void> {
+    /** @deprecated Use {@link CanSave}. */
+    public get canSave(): boolean {
+      return this.CanSave;
+    }
+
+    public async Open(credentialType: MJCredentialTypeEntity | null): Promise<void> {
         this.isLoading = true;
-        this.isOpen = true;
-        this.credentialType = credentialType;
-        this.isNew = !credentialType || !credentialType.ID;
+        this.IsOpen = true;
+        this.CredentialType = credentialType;
+        this.IsNew = !credentialType || !credentialType.ID;
         this.cdr.markForCheck();
 
         this.resetForm();
@@ -77,21 +177,26 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link Open}. */
+    public async open(credentialType: MJCredentialTypeEntity | null): Promise<void> {
+      return this.Open(credentialType);
+    }
+
     private resetForm(): void {
         this.name = '';
         this.description = '';
         this.category = 'Integration';
-        this.iconClass = '';
-        this.validationEndpoint = '';
-        this.schemaFields = [];
+        this.IconClass = '';
+        this.ValidationEndpoint = '';
+        this.SchemaFields = [];
     }
 
     private populateFromType(credentialType: MJCredentialTypeEntity): void {
         this.name = credentialType.Name || '';
         this.description = credentialType.Description || '';
         this.category = credentialType.Category || 'Integration';
-        this.iconClass = credentialType.IconClass || '';
-        this.validationEndpoint = credentialType.ValidationEndpoint || '';
+        this.IconClass = credentialType.IconClass || '';
+        this.ValidationEndpoint = credentialType.ValidationEndpoint || '';
 
         // Parse field schema
         this.parseFieldSchema(credentialType.FieldSchema);
@@ -100,7 +205,7 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
     private parseFieldSchema(schemaJson: string): void {
         try {
             if (!schemaJson) {
-                this.schemaFields = [];
+                this.SchemaFields = [];
                 return;
             }
             const schema = JSON.parse(schemaJson) as {
@@ -110,7 +215,7 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
             const properties = schema.properties || {};
             const required = schema.required || [];
 
-            this.schemaFields = Object.entries(properties).map(([name, prop]) => ({
+            this.SchemaFields = Object.entries(properties).map(([name, prop]) => ({
                 name,
                 type: (prop.type as string) || 'string',
                 title: (prop.title as string) || name,
@@ -120,23 +225,23 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
                 order: typeof prop.order === 'number' ? prop.order : 999
             }));
 
-            this.schemaFields.sort((a, b) => a.order - b.order);
+            this.SchemaFields.sort((a, b) => a.order - b.order);
         } catch (e) {
             console.error('Error parsing field schema:', e);
-            this.schemaFields = [];
+            this.SchemaFields = [];
         }
     }
 
     private buildFieldSchema(): string {
-        if (this.schemaFields.length === 0) {
+        if (this.SchemaFields.length === 0) {
             return JSON.stringify({ type: 'object', properties: {}, required: [] });
         }
 
         const properties: Record<string, Record<string, unknown>> = {};
         const required: string[] = [];
 
-        for (let i = 0; i < this.schemaFields.length; i++) {
-            const field = this.schemaFields[i];
+        for (let i = 0; i < this.SchemaFields.length; i++) {
+            const field = this.SchemaFields[i];
             properties[field.name] = {
                 type: field.type,
                 title: field.title,
@@ -158,78 +263,98 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
     }
 
     // Schema field management
-    public addSchemaField(): void {
-        this.schemaFields.push({
+    public AddSchemaField(): void {
+        this.SchemaFields.push({
             name: '',
             type: 'string',
             title: '',
             description: '',
             isSecret: false,
             required: false,
-            order: this.schemaFields.length
+            order: this.SchemaFields.length
         });
         this.cdr.markForCheck();
     }
 
-    public removeSchemaField(index: number): void {
-        this.schemaFields.splice(index, 1);
+    /** @deprecated Use {@link AddSchemaField}. */
+    public addSchemaField(): void {
+      return this.AddSchemaField();
+    }
+
+    public RemoveSchemaField(index: number): void {
+        this.SchemaFields.splice(index, 1);
         this.cdr.markForCheck();
     }
 
-    public moveFieldUp(index: number): void {
+    /** @deprecated Use {@link RemoveSchemaField}. */
+    public removeSchemaField(index: number): void {
+      return this.RemoveSchemaField(index);
+    }
+
+    public MoveFieldUp(index: number): void {
         if (index > 0) {
-            const temp = this.schemaFields[index];
-            this.schemaFields[index] = this.schemaFields[index - 1];
-            this.schemaFields[index - 1] = temp;
+            const temp = this.SchemaFields[index];
+            this.SchemaFields[index] = this.SchemaFields[index - 1];
+            this.SchemaFields[index - 1] = temp;
             this.cdr.markForCheck();
         }
     }
 
-    public moveFieldDown(index: number): void {
-        if (index < this.schemaFields.length - 1) {
-            const temp = this.schemaFields[index];
-            this.schemaFields[index] = this.schemaFields[index + 1];
-            this.schemaFields[index + 1] = temp;
+    /** @deprecated Use {@link MoveFieldUp}. */
+    public moveFieldUp(index: number): void {
+      return this.MoveFieldUp(index);
+    }
+
+    public MoveFieldDown(index: number): void {
+        if (index < this.SchemaFields.length - 1) {
+            const temp = this.SchemaFields[index];
+            this.SchemaFields[index] = this.SchemaFields[index + 1];
+            this.SchemaFields[index + 1] = temp;
             this.cdr.markForCheck();
         }
+    }
+
+    /** @deprecated Use {@link MoveFieldDown}. */
+    public moveFieldDown(index: number): void {
+      return this.MoveFieldDown(index);
     }
 
     public async save(): Promise<void> {
-        if (!this.canSave) {
+        if (!this.CanSave) {
             MJNotificationService.Instance.CreateSimpleNotification('Please fill in all required fields', 'warning', 3000);
             return;
         }
 
-        this.isSaving = true;
+        this.IsSaving = true;
         this.cdr.markForCheck();
 
         try {
             let entity: MJCredentialTypeEntity;
 
-            if (this.isNew) {
+            if (this.IsNew) {
                 entity = await this._metadata.GetEntityObject<MJCredentialTypeEntity>('MJ: Credential Types');
             } else {
-                entity = this.credentialType!;
+                entity = this.CredentialType!;
             }
 
             entity.Name = this.name.trim();
             entity.Description = this.description.trim() || null;
             entity.Category = this.category;
-            entity.IconClass = this.iconClass.trim() || null;
-            entity.ValidationEndpoint = this.validationEndpoint.trim() || null;
+            entity.IconClass = this.IconClass.trim() || null;
+            entity.ValidationEndpoint = this.ValidationEndpoint.trim() || null;
             entity.FieldSchema = this.buildFieldSchema();
 
             const success = await entity.Save();
 
             if (success) {
-                const action = this.isNew ? 'created' : 'updated';
+                const action = this.IsNew ? 'created' : 'updated';
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Credential type "${entity.Name}" ${action} successfully`,
                     'success',
                     3000
                 );
-                this.saved.emit(entity);
-                this.closePanel();
+                this.Saved.emit(entity);
+                this.ClosePanel();
             } else {
                 const errorMessage = entity.LatestResult?.Message || 'Unknown error';
                 console.error('Save failed:', errorMessage);
@@ -247,32 +372,32 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
                 3000
             );
         } finally {
-            this.isSaving = false;
+            this.IsSaving = false;
             this.cdr.markForCheck();
         }
     }
 
-    public async deleteType(): Promise<void> {
-        if (this.isNew || !this.credentialType) return;
+    public async DeleteType(): Promise<void> {
+        if (this.IsNew || !this.CredentialType) return;
 
-        const confirmed = await this.confirmService.ConfirmDelete({ title: 'Delete Type', message: `Delete "${this.credentialType.Name}"?`, detail: 'This action cannot be undone.' });
+        const confirmed = await this.confirmService.ConfirmDelete({ title: 'Delete Type', message: `Delete "${this.CredentialType.Name}"?`, detail: 'This action cannot be undone.' });
         if (!confirmed) return;
 
-        this.isSaving = true;
+        this.IsSaving = true;
         this.cdr.markForCheck();
 
         try {
-            const success = await this.credentialType.Delete();
+            const success = await this.CredentialType.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    `Credential type "${this.credentialType.Name}" deleted successfully`,
+                    `Credential type "${this.CredentialType.Name}" deleted successfully`,
                     'success',
                     3000
                 );
-                this.deleted.emit(this.credentialType.ID);
-                this.closePanel();
+                this.Deleted.emit(this.CredentialType.ID);
+                this.ClosePanel();
             } else {
-                const errorMessage = this.credentialType.LatestResult?.Message || 'Unknown error';
+                const errorMessage = this.CredentialType.LatestResult?.Message || 'Unknown error';
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to delete credential type: ${errorMessage}`,
                     'error',
@@ -287,26 +412,41 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
                 3000
             );
         } finally {
-            this.isSaving = false;
+            this.IsSaving = false;
             this.cdr.markForCheck();
         }
     }
 
-    public closePanel(): void {
-        this.isOpen = false;
-        this.credentialType = null;
+    /** @deprecated Use {@link DeleteType}. */
+    public async deleteType(): Promise<void> {
+      return this.DeleteType();
+    }
+
+    public ClosePanel(): void {
+        this.IsOpen = false;
+        this.CredentialType = null;
         this.resetForm();
         this.close.emit();
         this.cdr.markForCheck();
     }
 
-    public onBackdropClick(event: MouseEvent): void {
+    /** @deprecated Use {@link ClosePanel}. */
+    public closePanel(): void {
+      return this.ClosePanel();
+    }
+
+    public OnBackdropClick(event: MouseEvent): void {
         if ((event.target as HTMLElement).classList.contains('panel-backdrop')) {
-            this.closePanel();
+            this.ClosePanel();
         }
     }
 
-    public getCategoryIcon(category: string): string {
+    /** @deprecated Use {@link OnBackdropClick}. */
+    public onBackdropClick(event: MouseEvent): void {
+      return this.OnBackdropClick(event);
+    }
+
+    public GetCategoryIcon(category: string): string {
         const iconMap: Record<string, string> = {
             'AI': 'fa-solid fa-brain',
             'Communication': 'fa-solid fa-envelope',
@@ -318,7 +458,12 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
         return iconMap[category] || 'fa-solid fa-key';
     }
 
-    public getCategoryColor(category: string): string {
+    /** @deprecated Use {@link GetCategoryIcon}. */
+    public getCategoryIcon(category: string): string {
+      return this.GetCategoryIcon(category);
+    }
+
+    public GetCategoryColor(category: string): string {
         const colorMap: Record<string, string> = {
             'AI': 'var(--mj-brand-primary)',
             'Communication': 'var(--mj-brand-primary)',
@@ -328,5 +473,10 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
             'Integration': 'var(--mj-brand-primary)'
         };
         return colorMap[category] || 'var(--mj-brand-primary)';
+    }
+
+    /** @deprecated Use {@link GetCategoryColor}. */
+    public getCategoryColor(category: string): string {
+      return this.GetCategoryColor(category);
     }
 }

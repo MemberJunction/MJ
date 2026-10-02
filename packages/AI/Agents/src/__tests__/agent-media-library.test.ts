@@ -15,11 +15,11 @@ vi.mock('@memberjunction/core', () => ({
 vi.mock('@memberjunction/core-entities', () => ({}));
 
 import {
-    mediaTypeFromMimeType,
-    formatAgentMediaManifest,
-    resolveAgentMediaManifest,
-    resolveAgentMediaCollectionID,
-    buildAgentMediaContextNote,
+    MediaTypeFromMimeType,
+    FormatAgentMediaManifest,
+    ResolveAgentMediaManifest,
+    ResolveAgentMediaCollectionID,
+    BuildAgentMediaContextNote,
     type AgentMediaManifestItem,
 } from '../realtime/agent-media-library';
 
@@ -32,28 +32,28 @@ beforeEach(() => {
 
 describe('mediaTypeFromMimeType', () => {
     it('maps each media family to its kind', () => {
-        expect(mediaTypeFromMimeType('image/png')).toBe('image');
-        expect(mediaTypeFromMimeType('video/mp4')).toBe('video');
-        expect(mediaTypeFromMimeType('audio/mpeg')).toBe('audio');
-        expect(mediaTypeFromMimeType('application/pdf')).toBe('pdf');
-        expect(mediaTypeFromMimeType('text/html')).toBe('web');
+        expect(MediaTypeFromMimeType('image/png')).toBe('image');
+        expect(MediaTypeFromMimeType('video/mp4')).toBe('video');
+        expect(MediaTypeFromMimeType('audio/mpeg')).toBe('audio');
+        expect(MediaTypeFromMimeType('application/pdf')).toBe('pdf');
+        expect(MediaTypeFromMimeType('text/html')).toBe('web');
     });
 
     it('is case- and whitespace-insensitive', () => {
-        expect(mediaTypeFromMimeType('  IMAGE/PNG ')).toBe('image');
+        expect(MediaTypeFromMimeType('  IMAGE/PNG ')).toBe('image');
     });
 
     it('returns null for non-media / missing types', () => {
-        expect(mediaTypeFromMimeType('text/plain')).toBeNull();
-        expect(mediaTypeFromMimeType('')).toBeNull();
-        expect(mediaTypeFromMimeType(null)).toBeNull();
-        expect(mediaTypeFromMimeType(undefined)).toBeNull();
+        expect(MediaTypeFromMimeType('text/plain')).toBeNull();
+        expect(MediaTypeFromMimeType('')).toBeNull();
+        expect(MediaTypeFromMimeType(null)).toBeNull();
+        expect(MediaTypeFromMimeType(undefined)).toBeNull();
     });
 });
 
 describe('formatAgentMediaManifest', () => {
     it('returns null for an empty kit', () => {
-        expect(formatAgentMediaManifest([])).toBeNull();
+        expect(FormatAgentMediaManifest([])).toBeNull();
     });
 
     it('numbers items, includes fileId + when-to-show + PRELOAD, and does not ask to read it aloud', () => {
@@ -61,7 +61,7 @@ describe('formatAgentMediaManifest', () => {
             { ResourceID: 'r1', FileID: 'f1', MediaType: 'image', DisplayName: 'Q3 Chart', ContextDescription: 'Show when discussing Q3', Preload: true },
             { ResourceID: 'r2', FileID: 'f2', MediaType: 'pdf', DisplayName: 'Brochure', ContextDescription: null, Preload: false },
         ];
-        const note = formatAgentMediaManifest(items)!;
+        const note = FormatAgentMediaManifest(items)!;
         expect(note).toContain('Media_ShowMedia');
         expect(note).toContain('1. "Q3 Chart" (image)');
         expect(note).toContain('Show when discussing Q3');
@@ -76,27 +76,27 @@ describe('formatAgentMediaManifest', () => {
 describe('resolveAgentMediaCollectionID', () => {
     it('prefers a valid (UUID) override and skips the agent lookup', async () => {
         const override = 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
-        const id = await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1', override);
+        const id = await ResolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1', override);
         expect(id).toBe(override);
         expect(runViewMock).not.toHaveBeenCalled();
     });
 
     it('ignores a malformed (non-UUID) override and falls back to the agent default', async () => {
         runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ DefaultMediaCollectionID: 'agent-col' }] });
-        const id = await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1', 'not-a-uuid; DROP TABLE');
+        const id = await ResolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1', 'not-a-uuid; DROP TABLE');
         expect(id).toBe('agent-col');
         expect(runViewMock).toHaveBeenCalledTimes(1);
     });
 
     it('falls back to AIAgent.DefaultMediaCollectionID', async () => {
         runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ DefaultMediaCollectionID: 'agent-col' }] });
-        const id = await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1');
+        const id = await ResolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1');
         expect(id).toBe('agent-col');
     });
 
     it('returns null when the agent is not found', async () => {
         runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
-        expect(await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1')).toBeNull();
+        expect(await ResolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1')).toBeNull();
     });
 
     it("looks the agent up via the canonical 'MJ: AI Agents' entity name", async () => {
@@ -104,7 +104,7 @@ describe('resolveAgentMediaCollectionID', () => {
         // resolves in metadata, so RunView throws "Entity AI Agents not found in metadata" and the
         // realtime media kit silently never loads.
         runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ DefaultMediaCollectionID: 'agent-col' }] });
-        await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1');
+        await ResolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1');
         expect(runViewMock).toHaveBeenCalledWith(
             expect.objectContaining({ EntityName: 'MJ: AI Agents' }),
             USER,
@@ -129,7 +129,7 @@ describe('resolveAgentMediaManifest', () => {
                     { ID: 'v2', FileID: 'f2', MimeType: 'application/pdf', Name: 'Doc', Description: 'A doc' },
                 ],
             });
-        const items = await resolveAgentMediaManifest(PROVIDER, USER, 'col-1');
+        const items = await ResolveAgentMediaManifest(PROVIDER, USER, 'col-1');
         expect(items).toHaveLength(2);
         expect(items[0]).toMatchObject({ ResourceID: 'm1', FileID: 'f1', MediaType: 'image', DisplayName: 'Chart', ContextDescription: 'Per-kit guidance', Preload: true });
         expect(items[1]).toMatchObject({ ResourceID: 'm2', FileID: 'f2', MediaType: 'pdf', ContextDescription: 'A doc', Preload: false });
@@ -153,21 +153,21 @@ describe('resolveAgentMediaManifest', () => {
                     { ID: 'v3', FileID: 'f3', MimeType: 'video/mp4', Name: 'Clip', Description: '' }, // kept
                 ],
             });
-        const items = await resolveAgentMediaManifest(PROVIDER, USER, 'col-1');
+        const items = await ResolveAgentMediaManifest(PROVIDER, USER, 'col-1');
         expect(items).toHaveLength(1);
         expect(items[0]).toMatchObject({ ResourceID: 'm3', FileID: 'f3', MediaType: 'video' });
     });
 
     it('returns [] for an empty collection', async () => {
         runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
-        expect(await resolveAgentMediaManifest(PROVIDER, USER, 'col-1')).toEqual([]);
+        expect(await ResolveAgentMediaManifest(PROVIDER, USER, 'col-1')).toEqual([]);
     });
 });
 
 describe('buildAgentMediaContextNote', () => {
     it('returns null when the agent has no kit', async () => {
         runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ DefaultMediaCollectionID: null }] });
-        expect(await buildAgentMediaContextNote(PROVIDER, USER, 'agent-1')).toBeNull();
+        expect(await BuildAgentMediaContextNote(PROVIDER, USER, 'agent-1')).toBeNull();
     });
 
     it('builds a note end-to-end from the agent default kit', async () => {
@@ -175,13 +175,13 @@ describe('buildAgentMediaContextNote', () => {
             .mockResolvedValueOnce({ Success: true, Results: [{ DefaultMediaCollectionID: 'col-1' }] }) // agent lookup
             .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'm1', ArtifactVersionID: 'v1', Sequence: 1, ContextDescription: 'When relevant', Preload: false }] }) // memberships
             .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'v1', FileID: 'f1', MimeType: 'image/png', Name: 'Chart', Description: '' }] }); // versions
-        const note = await buildAgentMediaContextNote(PROVIDER, USER, 'agent-1');
+        const note = await BuildAgentMediaContextNote(PROVIDER, USER, 'agent-1');
         expect(note).toContain('"Chart" (image)');
         expect(note).toContain('fileId: f1');
     });
 
     it('never throws — resolves to null on failure', async () => {
         runViewMock.mockRejectedValueOnce(new Error('db down'));
-        expect(await buildAgentMediaContextNote(PROVIDER, USER, 'agent-1')).toBeNull();
+        expect(await BuildAgentMediaContextNote(PROVIDER, USER, 'agent-1')).toBeNull();
     });
 });

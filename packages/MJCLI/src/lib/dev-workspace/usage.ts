@@ -47,10 +47,12 @@ export const DEV_WORKSPACE_USAGE: PluginUsage = {
     `to drop one. Existing files are NEVER overwritten silently — the run refuses unless --force, which keeps a ` +
     `<name>.bak copy of each. Workspace globs cover each member's repo root plus the packages-rooted globs of the ` +
     `member's own pnpm-workspace.yaml (packages/* when it has none) — never apps/*, ` +
-    `because app-shell names collide across repos. The generated parent package.json ABSORBS what each member's own ` +
-    `config would otherwise lose at a workspace root: member pnpm.overrides/patchedDependencies/packageExtensions/` +
+    `because app-shell names collide across repos. The generated pnpm-workspace.yaml ABSORBS what each member's own ` +
+    `config would otherwise lose at a workspace root (pnpm 10 reads settings only from that file, never from a ` +
+    `package.json#pnpm block): member pnpm.overrides/patchedDependencies/packageExtensions/` +
     `peerDependencyRules are hoisted (patch paths re-rooted to <member>/...); every member-provided package name gets ` +
-    `a workspace:* override so local source always beats registry copies; and pnpm.overrides pins every direct ` +
+    `a workspace:* override so local source always beats registry copies; a patched package is pinned to the exact ` +
+    `version its patch is keyed to (a patch applies to that version only); and overrides pin every direct ` +
     `dependency of each member's importers (plus every @types/* at any depth) to the member's COMMITTED lockfile ` +
     `resolution — EXACT versions, with per-major override selectors (name@^N) when the committed graphs hold more ` +
     `than one major of a name — pure file derivation, no network (unsupported lockfile formats are warned about ` +

@@ -1,0 +1,136 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-multiturn-write-then-finish-01 [gemini-3.7-flash · Google · envelope]",
+    "Description": "The question native tool results exist to ask. The code ran, the results were written to the payload (both as tool results), and the payload already holds them. The right decision is to finish — under implicit control flow, in plain text. Neutral tool form.",
+    "InputDefinition": {
+      "payload": {
+        "task": "count by category",
+        "inputData": {
+          "rows": [
+            {
+              "c": "a"
+            },
+            {
+              "c": "b"
+            },
+            {
+              "c": "a"
+            }
+          ]
+        },
+        "iterations": 1,
+        "code": "output = Object.entries(input.inputData.rows.reduce((m,r)=>(m[r.c]=(m[r.c]||0)+1,m),{}))",
+        "results": {
+          "a": 2,
+          "b": 1
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Count the rows by category."
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "call_0",
+              "name": "execute_code",
+              "arguments": {
+                "code": "output = Object.entries(input.inputData.rows.reduce((m,r)=>(m[r.c]=(m[r.c]||0)+1,m),{}))",
+                "inputData": "{\"inputData\":{\"rows\":[{\"c\":\"a\"},{\"c\":\"b\"},{\"c\":\"a\"}]}}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": [
+            {
+              "type": "tool_result",
+              "toolCallId": "call_0",
+              "toolName": "execute_code",
+              "isError": false,
+              "content": "output = { a: 2, b: 1 }"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "call_1",
+              "name": "payload_change_request",
+              "arguments": {
+                "newElements": {
+                  "results": {
+                    "a": 2,
+                    "b": 1
+                  },
+                  "code": "output = Object.entries(input.inputData.rows.reduce((m,r)=>(m[r.c]=(m[r.c]||0)+1,m),{}))"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": [
+            {
+              "type": "tool_result",
+              "toolCallId": "call_1",
+              "toolName": "payload_change_request",
+              "isError": false,
+              "content": "Your payload change was applied. Continue: call another tool if there is more to do, or reply in plain text when the task is complete."
+            }
+          ]
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-multiturn-write-then-finish-01",
+      "expect": {
+        "kind": "taskComplete",
+        "forbiddenActions": [
+          "Execute Code"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "taskComplete",
+            "forbiddenActions": [
+              "Execute Code"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "84BAB692-84ED-4696-A985-ED6AFC86ED6C"
+  }
+}

@@ -88,7 +88,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * @param isMutation - Whether this is a data mutation operation
    * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
    */
-  public async logSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+  public async LogSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
     const verbose = this.options.verboseOutput === true;
 
     if (verbose) {
@@ -142,8 +142,10 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // Use simple SQL fallback if this session has logRecordChangeMetadata=false (default) and fallback is provided
     if (this.options.logRecordChangeMetadata !== true && simpleSQLFallback) {
       processedQuery = simpleSQLFallback;
-      // Update description to indicate we're using the simplified version
-      if (description && !description.includes('(core SP call only)')) {
+      // Tag the description only when the logged text actually differs from what ran.
+      // A save on an entity without record-change tracking hands over a fallback that is
+      // byte-identical to the executed SQL (updates), and tagging that would misreport it.
+      if (description && simpleSQLFallback !== query && !description.includes('(core SP call only)')) {
         logEntry = logEntry.replace(`-- ${description}\n`, `-- ${description} (core SP call only)\n`);
       }
     }
@@ -268,6 +270,11 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       console.error(`Session ${this.id}: Error writing to file:`, error);
       throw error;
     }
+  }
+
+  /** @deprecated Use {@link LogSqlStatement}. */
+  public async logSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+    return this.LogSqlStatement(query, parameters, description, isMutation, simpleSQLFallback);
   }
 
   /**

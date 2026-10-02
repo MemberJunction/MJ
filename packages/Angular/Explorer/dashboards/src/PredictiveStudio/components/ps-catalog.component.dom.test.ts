@@ -1,7 +1,16 @@
+import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import type { PredictiveStudioEngine, RecommendationLevel } from '../engine/predictive-studio.engine';
 import { PSCatalogComponent } from './ps-catalog.component';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for <ps-catalog> — the algorithm card gallery + "Guide me" scenario picker. The engine
