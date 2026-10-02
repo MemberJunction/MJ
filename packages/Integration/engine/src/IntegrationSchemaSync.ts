@@ -26,7 +26,7 @@ import type {
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
 import { ReadFieldSyncDirective, WriteFieldSyncDirective } from './SyncDirectives.js';
 import { CatalogWriter, PerConnectionCatalogWriter, SharedCatalogWriter } from './CatalogWriter.js';
-import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
+import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator.js';
 
 export interface PersistSchemaOptions {
   IntegrationID: string;
