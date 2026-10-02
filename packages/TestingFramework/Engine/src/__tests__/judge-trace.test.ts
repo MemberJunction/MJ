@@ -227,6 +227,8 @@ describe('LLMJudgeOracle.evaluate — the prompt data it sends', () => {
         );
 
         expect(result.score).toBe(1);
+        expect(result.passed).toBe(false);
+        expect(result.message).toContain('Incomplete');
         const details = result.details as { Criteria: { NormalizedScore: number | null }[] };
         expect(details.Criteria[1].NormalizedScore).toBeNull();
     });

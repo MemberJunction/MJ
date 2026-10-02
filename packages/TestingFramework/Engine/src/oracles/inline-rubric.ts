@@ -15,6 +15,7 @@ export function InlineVersion(criteria: Array<string | InlineCriterion>, strict:
         id: 'inline',
         rubricId: 'inline',
         notApplicablePolicy: 'NotAllowed',
+        minimumCompleteness: 1,
         passThreshold,
         scoreDisplayMin: 0,
         scoreDisplayMax: 1,

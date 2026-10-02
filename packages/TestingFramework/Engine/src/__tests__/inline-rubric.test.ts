@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InlineOracleFromVerdicts, ScoreInline } from '../oracles/inline-rubric.js';
+import { InlineOracleFromVerdicts, InlineOracleResult, ScoreInline } from '../oracles/inline-rubric.js';
 
 describe('inline rubric', () => {
     it('scores equal binary leaves and does not persist an evaluation id', () => {
@@ -41,10 +41,16 @@ describe('inline rubric', () => {
         expect(silent.normalizedScore).toBe(1);
     });
 
-    it('leaves an omitted leaf unanswered', () => {
+    it('leaves an omitted leaf unanswered and does not pass', () => {
         const omitted = ScoreInline(['First', 'Second'], [{ index: 0, met: true }], { passThreshold: 0.7 });
         expect(omitted.normalizedScore).toBe(1);
         expect(omitted.completeness).toBe(0.5);
+        expect(omitted.outcome).toBe('Incomplete');
         expect(omitted.nodes[1].normalizedScore).toBeNull();
+        const five = ['A', 'B', 'C', 'D', 'E'];
+        const partial = ScoreInline(five, [{ index: 0, met: true }], {});
+        expect(partial.completeness).toBe(0.2);
+        expect(partial.outcome).toBe('Incomplete');
+        expect(InlineOracleResult(five, partial).passed).toBe(false);
     });
 });
