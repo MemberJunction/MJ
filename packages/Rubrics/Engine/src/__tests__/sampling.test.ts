@@ -135,6 +135,51 @@ describe('production sampling', () => {
         });
         const means = PeriodMeans(rows, '2026-09-01T00:00:00.000Z', '2026-10-02T00:00:00.000Z');
         expect(means.map(row => row.key).sort()).toEqual(['agent-a|rubric|facts', 'agent-b|rubric|facts']);
+        const keyed = DriftSeries({
+            scores: [{ evaluationId: 'e1', criterionId: '11111111-1111-4111-8111-111111111111', normalizedScore: 0.2 }],
+            criteria: [{ id: '11111111-1111-4111-8111-111111111111', key: 'facts' }],
+            evaluations: [{ id: 'e1', subjectRecordId: 'run-a', rubricVersionId: 'version-1', at }],
+            runs: [{ id: 'run-a', agentId: 'agent-a' }],
+            versions: [{ id: 'version-1', rubricId: 'rubric' }],
+        });
+        expect(keyed.map(row => row.key)).toEqual(['agent-a|rubric|facts']);
+    });
+
+    it('keeps a recent agent, caps the volume, batches the lookup, and continues after a failure', async () => {
+        const batches: string[][] = [];
+        const evaluated: string[] = [];
+        const job = ProductionSamplingJob({
+            async links() {
+                return [
+                    { agentId: 'keep', rubricId: 'rubric', sampleRate: 1, status: 'Active', purpose: 'ProductionSampling' },
+                    { agentId: 'drop', rubricId: 'rubric', sampleRate: 1, status: 'Active', purpose: 'ProductionSampling' },
+                ];
+            },
+            async runs() {
+                return [
+                    { id: 'old', agentId: 'keep', status: 'Completed', startedAt: '2026-09-01T00:00:00.000Z' },
+                    { id: 'a', agentId: 'keep', status: 'Completed', startedAt: '2026-10-01T00:00:00.000Z' },
+                    { id: 'b', agentId: 'keep', status: 'Completed', startedAt: '2026-10-01T12:00:00.000Z' },
+                    { id: 'other', agentId: 'drop', status: 'Completed', startedAt: '2026-10-01T00:00:00.000Z' },
+                ];
+            },
+            async evaluated(runIds) { batches.push([...runIds]); return []; },
+            async versions() { return []; },
+        }, {
+            async EvaluateRecord(input) {
+                evaluated.push(input.subjectRecordId);
+                if (input.subjectRecordId === 'a') throw new Error('boom');
+            },
+        }, {
+            now: new Date('2026-10-02T00:00:00.000Z'),
+            agentIds: ['keep'],
+            volumeCap: 1,
+            evaluatedBatchSize: 1,
+        });
+        expect((await job.run()).map(row => row.runId)).toEqual(['a']);
+        expect(evaluated).toEqual(['a']);
+        expect(job.failures).toEqual([{ runId: 'a', message: 'boom' }]);
+        expect(batches).toEqual([['a'], ['b']]);
     });
 
     it('alerts when the current mean drops past the threshold', () => {

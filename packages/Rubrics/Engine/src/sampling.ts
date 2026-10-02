@@ -92,7 +92,13 @@ export interface SamplingEvaluator {
 
 /** Scheduled job. Loads links and runs, then evaluates the kept runs off the agent response path. */
 export class EvaluateSampledAgentRuns {
-    public constructor(private readonly loader: SamplingLoader, private readonly engine: SamplingEvaluator) {}
+    public failures: { runId: string; message: string }[] = [];
+
+    public constructor(
+        private readonly loader: SamplingLoader,
+        private readonly engine: SamplingEvaluator,
+        private readonly volumeCap: number = SAMPLING_VOLUME_CAP,
+    ) {}
 
     public Plan(input: Parameters<typeof SelectSampledRuns>[0]): ReturnType<typeof SelectSampledRuns> {
         return SelectSampledRuns(input);
@@ -104,15 +110,20 @@ export class EvaluateSampledAgentRuns {
     }
 
     public async Run(): Promise<ReturnType<typeof SelectSampledRuns>> {
-        const chosen = this.Plan(await this.loader.Load());
+        const chosen = this.Plan(await this.loader.Load()).slice(0, Math.max(0, this.volumeCap));
+        this.failures = [];
         for (const item of chosen) {
-            await this.engine.EvaluateRecord({
-                rubricId: item.rubricId,
-                subjectRecordId: item.runId,
-                subjectEntityName: AGENT_RUN_SUBJECT,
-                evaluator: item.evaluator,
-                promptMode: item.promptMode,
-            });
+            try {
+                await this.engine.EvaluateRecord({
+                    rubricId: item.rubricId,
+                    subjectRecordId: item.runId,
+                    subjectEntityName: AGENT_RUN_SUBJECT,
+                    evaluator: item.evaluator,
+                    promptMode: item.promptMode,
+                });
+            } catch (error) {
+                this.failures.push({ runId: item.runId, message: error instanceof Error ? error.message : String(error) });
+            }
         }
         return chosen;
     }
@@ -136,14 +147,56 @@ export interface AgentRunRow {
     id: string;
     agentId: string;
     status: string;
+    /** When the run started. A run older than the recency window is not sampled. */
+    startedAt?: string;
+}
+
+/** Seven days. A completed run older than this is outside the sampling window. */
+export const SAMPLING_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+/** The job stops after this many evaluations, even when more runs were kept. */
+export const SAMPLING_VOLUME_CAP = 100;
+/** How many run ids go into one evaluated-lookup. */
+export const SAMPLING_EVALUATED_BATCH = 100;
+
+export interface SamplingJobOptions {
+    now?: Date;
+    windowMs?: number;
+    /** Only these agents. Omit to use every agent that has a sampling link. */
+    agentIds?: string[];
+    volumeCap?: number;
+    evaluatedBatchSize?: number;
+}
+
+export function SamplingSince(now: Date = new Date(), windowMs: number = SAMPLING_WINDOW_MS): string {
+    return new Date(now.getTime() - windowMs).toISOString();
+}
+
+/** Completed runs inside the window and, when set, the agent list. A run with no start time stays. */
+export function FilterSamplingRuns(runs: AgentRunRow[], options: { since?: string; agentIds?: string[] }): AgentRunRow[] {
+    return runs.filter(run => {
+        if (run.status !== 'Completed') return false;
+        if (options.agentIds && options.agentIds.length > 0 && !options.agentIds.includes(run.agentId)) return false;
+        if (run.startedAt && options.since && run.startedAt < options.since) return false;
+        return true;
+    });
+}
+
+export function ChunkIds(ids: string[], size: number): string[][] {
+    const width = Math.max(1, size);
+    const chunks: string[][] = [];
+    for (let index = 0; index < ids.length; index += width) chunks.push(ids.slice(index, index + width));
+    return chunks;
 }
 
 /** Links, completed runs, and evaluations already stored. The job reads these and does not query itself. */
 export interface ProductionSamplingCatalog {
     links(): Promise<AgentRubricLinkRow[]>;
-    runs(): Promise<AgentRunRow[]>;
-    /** Evaluations point at a version. They do not store a rubric id. */
-    evaluated(): Promise<{ runId: string; rubricVersionId: string }[]>;
+    runs(filter?: { since?: string; agentIds?: string[] }): Promise<AgentRunRow[]>;
+    /**
+     * Evaluations for these run ids, one batch at a time. They point at a version.
+     * They do not store a rubric id.
+     */
+    evaluated(runIds: string[]): Promise<{ runId: string; rubricVersionId: string }[]>;
     versions(): Promise<{ id: string; rubricId: string }[]>;
 }
 
@@ -185,14 +238,20 @@ export function productionSamplingLinks(links: AgentRubricLinkRow[]): SamplingLi
 }
 
 /** Loader for the scheduled job. Completed runs only, and only ProductionSampling links. */
-export function ProductionSamplingLoader(catalog: ProductionSamplingCatalog): SamplingLoader {
+export function ProductionSamplingLoader(catalog: ProductionSamplingCatalog, options: SamplingJobOptions = {}): SamplingLoader {
     return {
         async Load() {
-            const runs = (await catalog.runs())
-                .filter(run => run.status === 'Completed')
+            const links = ProductionSamplingLinks(await catalog.links());
+            const agentIds = options.agentIds ?? [...new Set(links.map(link => link.agentId))];
+            const since = SamplingSince(options.now ?? new Date(), options.windowMs ?? SAMPLING_WINDOW_MS);
+            const runs = FilterSamplingRuns(await catalog.runs({ since, agentIds }), { since, agentIds })
                 .map(run => ({ id: run.id, agentId: run.agentId }));
-            const evaluated = EvaluatedRubricRuns(await catalog.evaluated(), await catalog.versions());
-            return { links: ProductionSamplingLinks(await catalog.links()), runs, evaluated };
+            const evaluatedRows = [];
+            for (const batch of ChunkIds(runs.map(run => run.id), options.evaluatedBatchSize ?? SAMPLING_EVALUATED_BATCH)) {
+                evaluatedRows.push(...await catalog.evaluated(batch));
+            }
+            const evaluated = EvaluatedRubricRuns(evaluatedRows, await catalog.versions());
+            return { links, runs, evaluated };
         },
     };
 }
@@ -203,8 +262,8 @@ export function productionSamplingLoader(catalog: ProductionSamplingCatalog): Sa
 }
 
 /** The scheduled job, built with a catalog that can see purpose. */
-export function ProductionSamplingJob(catalog: ProductionSamplingCatalog, engine: SamplingEvaluator): EvaluateSampledAgentRuns {
-    return new EvaluateSampledAgentRuns(ProductionSamplingLoader(catalog), engine);
+export function ProductionSamplingJob(catalog: ProductionSamplingCatalog, engine: SamplingEvaluator, options: SamplingJobOptions = {}): EvaluateSampledAgentRuns {
+    return new EvaluateSampledAgentRuns(ProductionSamplingLoader(catalog, options), engine, options.volumeCap ?? SAMPLING_VOLUME_CAP);
 }
 
 /** @deprecated Use {@link ProductionSamplingJob}. */

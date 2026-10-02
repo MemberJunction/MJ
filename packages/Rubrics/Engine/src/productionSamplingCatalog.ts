@@ -35,19 +35,26 @@ export function ProviderProductionCatalog(provider: unknown, user: unknown): Pro
                 evaluatorConfig: row.EvaluatorConfig ?? null,
             }));
         },
-        async runs() {
-            const rows = await read('MJ: AI Agent Runs', "Status = 'Completed'");
+        async runs(filter) {
+            const clauses = ["Status = 'Completed'"];
+            if (filter?.since) clauses.push(`StartedAt >= '${filter.since.replace(/'/g, "''")}'`);
+            const agentIds = (filter?.agentIds ?? []).filter(id => id.length > 0);
+            if (agentIds.length > 0) clauses.push(`AgentID IN (${agentIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')})`);
+            const rows = await read('MJ: AI Agent Runs', clauses.join(' AND '));
             return rows.map(row => ({
                 id: String(row.ID ?? ''),
                 agentId: String(row.AgentID ?? ''),
                 status: String(row.Status ?? ''),
+                startedAt: row.StartedAt == null ? undefined : new Date(row.StartedAt as string | Date).toISOString(),
             }));
         },
-        async evaluated() {
+        async evaluated(runIds) {
             const entities = await read('MJ: Entities', "Name = 'MJ: AI Agent Runs'");
             const entityId = String(entities[0]?.ID ?? '');
             if (!/^[0-9A-Fa-f-]{36}$/.test(entityId)) throw new Error('MJ: AI Agent Runs has no entity id.');
-            const rows = await read('MJ: Rubric Evaluations', `SubjectEntityID = '${entityId}'`);
+            if (!runIds || runIds.length === 0) return [];
+            const ids = runIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ');
+            const rows = await read('MJ: Rubric Evaluations', `SubjectEntityID = '${entityId}' AND SubjectRecordID IN (${ids})`);
             return rows.map(row => ({
                 runId: String(row.SubjectRecordID ?? ''),
                 rubricVersionId: String(row.RubricVersionID ?? ''),

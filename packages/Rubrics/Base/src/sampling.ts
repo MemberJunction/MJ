@@ -25,6 +25,8 @@ export function keepSample(runId: string, sampleRate: number): boolean {
 export interface DriftScoreRow {
     evaluationId: string;
     criterionId: string;
+    /** The criterion's Key. Drift is keyed by this, not by the row id. */
+    criterionKey?: string;
     normalizedScore: number;
 }
 
@@ -60,17 +62,21 @@ export function DriftSeries(input: {
     evaluations: DriftEvaluationRow[];
     runs: DriftRunRow[];
     versions: { id: string; rubricId: string }[];
+    /** Criterion id to Key. The series key uses Key, so two ids of one criterion stay together. */
+    criteria?: { id: string; key: string }[];
 }): { key: string; score: number; at: string }[] {
     const evaluations = new Map(input.evaluations.map(row => [row.id, row]));
     const agents = new Map(input.runs.map(row => [row.id, row.agentId]));
+    const criterionKeys = new Map((input.criteria ?? []).map(row => [row.id, row.key]));
     const rows: { key: string; score: number; at: string }[] = [];
     for (const score of input.scores) {
         const evaluation = evaluations.get(score.evaluationId);
         if (!evaluation || !Number.isFinite(score.normalizedScore)) continue;
         const agentId = agents.get(evaluation.subjectRecordId);
         const rubricId = RubricIdFromVersion(evaluation.rubricVersionId, input.versions);
-        if (!agentId || !rubricId || !score.criterionId) continue;
-        rows.push({ key: `${agentId}|${rubricId}|${score.criterionId}`, score: score.normalizedScore, at: evaluation.at });
+        const criterionKey = score.criterionKey || criterionKeys.get(score.criterionId) || score.criterionId;
+        if (!agentId || !rubricId || !criterionKey) continue;
+        rows.push({ key: `${agentId}|${rubricId}|${criterionKey}`, score: score.normalizedScore, at: evaluation.at });
     }
     return rows;
 }
