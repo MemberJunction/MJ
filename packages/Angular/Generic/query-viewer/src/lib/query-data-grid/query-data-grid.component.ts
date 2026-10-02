@@ -14,6 +14,7 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
+import { FormatDateOnly, IsDateOnlySQLType } from '@memberjunction/core';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import {
@@ -58,9 +59,9 @@ import {
     QueryGridStateChangedEvent,
     QuerySelectionChangedEvent,
     QueryExportOptions,
-    buildColumnsFromQueryFields,
-    buildColumnsFromData,
-    getQueryGridStateKey
+    BuildColumnsFromQueryFields,
+    BuildColumnsFromData,
+    GetQueryGridStateKey
 } from './models/query-grid-types';
 import { RowDetailEntityLinkEvent } from '../query-row-detail/query-row-detail.component';
 
@@ -181,7 +182,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
 
         // If we have data but no columns from metadata or explicit configs, build from data
         if (this._data.length > 0 && this.Columns.length === 0 && !this._columnConfigs) {
-            this.Columns = buildColumnsFromData(this._data);
+            this.Columns = BuildColumnsFromData(this._data);
             this.buildColumnDefs();
         }
 
@@ -454,7 +455,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         }
 
         // Build columns from query fields
-        this.Columns = buildColumnsFromQueryFields(this._queryInfo.QueryFields);
+        this.Columns = BuildColumnsFromQueryFields(this._queryInfo.QueryFields);
 
         // Apply initial state if provided via prop (takes precedence)
         if (this.InitialGridState) {
@@ -613,10 +614,15 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             const date = new Date(value as string);
             if (isNaN(date.getTime())) return String(value);
 
+            // A SQL `date` is a calendar day delivered as UTC midnight: format it in UTC, or a
+            // reader west of Greenwich sees the day before.
+            if (IsDateOnlySQLType(baseType)) {
+                return this._mergedVisualConfig.friendlyDates
+                    ? FormatDateOnly(date, { year: 'numeric', month: 'short', day: 'numeric' }, 'en-US')
+                    : date.toISOString().slice(0, 10);
+            }
+
             if (this._mergedVisualConfig.friendlyDates) {
-                if (baseType === 'date') {
-                    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-                }
                 return date.toLocaleString('en-US', {
                     year: 'numeric', month: 'short', day: 'numeric',
                     hour: 'numeric', minute: '2-digit'
@@ -868,7 +874,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         }
 
         try {
-            const settingKey = getQueryGridStateKey(this._queryInfo.ID);
+            const settingKey = GetQueryGridStateKey(this._queryInfo.ID);
             const savedState = UserInfoEngine.Instance.GetSetting(settingKey);
 
             if (savedState) {
@@ -951,7 +957,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         }
 
         try {
-            const settingKey = getQueryGridStateKey(this._queryInfo.ID);
+            const settingKey = GetQueryGridStateKey(this._queryInfo.ID);
             await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(state));
         } catch (error) {
             console.error('[query-data-grid] Failed to persist grid state:', error);
@@ -1122,11 +1128,11 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
             .map(c => ({
                 name: c.field,
                 displayName: c.title,
-                type: this.mapSqlTypeToExportType(c.sqlBaseType)
+                dataType: this.mapSqlTypeToExportType(c.sqlBaseType)
             }));
     }
 
-    private mapSqlTypeToExportType(sqlType: string): 'string' | 'number' | 'boolean' | 'date' {
+    private mapSqlTypeToExportType(sqlType: string): ExportColumn['dataType'] {
         const baseType = sqlType.toLowerCase();
         if (['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'numeric', 'float', 'real', 'money', 'smallmoney'].includes(baseType)) {
             return 'number';
@@ -1134,7 +1140,10 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         if (['bit'].includes(baseType)) {
             return 'boolean';
         }
-        if (['date', 'datetime', 'datetime2', 'smalldatetime', 'datetimeoffset'].includes(baseType)) {
+        if (IsDateOnlySQLType(baseType)) {
+            return 'dateonly';
+        }
+        if (['datetime', 'datetime2', 'smalldatetime', 'datetimeoffset'].includes(baseType)) {
             return 'date';
         }
         return 'string';

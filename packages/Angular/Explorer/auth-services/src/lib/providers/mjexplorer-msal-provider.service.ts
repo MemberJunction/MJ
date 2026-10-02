@@ -37,7 +37,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
    * Factory function to provide Angular dependencies required by MSAL
    * Stored as a static property for the factory to access without instantiation
    */
-  static angularProviderFactory = (environment: Record<string, unknown>) => [
+  static AngularProviderFactory = (environment: Record<string, unknown>) => [
     {
       provide: MSAL_INSTANCE,
       useValue: new PublicClientApplication({
@@ -72,6 +72,15 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     MsalBroadcastService
   ];
 
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static get angularProviderFactory() {
+    return this.AngularProviderFactory;
+  }
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static set angularProviderFactory(value) {
+    this.AngularProviderFactory = value;
+  }
+
   /**
    * Maps a catalog row onto the unprefixed keys `angularProviderFactory` reads (`CLIENT_ID` /
    * `CLIENT_AUTHORITY`), which predate the `<DRIVER>_*` convention the generic overlay emits —
@@ -105,12 +114,21 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     return overlay;
   }
 
-  constructor(public auth: MsalService, private msalBroadcastService: MsalBroadcastService) {
+  constructor(public Auth: MsalService, private msalBroadcastService: MsalBroadcastService) {
     const config: AngularAuthProviderConfig = {
       name: MJMSALProvider.PROVIDER_TYPE,
       type: MJMSALProvider.PROVIDER_TYPE
     };
     super(config);
+  }
+
+  /** @deprecated Use {@link Auth}. */
+  public get auth(): MsalService {
+    return this.Auth;
+  }
+  /** @deprecated Use {@link Auth}. */
+  public set auth(value: MsalService) {
+    this.Auth = value;
   }
 
   // ============================================================================
@@ -128,17 +146,17 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
 
   private async _performInitialization(): Promise<void> {
     console.debug('[MSAL] Starting initialization...');
-    await this.auth.instance.initialize();
+    await this.Auth.instance.initialize();
     console.debug('[MSAL] MSAL instance initialized');
 
     // Handle redirect immediately after initialization
-    const redirectResponse = await this.auth.instance.handleRedirectPromise();
+    const redirectResponse = await this.Auth.instance.handleRedirectPromise();
     console.debug('[MSAL] Redirect response:', redirectResponse ? 'Found' : 'None');
 
     if (redirectResponse && redirectResponse.account) {
       // User just logged in via redirect
       console.debug('[MSAL] Processing redirect login');
-      this.auth.instance.setActiveAccount(redirectResponse.account);
+      this.Auth.instance.setActiveAccount(redirectResponse.account);
       this.updateAuthState(true);
 
       // Update user info from account
@@ -149,12 +167,12 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       console.debug('[MSAL] Initialization completed (redirect login)');
     } else {
       // Set active account if we have one from cache
-      const accounts = this.auth.instance.getAllAccounts();
+      const accounts = this.Auth.instance.getAllAccounts();
       console.debug('[MSAL] Cached accounts found:', accounts.length);
 
       if (accounts.length > 0) {
         console.debug('[MSAL] Restoring session from cached account:', accounts[0].username);
-        this.auth.instance.setActiveAccount(accounts[0]);
+        this.Auth.instance.setActiveAccount(accounts[0]);
         this.updateAuthState(true);
 
         // Update user info from cached account
@@ -175,13 +193,13 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         takeUntil(this._destroying$)
       )
       .subscribe(() => {
-        const accounts = this.auth.instance.getAllAccounts();
+        const accounts = this.Auth.instance.getAllAccounts();
         const isAuth = accounts.length > 0;
 
         this.updateAuthState(isAuth);
 
         if (isAuth) {
-          this.auth.instance.setActiveAccount(accounts[0]);
+          this.Auth.instance.setActiveAccount(accounts[0]);
           const userInfo = this.mapMSALAccountToStandard(accounts[0]);
           this.updateUserInfo(userInfo);
         } else {
@@ -201,7 +219,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     };
 
     return new Promise((resolve, reject) => {
-      this.auth.loginRedirect(silentRequest).subscribe({
+      this.Auth.loginRedirect(silentRequest).subscribe({
         next: () => {
           resolve();
         },
@@ -215,7 +233,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
 
   protected async logoutInternal(): Promise<void> {
     await this.ensureInitialized();
-    this.auth.logoutRedirect().subscribe(() => {
+    this.Auth.logoutRedirect().subscribe(() => {
       // Logout will trigger a redirect
     });
   }
@@ -240,7 +258,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     try {
       await this.ensureInitialized();
 
-      const account = this.auth.instance.getActiveAccount();
+      const account = this.Auth.instance.getActiveAccount();
       if (!account) {
         return null;
       }
@@ -258,7 +276,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         // Token expired or near-expiry — force a silent refresh
         console.debug('[MSAL] Cached token expired or near-expiry, forcing silent refresh');
         try {
-          const response = await this.auth.instance.acquireTokenSilent({
+          const response = await this.Auth.instance.acquireTokenSilent({
             scopes: ['User.Read', 'email', 'profile'],
             account: account,
             forceRefresh: true
@@ -272,7 +290,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
 
       // If not in account, try silent token acquisition from cache only
       // Use CacheLookupPolicy.AccessToken to avoid iframe calls
-      const response = await this.auth.instance.acquireTokenSilent({
+      const response = await this.Auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
         cacheLookupPolicy: CacheLookupPolicy.AccessToken
@@ -295,13 +313,13 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     try {
       await this.ensureInitialized();
 
-      const account = this.auth.instance.getActiveAccount();
+      const account = this.Auth.instance.getActiveAccount();
       if (!account) {
         return null;
       }
 
       // Use cache-only lookup to avoid iframe timeouts during normal token extraction
-      const response = await this.auth.instance.acquireTokenSilent({
+      const response = await this.Auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
         cacheLookupPolicy: CacheLookupPolicy.AccessToken
@@ -321,7 +339,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       // If acquireTokenSilent fails (e.g., iframe timeout), try to use cached account data
       console.error('[MSAL] Error extracting token info:', error);
 
-      const account = this.auth.instance.getActiveAccount();
+      const account = this.Auth.instance.getActiveAccount();
       if (account?.idToken) {
         // Return basic token info from account if available
         return {
@@ -344,7 +362,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     try {
       await this.ensureInitialized();
 
-      const account = this.auth.instance.getActiveAccount();
+      const account = this.Auth.instance.getActiveAccount();
       if (!account) {
         return null;
       }
@@ -374,7 +392,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     try {
       await this.ensureInitialized();
 
-      const account = this.auth.instance.getActiveAccount();
+      const account = this.Auth.instance.getActiveAccount();
       if (!account) {
         return {
           success: false,
@@ -391,7 +409,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       // This is critical because this method is called after the server rejected
       // the current token — returning a cached (potentially stale) ID token would
       // cause the retry to fail with the same JWT_EXPIRED error.
-      const response = await this.auth.instance.acquireTokenSilent({
+      const response = await this.Auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
         forceRefresh: true
@@ -651,13 +669,13 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     try {
       await this.ensureInitialized();
 
-      const account = this.auth.instance.getActiveAccount();
+      const account = this.Auth.instance.getActiveAccount();
       if (!account) {
         return null;
       }
 
       // Get access token for Microsoft Graph
-      const response = await this.auth.instance.acquireTokenSilent({
+      const response = await this.Auth.instance.acquireTokenSilent({
         scopes: ['User.Read'],
         account: account,
         forceRefresh: false
@@ -695,7 +713,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     console.debug('[MSAL] Redirecting to Microsoft login for re-authentication...');
 
     // Initiate redirect authentication - page will navigate away
-    this.auth.loginRedirect({
+    this.Auth.loginRedirect({
       scopes: ['User.Read', 'email', 'profile'],
       prompt: 'select_account'
     }).subscribe({

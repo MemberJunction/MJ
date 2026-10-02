@@ -32,7 +32,7 @@ import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
 import {
-  createScheduledModelScoring,
+  CreateScheduledModelScoring,
   type ScheduleModelScoringOptions,
   type ScheduledModelScoringResult,
   type ScoringCadence,
@@ -156,6 +156,6 @@ export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveSt
 
   /** The scheduling function. Overridable so tests inject a fake with no live DB. */
   protected schedule(): ScheduleModelScoringFn {
-    return createScheduledModelScoring;
+    return CreateScheduledModelScoring;
   }
 }

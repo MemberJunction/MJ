@@ -56,7 +56,7 @@ vi.mock('@memberjunction/actions-base', async () => {
 import { MJGlobal } from '@memberjunction/global';
 import { RuntimeActionBridgeBuilder } from '@memberjunction/actions-base';
 import { DefaultRuntimeActionBridgeBuilder } from '../DefaultRuntimeActionBridgeBuilder';
-import { getRuntimeActionBridgePreamble } from '../RuntimeActionBridge';
+import { GetRuntimeActionBridgePreamble } from '../RuntimeActionBridge';
 
 // The minimum-viable config shape required by BuildHandlers. Permissions are
 // deliberately empty — none of the handlers run here, we just need the
@@ -162,7 +162,7 @@ describe('DefaultRuntimeActionBridgeBuilder', () => {
             // that in so someone can't accidentally divergently override the
             // preamble in only one of the two call sites.
             expect(DefaultRuntimeActionBridgeBuilder.Instance.GetPreamble()).toBe(
-                getRuntimeActionBridgePreamble()
+                GetRuntimeActionBridgePreamble()
             );
         });
 

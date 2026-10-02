@@ -86,9 +86,9 @@ export class TransactionResult {
  * Used internally within the transaction group to manage the preprocessing of entities before a transaction is submitted
  */
 export class TransactionPreprocessingItem {
-    entity: BaseEntity;
-    complete: boolean = false;
-    completionPromise: Promise<void>;
+    entity: BaseEntity;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    complete: boolean = false;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    completionPromise: Promise<void>;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor(entity: BaseEntity, completionPromise: Promise<void>) {
         this.entity = entity;
@@ -228,7 +228,7 @@ export abstract class TransactionGroupBase {
      * @param results The transaction results (if applicable)
      * @param error Any error that occurred (if applicable)
      */
-    private NotifyTransactionStatus(success: boolean, results?: TransactionResult[], error?: any) {
+    private notifyTransactionStatus(success: boolean, results?: TransactionResult[], error?: any) {
         this.transactionNotifier.next({ success, results, error });
     }
 
@@ -349,7 +349,7 @@ export abstract class TransactionGroupBase {
 
                 // now, see if there are any false values for results[x].Success, if so, we have to return false
                 const overallSuccess = results.every(r => r.Success);
-                this.NotifyTransactionStatus(overallSuccess, results);
+                this.notifyTransactionStatus(overallSuccess, results);
 
                 this._status = overallSuccess ? 'Complete' : 'Failed';
                 return overallSuccess;
@@ -368,7 +368,7 @@ export abstract class TransactionGroupBase {
                 await this._pendingTransactions[i].CallBack(err, false);
             }
 
-            this.NotifyTransactionStatus(false, undefined, err);
+            this.notifyTransactionStatus(false, undefined, err);
             this._status = 'Failed';
             return false;
         }

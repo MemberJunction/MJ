@@ -152,3 +152,36 @@ describe('MJNumericInputComponent — Disabled with no Angular Forms binding (DO
     expect((f.nativeElement.querySelector('input.mj-numeric-input') as HTMLInputElement).disabled).toBe(true);
   });
 });
+
+describe('MJNumericInputComponent — accessible name (#4116)', () => {
+  const render = (inputs: Record<string, unknown> = {}) =>
+    renderComponentFixture(MJNumericInputComponent, { inputs });
+  const input = (f: ComponentFixture<MJNumericInputComponent>) =>
+    f.nativeElement.querySelector('input.mj-numeric-input') as HTMLInputElement;
+
+  it('names the spinbutton with AriaLabel', () => {
+    expect(input(render({ AriaLabel: 'Quantity' })).getAttribute('aria-label')).toBe('Quantity');
+  });
+
+  it('names the spinbutton from a visible label via AriaLabelledBy', () => {
+    expect(input(render({ AriaLabelledBy: 'qty-label' })).getAttribute('aria-labelledby')).toBe('qty-label');
+  });
+
+  it('puts InputId on the real <input>, which IS a valid <label for> target', () => {
+    const f = render({ InputId: 'qty-field' });
+    expect(input(f).getAttribute('id')).toBe('qty-field');
+    expect(input(f).tagName).toBe('INPUT');
+  });
+
+  it('passes AriaDescribedBy through for hint and error text', () => {
+    expect(input(render({ AriaDescribedBy: 'qty-hint' })).getAttribute('aria-describedby')).toBe('qty-hint');
+  });
+
+  it('renders NO empty name attributes when nothing is configured — absent beats empty', () => {
+    const el = input(render());
+    expect(el.hasAttribute('aria-label')).toBe(false);
+    expect(el.hasAttribute('aria-labelledby')).toBe(false);
+    expect(el.hasAttribute('id')).toBe(false);
+    expect(el.hasAttribute('aria-describedby')).toBe(false);
+  });
+});

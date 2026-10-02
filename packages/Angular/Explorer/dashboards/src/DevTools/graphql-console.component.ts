@@ -98,7 +98,16 @@ query GetCurrentUser {
 })
 export class GraphQLConsoleComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
-    @ViewChild('queryEditor') queryEditor?: ElementRef<HTMLTextAreaElement>;
+    @ViewChild('queryEditor') QueryEditor?: ElementRef<HTMLTextAreaElement>;
+
+    /** @deprecated Use {@link QueryEditor}. */
+    get queryEditor(): ElementRef<HTMLTextAreaElement> | undefined {
+      return this.QueryEditor;
+    }
+    /** @deprecated Use {@link QueryEditor}. */
+    set queryEditor(value: ElementRef<HTMLTextAreaElement> | undefined) {
+      this.QueryEditor = value;
+    }
 
     public Query = SAMPLE_QUERY;
     public Variables = '{}';
@@ -144,6 +153,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
     }
 
     public ngOnInit(): void {
+        super.ngOnInit();
         this.loadFromStorage();
         try {
             this.ApiUrl = GraphQLDataProvider.Instance.ConfigData?.URL ?? '';
@@ -153,6 +163,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
     }
 
     public ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.saveToStorage();
         this.detachResizeListeners();
     }

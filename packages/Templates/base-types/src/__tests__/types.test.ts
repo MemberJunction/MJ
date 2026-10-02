@@ -59,7 +59,7 @@ describe('Templates/base-types exports', () => {
   });
 
   /**
-   * Every accessor on the engine reads through `_Metadata`, which only exists once
+   * Every accessor on the engine reads through `_metadata`, which only exists once
    * Config() has loaded the Template_Metadata dataset. An engine that was never
    * configured — or one reached while the cache is still warming — used to throw a
    * TypeError straight out of a property read, which took down the very form the error
@@ -87,7 +87,7 @@ describe('Templates/base-types exports', () => {
 
     it('exposes exactly the accessors this suite knows about', () => {
       // Tripwire: if this fails, a new accessor landed — extend the guard and this list
-      // together rather than shipping an unprotected `this._Metadata.X` read.
+      // together rather than shipping an unprotected `this._metadata.X` read.
       expect(prototypeGetters()).toEqual([...knownAccessors].sort());
     });
 

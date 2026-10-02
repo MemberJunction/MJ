@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
     RealVonageBindings,
-    buildConnectNcco,
-    buildTransferNccoAction,
-    parseVonageControlEvent,
+    BuildConnectNcco,
+    BuildTransferNccoAction,
+    ParseVonageControlEvent,
     IVonageVoiceLike,
     IVonageMediaPump,
     VonageCreateCallParams,
@@ -80,7 +80,7 @@ function makeBindings(mediaWssUrl = 'wss://api.example/telephony/vonage/media'):
 
 describe('NCCO pure helpers', () => {
     it('buildConnectNcco emits a connect action with a websocket endpoint + default content-type', () => {
-        const ncco = buildConnectNcco('wss://h/media');
+        const ncco = BuildConnectNcco('wss://h/media');
         expect(ncco).toHaveLength(1);
         expect(ncco[0].action).toBe('connect');
         expect(ncco[0].endpoint?.[0]).toMatchObject({
@@ -91,13 +91,13 @@ describe('NCCO pure helpers', () => {
     });
 
     it('buildConnectNcco honors a custom content-type + forwards headers', () => {
-        const ncco = buildConnectNcco('wss://h/media', 'audio/l16;rate=16000', { callId: 'abc' });
+        const ncco = BuildConnectNcco('wss://h/media', 'audio/l16;rate=16000', { callId: 'abc' });
         expect(ncco[0].endpoint?.[0]['content-type']).toBe('audio/l16;rate=16000');
         expect(ncco[0].endpoint?.[0].headers).toEqual({ callId: 'abc' });
     });
 
     it('buildTransferNccoAction connects to a phone endpoint for the transfer destination', () => {
-        const ncco = buildTransferNccoAction('+15551112222');
+        const ncco = BuildTransferNccoAction('+15551112222');
         expect(ncco[0].action).toBe('connect');
         expect(ncco[0].endpoint?.[0]).toMatchObject({ type: 'phone', number: '+15551112222' });
     });
@@ -109,7 +109,7 @@ describe('NCCO pure helpers', () => {
 
 describe('parseVonageControlEvent', () => {
     it('parses a DTMF event with the digit at the TOP level (not nested under dtmf)', () => {
-        const event = parseVonageControlEvent('{"event":"websocket:dtmf","digit":"5","duration":260}');
+        const event = ParseVonageControlEvent('{"event":"websocket:dtmf","digit":"5","duration":260}');
         expect(event).not.toBeNull();
         expect(event!.event).toBe('websocket:dtmf');
         expect(event!.digit).toBe('5');
@@ -117,14 +117,14 @@ describe('parseVonageControlEvent', () => {
     });
 
     it('parses the connected + close lifecycle events', () => {
-        expect(parseVonageControlEvent('{"event":"websocket:connected"}')!.event).toBe('websocket:connected');
-        expect(parseVonageControlEvent('{"event":"close"}')!.event).toBe('close');
+        expect(ParseVonageControlEvent('{"event":"websocket:connected"}')!.event).toBe('websocket:connected');
+        expect(ParseVonageControlEvent('{"event":"close"}')!.event).toBe('close');
     });
 
     it('returns null for non-JSON, non-object JSON, or an object with no event string', () => {
-        expect(parseVonageControlEvent('not json')).toBeNull();
-        expect(parseVonageControlEvent('123')).toBeNull();
-        expect(parseVonageControlEvent('{"foo":"bar"}')).toBeNull();
+        expect(ParseVonageControlEvent('not json')).toBeNull();
+        expect(ParseVonageControlEvent('123')).toBeNull();
+        expect(ParseVonageControlEvent('{"foo":"bar"}')).toBeNull();
     });
 });
 

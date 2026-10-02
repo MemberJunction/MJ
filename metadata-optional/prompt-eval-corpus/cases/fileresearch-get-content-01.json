@@ -1,0 +1,38 @@
+{
+  "id": "fileresearch-get-content-01",
+  "agent": "File Research Agent",
+  "tags": [
+    "mid-loop-action",
+    "param-fidelity"
+  ],
+  "description": "The file has been located; the next step is to read it, not to search again.",
+  "input": {
+    "payload": {
+      "files": [
+        {
+          "name": "Q3-board-deck.pdf",
+          "objectKey": "docs/2024/Q3-board-deck.pdf"
+        }
+      ]
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Summarize the Q3 board deck."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Search Storage Files succeeded. 1 match: docs/2024/Q3-board-deck.pdf"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "File Storage: Get File Content"
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

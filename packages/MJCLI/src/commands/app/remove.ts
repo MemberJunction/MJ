@@ -1,10 +1,10 @@
 import { Args, Command, Flags } from '@oclif/core';
 import { RemoveApp } from '@memberjunction/open-app-engine';
 import { confirm } from '@inquirer/prompts';
-import { resolveOrPrompt, withNonInteractiveHandling } from '../../lib/interactive-guard.js';
+import { resolveOrPrompt, WithNonInteractiveHandling } from '../../lib/interactive-guard.js';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import { buildOrchestratorContext } from '../../utils/open-app-context.js';
+import { BuildOrchestratorContext } from '../../utils/open-app-context.js';
 
 /**
  * CLI command: `mj app remove <name>`.
@@ -46,7 +46,7 @@ export default class AppRemove extends Command {
     if (!flags.yes) {
       // Destructive: this drops a schema. A headless run must say --yes explicitly
       // rather than have consent inferred for it.
-      const confirmed = await withNonInteractiveHandling(this, () =>
+      const confirmed = await WithNonInteractiveHandling(this, () =>
         resolveOrPrompt<boolean>({
           flagValue: undefined,
           what: `Confirmation to remove '${args.name}'`,
@@ -66,7 +66,7 @@ export default class AppRemove extends Command {
     }
 
     try {
-      const context = await buildOrchestratorContext(this, flags.verbose);
+      const context = await BuildOrchestratorContext(this, flags.verbose);
 
       const result = await RemoveApp(
         {

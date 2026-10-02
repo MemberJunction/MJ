@@ -5,7 +5,7 @@
  */
 export { ConversionPipeline } from './ConversionPipeline.js';
 export { SQLFileSplitter } from './SQLFileSplitter.js';
-export { splitMigration, extractAffectedEntities } from './MigrationSplitter.js';
+export { SplitMigration, splitMigration, ExtractAffectedEntities, extractAffectedEntities } from './MigrationSplitter.js';
 export type {
   MigrationSplitResult,
   MigrationRegionKind,
@@ -13,8 +13,8 @@ export type {
   BoundaryMethod,
   FileRouting,
 } from './MigrationSplitter.js';
-export { convertMigration, extractKeptTSQL } from './MigrationConverter.js';
-export { IncrementalBaker, stripVolatileHeaders, BakeApplyError } from './IncrementalBaker.js';
+export { ConvertMigration, convertMigration, ExtractKeptTSQL, extractKeptTSQL } from './MigrationConverter.js';
+export { IncrementalBaker, StripVolatileHeaders, stripVolatileHeaders, BakeApplyError } from './IncrementalBaker.js';
 export type {
   BakerWorkingDB,
   CapturedEntitySQL,
@@ -30,7 +30,7 @@ export type {
   TSQLToPGTranspiler,
   UnhandledStatement,
 } from './MigrationConverter.js';
-export { splitByStatement, summarizeStatements } from './MigrationStatementSplitter.js';
+export { SplitByStatement, splitByStatement, SummarizeStatements, summarizeStatements } from './MigrationStatementSplitter.js';
 export type { StatementBatch, StatementKind } from './MigrationStatementSplitter.js';
 export { DatabaseAuditRunner } from './DatabaseAuditor.js';
 export { NoOpLLMFallback } from './LLMFallback.js';
@@ -107,9 +107,9 @@ export type {
 } from './rules/index.js';
 
 // Post-conversion validation/fixup
-export { deduplicateEntityFieldSequences } from './rules/SequenceDeduplicator.js';
+export { DeduplicateEntityFieldSequences, deduplicateEntityFieldSequences } from './rules/SequenceDeduplicator.js';
 export type { SequenceFix, DeduplicationResult } from './rules/SequenceDeduplicator.js';
 
 // Parity reporting
-export { generateParityReport } from './rules/ParityReporter.js';
+export { GenerateParityReport, generateParityReport } from './rules/ParityReporter.js';
 export type { ParityReport, ParityGap, MigrationFileInfo } from './rules/ParityReporter.js';

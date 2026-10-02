@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Row Level Security Filters",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Row Level Security Filters&RoleID=@lookup:MJ: Roles.Name=Developer&Type=Allow"
+    }
+  }
+]

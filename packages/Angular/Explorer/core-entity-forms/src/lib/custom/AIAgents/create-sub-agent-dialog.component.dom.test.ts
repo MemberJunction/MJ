@@ -72,8 +72,8 @@ function fakeProviderWithEntity(): { provider: IMetadataProvider; getLastEntity:
 
 const CONFIG: CreateSubAgentConfig = {
   title: 'Create a Helper',
-  parentAgentId: 'parent-1',
-  parentAgentName: 'Coordinator Agent',
+  ParentAgentId: 'parent-1',
+  ParentAgentName: 'Coordinator Agent',
 };
 
 interface RenderResult {

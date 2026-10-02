@@ -118,7 +118,7 @@ function SignInModal({ open, onClose }: { open: boolean; onClose: () => void }) 
             <SafeAreaView style={styles.sheet} edges={['top', 'bottom']}>
                 <KeyboardAvoidingView
                     style={{ flex: 1 }}
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    behavior="padding"
                 >
                     <View style={styles.sheetHeader}>
                         <Text style={styles.sheetTitle}>Sign in to MJ</Text>

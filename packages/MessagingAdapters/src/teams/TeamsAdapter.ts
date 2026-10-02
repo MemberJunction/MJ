@@ -14,8 +14,8 @@ import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-
 import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
-import { markdownToAdaptiveCard } from './teams-formatter.js';
-import { buildRichAdaptiveCard } from './teams-card-builder.js';
+import { MarkdownToAdaptiveCard } from './teams-formatter.js';
+import { BuildRichAdaptiveCard } from './teams-card-builder.js';
 
 /**
  * Microsoft Teams-specific adapter that implements all platform operations
@@ -257,12 +257,12 @@ export class TeamsAdapter extends BaseMessagingAdapter {
         metadata?: AgentResponseMetadata
     ): Promise<FormattedResponse> {
         const richPayload = result
-            ? buildRichAdaptiveCard(result, agent, responseText, {
+            ? BuildRichAdaptiveCard(result, agent, responseText, {
                 explorerBaseURL: this.settings.ExplorerBaseURL,
                 artifactId: metadata?.ArtifactId,
                 conversationId: metadata?.ConversationId,
             })
-            : markdownToAdaptiveCard(responseText);
+            : MarkdownToAdaptiveCard(responseText);
 
         return {
             PlainText: responseText,

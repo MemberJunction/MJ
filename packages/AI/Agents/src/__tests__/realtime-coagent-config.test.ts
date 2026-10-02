@@ -669,6 +669,18 @@ describe('GetModelCatalogSessionSettings — the model-catalog BASE layer', () =
         });
     });
 
+    it('projects Realtime.Reasoning and Realtime.Tooling onto driver bag keys', () => {
+        expect(GetModelCatalogSessionSettings({
+            Realtime: {
+                Reasoning: { Level: 'medium', IncludeThoughtSummaries: true },
+                Tooling: { SupportsBlockingExecution: false, SupportsScheduling: false },
+            }
+        })).toEqual({
+            reasoning: { Level: 'medium', IncludeThoughtSummaries: true },
+            tooling: { SupportsBlockingExecution: false, SupportsScheduling: false },
+        });
+    });
+
     it('returns null when the catalog contributes nothing', () => {
         expect(GetModelCatalogSessionSettings(null)).toBeNull();
         expect(GetModelCatalogSessionSettings(undefined)).toBeNull();

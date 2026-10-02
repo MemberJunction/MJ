@@ -1,0 +1,45 @@
+# Composing a dashboard from Data Explorer.
+#
+# Every dashboard MJ ships is `Type = 'Code'` — its panels are an Angular component, which is why
+# none of them render anywhere but Explorer and why the mobile Dashboards resource had nothing real
+# to show. A `Config` dashboard is data, and data renders wherever there is a renderer. This flow
+# asserts the surface that makes them.
+#
+# It deliberately stops short of SAVING. A flow that creates a row on every run leaves the
+# workspace dirtier each time, and the save path is covered by dashboard-config.test.ts, which pins
+# the written layout against the parser that has to read it.
+appId: org.memberjunction.mobile
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Ask an agent anything, or pick up where you left off."
+    timeout: 40000
+- waitForAnimationToEnd:
+    timeout: 10000
+
+- openLink: "mjmobile://explorer/dashboards"
+- runFlow:
+    when:
+      visible: "Open"
+    commands:
+      - tapOn: "Open"
+
+# The entry point, and the honest notice next to it.
+- extendedWaitUntil:
+    visible: "New dashboard"
+    timeout: 25000
+- assertVisible: "Dashboards built for desktop may not render here. Tap \\+ to compose one from saved queries that will."
+
+- tapOn: "New dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard name"
+    timeout: 20000
+
+# Panels come from approved saved queries, which are already named and permissioned — the reason
+# this composes from queries rather than letting a phone author SQL.
+- assertVisible: "Search saved queries"
+- assertVisible: "Add Active Users"
+
+# Save stays disabled until the dashboard has a name AND at least one panel.
+- tapOn: "Add Active Users"
+- assertVisible: "Panels · 1"

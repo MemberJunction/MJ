@@ -239,7 +239,7 @@ export class ComposeListsInput {
 // AppContext / type-graphql runtime.
 // ---------------------------------------------------------------------------
 
-export function toCoreSource(input: ListSourceInput): CoreListSource {
+export function ToCoreSource(input: ListSourceInput): CoreListSource {
   switch (input.Kind) {
     case 'list':
       if (!input.ListID) throw new Error("ListSourceInput.ListID is required when Kind='list'");
@@ -257,7 +257,12 @@ export function toCoreSource(input: ListSourceInput): CoreListSource {
   }
 }
 
-export function fromCoreDelta(delta: CoreListDelta): ListDeltaType {
+/** @deprecated Use {@link ToCoreSource}. */
+export function toCoreSource(input: ListSourceInput): CoreListSource {
+  return ToCoreSource(input);
+}
+
+export function FromCoreDelta(delta: CoreListDelta): ListDeltaType {
   return {
     TargetListId: delta.TargetListId,
     EntityName: delta.EntityName,
@@ -265,12 +270,17 @@ export function fromCoreDelta(delta: CoreListDelta): ListDeltaType {
     ToRemove: delta.ToRemove,
     Unchanged: delta.Unchanged,
     Counts: { ...delta.Counts },
-    Warnings: delta.Warnings.map(fromCoreWarning),
+    Warnings: delta.Warnings.map(FromCoreWarning),
     DeltaToken: delta.DeltaToken,
   };
 }
 
-export function fromCoreWarning(w: CoreListDeltaWarning): ListDeltaWarningType {
+/** @deprecated Use {@link FromCoreDelta}. */
+export function fromCoreDelta(delta: CoreListDelta): ListDeltaType {
+  return FromCoreDelta(delta);
+}
+
+export function FromCoreWarning(w: CoreListDeltaWarning): ListDeltaWarningType {
   return {
     Code: w.Code,
     Message: w.Message,
@@ -278,7 +288,12 @@ export function fromCoreWarning(w: CoreListDeltaWarning): ListDeltaWarningType {
   };
 }
 
-export function fromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
+/** @deprecated Use {@link FromCoreWarning}. */
+export function fromCoreWarning(w: CoreListDeltaWarning): ListDeltaWarningType {
+  return FromCoreWarning(w);
+}
+
+export function FromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
   return {
     Success: r.Success,
     ResultCode: r.ResultCode,
@@ -292,8 +307,13 @@ export function fromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
   };
 }
 
+/** @deprecated Use {@link FromCoreApplyResult}. */
+export function fromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
+  return FromCoreApplyResult(r);
+}
+
 /** Convert a `ListShareSummary` from the core into the GraphQL DTO. */
-export function fromCoreShareSummary(s: ListShareSummary): ListShareSummaryType {
+export function FromCoreShareSummary(s: ListShareSummary): ListShareSummaryType {
   return {
     PermissionID: s.PermissionID,
     ListID: s.ListID,
@@ -308,28 +328,53 @@ export function fromCoreShareSummary(s: ListShareSummary): ListShareSummaryType 
   };
 }
 
+/** @deprecated Use {@link FromCoreShareSummary}. */
+export function fromCoreShareSummary(s: ListShareSummary): ListShareSummaryType {
+  return FromCoreShareSummary(s);
+}
+
 /** Guard for required-when-Kind-X fields on discriminated inputs. */
-export function requireField<T>(value: T | undefined, name: string): T {
+export function RequireField<T>(value: T | undefined, name: string): T {
   if (value == null) throw new Error(`'${name}' is required`);
   return value;
 }
 
+/** @deprecated Use {@link RequireField}. */
+export function requireField<T>(value: T | undefined, name: string): T {
+  return RequireField(value, name);
+}
+
 /** Three failure helpers — one per output type — keep the try/catch
  *  sites in the resolver methods tiny. */
-export function shareUnexpected(e: unknown, op: string): ShareResultType {
-  const message = e instanceof Error ? e.message : String(e);
-  return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: `${op}: ${message}` };
-}
-export function inviteUnexpected(e: unknown, op: string): InviteResultType {
-  const message = e instanceof Error ? e.message : String(e);
-  return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: `${op}: ${message}` };
-}
-export function acceptInvitationUnexpected(e: unknown, op: string): AcceptInvitationResultType {
+export function ShareUnexpected(e: unknown, op: string): ShareResultType {
   const message = e instanceof Error ? e.message : String(e);
   return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: `${op}: ${message}` };
 }
 
-export function rebuildDeltaFromInput(input: ApplyDeltaInput): CoreListDelta {
+/** @deprecated Use {@link ShareUnexpected}. */
+export function shareUnexpected(e: unknown, op: string): ShareResultType {
+  return ShareUnexpected(e, op);
+}
+export function InviteUnexpected(e: unknown, op: string): InviteResultType {
+  const message = e instanceof Error ? e.message : String(e);
+  return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: `${op}: ${message}` };
+}
+
+/** @deprecated Use {@link InviteUnexpected}. */
+export function inviteUnexpected(e: unknown, op: string): InviteResultType {
+  return InviteUnexpected(e, op);
+}
+export function AcceptInvitationUnexpected(e: unknown, op: string): AcceptInvitationResultType {
+  const message = e instanceof Error ? e.message : String(e);
+  return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: `${op}: ${message}` };
+}
+
+/** @deprecated Use {@link AcceptInvitationUnexpected}. */
+export function acceptInvitationUnexpected(e: unknown, op: string): AcceptInvitationResultType {
+  return AcceptInvitationUnexpected(e, op);
+}
+
+export function RebuildDeltaFromInput(input: ApplyDeltaInput): CoreListDelta {
   return {
     TargetListId: input.TargetListId,
     EntityName: input.EntityName,
@@ -346,6 +391,11 @@ export function rebuildDeltaFromInput(input: ApplyDeltaInput): CoreListDelta {
     Warnings: [],
     DeltaToken: input.DeltaToken,
   };
+}
+
+/** @deprecated Use {@link RebuildDeltaFromInput}. */
+export function rebuildDeltaFromInput(input: ApplyDeltaInput): CoreListDelta {
+  return RebuildDeltaFromInput(input);
 }
 
 // ---------------------------------------------------------------------------
@@ -369,10 +419,10 @@ export class ListOperationsResolver extends ResolverBase {
     @Ctx() ctx: AppContext,
   ): Promise<ListDeltaType> {
     const ops = this.buildOps(ctx);
-    const source = toCoreSource(input.Source);
+    const source = ToCoreSource(input.Source);
     const target = input.Target === 'new' ? 'new' : ({ kind: 'list', listId: input.Target } as const);
     const delta = await ops.ComputeDelta(target, source, input.Mode);
-    return fromCoreDelta(delta);
+    return FromCoreDelta(delta);
   }
 
   @Mutation(() => ApplyListResultType, {
@@ -384,12 +434,12 @@ export class ListOperationsResolver extends ResolverBase {
   ): Promise<ApplyListResultType> {
     const ops = this.buildOps(ctx);
     try {
-      const delta = rebuildDeltaFromInput(input);
+      const delta = RebuildDeltaFromInput(input);
       const result = await ops.ApplyDelta(delta, {
         ConfirmDrops: input.ConfirmDrops,
         DeltaToken: input.DeltaToken,
       });
-      return fromCoreApplyResult(result);
+      return FromCoreApplyResult(result);
     } catch (e) {
       return this.unexpectedFailure(e, 'ApplyListDelta');
     }
@@ -412,7 +462,7 @@ export class ListOperationsResolver extends ResolverBase {
         RefreshMode: options.RefreshMode,
       };
       const result = await ops.MaterializeFromView(viewId, opts);
-      return fromCoreApplyResult(result);
+      return FromCoreApplyResult(result);
     } catch (e) {
       return this.unexpectedFailure(e, 'MaterializeListFromView');
     }
@@ -427,7 +477,7 @@ export class ListOperationsResolver extends ResolverBase {
     const ops = this.buildOps(ctx);
     try {
       const result = await ops.AddViewResultsToList(viewId, listId);
-      return fromCoreApplyResult(result);
+      return FromCoreApplyResult(result);
     } catch (e) {
       return this.unexpectedFailure(e, 'AddViewResultsToList');
     }
@@ -443,7 +493,7 @@ export class ListOperationsResolver extends ResolverBase {
     const ops = this.buildOps(ctx);
     try {
       const result = await ops.RefreshFromSource(listId, mode, { ConfirmDrops: confirmDrops });
-      return fromCoreApplyResult(result);
+      return FromCoreApplyResult(result);
     } catch (e) {
       return this.unexpectedFailure(e, 'RefreshListFromSource');
     }
@@ -458,10 +508,10 @@ export class ListOperationsResolver extends ResolverBase {
     @Ctx() ctx: AppContext,
   ): Promise<ListDeltaType> {
     const ops = this.buildOps(ctx);
-    const inputs = input.Inputs.map(toCoreSource);
-    const target = input.Target ? toCoreSource(input.Target) : undefined;
+    const inputs = input.Inputs.map(ToCoreSource);
+    const target = input.Target ? ToCoreSource(input.Target) : undefined;
     const delta = await ops.ComputeSetOp(input.Op, inputs, target);
-    return fromCoreDelta(delta);
+    return FromCoreDelta(delta);
   }
 
   // -----------------------------------------------------------------------
@@ -480,8 +530,8 @@ export class ListOperationsResolver extends ResolverBase {
     try {
       const target: ShareTarget =
         input.Target.Kind === 'user'
-          ? { kind: 'user', userId: requireField(input.Target.UserID, 'Target.UserID') }
-          : { kind: 'role', roleId: requireField(input.Target.RoleID, 'Target.RoleID') };
+          ? { kind: 'user', userId: RequireField(input.Target.UserID, 'Target.UserID') }
+          : { kind: 'role', roleId: RequireField(input.Target.RoleID, 'Target.RoleID') };
       const result = await sharing.Share({
         ListID: input.ListID,
         Target: target,
@@ -489,7 +539,7 @@ export class ListOperationsResolver extends ResolverBase {
       });
       return result;
     } catch (e) {
-      return shareUnexpected(e, 'ShareList');
+      return ShareUnexpected(e, 'ShareList');
     }
   }
 
@@ -502,7 +552,7 @@ export class ListOperationsResolver extends ResolverBase {
     try {
       return await sharing.Unshare(permissionId);
     } catch (e) {
-      return shareUnexpected(e, 'UnshareList');
+      return ShareUnexpected(e, 'UnshareList');
     }
   }
 
@@ -520,7 +570,7 @@ export class ListOperationsResolver extends ResolverBase {
         TtlMs: input.TtlHours != null ? input.TtlHours * 60 * 60 * 1000 : undefined,
       });
     } catch (e) {
-      return inviteUnexpected(e, 'InviteToList');
+      return InviteUnexpected(e, 'InviteToList');
     }
   }
 
@@ -533,7 +583,7 @@ export class ListOperationsResolver extends ResolverBase {
     try {
       return await sharing.AcceptInvitation(token);
     } catch (e) {
-      return acceptInvitationUnexpected(e, 'AcceptListInvitation');
+      return AcceptInvitationUnexpected(e, 'AcceptListInvitation');
     }
   }
 
@@ -546,7 +596,7 @@ export class ListOperationsResolver extends ResolverBase {
     try {
       return await sharing.RevokeInvitation(invitationId);
     } catch (e) {
-      return shareUnexpected(e, 'RevokeListInvitation');
+      return ShareUnexpected(e, 'RevokeListInvitation');
     }
   }
 
@@ -557,7 +607,7 @@ export class ListOperationsResolver extends ResolverBase {
   ): Promise<ListShareSummaryType[]> {
     const sharing = this.buildSharing(ctx);
     const shares = await sharing.GetSharesForList(listId);
-    return shares.map(fromCoreShareSummary);
+    return shares.map(FromCoreShareSummary);
   }
 
   @Query(() => [SharedListSummaryType])

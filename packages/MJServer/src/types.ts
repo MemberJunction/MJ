@@ -2,7 +2,7 @@ import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo } fro
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
-import { getSystemUser } from './auth/index.js';
+import { GetSystemUser } from './auth/index.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
@@ -57,18 +57,18 @@ export type AppContext = {
 };
 
 export class ProviderInfo {
-  provider: DatabaseProviderBase;
-  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';
+  provider: DatabaseProviderBase;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 export class DataSourceInfo  {
-  dataSource: sql.ConnectionPool;
-  host: string;
-  port: number;
-  instance?: string;
-  database: string;
-  userName: string;
-  type: "Admin" | "Read-Write" | "Read-Only" | "Other";
+  dataSource: sql.ConnectionPool;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  host: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  port: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  instance?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  database: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  userName: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  type: "Admin" | "Read-Write" | "Read-Only" | "Other";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   constructor(init: {dataSource: sql.ConnectionPool, type: "Admin" | "Read-Write" | "Read-Only" | "Other", host: string, port: number, database: string, userName: string} ) {
     this.dataSource = init.dataSource;
@@ -125,20 +125,20 @@ export type RunViewGenericParams = {
 
 
 export class MJServerEvent {
-  type: 'setupComplete' | 'requestReceived' | 'requestCompleted' | 'requestFailed';
-  dataSources: DataSourceInfo[];
-  userPayload: UserPayload;
-  systemUser: UserInfo;
+  type: 'setupComplete' | 'requestReceived' | 'requestCompleted' | 'requestFailed';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  dataSources: DataSourceInfo[];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  userPayload: UserPayload;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  systemUser: UserInfo;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 export const MJ_SERVER_EVENT_CODE = 'MJ_SERVER_EVENT';
 
-export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
+export async function RaiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
   const event = new MJServerEvent();
   event.type = type;
   event.dataSources = dataSources;
   event.userPayload = userPayload;
-  event.systemUser = await getSystemUser();
+  event.systemUser = await GetSystemUser();
 
   const mje = new MJEvent();
   mje.args = event;
@@ -146,4 +146,9 @@ export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataS
   mje.event = MJEventType.ComponentEvent;
   mje.eventCode = MJ_SERVER_EVENT_CODE;
   MJGlobal.Instance.RaiseEvent(mje);
+}
+
+/** @deprecated Use {@link RaiseEvent}. */
+export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
+  return RaiseEvent(type, dataSources, userPayload, component);
 }

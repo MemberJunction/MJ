@@ -1,5 +1,8 @@
+import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
 import { Component, Input } from '@angular/core';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
@@ -7,6 +10,12 @@ import { MJAccordionModule, MJButtonDirective } from '@memberjunction/ng-ui-comp
 import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { ApplicationDialogComponent, ApplicationDialogData } from './application-dialog.component';
 import type { MJEntityEntity } from '@memberjunction/core-entities';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for <mj-application-dialog> — a standalone:false, default-CD reactive-form dialog

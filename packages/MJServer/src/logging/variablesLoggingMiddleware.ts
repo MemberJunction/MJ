@@ -4,8 +4,8 @@ import { getNamedType } from 'graphql';
 import type { GraphQLArgument } from 'graphql';
 import { configInfo } from '../config.js';
 import type { AppContext } from '../types.js';
-import { redactArg } from './secretRedactor.js';
-import { hasNoLogParameter, getNoLogFields } from './NoLog.js';
+import { RedactArg } from './secretRedactor.js';
+import { HasNoLogParameter, GetNoLogFields } from './NoLog.js';
 import { StartupLogger } from './StartupLogger.js';
 
 /**
@@ -112,7 +112,7 @@ const warnedResolverSignatures = new Set<string>();
  * differ from the always-on log line (`operationName` vs `operation`, `variables` vs `args`)
  * — operators with log-grep automation should update their patterns.
  */
-export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = async (action, next) => {
+export const VariablesLoggingMiddleware: MiddlewareFn<AppContext> = async (action, next) => {
   // Field resolvers (info.path.prev !== undefined) are skipped — only root @Query/@Mutation/@Subscription.
   if (action.info.path.prev !== undefined) {
     return next();
@@ -144,13 +144,13 @@ export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = async (actio
 
     const paramMeta = argParams.find((p) => p.name === argDef.name);
     const noLogParameter = paramMeta && resolverEntry
-      ? hasNoLogParameter(resolverEntry.target, resolverEntry.methodName, paramMeta.index)
+      ? HasNoLogParameter(resolverEntry.target, resolverEntry.methodName, paramMeta.index)
       : false;
 
     const inputClass = findInputClass(inputTypeName);
-    const noLogFields = inputClass ? getNoLogFields(inputClass) : new Set<string>();
+    const noLogFields = inputClass ? GetNoLogFields(inputClass) : new Set<string>();
 
-    redactedArgs[argDef.name] = redactArg({
+    redactedArgs[argDef.name] = RedactArg({
       inputTypeName,
       rawValue,
       provider,
@@ -187,6 +187,9 @@ export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = async (actio
 
   return next();
 };
+
+/** @deprecated Use {@link VariablesLoggingMiddleware}. */
+export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = VariablesLoggingMiddleware;
 
 /**
  * Heuristic: an arg is "custom" (i.e. needs `@NoLog` discipline because metadata can't redact it)
