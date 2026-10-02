@@ -1,3 +1,4 @@
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { NodeSnapshotFromRecord, RubricScoring, RubricVersionDiff, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type VersionChange } from '@memberjunction/rubrics-base';
 
 /** One answer on the scoring form. Groups are not answered. */
@@ -561,15 +562,39 @@ export function nodeFromRow(row: Record<string, unknown>, anchors: RubricNodeSna
     return NodeFromRow(row, anchors);
 }
 
-/** Writes include the client id, so a new row is stored under the id the form already holds. Removed ids are deleted children first. */
-export function PlanNodeSave(existing: { id: string; parentId: string | null }[], nodes: RubricNodeSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
-    const known = new Set(existing.map(row => row.id));
-    const kept = new Set(nodes.map(node => node.id));
-    const removed = new Set(existing.filter(row => !kept.has(row.id)).map(row => row.id));
-    return {
-        upserts: nodes.map(node => ({ id: node.id, isNew: !known.has(node.id), fields: { ...NodeFields(node), ID: node.id } })),
-        removedIds: deleteChildrenFirst(existing, removed),
+/** How long the author waits after the last keystroke before writing criteria. */
+export const NodeSaveDelayMs = 400;
+
+/** One timer for the draft tree. A later keystroke cancels the save that was already waiting. */
+export function QueueNodeSave(timer: ReturnType<typeof setTimeout> | null, run: () => void, delayMs = NodeSaveDelayMs): ReturnType<typeof setTimeout> {
+    if (timer != null) clearTimeout(timer);
+    return setTimeout(run, delayMs);
+}
+
+/**
+ * Dirty rows only, parents before children. A stored row whose id differs only by case
+ * is the same row: it is updated under the stored id, not deleted and inserted.
+ * Rows without `fields` are treated as dirty so a caller that only knows ids still writes them.
+ */
+export function PlanNodeSave(
+    existing: { id: string; parentId: string | null; fields?: Record<string, unknown>; anchors?: RubricNodeSnapshot['anchors'] }[],
+    nodes: RubricNodeSnapshot[],
+): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
+    const storedId = (value: string | null | undefined): string | null => {
+        if (value == null) return null;
+        const found = existing.find(row => UUIDsEqual(row.id, value));
+        return found ? found.id : value;
     };
+    const upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[] = [];
+    for (const node of nodes) {
+        const match = existing.find(row => UUIDsEqual(row.id, node.id));
+        const id = match ? match.id : node.id;
+        const fields = { ...NodeFields({ ...node, parentId: storedId(node.parentId ?? null) }), ID: id };
+        if (match?.fields && sameStoredFields(match.fields, fields) && sameAnchors(match.anchors, node.anchors)) continue;
+        upserts.push({ id, isNew: !match, fields });
+    }
+    const removed = existing.filter(row => !nodes.some(node => UUIDsEqual(node.id, row.id))).map(row => row.id);
+    return { upserts: parentsFirst(upserts), removedIds: deleteChildrenFirst(existing, removed) };
 }
 
 /** @deprecated Use {@link PlanNodeSave}. */
@@ -638,15 +663,71 @@ export function planBandSave(existingIds: string[], bands: RubricBandSnapshot[])
     return PlanBandSave(existingIds, bands);
 }
 
-function deleteChildrenFirst(rows: { id: string; parentId: string | null }[], removed: Set<string>): string[] {
-    const ordered: string[] = [];
-    const visit = (id: string): void => {
-        for (const row of rows) {
-            if (row.parentId === id && removed.has(row.id)) visit(row.id);
+const UUID_FIELDS = new Set(['ParentID', 'ScaleID']);
+
+function sameStoredFields(stored: Record<string, unknown>, next: Record<string, unknown>): boolean {
+    const keys = new Set([...Object.keys(stored), ...Object.keys(next)].filter(key => key !== 'ID'));
+    for (const key of keys) {
+        const left = stored[key];
+        const right = next[key];
+        if (UUID_FIELDS.has(key)) {
+            if (!UUIDsEqual(left as string | null | undefined, right as string | null | undefined)) return false;
+            continue;
         }
-        if (removed.has(id) && !ordered.includes(id)) ordered.push(id);
+        if (left == null && right == null) continue;
+        if (left !== right) return false;
+    }
+    return true;
+}
+
+function sameAnchors(stored: RubricNodeSnapshot['anchors'] | undefined, next: RubricNodeSnapshot['anchors'] | undefined): boolean {
+    const rank = (anchor: NonNullable<RubricNodeSnapshot['anchors']>[number]): string =>
+        `${NormalizeUUID(anchor.scaleLevelId ?? '')}|${anchor.anchorValue ?? ''}|${anchor.descriptor}`;
+    const left = [...(stored ?? [])].map(rank).sort();
+    const right = [...(next ?? [])].map(rank).sort();
+    return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/** Parents in this save land before their children. A parent already stored can be skipped. */
+function parentsFirst(items: { id: string; isNew: boolean; fields: Record<string, unknown> }[]): { id: string; isNew: boolean; fields: Record<string, unknown> }[] {
+    const pending = [...items];
+    const writing = new Set(pending.map(item => NormalizeUUID(item.id)));
+    const done = new Set<string>();
+    const ordered: typeof pending = [];
+    let guard = pending.length;
+    while (pending.length > 0 && guard-- >= 0) {
+        const index = pending.findIndex(item => {
+            const parent = item.fields.ParentID;
+            if (parent == null || parent === '') return true;
+            const key = NormalizeUUID(String(parent));
+            return !writing.has(key) || done.has(key);
+        });
+        if (index < 0) return ordered.concat(pending);
+        const [item] = pending.splice(index, 1);
+        done.add(NormalizeUUID(item.id));
+        ordered.push(item);
+    }
+    return ordered.concat(pending);
+}
+
+function deleteChildrenFirst(rows: { id: string; parentId: string | null }[], removedIds: string[]): string[] {
+    const removed = new Set(removedIds.map(id => NormalizeUUID(id)));
+    const ordered: string[] = [];
+    const orderedKeys = new Set<string>();
+    const visiting = new Set<string>();
+    const visit = (id: string): void => {
+        const key = NormalizeUUID(id);
+        if (visiting.has(key)) return;
+        visiting.add(key);
+        for (const row of rows) {
+            if (row.parentId && UUIDsEqual(row.parentId, id) && removed.has(NormalizeUUID(row.id))) visit(row.id);
+        }
+        if (removed.has(key) && !orderedKeys.has(key)) {
+            orderedKeys.add(key);
+            ordered.push(rows.find(row => UUIDsEqual(row.id, id))?.id ?? id);
+        }
     };
-    for (const id of removed) visit(id);
+    for (const id of removedIds) visit(id);
     return ordered;
 }
 

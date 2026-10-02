@@ -2,10 +2,10 @@ import { Component } from '@angular/core';
 import { ActionParam } from '@memberjunction/actions-base';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
+import { RegisterClass, RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPolicy, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
-import { bandFromRow, nodeFromRow, planBandSave, planNodeSave, publishPreview, scaleFromRow, VersionShownWithoutDraft, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionCard, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { bandFromRow, NodeFields, nodeFromRow, PlanNodeSave, planBandSave, QueueNodeSave, publishPreview, scaleFromRow, VersionShownWithoutDraft, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionCard, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { MJRubricEntity } from '@memberjunction/core-entities';
 import { MJRubricFormComponent } from '../../generated/Entities/MJRubric/mjrubric.form.component';
 
@@ -34,6 +34,9 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     public Message = '';
     public Viewing: 'draft' | 'published' = 'draft';
     public VersionCards: RubricVersionCard[] = [];
+    private nodeSaveTimer: ReturnType<typeof setTimeout> | null = null;
+    private nodeSaveChain: Promise<void> = Promise.resolve();
+    private disposed = false;
 
     public get PublishedLabel(): string {
         const row = this.Versions.find(item => item.Status === 'Published');
@@ -124,22 +127,52 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
         }).sort((left, right) => Number(left.status === 'Draft') - Number(right.status === 'Draft'));
     }
 
-    public async OnNodes(nodes: RubricNodeSnapshot[]): Promise<void> {
+    public override ngOnDestroy(): void {
+        this.disposed = true;
+        if (this.nodeSaveTimer != null) clearTimeout(this.nodeSaveTimer);
+        this.nodeSaveTimer = null;
+        super.ngOnDestroy();
+    }
+
+    /** Keeps the open draft in memory and writes dirty criteria once typing pauses. */
+    public OnNodes(nodes: RubricNodeSnapshot[]): void {
         if (this.Viewing === 'published') return;
         this.Nodes = nodes;
-        if (!this.DraftId) return;
-        const saved = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${this.DraftId}'`);
-        const plan = planNodeSave(saved.map(row => ({ id: String(row.ID), parentId: row.ParentID == null ? null : String(row.ParentID) })), nodes);
-        for (const removedId of plan.removedIds) {
-            const anchors = await this.rows('MJ: Rubric Criterion Levels', `CriterionID='${removedId}'`);
-            for (const anchor of anchors) await this.remove('MJ: Rubric Criterion Levels', String(anchor.ID));
-            await this.remove('MJ: Rubric Criteria', removedId);
-        }
-        for (const item of plan.upserts) {
-            await this.write('MJ: Rubric Criteria', item.id, item.isNew, { ...item.fields, RubricVersionID: this.DraftId });
-            await this.saveAnchors(item.id, nodes.find(node => node.id === item.id)?.anchors ?? []);
-        }
         if (this.DraftVersion) this.DraftVersion = { ...this.DraftVersion, nodes };
+        if (!this.DraftId) return;
+        const draftId = this.DraftId;
+        this.nodeSaveTimer = QueueNodeSave(this.nodeSaveTimer, () => {
+            this.nodeSaveTimer = null;
+            this.nodeSaveChain = this.nodeSaveChain.then(() => this.PersistNodes(draftId, nodes));
+        });
+    }
+
+    private async PersistNodes(draftId: string, nodes: RubricNodeSnapshot[]): Promise<void> {
+        if (this.disposed || this.DraftId !== draftId || this.Viewing === 'published') return;
+        try {
+            const saved = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${draftId}'`);
+            const anchorRows = saved.length === 0 ? [] : await this.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${saved.map(row => `'${String(row.ID)}'`).join(', ')})`);
+            const plan = PlanNodeSave(saved.map(row => {
+                const node = nodeFromRow(row, anchorRows.filter(anchor => String(anchor.CriterionID) === String(row.ID)).map(anchor => ({
+                    scaleLevelId: anchor.ScaleLevelID == null ? null : String(anchor.ScaleLevelID),
+                    anchorValue: anchor.AnchorValue == null ? null : Number(anchor.AnchorValue),
+                    descriptor: String(anchor.Descriptor ?? ''),
+                })));
+                return { id: node.id, parentId: node.parentId ?? null, fields: NodeFields(node), anchors: node.anchors ?? [] };
+            }), nodes);
+            for (const removedId of plan.removedIds) {
+                const anchors = await this.rows('MJ: Rubric Criterion Levels', `CriterionID='${removedId}'`);
+                for (const anchor of anchors) await this.remove('MJ: Rubric Criterion Levels', String(anchor.ID));
+                await this.remove('MJ: Rubric Criteria', removedId);
+            }
+            for (const item of plan.upserts) {
+                await this.write('MJ: Rubric Criteria', item.id, item.isNew, { ...item.fields, RubricVersionID: draftId });
+                const source = nodes.find(node => UUIDsEqual(node.id, item.id));
+                await this.saveAnchors(item.id, source?.anchors ?? []);
+            }
+        } catch (error) {
+            this.Message = error instanceof Error ? error.message : 'Could not save the draft.';
+        }
     }
 
     public async OnBands(bands: RubricBandSnapshot[]): Promise<void> {

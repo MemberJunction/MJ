@@ -8733,6 +8733,9 @@ importers:
       '@memberjunction/core':
         specifier: 6.2.0-edge.1
         version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJGlobal
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.1
         version: link:../ui-components

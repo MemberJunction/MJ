@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
+import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, QueueNodeSave, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -8,6 +8,10 @@ const scale: RubricScaleSnapshot = {
     higherIsBetter: true,
     levels: [{ id: 'high', label: 'High', value: 1, normalizedValue: 1, sequence: 0 }],
 };
+
+function stored(node: RubricNodeSnapshot): { id: string; parentId: string | null; fields: Record<string, unknown>; anchors: RubricNodeSnapshot['anchors'] } {
+    return { id: node.id, parentId: node.parentId ?? null, fields: NodeFields(node), anchors: node.anchors ?? [] };
+}
 
 function leaf(id: string, weight: number, extra: Partial<RubricNodeSnapshot> = {}): RubricNodeSnapshot {
     return {
@@ -242,6 +246,61 @@ describe('explorer row mapping', () => {
         );
         expect(plan.upserts.find(row => row.id === 'client-child')).toMatchObject({ isNew: true, fields: { ID: 'client-child', ParentID: 'parent' } });
         expect(plan.removedIds).toEqual(['old-child']);
+        expect(plan.upserts.map(row => row.id)).toEqual(['parent', 'client-child']);
+    });
+
+    it('writes a dirty child after its parent and keeps a case-only id', () => {
+        const storedId = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE';
+        const parent = leaf(storedId, 1, { nodeType: 'Group', parentId: null, scaleId: null });
+        const child = leaf('child', 1, { parentId: storedId });
+        const unchanged = PlanNodeSave(
+            [stored(parent), stored(child)],
+            [{ ...parent, id: storedId.toLowerCase() }, child],
+        );
+        expect(unchanged.upserts).toEqual([]);
+        expect(unchanged.removedIds).toEqual([]);
+        const renamed = PlanNodeSave(
+            [stored(parent), stored(child)],
+            [{ ...parent, id: storedId.toLowerCase(), name: 'Renamed' }, { ...child, name: 'Clearer' }],
+        );
+        expect(renamed.removedIds).toEqual([]);
+        expect(renamed.upserts.map(row => row.id)).toEqual([storedId, 'child']);
+        expect(renamed.upserts[0]).toMatchObject({ isNew: false, fields: { ID: storedId, Name: 'Renamed' } });
+        const added = PlanNodeSave(
+            [stored(parent)],
+            [leaf('new-child', 1, { parentId: storedId.toLowerCase() }), { ...parent, id: storedId.toLowerCase(), name: 'Renamed' }],
+        );
+        expect(added.upserts.map(row => row.id)).toEqual([storedId, 'new-child']);
+        expect(added.upserts[1].fields.ParentID).toBe(storedId);
+        const anchored = PlanNodeSave(
+            [stored(child)],
+            [{ ...child, anchors: [{ scaleLevelId: 'LEVEL', descriptor: 'Shows the work', anchorValue: null }] }],
+        );
+        expect(anchored.upserts.map(row => row.id)).toEqual(['child']);
+        const dropped = PlanNodeSave(
+            [stored({ ...parent, id: storedId }), stored({ ...child, parentId: storedId.toLowerCase() })],
+            [{ ...parent, id: storedId.toLowerCase() }],
+        );
+        expect(dropped.upserts).toEqual([]);
+        expect(dropped.removedIds).toEqual(['child']);
+        const mixed = PlanNodeSave(
+            [stored(parent), stored({ ...child, parentId: storedId.toLowerCase() }), stored(leaf('grand', 1, { parentId: 'CHILD' }))],
+            [],
+        );
+        expect(mixed.removedIds).toEqual(['grand', 'child', storedId]);
+    });
+
+    it('saves once after the last keystroke', () => {
+        vi.useFakeTimers();
+        let saves = 0;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        timer = QueueNodeSave(timer, () => { saves += 1; });
+        timer = QueueNodeSave(timer, () => { saves += 1; });
+        vi.advanceTimersByTime(399);
+        expect(saves).toBe(0);
+        vi.advanceTimersByTime(1);
+        expect(saves).toBe(1);
+        vi.useRealTimers();
     });
 
     it('keeps a numeric scale and its levels', () => {

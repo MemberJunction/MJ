@@ -24,4 +24,18 @@ describe('rubric author draft', () => {
         expect(records).toContain('Sample rate');
         expect(records).toContain('Pass threshold');
     });
+
+    it('debounces criterion saves and compares ids with UUIDsEqual', () => {
+        const directory = dirname(fileURLToPath(import.meta.url));
+        const form = readFileSync(join(directory, 'rubric-form.component.ts'), 'utf8');
+        const model = readFileSync(join(directory, '../../../../../../Generic/rubrics/src/lib/model.ts'), 'utf8');
+        const onNodes = form.slice(form.indexOf('public OnNodes'), form.indexOf('private async PersistNodes'));
+        expect(onNodes).toContain('QueueNodeSave');
+        expect(onNodes).not.toContain('this.rows(');
+        expect(onNodes).not.toContain('this.write(');
+        expect(form.slice(form.indexOf('private async PersistNodes'), form.indexOf('public async OnBands'))).toContain('PlanNodeSave');
+        expect(form).toContain('UUIDsEqual');
+        expect(model).toContain('UUIDsEqual');
+        expect(form).toContain('ngOnDestroy');
+    });
 });
