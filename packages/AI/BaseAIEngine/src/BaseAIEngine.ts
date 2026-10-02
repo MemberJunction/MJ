@@ -4,7 +4,7 @@ import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfigu
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
-         MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity,
+         MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity,
          MJAIAgentPromptEntity,
          MJAIAgentTypeEntity,
          MJAIVendorEntity,
@@ -164,6 +164,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: MJAIModelEntityExtended[] = [];
     private _modelTypes: MJAIModelTypeEntity[] = [];
     private _vectorDatabases: MJVectorDatabaseEntity[] = [];
+    private _vectorIndexes: MJVectorIndexEntity[] = [];
     private _prompts: MJAIPromptEntityExtended[] = [];
     private _promptModels: MJAIPromptModelEntity[] = [];
     private _promptTypes: MJAIPromptTypeEntity[] = [];
@@ -276,6 +277,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_vectorDatabases',
                 EntityName: 'MJ: Vector Databases',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_vectorIndexes',
+                EntityName: 'MJ: Vector Indexes',
                 CacheLocal: true
             },
             {
@@ -1481,6 +1487,30 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get VectorDatabases(): MJVectorDatabaseEntity[] {
         return this.GetConfigData<MJVectorDatabaseEntity>('_vectorDatabases');
+    }
+
+    /** All Vector Indexes. This is the single cache of `MJ: Vector Indexes`; other engines proxy it. */
+    public get VectorIndexes(): MJVectorIndexEntity[] {
+        return this.GetConfigData<MJVectorIndexEntity>('_vectorIndexes');
+    }
+
+    /** Find a vector index by ID (case-insensitive UUID comparison). */
+    public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined {
+        if (!id) return undefined;
+        return this.VectorIndexes.find(v => UUIDsEqual(v.ID, id));
+    }
+
+    /**
+     * Returns the name the vector database itself knows this index by — the single source of truth
+     * for addressing an index on its provider.
+     *
+     * A Vector Index row carries two names: `Name` is the MJ display label and `ExternalID` is the
+     * index's name on the provider. They often differ (Pinecone index names cannot contain spaces or
+     * parentheses), so every call that reaches the provider must use this rather than `Name`.
+     * Falls back to `Name` for rows that have no `ExternalID` (indexes not provisioned through MJ).
+     */
+    public GetProviderIndexName(vectorIndex: MJVectorIndexEntity): string {
+        return vectorIndex.ExternalID?.trim() || vectorIndex.Name;
     }
 
     public get ModelCosts(): MJAIModelCostEntity[] {

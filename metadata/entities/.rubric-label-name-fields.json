@@ -1,0 +1,53 @@
+[
+  {
+    "_comments": [
+      "Label is the name field. CodeGen only auto-flags a column literally named Name,",
+      "and the inner score view joins the chosen level only when IsNameField is set.",
+      "AutoUpdateIsNameField is false so a later smart-field pass does not clear it.",
+      "Metadata is the source. Do not copy these values into a migration."
+    ],
+    "fields": {
+      "Name": "MJ: Rubric Scale Levels"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": true,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Scale Levels&Name=Label"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Scale Levels"
+    }
+  },
+  {
+    "_comments": [
+      "Same pin as Rubric Scale Levels. Band.Label is what a person reads for the band."
+    ],
+    "fields": {
+      "Name": "MJ: Rubric Bands"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": true,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Bands&Name=Label"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Bands"
+    }
+  }
+]

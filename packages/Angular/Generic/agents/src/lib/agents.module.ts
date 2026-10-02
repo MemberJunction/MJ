@@ -14,6 +14,7 @@ import { CreateAgentPanelComponent } from './components/create-agent-panel.compo
 import { CreateAgentDialogComponent } from './components/create-agent-dialog.component';
 import { CreateAgentSlideInComponent } from './components/create-agent-slidein.component';
 import { AgentInvocationsComponent } from './components/agent-invocations.component';
+import { AgentRubricsComponent } from './components/agent-rubrics.component';
 
 /**
  * Module providing reusable AI Agent UI components.
@@ -50,7 +51,8 @@ import { AgentInvocationsComponent } from './components/agent-invocations.compon
         CreateAgentPanelComponent,
         CreateAgentDialogComponent,
         CreateAgentSlideInComponent,
-        AgentInvocationsComponent
+        AgentInvocationsComponent,
+        AgentRubricsComponent
     ],
     imports: [
         CommonModule,
@@ -71,7 +73,8 @@ import { AgentInvocationsComponent } from './components/agent-invocations.compon
         CreateAgentPanelComponent,
         CreateAgentDialogComponent,
         CreateAgentSlideInComponent,
-        AgentInvocationsComponent
+        AgentInvocationsComponent,
+        AgentRubricsComponent
     ]
 })
 export class AgentsModule {}

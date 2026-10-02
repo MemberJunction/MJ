@@ -144,6 +144,18 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(text(f, '.mj-forms-field-value')).toBe('Gadget');
     });
 
+    it('hides a named field from FormContext even while the form is editing', () => {
+      const f = render({
+        Record: makeWidget(),
+        FieldName: 'Name',
+        Type: 'textbox',
+        EditMode: true,
+        FormContext: { hiddenFieldNames: ['Name'] },
+      });
+      expect(f.componentInstance.ShouldHideField).toBe(true);
+      expect(query(f, '.mj-forms-field')).toBeNull();
+    });
+
     it('hides an empty field entirely by default (HideWhenEmptyInReadOnlyMode)', () => {
       const f = render({ Record: makeWidget({ Description: null }), FieldName: 'Description', Type: 'textbox' });
       expect(query(f, '.mj-forms-field')).toBeNull();

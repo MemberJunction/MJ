@@ -1,0 +1,169 @@
+{
+  "fields": {
+    "Name": "Hiring",
+    "Status": "Active",
+    "Description": "Structure and evidence on Likert 1-5, each level anchored. See guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "ID": "80D5EE85-B06D-414D-81B9-CF157F1491BE"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Worked example from guides/RUBRICS_GUIDE.md. Draft because publish stamps are not set here."
+        },
+        "primaryKey": {
+          "ID": "995580BB-678D-4972-937B-BF90B4F1E0DD"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "structure",
+                "Name": "Structure",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Likert 1-5"
+              },
+              "primaryKey": {
+                "ID": "7BD079BB-7D41-43B1-8671-6829D7480460"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=1&Scale=Likert 1-5",
+                      "Descriptor": "Misses a beginning, middle, and end."
+                    },
+                    "primaryKey": {
+                      "ID": "4A9B4DA6-2AEB-48B7-92B4-86BE0EE1C497"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=2&Scale=Likert 1-5",
+                      "Descriptor": "Sections are present but hard to follow."
+                    },
+                    "primaryKey": {
+                      "ID": "F4E0BF93-D4F7-48F8-A7D1-6E03B8F66C7D"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=3&Scale=Likert 1-5",
+                      "Descriptor": "A beginning, middle, and end a listener can follow."
+                    },
+                    "primaryKey": {
+                      "ID": "635CE752-5EC8-4446-B0C7-2B81B0DD9F9C"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=4&Scale=Likert 1-5",
+                      "Descriptor": "Clear sections with transitions."
+                    },
+                    "primaryKey": {
+                      "ID": "21E50B63-8427-463A-B819-24AAC95526E7"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=5&Scale=Likert 1-5",
+                      "Descriptor": "Structure makes the answer easy to score."
+                    },
+                    "primaryKey": {
+                      "ID": "9FABC450-8BB0-4483-964C-AC71A591FCF8"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "evidence",
+                "Name": "Evidence",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Likert 1-5"
+              },
+              "primaryKey": {
+                "ID": "DCEFDEDD-2E32-4BB1-9F0F-CB1BFAD49335"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=1&Scale=Likert 1-5",
+                      "Descriptor": "No example from the work."
+                    },
+                    "primaryKey": {
+                      "ID": "0F22602F-ECBC-4DB8-A858-6B0DE2DC6872"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=2&Scale=Likert 1-5",
+                      "Descriptor": "An example that does not support the claim."
+                    },
+                    "primaryKey": {
+                      "ID": "2A408EC9-AA48-4C41-A1F3-211B7F4B8666"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=3&Scale=Likert 1-5",
+                      "Descriptor": "One relevant example."
+                    },
+                    "primaryKey": {
+                      "ID": "3EF22F5F-08E3-4460-9A34-97B014EA6404"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=4&Scale=Likert 1-5",
+                      "Descriptor": "A specific example tied to the claim."
+                    },
+                    "primaryKey": {
+                      "ID": "40B5A401-5B27-4E01-81E2-53ADE8266EAE"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "@lookup:MJ: Rubric Scale Levels.Label=5&Scale=Likert 1-5",
+                      "Descriptor": "More than one specific example a reviewer can check."
+                    },
+                    "primaryKey": {
+                      "ID": "F90A7280-9471-4039-B55A-09E71C64EA09"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

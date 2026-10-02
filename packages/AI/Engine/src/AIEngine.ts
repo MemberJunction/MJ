@@ -17,7 +17,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
-         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
+         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJAIAgentPromptEntity,
          MJAIAgentTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
          MJAIModelCostEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity,
          MJAIConfigurationEntity, MJAIConfigurationParamEntity, MJAIAgentStepEntity,
@@ -307,6 +307,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get ArtifactTypes(): MJArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
     public get LanguageModels(): MJAIModelEntityExtended[] { return this.Base.LanguageModels; }
     public get VectorDatabases(): MJVectorDatabaseEntity[] { return this.Base.VectorDatabases; }
+    public get VectorIndexes(): MJVectorIndexEntity[] { return this.Base.VectorIndexes; }
+    public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined { return this.Base.GetVectorIndexByID(id); }
+    public GetProviderIndexName(vectorIndex: MJVectorIndexEntity): string { return this.Base.GetProviderIndexName(vectorIndex); }
     public get ModelCosts(): MJAIModelCostEntity[] { return this.Base.ModelCosts; }
     public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
     public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] { return this.Base.ModelPriceUnitTypes; }
