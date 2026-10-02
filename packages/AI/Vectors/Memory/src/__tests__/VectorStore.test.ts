@@ -95,6 +95,46 @@ describe('VectorStore', () => {
     expect(store.Dims).toBe(3);
   });
 
+  it('keeps the change log bounded, and reports a version older than the log as unknown', () => {
+    const store = new VectorStore<string>();
+    store.Write('seed', [1]);
+    const early = store.Version;
+    for (let i = 0; i < 9000; i++) store.Write(`k${i}`, [i]);
+    // The early version fell off the log: callers must rebuild rather than patch.
+    expect(store.ChangedRowsSince(early, store.Generation)).toBeNull();
+    const recent = store.Version;
+    store.Write('late', [1]);
+    expect(Array.from(store.ChangedRowsSince(recent, store.Generation)!)).toEqual([store.RowOf('late')]);
+  });
+
+  it('reports no changes since the current version', () => {
+    const store = new VectorStore<string>();
+    store.Write('a', [1]);
+    expect(Array.from(store.ChangedRowsSince(store.Version, store.Generation)!)).toEqual([]);
+  });
+
+  it('returns null from KeyAt for a row it never held', () => {
+    expect(new VectorStore<string>().KeyAt(5)).toBeNull();
+  });
+
+  it('takes its dimension count from Reserve, and Reserve keeps an existing one', () => {
+    const store = new VectorStore<string>('float32');
+    store.Reserve(10, 3);
+    expect(store.Dims).toBe(3);
+    store.Reserve(10, 3);
+    store.Write('a', [1, 2, 3]);
+    expect(store.ReadRow(0)).toEqual([1, 2, 3]);
+  });
+
+  it('resets float32 storage on Clear and stays float32', () => {
+    const store = new VectorStore<string>('float32');
+    store.Write('a', [0.1, 0.2]);
+    store.Clear();
+    store.Write('b', [0.1, 0.2]);
+    expect(store.View().Data).toBeInstanceOf(Float32Array);
+    expect(store.ReadRow(0)).toEqual([Math.fround(0.1), Math.fround(0.2)]);
+  });
+
   describe('Adopt', () => {
     it('wraps a view read-only, keyed by row, limited to the candidate rows', () => {
       const source = new VectorStore<string>();
@@ -107,6 +147,28 @@ describe('VectorStore', () => {
       expect(() => adopted.Write('x', [1, 1])).toThrow(/read-only/);
       // The source's live mask is never modified by the adoption.
       expect(source.IsLive(1)).toBe(true);
+    });
+
+    it('adopts every live row when no candidates are given, skipping dead rows and counting zero norms', () => {
+      const source = new VectorStore<string>();
+      source.Write('a', [1, 0]);
+      source.Write('b', [0, 0]);
+      source.Write('c', [0, 1]);
+      source.Remove('c');
+      const adopted = VectorStore.Adopt<string>(source.View(), 'float64', null);
+      expect(adopted.Size).toBe(2);
+      expect(adopted.ZeroNormRows).toBe(1);
+      expect(adopted.IsLive(2)).toBe(false);
+    });
+
+    it('ignores dead rows named in the candidate list', () => {
+      const source = new VectorStore<string>();
+      source.Write('a', [1, 0]);
+      source.Write('b', [0, 1]);
+      source.Remove('b');
+      const adopted = VectorStore.Adopt<string>(source.View(), 'float64', Int32Array.from([0, 1]));
+      expect(adopted.Size).toBe(1);
+      expect(adopted.IsLive(1)).toBe(false);
     });
   });
 });

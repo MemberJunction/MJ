@@ -176,3 +176,150 @@ describe('SearchRows row ranges', () => {
     expect(Array.from(result.Rows)).toEqual([1, 2]);
   });
 });
+
+describe('SimpleVectorService search paths', () => {
+  /** An accelerator whose synchronous path answers with whatever the test supplies. */
+  class SyncScripted extends BaseVectorAccelerator {
+    public Calls = 0;
+    constructor(private readonly answer: (job: VectorSearchJob) => ScoredRows | null) {
+      super();
+    }
+    public override TrySearchSync(job: VectorSearchJob): ScoredRows | null {
+      this.Calls++;
+      return this.answer(job);
+    }
+  }
+
+  it('re-scores a synchronous accelerator answer exactly, rather than trusting its scores', () => {
+    const fast = new SyncScripted(() => ({ Rows: Int32Array.from([2, 0]), Scores: Float64Array.from([9, 8]) }));
+    const service = loaded('float64', fast);
+    const results = service.FindNearest([1, 0, 0], 2);
+    expect(fast.Calls).toBe(1);
+    expect(results.map(r => r.key)).toEqual(['a', 'c']);
+    expect(results[0].score).toBe(1);
+    expect(results[1].score).toBe(0.5);
+  });
+
+  it('returns nothing without dispatching when the filter matches no row, or the service is empty', async () => {
+    const recorder = new ScriptedAccelerator(job => SearchRows(job.Snapshot, job));
+    const service = loaded('float64', recorder);
+    expect(await service.FindNearestAsync([1, 0, 0], 3, undefined, 'cosine', m => m.group === 99)).toEqual([]);
+    expect(service.FindNearest([1, 0, 0], 3, undefined, 'cosine', m => m.group === 99)).toEqual([]);
+    expect(await new SimpleVectorService({ Accelerator: recorder }).FindNearestAsync([1, 0, 0], 3)).toEqual([]);
+    expect(recorder.Jobs).toHaveLength(0);
+  });
+
+  it('never matches rows without metadata when a filter is given', () => {
+    const service = loaded();
+    service.AddVector('bare', [1, 0, 0]);
+    expect(service.FindNearest([1, 0, 0], 10, undefined, 'cosine', () => true).map(r => r.key)).not.toContain('bare');
+  });
+
+  it('skips removed rows when filtering', () => {
+    const service = loaded();
+    service.RemoveVector('a');
+    expect(service.FindNearest([1, 0, 0], 10, undefined, 'cosine', () => true).map(r => r.key)).toEqual(['b', 'c', 'd']);
+  });
+
+  it('drops rows an accelerator returns that had no key, or no metadata under a filter, at dispatch', async () => {
+    const liar = new ScriptedAccelerator(() => ({
+      Rows: Int32Array.from([0, 4, 99, 5]),
+      Scores: Float64Array.from([1, 1, 1, 1]),
+    }));
+    const service = loaded('float64', liar);
+    service.AddVector('e', [1, 0, 0], { group: 1 });
+    service.AddVector('bare', [1, 0, 0]);
+    service.RemoveVector('e'); // row 4 is a tombstone at dispatch
+    const results = await service.FindNearestAsync([1, 0, 0], 10, undefined, 'cosine', m => m.group === 1);
+    expect(results.map(r => r.key)).toEqual(['a']);
+  });
+
+  it('applies the threshold and drops NaN scores when re-scoring', async () => {
+    const everything = new ScriptedAccelerator(() => ({ Rows: Int32Array.from([0, 1, 2, 3]), Scores: Float64Array.from([1, 1, 1, 1]) }));
+    const service = loaded('float64', everything);
+    expect((await service.FindNearestAsync([1, 0, 0], 10, 0.9)).map(r => r.key)).toEqual(['a', 'b']);
+    expect(await service.FindNearestAsync([Number.NaN, 0, 0], 10)).toEqual([]);
+  });
+
+  it('applies the threshold, and logs and skips rows a custom metric throws on', () => {
+    class Picky extends SimpleVectorService<Meta> {
+      public override CalculateDistance(a: number[], b: number[]): number {
+        if (b[2] === 1) throw new Error('refused');
+        return 1 - Math.abs(a[0] - b[0]);
+      }
+    }
+    vi.mocked(LogError).mockClear();
+    const service = new Picky({ Accelerator: new BaseVectorAccelerator() });
+    service.LoadVectors([
+      { key: 'near', vector: [0.9, 0, 0] },
+      { key: 'far', vector: [0.1, 0, 0] },
+      { key: 'bad', vector: [0, 0, 1] },
+    ]);
+    expect(service.FindNearest([1, 0, 0], 5, 0.5).map(r => r.key)).toEqual(['near']);
+    expect(LogError).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(LogError).mock.calls[0][0]).toMatch(/for key bad: Error: refused/);
+  });
+
+  it('serves FindNearestAsync for a custom metric in-process, without the accelerator', async () => {
+    class Reversed extends SimpleVectorService<Meta> {
+      public override CalculateDistance(a: number[], b: number[]): number {
+        return -super.CalculateDistance(a, b, 'cosine');
+      }
+    }
+    const recorder = new ScriptedAccelerator(job => SearchRows(job.Snapshot, job));
+    const service = new Reversed({ Accelerator: recorder });
+    service.AddVector('same', [1, 0]);
+    service.AddVector('opposite', [-1, 0]);
+    expect((await service.FindNearestAsync([1, 0], 1))[0].key).toBe('opposite');
+    expect(recorder.Jobs).toHaveLength(0);
+  });
+});
+
+describe('SimpleVectorService.Similarity', () => {
+  it('names whichever key is missing', () => {
+    const service = loaded();
+    expect(() => service.Similarity('missing', 'a')).toThrow('Vector with key "missing" not found');
+    expect(() => service.Similarity('a', 'missing')).toThrow('Vector with key "missing" not found');
+  });
+
+  it('uses a subclass CosineSimilarity override', () => {
+    class Constant extends SimpleVectorService<Meta> {
+      protected override CosineSimilarity(): number {
+        return 0.42;
+      }
+    }
+    const service = new Constant({ Accelerator: new BaseVectorAccelerator() });
+    service.AddVector('x', [1, 0]);
+    service.AddVector('y', [0, 1]);
+    expect(service.Similarity('x', 'y')).toBe(0.42);
+  });
+});
+
+describe('SimpleVectorService argument validation', () => {
+  it('rejects a missing key or an empty vector in AddOrUpdateVector', () => {
+    const service = loaded();
+    expect(() => service.AddOrUpdateVector('', [1, 0, 0])).toThrow('Key cannot be null or undefined');
+    expect(() => service.AddOrUpdateVector('z', [])).toThrow('Vector cannot be null, undefined, or empty');
+  });
+
+  it('treats ReserveCapacity with a non-positive count or dimension as a no-op', () => {
+    const service = new SimpleVectorService({ Accelerator: new BaseVectorAccelerator() });
+    service.ReserveCapacity(0, 3);
+    service.ReserveCapacity(10, 0);
+    expect(service.ExpectedDimensions).toBeNull();
+    service.AddVector('a', [1, 2]);
+    expect(service.ExpectedDimensions).toBe(2);
+  });
+
+  it('rejects mismatched dimensions in each metric', () => {
+    class Exposed extends SimpleVectorService {
+      public Run(name: 'EuclideanDistance' | 'ManhattanDistance' | 'DotProduct' | 'JaccardSimilarity' | 'HammingDistance'): number {
+        return this[name]([1, 2], [1]);
+      }
+    }
+    const service = new Exposed({ Accelerator: new BaseVectorAccelerator() });
+    for (const name of ['EuclideanDistance', 'ManhattanDistance', 'DotProduct', 'JaccardSimilarity', 'HammingDistance'] as const) {
+      expect(() => service.Run(name)).toThrow('Vectors must have same dimensions. Got 2 and 1');
+    }
+  });
+});

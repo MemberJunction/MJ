@@ -364,6 +364,8 @@ This package ships **two `VectorDBBase` driver implementations** so the in-memor
 
 In-process VectorDBBase driver that reads from an `MJ: Vector Indexes` row configured to point at any entity and field. Use when you have arbitrary entity rows with embeddings stored in a column and want to make them queryable through the `SearchEngine` cross-scope fusion path.
 
+Rows are read on every query, as the calling user, so row-level security always applies. The parsed vectors are reused only when the index config and the rows just read (their keys, `__mj_UpdatedAt` values and vector presence) match what they were built from, so one user never receives another user's rows. After writing vectors by a path that bypasses `BaseEntity`, call `DeleteAllRecords(indexName)` to drop the cached vectors.
+
 ### `SimpleVectorServiceProvider` (new in v5.38)
 
 **EntityDocument-keyed** in-process driver, purpose-built for `Provider.SearchEntities()` and any other `EntityDocument`-backed search. Each "index" corresponds to one `MJ: Entity Documents` row; vectors come from `MJ: Entity Record Documents.VectorJSON` filtered by `EntityDocumentID`, and matches surface the **underlying entity record's RecordID** in their metadata (not the EntityRecordDocument PK).
@@ -379,7 +381,7 @@ const result = await provider.QueryIndex(
 // result.data.matches[i].metadata.RecordID is the parent record's ID
 ```
 
-**Incrementally maintained cache:** one loaded index per `EntityDocumentID`, held at float32. Saves and deletes of `MJ: Entity Record Documents` rows — local, or on another server via `remote-invalidate` — are applied to the loaded index **row by row**; the index is never thrown away because one row changed. Remote changes use the broadcast record when the host opts the entity into record-data broadcast, otherwise only the changed rows are re-read (batched). Once the TTL (default 15 minutes) passes, the index keeps serving while it reloads in the background. Call `SimpleVectorServiceProvider.InvalidateIndex(entityDocumentId)` only after writing `VectorJSON` by a path that bypasses `BaseEntity` (raw SQL, external tools); it forces the next query to reload first.
+**Incrementally maintained cache:** one loaded index per `EntityDocumentID`, held at float32. Saves and deletes of `MJ: Entity Record Documents` rows — local, or on another server via `remote-invalidate` — are applied to the loaded index **row by row**; the index is never thrown away because one row changed. Remote changes use the broadcast record when the host opts the entity into record-data broadcast, otherwise only the changed rows are re-read (batched), once per user an index was loaded as, and each read is applied only to that user's indexes. Once the TTL (default 15 minutes) passes, the index keeps serving while it reloads in the background. Call `SimpleVectorServiceProvider.InvalidateIndex(entityDocumentId)` only after writing `VectorJSON` by a path that bypasses `BaseEntity` (raw SQL, external tools); it forces the next query to reload first, even if a load was already running when you called it.
 
 **Read-only:** ingestion methods (`CreateRecord`, `UpdateRecord`, etc.) throw via the `unsupported()` path. The vector-sync pipeline writes `EntityRecordDocument.VectorJSON` directly; this driver just rehydrates from those rows.
 

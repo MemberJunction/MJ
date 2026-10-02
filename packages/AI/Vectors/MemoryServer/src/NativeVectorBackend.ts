@@ -100,12 +100,17 @@ export class NativeVectorBackend extends BaseSingleton<NativeVectorBackend> {
     if (this.loadAttempted) return this.module !== null;
     this.loadAttempted = true;
     try {
-      const requireFromHere = createRequire(import.meta.url);
-      this.module = requireFromHere('usearch') as UsearchModule;
+      this.module = this.RequireUsearch();
     } catch (e) {
       LogStatus(`Vector acceleration: native usearch backend unavailable, using JS kernels (${e instanceof Error ? e.message : String(e)})`);
     }
     return this.module !== null;
+  }
+
+  /** Resolves the usearch module. Throws when it is not installed or its binary cannot load. */
+  protected RequireUsearch(): UsearchModule {
+    const requireFromHere = createRequire(import.meta.url);
+    return requireFromHere('usearch') as UsearchModule;
   }
 
   /** True when exact native search can serve this job (synchronous check). */
@@ -326,13 +331,14 @@ export class NativeVectorBackend extends BaseSingleton<NativeVectorBackend> {
     const sliceStart = Date.now();
     let row = startRow;
     try {
-      while (row < snapshot.RowCount && Date.now() - sliceStart < sliceMs) {
+      // At least one chunk per slice, so a build always progresses (even with BuildSliceMs 0).
+      do {
         const end = Math.min(snapshot.RowCount, row + ANN_BUILD_CHUNK_ROWS);
         const liveRows: number[] = [];
         for (let r = row; r < end; r++) if (snapshot.Live[r] === 1) liveRows.push(r);
         if (liveRows.length > 0) this.addRows(state.Index, snapshot, liveRows);
         row = end;
-      }
+      } while (row < snapshot.RowCount && Date.now() - sliceStart < sliceMs);
     } catch (e) {
       LogError(`Vector acceleration: HNSW build failed, staying on exact search: ${e instanceof Error ? e.message : String(e)}`);
       this.annBuilds.delete(snapshot.StoreID);

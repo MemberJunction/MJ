@@ -168,3 +168,63 @@ describe('SearchRows precision specialisations', () => {
     }
   });
 });
+
+describe('SearchRows edge cases', () => {
+  it('throws for an unknown metric', () => {
+    expect(() => search(viewOf([[1, 0]]), [1, 0], 'nope' as DistanceMetric, 1)).toThrow(/Unknown distance metric: nope/);
+  });
+
+  it('drops NaN scores and rows below the threshold on float32 data, as on float64', () => {
+    const rows = [[1, 0], [Number.NaN, 0], [0, 1], [0.9, 0.1]];
+    for (const ArrayType of [Float32Array, Float64Array]) {
+      const base = viewOf(rows);
+      const data = ArrayType.from(base.Data);
+      const view: VectorRowsView = { ...base, Data: data, Norms: Float64Array.from(rows, (_, i) => SumOfSquares(data, i * 2, 2)) };
+      for (const metric of ['cosine', 'euclidean', 'dotproduct', 'manhattan'] as DistanceMetric[]) {
+        const all = search(view, [1, 0], metric, null);
+        expect(Array.from(all.Rows)).not.toContain(1); // the NaN row never scores
+        const threshold = all.Scores[1]; // keep exactly the two best rows
+        const kept = search(view, [1, 0], metric, null, threshold);
+        expect(Array.from(kept.Rows)).toEqual(Array.from(all.Rows.slice(0, 2)));
+      }
+    }
+  });
+
+  it('skips dead rows named in the candidate list, at both precisions', () => {
+    for (const ArrayType of [Float32Array, Float64Array]) {
+      const base = viewOf([[1, 0], [1, 0], [0, 1]], [1, 0, 1]);
+      const view: VectorRowsView = { ...base, Data: ArrayType.from(base.Data) };
+      expect(Array.from(search(view, [1, 0], 'euclidean', null, null, [1, 2]).Rows)).toEqual([2]);
+    }
+  });
+
+  it('scans only from RowStart, and clamps RowEnd to the row count, at both precisions', () => {
+    for (const ArrayType of [Float32Array, Float64Array]) {
+      const base = viewOf([[1, 0], [0, 1], [1, 1]]);
+      const view: VectorRowsView = { ...base, Data: ArrayType.from(base.Data) };
+      const result = SearchRows(view, {
+        Query: Float64Array.from([1, 0]), QueryNormSq: 1, Candidates: null, Metric: 'cosine', TopK: null, Threshold: null, RowStart: 1, RowEnd: 99,
+      });
+      expect(Array.from(result.Rows)).toEqual([2, 1]);
+      const fromStart = SearchRows(view, {
+        Query: Float64Array.from([1, 0]), QueryNormSq: 1, Candidates: null, Metric: 'cosine', TopK: 1, Threshold: null, RowEnd: 2,
+      });
+      expect(Array.from(fromStart.Rows)).toEqual([0]);
+    }
+  });
+});
+
+describe('MergeScoredRows', () => {
+  it('keeps every row, highest score first and ties by ascending row, when topK is null', () => {
+    const merged = MergeScoredRows([
+      { Rows: Int32Array.from([4, 1]), Scores: Float64Array.from([0.9, 0.5]) },
+      { Rows: Int32Array.from([2, 0]), Scores: Float64Array.from([0.9, 0.1]) },
+    ], null);
+    expect(Array.from(merged.Rows)).toEqual([2, 4, 1, 0]);
+    expect(Array.from(merged.Scores)).toEqual([0.9, 0.9, 0.5, 0.1]);
+  });
+
+  it('returns nothing for no parts', () => {
+    expect(MergeScoredRows([], 5).Rows.length).toBe(0);
+  });
+});

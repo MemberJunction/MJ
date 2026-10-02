@@ -26,6 +26,9 @@ import {
   VectorSearchJob,
 } from './VectorAccelerator';
 
+// Kept exported from this module too: callers have long imported it from here.
+export type { DistanceMetric } from './VectorKernels';
+
 /**
  * Construction options for {@link SimpleVectorService}.
  */
@@ -1371,11 +1374,8 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
       throw new Error(`Invalid k: ${k}. Must be between 1 and ${this.store.Size}`);
     }
 
+    // Non-empty: the k check above rejects an empty store.
     const rows = this.store.LiveRows();
-    if (rows.length === 0) {
-      throw new Error('No vectors loaded for clustering');
-    }
-
     const scorer = this.createScorer(metric);
     // Initialize centroids using K-Means++
     const centroids = this.initializeKMeansPlusPlus(rows, k, scorer);
@@ -1560,7 +1560,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * @private
    */
   private sameAssignments(oldAssignments: Int32Array, newAssignments: Int32Array): boolean {
-    if (oldAssignments.length !== newAssignments.length) return false;
+    // Both cover the same rows, so they always have the same length.
     for (let i = 0; i < newAssignments.length; i++) {
       if (oldAssignments[i] !== newAssignments[i]) return false;
     }

@@ -91,16 +91,18 @@ node scripts/benchmark.mjs 20000 1536 32
 
 Reports single-search latency for in-process JS, native, and worker paths, then the wall time and the **longest event-loop stall** while 32 searches run concurrently. The stall is the number that decides whether vector search slows down unrelated requests.
 
-One run on a 4-core Linux container (20,000 × 1,536 float32 vectors, top 10, default settings — 3 workers):
+Medians of three runs on an idle 4-core Linux container (20,000 × 1,536 float32 vectors, top 10, default settings — 3 workers):
 
 | Path | Single search | 32 concurrent: wall / longest stall |
 |---|---|---|
-| Before this package (old `Map` implementation, JS) | 84 ms | — |
-| In-process JS (packed storage) | 53 ms | 1,663 ms / 1,663 ms |
-| `FindNearest`, native on the calling thread | 7.6 ms | 275 ms / 275 ms |
-| `FindNearestAsync`, worker pool | 25 ms | 540 ms / **8 ms** |
+| Before this package (old `Map` implementation, JS) | 80 ms | 2,508 ms / 2,508 ms |
+| In-process JS (packed storage) | 65 ms | — |
+| `FindNearest`, native on the calling thread | 7.9 ms | — |
+| `FindNearestAsync`, worker pool | 21 ms | 670 ms / **13 ms** |
 
-A single worker search is slower than native on the calling thread, because each worker gives usearch a share of the cores rather than all of them. In exchange, the event loop stays responsive under load: while 32 searches run, no other request waits more than about 8 ms.
+A single worker search is slower than native on the calling thread, because each worker gives usearch a share of the cores rather than all of them. In exchange, the event loop stays responsive under load: while 32 searches run, no other request waits more than about 13 ms.
+
+Clustering moves the same way. DBSCAN over 2,500 × 384 vectors blocks the event loop for about 4.5 s in-process; through `DBSCANClusterAsync` on a worker, the longest stall is about 6 ms.
 
 ## Development
 
