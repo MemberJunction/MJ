@@ -496,6 +496,37 @@ describe('generatePluralName', () => {
   it('should handle capitalizeEntireWord option', () => {
     expect(GeneratePluralName('dog', { capitalizeEntireWord: true })).toBe('DOGS');
   });
+
+  it('should pluralize the last word of a multi-word name', () => {
+    expect(GeneratePluralName('Rubric Criterion', { capitalizeFirstLetterOnly: true })).toBe('Rubric Criteria');
+    expect(GeneratePluralName('Rubric Category', { capitalizeFirstLetterOnly: true })).toBe('Rubric Categories');
+    expect(GeneratePluralName('criterion')).toBe('criteria');
+    // Table names have no space. The last PascalCase segment pluralizes in place.
+    expect(GeneratePluralName('RubricCriterion', { capitalizeFirstLetterOnly: true })).toBe('RubricCriteria');
+    expect(GeneratePluralName('RubricCategory', { capitalizeFirstLetterOnly: true })).toBe('RubricCategories');
+  });
+
+  it('keeps the head verbatim so snake_case and camelCase do not collapse', () => {
+    const snake = GeneratePluralName('user_profile', { capitalizeFirstLetterOnly: true });
+    const camel = GeneratePluralName('userProfile', { capitalizeFirstLetterOnly: true });
+    expect(snake).toBe('user_Profiles');
+    expect(camel).toBe('userProfiles');
+    expect(`vw${snake}`).not.toBe(`vw${camel}`);
+    expect(`vw${snake}`).not.toBe('vwuserProfiles');
+  });
+
+  it('keeps a leading non-ASCII character on the head', () => {
+    const plural = GeneratePluralName('ÄrgerItem');
+    expect(plural.startsWith('Ä')).toBe(true);
+    expect(plural).toBe('ÄrgerItems');
+  });
+
+  it('preserves the tail case of a spaced name', () => {
+    expect(GeneratePluralName('Contact Person')).toBe('Contact People');
+    expect(GeneratePluralName('Contact Person')).not.toBe('Contact people');
+    expect(GeneratePluralName('my item')).toBe('my items');
+    expect(GeneratePluralName('my item', { capitalizeFirstLetterOnly: true })).toBe('my Items');
+  });
 });
 
 describe('getIrregularPlural', () => {
