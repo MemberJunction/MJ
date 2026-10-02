@@ -2,7 +2,41 @@
 
 Server evaluators for rubrics. An evaluator produces answers. `RubricScoring` in `@memberjunction/rubrics-base` is the only math.
 
+> **Start with the [Rubrics Guide](../../../guides/RUBRICS_GUIDE.md)** — the model, the five common tasks, tests, agents, and adopting rubrics in an application. This README is the package reference.
+
+
 ## Engine
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Caller as Caller (action, test oracle, self-check, sampling job, CLI)
+    participant Eng as RubricEngine
+    participant Ev as Evaluator (LLM / Agent / Deterministic)
+    participant Srv as Evaluation entity server
+    Caller->>Eng: EvaluateRecord(rubric, subject, context, evaluator)
+    Eng->>Eng: latest Published version (or versionId)
+    Eng->>Eng: content = input.content, or load the subject and ShapeContent
+    Eng->>Ev: answers for each leaf
+    Eng->>Srv: save Draft evaluation, then submit the answers
+    Srv->>Srv: RubricScoring.Compute — the only math
+    Srv-->>Eng: score, outcome, per-criterion results
+    Eng-->>Caller: { evaluationId, score, outcome, displayScore, criteria }
+    Note over Eng,Srv: An evaluator error is stored as a Failed evaluation,<br/>and EvaluateRecord throws with its message.
+```
+
+In server code, get an engine wired to a provider and a user:
+
+```typescript
+import { ProviderRubricEngine } from '@memberjunction/rubrics';
+
+const result = await ProviderRubricEngine(provider, contextUser).EvaluateRecord({
+    rubricName: 'Research answer',
+    subjectEntityName: 'MJ: AI Agent Runs',
+    subjectRecordId: runId,
+});
+```
+
 
 `RubricEngine` has its own `Instance`. It does not extend `BaseSingleton`.
 
@@ -23,7 +57,7 @@ It saves a Draft, submits it, and returns the computed result. A throw produces 
 - **Deterministic** — a rule on the criterion's evaluator config.
 - **Human** — `HumanRubricEvaluator.Start` creates a Draft evaluation and a task titled `Score <rubric>`. It does not score. `StartHumanEvaluation` constructs that class. The person answers in the form, and submit runs `RubricScoring`.
 
-`ShapeContent` returns `RubricSubjectContent`: `text`, `data`, and `files`. A caller may pass `content` on `Evaluate` and skip the lookup. Test runs use input, expected output, actual output, and result details. Agent runs use the final payload and the in-memory message. There is no turns column and no transcript column.
+Register a provider for your own entity with `RubricContentRegistry.Instance.Register(entityName, record => ({ text, data, files }))`; unregistered entities fall back to the record's readable columns. `ShapeContent` returns `RubricSubjectContent`: `text`, `data`, and `files`. A caller may pass `content` on `Evaluate` and skip the lookup. Test runs use input, expected output, actual output, and result details. Agent runs use the final payload and the in-memory message. There is no turns column and no transcript column.
 
 ## Actions
 

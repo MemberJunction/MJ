@@ -2,6 +2,9 @@
 
 UI-safe scoring and version classification for rubrics. Pure functions: no database and no Angular. The server and the author preview both call this package. Neither one keeps a second copy of the math.
 
+> **Start with the [Rubrics Guide](../../../guides/RUBRICS_GUIDE.md)** — the model, the five common tasks, tests, agents, and adopting rubrics in an application. This README is the package reference.
+
+
 ## Scoring
 
 `RubricScoring.Compute` scores a version snapshot and its answers. A levels answer uses the level's normalized value. A numeric answer maps the raw value across the scale's minimum and maximum, and inverts that when lower is better. A Percentage scale is a numeric scale named Percentage, or any numeric scale whose minimum is 0 and maximum is 100.
