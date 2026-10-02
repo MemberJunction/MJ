@@ -12,8 +12,11 @@ describe('evaluation form cohort', () => {
         expect(source).toContain('[SubjectEntityId]="Form.record.SubjectEntityID"');
         expect(source).toContain('[ViewerStatus]="Form.record.Status"');
         expect(source).toContain('[ViewerEvaluationId]="Form.record.ID"');
-        expect(source).toContain('evaluation-draft');
-        expect(source).toContain('fieldname^="Cohort"');
+        expect(source).toContain('hiddenFieldNames: [...HIDDEN_DRAFT_EVALUATION_FIELDS]');
+        expect(source).not.toContain('fieldname^="Cohort"');
+        expect(source).toContain("'CohortEvaluationCount'");
+        expect(source).toContain("'CohortMeanScore'");
+        expect(source).toContain("'DeviationFromCohortMean'");
         expect(source).not.toContain('SubjectRecordID=');
         expect(source).not.toContain('RubricVersionID=\'${this.record.RubricVersionID}\' AND ContextRecordID');
         expect(source).not.toMatch(/cohort\.map/);

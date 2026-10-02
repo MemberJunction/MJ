@@ -6,20 +6,37 @@ import { BaseFormComponent, BaseFormPanel, BaseFormPolicy, BaseFormsModule, type
 import { RubricComparisonMatrixComponent, RubricResultComponent, bandFromRow, nodeFromRow, scaleFromRow, type RubricFormAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { MJRubricEvaluationFormComponent } from '../../generated/Entities/MJRubricEvaluation/mjrubricevaluation.form.component';
 
+/** Cohort figures stay hidden until the viewer's own evaluation leaves Draft. */
+export const HIDDEN_DRAFT_EVALUATION_FIELDS = [
+    'CohortEvaluationCount',
+    'CohortScoredCount',
+    'CohortPassedCount',
+    'CohortMeanScore',
+    'CohortMinScore',
+    'CohortMaxScore',
+    'CohortScoreStdDev',
+    'CohortHumanCount',
+    'CohortHumanMeanScore',
+    'CohortAICount',
+    'CohortAIMeanScore',
+    'DeviationFromCohortMean',
+] as const;
+
 /** Evaluation form. Loads the stored result and the cohort, and shows the read-only widgets. */
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Evaluations')
 @Component({
     standalone: false,
     selector: 'mj-rubric-evaluation-form',
     templateUrl: '../../generated/Entities/MJRubricEvaluation/mjrubricevaluation.form.component.html',
-    host: { '[class.evaluation-draft]': 'record?.Status === "Draft"' },
-    styles: [`
-        :host.evaluation-draft mj-form-field[fieldname^="Cohort"],
-        :host.evaluation-draft mj-form-field[fieldname="DeviationFromCohortMean"] { display: none; }
-    `],
 })
 export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationFormComponent {
     public override record!: MJRubricEvaluationEntity;
+
+    public override get formContext() {
+        const context = super.formContext;
+        if (this.record?.Status !== 'Draft') return context;
+        return { ...context, hiddenFieldNames: [...HIDDEN_DRAFT_EVALUATION_FIELDS] };
+    }
     public Loading = true;
     public Result: RubricScoreResult | null = null;
     public Version: RubricVersionSnapshot | null = null;
