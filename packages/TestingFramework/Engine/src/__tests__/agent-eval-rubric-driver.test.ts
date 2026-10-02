@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { AgentEvalDriver, type AgentEvalConfig } from '../drivers/AgentEvalDriver.js';
+import { AgentEvalDriver, type AgentEvalConfig, type AgentRubricResolution } from '../drivers/AgentEvalDriver.js';
 import type { DriverExecutionContext, SuiteFixtureContext } from '../types.js';
 
 class SuiteProbe extends AgentEvalDriver {
@@ -29,7 +29,7 @@ class SuiteProbe extends AgentEvalDriver {
         return [];
     }
 
-    protected override async LoadAgentEvaluationRubric(): Promise<string | undefined> {
+    protected override async LoadAgentEvaluationRubric(): Promise<AgentRubricResolution | undefined> {
         return undefined;
     }
 
@@ -101,7 +101,7 @@ describe('agent eval rubric driver', () => {
                 return { suites: [] };
             }
 
-            protected override async LoadAgentEvaluationRubric(): Promise<string | undefined> {
+            protected override async LoadAgentEvaluationRubric(): Promise<AgentRubricResolution | undefined> {
                 return undefined;
             }
 
@@ -191,7 +191,7 @@ describe('agent eval rubric driver', () => {
             protected override async LoadSuites(): Promise<{ suiteId?: string; suites: [] }> {
                 return { suites: [] };
             }
-            protected override async LoadAgentEvaluationRubric(): Promise<{ rubricId: string; evaluatorConfig?: Record<string, unknown> }> {
+            protected override async LoadAgentEvaluationRubric(): Promise<AgentRubricResolution | undefined> {
                 return {
                     rubricId: 'agent-rubric',
                     evaluatorConfig: { EvaluatorType: 'AIPrompt', PromptName: 'Rubric Judge - Sage' },
@@ -221,4 +221,3 @@ describe('agent eval rubric driver', () => {
         }]);
     });
 });
-

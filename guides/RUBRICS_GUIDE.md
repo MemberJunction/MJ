@@ -290,6 +290,8 @@ graph TD
   used as given.
 - When a rubric resolves and the test has no `rubric` oracle, the driver adds one. It always gates the test's
   status, and it contributes to the score when `scoringWeights` is absent or already names `rubric`.
+- When the rubric comes from the agent's default link, the link's `EvaluatorConfig` (its judge, mode and model)
+  is used. An explicit `rubric` oracle's own `evaluator` wins over the link's settings.
 - A test that already has an `llm-judge` oracle keeps it, and the agent's default rubric is not added beside
   it. Rubrics named on the run, the test, or the suite are still added.
 
@@ -400,7 +402,7 @@ is Deterministic. An empty config is LLM SinglePass with the default judge. `Pro
 judge, or the Decision prompt), `SystemPromptID` / `SystemPromptName`, `CriterionPromptID` /
 `CriterionPromptName`, `ModelID`, `ModelSelection`, `AgentID`, `Mode`, `Samples`, and `Extensions` are passed
 to the evaluator as its settings. Every core agent's link names a judge written for it; see
-[The shipped judges](#the-shipped-judges). Self-check and the sampling job both honor the whole selection.
+[The shipped judges](#the-shipped-judges). Agent eval tests, self-check and the sampling job all honor the whole selection.
 `PassThreshold` on the link overrides the version's threshold for that purpose.
 
 ---

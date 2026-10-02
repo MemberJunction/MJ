@@ -28,6 +28,22 @@ export interface AgentRubricResolution {
 }
 
 /**
+ * Extract output payload from an agent run.
+ * Parses the FinalPayload string property; falls back to `{ message: agentRun.Message }`
+ * for conversational agents whose output sits in Message, or `{}` when both are empty.
+ */
+export function ExtractOutputPayload(agentRun: { FinalPayload?: string | null; Message?: string | null }): Record<string, unknown> {
+    const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
+    if (finalPayloadObject && Object.keys(finalPayloadObject).length > 0) {
+        return finalPayloadObject;
+    }
+    if (agentRun.Message) {
+        return { message: agentRun.Message };
+    }
+    return finalPayloadObject ?? {};
+}
+
+/**
  * Configuration for Agent Evaluation tests.
  */
 export interface AgentEvalConfig {
@@ -767,17 +783,8 @@ export class AgentEvalDriver extends BaseTestDriver {
      * Parses the FinalPayload string property to get the agent's output for chaining to next turn.
      * @private
      */
-    private extractOutputPayload(agentRun: MJAIAgentRunEntity): Record<string, unknown> {
-        // Parse the FinalPayload string property (which exists on base MJAIAgentRunEntity)
-        // SafeJSONParse returns the parsed object or an empty object if parsing fails
-        const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
-        if (finalPayloadObject && Object.keys(finalPayloadObject).length > 0) {
-            return finalPayloadObject;
-        }
-        if (agentRun.Message) {
-            return { message: agentRun.Message };
-        }
-        return finalPayloadObject ?? {};
+    protected extractOutputPayload(agentRun: MJAIAgentRunEntity): Record<string, unknown> {
+        return ExtractOutputPayload(agentRun);
     }
 
 
@@ -880,16 +887,14 @@ export class AgentEvalDriver extends BaseTestDriver {
         const agentRubricRaw = context.options.agentEvaluationRubricId
             ? { rubricId: context.options.agentEvaluationRubricId }
             : await this.LoadAgentEvaluationRubric(context, config.agentId);
-        const agentRubricId = typeof agentRubricRaw === 'string' ? agentRubricRaw : agentRubricRaw?.rubricId;
-        const agentEvaluatorConfig = typeof agentRubricRaw === 'object' && agentRubricRaw !== null ? agentRubricRaw.evaluatorConfig : undefined;
         const choice = ResolveRubric({
             run: context.options.rubricId ? { rubricId: context.options.rubricId, versionId: context.options.rubricVersionId } : undefined,
             oracle: named,
             testRubricId: context.test.RubricID,
             suites: loaded.suites,
             suiteId: loaded.suiteId,
-            agentRubricId,
-            agentEvaluatorConfig,
+            agentRubricId: agentRubricRaw?.rubricId,
+            agentEvaluatorConfig: agentRubricRaw?.evaluatorConfig,
         });
         const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
         const suiteRunId = (context.testRun as { TestSuiteRunID?: string }).TestSuiteRunID || context.testRun.ID;
@@ -946,20 +951,14 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /** The agent's Active default Evaluation rubric, when this test is an agent eval. */
-    protected async LoadAgentEvaluationRubric(context: DriverExecutionContext, agentId: string): Promise<AgentRubricResolution | string | undefined> {
+    protected async LoadAgentEvaluationRubric(context: DriverExecutionContext, agentId: string): Promise<AgentRubricResolution | undefined> {
         const rows = await this.ReadMany(context, 'MJ: AI Agent Rubrics', `AgentID='${agentId}' AND Purpose='Evaluation' AND Status='Active'`);
         const chosen = rows.find(row => row.IsDefault === true || row.IsDefault === 1) ?? rows[0];
         if (!chosen || chosen.RubricID == null) return undefined;
-        let evaluatorConfig: Record<string, unknown> | string | undefined;
-        if (typeof chosen.EvaluatorConfig === 'string') {
-            try {
-                evaluatorConfig = JSON.parse(chosen.EvaluatorConfig) as Record<string, unknown>;
-            } catch {
-                evaluatorConfig = chosen.EvaluatorConfig;
-            }
-        } else if (typeof chosen.EvaluatorConfig === 'object' && chosen.EvaluatorConfig !== null) {
-            evaluatorConfig = chosen.EvaluatorConfig as Record<string, unknown>;
-        }
+        const rawConfig = chosen.EvaluatorConfig;
+        const evaluatorConfig = (typeof rawConfig === 'string' || (typeof rawConfig === 'object' && rawConfig !== null))
+            ? (rawConfig as Record<string, unknown> | string)
+            : undefined;
         return {
             rubricId: String(chosen.RubricID),
             evaluatorConfig,

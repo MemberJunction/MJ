@@ -30,12 +30,13 @@ Sub-directory `CLAUDE.md` files extend this root guide with topic-specific rules
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 
-### 1. COMMIT AND PUSH BY DEFAULT
+### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
 
-- **Always commit and push completed, tested work unless the user explicitly says otherwise in the session**
-- Ensure all tests and builds pass before committing and pushing
-- Never commit broken work-in-progress
-- Never push to `next` directly; always push feature branches to their tracking remote
+- **NEVER run `git commit` without the user explicitly asking you to**
+- **Each commit requires ONE-TIME explicit approval** - don't assume ongoing permission
+- **NEVER ask to commit** - wait for the user to request it
+- **ONLY commit what is staged** - never modify or add to staged changes
+- **NEVER commit work-in-progress** that isn't staged by the user
 
 ### 2. NO `any` TYPES - EVER
 
