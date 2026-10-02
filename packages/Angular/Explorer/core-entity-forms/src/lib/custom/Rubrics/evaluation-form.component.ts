@@ -3,7 +3,7 @@ import { RunView } from '@memberjunction/core';
 import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPanel, BaseFormPolicy, BaseFormsModule, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
-import { RubricComparisonMatrixComponent, RubricResultComponent, bandFromRow, nodeFromRow, scaleFromRow, type MatrixColumn, type RubricFormAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { RubricComparisonMatrixComponent, RubricResultComponent, bandFromRow, nodeFromRow, scaleFromRow, type RubricFormAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { MJRubricEvaluationFormComponent } from '../../generated/Entities/MJRubricEvaluation/mjrubricevaluation.form.component';
 
 /** Evaluation form. Loads the stored result and the cohort, and shows the read-only widgets. */
@@ -19,8 +19,6 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
     public Result: RubricScoreResult | null = null;
     public Version: RubricVersionSnapshot | null = null;
     public Answers: RubricFormAnswer[] = [];
-    public Columns: MatrixColumn[] = [];
-    public Keys: string[] = [];
 
     public override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
@@ -37,7 +35,6 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
                 evidence: row.Evidence == null ? undefined : String(row.Evidence),
             }));
             const criterionLabel = (row: Record<string, unknown>) => String(row.Criterion || row.CriterionKey || row.CriterionID);
-            this.Keys = [...new Set(scores.map(criterionLabel))];
             this.Result = {
                 normalizedScore: this.record.NormalizedScore ?? null,
                 completeness: this.record.Completeness ?? null,
@@ -77,19 +74,6 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
                     bands,
                 };
             }
-            let cohortFilter = `SubjectRecordID='${this.record.SubjectRecordID}' AND RubricVersionID='${this.record.RubricVersionID}'`;
-            if (this.record.ContextRecordID) cohortFilter += ` AND ContextRecordID='${this.record.ContextRecordID}'`;
-            const cohort = await this.rows('MJ: Rubric Evaluations', cohortFilter);
-            this.Columns = await Promise.all(cohort.map(async row => {
-                const cells = await this.rows('MJ: Rubric Evaluation Scores', `EvaluationID='${row.ID}'`);
-                return {
-                    id: String(row.ID),
-                    name: String(row.EvaluatorType ?? 'Evaluation'),
-                    evaluatorType: (row.EvaluatorType ?? 'Human') as MatrixColumn['evaluatorType'],
-                    status: String(row.Status ?? ''),
-                    scores: cells.map(cell => ({ key: criterionLabel(cell), normalizedScore: cell.NormalizedScore == null ? null : Number(cell.NormalizedScore), rationale: cell.Rationale == null ? '' : String(cell.Rationale) })),
-                };
-            }));
         } finally {
             this.Loading = false;
         }
@@ -162,7 +146,7 @@ export class RubricEvaluationResultPanel extends BaseFormPanel<MJRubricEvaluatio
         @if (Form.Loading) {
           <p>Loading the cohort...</p>
         } @else {
-          <mj-rubric-comparison-matrix [Keys]="Form.Keys" [Columns]="Form.Columns"></mj-rubric-comparison-matrix>
+          <mj-rubric-comparison-matrix [Provider]="Form.ProviderToUse" [RubricId]="Form.record.RubricID" [Major]="Form.record.RubricMajorVersion" [SubjectEntityId]="Form.record.SubjectEntityID"></mj-rubric-comparison-matrix>
         }
       </mj-collapsible-panel>
     `,
