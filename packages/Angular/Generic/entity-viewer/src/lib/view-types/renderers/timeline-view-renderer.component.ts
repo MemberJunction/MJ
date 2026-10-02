@@ -8,7 +8,7 @@ import {
   ViewEncapsulation,
   inject,
 } from '@angular/core';
-import { EntityInfo, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldTSType, IsDateOnlySQLType } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
@@ -542,6 +542,9 @@ export class TimelineViewRendererComponent
     group.DateFieldName = this.SelectedTimelineDateField;
     group.IdFieldName = 'ID';
     group.GroupLabel = this._entity.Name;
+    // The records are plain `simple` rows with no EntityInfo of their own: the group needs the
+    // entity's metadata to know a SQL `date` field is a calendar day, not an instant.
+    group.EntityInfo = this._entity;
 
     const descField = this.findDescriptionField();
     if (descField) {
@@ -553,14 +556,25 @@ export class TimelineViewRendererComponent
       group.SubtitleFieldName = subtitleField;
     }
 
+    const imageField = this.findImageField();
     group.CardConfig = {
       collapsible: true,
       defaultExpanded: false,
       showDate: true,
-      dateFormat: 'MMM d, yyyy h:mm a',
+      // A calendar day has no time: "12:00 AM" on it would be invented.
+      dateFormat: this.isDateOnlyField(this.SelectedTimelineDateField) ? 'MMM d, yyyy' : 'MMM d, yyyy h:mm a',
+      ...(imageField
+        ? { imageField, imagePosition: 'left' as const, imageSize: 'small' as const }
+        : {}),
     };
 
     this.TimelineGroups = [group];
+  }
+
+  /** Whether the named field of the current entity is a SQL `date` column (a calendar day). */
+  private isDateOnlyField(fieldName: string): boolean {
+    const field = this._entity?.Fields.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
+    return IsDateOnlySQLType(field?.Type);
   }
 
   /**
@@ -635,6 +649,17 @@ export class TimelineViewRendererComponent
 
     const firstOther = fields.find((f) => f.Name !== excludeField);
     return firstOther?.Name || null;
+  }
+
+  /** Image field (ExtendedType='Image') so timeline cards crop a thumbnail, same as grid/cards. */
+  private findImageField(): string | null {
+    if (!this._entity) {
+      return null;
+    }
+    const match = this._entity.Fields.find(
+      (f) => f.ExtendedType === 'Image' && f.TSType === EntityFieldTSType.String,
+    );
+    return match?.Name ?? null;
   }
 }
 

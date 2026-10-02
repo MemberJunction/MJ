@@ -8,7 +8,7 @@
  * something to paper over.
  */
 import { simpleGit } from 'simple-git';
-import { mergeMainIntoNext, LOCKFILE } from './back-merge.mjs';
+import { mergeMainIntoNext, LOCKFILE, nextPushRemote } from './back-merge.mjs';
 
 const git = simpleGit();
 const { lockfileConflicted } = await mergeMainIntoNext(git);
@@ -21,5 +21,6 @@ if (lockfileConflicted) {
   process.exit(1);
 }
 
-console.log(`\nPushing to origin/next...`);
-await git.push('origin', 'HEAD:next');
+const remote = nextPushRemote();
+console.log(`\nPushing to ${remote}/next...`);
+await git.push(remote, 'HEAD:next');

@@ -38,9 +38,17 @@ vi.mock('../lib/config/react-debug.config', () => ({
   },
 }));
 
-vi.mock('../lib/hooks/antd-dropdown-position-hook', () => ({
-  createAntdDropdownPositionHook: vi.fn().mockReturnValue({}),
-}));
+vi.mock('../lib/hooks/antd-dropdown-position-hook', () => {
+  // One mock instance under both names. A getter would be the shorter form, but `this` inside an
+  // object literal passed to vi.mock is contextually typed as the mock's return type, not the
+  // literal, so it cannot see its own sibling property. Only surfaces in packages whose build
+  // type-checks test files (ngc does; most packages' tsc configs do not).
+  const CreateAntdDropdownPositionHook = vi.fn().mockReturnValue({});
+  return {
+    CreateAntdDropdownPositionHook,
+    createAntdDropdownPositionHook: CreateAntdDropdownPositionHook,
+  };
+});
 
 import { ReactBridgeService } from '../lib/services/react-bridge.service';
 

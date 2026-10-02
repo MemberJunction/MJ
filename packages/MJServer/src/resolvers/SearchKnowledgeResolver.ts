@@ -32,6 +32,9 @@ export class SearchKnowledgeResultItem {
     @Field()
     EntityName: string;
 
+    @Field({ nullable: true })
+    EntityDisplayName?: string;
+
     @Field()
     RecordID: string;
 
@@ -461,6 +464,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
             Results: result.Results.map((r: SearchEngineResultItem) => ({
                 ID: r.ID,
                 EntityName: r.EntityName,
+                EntityDisplayName: r.EntityDisplayName,
                 RecordID: r.RecordID,
                 SourceType: r.SourceType,
                 ResultType: r.ResultType,

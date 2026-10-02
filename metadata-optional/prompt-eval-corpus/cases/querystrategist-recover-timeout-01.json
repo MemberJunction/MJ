@@ -1,0 +1,47 @@
+{
+  "id": "querystrategist-recover-timeout-01",
+  "agent": "Query Strategist",
+  "tags": [
+    "error-recovery",
+    "param-fidelity"
+  ],
+  "description": "The query timed out. The correction should bound the result set rather than resubmitting the same unbounded query.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Show me all conversation messages."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Run Ad-hoc Query FAILED: Query timeout after 30s. The table has ~4.2M rows. Consider limiting the result set."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Run Ad-hoc Query",
+            "params": {
+              "Query": {
+                "matcher": "nonEmpty"
+              }
+            }
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        }
+      }
+    ]
+  }
+}

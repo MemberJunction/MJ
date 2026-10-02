@@ -21,7 +21,7 @@ import type { DatabasePlatform } from '@memberjunction/sql-dialect';
  *   The legacy `DB_TYPE` name is no longer consulted; rename your `.env`.
  * @throws Error when the variable is set to an unrecognized non-empty value.
  */
-export function resolveDbPlatformFromEnv(envVarName: string = 'DB_PLATFORM'): DatabasePlatform | undefined {
+export function ResolveDbPlatformFromEnv(envVarName: string = 'DB_PLATFORM'): DatabasePlatform | undefined {
     const raw = process.env[envVarName];
     if (raw === undefined) return undefined;
     const normalized = raw.trim().toLowerCase();
@@ -33,4 +33,9 @@ export function resolveDbPlatformFromEnv(envVarName: string = 'DB_PLATFORM'): Da
         `Invalid ${envVarName} value '${raw}'. Must be 'sqlserver' or 'postgresql' (case-insensitive). ` +
             `Legacy aliases ('mssql', 'postgres', 'pg') and the legacy env var DB_TYPE are no longer supported.`,
     );
+}
+
+/** @deprecated Use {@link ResolveDbPlatformFromEnv}. */
+export function resolveDbPlatformFromEnv(envVarName: string = 'DB_PLATFORM'): DatabasePlatform | undefined {
+    return ResolveDbPlatformFromEnv(envVarName);
 }

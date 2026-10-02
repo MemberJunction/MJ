@@ -21,7 +21,7 @@ vi.mock('../adapters/RepoFetcher.js', () => ({
   },
 }));
 
-import { createDistributionBundle } from '../distribution/createBundle.js';
+import { CreateDistributionBundle } from '../distribution/createBundle.js';
 
 let fixtureDir: string;
 
@@ -75,7 +75,7 @@ describe('createDistributionBundle', () => {
     const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-out-'));
     const out = path.join(outDir, 'dist.zip');
     try {
-      const result = await createDistributionBundle({ SourceDir: fixtureDir, Out: out });
+      const result = await CreateDistributionBundle({ SourceDir: fixtureDir, Out: out });
       expect(result.Source).toBe('local');
       expect(result.EntryCount).toBeGreaterThan(0);
       await expect(stat(out)).resolves.toBeDefined();
@@ -95,7 +95,7 @@ describe('createDistributionBundle', () => {
     const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-mig-'));
     const out = path.join(outDir, 'dist.zip');
     try {
-      await createDistributionBundle({ SourceDir: fixtureDir, Out: out, IncludeMigrations: true });
+      await CreateDistributionBundle({ SourceDir: fixtureDir, Out: out, IncludeMigrations: true });
       const names = new Set(new AdmZip(out).getEntries().map((e) => e.entryName));
       expect(names.has('migrations/v5/V202601010000__x.sql')).toBe(true);
       expect(names.has('migrations-pg/v5/V202601010000__x.sql')).toBe(true);
@@ -108,7 +108,7 @@ describe('createDistributionBundle', () => {
     const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-pg-'));
     const out = path.join(outDir, 'dist.zip');
     try {
-      await createDistributionBundle({ SourceDir: fixtureDir, Out: out, IncludeMigrations: true, MigrationPlatform: 'postgresql' });
+      await CreateDistributionBundle({ SourceDir: fixtureDir, Out: out, IncludeMigrations: true, MigrationPlatform: 'postgresql' });
       const names = new Set(new AdmZip(out).getEntries().map((e) => e.entryName));
       expect(names.has('migrations-pg/v5/V202601010000__x.sql')).toBe(true);
       expect([...names].some((n) => n.startsWith('migrations/'))).toBe(false);
@@ -123,7 +123,7 @@ describe('createDistributionBundle', () => {
     const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-ref-'));
     const out = path.join(outDir, 'dist.zip');
     try {
-      const result = await createDistributionBundle({ Ref: 'v1.0.0', RepoUrl: 'url', Out: out });
+      const result = await CreateDistributionBundle({ Ref: 'v1.0.0', RepoUrl: 'url', Out: out });
       expect(mockFetchPaths).toHaveBeenCalledWith(expect.objectContaining({ Ref: 'v1.0.0', RepoUrl: 'url' }));
       expect(result.Source).toBe('fetch');
       expect(result.UsedFallback).toBe(true);
@@ -135,14 +135,14 @@ describe('createDistributionBundle', () => {
   });
 
   it('throws when neither SourceDir nor Ref is provided', async () => {
-    await expect(createDistributionBundle({ Out: '/tmp/none.zip' })).rejects.toThrow(/SourceDir or Ref/);
+    await expect(CreateDistributionBundle({ Out: '/tmp/none.zip' })).rejects.toThrow(/SourceDir or Ref/);
   });
 
   it('includes the Claude pack at the bundle root by default', async () => {
     const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-pack-'));
     const out = path.join(outDir, 'dist.zip');
     try {
-      await createDistributionBundle({ SourceDir: fixtureDir, Out: out });
+      await CreateDistributionBundle({ SourceDir: fixtureDir, Out: out });
       const names = new Set(new AdmZip(out).getEntries().map((e) => e.entryName));
       expect(names.has('CLAUDE.md')).toBe(true);
       expect(names.has('.claude/mj/VERSION')).toBe(true);
@@ -156,7 +156,7 @@ describe('createDistributionBundle', () => {
     const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-nopack-'));
     const out = path.join(outDir, 'dist.zip');
     try {
-      await createDistributionBundle({ SourceDir: fixtureDir, Out: out, IncludeClaudePack: false });
+      await CreateDistributionBundle({ SourceDir: fixtureDir, Out: out, IncludeClaudePack: false });
       const names = new Set(new AdmZip(out).getEntries().map((e) => e.entryName));
       expect(names.has('CLAUDE.md')).toBe(false);
       expect([...names].some((n) => n.startsWith('.claude/'))).toBe(false);
@@ -174,7 +174,7 @@ describe('createDistributionBundle', () => {
     const outDir = await mkdtemp(path.join(tmpdir(), 'mj-bundle-ref-nopack-'));
     const out = path.join(outDir, 'dist.zip');
     try {
-      await createDistributionBundle({ Ref: 'v1.0.0', RepoUrl: 'url', Out: out, IncludeClaudePack: false });
+      await CreateDistributionBundle({ Ref: 'v1.0.0', RepoUrl: 'url', Out: out, IncludeClaudePack: false });
       const fetchedPaths = mockFetchPaths.mock.calls.at(-1)?.[0].Paths;
       expect(fetchedPaths).toBeDefined();
       expect(fetchedPaths).not.toContain('templates/claude-pack/dist');

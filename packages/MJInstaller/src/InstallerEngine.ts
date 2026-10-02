@@ -43,7 +43,8 @@ import { SmokeTestPhase } from './phases/SmokeTestPhase.js';
 import { ClaudePackDoctor } from './diagnostics/ClaudePackDoctor.js';
 import { InstallPlan, type CreatePlanInput, type RunOptions, type DoctorOptions, type InstallResult } from './models/InstallPlan.js';
 import { InstallState } from './models/InstallState.js';
-import { InstallConfigDefaults, resolveFromEnvironment, loadConfigFile, mergeConfigs, type PartialInstallConfig } from './models/InstallConfig.js';
+import { InstallConfigDefaults, ResolveFromEnvironment, LoadConfigFile, MergeConfigs, type PartialInstallConfig } from './models/InstallConfig.js';
+import { PackageManagerCommands } from './models/PackageManager.js';
 import { EventLogger } from './logging/EventLogger.js';
 import { ReportGenerator, type ReportData, type ServiceLogCapture } from './logging/ReportGenerator.js';
 import { FileSystemAdapter } from './adapters/FileSystemAdapter.js';
@@ -117,6 +118,11 @@ export class InstallerEngine {
    * then consumed by all subsequent phases (database, migrate, smoke test, etc.).
    */
   private resolvedConfig: PartialInstallConfig = {};
+
+  /** Package-manager commands derived from the resolved config (pnpm default). */
+  private get packageManager(): PackageManagerCommands {
+    return PackageManagerCommands.For(this.resolvedConfig.PackageManager);
+  }
 
   /**
    * Concrete release tag resolved by the scaffold phase this run. Pinned into
@@ -245,7 +251,7 @@ export class InstallerEngine {
     // ── Config chain: Defaults → Env vars → Config file → Plan → RunOptions ──
     const configSources: PartialInstallConfig[] = [plan.Config];
 
-    const envConfig = resolveFromEnvironment();
+    const envConfig = ResolveFromEnvironment();
     if (Object.keys(envConfig).length > 0) {
       configSources.push(envConfig);
       this.emitter.Emit('log', {
@@ -256,7 +262,7 @@ export class InstallerEngine {
     }
 
     if (options?.ConfigFile) {
-      const fileConfig = await loadConfigFile(options.ConfigFile);
+      const fileConfig = await LoadConfigFile(options.ConfigFile);
       configSources.push(fileConfig);
       this.emitter.Emit('log', {
         Type: 'log',
@@ -269,7 +275,7 @@ export class InstallerEngine {
       configSources.push(options.Config);
     }
 
-    const config = mergeConfigs(...configSources);
+    const config = MergeConfigs(...configSources);
 
     // ── Prompt safety net (non-interactive mode) ──────────────────────────
     // In --yes mode, install a catch-all listener that auto-resolves any
@@ -414,8 +420,10 @@ export class InstallerEngine {
    * Run diagnostics on an existing or target install directory.
    *
    * Performs preflight checks (Node version, disk space, SQL connectivity, etc.)
-   * and known-issue detection. Does **not** modify any files. Results are
-   * returned as a {@link Diagnostics} object and also emitted as `diagnostic` events.
+   * and known-issue detection. Creates `targetDir` if it does not already exist
+   * (preflight needs it to exist to probe the package manager from it), but
+   * changes nothing else. Results are returned as a {@link Diagnostics} object
+   * and also emitted as `diagnostic` events.
    *
    * @param targetDir - Absolute path to the directory to diagnose.
    * @param options - Optional doctor options (currently reserved for future use).
@@ -478,6 +486,20 @@ export class InstallerEngine {
       (check, status, message, suggestedFix) => this.emitDiagnostic(check, status, message, suggestedFix)
     );
     await claudePackDoctor.RunChecks(targetDir, diagnostics);
+
+    // Run runtime and AI provider configuration checks
+    await this.runRuntimeAndAIChecks(targetDir, diagnostics);
+
+    // Filter by scope if requested
+    if (options?.Scope) {
+      const rawScopes = Array.isArray(options.Scope) ? options.Scope : [options.Scope];
+      const requestedScopes = rawScopes.flatMap((s) => s.split(',')).map((s) => s.toLowerCase().trim()).filter(Boolean);
+      if (requestedScopes.length > 0) {
+        diagnostics.Checks = diagnostics.Checks.filter((c) =>
+          requestedScopes.includes((c.Scope ?? 'install').toLowerCase())
+        );
+      }
+    }
 
     // Generate diagnostic report if requested
     if (generateReport) {
@@ -673,6 +695,7 @@ export class InstallerEngine {
     await this.migrate.Run({
       Dir: plan.Dir,
       Config: this.resolvedConfig,
+      PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
       VersionTag: plan.Tag,
     });
@@ -696,11 +719,12 @@ export class InstallerEngine {
     return { Warnings: warnings };
   }
 
-  /** Run `npm install` and `npm run build` to install and compile all packages. */
+  /** Run the configured package manager's install and build to compile all packages. */
   private async executeDependencies(plan: InstallPlan): Promise<PhaseExecutionResult> {
     const result = await this.dependency.Run({
       Dir: plan.Dir,
       Tag: plan.Tag,
+      PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
     });
 
@@ -714,6 +738,7 @@ export class InstallerEngine {
       Emitter: this.emitter,
       Fast: fast,
       VersionTag: plan.Tag,
+      PackageManager: this.packageManager.Name,
     });
 
     const warnings: string[] = [];
@@ -729,6 +754,7 @@ export class InstallerEngine {
     const result = await this.smokeTest.Run({
       Dir: plan.Dir,
       Config: this.resolvedConfig,
+      PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
     });
 
@@ -1099,12 +1125,150 @@ export class InstallerEngine {
     });
   }
 
+  /**
+   * Run runtime and AI configuration checks (encryption keys, AI provider credentials).
+   */
+  private async runRuntimeAndAIChecks(
+    targetDir: string,
+    diagnostics: Diagnostics
+  ): Promise<void> {
+    const fs = new FileSystemAdapter();
+    const envCandidates = [
+      path.join(targetDir, '.env'),
+      path.join(targetDir, 'packages', 'MJAPI', '.env'),
+      path.join(targetDir, 'apps', 'MJAPI', '.env'),
+    ];
+
+    let combinedEnv = '';
+    for (const envPath of envCandidates) {
+      if (await fs.FileExists(envPath)) {
+        try {
+          combinedEnv += '\n' + (await fs.ReadText(envPath));
+        } catch {
+          // Ignore read errors
+        }
+      }
+    }
+
+    // Helper to get variable from process.env or .env files
+    const getVar = (name: string): string => {
+      if (process.env[name]) return process.env[name]!;
+      const match = combinedEnv.match(new RegExp(`^\\s*${name}\\s*=\\s*["']?([^"'\\r\\n]+)["']?`, 'm'));
+      return match?.[1]?.trim() ?? '';
+    };
+
+    // 1. Encryption Key Check (Scope: 'runtime')
+    const encKey = getVar('MJ_BASE_ENCRYPTION_KEY');
+    if (!encKey) {
+      this.emitDiagnostic(
+        'Base encryption key',
+        'warn',
+        'MJ_BASE_ENCRYPTION_KEY is not configured. Sensitive fields cannot be encrypted.',
+        'Generate a 32-byte hex key and set MJ_BASE_ENCRYPTION_KEY in .env.'
+      );
+      diagnostics.AddCheck({
+        Name: 'Base encryption key',
+        Status: 'warn',
+        Message: 'MJ_BASE_ENCRYPTION_KEY is not configured in environment or .env.',
+        SuggestedFix: 'Generate a 32-byte hex key and set MJ_BASE_ENCRYPTION_KEY in .env.',
+        Code: 'ENCRYPTION_KEY_MISSING',
+        Scope: 'runtime',
+        Remediation: {
+          Type: 'manual',
+        },
+      });
+    } else if (encKey.length < 32) {
+      this.emitDiagnostic(
+        'Base encryption key',
+        'warn',
+        `MJ_BASE_ENCRYPTION_KEY is too short (${encKey.length} chars). Recommend 32+ characters or 64 hex characters.`,
+        'Provide a 32-byte key for AES-256.'
+      );
+      diagnostics.AddCheck({
+        Name: 'Base encryption key',
+        Status: 'warn',
+        Message: `MJ_BASE_ENCRYPTION_KEY is too short (${encKey.length} characters; expected 32+).`,
+        SuggestedFix: 'Use a 32-byte (64 hex characters) key.',
+        Code: 'ENCRYPTION_KEY_INVALID_LENGTH',
+        Scope: 'runtime',
+        Evidence: { Length: encKey.length },
+      });
+    } else {
+      this.emitDiagnostic(
+        'Base encryption key',
+        'pass',
+        'MJ_BASE_ENCRYPTION_KEY is configured with valid length.'
+      );
+      diagnostics.AddCheck({
+        Name: 'Base encryption key',
+        Status: 'pass',
+        Message: 'MJ_BASE_ENCRYPTION_KEY is configured with valid length.',
+        Code: 'ENCRYPTION_KEY_OK',
+        Scope: 'runtime',
+      });
+    }
+
+    // 2. AI Provider Credential Check (Scope: 'ai')
+    const aiProviders: { name: string; keyName: string }[] = [
+      { name: 'OpenAI', keyName: 'OPENAI_API_KEY' },
+      { name: 'Anthropic', keyName: 'ANTHROPIC_API_KEY' },
+      { name: 'Gemini', keyName: 'GEMINI_API_KEY' },
+      { name: 'Groq', keyName: 'GROQ_API_KEY' },
+      { name: 'Mistral', keyName: 'MISTRAL_API_KEY' },
+    ];
+
+    const configuredProviders: string[] = [];
+    for (const provider of aiProviders) {
+      const val = getVar(provider.keyName) || getVar(`AI_VENDOR_API_KEY__${provider.name}LLM`);
+      if (val && val.length > 5) {
+        configuredProviders.push(provider.name);
+      }
+    }
+
+    if (configuredProviders.length > 0) {
+      this.emitDiagnostic(
+        'AI provider credentials',
+        'pass',
+        `Active AI provider credentials detected: ${configuredProviders.join(', ')}.`
+      );
+      diagnostics.AddCheck({
+        Name: 'AI provider credentials',
+        Status: 'pass',
+        Message: `Active AI provider credentials detected: ${configuredProviders.join(', ')}.`,
+        Code: 'AI_CREDENTIAL_OK',
+        Scope: 'ai',
+        Evidence: { ConfiguredProviders: configuredProviders },
+      });
+    } else {
+      this.emitDiagnostic(
+        'AI provider credentials',
+        'warn',
+        'No AI provider credentials detected in environment or .env.',
+        'Add OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY to .env to execute AI agents.'
+      );
+      diagnostics.AddCheck({
+        Name: 'AI provider credentials',
+        Status: 'warn',
+        Message: 'No AI provider credentials detected in environment or .env.',
+        SuggestedFix: 'Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY in .env.',
+        Code: 'AI_CREDENTIAL_MISSING',
+        Scope: 'ai',
+        Remediation: {
+          Type: 'manual',
+        },
+      });
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Service log capture
   // -------------------------------------------------------------------------
 
   /** Readiness patterns for MJAPI startup detection. */
-  private static readonly API_READY_PATTERNS: RegExp[] = [/Server ready at/i];
+  private static readonly API_READY_PATTERNS: RegExp[] = [
+    /\bReady\s+https?:\/\//,   // current server: `🚀 Ready  <url>` / `   Ready     <url>`
+    /Server ready at/i,          // legacy marker (older installed tags)
+  ];
 
   /** Readiness patterns for Explorer startup detection. */
   private static readonly EXPLORER_READY_PATTERNS: RegExp[] = [
@@ -1129,7 +1293,7 @@ export class InstallerEngine {
    * Kills processes after capture. Used by `mj doctor --report` to detect
    * runtime errors like missing modules, auth failures, or DB connectivity.
    *
-   * @param targetDir - Install directory where `npm run start:api` is valid.
+   * @param targetDir - Install directory where the `start:api` script is valid.
    * @param config - Current config (for port detection).
    * @returns Array of service log captures.
    */
@@ -1149,14 +1313,14 @@ export class InstallerEngine {
 
     // Capture MJAPI startup
     results.push(await this.captureServiceStartup(
-      runner, targetDir, 'MJAPI', ['run', 'start:api'],
+      runner, targetDir, 'MJAPI', 'start:api',
       InstallerEngine.API_READY_PATTERNS,
       config.APIPort ?? 4000
     ));
 
     // Capture Explorer startup
     results.push(await this.captureServiceStartup(
-      runner, targetDir, 'Explorer', ['run', 'start:explorer'],
+      runner, targetDir, 'Explorer', 'start:explorer',
       InstallerEngine.EXPLORER_READY_PATTERNS,
       config.ExplorerPort ?? 4200
     ));
@@ -1171,7 +1335,7 @@ export class InstallerEngine {
     runner: ProcessRunner,
     dir: string,
     label: string,
-    args: string[],
+    script: string,
     readyPatterns: RegExp[],
     port: number
   ): Promise<ServiceLogCapture> {
@@ -1194,7 +1358,8 @@ export class InstallerEngine {
       const timer = setTimeout(() => resolveCapture!(), captureTimeoutMs);
       let childPid: number | undefined;
 
-      const processPromise = runner.Run('npm', args, {
+      const start = this.packageManager.RunScript(script);
+      const processPromise = runner.Run(start.Cmd, start.Args, {
         Cwd: dir,
         TimeoutMs: captureTimeoutMs + 10_000, // Process timeout slightly longer than capture
         OnSpawn: (pid: number) => { childPid = pid; },
@@ -1225,7 +1390,7 @@ export class InstallerEngine {
       clearTimeout(timer);
 
       // Kill the server process on the port, then kill the entire spawned
-      // process tree (npm → turbo → node). Both are needed because killByPort
+      // process tree (npm/pnpm → turbo → node). Both are needed because killByPort
       // targets the listening server while killTree targets the parent wrapper.
       runner.killByPort(port);
       runner.killTree(childPid);

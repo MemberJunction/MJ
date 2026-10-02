@@ -74,12 +74,12 @@
                     <tbody>
                         @for (row of Rows; track $index) {
                             <tr>
-                                <td class="dry-cell-tag">{{ row.tag }}</td>
-                                <td class="dry-cell-matched">{{ row.matchedTag ?? '—' }}</td>
-                                <td class="dry-col-score dry-mono">{{ FormatScore(row.score) }}</td>
+                                <td class="dry-cell-tag">{{ row.Tag }}</td>
+                                <td class="dry-cell-matched">{{ row.MatchedTag ?? '—' }}</td>
+                                <td class="dry-col-score dry-mono">{{ FormatScore(row.Score) }}</td>
                                 <td>
-                                    <span [class]="DispositionClass(row.disposition)" [title]="row.reason">
-                                        {{ DispositionLabel(row.disposition) }}
+                                    <span [class]="DispositionClass(row.Disposition)" [title]="row.Reason">
+                                        {{ DispositionLabel(row.Disposition) }}
                                     </span>
                                 </td>
                             </tr>

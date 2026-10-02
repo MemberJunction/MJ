@@ -1,8 +1,17 @@
+import '@angular/compiler';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, it, expect } from 'vitest';
 import type { EntityInfo } from '@memberjunction/core';
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { RecordProcessEditorComponent } from './record-process-editor.component';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for <mj-record-process-editor> — the Bulk Operations process editor (~4×). It reads
@@ -43,7 +52,6 @@ function fakeProvider() {
 
 const render = (record: MJRecordProcessEntity) =>
   renderComponentFixture(RecordProcessEditorComponent, {
-    imports: [RecordProcessEditorComponent],
     inputs: { Record: record, Provider: fakeProvider() },
   });
 type Fx = ReturnType<typeof render>;

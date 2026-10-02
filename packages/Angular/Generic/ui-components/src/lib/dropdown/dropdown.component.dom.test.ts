@@ -1,6 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { renderComponentFixture, query, capture, overlayQuery, overlayQueryAll, overlayText, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { Component, Input } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MJDropdownComponent } from './dropdown.component';
+import { MJDialogComponent } from '../dialog/dialog.component';
 
 /**
  * DOM coverage for <mj-dropdown> — the design-system select (used ~93×; stubbed by many other specs).
@@ -69,8 +73,9 @@ describe('MJDropdownComponent (DOM)', () => {
   });
 
   it('does not open when disabled', () => {
-    // The disabled guard reads IsDisabled, which is driven by the CVA setDisabledState()
-    // (the [Disabled] input only takes effect once a forms adapter calls it). Drive it directly.
+    // The disabled guard reads IsDisabled, which composes the [Disabled] input with the forms-driven
+    // setDisabledState(). This spec pins the forms-driven half by calling the hook directly; the
+    // @Input half is covered by the ngModel-host block below.
     const f = renderComponentFixture(MJDropdownComponent, {
       imports: [MJDropdownComponent],
       inputs: { Data: DATA, TextField: 'text', ValueField: 'value', ValuePrimitive: true },
@@ -169,6 +174,21 @@ describe('MJDropdownComponent (DOM)', () => {
     expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-label')).toBe('Filter roles');
   });
 
+  it('treats punctuation as ending the word too, not just a space', () => {
+    // "Filter: roles" already begins with the word; a space-only check would prefix it anyway and
+    // announce "Filter Filter: roles".
+    const f = render({ Filterable: true, AriaLabel: 'Filter: roles' });
+    open(f);
+    expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-label')).toBe('Filter: roles');
+  });
+
+  it('still prefixes a name that merely starts with the same letters', () => {
+    // "Filters" is a different word from "Filter", so the box is "Filter Filters" — correct.
+    const f = render({ Filterable: true, AriaLabel: 'Filters' });
+    open(f);
+    expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-label')).toBe('Filter Filters');
+  });
+
   it("keeps the filter's visible placeholder inside its accessible name", () => {
     // WCAG 2.5.3: a voice-control user says what they SEE. The old placeholder said "Search..."
     // while the accessible name said "Filter …", so "click Search" matched nothing.
@@ -194,8 +214,9 @@ describe('MJDropdownComponent (DOM)', () => {
   it('exposes the disabled state and drops out of the tab order', () => {
     // The SCSS suppresses the focus ring when disabled, so a still-tabbable disabled dropdown means
     // a keyboard user lands on something invisible that then silently ignores Enter.
-    // Disabled arrives through the CVA, so it is applied in `setup` — before the first change
-    // detection — exactly as a reactive form applies it on bind.
+    // Disable via the forms-driven path, applied in `setup` — before the first change detection —
+    // exactly as a reactive form applies it on bind. (The [Disabled] input is an equal source of
+    // IsDisabled; the ngModel-host block below covers that side.)
     const f = renderComponentFixture(MJDropdownComponent, {
       imports: [MJDropdownComponent],
       inputs: { Data: DATA, TextField: 'text', ValueField: 'value', ValuePrimitive: true },
@@ -210,5 +231,260 @@ describe('MJDropdownComponent (DOM)', () => {
     const f = render();
     expect(trigger(f).getAttribute('tabindex')).toBe('0');
     expect(trigger(f).hasAttribute('aria-disabled')).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Disabled-state contract — the control is unusable exactly when the `Disabled` input OR the
+ * reactive-forms disabled state says so, **at every point in time**, not only at the moment
+ * Angular Forms registers the ControlValueAccessor.
+ *
+ * Needs a real `ngModel` host, unlike the specs above which render the component bare: the defect
+ * this guards lives in the seam between the two. `IsDisabled` — the only gate on `Toggle()`/`Open()`
+ * — is derived state, and the only thing that ever assigned it was `setDisabledState()`. The
+ * forms-driven half was always live (`setUpControl` also wires `registerOnDisabledChange`, so the
+ * hook re-fires on every `control.disable()`/`enable()`); what had no recompute path at all was the
+ * `Disabled` @Input, a plain field. So the gate froze whatever `Disabled` happened to be when the
+ * hook last ran and dropped every later change to the input:
+ *
+ *   - `Disabled` true at that moment → the control was dead FOREVER, even after it went false;
+ *   - `Disabled` false at that moment → the control could never be locked afterwards;
+ *   - no forms binding at all → the hook never ran, so `[Disabled]` was completely inert.
+ *
+ * The first direction shipped a real user-facing failure (a picker gated on "pick a company first"
+ * never came back to life once the company was picked). All five MJ form controls carried the
+ * identical defect; each now has an equivalent block.
+ */
+@Component({
+  standalone: true,
+  imports: [MJDropdownComponent, FormsModule],
+  template: `
+    <mj-dropdown
+      [Data]="Items" TextField="text" ValueField="value" [ValuePrimitive]="true"
+      [Disabled]="Locked" [(ngModel)]="Value" />
+  `,
+})
+class DisabledHostComponent {
+  public Items = DATA;
+  /** An @Input so specs flip it via `componentRef.setInput()` — the zoneless-correct way to mark
+   *  the view dirty; a plain field assignment trips NG0100 on the verify pass. */
+  @Input() Locked = false;
+  public Value: string | null = null;
+}
+
+describe('MJDropdownComponent — disabled state (DOM, ngModel host)', () => {
+  let fixture: ComponentFixture<DisabledHostComponent>;
+
+  const control = (): MJDropdownComponent =>
+    fixture.debugElement.children[0].componentInstance as MJDropdownComponent;
+  const hostTrigger = (): HTMLElement =>
+    fixture.nativeElement.querySelector('.mj-dropdown') as HTMLElement;
+  const lock = (value: boolean): void => {
+    fixture.componentRef.setInput('Locked', value);
+    fixture.detectChanges();
+  };
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [DisabledHostComponent] }).compileComponents();
+    fixture = TestBed.createComponent(DisabledHostComponent);
+  });
+
+  it('RE-ENABLES when Disabled flips to false after registration', () => {
+    lock(true);
+    expect(control().IsDisabled).toBe(true);
+    expect(hostTrigger().classList.contains('mj-dropdown--disabled')).toBe(true);
+
+    lock(false);
+    expect(control().Disabled, 'the @Input itself is false').toBe(false);
+    expect(control().IsDisabled, 'and the gate must have followed it').toBe(false);
+    expect(hostTrigger().classList.contains('mj-dropdown--disabled')).toBe(false);
+
+    hostTrigger().click();
+    fixture.detectChanges();
+    expect(control().IsOpen, 're-enabled dropdown must open on click').toBe(true);
+  });
+
+  it('LOCKS when Disabled flips to true after registration', () => {
+    lock(false);
+    hostTrigger().click();
+    fixture.detectChanges();
+    expect(control().IsOpen).toBe(true);
+
+    lock(true);
+    expect(control().IsDisabled).toBe(true);
+    expect(control().IsOpen, 'locking an open dropdown must close its panel').toBe(false);
+
+    hostTrigger().click();
+    fixture.detectChanges();
+    expect(control().IsOpen).toBe(false);
+  });
+
+  it('stays disabled while the forms-driven state holds, regardless of @Input churn', () => {
+    lock(false); // first CD pass — this is what registers the ControlValueAccessor
+
+    // `setDisabledState` is how Angular Forms reports a programmatically disabled control. Render
+    // it via a `lock()` (setInput) rather than a bare `detectChanges()`: a direct call mutates
+    // state without marking the view dirty, and zoneless dev-mode check-no-changes then throws
+    // NG0100 (guides/ANGULAR_TESTING_GUIDE.md). The @Input churn is the assertion anyway.
+    control().setDisabledState(true);
+    lock(true);
+    lock(false);
+    expect(control().IsDisabled, 'forms-driven disable survives @Input churn').toBe(true);
+
+    control().setDisabledState(false);
+    lock(true);
+    lock(false);
+    expect(control().IsDisabled, 'released by both sources ⇒ usable').toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The same defect in its broadest form — no Angular Forms anywhere. With no `ngModel` /
+ * `formControl` on the element, `setDisabledState()` is never called at all, so the gate was left
+ * at its initialiser and `[Disabled]` was completely inert: the control rendered fully enabled and
+ * responded to gestures. `Disabled` only ever worked as a side effect of a forms binding happening
+ * to compose it in, which is why this is the widest case and the cheapest one to regress.
+ */
+describe('MJDropdownComponent — Disabled with no Angular Forms binding (DOM)', () => {
+  it('honours [Disabled] on its own, with no ngModel present', () => {
+    const f = render({ Disabled: true });
+
+    expect(f.componentInstance.IsDisabled, 'the gate must follow the input unaided').toBe(true);
+    expect(trigger(f).classList.contains('mj-dropdown--disabled')).toBe(true);
+
+    open(f);
+    expect(f.componentInstance.IsOpen, 'a disabled dropdown must not open').toBe(false);
+  });
+});
+
+/** The filter panel renders on body, outside the dialog. Tab there must not jump to the dialog's ✕. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent, MJDropdownComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Form">
+      <button type="button" class="before">Before</button>
+      <mj-dropdown [Filterable]="true" [Data]="Data" TextField="text" ValueField="value" [ValuePrimitive]="true" AriaLabel="Role"></mj-dropdown>
+      <button type="button" class="after">After</button>
+    </mj-dialog>
+  `,
+})
+class DropdownInDialogHostComponent {
+  Data = DATA;
+}
+
+/** The dropdown is the dialog's last stop. Tab in its filter must wrap to the first stop. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent, MJDropdownComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Form">
+      <mj-dropdown [Filterable]="true" [Data]="Data" TextField="text" ValueField="value" [ValuePrimitive]="true" AriaLabel="Role"></mj-dropdown>
+    </mj-dialog>
+  `,
+})
+class DropdownLastInDialogHostComponent {
+  Data = DATA;
+}
+
+/** Closeable is off, so the dropdown is the first stop. Shift+Tab in its filter must wrap to the last. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent, MJDropdownComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" [Closeable]="false" Title="Form">
+      <mj-dropdown [Filterable]="true" [Data]="Data" TextField="text" ValueField="value" [ValuePrimitive]="true" AriaLabel="Role"></mj-dropdown>
+      <button type="button" class="last">Last</button>
+    </mj-dialog>
+  `,
+})
+class DropdownFirstInDialogHostComponent {
+  Data = DATA;
+}
+
+describe('MJDropdownComponent inside mj-dialog (DOM)', () => {
+  const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}): KeyboardEvent => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+    el.dispatchEvent(event);
+    return event;
+  };
+
+  it('Tab in the filter box closes the panel and returns to the field, not the dialog close', async () => {
+    const f = renderComponentFixture(DropdownInDialogHostComponent, { imports: [DropdownInDialogHostComponent] });
+    const closeBtn = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    field.click();
+    f.detectChanges();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    expect(document.activeElement).toBe(filter);
+
+    const tab = press(filter, 'Tab');
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+    expect(document.activeElement).toBe(field);
+    expect(document.activeElement).not.toBe(closeBtn);
+  });
+
+  it('Shift+Tab in the filter box does not land on the dialog last stop', async () => {
+    const f = renderComponentFixture(DropdownInDialogHostComponent, { imports: [DropdownInDialogHostComponent] });
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    field.click();
+    f.detectChanges();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    filter.focus();
+
+    const tab = press(filter, 'Tab', { shiftKey: true });
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(field);
+    expect(document.activeElement).not.toBe(query(f, '.after'));
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+  });
+
+  it('Tab in the filter of a dropdown that is the last stop wraps to the dialog close', async () => {
+    const f = renderComponentFixture(DropdownLastInDialogHostComponent, { imports: [DropdownLastInDialogHostComponent] });
+    const closeBtn = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    field.click();
+    f.detectChanges();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    filter.focus();
+
+    const tab = press(filter, 'Tab');
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(true);
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+    expect(document.activeElement).toBe(closeBtn);
+    expect(document.activeElement).not.toBe(field);
+  });
+
+  it('Shift+Tab in the filter of a dropdown that is the first stop wraps to the last stop', async () => {
+    const f = renderComponentFixture(DropdownFirstInDialogHostComponent, { imports: [DropdownFirstInDialogHostComponent] });
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    const last = query(f, '.last') as HTMLButtonElement;
+    field.click();
+    f.detectChanges();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    filter.focus();
+
+    const tab = press(filter, 'Tab', { shiftKey: true });
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(true);
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+    expect(document.activeElement).toBe(last);
+    expect(document.activeElement).not.toBe(field);
   });
 });

@@ -17,7 +17,7 @@ import { MCPDashboardFilters, MCPDashboardTab } from './mcp-dashboard.component'
   styleUrls: ['./mcp-filter-panel.component.css']
 })
 export class MCPFilterPanelComponent {
-  @Input() filters: MCPDashboardFilters = {
+  @Input() Filters: MCPDashboardFilters = {
     searchTerm: '',
     serverStatus: 'all',
     connectionStatus: 'all',
@@ -28,90 +28,243 @@ export class MCPFilterPanelComponent {
     favoritesOnly: false
   };
 
-  @Input() activeTab: MCPDashboardTab = 'servers';
-  @Input() totalCount = 0;
-  @Input() filteredCount = 0;
+  /** @deprecated Use {@link Filters}. */
+  @Input() set filters(value: MCPDashboardFilters) {
+    this.Filters = value;
+  }
+  /** @deprecated Use {@link Filters}. */
+  get filters(): MCPDashboardFilters {
+    return this.Filters;
+  }
+
+  @Input() ActiveTab: MCPDashboardTab = 'servers';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  @Input() set activeTab(value: MCPDashboardTab) {
+    this.ActiveTab = value;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  get activeTab(): MCPDashboardTab {
+    return this.ActiveTab;
+  }
+  @Input() TotalCount = 0;
+
+  /** @deprecated Use {@link TotalCount}. */
+  @Input() set totalCount(value: MCPFilterPanelComponent['TotalCount']) {
+    this.TotalCount = value;
+  }
+  /** @deprecated Use {@link TotalCount}. */
+  get totalCount(): MCPFilterPanelComponent['TotalCount'] {
+    return this.TotalCount;
+  }
+  @Input() FilteredCount = 0;
+
+  /** @deprecated Use {@link FilteredCount}. */
+  @Input() set filteredCount(value: MCPFilterPanelComponent['FilteredCount']) {
+    this.FilteredCount = value;
+  }
+  /** @deprecated Use {@link FilteredCount}. */
+  get filteredCount(): MCPFilterPanelComponent['FilteredCount'] {
+    return this.FilteredCount;
+  }
 
   /** Part 3.3 — available servers for the Tools tab server-filter dropdown */
-  @Input() availableServers: Array<{ ID: string; Name: string }> = [];
+  @Input() AvailableServers: Array<{ ID: string; Name: string }> = [];
+
+  /** @deprecated Use {@link AvailableServers}. */
+  @Input() set availableServers(value: Array<{ ID: string; Name: string }>) {
+    this.AvailableServers = value;
+  }
+  /** @deprecated Use {@link AvailableServers}. */
+  get availableServers(): Array<{ ID: string; Name: string }> {
+    return this.AvailableServers;
+  }
   /** Part 3.3 — available categories (derived from snake_case tool-name prefix) with counts */
-  @Input() availableCategories: Array<{ category: string; count: number }> = [];
+  @Input() AvailableCategories: Array<{ category: string; count: number }> = [];
 
-  @Output() filtersChange = new EventEmitter<MCPDashboardFilters>();
-  @Output() closePanel = new EventEmitter<void>();
+  /** @deprecated Use {@link AvailableCategories}. */
+  @Input() set availableCategories(value: Array<{ category: string; count: number }>) {
+    this.AvailableCategories = value;
+  }
+  /** @deprecated Use {@link AvailableCategories}. */
+  get availableCategories(): Array<{ category: string; count: number }> {
+    return this.AvailableCategories;
+  }
 
-  public serverStatusOptions = [
+  @Output() FiltersChange = new EventEmitter<MCPDashboardFilters>();
+
+  /**
+   * @deprecated Use {@link FiltersChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (filtersChange) keeps working. Must stay AFTER FiltersChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() filtersChange = this.FiltersChange;
+  @Output() ClosePanel = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ClosePanel}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closePanel) keeps working. Must stay AFTER ClosePanel: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closePanel = this.ClosePanel;
+
+  public ServerStatusOptions = [
     { text: 'All Statuses', value: 'all' },
     { text: 'Active', value: 'Active' },
     { text: 'Inactive', value: 'Inactive' }
   ];
 
-  public connectionStatusOptions = [
+  /** @deprecated Use {@link ServerStatusOptions}. */
+  public get serverStatusOptions() {
+    return this.ServerStatusOptions;
+  }
+  /** @deprecated Use {@link ServerStatusOptions}. */
+  public set serverStatusOptions(value) {
+    this.ServerStatusOptions = value;
+  }
+
+  public ConnectionStatusOptions = [
     { text: 'All Statuses', value: 'all' },
     { text: 'Active', value: 'Active' },
     { text: 'Inactive', value: 'Inactive' },
     { text: 'Error', value: 'Error' }
   ];
 
-  public toolStatusOptions = [
+  /** @deprecated Use {@link ConnectionStatusOptions}. */
+  public get connectionStatusOptions() {
+    return this.ConnectionStatusOptions;
+  }
+  /** @deprecated Use {@link ConnectionStatusOptions}. */
+  public set connectionStatusOptions(value) {
+    this.ConnectionStatusOptions = value;
+  }
+
+  public ToolStatusOptions = [
     { text: 'All Statuses', value: 'all' },
     { text: 'Active', value: 'Active' },
     { text: 'Deprecated', value: 'Deprecated' }
   ];
 
-  public logStatusOptions = [
+  /** @deprecated Use {@link ToolStatusOptions}. */
+  public get toolStatusOptions() {
+    return this.ToolStatusOptions;
+  }
+  /** @deprecated Use {@link ToolStatusOptions}. */
+  public set toolStatusOptions(value) {
+    this.ToolStatusOptions = value;
+  }
+
+  public LogStatusOptions = [
     { text: 'All Statuses', value: 'all' },
     { text: 'Success', value: 'Success' },
     { text: 'Error', value: 'Error' },
     { text: 'Running', value: 'Running' }
   ];
 
+  /** @deprecated Use {@link LogStatusOptions}. */
+  public get logStatusOptions() {
+    return this.LogStatusOptions;
+  }
+  /** @deprecated Use {@link LogStatusOptions}. */
+  public set logStatusOptions(value) {
+    this.LogStatusOptions = value;
+  }
+
+  public OnFilterChange(): void {
+    this.FiltersChange.emit(this.Filters);
+  }
+
+  /** @deprecated Use {@link OnFilterChange}. */
   public onFilterChange(): void {
-    this.filtersChange.emit(this.filters);
+    return this.OnFilterChange();
   }
 
+  public OnSearchChange(value: string): void {
+    this.Filters = { ...this.Filters, searchTerm: value };
+    this.OnFilterChange();
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
   public onSearchChange(value: string): void {
-    this.filters = { ...this.filters, searchTerm: value };
-    this.onFilterChange();
+    return this.OnSearchChange(value);
   }
 
+  public OnServerStatusChange(value: string): void {
+    this.Filters = { ...this.Filters, serverStatus: value };
+    this.OnFilterChange();
+  }
+
+  /** @deprecated Use {@link OnServerStatusChange}. */
   public onServerStatusChange(value: string): void {
-    this.filters = { ...this.filters, serverStatus: value };
-    this.onFilterChange();
+    return this.OnServerStatusChange(value);
   }
 
+  public OnConnectionStatusChange(value: string): void {
+    this.Filters = { ...this.Filters, connectionStatus: value };
+    this.OnFilterChange();
+  }
+
+  /** @deprecated Use {@link OnConnectionStatusChange}. */
   public onConnectionStatusChange(value: string): void {
-    this.filters = { ...this.filters, connectionStatus: value };
-    this.onFilterChange();
+    return this.OnConnectionStatusChange(value);
   }
 
+  public OnToolStatusChange(value: string): void {
+    this.Filters = { ...this.Filters, toolStatus: value };
+    this.OnFilterChange();
+  }
+
+  /** @deprecated Use {@link OnToolStatusChange}. */
   public onToolStatusChange(value: string): void {
-    this.filters = { ...this.filters, toolStatus: value };
-    this.onFilterChange();
+    return this.OnToolStatusChange(value);
   }
 
+  public OnLogStatusChange(value: string): void {
+    this.Filters = { ...this.Filters, logStatus: value };
+    this.OnFilterChange();
+  }
+
+  /** @deprecated Use {@link OnLogStatusChange}. */
   public onLogStatusChange(value: string): void {
-    this.filters = { ...this.filters, logStatus: value };
-    this.onFilterChange();
+    return this.OnLogStatusChange(value);
   }
 
+  public OnToolsServerChange(value: string): void {
+    this.Filters = { ...this.Filters, toolsServer: value };
+    this.OnFilterChange();
+  }
+
+  /** @deprecated Use {@link OnToolsServerChange}. */
   public onToolsServerChange(value: string): void {
-    this.filters = { ...this.filters, toolsServer: value };
-    this.onFilterChange();
+    return this.OnToolsServerChange(value);
   }
 
+  public OnToolsCategoryChange(value: string): void {
+    this.Filters = { ...this.Filters, toolsCategory: value };
+    this.OnFilterChange();
+  }
+
+  /** @deprecated Use {@link OnToolsCategoryChange}. */
   public onToolsCategoryChange(value: string): void {
-    this.filters = { ...this.filters, toolsCategory: value };
-    this.onFilterChange();
+    return this.OnToolsCategoryChange(value);
   }
 
+  public OnFavoritesOnlyChange(checked: boolean): void {
+    this.Filters = { ...this.Filters, favoritesOnly: checked };
+    this.OnFilterChange();
+  }
+
+  /** @deprecated Use {@link OnFavoritesOnlyChange}. */
   public onFavoritesOnlyChange(checked: boolean): void {
-    this.filters = { ...this.filters, favoritesOnly: checked };
-    this.onFilterChange();
+    return this.OnFavoritesOnlyChange(checked);
   }
 
-  public resetAllFilters(): void {
-    this.filters = {
+  public ResetAllFilters(): void {
+    this.Filters = {
       searchTerm: '',
       serverStatus: 'all',
       connectionStatus: 'all',
@@ -121,84 +274,119 @@ export class MCPFilterPanelComponent {
       toolsCategory: 'all',
       favoritesOnly: false
     };
-    this.onFilterChange();
+    this.OnFilterChange();
+  }
+
+  /** @deprecated Use {@link ResetAllFilters}. */
+  public resetAllFilters(): void {
+    return this.ResetAllFilters();
   }
 
   /** Part 3.3 — count of non-default filter dimensions, used for "Filters (N)" badge */
-  public get activeFilterCount(): number {
+  public get ActiveFilterCount(): number {
     let n = 0;
-    if (this.filters.searchTerm) n++;
-    if (this.filters.serverStatus && this.filters.serverStatus !== 'all') n++;
-    if (this.filters.connectionStatus && this.filters.connectionStatus !== 'all') n++;
-    if (this.filters.toolStatus && this.filters.toolStatus !== 'all') n++;
-    if (this.filters.logStatus && this.filters.logStatus !== 'all') n++;
-    if (this.filters.toolsServer && this.filters.toolsServer !== 'all') n++;
-    if (this.filters.toolsCategory && this.filters.toolsCategory !== 'all') n++;
-    if (this.filters.favoritesOnly) n++;
+    if (this.Filters.searchTerm) n++;
+    if (this.Filters.serverStatus && this.Filters.serverStatus !== 'all') n++;
+    if (this.Filters.connectionStatus && this.Filters.connectionStatus !== 'all') n++;
+    if (this.Filters.toolStatus && this.Filters.toolStatus !== 'all') n++;
+    if (this.Filters.logStatus && this.Filters.logStatus !== 'all') n++;
+    if (this.Filters.toolsServer && this.Filters.toolsServer !== 'all') n++;
+    if (this.Filters.toolsCategory && this.Filters.toolsCategory !== 'all') n++;
+    if (this.Filters.favoritesOnly) n++;
     return n;
   }
 
+  /** @deprecated Use {@link ActiveFilterCount}. */
+  public get activeFilterCount(): number {
+    return this.ActiveFilterCount;
+  }
+
+  public ToggleFilterPanel(): void {
+    this.ClosePanel.emit();
+  }
+
+  /** @deprecated Use {@link ToggleFilterPanel}. */
   public toggleFilterPanel(): void {
-    this.closePanel.emit();
+    return this.ToggleFilterPanel();
   }
 
+  public get HasActiveFilters(): boolean {
+    return this.Filters.searchTerm !== '' ||
+           this.Filters.serverStatus !== 'all' ||
+           this.Filters.connectionStatus !== 'all' ||
+           this.Filters.toolStatus !== 'all' ||
+           this.Filters.logStatus !== 'all';
+  }
+
+  /** @deprecated Use {@link HasActiveFilters}. */
   public get hasActiveFilters(): boolean {
-    return this.filters.searchTerm !== '' ||
-           this.filters.serverStatus !== 'all' ||
-           this.filters.connectionStatus !== 'all' ||
-           this.filters.toolStatus !== 'all' ||
-           this.filters.logStatus !== 'all';
+    return this.HasActiveFilters;
   }
 
-  public get currentStatusOptions(): { text: string; value: string }[] {
-    switch (this.activeTab) {
+  public get CurrentStatusOptions(): { text: string; value: string }[] {
+    switch (this.ActiveTab) {
       case 'servers':
-        return this.serverStatusOptions;
+        return this.ServerStatusOptions;
       case 'connections':
-        return this.connectionStatusOptions;
+        return this.ConnectionStatusOptions;
       case 'tools':
-        return this.toolStatusOptions;
+        return this.ToolStatusOptions;
       case 'logs':
-        return this.logStatusOptions;
+        return this.LogStatusOptions;
       default:
-        return this.serverStatusOptions;
+        return this.ServerStatusOptions;
     }
   }
 
-  public get currentStatusValue(): string {
-    switch (this.activeTab) {
+  /** @deprecated Use {@link CurrentStatusOptions}. */
+  public get currentStatusOptions(): { text: string; value: string }[] {
+    return this.CurrentStatusOptions;
+  }
+
+  public get CurrentStatusValue(): string {
+    switch (this.ActiveTab) {
       case 'servers':
-        return this.filters.serverStatus;
+        return this.Filters.serverStatus;
       case 'connections':
-        return this.filters.connectionStatus;
+        return this.Filters.connectionStatus;
       case 'tools':
-        return this.filters.toolStatus;
+        return this.Filters.toolStatus;
       case 'logs':
-        return this.filters.logStatus;
+        return this.Filters.logStatus;
       default:
         return 'all';
     }
   }
 
-  public onCurrentStatusChange(value: string): void {
-    switch (this.activeTab) {
+  /** @deprecated Use {@link CurrentStatusValue}. */
+  public get currentStatusValue(): string {
+    return this.CurrentStatusValue;
+  }
+
+  public OnCurrentStatusChange(value: string): void {
+    switch (this.ActiveTab) {
       case 'servers':
-        this.onServerStatusChange(value);
+        this.OnServerStatusChange(value);
         break;
       case 'connections':
-        this.onConnectionStatusChange(value);
+        this.OnConnectionStatusChange(value);
         break;
       case 'tools':
-        this.onToolStatusChange(value);
+        this.OnToolStatusChange(value);
         break;
       case 'logs':
-        this.onLogStatusChange(value);
+        this.OnLogStatusChange(value);
         break;
     }
   }
 
-  public getTabLabel(): string {
-    switch (this.activeTab) {
+  /** @deprecated Use {@link OnCurrentStatusChange}. */
+  public onCurrentStatusChange(value: string): void {
+    return this.OnCurrentStatusChange(value);
+  }
+
+  public GetTabLabel(): string {
+    switch (this.ActiveTab) {
       case 'servers':
         return 'Server';
       case 'connections':
@@ -210,5 +398,10 @@ export class MCPFilterPanelComponent {
       default:
         return 'Item';
     }
+  }
+
+  /** @deprecated Use {@link GetTabLabel}. */
+  public getTabLabel(): string {
+    return this.GetTabLabel();
   }
 }

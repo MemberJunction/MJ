@@ -145,7 +145,7 @@ Read-only SELECTs vs `__mj` views + `sys.*`/`information_schema`. Zero fixtures/
 | SEC12 | RemoteOperation ShouldRegenerate + approval reset: regen resets `CodeApprovalStatus=Pending` (re-review gate) | MUT | P2 | MJRemoteOperationEntityServer:84 |
 | SEC13 | SQLExpressionValidator `\bXP_\b`/`\bSP_\b` boundary: does `xp_cmdshell` slip through? | DET | P1 | SQLExpressionValidator.ts:183 |
 | SEC14 | SQLExpressionValidator full_query trailing `;--comment` allowed but mid-`;` rejected | DET | P2 | SQLExpressionValidator.ts:308 |
-| SEC15 | Magic-link single-use CAS race: N concurrent `/redeem` of 1-use link → exactly one wins | MUT | P3 | magicLinkCore buildConsumeInviteSQL |
+| SEC15 | Magic-link single-use CAS race: N concurrent `/redeem` of 1-use link → exactly one wins | MUT | P3 | MagicLinkService.consumeInvite → spConsumeMagicLinkInvite (SS) / BuildConsumeInvitePostgresSQL (PG) |
 | SEC16 | Magic-link privilege confinement: guest can't mint invites, grant privileged role, or read outside scope | MUT | P3 | canIssueInvites:57 |
 | SEC17 | OAuth state cross-user 403: user B can't `/status`/`/exchange` A's state (no real IdP needed) | MUT | P3 | OAuthCallbackHandler:293,495 |
 
@@ -237,7 +237,7 @@ The untested majority (~30 of ~40 server subclasses). Mostly DET (pure validator
 | MT1 | MetadataSync pull→push round-trip is a no-op (checksums unchanged) | MUT | P3 | sync-engine.ts |
 | MT2 | Sync push partial-failure rolls back ALL rows (atomic) | MUT | P3 | transaction-manager.ts:102 |
 | MT3 | @lookup case-insensitive incl. PG uuid `LOWER()` bypass | DET | P3 | sync-engine.ts:646-668 |
-| MT4 | CodeGen idempotent: 2nd run against unchanged DB → zero metadata writes | MUT | P2 | nextAvailableEntityFieldSequence:359 |
+| MT4 | CodeGen idempotent: 2nd run against unchanged DB → zero metadata writes | MUT | P2 | applyTimeEntityFieldSequenceSQL |
 | MT5 | CodeGen output byte-identical across runs (git-clean assert) | MUT | P3 | (#3117) |
 | MT6 | Manifest generation deterministic + topo-correct (subclass before dependent) | DET | P2 | GenerateClassRegistrationsManifest:799 |
 | MT7 | OpenApp reinstall idempotency full graph (install→remove→reinstall, same GUIDs) | MUT | P3 | install-orchestrator.ts:276 |

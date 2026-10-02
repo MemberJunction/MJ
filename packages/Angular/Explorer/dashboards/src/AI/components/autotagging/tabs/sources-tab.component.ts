@@ -25,7 +25,7 @@ import {
     SourceCard, SourceDetailInfo, ContentItemDetail, RunHistoryRow, WeightedTag,
     ItemPipelineStatus
 } from '../shared/classify.types';
-import { formatNumber, formatDate, computeDuration, displayStatus, getSourceTypeIcon, CronToHumanReadable, deriveDisplayName } from '../shared/classify.format';
+import { formatNumber, FormatDate, ComputeDuration, DisplayStatus, GetSourceTypeIcon, CronToHumanReadable, DeriveDisplayName } from '../shared/classify.format';
 
 @Component({
     standalone: false,
@@ -154,7 +154,12 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
     public ScheduleEnabled = true;
 
     /** Template-facing formatter. */
-    public readonly formatNumber = formatNumber;
+    public readonly FormatNumber = formatNumber;
+
+    /** @deprecated Use {@link FormatNumber}. */
+    public get formatNumber() {
+        return this.FormatNumber;
+    }
 
     // ── Cross-tab intents (host owns the slide-in form, navigation, pipeline) ──
 
@@ -184,20 +189,40 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
         this.cdr.detectChanges();
     }
 
-    public onAddSource(): void {
+    public OnAddSource(): void {
         this.AddSourceRequested.emit();
     }
 
-    public onAddSourceGuided(): void {
+    /** @deprecated Use {@link OnAddSource}. */
+    public onAddSource(): void {
+        return this.OnAddSource();
+    }
+
+    public OnAddSourceGuided(): void {
         this.AddSourceGuidedRequested.emit();
     }
 
-    public onEditSource(card: SourceCard): void {
+    /** @deprecated Use {@link OnAddSourceGuided}. */
+    public onAddSourceGuided(): void {
+        return this.OnAddSourceGuided();
+    }
+
+    public OnEditSource(card: SourceCard): void {
         this.EditSourceRequested.emit(card);
     }
 
-    public onRunSource(sourceID: string): void {
+    /** @deprecated Use {@link OnEditSource}. */
+    public onEditSource(card: SourceCard): void {
+        return this.OnEditSource(card);
+    }
+
+    public OnRunSource(sourceID: string): void {
         this.RunSourceRequested.emit(sourceID);
+    }
+
+    /** @deprecated Use {@link OnRunSource}. */
+    public onRunSource(sourceID: string): void {
+        return this.OnRunSource(sourceID);
     }
 
     // ── Dry-run preview (in-memory, nothing persisted) ──
@@ -246,14 +271,14 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
                 SourceTypeName: typeName,
                 ContentTypeName: (source['ContentType'] as string) ?? 'Unknown',
                 FileTypeName: (source['ContentFileType'] as string) ?? 'Unknown',
-                Icon: getSourceTypeIcon(typeName),
+                Icon: GetSourceTypeIcon(typeName),
                 StatusClass: hasError ? 'error' as const : 'active' as const,
                 StatusLabel: hasError ? 'Error' : 'Active',
                 URL: (source['URL'] as string) ?? '',
                 ItemCount: itemCount,
                 TagCount: tagCount,
                 AvgTags: avgTags,
-                LastRunAgo: lastRun ? this.formatRelativeTime(lastRun['StartTime'] as string) : 'Never',
+                LastRunAgo: lastRun ? this.FormatRelativeTime(lastRun['StartTime'] as string) : 'Never',
                 ContentSourceTypeID: source['ContentSourceTypeID'] as string,
                 ContentTypeID: source['ContentTypeID'] as string,
                 ContentFileTypeID: source['ContentFileTypeID'] as string,
@@ -420,7 +445,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
         return 'Pending';
     }
 
-    public formatRelativeTime(dateStr: string | null | undefined): string {
+    public FormatRelativeTime(dateStr: string | null | undefined): string {
         if (!dateStr) return 'Never';
         const now = new Date();
         const then = new Date(dateStr);
@@ -433,6 +458,11 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
         if (diffHours < 24) return `${diffHours}h ago`;
         const diffDays = Math.floor(diffHours / 24);
         return `${diffDays}d ago`;
+    }
+
+    /** @deprecated Use {@link FormatRelativeTime}. */
+    public formatRelativeTime(dateStr: string | null | undefined): string {
+        return this.FormatRelativeTime(dateStr);
     }
 
     /** Looks up the cron expression for a cached Scheduled Job by ID */
@@ -461,7 +491,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
         try {
             const p = this.ProviderToUse;
             const entity = await p.GetEntityObject<BaseEntity>('MJ: Content Sources', p.CurrentUser);
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: card.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(card.ID));
             const deleted = await entity.Delete();
             if (deleted) {
                 MJNotificationService.Instance.CreateSimpleNotification('Source deleted', 'success', 2500);
@@ -623,7 +653,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
     private async linkScheduleToSource(sourceID: string, scheduledJobID: string | null): Promise<void> {
         const p = this.ProviderToUse;
         const entity = await p.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources', p.CurrentUser);
-        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceID }]));
+        await entity.InnerLoad(CompositeKey.FromID(sourceID));
         entity.ScheduledJobID = scheduledJobID;
         const saved = await entity.Save();
         if (!saved) {
@@ -801,7 +831,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
             const itemStatuses = this.inferPipelineStatuses(item, tagCount);
             return {
                 ID: itemId,
-                Name: deriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
+                Name: DeriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
                 SourceName: (item['ContentSource'] as string) ?? '',
                 SourceTypeName: (item['ContentSourceType'] as string) ?? '',
                 ContentTypeName: (item['ContentType'] as string) ?? '',
@@ -810,8 +840,8 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
                 TextContent: (item['Text'] as string) ?? '',
                 Checksum: (item['Checksum'] as string) ?? '',
                 Tags: allTags,
-                CreatedAt: formatDate((item['__mj_CreatedAt'] as string) ?? ''),
-                UpdatedAt: formatDate((item['__mj_UpdatedAt'] as string) ?? ''),
+                CreatedAt: FormatDate((item['__mj_CreatedAt'] as string) ?? ''),
+                UpdatedAt: FormatDate((item['__mj_UpdatedAt'] as string) ?? ''),
                 ContentSourceID: sourceId,
                 ContentSourceTypeID: contentSourceTypeID,
                 StatusDot: tagCount > 0 ? 'complete' : 'processing',
@@ -841,7 +871,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
             const status = (run['Status'] as string) ?? 'Unknown';
             const startTime = run['StartTime'] as string | null;
             const endTime = run['EndTime'] as string | null;
-            const duration = computeDuration(startTime, endTime);
+            const duration = ComputeDuration(startTime, endTime);
             const processedItems = run['ProcessedItems'] as number | null;
             const errorCount = run['ErrorCount'] as number | null;
             const statusLower = status.toLowerCase();
@@ -851,10 +881,10 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
 
             return {
                 ID: run['ID'] as string,
-                Status: displayStatus(status),
+                Status: DisplayStatus(status),
                 StatusClass: isFailed ? 'failed' : isRunning ? 'running' : 'complete',
                 SourceName: (run['Source'] as string) ?? 'Unknown',
-                StartedDisplay: startTime ? formatDate(startTime) : '—',
+                StartedDisplay: startTime ? FormatDate(startTime) : '—',
                 Duration: duration,
                 Items: processedItems != null ? formatNumber(processedItems) : '—',
                 Tags: '—',

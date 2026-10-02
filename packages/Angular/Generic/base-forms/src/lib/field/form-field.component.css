@@ -430,6 +430,105 @@
   color: var(--mj-text-primary);
 }
 
+/* Population toggle ("All organizations" / "Customers"). Sits where the search-field pill
+   would, or left of the pill when both show; the input reserves room for it so it never covers
+   typed text. Same visual family as the pill. */
+.mj-fk-search--toggle .mj-forms-field-input {
+  padding-right: 178px;
+}
+
+.mj-fk-search--scoped.mj-fk-search--toggle .mj-forms-field-input {
+  padding-right: 306px;
+}
+
+.mj-fk-search--scoped .mj-fk-scope-toggle {
+  right: 158px;
+}
+
+.mj-fk-scope-toggle {
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-strong);
+  color: var(--mj-text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 1px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.35;
+  transition: border-color var(--mj-transition-base), color var(--mj-transition-base);
+}
+
+.mj-fk-scope-toggle:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-primary);
+}
+
+/* Group header inside the results grid — spans every column, never selectable. Rows are
+   `display: contents`, so the header needs a box of its own to be a grid item at all. */
+.mj-fk-grid-row.mj-fk-group-head {
+  display: block;
+  grid-column: 1 / -1;
+  padding: 8px 12px 2px;
+  font-size: var(--mj-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  cursor: default;
+}
+
+/* Name plus its chips on one line, so the second line sits directly beneath the name. */
+.mj-fk-name-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mj-fk-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.mj-fk-chip--info {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-secondary);
+}
+
+.mj-fk-chip--warn {
+  border-color: var(--mj-status-warning);
+  color: var(--mj-text-secondary);
+}
+
+/* The disambiguating second line — city and state, a website, a count. Takes the whole row of
+   the wrapping name cell, so it lands beneath the name rather than beside the chips. */
+.mj-fk-secondary {
+  display: block;
+  flex-basis: 100%;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mj-fk-scope-pill-icon {
   font-size: 9px;
   opacity: 0.7;
@@ -796,6 +895,8 @@
   font-size: 14px;
   color: var(--mj-text-primary);
   gap: 6px;
+  /* Lets a strategy's second line wrap beneath the name. */
+  flex-wrap: wrap;
 }
 
 .mj-fk-selected-check {
@@ -1146,6 +1247,130 @@
 
 .mj-forms-field-validation--warning .mj-forms-field-validation-item i {
   color: var(--mj-status-warning);
+}
+
+/* ============================================
+   IMAGE / COLOR / JSON EXTENDED TYPES
+   ============================================ */
+.mj-forms-image {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mj-forms-image-preview {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 8px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  display: block;
+}
+
+.mj-forms-image-preview--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mj-text-muted);
+  font-size: 22px;
+}
+
+.mj-forms-image-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+}
+
+.mj-forms-image-hint {
+  color: var(--mj-text-muted);
+}
+
+.mj-forms-image-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mj-forms-image-file {
+  display: none;
+}
+
+.mj-forms-image-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.mj-forms-image-btn:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+}
+
+.mj-forms-image-btn--ghost {
+  color: var(--mj-text-secondary);
+  background: transparent;
+  border-color: var(--mj-border-default);
+  font-weight: 500;
+}
+
+.mj-forms-image--edit .mj-forms-field-input {
+  width: 100%;
+}
+
+.mj-forms-color {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mj-forms-color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+
+.mj-forms-color-picker {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.mj-forms-color-hex {
+  max-width: 160px;
+}
+
+.mj-forms-json {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  width: 100%;
 }
 
 @keyframes mj-validation-slide-in {

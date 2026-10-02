@@ -24,12 +24,12 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
-    buildDuplicateAgentContext,
-    resolveEntityDoc,
-    resolveEntityFilter,
+    BuildDuplicateAgentContext,
+    ResolveEntityDoc,
+    ResolveEntityFilter,
     DupeEntityDocCandidate,
 } from './duplicate-detection-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /**
  * Represents a group of duplicate matches for a single source record,
@@ -395,7 +395,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             return;
         }
         const selectedDoc = this.SelectedDocumentThresholds;
-        this.navigationService.SetAgentContext(this, buildDuplicateAgentContext({
+        this.navigationService.SetAgentContext(this, BuildDuplicateAgentContext({
             IsDetecting: this.IsDetecting,
             DetectionProgress: this.DetectionProgress,
             DetectionStage: this.DetectionStage,
@@ -449,14 +449,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     required: ['document'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['document'], 'document');
+                    const v = ValidateStringParam(params['document'], 'document');
                     if (!v.ok) return v.result;
-                    const resolved = resolveEntityDoc(v.value, this.getEntityDocCandidates());
-                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
-                    this.SelectedEntityDocumentID = resolved.value.ID;
+                    const resolved = ResolveEntityDoc(v.value, this.getEntityDocCandidates());
+                    if (!resolved.Ok) return { Success: false, ErrorMessage: resolved.Error };
+                    this.SelectedEntityDocumentID = resolved.Value.ID;
                     this.emitAgentContext();
                     this.cdr.detectChanges();
-                    return { Success: true, Data: { SelectedEntityDocID: resolved.value.ID, SelectedEntityDocName: resolved.value.Name } };
+                    return { Success: true, Data: { SelectedEntityDocID: resolved.Value.ID, SelectedEntityDocName: resolved.Value.Name } };
                 },
             },
             {
@@ -483,12 +483,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     required: ['entityName'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['entityName'], 'entityName');
+                    const v = ValidateStringParam(params['entityName'], 'entityName');
                     if (!v.ok) return v.result;
-                    const resolved = resolveEntityFilter(v.value, this.EntityNames);
-                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
-                    this.FilterByEntity(resolved.value);
-                    return { Success: true, Data: { EntityFilter: resolved.value || 'All', PendingCount: this.PendingGroups.length } };
+                    const resolved = ResolveEntityFilter(v.value, this.EntityNames);
+                    if (!resolved.Ok) return { Success: false, ErrorMessage: resolved.Error };
+                    this.FilterByEntity(resolved.Value);
+                    return { Success: true, Data: { EntityFilter: resolved.Value || 'All', PendingCount: this.PendingGroups.length } };
                 },
             },
             {
@@ -1462,13 +1462,19 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const md = this.ProviderToUse;
             const relatedEntityInfo = md.Entities.find(e => e.Name === relatedEntityName);
-            const nameField = relatedEntityInfo?.NameField;
-            const pkFieldName = relatedEntityInfo?.FirstPrimaryKey?.Name || 'ID';
+            if (!relatedEntityInfo) {
+                LogStatus(`[DuplicateDetection] Related entity '${relatedEntityName}' not found in metadata; dependent records skipped`);
+                this.depRecordsCache.set(key, []);
+                return;
+            }
+            const nameField = relatedEntityInfo.NameField;
+            // The related entity is arbitrary — select every key column, not an assumed single ID
+            const pkFieldNames = relatedEntityInfo.PrimaryKeys.map(pk => pk.Name);
 
             const result = await rv.RunView<Record<string, unknown>>({
                 EntityName: relatedEntityName,
                 ExtraFilter: `${fkFieldName}='${parentKeyValue}'`,
-                Fields: nameField ? [pkFieldName, nameField.Name] : [pkFieldName],
+                Fields: nameField ? [...pkFieldNames, nameField.Name] : pkFieldNames,
                 MaxRows: 50,
                 ResultType: 'simple',
             });
@@ -1476,8 +1482,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const records: Array<{ Name: string; PrimaryKey: CompositeKey; EntityName: string }> = [];
             if (result.Success && result.Results) {
                 for (const row of result.Results) {
-                    const pk = new CompositeKey([{ FieldName: pkFieldName, Value: String(row[pkFieldName] || '') }]);
-                    const name = nameField ? String(row[nameField.Name] || '') : String(row[pkFieldName] || '');
+                    const pk = CompositeKey.FromEntityRecord(relatedEntityInfo, row);
+                    const name = nameField ? String(row[nameField.Name] || '') : pk.Values();
                     records.push({ Name: name || pk.Values(), PrimaryKey: pk, EntityName: relatedEntityName });
                 }
             }
@@ -1944,13 +1950,17 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             // Get entity info to know primary key field name
             const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === group.EntityName);
-            const pkFieldName = entityInfo?.FirstPrimaryKey?.Name || 'ID';
+            if (!entityInfo) {
+                LogStatus(`[DuplicateDetection] Entity '${group.EntityName}' not found in metadata; comparison records not indexed`);
+                return;
+            }
 
             for (const record of result.Results) {
-                const pkValue = String(record[pkFieldName] || '');
-                // Store keyed by both raw PK value and the composite key string format
-                this.comparisonRecords.set(pkValue, record);
-                this.comparisonRecords.set(`${pkFieldName}|${pkValue}`, record);
+                // Store keyed by both the compact segment (raw value for a single-column key) and the
+                // full "Field|Value" concatenated form so either record-id spelling resolves
+                const recordKey = CompositeKey.FromEntityRecord(entityInfo, record);
+                this.comparisonRecords.set(recordKey.ToCompactURLSegment(), record);
+                this.comparisonRecords.set(recordKey.ToConcatenatedString(), record);
             }
         }
     }

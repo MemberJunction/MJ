@@ -1,15 +1,23 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
+import {
+  BaseModelRunner,
+  type ExecutionBound,
+  type ModelVendorCandidate,
+  type FailoverConfiguration,
+  type FailoverAttempt,
+} from './BaseModelRunner';
+import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
+import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
+import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -17,7 +25,8 @@ import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
 import {
     TemplateMessageRole,
     ChildPromptParam,
-    AIPromptParams
+    AIPromptParams,
+    ResolvePromptRunUserID
 } from '@memberjunction/ai-core-plus';
 // json5 is a CJS module: under this package's ESM output its import namespace has no
 // `parse` — only the default export does. `import * as JSON5` made JSON5.parse
@@ -40,26 +49,8 @@ function mimeFromBlockType(type: string): string {
     }
 }
 
-/**
- * The composed bound applied to a single model call: the caller's cancellation token (if any) merged
- * with the prompt's configured `AIPrompt.TimeoutMS` (if any).
- *
- * Produced by `AIPromptRunner.createExecutionBound` and consumed by the bounded ChatCompletion race.
- * `Dispose()` MUST be called when the call settles so the timeout timer and abort listener are
- * released.
- */
-export interface ExecutionBound {
-    /** Merged abort signal; `undefined` when there is neither a caller token nor a prompt timeout. */
-    Signal?: AbortSignal;
-    /** The prompt-configured timeout in ms, when one applies. */
-    TimeoutMS?: number;
-    /** True once the TIMEOUT (not the caller's token) fired — used to build the right error. */
-    TimedOut: () => boolean;
-    /** Releases the timer and the caller-token listener. Safe to call multiple times. */
-    Dispose: () => void;
-}
-
-
+// Both were exported from this module before they moved to BaseModelRunner; keep that import path working.
+export type { ExecutionBound, FailoverConfiguration } from './BaseModelRunner';
 
 /**
  * Advanced AI Prompt execution engine with comprehensive template support, hierarchical template composition,
@@ -119,12 +110,14 @@ export interface ExecutionBound {
  * ExecutePrompt → executeSinglePrompt / executePromptInParallel without
  * discarding vendor-resolution data that would need to be re-derived.
  */
-interface ModelSelectionResult {
+export interface ModelSelectionResult {
   model: MJAIModelEntityExtended | null;
   vendorDriverClass?: string;
   vendorApiName?: string;
   vendorSupportsEffortLevel?: boolean;
   modelEffortLevel?: number;
+  /** The selected candidate's AIPromptModel `PromptConfiguration`, for the native tool-calling gate. */
+  promptModelConfiguration?: AIPromptConfiguration | null;
   selectionInfo?: AIModelSelectionInfo;
   allCandidates: ModelVendorCandidate[];
   /**
@@ -132,7 +125,7 @@ interface ModelSelectionResult {
    * {@link AIPromptRunner.selectModelWithAPIKeyTracked} during selection, keyed by
    * `driverClass:modelID:vendorId` (the same key {@link AIPromptRunner.executeModelWithFailover}
    * uses for its own cache). Lets failover REUSE selection's credential probes instead of
-   * recomputing `hasCredentialsAvailable` for the prefix it already walked.
+   * recomputing `HasCredentialsAvailable` for the prefix it already walked.
    *
    * Because selection short-circuits once the highest-priority credentialed candidate is found
    * (see the DECISION note in {@link AIPromptRunner.selectModelWithAPIKeyTracked}), this map
@@ -141,47 +134,6 @@ interface ModelSelectionResult {
    * there during an actual failover.
    */
   credentialAvailability?: Map<string, boolean>;
-}
-
-/**
- * Represents a model-vendor pair candidate for execution
- */
-interface ModelVendorCandidate {
-  model: MJAIModelEntityExtended;
-  vendorId?: string;
-  vendorName?: string;
-  driverClass: string;
-  apiName?: string;
-  supportsEffortLevel?: boolean;
-  effortLevel?: number;
-  isPreferredVendor: boolean;
-  priority: number; // Higher is better
-  source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank' | 'power-match-fallback';
-}
-
-
-/**
- * Configuration for failover behavior when primary model fails
- */
-interface FailoverConfiguration {
-  strategy: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None';
-  maxAttempts: number;
-  delaySeconds: number;
-  modelStrategy?: 'PreferSameModel' | 'PreferDifferentModel' | 'RequireSameModel';
-  errorScope?: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly';
-}
-
-/**
- * Tracks information about a failover attempt
- */
-interface FailoverAttempt {
-  attemptNumber: number;
-  modelId: string;
-  vendorId?: string;
-  error: Error;
-  errorType: string;
-  duration: number;
-  timestamp: Date;
 }
 
 /**
@@ -203,25 +155,24 @@ interface ResolvedScalarInferenceParams {
   topLogProbs?: number;
 }
 
-export class AIPromptRunner {
-  private _metadata: Metadata;
+export class AIPromptRunner extends BaseModelRunner {
+  /**
+   * The model type this runner requires. Returns 'LLM' for AIPromptRunner.
+   */
+  public override get RequiredModelType(): string {
+    return 'LLM';
+  }
+
+  /** Keeps this runner's uncategorized errors logged under `AIPromptRunner`, as before the base class existed. */
+  protected override get DefaultLogCategory(): string {
+    return 'AIPromptRunner';
+  }
+
   private _templateEngine: TemplateEngineServer;
   private _executionPlanner: ExecutionPlanner;
   private _parallelCoordinator?: IParallelExecutionCoordinator;
   private _jsonValidator: JSONValidator;
   private _modelRunner: AIModelRunner;
-  private _provider: IMetadataProvider | null = null;
-
-  /**
-   * Fire-and-forget AIPromptRun persistence. Prompt-run logging never blocks the execution path on a
-   * DB round-trip; the shared {@link BaseEntitySaveQueue} sequences saves for the SAME entity (the
-   * initial 'Running' INSERT always completes before the finalize UPDATE, and the finalize mutation
-   * runs INSIDE the post-INSERT task so a slow INSERT can never clobber the finalized row). Failures
-   * stay in this runner's structured log stream via the queue's `onError` hook.
-   */
-  private _promptRunQueue = new BaseEntitySaveQueue({
-    onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
-  });
 
   /**
    * Process-wide cache of parsed `OutputExample` JSON, keyed by the raw example string.
@@ -240,19 +191,8 @@ export class AIPromptRunner {
    */
   private static readonly NOT_EVALUATED_REASON = 'Not evaluated (a higher-priority candidate was already selected; set AIPromptParams.forceFullModelEvaluation to probe all)';
 
-  /**
-   * Optional metadata provider override. Callers should set
-   * `instance.Provider = providerToUse` before invoking run methods
-   * in multi-provider contexts. Falls back to the global default provider when unset.
-   */
-  public get Provider(): IMetadataProvider {
-    return this._provider ?? (this._metadata as unknown as IMetadataProvider);
-  }
-  public set Provider(value: IMetadataProvider | null) {
-    this._provider = value;
-  }
-
   constructor() {
+    super();
     this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
@@ -302,418 +242,6 @@ export class AIPromptRunner {
     return this._modelRunner;
   }
 
-  /**
-   * Performs robust validation of an API key
-   * @returns true if the API key is valid (not null, undefined, or empty/whitespace)
-   */
-  private isValidAPIKey(apiKey: string | undefined | null): boolean {
-    if (apiKey === undefined || apiKey === null) {
-      return false;
-    }
-    
-    // Check if it's just whitespace
-    const trimmed = apiKey.trim();
-    return trimmed.length > 0;
-  }
-
-  /**
-   * Internal logging helper that wraps LogStatusEx with verbose control
-   * @param message The message to log
-   * @param verboseOnly Whether this is a verbose-only message
-   * @param params Optional prompt parameters for custom verbose check
-   */
-  protected logStatus(message: string, verboseOnly: boolean = false, params?: AIPromptParams): void {
-    if (verboseOnly) {
-      LogStatusEx({
-        message,
-        verboseOnly: true,
-        isVerboseEnabled: () => params?.verbose === true || IsVerboseLoggingEnabled()
-      });
-    } else {
-      LogStatus(message);
-    }
-  }
-
-  /**
-   * Helper method for enhanced error logging with metadata
-   */
-  protected logError(error: Error | string, options?: {
-    category?: string;
-    metadata?: Record<string, any>;
-    prompt?: MJAIPromptEntityExtended;
-    model?: MJAIModelEntityExtended;
-    severity?: 'warning' | 'error' | 'critical';
-    maxErrorLength?: number;
-  }): void {
-    let errorMessage = error instanceof Error ? error.message : error;
-    const errorObj = error instanceof Error ? error : undefined;
-
-    // Truncate extremely long error messages (like Groq's failed_generation JSON dumps)
-    // Only truncate if maxErrorLength is explicitly set
-    if (options?.maxErrorLength !== undefined && errorMessage.length > options.maxErrorLength) {
-      errorMessage = errorMessage.substring(0, options.maxErrorLength) + '... [truncated]';
-    }
-
-    const metadata: Record<string, any> = {
-      ...options?.metadata
-    };
-
-    // Add prompt information if available
-    if (options?.prompt) {
-      metadata.promptId = options.prompt.ID;
-      metadata.promptName = options.prompt.Name;
-    }
-
-    // Add model information if available
-    if (options?.model) {
-      metadata.modelId = options.model.ID;
-      metadata.modelName = options.model.Name;
-    }
-
-    LogErrorEx({
-      message: errorMessage,
-      error: errorObj,
-      category: options?.category || 'AIPromptRunner',
-      severity: options?.severity || 'error',
-      metadata: Object.keys(metadata).length > 0 ? metadata : undefined
-    });
-  }
-
-  /**
-   * Checks if a model vendor is configured as an inference provider.
-   * Delegates to the memoized {@link AIEngine.IsInferenceProvider} helper so the
-   * "Inference Provider" vendor-type lookup happens once per engine load rather than on
-   * every candidate in every selection pass.
-   * @param modelVendor The model vendor to check
-   * @returns true if the vendor is an inference provider
-   */
-  private isInferenceProvider(modelVendor: MJAIModelVendorEntity): boolean {
-    return AIEngine.Instance.IsInferenceProvider(modelVendor);
-  }
-
-  /**
-   * Resolves credentials for AI model execution using a hierarchical resolution system.
-   *
-   * Resolution priority (highest to lowest):
-   * 1. Per-request override: params.credentialId
-   * 2. Prompt-Model specific: AIPromptModel.CredentialID
-   * 3. Model-Vendor specific: AIModelVendor.CredentialID
-   * 4. Vendor default: AIVendor.CredentialID
-   * 5. Legacy: params.apiKeys[] array
-   * 6. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
-   *
-   * IMPORTANT: When ANY credential ID is found (priorities 1-4), the system uses
-   * the Credentials path and ignores legacy methods (priorities 5-6).
-   *
-   * @param driverClass - The driver class name (e.g., 'OpenAILLM')
-   * @param promptId - The prompt ID for looking up AIPromptModel credentials
-   * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor credentials
-   * @param vendorId - The vendor ID for looking up AIModelVendor and AIVendor credentials
-   * @param params - The prompt execution parameters containing contextUser and optional credentialId
-   * @returns The API key/configuration string to pass to the LLM constructor
-   */
-  private async resolveCredentialForExecution(
-    driverClass: string,
-    promptId: string | undefined,
-    modelId: string | undefined,
-    vendorId: string | undefined,
-    params: AIPromptParams
-  ): Promise<string> {
-    const verbose = params.verbose === true || IsVerboseLoggingEnabled();
-
-    // Priority 1: Per-request override - no failover, explicit choice
-    if (params.credentialId) {
-      return await this.resolveCredentialById(params.credentialId, 'per-request override', params, verbose);
-    }
-
-    // Ensure CredentialEngine is configured for binding lookups
-    await CredentialEngine.Instance.Config(false, params.contextUser);
-
-    // Priority 2: PromptModel bindings (most specific) - with failover
-    if (promptId && modelId) {
-      const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
-      );
-      if (promptModel) {
-        const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('PromptModel', promptModel.ID);
-        const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(PromptModel)', params, verbose);
-        if (result) return result;
-      }
-    }
-
-    // Priority 3: ModelVendor bindings - with failover
-    if (modelId && vendorId) {
-      const modelVendor = AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelId))
-        ?.find(mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active');
-      if (modelVendor) {
-        const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('ModelVendor', modelVendor.ID);
-        const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(ModelVendor)', params, verbose);
-        if (result) return result;
-      }
-    }
-
-    // Priority 4: Vendor bindings - with failover
-    if (vendorId) {
-      const bindings = AIEngine.Instance.GetCredentialBindingsForTarget('Vendor', vendorId);
-      const result = await this.tryCredentialBindingsWithFailover(bindings, 'AICredentialBinding(Vendor)', params, verbose);
-      if (result) return result;
-    }
-
-    // Priority 5: Type-based default credential
-    // If the vendor declares a CredentialTypeID, try to find a default credential of that type
-    if (vendorId) {
-      const vendor = AIEngine.Instance.VendorsByID.get(NormalizeUUID(vendorId));
-      if (vendor?.CredentialTypeID) {
-        const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
-        if (defaultCredential) {
-          const result = await this.tryResolveCredential(defaultCredential, 'type-based default', params, verbose);
-          if (result) return result;
-        }
-      }
-    }
-
-    // No credential bindings found - fall back to legacy methods
-    if (verbose) {
-      this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
-    }
-
-    // Priority 6 & 7: Legacy apiKeys array and environment variables
-    return GetAIAPIKey(driverClass, params.apiKeys, verbose);
-  }
-
-  /**
-   * Attempts to resolve credentials from bindings with priority-based failover.
-   * Tries each binding in priority order until one succeeds.
-   */
-  private async tryCredentialBindingsWithFailover(
-    bindings: MJAICredentialBindingEntity[],
-    source: string,
-    params: AIPromptParams,
-    verbose: boolean
-  ): Promise<string | null> {
-    if (bindings.length === 0) return null;
-
-    for (let i = 0; i < bindings.length; i++) {
-      const binding = bindings[i];
-      const credential = CredentialEngine.Instance.getCredentialById(binding.CredentialID);
-
-      if (!credential) {
-        if (verbose) {
-          this.logStatus(`   ⚠️ Credential ${binding.CredentialID} not found (priority ${binding.Priority}), trying next...`, true, params);
-        }
-        continue;
-      }
-
-      const result = await this.tryResolveCredential(
-        credential,
-        `${source} priority ${binding.Priority}`,
-        params,
-        verbose,
-        i < bindings.length - 1  // hasMoreBindings
-      );
-
-      if (result) return result;
-    }
-
-    return null;
-  }
-
-  /**
-   * Attempts to resolve a single credential, returning null on failure for failover support.
-   */
-  private async tryResolveCredential(
-    credential: MJCredentialEntity,
-    source: string,
-    params: AIPromptParams,
-    verbose: boolean,
-    hasMoreBindings: boolean = false
-  ): Promise<string | null> {
-    try {
-      // Check if credential is active and not expired
-      if (!credential.IsActive) {
-        if (verbose) {
-          this.logStatus(`   ⚠️ Credential "${credential.Name}" is inactive, trying next...`, true, params);
-        }
-        return null;
-      }
-
-      // Expiry is evaluated by the engine rather than compared here, so this
-      // failover path honors the same policy — including any grace period —
-      // that getCredential() would apply a few lines below.
-      const expiration = CredentialEngine.Instance.getExpirationStatus(credential);
-      if (!expiration.usable) {
-        if (verbose) {
-          this.logStatus(
-            `   ⚠️ Credential "${credential.Name}" expired on ${expiration.expiresAt?.toISOString()}, trying next...`,
-            true,
-            params
-          );
-        }
-        return null;
-      }
-      if (expiration.status === 'expiring-soon' && verbose) {
-        this.logStatus(
-          `   ⏳ Credential "${credential.Name}" expires in ${expiration.daysUntilExpiration} day(s)`,
-          true,
-          params
-        );
-      }
-
-      // Resolve the credential values
-      const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
-        credentialId: credential.ID,
-        contextUser: params.contextUser,
-        subsystem: 'AIPromptRunner'
-      });
-
-      if (verbose) {
-        this.logStatus(`   🔐 Using credential from ${source}: "${credential.Name}"`, true, params);
-      }
-
-      return JSON.stringify(resolved.values);
-
-    } catch (error) {
-      if (hasMoreBindings) {
-        // More bindings to try - log warning and continue
-        if (verbose) {
-          this.logStatus(`   ⚠️ Failed to resolve credential "${credential.Name}" from ${source}: ${error instanceof Error ? error.message : String(error)}, trying next...`, true, params);
-        }
-        return null;
-      } else {
-        // No more bindings - log error but still return null for legacy fallback
-        this.logError(error instanceof Error ? error : new Error(String(error)), {
-          category: 'CredentialResolution',
-          severity: 'warning',
-          metadata: {
-            credentialId: credential.ID,
-            credentialName: credential.Name,
-            source
-          },
-          maxErrorLength: params.maxErrorLength
-        });
-        return null;
-      }
-    }
-  }
-
-  /**
-   * Resolves a credential by its explicit ID (used for per-request override).
-   * This does not support failover since it's an explicit choice.
-   */
-  private async resolveCredentialById(
-    credentialId: string,
-    source: string,
-    params: AIPromptParams,
-    verbose: boolean
-  ): Promise<string> {
-    await CredentialEngine.Instance.Config(false, params.contextUser);
-
-    const credential = CredentialEngine.Instance.getCredentialById(credentialId);
-    if (!credential) {
-      throw new Error(`Credential with ID ${credentialId} not found`);
-    }
-
-    const resolved = await CredentialEngine.Instance.getCredential(credential.Name, {
-      credentialId,
-      contextUser: params.contextUser,
-      subsystem: 'AIPromptRunner'
-    });
-
-    if (verbose) {
-      this.logStatus(`   🔐 Using credential from ${source}: "${credential.Name}"`, true, params);
-    }
-
-    return JSON.stringify(resolved.values);
-  }
-
-  /**
-   * Finds a default credential matching a specific credential type.
-   */
-  private findDefaultCredentialByType(credentialTypeId: string): MJCredentialEntity | null {
-    const credentials = CredentialEngine.Instance.Credentials;
-    return credentials.find(c =>
-      UUIDsEqual(c.CredentialTypeID, credentialTypeId) &&
-      c.IsDefault === true &&
-      c.IsActive === true &&
-      CredentialEngine.Instance.getExpirationStatus(c).usable
-    ) || null;
-  }
-
-  /**
-   * Checks if credentials are available for a given model-vendor combination.
-   * This is a pre-flight check used during model selection to determine which
-   * candidates have valid authentication configured.
-   *
-   * Checks the credential hierarchy:
-   * 1. Per-request override: params.credentialId
-   * 2. PromptModel bindings: AICredentialBinding WHERE BindingType='PromptModel'
-   * 3. ModelVendor bindings: AICredentialBinding WHERE BindingType='ModelVendor'
-   * 4. Vendor bindings: AICredentialBinding WHERE BindingType='Vendor'
-   * 5. Type-based default: Credential.IsDefault=1 matching AIVendor.CredentialTypeID
-   * 6. Legacy: params.apiKeys[] array
-   * 7. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
-   *
-   * @param driverClass - The driver class name (e.g., 'OpenAILLM')
-   * @param promptId - The prompt ID for looking up AIPromptModel bindings
-   * @param modelId - The model ID for looking up AIPromptModel and AIModelVendor bindings
-   * @param vendorId - The vendor ID for looking up AIModelVendor and AIVendor bindings
-   * @param params - The prompt execution parameters
-   * @returns true if credentials are available, false otherwise
-   */
-  private hasCredentialsAvailable(
-    driverClass: string,
-    promptId: string | undefined,
-    modelId: string | undefined,
-    vendorId: string | undefined,
-    params?: AIPromptParams
-  ): boolean {
-    // Priority 1: Per-request override
-    if (params?.credentialId) {
-      // Assume valid if credential ID is provided - will be validated at execution time
-      return true;
-    }
-
-    // Priority 2: PromptModel bindings
-    if (promptId && modelId) {
-      const promptModel = AIEngine.Instance.PromptModels.find(
-        pm => UUIDsEqual(pm.PromptID, promptId) && UUIDsEqual(pm.ModelID, modelId)
-      );
-      if (promptModel && AIEngine.Instance.HasCredentialBindings('PromptModel', promptModel.ID)) {
-        return true;
-      }
-    }
-
-    // Priority 3: ModelVendor bindings
-    if (modelId && vendorId) {
-      const modelVendor = AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelId))
-        ?.find(mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active');
-      if (modelVendor && AIEngine.Instance.HasCredentialBindings('ModelVendor', modelVendor.ID)) {
-        return true;
-      }
-    }
-
-    // Priority 4: Vendor bindings
-    if (vendorId) {
-      if (AIEngine.Instance.HasCredentialBindings('Vendor', vendorId)) {
-        return true;
-      }
-    }
-
-    // Priority 5: Type-based default credential
-    if (vendorId) {
-      const vendor = AIEngine.Instance.VendorsByID.get(NormalizeUUID(vendorId));
-      if (vendor?.CredentialTypeID) {
-        const defaultCredential = this.findDefaultCredentialByType(vendor.CredentialTypeID);
-        if (defaultCredential) {
-          return true;
-        }
-      }
-    }
-
-    // Priority 6 & 7: Legacy methods - check if API key is available
-    const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose);
-    return this.isValidAPIKey(apiKey);
-  }
 
   /**
    * Executes an AI prompt with full support for templates, model selection, and validation.
@@ -801,14 +329,43 @@ export class AIPromptRunner {
           throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
         }
 
+        // Tell the template which path this run is actually taking, BEFORE it renders. The loop
+        // template drops its action catalog and the `'Actions'` step type under native mode
+        // (plan §8.4), and that is only safe if the flag is the gate's real answer rather than the
+        // caller's intent — a prompt that suppressed its catalog while the model received no tools
+        // would leave the agent unable to act at all.
+        // Caveat: failover re-resolves the gate per attempt, so a failover onto a model without
+        // the capability keeps the already-rendered native wording. The request still degrades
+        // correctly (no tools are sent); the prompt is merely quieter than it should be.
+        //
+        // This must resolve from the SAME inputs the request-time call uses (see
+        // `applyNativeToolCalling`), or the template can render for the opposite path: the vendor
+        // actually selected — not merely the caller's override, which is usually absent — and the
+        // selected candidate's AIPromptModel bag. Resolving without those skips the two layers the
+        // capability is normally declared on and silently inverts the decision.
+        if (params.tools?.length) {
+          const nativeDecision = this.ResolveNativeToolCallingDecision(
+            prompt, params, selection.model,
+            selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
+            selection.promptModelConfiguration);
+          params.data = {
+            ...(params.data ?? {}),
+            _NATIVE_TOOL_CALLING: nativeDecision.useNativeTools,
+            // The template renders the implicit-mode section only when this is the gate's REAL answer.
+            _NATIVE_CONTROL_FLOW: nativeDecision.controlFlow
+          };
+        }
+
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
           // Use the override instead of rendering child templates and parent template
           renderedPromptText = params.systemPromptOverride;
           this.logStatus(`   Using system prompt override for prompt "${prompt.Name}" (bypassing hierarchical template rendering)`, true, params);
         } else {
-          // Render all child prompt templates recursively
-          childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
+          // Render all child prompt templates recursively (or reuse pre-rendered templates)
+          childTemplateRenderingResult = params.PreRenderedChildTemplates
+            ? { renderedTemplates: params.PreRenderedChildTemplates }
+            : await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
           // Render the parent prompt with child templates embedded
           renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
         }
@@ -970,9 +527,10 @@ export class AIPromptRunner {
     let vendorApiName = existingSelection?.vendorApiName;
     let vendorSupportsEffortLevel = existingSelection?.vendorSupportsEffortLevel;
     let modelEffortLevel = existingSelection?.modelEffortLevel;
+    let promptModelConfiguration = existingSelection?.promptModelConfiguration;
     let allCandidates: ModelVendorCandidate[] = existingSelection?.allCandidates ?? [];
     // Credential probes already done during selection — reused by failover so it doesn't
-    // recompute hasCredentialsAvailable for the prefix it walks before the selected candidate.
+    // recompute HasCredentialsAvailable for the prefix it walks before the selected candidate.
     let credentialAvailability = existingSelection?.credentialAvailability;
 
     if (!selectedModel) {
@@ -989,6 +547,7 @@ export class AIPromptRunner {
       vendorApiName = modelResult.vendorApiName;
       vendorSupportsEffortLevel = modelResult.vendorSupportsEffortLevel;
       modelEffortLevel = modelResult.modelEffortLevel;
+      promptModelConfiguration = modelResult.promptModelConfiguration;
       modelSelectionInfo = modelResult.selectionInfo;
       allCandidates = modelResult.allCandidates || [];
       credentialAvailability = modelResult.credentialAvailability;
@@ -1003,7 +562,7 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo);
+    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo, params.RunType);
 
     // Check for cancellation before model execution
     if (params.cancellationToken?.aborted) {
@@ -1022,12 +581,17 @@ export class AIPromptRunner {
       vendorApiName,
       vendorSupportsEffortLevel,
       modelEffortLevel, // Pass model-specific effort level
-      credentialAvailability // Reuse credential probes from selection
+      credentialAvailability, // Reuse credential probes from selection
+      promptModelConfiguration
     );
 
     // Calculate execution metrics
     const endTime = new Date();
     const executionTimeMS = endTime.getTime() - startTime.getTime();
+
+    // Layer 4 instrumentation: attribute this run to the path it actually took, before the update
+    // persists it. Left NULL when no model call happened, which is the honest value.
+    promptRun.ToolCallingMode = GetToolCallingMode(modelResult) ?? null;
 
     // Update the prompt run with results including validation attempts and cumulative tokens
     await this.updatePromptRun(promptRun, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens);
@@ -1129,19 +693,30 @@ export class AIPromptRunner {
         this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
       }
 
+      // Apply this runner's model-type floor to everything the planner may choose from: a prompt
+      // typed differently fails here, and neither the model pool nor the prompt's bindings can admit
+      // a model of another type (the planner's own filters treat an empty AIModelTypeID as "any").
+      this.AssertPromptMatchesRequiredType(prompt);
+      if (modelSelectionPrompt !== prompt) {
+        this.AssertPromptMatchesRequiredType(modelSelectionPrompt);
+      }
+      const requiredTypeId = this.RequiredModelTypeID();
+      const typedModels = AIEngine.Instance.Models.filter(m => UUIDsEqual(m.AIModelTypeID, requiredTypeId));
+
       // Get prompt-specific model associations using the model selection prompt
       const promptModels = AIEngine.Instance.PromptModels.filter(
         (pm) =>
           UUIDsEqual(pm.PromptID, modelSelectionPrompt.ID) &&
           (pm.Status === 'Active' || pm.Status === 'Preview') &&
-          (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)),
+          (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)) &&
+          UUIDsEqual(AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID))?.AIModelTypeID, requiredTypeId),
       );
 
       // Create execution plan using the modelSelectionPrompt for model configurations
       executionTasks = this._executionPlanner.createExecutionPlan(
         modelSelectionPrompt,
         promptModels,
-        AIEngine.Instance.Models,
+        typedModels,
         renderedPromptText,
         params.contextUser,
         params.configurationId,
@@ -1154,13 +729,41 @@ export class AIPromptRunner {
       throw new Error(`No execution tasks created for parallel execution of prompt ${prompt.Name}`);
     }
 
+    const parallelUserId = ResolvePromptRunUserID({ UserID: params.UserID, ContextUser: params.contextUser }) ?? undefined;
+    for (const task of executionTasks) {
+      task.AgentID = params.agentId;
+      task.UserID = parallelUserId;
+    }
+
     // Check for cancellation before executing tasks
     if (params.cancellationToken?.aborted) {
       throw new Error('Parallel execution was cancelled before task execution');
     }
 
-    // Execute tasks in parallel
-    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken);
+    // 1. Create (or reuse existingPromptRun) the consolidated parent BEFORE parallel tasks run (§5.1).
+    // Use the first task's model for the initial ModelID; after selection, set ModelID/VendorID to the selected arm's.
+    const initialModel = existingSelection?.model || executionTasks[0].model;
+    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(
+      prompt,
+      initialModel,
+      params,
+      renderedPromptText,
+      startTime,
+      params.override?.vendorId,
+      existingSelection?.selectionInfo,
+      'ParallelParent',
+    );
+    consolidatedPromptRun.RunType = 'ParallelParent';
+    consolidatedPromptRun.WasSelectedResult = false;
+
+    // Execute tasks in parallel - pass consolidatedPromptRun.ID as parentPromptRunId
+    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(
+      params,
+      executionTasks,
+      undefined,
+      consolidatedPromptRun.ID,
+      params.cancellationToken,
+    );
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
@@ -1174,17 +777,37 @@ export class AIPromptRunner {
 
     let selectedResult = successfulResults[0]; // Default to first
 
-    // Use result selector if configured
+    // Use result selector if configured - pass consolidatedPromptRun.ID and contextUser
     if (successfulResults.length > 1 && prompt.ResultSelectorPromptID) {
       const selectionConfig: ResultSelectionConfig = {
         method: 'PromptSelector',
         selectorPromptId: prompt.ResultSelectorPromptID,
       };
 
-      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken);
+      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(
+        successfulResults,
+        selectionConfig,
+        consolidatedPromptRun.ID,
+        params.cancellationToken,
+        params.contextUser,
+      );
       if (aiSelectedResult) {
         selectedResult = aiSelectedResult;
       }
+    }
+
+    // Update parent with selected arm's model and vendor
+    consolidatedPromptRun.ModelID = selectedResult.task.model.ID;
+    if (selectedResult.task.vendorId) {
+      consolidatedPromptRun.VendorID = selectedResult.task.vendorId;
+    } else if (selectedResult.task.promptModel?.VendorID) {
+      consolidatedPromptRun.VendorID = selectedResult.task.promptModel.VendorID;
+    }
+
+    // Ensure selectedResult child is marked WasSelectedResult = true
+    if (selectedResult.promptRun) {
+      selectedResult.promptRun.WasSelectedResult = true;
+      await selectedResult.promptRun.Save();
     }
 
     // Calculate total tokens and costs from all parallel executions
@@ -1211,16 +834,18 @@ export class AIPromptRunner {
       }
     }
 
-    // Use existing prompt run if provided (hierarchical case) or create new one
-    // Use the model selection info if provided (from hierarchical execution)
-    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId, existingSelection?.selectionInfo);
-
     // Update with parallel execution metadata
     const endTime = new Date();
     consolidatedPromptRun.CompletedAt = endTime;
     consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
     consolidatedPromptRun.Result = selectedResult.rawResult || '';
     consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
+
+    // Layer 4 instrumentation, same as the single-model path. This path reaches the same
+    // `executeModel` and therefore declares tools, so leaving the column NULL here would tell the
+    // agent loop a NativeImplicit turn was not implicit — every control-flow call would then be
+    // rejected as an undeclared tool and the loop would retry on tools it declared itself.
+    consolidatedPromptRun.ToolCallingMode = GetToolCallingMode(selectedResult.modelResult) ?? null;
     
     // Extract token and cost info from selected result
     const selectedResultUsage = selectedResult.modelResult?.data?.usage;
@@ -1232,9 +857,8 @@ export class AIPromptRunner {
       // prices the full input including cached tokens rather than dropping them.
       consolidatedPromptRun.TokensCacheRead = selectedResultUsage.cacheReadTokens ?? 0;
       consolidatedPromptRun.TokensCacheWrite = selectedResultUsage.cacheWriteTokens ?? 0;
-      if (selectedResultUsage.cost !== undefined) {
-        consolidatedPromptRun.Cost = selectedResultUsage.cost;
-      }
+      // NOTE (§5.1): On the parent, do NOT assign Cost from the selected arm. Leave Cost = null.
+      // TotalCost is maintained by server-side TriggerParentCostRollup.
       if (selectedResultUsage.costCurrency !== undefined) {
         consolidatedPromptRun.CostCurrency = selectedResultUsage.costCurrency;
       }
@@ -1259,19 +883,20 @@ export class AIPromptRunner {
       });
     }
 
-    // For parallel execution, set rollup fields to match totals (no child execution to roll up)
+    // For parallel execution, set rollup fields to match totals
     consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
     consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
     consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
     consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
     consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
     if (hasCost) {
+      consolidatedPromptRun.DescendantCost = totalCost;
       consolidatedPromptRun.TotalCost = totalCost;
     }
     
     // Set Status and WasSelectedResult for parallel execution
     consolidatedPromptRun.Status = parallelResult.successCount > 0 ? 'Completed' : 'Failed';
-    consolidatedPromptRun.WasSelectedResult = true; // This is the consolidated result chosen by judge
+    consolidatedPromptRun.WasSelectedResult = false; // WasSelectedResult stays on the selected child, not the parent
 
     // Persist the consolidated run fire-and-forget; the finalize UPDATE chains after its INSERT via
     // the save queue. These fields are set after all the awaited parallel work, so the INSERT has long
@@ -1416,6 +1041,29 @@ export class AIPromptRunner {
    * @param cancellationToken - Cancellation token for aborting rendering
    * @returns Promise with rendered templates map
    */
+  /**
+   * Render a set of child prompt templates WITHOUT executing anything, returning the rendered text
+   * keyed by each child's parent placeholder — exactly what the hierarchical execution path embeds
+   * into the parent template.
+   *
+   * Exposed for callers that need a child's rendered text before the run: the loop agent uses it to
+   * relocate a volatile specialization into the trailing runtime-state message (see
+   * `ResolveSpecializationPlacement` in `@memberjunction/ai-agents`) while the system prompt renders a
+   * stub in its place. Rendering is deterministic for the same inputs, so a subsequent execution of
+   * the same params reproduces the same text.
+   *
+   * @param childPrompts The child prompt params, as they would be passed in `AIPromptParams.childPrompts`.
+   * @param params The parent params (context user, data, template data) the children render against.
+   * @param cancellationToken Optional abort signal.
+   */
+  public async RenderChildPromptTemplates(
+    childPrompts: ChildPromptParam[],
+    params: AIPromptParams,
+    cancellationToken?: AbortSignal
+  ): Promise<{ renderedTemplates: Record<string, string> }> {
+    return this.renderChildPromptTemplates(childPrompts, params, cancellationToken);
+  }
+
   private async renderChildPromptTemplates(
     childPrompts: ChildPromptParam[],
     params: AIPromptParams,
@@ -1683,10 +1331,10 @@ export class AIPromptRunner {
 
   /**
    * Selects the appropriate AI model based on prompt configuration and parameters.
-   * Uses the unified buildModelVendorCandidates method to create an ordered list of candidates,
+   * Uses the unified BuildModelVendorCandidates method to create an ordered list of candidates,
    * then selects the first one with an available API key.
    */
-  private async selectModel(
+  protected async selectModel(
     prompt: MJAIPromptEntityExtended,
     explicitModelId?: string,
     contextUser?: UserInfo,
@@ -1719,12 +1367,12 @@ export class AIPromptRunner {
       }
 
       // Build unified list of model-vendor candidates
-      const candidates = this.buildModelVendorCandidates(
+      const candidates = this.BuildModelVendorCandidates(
         prompt,
         explicitModelId,
         configurationId,
         vendorId,
-        params.verbose
+        params?.verbose
       );
 
       // Track all models considered for selection info
@@ -1829,6 +1477,7 @@ export class AIPromptRunner {
         vendorApiName: selected.apiName,
         vendorSupportsEffortLevel: selected.supportsEffortLevel,
         modelEffortLevel: selected.effortLevel, // Pass through model-specific effort level
+        promptModelConfiguration: selected.promptModelConfiguration,
         allCandidates: candidates,
         credentialAvailability,
         selectionInfo: this.createSelectionInfo({
@@ -1864,719 +1513,6 @@ export class AIPromptRunner {
         })
       };
     }
-  }
-
-  /**
-   * Builds a unified, ordered list of model-vendor candidates based on all selection criteria.
-   * Uses a 3-phase approach to properly handle SelectionStrategy='Specific' with AIPromptModel priorities.
-   * 
-   * Phase 1: Handle explicit model ID (highest priority)
-   * Phase 2: Check if SelectionStrategy='Specific' with AIPromptModel entries - use ONLY those with AIPromptModel priorities
-   * Phase 3: Use general selection strategy (fallback) - blended priorities from legacy behavior
-   * 
-   * @param prompt - The AI prompt with selection criteria
-   * @param explicitModelId - Explicitly specified model ID (highest priority)
-   * @param configurationId - Configuration ID for filtering
-   * @param preferredVendorId - Preferred vendor ID
-   * @returns Ordered array of model-vendor candidates (highest priority first)
-   */
-  private buildModelVendorCandidates(
-    prompt: MJAIPromptEntityExtended,
-    explicitModelId?: string,
-    configurationId?: string,
-    preferredVendorId?: string,
-    verbose?: boolean
-  ): ModelVendorCandidate[] {
-    // PHASE 1: Handle explicit model ID (highest priority)
-    if (explicitModelId) {
-      return this.buildCandidatesForExplicitModel(explicitModelId, prompt, preferredVendorId);
-    }
-
-    // PHASE 2: SelectionStrategy='Specific' - Use explicit AIPromptModel configuration
-    if (prompt.SelectionStrategy === 'Specific') {
-      return this.buildCandidatesForSpecificStrategy(prompt, configurationId, verbose);
-    }
-
-    // PHASE 3: Build candidates with configuration-aware fallback hierarchy
-    // (SelectionStrategy='Default' or 'ByPower')
-    return this.buildCandidatesForGeneralSelection(prompt, configurationId, preferredVendorId, verbose);
-  }
-
-  /**
-   * PHASE 1: Build candidates for explicitly specified model ID.
-   * Returns candidates for the single model if it's active and compatible.
-   */
-  private buildCandidatesForExplicitModel(
-    explicitModelId: string,
-    prompt: MJAIPromptEntityExtended,
-    preferredVendorId?: string
-  ): ModelVendorCandidate[] {
-    const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(explicitModelId));
-    if (!model || !model.IsActive) {
-      return [];
-    }
-
-    // Check model type compatibility
-    if (prompt.AIModelTypeID && !UUIDsEqual(model.AIModelTypeID, prompt.AIModelTypeID)) {
-      return [];
-    }
-
-    const candidates = this.createCandidatesForModel(model, 20000, 'explicit', preferredVendorId);
-    candidates.sort((a, b) => b.priority - a.priority);
-    return candidates;
-  }
-
-  /**
-   * PHASE 2: Build candidates for 'Specific' selection strategy.
-   * Uses AIPromptModel configuration with clean ranking:
-   * 1. Config-matching models first (by priority DESC)
-   * 2. Then universal (null config) models (by priority DESC)
-   */
-  private buildCandidatesForSpecificStrategy(
-    prompt: MJAIPromptEntityExtended,
-    configurationId?: string,
-    verbose?: boolean
-  ): ModelVendorCandidate[] {
-    // Get all active AIPromptModel records for this prompt
-    const allPromptModels = AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview')
-    );
-
-    // Filter by configuration matching rules
-    const promptModels = this.filterPromptModelsByConfiguration(allPromptModels, configurationId);
-
-    // Sort: config-specific before universal, then by priority DESC within each group
-    const sortedPromptModels = this.sortPromptModelsForSpecificStrategy(promptModels, configurationId);
-
-    // Build candidates maintaining order
-    const candidates = this.buildCandidatesFromPromptModels(sortedPromptModels);
-
-    // If RequireSpecificModels is true (or no candidates at all), enforce strict behavior
-    if (candidates.length === 0 && prompt.RequireSpecificModels) {
-      const configInfo = configurationId ? ` with configuration "${configurationId}"` : '';
-      throw new Error(
-        `SelectionStrategy is 'Specific' but no valid AIPromptModel candidates found for prompt "${prompt.Name}"${configInfo}. ` +
-        `Please configure AIPromptModel records for this prompt.`
-      );
-    }
-
-    // When RequireSpecificModels is false, append power-matched fallback candidates
-    // so that if none of the specific models have valid credentials, the system
-    // gracefully falls back to other available models at a similar power level.
-    if (!prompt.RequireSpecificModels) {
-      this.appendPowerMatchedFallbackCandidates(candidates, prompt, sortedPromptModels, verbose);
-    }
-
-    if (candidates.length === 0) {
-      const configInfo = configurationId ? ` with configuration "${configurationId}"` : '';
-      throw new Error(
-        `SelectionStrategy is 'Specific' but no valid AIPromptModel candidates found for prompt "${prompt.Name}"${configInfo}. ` +
-        `Please configure AIPromptModel records for this prompt.`
-      );
-    }
-
-    if (verbose) {
-      LogStatus(`Using SelectionStrategy='Specific' with ${sortedPromptModels.length} AIPromptModel entries, generated ${candidates.length} candidates`);
-    }
-
-    return candidates;
-  }
-
-  /**
-   * Appends fallback candidates from the global model pool, sorted by proximity to the
-   * average power rank of the originally configured models. This ensures that when
-   * specific models lack credentials, the fallback uses models of similar capability
-   * rather than defaulting to the most or least powerful available model.
-   *
-   * Fallback candidates are given lower priority than any specific candidate so
-   * configured models are always preferred when their credentials are available.
-   */
-  private appendPowerMatchedFallbackCandidates(
-    candidates: ModelVendorCandidate[],
-    prompt: MJAIPromptEntityExtended,
-    configuredPromptModels: MJAIPromptModelEntity[],
-    verbose?: boolean
-  ): void {
-    // Compute target power rank from the configured models
-    const targetPowerRank = this.computeTargetPowerRank(configuredPromptModels);
-
-    // Get all active models matching the prompt's model type, excluding already-present models
-    const existingModelIds = new Set(candidates.map(c => c.model.ID));
-    const fallbackPool = AIEngine.Instance.Models.filter(
-      m => m.IsActive &&
-           !existingModelIds.has(m.ID) &&
-           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID))
-    );
-
-    if (fallbackPool.length === 0) return;
-
-    // Sort by proximity to the target power rank
-    const sorted = this.sortByPowerProximity(fallbackPool, targetPowerRank);
-
-    // Assign priorities below the lowest specific candidate
-    const lowestSpecificPriority = candidates.length > 0
-      ? Math.min(...candidates.map(c => c.priority))
-      : 1000;
-    const fallbackBasePriority = lowestSpecificPriority - 100;
-
-    sorted.forEach((model, index) => {
-      const modelCandidates = this.createCandidatesForModel(
-        model,
-        fallbackBasePriority - index * 10,
-        'power-match-fallback'
-      );
-      candidates.push(...modelCandidates);
-    });
-
-    if (verbose && sorted.length > 0) {
-      LogStatus(
-        `Appended ${sorted.length} power-matched fallback models (target PowerRank: ${targetPowerRank}) ` +
-        `for prompt "${prompt.Name}" since RequireSpecificModels is false`
-      );
-    }
-  }
-
-  /**
-   * Computes the target power rank from configured AIPromptModel records.
-   * Uses the weighted average (by priority) of the configured models' power ranks,
-   * so higher-priority models have more influence on the target.
-   * Falls back to simple average if priorities are all zero.
-   */
-  private computeTargetPowerRank(promptModels: MJAIPromptModelEntity[]): number {
-    if (promptModels.length === 0) return 0;
-
-    const modelsWithPower = promptModels
-      .map(pm => {
-        const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
-        return { powerRank: model?.PowerRank ?? 0, priority: pm.Priority || 1 };
-      });
-
-    const totalWeight = modelsWithPower.reduce((sum, m) => sum + m.priority, 0);
-    if (totalWeight === 0) {
-      // All priorities are 0, use simple average
-      return Math.round(modelsWithPower.reduce((sum, m) => sum + m.powerRank, 0) / modelsWithPower.length);
-    }
-
-    const weightedSum = modelsWithPower.reduce((sum, m) => sum + m.powerRank * m.priority, 0);
-    return Math.round(weightedSum / totalWeight);
-  }
-
-  /**
-   * Sorts models by proximity to a target power rank (closest first).
-   * When two models are equidistant, the higher-powered one is preferred.
-   */
-  private sortByPowerProximity(
-    models: MJAIModelEntityExtended[],
-    targetPowerRank: number
-  ): MJAIModelEntityExtended[] {
-    return [...models].sort((a, b) => {
-      const distA = Math.abs((a.PowerRank ?? 0) - targetPowerRank);
-      const distB = Math.abs((b.PowerRank ?? 0) - targetPowerRank);
-      if (distA !== distB) return distA - distB; // Closer to target first
-      return (b.PowerRank ?? 0) - (a.PowerRank ?? 0); // Tie-break: higher power first
-    });
-  }
-
-  /**
-   * PHASE 3: Build candidates for general selection strategies ('Default' or 'ByPower').
-   * Uses configuration-aware fallback hierarchy with legacy blended priority calculation.
-   */
-  private buildCandidatesForGeneralSelection(
-    prompt: MJAIPromptEntityExtended,
-    configurationId?: string,
-    preferredVendorId?: string,
-    verbose?: boolean
-  ): ModelVendorCandidate[] {
-    const preferredVendorName = preferredVendorId ?
-      AIEngine.Instance.VendorsByID.get(NormalizeUUID(preferredVendorId))?.Name : undefined;
-
-    // Get prompt models for configuration
-    const promptModels = this.getPromptModelsForConfiguration(prompt, configurationId);
-
-    const candidates: ModelVendorCandidate[] = [];
-
-    if (promptModels.length > 0) {
-      // Use prompt-specific models with blended priorities
-      this.addPromptSpecificCandidates(candidates, promptModels, preferredVendorId);
-
-      // Add configuration fallback candidates if needed
-      if (configurationId) {
-        this.addConfigurationFallbackCandidates(candidates, prompt, configurationId, preferredVendorId, verbose);
-      }
-    } else if (this.hasAnyPromptModelBindings(prompt)) {
-      // Bindings exist for this prompt but none are Active/Preview (e.g. deliberately deactivated) —
-      // do NOT silently fall back to the global model pool, which would mask an intentional
-      // "no model available for this prompt" state. Leave candidates empty so the caller surfaces
-      // a "no suitable model found" failure instead of succeeding against an unrelated model.
-    } else {
-      // No prompt-specific bindings were ever configured, use the general selection strategy
-      this.addStrategyBasedCandidates(candidates, prompt, preferredVendorName);
-    }
-
-    // Sort all candidates by priority (highest first)
-    candidates.sort((a, b) => b.priority - a.priority);
-
-    return candidates;
-  }
-
-  /**
-   * Helper: Filter prompt models by configuration matching rules.
-   * Supports configuration inheritance - includes models from the entire inheritance chain.
-   */
-  private filterPromptModelsByConfiguration(
-    allPromptModels: MJAIPromptModelEntity[],
-    configurationId?: string
-  ): MJAIPromptModelEntity[] {
-    if (configurationId) {
-      // Get the configuration inheritance chain
-      const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
-      const chainIds = new Set(chain.map(c => NormalizeUUID(c.ID)));
-
-      // Include models matching any config in the chain, plus null-config (universal fallback)
-      return allPromptModels.filter(
-        pm => (pm.ConfigurationID && chainIds.has(NormalizeUUID(pm.ConfigurationID))) ||
-              pm.ConfigurationID === null
-      );
-    } else {
-      // No config specified - only include null-config models
-      return allPromptModels.filter(pm => pm.ConfigurationID === null);
-    }
-  }
-
-  /**
-   * Helper: Sort prompt models for 'Specific' strategy.
-   * Respects configuration inheritance chain - child configs first, then parents, then null-config.
-   * Within each config level, sorts by priority DESC.
-   */
-  private sortPromptModelsForSpecificStrategy(
-    promptModels: MJAIPromptModelEntity[],
-    configurationId?: string
-  ): MJAIPromptModelEntity[] {
-    if (!configurationId) {
-      // No config specified - just sort by priority
-      return promptModels.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
-    }
-
-    // Get the configuration inheritance chain and create position map
-    const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
-    const chainOrder = new Map(chain.map((c, index) => [c.ID, index]));
-
-    return promptModels.sort((a, b) => {
-      // Primary: Chain position (lower index = higher priority, null config = last)
-      const aChainPos = a.ConfigurationID ? (chainOrder.get(a.ConfigurationID) ?? 999) : 1000;
-      const bChainPos = b.ConfigurationID ? (chainOrder.get(b.ConfigurationID) ?? 999) : 1000;
-
-      if (aChainPos !== bChainPos) {
-        return aChainPos - bChainPos; // Lower chain position first (child before parent)
-      }
-
-      // Secondary: Higher priority first within same config level
-      return (b.Priority || 0) - (a.Priority || 0);
-    });
-  }
-
-  /**
-   * Helper: Build candidates from sorted AIPromptModel records.
-   * Expands VendorID=null to all vendors for that model.
-   */
-  private buildCandidatesFromPromptModels(
-    promptModels: MJAIPromptModelEntity[]
-  ): ModelVendorCandidate[] {
-    const candidates: ModelVendorCandidate[] = [];
-
-    for (let i = 0; i < promptModels.length; i++) {
-      const pm = promptModels[i];
-      // Compute priority as inverse of array position so highest-priority (first) gets the largest number
-      const computedPriority = promptModels.length - i;
-      const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
-      if (!model || !model.IsActive) continue;
-
-      if (pm.VendorID) {
-        // Specific vendor specified - create single candidate
-        const candidate = this.createCandidateForSpecificVendor(model, pm, computedPriority);
-        if (candidate) {
-          candidates.push(candidate);
-        }
-      } else {
-        // No vendor specified - create candidates for all vendors
-        const vendorCandidates = this.createCandidatesForAllVendors(model, computedPriority);
-        candidates.push(...vendorCandidates);
-      }
-    }
-
-    return candidates;
-  }
-
-  /**
-   * Helper: Create candidate for specific vendor from AIPromptModel.
-   */
-  private createCandidateForSpecificVendor(
-    model: MJAIModelEntityExtended,
-    promptModel: MJAIPromptModelEntity,
-    computedPriority: number = 0
-  ): ModelVendorCandidate | null {
-    // Use the model's precomputed ModelVendors (grouped at engine load) instead of scanning
-    // the global ModelVendors array — model.ID === promptModel.ModelID here.
-    const modelVendor = model.ModelVendors.find(
-      mv => UUIDsEqual(mv.VendorID, promptModel.VendorID) &&
-            mv.Status === 'Active' &&
-            this.isInferenceProvider(mv)
-    );
-
-    if (!modelVendor) return null;
-
-    return {
-      model,
-      vendorId: modelVendor.VendorID,
-      vendorName: modelVendor.Vendor,
-      driverClass: modelVendor.DriverClass || model.DriverClass,
-      apiName: modelVendor.APIName || model.APIName,
-      supportsEffortLevel: modelVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
-      effortLevel: promptModel.EffortLevel ?? undefined, // Model-specific effort level override
-      isPreferredVendor: false,
-      priority: computedPriority,
-      source: 'prompt-model'
-    };
-  }
-
-  /**
-   * Helper: Create candidates for all vendors of a model, sorted by vendor priority.
-   */
-  private createCandidatesForAllVendors(
-    model: MJAIModelEntityExtended,
-    computedPriority: number = 0
-  ): ModelVendorCandidate[] {
-    const vendors = model.ModelVendors
-      .filter(mv =>
-        mv.Status === 'Active' &&
-        this.isInferenceProvider(mv)
-      )
-      .sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
-
-    const candidates: ModelVendorCandidate[] = [];
-
-    for (const vendor of vendors) {
-      candidates.push({
-        model,
-        vendorId: vendor.VendorID,
-        vendorName: vendor.Vendor,
-        driverClass: vendor.DriverClass || model.DriverClass,
-        apiName: vendor.APIName || model.APIName,
-        supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
-        isPreferredVendor: false,
-        priority: computedPriority,
-        source: 'prompt-model'
-      });
-    }
-
-    // If no vendors found, use model defaults
-    if (candidates.length === 0 && model.DriverClass) {
-      candidates.push({
-        model,
-        driverClass: model.DriverClass,
-        apiName: model.APIName,
-        supportsEffortLevel: model.SupportsEffortLevel ?? false,
-        isPreferredVendor: false,
-        priority: computedPriority,
-        source: 'prompt-model'
-      });
-    }
-
-    return candidates;
-  }
-
-  /**
-   * Helper: true if this prompt has any AIPromptModel bindings at all, regardless of Status or
-   * ConfigurationID. Distinguishes "no bindings were ever configured" (general selection strategy
-   * should apply) from "bindings exist but are all Inactive" (no model should be selected).
-   */
-  private hasAnyPromptModelBindings(prompt: MJAIPromptEntityExtended): boolean {
-    return AIEngine.Instance.PromptModels.some(pm => UUIDsEqual(pm.PromptID, prompt.ID));
-  }
-
-  /**
-   * Helper: Get prompt models for configuration with inheritance chain fallback.
-   * Walks the configuration inheritance chain looking for prompt models.
-   * Returns models from the first config in the chain that has any, or falls back to null-config.
-   */
-  private getPromptModelsForConfiguration(
-    prompt: MJAIPromptEntityExtended,
-    configurationId?: string
-  ): MJAIPromptModelEntity[] {
-    if (configurationId) {
-      // Get the configuration inheritance chain (child -> parent -> grandparent -> ...)
-      const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
-
-      // Walk the chain looking for prompt models
-      for (const config of chain) {
-        const promptModels = AIEngine.Instance.PromptModels.filter(
-          pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-                (pm.Status === 'Active' || pm.Status === 'Preview') &&
-                UUIDsEqual(pm.ConfigurationID, config.ID)
-        );
-
-        if (promptModels.length > 0) {
-          return promptModels;
-        }
-      }
-
-      // No match in chain, fall back to NULL config models
-      LogStatus(`No models found in configuration chain for "${configurationId}", falling back to default models`);
-    }
-
-    // Return null-config (universal) models
-    return AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
-            !pm.ConfigurationID
-    );
-  }
-
-  /**
-   * Helper: Add prompt-specific candidates with blended priorities (legacy behavior).
-   */
-  private addPromptSpecificCandidates(
-    candidates: ModelVendorCandidate[],
-    promptModels: MJAIPromptModelEntity[],
-    preferredVendorId?: string
-  ): void {
-    for (const pm of promptModels) {
-      const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
-      if (model && model.IsActive) {
-        const modelCandidates = this.createCandidatesForModel(
-          model,
-          5000,
-          'prompt-model',
-          preferredVendorId,
-          pm.Priority
-        );
-        candidates.push(...modelCandidates);
-      }
-    }
-  }
-
-  /**
-   * Helper: Add configuration fallback candidates from the inheritance chain.
-   * Adds models from parent configs (with decreasing priority) and null-config models as final fallback.
-   */
-  private addConfigurationFallbackCandidates(
-    candidates: ModelVendorCandidate[],
-    prompt: MJAIPromptEntityExtended,
-    configurationId: string,
-    preferredVendorId?: string,
-    verbose?: boolean
-  ): void {
-    const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
-
-    // Add models from parent configs (skip index 0 which is the direct config, already handled)
-    for (let i = 1; i < chain.length; i++) {
-      const parentConfig = chain[i];
-      const parentModels = AIEngine.Instance.PromptModels.filter(
-        pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-              (pm.Status === 'Active' || pm.Status === 'Preview') &&
-              UUIDsEqual(pm.ConfigurationID, parentConfig.ID)
-      );
-
-      if (parentModels.length > 0 && verbose) {
-        LogStatus(`Adding ${parentModels.length} models from parent config "${parentConfig.Name}" as fallback`);
-      }
-
-      for (const pm of parentModels) {
-        const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
-        if (model && model.IsActive) {
-          // Decrease base priority for each level up the chain (3000, 2500, 2000, etc.)
-          const basePriority = 3000 - (i * 500);
-          const modelCandidates = this.createCandidatesForModel(
-            model,
-            basePriority,
-            'prompt-model',
-            preferredVendorId,
-            pm.Priority
-          );
-          candidates.push(...modelCandidates);
-        }
-      }
-    }
-
-    // Finally add NULL config models (universal fallback) with lowest priority
-    const nullConfigModels = AIEngine.Instance.PromptModels.filter(
-      pm => UUIDsEqual(pm.PromptID, prompt.ID) &&
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
-            !pm.ConfigurationID
-    );
-
-    if (nullConfigModels.length > 0 && verbose) {
-      LogStatus(`Adding ${nullConfigModels.length} NULL configuration models as universal fallback`);
-    }
-
-    for (const pm of nullConfigModels) {
-      const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
-      if (model && model.IsActive) {
-        const modelCandidates = this.createCandidatesForModel(
-          model,
-          1000, // Lowest priority tier
-          'prompt-model',
-          preferredVendorId,
-          pm.Priority
-        );
-        candidates.push(...modelCandidates);
-      }
-    }
-  }
-
-  /**
-   * Helper: Add strategy-based candidates when no prompt models exist.
-   */
-  private addStrategyBasedCandidates(
-    candidates: ModelVendorCandidate[],
-    prompt: MJAIPromptEntityExtended,
-    preferredVendorName?: string
-  ): void {
-    let modelPool = this.getModelPoolForStrategy(prompt, preferredVendorName);
-    modelPool = this.sortModelPoolByStrategy(modelPool, prompt);
-
-    // Create candidates for each model in the pool
-    modelPool.forEach((model, index) => {
-      const basePriority = 1000 - index * 10; // Decrease priority by position
-      const source = prompt.SelectionStrategy === 'ByPower' ? 'power-rank' : 'model-type';
-      candidates.push(...this.createCandidatesForModel(model, basePriority, source));
-    });
-  }
-
-  /**
-   * Helper: Get model pool filtered for strategy.
-   */
-  private getModelPoolForStrategy(
-    prompt: MJAIPromptEntityExtended,
-    preferredVendorName?: string
-  ): MJAIModelEntityExtended[] {
-    return AIEngine.Instance.Models.filter(
-      m => m.IsActive &&
-           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID)) &&
-           (!preferredVendorName ||
-            m.ModelVendors.some(mv =>
-              mv.Status === 'Active' &&
-              mv.Vendor === preferredVendorName &&
-              this.isInferenceProvider(mv)
-            ))
-    );
-  }
-
-  /**
-   * Helper: Sort model pool by selection strategy.
-   */
-  private sortModelPoolByStrategy(
-    modelPool: MJAIModelEntityExtended[],
-    prompt: MJAIPromptEntityExtended
-  ): MJAIModelEntityExtended[] {
-    if (prompt.SelectionStrategy === 'ByPower') {
-      return this.sortByPowerPreference(modelPool, prompt.PowerPreference);
-    } else {
-      // Default strategy
-      const minPowerRank = prompt.MinPowerRank || 0;
-      return modelPool
-        .filter(m => m.PowerRank >= minPowerRank)
-        .sort((a, b) => b.PowerRank - a.PowerRank);
-    }
-  }
-
-  /**
-   * Helper: Sort models by power preference.
-   */
-  private sortByPowerPreference(
-    modelPool: MJAIModelEntityExtended[],
-    powerPreference?: 'Highest' | 'Lowest' | 'Balanced'
-  ): MJAIModelEntityExtended[] {
-    const pool = [...modelPool];
-
-    switch (powerPreference) {
-      case 'Highest':
-        return pool.sort((a, b) => b.PowerRank - a.PowerRank);
-      case 'Lowest':
-        return pool.sort((a, b) => a.PowerRank - b.PowerRank);
-      case 'Balanced':
-        const avgPower = pool.reduce((sum, m) => sum + m.PowerRank, 0) / pool.length;
-        return pool.sort((a, b) =>
-          Math.abs(a.PowerRank - avgPower) - Math.abs(b.PowerRank - avgPower)
-        );
-      default:
-        return pool.sort((a, b) => b.PowerRank - a.PowerRank);
-    }
-  }
-
-  /**
-   * Helper: Create candidates for a model with AIModelVendor priorities (legacy behavior).
-   */
-  private createCandidatesForModel(
-    model: MJAIModelEntityExtended,
-    basePriority: number,
-    source: ModelVendorCandidate['source'],
-    preferredVendorId?: string,
-    promptModelPriority?: number
-  ): ModelVendorCandidate[] {
-    const modelCandidates: ModelVendorCandidate[] = [];
-
-    // Get all vendors for this model - filter for inference providers only.
-    // Uses the model's precomputed ModelVendors (grouped at engine load) rather than scanning
-    // the global ModelVendors array.
-    const modelVendors = model.ModelVendors
-      .filter(mv => mv.Status === 'Active' && this.isInferenceProvider(mv))
-      .sort((a, b) => b.Priority - a.Priority);
-
-    // First, add preferred vendor if it exists
-    if (preferredVendorId) {
-      const preferredVendor = modelVendors.find(mv => UUIDsEqual(mv.VendorID, preferredVendorId));
-      if (preferredVendor) {
-        modelCandidates.push({
-          model,
-          vendorId: preferredVendor.VendorID,
-          vendorName: preferredVendor.Vendor,
-          driverClass: preferredVendor.DriverClass || model.DriverClass,
-          apiName: preferredVendor.APIName || model.APIName,
-          supportsEffortLevel: preferredVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
-          isPreferredVendor: true,
-          priority: basePriority + 1000, // Boost priority for preferred vendor
-          source
-        });
-      }
-    }
-
-    // Then add other vendors in priority order
-    for (const vendor of modelVendors) {
-      if (!UUIDsEqual(vendor.VendorID, preferredVendorId)) {
-        modelCandidates.push({
-          model,
-          vendorId: vendor.VendorID,
-          vendorName: vendor.Vendor,
-          driverClass: vendor.DriverClass || model.DriverClass,
-          apiName: vendor.APIName || model.APIName,
-          supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
-          isPreferredVendor: false,
-          priority: basePriority + (vendor.Priority || 0),
-          source
-        });
-      }
-    }
-
-    // If no vendors found, add model with its default driver
-    if (modelCandidates.length === 0 && model.DriverClass) {
-      modelCandidates.push({
-        model,
-        driverClass: model.DriverClass,
-        apiName: model.APIName,
-        supportsEffortLevel: model.SupportsEffortLevel ?? false,
-        isPreferredVendor: false,
-        priority: basePriority,
-        source
-      });
-    }
-
-    // Apply prompt model priority if provided (legacy blended approach)
-    if (promptModelPriority !== undefined) {
-      modelCandidates.forEach(c => c.priority += promptModelPriority * 10);
-    }
-
-    return modelCandidates;
   }
 
   /**
@@ -2648,7 +1584,7 @@ export class AIPromptRunner {
     // DECISION (performance): candidates are ordered by priority, and we only need the
     // highest-priority candidate that has working credentials. So once we find that first
     // hit, we STOP credential-probing the remaining candidates and record them as
-    // "not-evaluated" rather than running a `hasCredentialsAvailable` check (which does
+    // "not-evaluated" rather than running a `HasCredentialsAvailable` check (which does
     // env-var lookups + binding scans) for every configured model on every prompt run.
     // The remaining candidates are still kept in `consideredModels` (and in the returned
     // `allCandidates` from selectModel, which is the FULL ordered list) so failover and the
@@ -2684,7 +1620,7 @@ export class AIPromptRunner {
         hasCredentials = credentialCache.get(cacheKey)!;
       } else {
         // Check for credentials using hierarchical resolution
-        hasCredentials = this.hasCredentialsAvailable(
+        hasCredentials = this.HasCredentialsAvailable(
           candidate.driverClass,
           promptId,
           candidate.model.ID,
@@ -2750,6 +1686,12 @@ export class AIPromptRunner {
   private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
     const base = `No suitable model found for prompt ${promptName}`;
 
+    // A selection step that threw (for example the model-type floor) records its error here; show it
+    // rather than the generic "no candidates" text. Every other reason keeps its detailed message below.
+    if (selectionInfo?.selectionReason?.startsWith('Error during model selection:')) {
+      return `${base}. ${selectionInfo.selectionReason}`;
+    }
+
     if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
       return `${base}. No model-vendor candidates were available. Please ensure AI models are configured for this prompt.`;
     }
@@ -2769,265 +1711,6 @@ export class AIPromptRunner {
     }
 
     return `${base}. ${selectionInfo.selectionReason || 'Unknown reason'}`;
-  }
-
-  /**
-   * Creates an AIPromptRun entity for execution tracking
-   */
-  /**
-   * Resolves the scalar inference parameters for a run: each value is the per-request override
-   * from `additionalParameters` when supplied, otherwise the prompt's configured default. This
-   * is the single source of truth for parameter precedence so {@link executeModel} (ChatParams)
-   * and {@link createPromptRun} (the persisted record) stay in lockstep. Stop sequences and
-   * assistant prefill are intentionally excluded — their representations differ per target.
-   */
-  private resolveScalarInferenceParams(
-    prompt: MJAIPromptEntityExtended,
-    additionalParameters?: Record<string, unknown>
-  ): ResolvedScalarInferenceParams {
-    const pick = <T>(override: unknown, promptDefault: T | null | undefined): T | undefined =>
-      override !== undefined ? (override as T) : (promptDefault != null ? promptDefault : undefined);
-    const ap = additionalParameters;
-    return {
-      temperature: pick<number>(ap?.temperature, prompt.Temperature),
-      topP: pick<number>(ap?.topP, prompt.TopP),
-      topK: pick<number>(ap?.topK, prompt.TopK),
-      minP: pick<number>(ap?.minP, prompt.MinP),
-      frequencyPenalty: pick<number>(ap?.frequencyPenalty, prompt.FrequencyPenalty),
-      presencePenalty: pick<number>(ap?.presencePenalty, prompt.PresencePenalty),
-      seed: pick<number>(ap?.seed, prompt.Seed),
-      includeLogProbs: pick<boolean>(ap?.includeLogProbs, prompt.IncludeLogProbs),
-      topLogProbs: pick<number>(ap?.topLogProbs, prompt.TopLogProbs),
-    };
-  }
-
-  /**
-   * Awaits all in-flight prompt-run saves queued by this runner instance. The normal execution path
-   * does NOT call this — prompt-run persistence is intentionally fire-and-forget. Exposed for tests
-   * and for callers that need the AIPromptRun rows durably written before proceeding.
-   */
-  public async WaitForPendingPromptRunSaves(): Promise<void> {
-    await this._promptRunQueue.Flush();
-  }
-
-  private async createPromptRun(
-    prompt: MJAIPromptEntityExtended,
-    model: MJAIModelEntityExtended,
-    params: AIPromptParams,
-    systemPromptText: string,
-    startTime: Date,
-    vendorId?: string,
-    modelSelectionInfo?: any
-  ): Promise<MJAIPromptRunEntityExtended> {
-    const provider: IMetadataProvider = params.provider ?? Metadata.Provider;
-    const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
-    try {
-      promptRun.NewRecord();
-
-      promptRun.PromptID = prompt.ID;
-      promptRun.ModelID = model.ID;
-      // Attribute the run to the agent that caused it, when there is one. PromptID alone cannot do
-      // this: agents share agent-type-level prompts, so a parent and its sub-agent produce runs of
-      // the SAME prompt. See AIPromptParams.agentId for why this was previously always null.
-      if (params.agentId) {
-        promptRun.AgentID = params.agentId;
-      }
-
-      // Set ChildPromptID if this is a hierarchical execution with child prompts
-      if (params.childPrompts && params.childPrompts.length > 0) {
-        promptRun.ChildPromptID = params.childPrompts[0].childPrompt.prompt.ID;
-      }
-      
-      // Set initial status and tracking fields
-      promptRun.Status = 'Running';
-      promptRun.Cancelled = false;
-      promptRun.CacheHit = false;
-      promptRun.StreamingEnabled = !!params.onStreaming;
-      promptRun.WasSelectedResult = false;
-      
-      // Set model selection tracking fields
-      if (modelSelectionInfo) {
-        // Convert the rich entity objects to simple IDs/names for database storage
-        const dbSelectionInfo = {
-          configurationId: modelSelectionInfo.aiConfiguration?.ID,
-          configurationName: modelSelectionInfo.aiConfiguration?.Name,
-          modelsConsidered: modelSelectionInfo.modelsConsidered.map(mc => ({
-            modelId: mc.model.ID,
-            modelName: mc.model.Name,
-            vendorId: mc.vendor?.ID,
-            vendorName: mc.vendor?.Name || 'default',
-            priority: mc.priority,
-            available: mc.available,
-            unavailableReason: mc.unavailableReason
-          })),
-          modelSelected: modelSelectionInfo.modelSelected?.ID,
-          vendorSelected: modelSelectionInfo.vendorSelected?.ID,
-          selectionReason: modelSelectionInfo.selectionReason,
-          fallbackUsed: modelSelectionInfo.fallbackUsed,
-          selectionStrategy: modelSelectionInfo.selectionStrategy
-        };
-        
-        promptRun.ModelSelection = JSON.stringify(dbSelectionInfo);
-        promptRun.SelectionStrategy = modelSelectionInfo.selectionStrategy || 'Default';
-        
-        // Set ModelPowerRank if available
-        if (model.PowerRank != null) {
-          promptRun.ModelPowerRank = model.PowerRank;
-        }
-      }
-      
-      // Set original model tracking for failover
-      promptRun.OriginalModelID = model.ID;
-      promptRun.OriginalRequestStartTime = startTime;
-
-      // Initialize failover tracking fields
-      promptRun.FailoverAttempts = 0;
-      promptRun.FailoverErrors = null;
-      promptRun.FailoverDurations = null;
-      promptRun.TotalFailoverDuration = 0;
-      
-      // Check if model has pre-selected vendor info from selectModel
-      const modelWithVendor = model as MJAIModelEntityExtended & { 
-        _selectedVendorId?: string;
-      };
-      
-      if (modelSelectionInfo) {
-        promptRun.VendorID = modelSelectionInfo.vendorSelected?.ID || vendorId || modelWithVendor._selectedVendorId;
-      } 
-      else if (vendorId) {
-        // Explicit vendor ID provided
-        promptRun.VendorID = vendorId;
-      } else if (modelWithVendor._selectedVendorId) {
-        // Use vendor selected during model selection (with API key verification)
-        promptRun.VendorID = modelWithVendor._selectedVendorId;
-      } else {
-        // Fallback: grab the highest priority AI Model Vendor record for this model (inference providers only)
-        const modelVendors = model.ModelVendors
-          .filter((mv) => mv.Status === 'Active' && this.isInferenceProvider(mv))
-          .sort((a, b) => b.Priority - a.Priority);
-        
-        if (modelVendors.length > 0) {
-          promptRun.VendorID = modelVendors[0].VendorID;
-        }
-      }
-      promptRun.ConfigurationID = params.configurationId;
-      promptRun.RunAt = startTime;
-      
-      // Resolve and save the effort level used (same precedence as ChatParams resolution)
-      if (params.effortLevel !== undefined && params.effortLevel !== null) {
-        promptRun.EffortLevel = params.effortLevel;
-      } else if (prompt.EffortLevel !== undefined && prompt.EffortLevel !== null) {
-        promptRun.EffortLevel = prompt.EffortLevel;
-      }
-      // If neither is set, EffortLevel remains null (provider default was used)
-
-      // Set ParentID for hierarchical prompt execution tracking
-      if (params.parentPromptRunId) {
-        promptRun.ParentID = params.parentPromptRunId;
-      }
-
-      // Set RerunFromPromptRunID if this is a rerun
-      if (params.rerunFromPromptRunID) {
-        promptRun.RerunFromPromptRunID = params.rerunFromPromptRunID;
-      }
-
-      // Always save the response format from the prompt if it exists
-      if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
-        promptRun.ResponseFormat = prompt.ResponseFormat;
-      }
-
-      // Save the actual values that will be used (prompt defaults overridden by additionalParameters).
-      // Uses the shared resolver so the persisted record matches what executeModel sends to the model.
-      const resolvedParams = this.resolveScalarInferenceParams(prompt, params.additionalParameters);
-      if (resolvedParams.temperature !== undefined) promptRun.Temperature = resolvedParams.temperature;
-      if (resolvedParams.topP !== undefined) promptRun.TopP = resolvedParams.topP;
-      if (resolvedParams.topK !== undefined) promptRun.TopK = resolvedParams.topK;
-      if (resolvedParams.minP !== undefined) promptRun.MinP = resolvedParams.minP;
-      if (resolvedParams.frequencyPenalty !== undefined) promptRun.FrequencyPenalty = resolvedParams.frequencyPenalty;
-      if (resolvedParams.presencePenalty !== undefined) promptRun.PresencePenalty = resolvedParams.presencePenalty;
-      if (resolvedParams.seed !== undefined) promptRun.Seed = resolvedParams.seed;
-      if (resolvedParams.includeLogProbs !== undefined) promptRun.LogProbs = resolvedParams.includeLogProbs;
-      if (resolvedParams.topLogProbs !== undefined) promptRun.TopLogProbs = resolvedParams.topLogProbs;
-
-      // Stop sequences + assistant prefill: stored from the prompt, with the additionalParameters
-      // array (JSON-encoded) taking precedence when supplied.
-      if (prompt.StopSequences) promptRun.StopSequences = prompt.StopSequences;
-      if (prompt.AssistantPrefill) promptRun.AssistantPrefill = prompt.AssistantPrefill;
-      if (params.additionalParameters?.stopSequences !== undefined && params.additionalParameters.stopSequences.length > 0) {
-        promptRun.StopSequences = JSON.stringify(params.additionalParameters.stopSequences);
-      }
-
-      // Store the input data/context as JSON in Messages field.
-      // Also capture callers that supply conversationMessages directly (e.g. templateMessageRole='none',
-      // no rendered system prompt) — otherwise their assembled prompt would never be persisted.
-      if (params.data || params.templateData || systemPromptText || (params.conversationMessages?.length ?? 0) > 0) {
-        const messages: ChatMessage[] = [];
-        if (systemPromptText) {
-          // Build the system prompt content, including prefill fallback if applicable
-          let systemContent = systemPromptText;
-          if (prompt.AssistantPrefill && prompt.PrefillFallbackMode === 'SystemInstruction') {
-            const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
-            // Function replacement: prefill text is authored content that routinely
-            // contains `$` (LaTeX `$$`, currency, JSON fragments), and a string
-            // replacement would expand it. See issue #3171.
-            const prefill = prompt.AssistantPrefill;
-            const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, () => prefill);
-            systemContent += '\n\n' + fallbackInstruction;
-          }
-          messages.push({
-            role: 'system',
-            content: systemContent
-          });
-        }
-        // Always include any caller-supplied conversation messages (previously only recorded when a
-        // template system prompt was present, which dropped them for the pure-conversationMessages path).
-        messages.push(...(params.conversationMessages || []));
-        promptRun.Messages = JSON.stringify({
-          data: params.data,
-          templateData: params.templateData,
-          messages: messages || [],
-        });
-      }
-
-      // Populate new retry tracking columns with initial values
-      promptRun.ValidationBehavior = prompt.ValidationBehavior || 'Warn';
-      promptRun.RetryStrategy = prompt.RetryStrategy || 'Fixed';
-      promptRun.MaxRetriesConfigured = prompt.MaxRetries || 0;
-      promptRun.FirstAttemptAt = startTime;
-      promptRun.ValidationAttemptCount = 0; // Will be updated during execution
-      promptRun.SuccessfulValidationCount = 0;
-      promptRun.FinalValidationPassed = false; // Will be updated after execution
-
-      // Persist the initial 'Running' record fire-and-forget. The ID was already assigned by
-      // NewRecord() above, so callers (and the onPromptRunCreated callback) have it immediately —
-      // we don't block the model call on the INSERT. The finalize UPDATE chains after this INSERT
-      // via the instance-keyed save queue, so ordering is guaranteed.
-      this._promptRunQueue.Insert(promptRun);
-
-      // Invoke callback if provided. The ID is available without awaiting the save (client-generated
-      // by NewRecord()), so agent-run/step linking that depends on it works immediately.
-      if (params.onPromptRunCreated) {
-        try {
-          await params.onPromptRunCreated(promptRun.ID);
-        } catch (callbackError) {
-          LogStatus(`Error in onPromptRunCreated callback: ${callbackError.message}`);
-          // Don't fail the execution if callback fails
-        }
-      }
-      
-      return promptRun;
-    } catch (error) {
-      const msg = `Error creating prompt run record: ${error.message} - ${promptRun?.LatestResult?.CompleteMessage} - ${promptRun?.LatestResult?.Errors[0]?.Message}`;
-      this.logError(msg, {
-        category: 'PromptRunSave',
-        metadata: {
-          promptRunId: promptRun.ID,
-          saveError: promptRun.LatestResult?.CompleteMessage
-        },
-        maxErrorLength: params.maxErrorLength
-      });
-      throw new Error(msg);
-    }
   }
 
   /**
@@ -3095,12 +1778,12 @@ export class AIPromptRunner {
    * capabilities. It will attempt to execute with different models/vendors according
    * to the configured failover strategy when errors occur.
    * 
-   * The method calls several smaller, focused helper methods:
-   * - buildFailoverCandidates: Creates candidate models based on type restrictions
-   * - createCandidatesFromModels: Converts models to vendor-specific candidates
-   * - updatePromptRunWithFailoverSuccess: Records successful failover metadata
-   * - updatePromptRunWithFailoverFailure: Records failed failover metadata
-   * - createFailoverErrorResult: Creates standardized error response
+   * Candidates come from model selection (`allCandidates`), already filtered to the prompt's
+   * model type by ID. When failover applies, the loop itself is
+   * {@link BaseModelRunner.ExecuteWithFailover}: this method supplies the chat call on each candidate
+   * (`executeModel` with that candidate's model, vendor, driver, effort level and prompt-model
+   * configuration) and the final error result (`createFailoverErrorResult`). The base records
+   * failover success or failure on the prompt run.
    */
   protected async executeModelWithFailover(
     model: MJAIModelEntityExtended,
@@ -3117,7 +1800,8 @@ export class AIPromptRunner {
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
     modelEffortLevel?: number,
-    credentialAvailability?: Map<string, boolean>
+    credentialAvailability?: Map<string, boolean>,
+    promptModelConfiguration?: AIPromptConfiguration | null
   ): Promise<ChatResult> {
     // Get failover configuration (used for errorScope filtering)
     const failoverConfig = this.getFailoverConfiguration(prompt);
@@ -3127,301 +1811,34 @@ export class AIPromptRunner {
       return this.executeModel(
         model, renderedPrompt, prompt, params, vendorId,
         conversationMessages, templateMessageRole, cancellationToken,
-        vendorDriverClass, vendorApiName, vendorSupportsEffortLevel, modelEffortLevel
+        vendorDriverClass, vendorApiName, vendorSupportsEffortLevel, modelEffortLevel,
+        promptModelConfiguration
       );
     }
-
-    // Track failover attempts
-    const failoverAttempts: FailoverAttempt[] = [];
-    let lastError: Error | null = null;
-
-    // Cache credential availability per driver:model:vendor for the duration of this failover
-    // scan so we don't repeat env-var / binding lookups while walking the candidate list.
-    //
-    // PERF: seed it with the probes model SELECTION already performed (same key format). Selection
-    // walks the priority list until it finds the first credentialed candidate, so this map holds
-    // the prefix it rejected (known false) PLUS the selected candidate (known true) — which is
-    // exactly the segment failover re-walks on the happy path. Reusing those results means the
-    // common case (and any caller looping failover) does ZERO redundant hasCredentialsAvailable
-    // calls. The not-evaluated tail is intentionally absent, so failover still lazily probes it
-    // only if a real failure forces it to walk down there.
-    const failoverCredentialCache = credentialAvailability
-      ? new Map<string, boolean>(credentialAvailability)
-      : new Map<string, boolean>();
-    const candidateHasCredentials = (c: ModelVendorCandidate): boolean => {
-      const key = `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
-      let has = failoverCredentialCache.get(key);
-      if (has === undefined) {
-        has = this.hasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params);
-        failoverCredentialCache.set(key, has);
-      }
-      return has;
-    };
-    let skippedForCredentials = 0;
-
-    // Iterate through all candidates in priority order with instant failover
-    for (let i = 0; i < allCandidates.length; i++) {
-      const candidate = allCandidates[i];
-      const attemptStartTime = Date.now();
-
-      // Skip candidates with no credentials configured. `allCandidates` is intentionally the
-      // FULL priority-ordered list (see the DECISION note in selectModelWithAPIKeyTracked),
-      // so it can include vendors that have no API key in this environment. Firing a live
-      // request at one of those produces a misleading "401 invalid API key" — and because an
-      // Authentication error is treated as fatal, it would halt failover before any
-      // credentialed candidate is ever reached. Skipping here makes failover land on the
-      // first candidate that can actually authenticate (mirroring model selection's own
-      // highest-priority-with-credentials rule).
-      if (!candidateHasCredentials(candidate)) {
-        skippedForCredentials++;
-        continue;
-      }
-
-      try {
-        // Log the attempt if not the first one
-        if (i > 0) {
-          const vendorName = candidate.vendorName || 'default';
-          LogStatusEx({
-            message: `🔄 Trying candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName}`,
-            category: 'AI',
-            additionalArgs: [{
-              promptId: prompt.ID,
-              modelId: candidate.model.ID,
-              model: candidate.model.Name,
-              vendorId: candidate.vendorId,
-              vendor: candidate.vendorName,
-              attemptNumber: i + 1
-            }]
-          });
-        }
-
-        // Execute the model with this candidate
-        const result = await this.executeModel(
-          candidate.model,
-          renderedPrompt,
-          prompt,
-          params,
-          candidate.vendorId || null,
-          conversationMessages,
-          templateMessageRole,
-          cancellationToken,
-          candidate.driverClass,
-          candidate.apiName,
-          candidate.supportsEffortLevel,
-          candidate.effortLevel
-        );
-
-        // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
-        // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
-        // instead of throwing, so we must check result.success here.
-        if (!result.success && result.errorInfo?.canFailover) {
-          lastError = result.exception || new Error(result.errorMessage || 'Model execution failed');
-
-          // Use shared failover error handling logic
-          const decision = await this.processFailoverError(
-            lastError,
-            result.errorInfo,
-            candidate,
-            attemptStartTime,
-            i,
-            allCandidates,
-            failoverAttempts,
-            prompt,
-            failoverConfig
-          );
-
-          // Update candidates list (may have been filtered)
-          allCandidates = decision.updatedCandidates;
-
-          if (decision.shouldRetry) {
-            i--; // Retry same model/vendor
-            continue;
-          }
-
-          if (decision.shouldContinue) {
-            continue; // Try next candidate
-          }
-
-          // Otherwise break (fatal error or last candidate)
-          break;
-        }
-
-        // If we reach here, the result was successful
-        // Update promptRun with failover information if we had prior failures
-        if (failoverAttempts.length > 0 && promptRun) {
-          this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, candidate.model, candidate.vendorId || null);
-        }
-
-        return result;
-
-      } catch (error) {
-        lastError = error as Error;
-
-        // Analyze error to get error info
-        const errorInfo = ErrorAnalyzer.analyzeError(lastError);
-
-        // Use shared failover error handling logic
-        const decision = await this.processFailoverError(
-          lastError,
-          errorInfo,
-          candidate,
-          attemptStartTime,
-          i,
-          allCandidates,
-          failoverAttempts,
-          prompt,
-          failoverConfig
-        );
-
-        // Update candidates list (may have been filtered)
-        allCandidates = decision.updatedCandidates;
-
-        if (decision.shouldRetry) {
-          i--; // Retry same model/vendor
-          continue;
-        }
-
-        if (decision.shouldContinue) {
-          continue; // Try next candidate
-        }
-
-        // Otherwise break (fatal error or last candidate)
-        break;
-      }
-    }
-
-    // All candidates failed
-    if (promptRun && failoverAttempts.length > 0) {
-      this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
-    }
-
-    // If every candidate was skipped for missing credentials we never attempted a call and
-    // have no underlying error to report — surface an actionable message instead of null.
-    if (!lastError && failoverAttempts.length === 0 && skippedForCredentials > 0) {
-      lastError = new Error(
-        `No API credentials configured for any of the ${skippedForCredentials} candidate model-vendor combination(s) for prompt "${prompt.Name}".`
-      );
-    }
-
-    return this.createFailoverErrorResult(lastError, failoverAttempts);
-  }
-
-  /**
-   * Builds failover candidates for a prompt based on available models and type restrictions
-   */
-  protected async buildFailoverCandidates(prompt: MJAIPromptEntityExtended): Promise<ModelVendorCandidate[]> {
-    const aiEngine = AIEngine.Instance;
-    
-    // Get all models, filtered by type if specified
-    let allModels: MJAIModelEntityExtended[];
-    if (prompt.AIModelTypeID) {
-      // Find the model type from the prompt
-      const modelType = aiEngine.ModelTypes.find(mt => UUIDsEqual(mt.ID, prompt.AIModelTypeID));
-      if (!modelType) {
-        throw new Error(`Model type ${prompt.AIModelTypeID} not found`);
-      }
-      
-      // Get all models of this specific type
-      const targetTypeName = modelType.Name.trim().toLowerCase();
-      allModels = aiEngine.Models.filter(m => {
-        // Guard against AIModelType being non-string (defensive coding for data issues)
-        const mType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
-        return mType === targetTypeName;
-      });
-    } else {
-      // No type restriction - get all models
-      allModels = aiEngine.Models;
-    }
-    
-    return this.createCandidatesFromModels(allModels);
-  }
-
-  /**
-   * Creates model-vendor candidates from a list of models
-   */
-  protected createCandidatesFromModels(models: MJAIModelEntityExtended[]): ModelVendorCandidate[] {
-    const candidates: ModelVendorCandidate[] = [];
-
-    for (const model of models) {
-      const vendors = model.ModelVendors || [];
-      if (vendors.length === 0) {
-        // Model without specific vendors
-        candidates.push({
-          model: model,
-          vendorId: undefined,
-          vendorName: undefined,
-          driverClass: model.DriverClass,
-          apiName: model.APIName,
-          supportsEffortLevel: model.SupportsEffortLevel ?? false,
-          isPreferredVendor: false,
-          priority: model.PowerRank || 0,
-          source: 'power-rank'
-        });
-      } else {
-        // Add each vendor as a separate candidate
-        for (const vendor of vendors) {
-          candidates.push({
-            model: model,
-            vendorId: vendor.VendorID,
-            vendorName: vendor.Vendor,
-            driverClass: vendor.DriverClass || model.DriverClass,
-            apiName: vendor.APIName || model.APIName,
-            supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
-            isPreferredVendor: vendor.Priority > 0,
-            priority: (model.PowerRank || 0) + (vendor.Priority || 0),
-            source: 'power-rank'
-          });
-        }
-      }
-    }
-
-    return candidates;
-  }
-
-  /**
-   * Updates prompt run with successful failover tracking data
-   */
-  protected updatePromptRunWithFailoverSuccess(
-    promptRun: MJAIPromptRunEntityExtended,
-    failoverAttempts: FailoverAttempt[],
-    currentModel: MJAIModelEntityExtended,
-    currentVendorId: string | null
-  ): void {
-    promptRun.FailoverAttempts = failoverAttempts.length;
-    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
-      model: a.modelId,
-      vendor: a.vendorId,
-      error: a.error.message,
-      errorType: a.errorType
-    })));
-    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
-
-    // Update ModelID if we ended up using a different model
-    if (!UUIDsEqual(currentModel.ID, promptRun.OriginalModelID)) {
-      promptRun.ModelID = currentModel.ID;
-    }
-    if (currentVendorId && !UUIDsEqual(currentVendorId, promptRun.VendorID)) {
-      promptRun.VendorID = currentVendorId;
-    }
-  }
-
-  /**
-   * Updates prompt run with failover failure tracking data
-   */
-  private updatePromptRunWithFailoverFailure(
-    promptRun: MJAIPromptRunEntityExtended,
-    failoverAttempts: FailoverAttempt[]
-  ): void {
-    promptRun.FailoverAttempts = failoverAttempts.length;
-    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
-      model: a.modelId,
-      vendor: a.vendorId,
-      error: a.error.message,
-      errorType: a.errorType
-    })));
-    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+    return this.ExecuteWithFailover(
+      prompt,
+      params,
+      allCandidates,
+      failoverConfig,
+      (candidate) => this.executeModel(
+        candidate.model,
+        renderedPrompt,
+        prompt,
+        params,
+        candidate.vendorId || null,
+        conversationMessages,
+        templateMessageRole,
+        cancellationToken,
+        candidate.driverClass,
+        candidate.apiName,
+        candidate.supportsEffortLevel,
+        candidate.effortLevel,
+        candidate.promptModelConfiguration
+      ),
+      (lastError, failoverAttempts) => this.createFailoverErrorResult(lastError, failoverAttempts),
+      promptRun,
+      credentialAvailability
+    );
   }
 
   /**
@@ -3467,6 +1884,181 @@ export class AIPromptRunner {
    * resolution, driver selection, ChatParams construction, prefill, media handling, and streaming
    * all live here ONCE. Do not duplicate this logic elsewhere.
    */
+  /**
+   * Resolves the native tool-calling gate for THIS (model, vendor) and, when it opens, copies the
+   * caller's ephemeral tool surface onto the outgoing request.
+   *
+   * Called per model call rather than once per run: failover can move the run to a different
+   * (model, vendor) whose capability differs, and a decision made before failover would be wrong.
+   *
+   * @param chatParams The request being assembled (mutated in place)
+   * @param prompt The prompt being run — supplies the prompt-layer configuration bag
+   * @param params The caller's params — supplies the tool declarations, if any
+   * @param model The selected model
+   * @param vendorId The selected vendor (`MJ: AI Vendors` ID), or null
+   * @param promptModelConfiguration The selected candidate's `AIPromptModel` bag, when it came from one
+   */
+  /**
+   * Resolves the native tool-calling gate WITHOUT touching a request.
+   *
+   * Split out because the answer is needed twice and must be the same both times: once before the
+   * template renders — the loop template drops its action catalog and the `'Actions'` step type
+   * when native mode is on (plan §8.4), and it can only do that truthfully if it knows the real
+   * decision rather than the caller's intent — and once when the request is assembled.
+   *
+   * Never throws: the gate is an opt-in enhancement and must not be able to fail a run that would
+   * otherwise succeed, so any configuration problem resolves to the path that has always worked.
+   */
+  public ResolveNativeToolCallingDecision(
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    promptModelConfiguration?: AIPromptConfiguration | null
+  ): NativeToolCallingDecision {
+    try {
+      return ResolveNativeToolCalling({
+        catalogConfiguration: AIEngine.Instance.GetEffectiveModelConfiguration(
+          model.ID,
+          vendorId
+            // Must be the INFERENCE PROVIDER row, not the Model Developer row: most models carry
+            // two AIModelVendor rows for the same VendorID, and ModelVendors has no guaranteed
+            // order. Picking the developer row merges an empty config layer and silently drops any
+            // per-serving-path LLM.* knob (notably the SupportsNativeToolCalling kill switch).
+            ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
+                && mv.Status === 'Active' && this.IsInferenceProvider(mv))?.ID
+            : undefined
+        ),
+        promptConfiguration: prompt.PromptConfigurationObject,
+        promptModelConfiguration,
+        // Action tools and control-flow tools are counted separately: under the hybrid the control
+        // tools are stripped, so on their own they must not open the gate (spec §5).
+        toolsProvided: (params.tools ?? []).some((t) => !(params.controlFlowToolNames ?? []).includes(t.name)),
+        controlToolsProvided: (params.tools ?? []).some((t) => (params.controlFlowToolNames ?? []).includes(t.name))
+      });
+    } catch (error) {
+      console.warn(
+        `AIPromptRunner: could not resolve the native tool-calling gate for prompt "${prompt.Name}" ` +
+        `on model "${model.Name}" — defaulting to the envelope path.`,
+        error
+      );
+      return { useNativeTools: false, mode: 'Envelope', controlFlow: 'envelope', toolResults: false };
+    }
+  }
+
+
+  /** @deprecated Use {@link ResolveNativeToolCallingDecision}. */
+  public resolveNativeToolCallingDecision(
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    promptModelConfiguration?: AIPromptConfiguration | null
+  ): NativeToolCallingDecision {
+    return this.ResolveNativeToolCallingDecision(prompt, params, model, vendorId, promptModelConfiguration);
+  }
+
+  private applyNativeToolCalling(
+    chatParams: ChatParams,
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    promptModelConfiguration?: AIPromptConfiguration | null
+  ): void {
+    const decision: NativeToolCallingDecision =
+      this.ResolveNativeToolCallingDecision(prompt, params, model, vendorId, promptModelConfiguration);
+
+    if (decision.warning) {
+      console.warn(
+        `AIPromptRunner: ${decision.warning} (prompt "${prompt.Name}", model "${model.Name}"` +
+        `${vendorId ? `, vendor ${vendorId}` : ''})`
+      );
+    }
+
+    if (decision.useNativeTools) {
+      const control = new Set(params.controlFlowToolNames ?? []);
+      // Under the hybrid the control tools are stripped: that model's control flow is the envelope,
+      // and offering it ask_user or a sub-agent tool would be a protocol it was never told about.
+      chatParams.tools = decision.controlFlow === 'implicit'
+        ? params.tools
+        : params.tools?.filter((t) => !control.has(t.name));
+      chatParams.toolChoice = params.toolChoice;
+      chatParams.parallelToolCalls = params.parallelToolCalls;
+    }
+
+    // Recorded even on the envelope path, so a run is always attributable to a path. The whole
+    // decision travels so the agent loop can read `toolResults` off the result later.
+    RecordToolCallingDecision(chatParams, decision);
+  }
+
+  /**
+   * Whether a failed result failed for a TOOLS-specific reason, and so is worth one retry with the
+   * declarations stripped.
+   *
+   * Deliberately narrow. A rate limit, a context-length error or a network failure has nothing to do
+   * with tools, and retrying those here would burn the fallback and mask the real cause from the
+   * existing retry/failover logic — which already handles them properly.
+   *
+   * @param result The result of a native-mode call
+   * @returns true when the failure looks tool-related
+   */
+  private isToolSpecificFailure(result: ChatResult): boolean {
+    if (result.success) {
+      return false;
+    }
+    // A cancellation is the caller's decision, never a tool problem.
+    if (result.errorInfo?.canFailover === false && result.errorInfo?.providerErrorCode === 'request_cancelled') {
+      return false;
+    }
+    return this.isToolSpecificFailureText(`${result.errorMessage ?? ''} ${result.statusText ?? ''}`);
+  }
+
+  /**
+   * Retries a native call once on today's exact path, with the tool declarations stripped.
+   *
+   * The retry reuses the SAME execution bound rather than opening a fresh one, so the two attempts
+   * share one timeout budget. That is deliberate: the bound exists to cap how long a single model
+   * call may take from the caller's point of view, and a fallback is still that one call. It does
+   * mean a native attempt that burned most of the budget leaves the retry little — but the
+   * alternative, silently doubling the caller's timeout, is worse.
+   *
+   * @param reason What the provider said, for the warning — a misconfiguration should be visible
+   */
+  private async retryWithToolsStripped(
+    llm: BaseLLM,
+    chatParams: ChatParams,
+    executionBound: ExecutionBound,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    prompt: MJAIPromptEntityExtended,
+    reason: string
+  ): Promise<ChatResult> {
+    console.warn(
+      `AIPromptRunner: native tool calling failed on ${model.Name}${vendorId ? ` (vendor ${vendorId})` : ''} ` +
+      `for prompt "${prompt.Name}" — retrying once on the envelope path with tools stripped. ` +
+      `Provider error: ${reason}`
+    );
+    chatParams.tools = undefined;
+    chatParams.toolChoice = undefined;
+    chatParams.parallelToolCalls = undefined;
+    // A history that already holds native turns — the assistant's call turn, the tool-result turn —
+    // is refused once the declarations are gone (Gemini also polices their order), so the retry
+    // would fail for a second, different reason and the loop would burn its remaining attempts on
+    // the same request. Show the retry what the envelope path has always
+    // shown: the calls' prose, and each result as an "[Action Result]" user message.
+    chatParams.messages = EncodeToolTurnsAsText(chatParams.messages);
+    const fallbackResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
+    RecordToolCallingMode(fallbackResult, 'NativeFallback');
+    return fallbackResult;
+  }
+
+  /** Scans provider prose for a tools marker. Shared by the thrown-error and failed-result paths. */
+  private isToolSpecificFailureText(text: string): boolean {
+    const lowered = text.toLowerCase();
+    return AIPromptRunner.TOOL_FAILURE_MARKERS.some(marker => lowered.includes(marker));
+  }
+
   protected async executeModel(
     model: MJAIModelEntityExtended,
     renderedPrompt: string,
@@ -3479,7 +2071,8 @@ export class AIPromptRunner {
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
-    modelEffortLevel?: number
+    modelEffortLevel?: number,
+    promptModelConfiguration?: AIPromptConfiguration | null
   ): Promise<ChatResult> {
     // define these variables here to ensure they're available in the catch block
     let driverClass: string;
@@ -3518,7 +2111,7 @@ export class AIPromptRunner {
         if (vendorId) {
           // Find the AIModelVendor record for this specific vendor - must be an inference provider
           const modelVendor = model.ModelVendors.find(
-            (mv) => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active' && this.isInferenceProvider(mv)
+            (mv) => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active' && this.IsInferenceProvider(mv)
           );
 
           if (modelVendor) {
@@ -3534,7 +2127,7 @@ export class AIPromptRunner {
       }
 
       // Resolve credentials using hierarchical resolution (Credentials system with legacy fallback)
-      const apiKey = await this.resolveCredentialForExecution(
+      const apiKey = await this.ResolveCredentialForExecution(
         driverClass,
         prompt.ID,
         model.ID,
@@ -3572,7 +2165,7 @@ export class AIPromptRunner {
       // Stop sequences are handled separately: the prompt value is comma-delimited and gated by
       // driver support; additionalParameters supplies a ready-made array that overrides it.
       if (prompt.StopSequences && this.shouldApplyStopSequences(prompt, model, vendorId, llm)) {
-        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.replace(AIPromptRunner.STOP_SEQUENCE_TRIM_REGEX, '')).filter((s: string) => s.length > 0);
+        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => TrimSpacesAndTabs(s)).filter((s: string) => s.length > 0);
       }
       if (params.additionalParameters?.stopSequences !== undefined) {
         chatParams.stopSequences = params.additionalParameters.stopSequences;
@@ -3625,8 +2218,24 @@ export class AIPromptRunner {
         chatParams.responseFormat = undefined;
       }
 
+      // Native tool calling (Layer 3). This is the ONLY place metadata decides whether tools go out.
+      // Resolved HERE rather than once per run because failover may land on a different
+      // (model, vendor) that does not support tools.
+      this.applyNativeToolCalling(chatParams, prompt, params, model, vendorId, promptModelConfiguration);
+
       // Build message array with rendered prompt and conversation messages
       chatParams.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
+
+      // Declarations and tool turns must travel TOGETHER. The gate above is re-resolved per
+      // failover attempt, so an attempt can legitimately come back envelope on a history that
+      // earlier turns filled with assistant `toolCalls` and `tool` turns — a candidate whose vendor
+      // row lacks the capability, or a catalog change mid-run. Sending those with no `tools` array
+      // is rejected outright by Anthropic and OpenAI (Gemini also polices their order), which would
+      // make failover — the mechanism meant to rescue a failing run — fail for a second, unrelated
+      // reason. Degrade the turns to text, exactly as the tools-stripped retry does.
+      if (!chatParams.tools?.length) {
+        chatParams.messages = EncodeToolTurnsAsText(chatParams.messages);
+      }
 
       // Resolve native file inputs: check each file against the driver's capabilities
       // and inject qualifying files as content blocks in the last user message.
@@ -3657,7 +2266,43 @@ export class AIPromptRunner {
       }
 
       // Execute the model bounded by the composed abort signal (caller cancellation + prompt TimeoutMS)
-      return await this.runChatCompletionBounded(llm, chatParams, executionBound);
+      //
+      // Layer 4 fallback, part one: some providers REJECT a tools payload instead of returning a
+      // failed result. The OpenAI SDK raises a 400 as an exception, so the returned-result check
+      // below never sees it and a native run that should degrade hard-fails instead. Observed on
+      // gpt-5.6-luna: `400 Function tools with reasoning_effort are not supported
+      // for gpt-5.6-luna in /v1/chat/completions`. Both shapes get the same one-shot retry.
+      let chatResult: ChatResult;
+      try {
+        chatResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
+      } catch (error) {
+        if (!chatParams.tools?.length || !this.isToolSpecificFailureText(error instanceof Error ? error.message : String(error ?? ''))) {
+          throw error;
+        }
+        return await this.retryWithToolsStripped(
+          llm, chatParams, executionBound, model, vendorId, prompt,
+          error instanceof Error ? error.message : String(error));
+      }
+      // Carry the gate's WHOLE decision from the request onto the result, which is what flows back up
+      // to the prompt run (mode) and to the agent loop (`toolResults` — the loop answers native
+      // calls as tool turns only when the result says so). Copying the mode alone resets `toolResults`
+      // to false on the fresh result object, which leaves native tool results inert.
+      // A fallback below overwrites the mode with 'NativeFallback'.
+      const gatedDecision = GetToolCallingDecision(chatParams);
+      if (gatedDecision) {
+        RecordToolCallingDecision(chatResult, gatedDecision);
+      }
+
+      // Layer 4 fallback, part two: a native-mode call that came back as a failed result for a
+      // TOOLS-specific reason retries the same way. Non-tool failures fall through to the existing
+      // retry/failover machinery untouched.
+      if (chatParams.tools?.length && this.isToolSpecificFailure(chatResult)) {
+        return await this.retryWithToolsStripped(
+          llm, chatParams, executionBound, model, vendorId, prompt,
+          chatResult.errorMessage || chatResult.statusText || 'unspecified');
+      }
+
+      return chatResult;
     } catch (error) {
       const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
       this.logError(error, {
@@ -3677,90 +2322,6 @@ export class AIPromptRunner {
     }
   }
 
-  /**
-   * Engine-level default model-call timeout, in milliseconds, applied when the caller supplies no
-   * `AIPromptParams.timeoutMS`. `undefined` (the default) means NO implicit bound — a prompt run
-   * with neither a timeout nor a cancellation token stays unbounded, exactly as before, so this
-   * change is behavior-preserving for existing callers.
-   *
-   * Subclasses (or a host application's runner subclass) can override this to impose a global
-   * safety ceiling on every prompt call.
-   */
-  protected get DefaultPromptTimeoutMS(): number | undefined {
-    return undefined;
-  }
-
-  /**
-   * Resolves the per-model-call timeout: the caller's `AIPromptParams.timeoutMS`, else the runner's
-   * {@link DefaultPromptTimeoutMS}. Non-positive / non-numeric values mean "no timeout".
-   *
-   * The bound is applied PER MODEL CALL (not per prompt execution), which mirrors the parallel
-   * path's existing `taskTimeoutMS` semantics: each failover candidate / validation retry gets a
-   * fresh budget rather than sharing one wall-clock window.
-   *
-   * NOTE (issue #3064): there is deliberately NO prompt-entity source here yet — the `AIPrompt`
-   * table has no `TimeoutMS` column today. Once a migration adds one and CodeGen regenerates the
-   * entity, this becomes `prompt.TimeoutMS ?? params.timeoutMS ?? this.DefaultPromptTimeoutMS`
-   * and every bound below starts honoring the per-prompt configuration with no other change.
-   */
-  protected getEffectiveTimeoutMS(params: AIPromptParams): number | undefined {
-    const timeoutMS = params.timeoutMS ?? this.DefaultPromptTimeoutMS;
-    return typeof timeoutMS === 'number' && timeoutMS > 0 ? timeoutMS : undefined;
-  }
-
-  /**
-   * Composes the caller-supplied cancellation token with the resolved model-call timeout into a
-   * single {@link AbortSignal} that bounds one model call. NEITHER bound is discarded:
-   *
-   * - caller token only  → the caller's signal is used directly (behavior unchanged)
-   * - timeout only       → an internal controller aborts after the timeout elapses
-   * - both               → an internal controller relays the caller's abort AND fires on timeout;
-   *                        whichever happens first wins
-   * - neither            → `Signal` is undefined and the call runs unbounded (legacy behavior)
-   *
-   * Implemented with an AbortController + relay listener rather than `AbortSignal.any()` so it works
-   * on Node 18 (where `AbortSignal.any` does not exist — it landed in Node 20.3).
-   */
-  protected createExecutionBound(prompt: MJAIPromptEntityExtended, params: AIPromptParams, cancellationToken?: AbortSignal): ExecutionBound {
-    const timeoutMS = this.getEffectiveTimeoutMS(params);
-    if (timeoutMS === undefined) {
-      // No prompt timeout: use the caller's token as-is (or nothing at all).
-      return { Signal: cancellationToken, TimeoutMS: undefined, TimedOut: () => false, Dispose: () => { /* nothing to release */ } };
-    }
-
-    const controller = new AbortController();
-    let timedOut = false;
-
-    const relayCallerAbort = () => {
-      if (!controller.signal.aborted) {
-        controller.abort(cancellationToken?.reason ?? 'Chat completion was cancelled');
-      }
-    };
-    if (cancellationToken) {
-      if (cancellationToken.aborted) {
-        relayCallerAbort();
-      } else {
-        cancellationToken.addEventListener('abort', relayCallerAbort, { once: true });
-      }
-    }
-
-    const timer = setTimeout(() => {
-      if (!controller.signal.aborted) {
-        timedOut = true;
-        controller.abort(new AIPromptTimeoutError(prompt.Name, timeoutMS));
-      }
-    }, timeoutMS);
-
-    return {
-      Signal: controller.signal,
-      TimeoutMS: timeoutMS,
-      TimedOut: () => timedOut,
-      Dispose: () => {
-        clearTimeout(timer);
-        cancellationToken?.removeEventListener('abort', relayCallerAbort);
-      },
-    };
-  }
 
   /**
    * Runs the model call, racing it against the composed execution bound so a hung provider surfaces
@@ -3900,7 +2461,6 @@ export class AIPromptRunner {
     const result: string[] = [];
     let inManifest = false;
     let mutated = false;
-    const entryRegex = /^\*\*[A-Z]+\*\* — .+? \[(?<mime>[^\]]+)\]/;
 
     for (const line of lines) {
       if (line.startsWith('## Available Artifacts')) {
@@ -3914,9 +2474,10 @@ export class AIPromptRunner {
       result.push(line);
 
       if (!inManifest) continue;
-      const match = entryRegex.exec(line);
-      if (!match) continue;
-      const mime = (match.groups?.mime ?? '').toLowerCase();
+      // `**A** — name [mime]`; parsed linearly (CodeQL js/polynomial-redos flagged the regex form).
+      const entryMime = ParseManifestEntryMime(line);
+      if (entryMime === null) continue;
+      const mime = entryMime.toLowerCase();
       const modality = mime.split('/')[0];
       if (modality !== 'image' && modality !== 'audio' && modality !== 'video') continue;
       if (this.driverSupportsModality(caps, mime)) continue;
@@ -4039,23 +2600,32 @@ export class AIPromptRunner {
   }
 
   /**
-   * Default fallback instruction text used when no PrefillFallbackText is configured
-   * at any level of the AIModelType → AIModel → AIModelVendor cascade.
-   */
-  private static readonly DEFAULT_PREFILL_FALLBACK = '# **CRITICAL**\nYour response must start with exactly: {{prefill}}\nDo not add quotes, markdown formatting, or any other characters before it.';
-
-  /**
-   * Regex used to trim only horizontal whitespace (spaces and tabs) from the start and end
-   * of each stop sequence token after comma-splitting.
+   * Substrings that mark a provider failure as TOOLS-specific, so the native call is worth one
+   * envelope retry (see {@link AIPromptRunner.isToolSpecificFailure}). Drawn from how the
+   * tool-capable providers word a rejected `tools` payload, an unusable tool call, or a turn whose output
+   * they discarded for a tool-related reason.
    *
-   * We intentionally do NOT use String.trim() here because stop sequences can legitimately
-   * begin or end with newline characters. For example, the sequence "\n```" is designed to
-   * match only a closing code fence (preceded by a newline), distinguishing it from an
-   * opening "```json" fence that does not start with a newline. Using trim() would strip
-   * that leading "\n", turning "\n```" into "```" and causing the stop to fire on the
-   * opening fence instead — producing an empty response for non-native prefill providers.
+   * Substring matching over provider prose is inherently approximate. It is deliberately biased
+   * toward MISSING a tool failure rather than catching an unrelated one: a missed match just means
+   * the existing retry/failover logic handles the error as it does today, whereas a false positive
+   * would silently strip tools from a run that should have kept them.
    */
-  private static readonly STOP_SEQUENCE_TRIM_REGEX = /^[ \t]+|[ \t]+$/g;
+  private static readonly TOOL_FAILURE_MARKERS: readonly string[] = [
+    'tool_use',
+    'tool use',
+    'tool_call',
+    'tool call',
+    'tool_choice',
+    'tool choice',
+    'tools',
+    'function_call',
+    'function call',
+    'function_declaration',
+    'functiondeclarations',
+    'malformed_function_call',
+    'input_schema',
+    'parametersjsonschema'
+  ];
 
   /**
    * Resolves whether the current model/vendor supports native assistant prefill.
@@ -4147,36 +2717,6 @@ export class AIPromptRunner {
     return supportsPrefill;
   }
 
-  /**
-   * Resolves the prefill fallback instruction text using the cascade:
-   * AIModelType → AIModel → AIModelVendor (most specific non-null wins).
-   * Falls back to DEFAULT_PREFILL_FALLBACK if none are configured.
-   */
-  private resolvePrefillFallbackText(
-    model: MJAIModelEntityExtended,
-    vendorId: string | null
-  ): string {
-    // Start with model type default
-    const modelType = AIEngine.Instance.ModelTypesByID.get(NormalizeUUID(model.AIModelTypeID));
-    let fallbackText: string | null = modelType?.PrefillFallbackText ?? null;
-
-    // Model-level override
-    if (model.PrefillFallbackText != null) {
-      fallbackText = model.PrefillFallbackText;
-    }
-
-    // Vendor-level override
-    if (vendorId) {
-      const modelVendor = model.ModelVendors.find(
-        mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active'
-      );
-      if (modelVendor?.PrefillFallbackText != null) {
-        fallbackText = modelVendor.PrefillFallbackText;
-      }
-    }
-
-    return fallbackText ?? AIPromptRunner.DEFAULT_PREFILL_FALLBACK;
-  }
 
   /**
    * Applies assistant prefill to ChatParams based on prompt configuration and provider support.
@@ -4229,6 +2769,43 @@ export class AIPromptRunner {
   }
 
   /**
+   * Default fallback instruction text used when no PrefillFallbackText is configured
+   * at any level of the AIModelType → AIModel → AIModelVendor cascade.
+   */
+  private static readonly DEFAULT_PREFILL_FALLBACK = '# **CRITICAL**\nYour response must start with exactly: {{prefill}}\nDo not add quotes, markdown formatting, or any other characters before it.';
+
+  /**
+   * Resolves the prefill fallback instruction text using the cascade:
+   * AIModelType → AIModel → AIModelVendor (most specific non-null wins).
+   * Falls back to DEFAULT_PREFILL_FALLBACK if none are configured.
+   */
+  private resolvePrefillFallbackText(
+    model: MJAIModelEntityExtended,
+    vendorId: string | null
+  ): string {
+    // Start with model type default
+    const modelType = AIEngine.Instance.ModelTypesByID.get(NormalizeUUID(model.AIModelTypeID));
+    let fallbackText: string | null = modelType?.PrefillFallbackText ?? null;
+
+    // Model-level override
+    if (model.PrefillFallbackText != null) {
+      fallbackText = model.PrefillFallbackText;
+    }
+
+    // Vendor-level override
+    if (vendorId) {
+      const modelVendor = model.ModelVendors.find(
+        mv => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active'
+      );
+      if (modelVendor?.PrefillFallbackText != null) {
+        fallbackText = modelVendor.PrefillFallbackText;
+      }
+    }
+
+    return fallbackText ?? AIPromptRunner.DEFAULT_PREFILL_FALLBACK;
+  }
+
+  /**
    * Executes the model with retry logic for validation failures
    */
   private async executeWithValidationRetries(
@@ -4242,7 +2819,8 @@ export class AIPromptRunner {
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
     modelEffortLevel?: number,
-    credentialAvailability?: Map<string, boolean>
+    credentialAvailability?: Map<string, boolean>,
+    promptModelConfiguration?: AIPromptConfiguration | null
   ): Promise<{
     modelResult: ChatResult;
     parsedResult: { result: unknown; validationResult?: ValidationResult };
@@ -4271,7 +2849,7 @@ export class AIPromptRunner {
 
         if (attempt > 0) {
           LogStatus(`   🔄 Retrying execution due to validation failure, attempt ${attempt + 1}/${maxRetries + 1}`);
-          await this.applyRetryDelay(prompt, attempt);
+          await this.ApplyRetryDelay(prompt, attempt);
         }
 
         // Execute the AI model with failover support
@@ -4290,7 +2868,8 @@ export class AIPromptRunner {
           vendorApiName,
           vendorSupportsEffortLevel,
           modelEffortLevel,
-          credentialAvailability // Reuse credential probes from selection
+          credentialAvailability, // Reuse credential probes from selection
+          promptModelConfiguration
         );
 
         // Check for fatal errors - don't attempt validation/retry on these
@@ -4367,14 +2946,15 @@ export class AIPromptRunner {
 
         // Validation failed, check if we should retry
         // BUG FIX: Only retry in Strict mode, not in Warn or None modes
-        if (prompt.ValidationBehavior === 'Strict' && attempt < maxRetries) {
+        const effectiveValidationBehavior = params?.validationBehavior || prompt.ValidationBehavior;
+        if (effectiveValidationBehavior === 'Strict' && attempt < maxRetries) {
           lastError = new Error(`Validation failed: ${validationErrors?.map(e => e.Message).join('; ')}`);
           LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
           continue; // Retry
         } else {
           // Either not strict mode or no more retries, return what we have
-          const reason = prompt.ValidationBehavior !== 'Strict' 
-            ? `${prompt.ValidationBehavior || 'None'} mode - continuing with invalid output (no retry)`
+          const reason = effectiveValidationBehavior !== 'Strict' 
+            ? `${effectiveValidationBehavior || 'None'} mode - continuing with invalid output (no retry)`
             : 'max retries exceeded';
           LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, stopping retries (${reason})`);
           return {
@@ -4419,248 +2999,6 @@ export class AIPromptRunner {
 
     // Should not reach here, but just in case
     throw lastError || new Error('Execution failed after all retry attempts');
-  }
-
-  /**
-   * Applies retry delay based on the prompt's retry strategy
-   */
-  /**
-   * Calculates retry delay for rate limit and other retriable errors.
-   * Uses the prompt's RetryStrategy and can respect suggested delays from provider.
-   */
-  private calculateRetryDelay(
-    prompt: MJAIPromptEntityExtended,
-    attemptNumber: number,
-    suggestedDelaySeconds?: number
-  ): number {
-    // Use provider's suggested delay if available
-    if (suggestedDelaySeconds && suggestedDelaySeconds > 0) {
-      return suggestedDelaySeconds * 1000; // Convert to milliseconds
-    }
-
-    const baseDelay = prompt.RetryDelayMS || 1000; // Default 1 second
-    let delay = baseDelay;
-
-    switch (prompt.RetryStrategy) {
-      case 'Fixed':
-        delay = baseDelay;
-        break;
-      case 'Linear':
-        delay = baseDelay * attemptNumber;
-        break;
-      case 'Exponential':
-        delay = baseDelay * Math.pow(2, attemptNumber - 1);
-        break;
-      default:
-        delay = baseDelay;
-    }
-
-    return delay;
-  }
-
-  private async applyRetryDelay(prompt: MJAIPromptEntityExtended, attemptNumber: number, suggestedDelaySeconds?: number): Promise<void> {
-    const delay = this.calculateRetryDelay(prompt, attemptNumber, suggestedDelaySeconds);
-    const delaySeconds = (delay / 1000).toFixed(1);
-    LogStatus(`   Waiting ${delaySeconds}s before retry (strategy: ${prompt.RetryStrategy || 'Fixed'})...`);
-    await new Promise(resolve => setTimeout(resolve, delay));
-  }
-
-  /**
-   * Filters out all candidates from a vendor when a vendor-level error occurs.
-   * Vendor-level errors affect all models from that vendor:
-   * - Authentication: Invalid API key
-   * - VendorValidationError: API schema/validation requirements
-   */
-  private filterVendorCandidates(
-    errorType: string,
-    currentVendorId: string | undefined,
-    allCandidates: ModelVendorCandidate[]
-  ): ModelVendorCandidate[] {
-    if (errorType !== 'Authentication' && errorType !== 'VendorValidationError') {
-      return allCandidates; // No filtering needed for non-vendor-level errors
-    }
-
-    const failedVendorId = currentVendorId || 'default';
-    const beforeCount = allCandidates.length;
-
-    // Filter out ALL candidates from this vendor
-    const filteredCandidates = allCandidates.filter(c =>
-      (c.vendorId || 'default') !== failedVendorId
-    );
-
-    const removedCount = beforeCount - filteredCandidates.length;
-    if (removedCount > 0) {
-      const vendorName = AIEngine.Instance.VendorsByID.get(NormalizeUUID(failedVendorId))?.Name || failedVendorId;
-      const remainingCount = filteredCandidates.length;
-
-      // Log appropriate message based on error type
-      let reason: string;
-      let icon: string;
-      if (errorType === 'Authentication') {
-        reason = 'Invalid API key';
-        icon = '🔒';
-      } else if (errorType === 'VendorValidationError') {
-        reason = 'API schema incompatibility';
-        icon = '⚠️';
-      } else {
-        reason = 'Vendor-level error';
-        icon = '❌';
-      }
-
-      this.logStatus(
-        `   ${icon} ${reason} for ${vendorName} - excluding ${removedCount} model${removedCount === 1 ? '' : 's'} from this vendor (${remainingCount} remaining)`,
-        true
-      );
-    }
-
-    return filteredCandidates;
-  }
-
-  /**
-   * Handles rate limit errors by retrying the same model/vendor with backoff.
-   * Returns true if the caller should continue (retry), false if should proceed to failover.
-   */
-  private async handleRateLimitRetry(
-    errorAnalysis: { errorType: string; suggestedRetryDelaySeconds?: number },
-    currentModel: MJAIModelEntityExtended,
-    currentVendorId: string | undefined,
-    failoverAttempts: FailoverAttempt[],
-    prompt: MJAIPromptEntityExtended,
-    attemptNumber: number,
-    maxAttempts: number,
-    failoverAttempt: FailoverAttempt
-  ): Promise<boolean> {
-    const isRateLimit = errorAnalysis.errorType === 'RateLimit';
-    if (!isRateLimit) {
-      return false; // Not a rate limit error
-    }
-
-    // Count how many times we've retried this specific model/vendor for rate limits
-    const rateLimitRetryCount = failoverAttempts.filter(a =>
-      UUIDsEqual(a.modelId, currentModel.ID) &&
-      UUIDsEqual(a.vendorId, currentVendorId) &&
-      a.errorType === 'RateLimit'
-    ).length;
-
-    // Use MaxRetries from prompt configuration, default to 3 if not set
-    const maxRetries = prompt.MaxRetries ?? 3;
-
-    // Retry up to MaxRetries times before giving up and failing over
-    const shouldRetry = rateLimitRetryCount <= maxRetries;
-
-    if (shouldRetry) {
-      const modelName = currentModel.Name;
-      const vendorName = currentVendorId
-        ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(currentVendorId))?.Name || 'default'
-        : 'default';
-
-      this.logStatus(
-        `   ⏳ Rate limit hit - retrying ${modelName} (${vendorName}) with backoff (attempt ${rateLimitRetryCount}/${maxRetries})`,
-        true
-      );
-      this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
-
-      // Apply backoff delay before retry
-      if (attemptNumber < maxAttempts) {
-        await this.applyRetryDelay(prompt, rateLimitRetryCount, errorAnalysis.suggestedRetryDelaySeconds);
-      }
-
-      return true; // Signal to continue with same model/vendor
-    }
-
-    return false; // Too many retries, proceed to failover
-  }
-
-  /**
-   * Processes a failover error (either from catch block or from failed ChatResult).
-   * Handles vendor filtering, rate limit retries, fatal error detection, and failover logic.
-   *
-   * @returns Decision object indicating whether to retry same model, continue to next candidate, or stop
-   */
-  private async processFailoverError(
-    error: Error,
-    errorInfo: AIErrorInfo,
-    candidate: ModelVendorCandidate,
-    attemptStartTime: number,
-    attemptIndex: number,
-    allCandidates: ModelVendorCandidate[],
-    failoverAttempts: FailoverAttempt[],
-    prompt: MJAIPromptEntityExtended,
-    failoverConfig: { strategy: string; errorScope?: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly'; delaySeconds?: number; maxAttempts: number }
-  ): Promise<{
-    shouldRetry: boolean;      // Retry same model/vendor (rate limit)
-    shouldContinue: boolean;   // Continue to next candidate
-    updatedCandidates: ModelVendorCandidate[];
-  }> {
-    const attemptDuration = Date.now() - attemptStartTime;
-
-    // Create failover attempt record
-    const failoverAttempt: FailoverAttempt = {
-      attemptNumber: attemptIndex + 1,
-      modelId: candidate.model.ID,
-      vendorId: candidate.vendorId,
-      error: error,
-      errorType: errorInfo.errorType,
-      duration: attemptDuration,
-      timestamp: new Date()
-    };
-    failoverAttempts.push(failoverAttempt);
-
-    // Vendor-level errors: filter out all candidates from this vendor
-    let updatedCandidates = allCandidates;
-    if (errorInfo.errorType === 'Authentication' || errorInfo.errorType === 'VendorValidationError') {
-      updatedCandidates = this.filterVendorCandidates(
-        errorInfo.errorType,
-        candidate.vendorId,
-        allCandidates
-      );
-    }
-
-    const isLastCandidate = attemptIndex === updatedCandidates.length - 1;
-
-    // Fatal errors: stop immediately
-    if (errorInfo.severity === 'Fatal') {
-      const errorMessage = error?.message || 'Unknown error';
-      LogErrorEx(`Stopping failover: Fatal error (${errorInfo.errorType}): ${errorMessage}`);
-      this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-      return { shouldRetry: false, shouldContinue: false, updatedCandidates };
-    }
-
-    // Check errorScope filter if configured
-    if (failoverConfig.errorScope && failoverConfig.errorScope !== 'All') {
-      const matchesScope = this.errorMatchesScope(errorInfo.errorType, failoverConfig.errorScope);
-      if (!matchesScope) {
-        this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-        return { shouldRetry: false, shouldContinue: false, updatedCandidates };
-      }
-    }
-
-    // Rate limit errors: check if we should retry the same model before failing over
-    if (errorInfo.errorType === 'RateLimit') {
-      const shouldRetry = await this.handleRateLimitRetry(
-        errorInfo,
-        candidate.model,
-        candidate.vendorId,
-        failoverAttempts,
-        prompt,
-        attemptIndex,
-        updatedCandidates.length,
-        failoverAttempt
-      );
-      if (shouldRetry) {
-        return { shouldRetry: true, shouldContinue: false, updatedCandidates };
-      }
-    }
-
-    // If this is the last candidate, we're done
-    if (isLastCandidate) {
-      this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-      return { shouldRetry: false, shouldContinue: false, updatedCandidates };
-    }
-
-    // Log and signal to continue to next candidate
-    this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
-    return { shouldRetry: false, shouldContinue: true, updatedCandidates };
   }
 
   /**
@@ -4719,31 +3057,6 @@ export class AIPromptRunner {
     };
   }
 
-  /**
-   * Provides a human-readable description of the validation decision
-   */
-  private getValidationDecisionDescription(
-    finalSuccess: boolean, 
-    totalAttempts: number, 
-    validationBehavior: string
-  ): string {
-    if (finalSuccess) {
-      return totalAttempts === 1 
-        ? 'Validation passed on first attempt'
-        : `Validation passed after ${totalAttempts} attempts`;
-    } else {
-      switch (validationBehavior) {
-        case 'Strict':
-          return `Validation failed after ${totalAttempts} attempts - execution marked as failed (Strict mode)`;
-        case 'Warn':
-          return `Validation failed after ${totalAttempts} attempts - warning logged, execution continued (Warn mode)`;
-        case 'None':
-          return `Validation skipped or ignored (None mode)`;
-        default:
-          return `Validation failed after ${totalAttempts} attempts - behavior: ${validationBehavior}`;
-      }
-    }
-  }
 
   /**
    * Generates a JSON schema from an example object for validation
@@ -4879,6 +3192,19 @@ export class AIPromptRunner {
    * @param params - Optional prompt parameters containing additional configuration like attemptJSONRepair
    * @returns Parsed result with optional validation results and errors
    */
+  /**
+   * Whether `text` parses as JSON once CleanJSON has stripped fences and prose around it — the test
+   * for "is this an envelope or plain prose?" under implicit control flow. Never throws.
+   */
+  private parsesAsJSON(text: string): boolean {
+    try {
+      JSON.parse(CleanJSON(text) ?? text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async parseAndValidateResultEnhanced(
     modelResult: ChatResult,
     prompt: MJAIPromptEntityExtended,
@@ -4901,7 +3227,31 @@ export class AIPromptRunner {
 
       rawOutput = modelResult.data?.choices?.[0]?.message?.content;
       if (!rawOutput) {
+        // A native tool call IS the model's answer. Providers return `content: null` on a turn
+        // that is nothing but calls, so reading emptiness as "no output" turns the designed
+        // native response into a validation failure — a warning on every native turn under
+        // `ValidationBehavior: 'Warn'`, and under `'Strict'` a retry that cannot ever succeed,
+        // because retrying asks the same question of a model that already answered it correctly.
+        //
+        // There is also nothing here to parse: `OutputType` describes the shape of TEXT output,
+        // and tool-call arguments arrive already structured and already schema-checked by the
+        // provider. The callers that care read them off `chatResult` directly — the agent loop
+        // via `LoopAgentType`, the eval harness via its own turn extractor.
+        if ((modelResult.data?.choices?.[0]?.message?.toolCalls?.length ?? 0) > 0) {
+          return { result: null };
+        }
         throw new Error('No output received from model');
+      }
+
+      // Implicit control flow: "reply in plain text when the task is complete" — prose IS the
+      // designed terminal form, so on a prompt whose OutputType is 'object' a reply that is not JSON is
+      // the answer, not a malformed envelope. Validating it as JSON marks every such prompt run
+      // Failed and spends a "Repair JSON" model call trying to fix prose.
+      // A reply that does parse as JSON — an honoured envelope — takes the normal path.
+      if (prompt.OutputType === 'object' && GetToolCallingDecision(modelResult)?.controlFlow === 'implicit' && !this.parsesAsJSON(rawOutput)) {
+        const accepted = new ValidationResult();
+        accepted.Success = true;
+        return { result: rawOutput, validationResult: accepted };
       }
 
       // Parse based on output type
@@ -4986,7 +3336,8 @@ export class AIPromptRunner {
         new ValidationErrorInfo('general', error.message, undefined, ValidationErrorType.Failure)
       ];
 
-      switch (prompt.ValidationBehavior) {
+      const effectiveValidationBehavior = params?.validationBehavior || prompt.ValidationBehavior;
+      switch (effectiveValidationBehavior) {
         case 'Strict':
           return { result: undefined, validationResult, validationErrors: validationResult.Errors };
         case 'Warn':
@@ -5147,8 +3498,36 @@ export class AIPromptRunner {
   }
 
   /**
-   * Attempts to repair malformed JSON using a two-step process.
-   * 
+   * Resolves the parse error that actually describes the model's output.
+   *
+   * The error reaching the repair path comes from `JSON.parse(CleanJSON(rawOutput))`, so it may
+   * describe one of CleanJSON's intermediate transforms rather than the response itself. That
+   * distinction is not cosmetic: a repair pass needs the failure offset in the *original* bytes,
+   * and the AI repair prompt is actively misled by an error describing text it was never shown.
+   *
+   * Observed in production: an unescaped quote at offset 23011 was reported as
+   * `Unexpected token 'm', "mermaid\ns"...` because CleanJSON had extracted a mermaid fence out of
+   * a string value before failing. Every downstream consumer — the repair model, the validation
+   * record, the logs — inherited that misdiagnosis.
+   *
+   * @param rawOutput - The model's unmodified output
+   * @param originalError - The error caught upstream, used as a fallback
+   * @returns The message that best describes what is wrong with `rawOutput`
+   */
+  private resolveTrueParseError(rawOutput: string, originalError: Error): string {
+    try {
+      JSON.parse(rawOutput);
+    } catch (directError: unknown) {
+      return directError instanceof Error ? directError.message : String(directError);
+    }
+    // rawOutput parses cleanly, so the failure came from a later stage; the caller's error stands.
+    return originalError.message;
+  }
+
+  /**
+   * Attempts to repair malformed JSON using a multi-step process: JSON5, then deterministic
+   * lexical repair, then an AI repair prompt.
+   *
    * @param rawOutput - The malformed JSON string
    * @param originalError - The original parsing error
    * @param params - Prompt parameters containing contextUser
@@ -5203,9 +3582,38 @@ export class AIPromptRunner {
       };
       return json5Result;
     } catch (json5Error) {
-      // Step 2: Use AI to repair the JSON
-      this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
-      
+      // The error handed to us may describe a CleanJSON transform rather than the model's actual
+      // output — CleanJSON rewrites the text through several passes before failing, and the error
+      // that escapes describes whatever it was holding at the end. Repairing, and telling a model
+      // what to repair, both require the real syntax error against the real bytes.
+      const trueError = this.resolveTrueParseError(rawOutput, originalError);
+
+      // Step 2: Deterministic lexical repair. The dominant failure by far is an unescaped quote or
+      // raw control character inside a string value — models embed mermaid diagrams, HTML mockups
+      // and code samples in markdown fields and miss an escape. JSON5 cannot help (an unescaped
+      // quote closes a string in JSON5 too), but the defect is mechanical, so fixing it needs no
+      // model call. Runs before the AI stage: it is microseconds against an LLM round-trip on a
+      // payload that may be tens of KB, and it cannot invent content the way a model can.
+      const lexicalRepair = RepairJSONEscaping(rawOutput);
+      if (lexicalRepair.repaired) {
+        this.logStatus(
+          `   ✅ Lexical repair fixed ${lexicalRepair.repairedOffsets.length} unescaped character(s)`,
+          true,
+          params
+        );
+        currentPromptRun._jsonRepairInfo = {
+          repaired: true,
+          method: 'LexicalEscaping',
+          originalError: trueError,
+          rawOutputPrefix: rawOutput.substring(0, 200),
+          repairedOffsets: lexicalRepair.repairedOffsets
+        };
+        return lexicalRepair.value;
+      }
+
+      // Step 3: Use AI to repair the JSON
+      this.logStatus('   🤖 JSON5 and lexical repair failed, attempting AI-based JSON repair...', true, params);
+
       try {
         // Find the "Repair JSON" prompt in the "MJ: System" category
         const repairPrompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === 'repair json' && p.Category.trim().toLowerCase() === 'mj: system');
@@ -5219,10 +3627,15 @@ export class AIPromptRunner {
           contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {
-            ERROR_MESSAGE: originalError.message,
+            ERROR_MESSAGE: trueError,
             MALFORMED_JSON: rawOutput
           },
-          skipValidation: true // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
+          skipValidation: true, // one shot, fix or no fix: no validation retries on the repair itself.
+          // attemptJSONRepair is deliberately NOT set, so a repair can never start a repair of its own.
+          // That keeps every run within two levels of an agent step's target, which is as far as
+          // vwAIUsageFacts looks for the agent run (pinned by the nesting-depth tests).
+          agentId: params.agentId,
+          UserID: ResolvePromptRunUserID({ UserID: params.UserID, ContextUser: params.contextUser }) ?? undefined,
         });
         
         if (!repairResult.success || !repairResult.result) {
@@ -5240,7 +3653,7 @@ export class AIPromptRunner {
         currentPromptRun._jsonRepairInfo = {
           repaired: true,
           method: 'AIRepair',
-          originalError: originalError.message,
+          originalError: trueError,
           rawOutputPrefix: rawOutput.substring(0, 200),
           repairPromptRunId: repairResult.promptRun?.ID
         };
@@ -5250,15 +3663,16 @@ export class AIPromptRunner {
         this.logError(aiRepairError, {
           category: 'JSONRepairFailed',
           metadata: {
-            originalError: originalError.message,
+            originalError: trueError,
             json5Error: json5Error.message,
+            lexicalRepairReason: lexicalRepair.reason,
             aiError: aiRepairError.message,
             rawOutput: rawOutput.substring(0, 500)
           },
           maxErrorLength: params.maxErrorLength
         });
         
-        throw new Error(`JSON repair failed after both JSON5 and AI attempts: ${originalError.message}`);
+        throw new Error(`JSON repair failed after JSON5, lexical and AI attempts: ${trueError}`);
       }
     }
   }
@@ -5384,6 +3798,136 @@ export class AIPromptRunner {
     return validationErrors;
   }
 
+  // ==================== PROMPT RUN LIFECYCLE ====================
+
+  /**
+   * Creates an AIPromptRun entity for execution tracking
+   */
+  private async createPromptRun(
+    prompt: MJAIPromptEntityExtended,
+    model: MJAIModelEntityExtended,
+    params: AIPromptParams,
+    systemPromptText: string,
+    startTime: Date,
+    vendorId?: string,
+    modelSelectionInfo?: AIModelSelectionInfo,
+    runType?: 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single'
+  ): Promise<MJAIPromptRunEntityExtended> {
+    return this.CreateRunRecord(
+      prompt,
+      model,
+      params,
+      startTime,
+      vendorId,
+      modelSelectionInfo,
+      (promptRun) => {
+        this.applyChatRequestFields(promptRun, prompt, model, params, systemPromptText, startTime, vendorId);
+        // An explicit run type (the consolidated parallel parent) wins over params.RunType.
+        if (runType) {
+          promptRun.RunType = runType;
+        }
+      }
+    );
+  }
+
+  /**
+   * Sets a prompt-run's chat-specific request fields: messages, prefill, sampling parameters,
+   * response format, streaming, effort level, child prompt and the validation/retry columns. Called by
+   * {@link BaseModelRunner.CreateRunRecord} just before the INSERT is queued.
+   */
+  private applyChatRequestFields(
+    promptRun: MJAIPromptRunEntityExtended,
+    prompt: MJAIPromptEntityExtended,
+    model: MJAIModelEntityExtended,
+    params: AIPromptParams,
+    systemPromptText: string,
+    startTime: Date,
+    vendorId?: string
+  ): void {
+    // Set ChildPromptID if this is a hierarchical execution with child prompts
+    if (params.childPrompts && params.childPrompts.length > 0) {
+      promptRun.ChildPromptID = params.childPrompts[0].childPrompt.prompt.ID;
+    }
+
+    promptRun.StreamingEnabled = !!params.onStreaming;
+
+    // Resolve and save the effort level used (same precedence as ChatParams resolution).
+    // EffortLevel is a numeric column with a CHECK (1-100), so a provider-named level such as
+    // 'xhigh' is deliberately not persisted here — it still reaches the driver via ChatParams.
+    if (typeof params.effortLevel === 'number') {
+      promptRun.EffortLevel = params.effortLevel;
+    } else if (prompt.EffortLevel !== undefined && prompt.EffortLevel !== null) {
+      promptRun.EffortLevel = prompt.EffortLevel;
+    }
+    // If neither is set, EffortLevel remains null (provider default was used)
+
+    // Always save the response format from the prompt if it exists
+    if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
+      promptRun.ResponseFormat = prompt.ResponseFormat;
+    }
+
+    // Save the actual values that will be used (prompt defaults overridden by additionalParameters).
+    // Uses the shared resolver so the persisted record matches what executeModel sends to the model.
+    const resolvedParams = this.resolveScalarInferenceParams(prompt, params.additionalParameters);
+    if (resolvedParams.temperature !== undefined) promptRun.Temperature = resolvedParams.temperature;
+    if (resolvedParams.topP !== undefined) promptRun.TopP = resolvedParams.topP;
+    if (resolvedParams.topK !== undefined) promptRun.TopK = resolvedParams.topK;
+    if (resolvedParams.minP !== undefined) promptRun.MinP = resolvedParams.minP;
+    if (resolvedParams.frequencyPenalty !== undefined) promptRun.FrequencyPenalty = resolvedParams.frequencyPenalty;
+    if (resolvedParams.presencePenalty !== undefined) promptRun.PresencePenalty = resolvedParams.presencePenalty;
+    if (resolvedParams.seed !== undefined) promptRun.Seed = resolvedParams.seed;
+    if (resolvedParams.includeLogProbs !== undefined) promptRun.LogProbs = resolvedParams.includeLogProbs;
+    if (resolvedParams.topLogProbs !== undefined) promptRun.TopLogProbs = resolvedParams.topLogProbs;
+
+    // Stop sequences + assistant prefill: stored from the prompt, with the additionalParameters
+    // array (JSON-encoded) taking precedence when supplied.
+    if (prompt.StopSequences) promptRun.StopSequences = prompt.StopSequences;
+    if (prompt.AssistantPrefill) promptRun.AssistantPrefill = prompt.AssistantPrefill;
+    if (params.additionalParameters?.stopSequences !== undefined && params.additionalParameters.stopSequences.length > 0) {
+      promptRun.StopSequences = JSON.stringify(params.additionalParameters.stopSequences);
+    }
+
+    // Store the input data/context as JSON in Messages field.
+    // Also capture callers that supply conversationMessages directly (e.g. templateMessageRole='none',
+    // no rendered system prompt) — otherwise their assembled prompt would never be persisted.
+    if (params.data || params.templateData || systemPromptText || (params.conversationMessages?.length ?? 0) > 0) {
+      const messages: ChatMessage[] = [];
+      if (systemPromptText) {
+        // Build the system prompt content, including prefill fallback if applicable
+        let systemContent = systemPromptText;
+        if (prompt.AssistantPrefill && prompt.PrefillFallbackMode === 'SystemInstruction') {
+          const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
+          // Function replacement: prefill text is authored content that routinely
+          // contains `$` (LaTeX `$$`, currency, JSON fragments), and a string
+          // replacement would expand it. See issue #3171.
+          const prefill = prompt.AssistantPrefill;
+          const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, () => prefill);
+          systemContent += '\n\n' + fallbackInstruction;
+        }
+        messages.push({
+          role: 'system',
+          content: systemContent
+        });
+      }
+      // Always include any caller-supplied conversation messages (previously only recorded when a
+      // template system prompt was present, which dropped them for the pure-conversationMessages path).
+      messages.push(...(params.conversationMessages || []));
+      promptRun.Messages = JSON.stringify({
+        data: params.data,
+        templateData: params.templateData,
+        messages: messages || [],
+      });
+    }
+
+    // Populate new retry tracking columns with initial values
+    promptRun.ValidationBehavior = params.validationBehavior || prompt.ValidationBehavior || 'Warn';
+    promptRun.RetryStrategy = prompt.RetryStrategy || 'Fixed';
+    promptRun.MaxRetriesConfigured = prompt.MaxRetries || 0;
+    promptRun.FirstAttemptAt = startTime;
+    promptRun.ValidationAttemptCount = 0; // Will be updated during execution
+    promptRun.SuccessfulValidationCount = 0;
+    promptRun.FinalValidationPassed = false; // Will be updated after execution
+  }
 
   /**
    * Updates the AIPromptRun entity with execution results
@@ -5402,21 +3946,25 @@ export class AIPromptRunner {
       totalCost: number;
     },
   ): Promise<void> {
-    // Fire-and-forget finalize UPDATE. The field mutations run INSIDE the post-INSERT task (after the
-    // 'Running' INSERT + its finalizeSave reload land), so the reload can never revert them and the
-    // chained UPDATE persists the finalized state — the "stuck at Running" race is structurally
-    // impossible. The execution flow does NOT await the save.
-    this._promptRunQueue.Update(promptRun, () =>
-      this.applyFinalizedPromptRunFields(promptRun, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens),
+    // A chat run succeeds only if the model call succeeded AND its output did not fail validation.
+    const success = modelResult.success && (parsedResult.validationResult?.Success !== false);
+    return this.FinalizeRunRecord(
+      promptRun,
+      success,
+      endTime,
+      executionTimeMS,
+      (run) => this.applyChatResultFields(run, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens)
     );
   }
 
   /**
-   * Populates a prompt-run's finalized fields (result, tokens, cost, timing, rollups) from the model
-   * result. Runs INSIDE the post-INSERT save task — see {@link updatePromptRun}. Errors here are
-   * logged (non-fatal): the AIPromptRun is observability, not part of the prompt's success contract.
+   * Populates a prompt-run's chat-specific finalized fields (result, tokens, cost, timing, validation)
+   * from the model result. Runs INSIDE the post-INSERT save task — see {@link BaseModelRunner.FinalizeRunRecord},
+   * which sets the completion timing, `Success` and `Status` before this runs and the rollups after it,
+   * and logs (non-fatal) any error thrown here: the AIPromptRun is observability, not part of the
+   * prompt's success contract.
    */
-  private applyFinalizedPromptRunFields(
+  private applyChatResultFields(
     promptRun: MJAIPromptRunEntityExtended,
     prompt: MJAIPromptEntityExtended,
     modelResult: ChatResult,
@@ -5430,551 +3978,243 @@ export class AIPromptRunner {
       totalCost: number;
     },
   ): void {
-    try {
-      promptRun.CompletedAt = endTime;
-      promptRun.ExecutionTimeMS = executionTimeMS;
-
-      // Determine what to save as the result
-      let resultToSave: string;
-      const rawResult = modelResult.data?.choices?.[0]?.message?.content || '';
+    // Determine what to save as the result
+    let resultToSave: string;
+    const rawResult = modelResult.data?.choices?.[0]?.message?.content || '';
+    
+    if (parsedResult.result === undefined || 
+        parsedResult.result === null || 
+        (typeof parsedResult.result === 'string' && parsedResult.result.trim().length === 0)) {
+      // Use raw result as fallback when parsed result is undefined, null, or empty string
+      resultToSave = rawResult;
       
-      if (parsedResult.result === undefined || 
-          parsedResult.result === null || 
-          (typeof parsedResult.result === 'string' && parsedResult.result.trim().length === 0)) {
-        // Use raw result as fallback when parsed result is undefined, null, or empty string
-        resultToSave = rawResult;
-        
-        // Also set error message when we have to fall back to raw result
-        if (!promptRun.ErrorMessage) {
-          const validationErrors = parsedResult.validationResult?.Errors;
-          if (validationErrors && validationErrors.length > 0) {
-            promptRun.ErrorMessage = `JSON parsing/validation failed: ${validationErrors.map(e => e.Message).join('; ')}`;
-          } else {
-            promptRun.ErrorMessage = 'Failed to parse result into expected format; raw output saved instead';
-          }
-        }
-      } else if (typeof parsedResult.result === 'string') {
-        resultToSave = parsedResult.result;
-      } else {
-        resultToSave = JSON.stringify(parsedResult.result);
-      }
-      
-      promptRun.Result = resultToSave;
-
-      // Extract token usage and cost - use cumulative if retries occurred
-      if (cumulativeTokens && validationAttempts && validationAttempts.length > 1) {
-        // Multiple attempts occurred, use cumulative totals. cumulativeTokens.promptTokens is the
-        // UNCACHED ("net-new") input summed across attempts; cache reads/writes are NOT summed (the
-        // re-sent prefix would over-count) and are persisted from the final model result below.
-        // TokensUsed must equal TokensPrompt + TokensCompletion (AIPromptRun invariant), so it does
-        // NOT include the cache buckets — those live in TokensCacheRead/TokensCacheWrite.
-        promptRun.TokensPrompt = cumulativeTokens.promptTokens;
-        promptRun.TokensCompletion = cumulativeTokens.completionTokens;
-        promptRun.TokensUsed = cumulativeTokens.promptTokens + cumulativeTokens.completionTokens;
-        promptRun.Cost = cumulativeTokens.totalCost;
-        
-        // Cost currency from the last model result
-        if (modelResult.data?.usage?.costCurrency !== undefined) {
-          promptRun.CostCurrency = modelResult.data.usage.costCurrency;
-        }
-      } else if (modelResult.data?.usage) {
-        // Single attempt, use standard token tracking
-        promptRun.TokensUsed = modelResult.data.usage.totalTokens;
-        promptRun.TokensPrompt = modelResult.data.usage.promptTokens;
-        promptRun.TokensCompletion = modelResult.data.usage.completionTokens;
-        
-        // Save cost information if available
-        if (modelResult.data.usage.cost !== undefined) {
-          promptRun.Cost = modelResult.data.usage.cost;
-        }
-        if (modelResult.data.usage.costCurrency !== undefined) {
-          promptRun.CostCurrency = modelResult.data.usage.costCurrency;
-        }
-        
-        // Save timing information if available
-        if (modelResult.data.usage.queueTime !== undefined) {
-          promptRun.QueueTime = modelResult.data.usage.queueTime;
-        }
-        if (modelResult.data.usage.promptTime !== undefined) {
-          promptRun.PromptTime = modelResult.data.usage.promptTime;
-        }
-        if (modelResult.data.usage.completionTime !== undefined) {
-          promptRun.CompletionTime = modelResult.data.usage.completionTime;
-        }
-      }
-
-      // Provider prompt-cache token counts (informational; no cost is derived here). Taken from the
-      // final model result in both the single-attempt and retry paths — cache reads are best
-      // represented by the final call rather than summed across retries (which would over-count the
-      // re-sent prefix). 0 means "no cache activity reported", consistent with ModelUsage defaults.
-      if (modelResult.data?.usage) {
-        promptRun.TokensCacheRead = modelResult.data.usage.cacheReadTokens ?? 0;
-        promptRun.TokensCacheWrite = modelResult.data.usage.cacheWriteTokens ?? 0;
-      }
-
-      // Save model-specific response details if available
-      if (modelResult.modelSpecificResponseDetails) {
-        promptRun.ModelSpecificResponseDetails = JSON.stringify(modelResult.modelSpecificResponseDetails);
-      }
-
-      // Populate retry tracking columns
-      if (validationAttempts && validationAttempts.length > 0) {
-        // Update retry tracking columns
-        promptRun.ValidationAttemptCount = validationAttempts.length;
-        promptRun.SuccessfulValidationCount = validationAttempts.filter(a => a.success).length;
-        promptRun.FinalValidationPassed = parsedResult.validationResult?.Success === true;
-        promptRun.LastAttemptAt = endTime;
-        
-        // Calculate total retry duration (excluding first attempt)
-        if (validationAttempts.length > 1) {
-          const firstAttemptTime = validationAttempts[0].timestamp;
-          const lastAttemptTime = validationAttempts[validationAttempts.length - 1].timestamp;
-          promptRun.TotalRetryDurationMS = lastAttemptTime.getTime() - firstAttemptTime.getTime();
+      // Also set error message when we have to fall back to raw result
+      if (!promptRun.ErrorMessage) {
+        const validationErrors = parsedResult.validationResult?.Errors;
+        if (validationErrors && validationErrors.length > 0) {
+          promptRun.ErrorMessage = `JSON parsing/validation failed: ${validationErrors.map(e => e.Message).join('; ')}`;
         } else {
-          promptRun.TotalRetryDurationMS = 0;
+          promptRun.ErrorMessage = 'Failed to parse result into expected format; raw output saved instead';
         }
-        
-        // Get final validation error if any
-        const finalAttempt = validationAttempts[validationAttempts.length - 1];
-        if (!finalAttempt.success && finalAttempt.errorMessage) {
-          promptRun.FinalValidationError = finalAttempt.errorMessage.substring(0, 500); // Truncate to fit column
-          promptRun.ValidationErrorCount = finalAttempt.validationErrors?.length || 0;
-        }
-        
-        // Find most common validation error
-        if (validationAttempts.some(a => !a.success)) {
-          const errorCounts = new Map<string, number>();
-          validationAttempts.forEach(attempt => {
-            if (!attempt.success && attempt.errorMessage) {
-              const count = errorCounts.get(attempt.errorMessage) || 0;
-              errorCounts.set(attempt.errorMessage, count + 1);
-            }
-          });
-          
-          if (errorCounts.size > 0) {
-            const [commonError] = [...errorCounts.entries()].sort((a, b) => b[1] - a[1])[0];
-            promptRun.CommonValidationError = commonError.substring(0, 255); // Truncate to fit column
-          }
-        }
-        
-        // Store detailed attempts in JSON columns
-        promptRun.ValidationAttempts = JSON.stringify(validationAttempts.map(a => ({
-          attemptNumber: a.attemptNumber,
-          success: a.success,
-          errorMessage: a.errorMessage,
-          validationErrorCount: a.validationErrors?.length || 0,
-          timestamp: a.timestamp.toISOString(),
-          outputLength: a.rawOutput?.length || 0
-        })));
-        
-        promptRun.ValidationSummary = JSON.stringify({
-          totalAttempts: validationAttempts.length,
-          successfulAttempts: validationAttempts.filter(a => a.success).length,
-          finalSuccess: parsedResult.validationResult?.Success || false,
-          validationBehavior: promptRun.ValidationBehavior,
-          retryStrategy: promptRun.RetryStrategy,
-          maxRetriesConfigured: promptRun.MaxRetriesConfigured,
-          actualRetriesUsed: validationAttempts.length - 1,
-          totalDurationMS: executionTimeMS,
-          retryDurationMS: promptRun.TotalRetryDurationMS || 0,
-          outputType: prompt.OutputType || 'unknown',
-          hasOutputExample: !!(prompt.OutputExample),
-          schemaValidationUsed: !!(prompt.OutputExample && prompt.OutputType === 'object'),
-          finalValidationErrors: parsedResult.validationResult?.Errors?.map(e => ({
-            source: e.Source,
-            message: e.Message,
-            type: e.Type,
-            value: e.Value
-          })) || [],
-          validationDecision: this.getValidationDecisionDescription(
-            parsedResult.validationResult?.Success || false,
-            validationAttempts.length,
-            promptRun.ValidationBehavior || 'Warn'
-          ),
-          jsonRepairInfo: promptRun._jsonRepairInfo || null
-        });
+      }
+    } else if (typeof parsedResult.result === 'string') {
+      resultToSave = parsedResult.result;
+    } else {
+      resultToSave = JSON.stringify(parsedResult.result);
+    }
+    
+    promptRun.Result = resultToSave;
+
+    // Extract token usage and cost - use cumulative if retries occurred
+    if (cumulativeTokens && validationAttempts && validationAttempts.length > 1) {
+      // Multiple attempts occurred, use cumulative totals. cumulativeTokens.promptTokens is the
+      // UNCACHED ("net-new") input summed across attempts; cache reads/writes are NOT summed (the
+      // re-sent prefix would over-count) and are persisted from the final model result below.
+      // TokensUsed must equal TokensPrompt + TokensCompletion (AIPromptRun invariant), so it does
+      // NOT include the cache buckets — those live in TokensCacheRead/TokensCacheWrite.
+      promptRun.TokensPrompt = cumulativeTokens.promptTokens;
+      promptRun.TokensCompletion = cumulativeTokens.completionTokens;
+      promptRun.TokensUsed = cumulativeTokens.promptTokens + cumulativeTokens.completionTokens;
+      promptRun.Cost = cumulativeTokens.totalCost;
+      
+      // Cost currency from the last model result
+      if (modelResult.data?.usage?.costCurrency !== undefined) {
+        promptRun.CostCurrency = modelResult.data.usage.costCurrency;
+      }
+    } else if (modelResult.data?.usage) {
+      // Single attempt, use standard token tracking
+      promptRun.TokensUsed = modelResult.data.usage.totalTokens;
+      promptRun.TokensPrompt = modelResult.data.usage.promptTokens;
+      promptRun.TokensCompletion = modelResult.data.usage.completionTokens;
+      
+      // Save cost information if available
+      if (modelResult.data.usage.cost !== undefined) {
+        promptRun.Cost = modelResult.data.usage.cost;
+      }
+      if (modelResult.data.usage.costCurrency !== undefined) {
+        promptRun.CostCurrency = modelResult.data.usage.costCurrency;
+      }
+      
+      // Save timing information if available
+      if (modelResult.data.usage.queueTime !== undefined) {
+        promptRun.QueueTime = modelResult.data.usage.queueTime;
+      }
+      if (modelResult.data.usage.promptTime !== undefined) {
+        promptRun.PromptTime = modelResult.data.usage.promptTime;
+      }
+      if (modelResult.data.usage.completionTime !== undefined) {
+        promptRun.CompletionTime = modelResult.data.usage.completionTime;
+      }
+    }
+
+    // Provider prompt-cache token counts (informational; no cost is derived here). Taken from the
+    // final model result in both the single-attempt and retry paths — cache reads are best
+    // represented by the final call rather than summed across retries (which would over-count the
+    // re-sent prefix). 0 means "no cache activity reported", consistent with ModelUsage defaults.
+    if (modelResult.data?.usage) {
+      promptRun.TokensCacheRead = modelResult.data.usage.cacheReadTokens ?? 0;
+      promptRun.TokensCacheWrite = modelResult.data.usage.cacheWriteTokens ?? 0;
+    }
+
+    // Save model-specific response details if available
+    if (modelResult.modelSpecificResponseDetails) {
+      promptRun.ModelSpecificResponseDetails = JSON.stringify(modelResult.modelSpecificResponseDetails);
+    }
+
+    // Populate retry tracking columns
+    if (validationAttempts && validationAttempts.length > 0) {
+      // Update retry tracking columns
+      promptRun.ValidationAttemptCount = validationAttempts.length;
+      promptRun.SuccessfulValidationCount = validationAttempts.filter(a => a.success).length;
+      promptRun.FinalValidationPassed = parsedResult.validationResult?.Success === true;
+      promptRun.LastAttemptAt = endTime;
+      
+      // Calculate total retry duration (excluding first attempt)
+      if (validationAttempts.length > 1) {
+        const firstAttemptTime = validationAttempts[0].timestamp;
+        const lastAttemptTime = validationAttempts[validationAttempts.length - 1].timestamp;
+        promptRun.TotalRetryDurationMS = lastAttemptTime.getTime() - firstAttemptTime.getTime();
       } else {
-        // No validation attempts (possibly skipped validation)
-        promptRun.ValidationAttemptCount = 1; // At least one attempt was made
-        promptRun.SuccessfulValidationCount = parsedResult.validationResult?.Success !== false ? 1 : 0;
-        promptRun.FinalValidationPassed = parsedResult.validationResult?.Success !== false;
-        promptRun.LastAttemptAt = endTime;
         promptRun.TotalRetryDurationMS = 0;
-
-        // Even without validation, persist JSON repair info if a repair occurred
-        if (promptRun._jsonRepairInfo) {
-          promptRun.ValidationSummary = JSON.stringify({
-            jsonRepairInfo: promptRun._jsonRepairInfo
-          });
-        }
       }
-
-      // Set Success flag based on validation result
-      promptRun.Success = modelResult.success && (parsedResult.validationResult?.Success !== false);
       
-      // Set final Status based on success
-      promptRun.Status = promptRun.Success ? 'Completed' : 'Failed';
+      // Get final validation error if any
+      const finalAttempt = validationAttempts[validationAttempts.length - 1];
+      if (!finalAttempt.success && finalAttempt.errorMessage) {
+        promptRun.FinalValidationError = finalAttempt.errorMessage.substring(0, 500); // Truncate to fit column
+        promptRun.ValidationErrorCount = finalAttempt.validationErrors?.length || 0;
+      }
       
-      // Set ErrorDetails if failed
-      if (!promptRun.Success) {
-        if (!modelResult.success && modelResult.errorMessage) {
-          promptRun.ErrorDetails = modelResult.errorMessage;
-        } else if (parsedResult.validationResult?.Success === false) {
-          promptRun.ErrorDetails = `Validation failed: ${parsedResult.validationResult.Errors?.map(e => e.Message).join(', ')}`;
-        }
-      }
-
-      // Note: Failover tracking fields are now updated directly in executeModelWithFailover
-      // The promptRun entity already has the failover information set
-
-      // With template composition, we only execute once so rollup equals regular fields
-      promptRun.TokensPromptRollup = promptRun.TokensPrompt;
-      promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
-      promptRun.TokensUsedRollup = promptRun.TokensUsed;
-      promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
-      promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
-      if (promptRun.Cost !== undefined) {
-        promptRun.TotalCost = promptRun.Cost;
-      }
-
-    } catch (error) {
-      this.logError(error, {
-        category: 'PromptRunUpdate',
-        metadata: {
-          promptRunId: promptRun.ID
-        }
-      });
-    }
-  }
-
-  // ==================== CONTEXT LENGTH METHODS ====================
-
-  /**
-   * Estimates the number of tokens in a rendered prompt and conversation messages.
-   * This is a rough estimation based on character count and typical token ratios.
-   * 
-   * @param renderedPrompt - The rendered prompt text
-   * @param conversationMessages - Optional conversation messages
-   * @returns Estimated token count
-   */
-
-  // ==================== FAILOVER METHODS ====================
-
-  /**
-   * Retrieves failover configuration from the prompt entity.
-   *
-   * @param prompt - The AI prompt entity containing failover settings
-   * @returns FailoverConfiguration object with strategy and settings
-   *
-   * @remarks
-   * This method extracts failover configuration from the prompt entity and provides
-   * default values when configuration is not specified. Override this method to
-   * implement custom failover configuration logic.
-   */
-  protected getFailoverConfiguration(prompt: MJAIPromptEntityExtended): FailoverConfiguration {
-    return {
-      strategy: prompt.FailoverStrategy || 'None',
-      maxAttempts: prompt.FailoverMaxAttempts || 3,
-      delaySeconds: prompt.FailoverDelaySeconds || 1,
-      modelStrategy: prompt.FailoverModelStrategy || 'PreferSameModel',
-      errorScope: prompt.FailoverErrorScope || 'All'
-    };
-  }
-
-  /**
-   * Determines whether a failover attempt should be made based on the error and configuration.
-   *
-   * @param error - The error that occurred during execution
-   * @param config - The failover configuration
-   * @param attemptNumber - The current attempt number (1-based)
-   * @returns True if failover should be attempted, false otherwise
-   *
-   * @remarks
-   * This method uses the ErrorAnalyzer to classify errors and determine if they are
-   * eligible for failover based on the configured error scope. Override this method
-   * to implement custom failover decision logic.
-   */
-  protected shouldAttemptFailover(
-    error: Error,
-    config: FailoverConfiguration,
-    attemptNumber: number
-  ): boolean {
-    // Don't failover if strategy is None or we've exceeded max attempts
-    if (config.strategy === 'None' || attemptNumber > config.maxAttempts) {
-      return false;
-    }
-
-    // Analyze the error to determine if it's eligible for failover
-    const errorAnalysis = ErrorAnalyzer.analyzeError(error);
-    
-    // Check if error analysis allows failover
-    if (!errorAnalysis.canFailover) {
-      return false;
-    }
-
-    // Check error scope configuration
-    switch (config.errorScope) {
-      case 'NetworkOnly':
-        return errorAnalysis.errorType === 'NetworkError';
-      case 'RateLimitOnly':
-        return errorAnalysis.errorType === 'RateLimit';
-      case 'ServiceErrorOnly':
-        return errorAnalysis.errorType === 'ServiceUnavailable' || 
-               errorAnalysis.errorType === 'InternalServerError';
-      case 'All':
-      default:
-        return true;
-    }
-  }
-
-  /**
-   * Checks if an error type matches the configured error scope
-   *
-   * @param errorType - The error type from ErrorAnalyzer
-   * @param scope - The configured error scope
-   * @returns True if the error matches the scope
-   */
-  private errorMatchesScope(errorType: string, scope: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly'): boolean {
-    switch (scope) {
-      case 'NetworkOnly':
-        return errorType === 'NetworkError';
-      case 'RateLimitOnly':
-        return errorType === 'RateLimit';
-      case 'ServiceErrorOnly':
-        return errorType === 'ServiceUnavailable' || errorType === 'InternalServerError';
-      case 'All':
-      default:
-        return true;
-    }
-  }
-
-  /**
-   * Calculates the delay before the next failover attempt.
-   *
-   * @param attemptNumber - The current attempt number (1-based)
-   * @param baseDelaySeconds - The base delay in seconds from configuration
-   * @param previousError - The error from the previous attempt
-   * @returns Delay in milliseconds before the next attempt
-   *
-   * @remarks
-   * Implements exponential backoff with jitter by default. The delay increases
-   * exponentially with each attempt and includes random jitter to prevent
-   * thundering herd problems. Override this method to implement custom delay logic.
-   */
-  protected calculateFailoverDelay(
-    attemptNumber: number,
-    baseDelaySeconds: number
-  ): number {
-    // Exponential backoff: delay = base * 2^(attempt-1)
-    const exponentialDelay = baseDelaySeconds * Math.pow(2, attemptNumber - 1);
-    
-    // Add jitter (0-25% of delay) to prevent thundering herd
-    const jitter = exponentialDelay * 0.25 * Math.random();
-    
-    // Cap at 30 seconds to prevent excessive delays
-    const totalDelay = Math.min(exponentialDelay + jitter, 30);
-    
-    return totalDelay * 1000; // Convert to milliseconds
-  }
-
-  /**
-   * Selects candidate models for failover based on the strategy and current failure.
-   *
-   * @param currentModel - The model that just failed
-   * @param currentVendorId - The vendor ID that just failed
-   * @param strategy - The failover strategy to use
-   * @param modelStrategy - The model selection preference
-   * @param allCandidates - All available model-vendor candidates
-   * @param attemptHistory - History of previous failover attempts
-   * @returns Array of candidates sorted by priority (highest first)
-   *
-   * @remarks
-   * This method implements different strategies for selecting failover candidates:
-   * - SameModelDifferentVendor: Try the same model with different vendors
-   * - NextBestModel: Try different models in order of preference
-   * - PowerRank: Use the global power ranking of models
-   *
-   * Override this method to implement custom candidate selection logic.
-   */
-  protected selectFailoverCandidates(
-    currentModel: MJAIModelEntityExtended,
-    currentVendorId: string | undefined,
-    strategy: FailoverConfiguration['strategy'],
-    modelStrategy: FailoverConfiguration['modelStrategy'],
-    allCandidates: ModelVendorCandidate[],
-    attemptHistory: FailoverAttempt[]
-  ): ModelVendorCandidate[] {
-    // Filter out candidates that have already failed
-    // Note: Authentication errors are already filtered from allCandidates upstream,
-    // so we only need to filter out specific model/vendor pairs that have failed
-    const failedPairs = new Set(
-      attemptHistory.map(a => `${a.modelId}:${a.vendorId || 'default'}`)
-    );
-
-    const availableCandidates = allCandidates.filter(c => {
-      const key = `${c.model.ID}:${c.vendorId || 'default'}`;
-      return !failedPairs.has(key);
-    });
-
-    // Check if we have context length exceeded errors in the attempt history
-    const hasContextLengthError = attemptHistory.some(a => 
-      a.errorType === 'ContextLengthExceeded' || 
-      ErrorAnalyzer.analyzeError(a.error).errorType === 'ContextLengthExceeded'
-    );
-
-    // Apply strategy-specific filtering and sorting
-    let candidates: ModelVendorCandidate[];
-    
-    switch (strategy) {
-      case 'SameModelDifferentVendor':
-        // Only consider same model with different vendors
-        candidates = availableCandidates.filter(c =>
-          UUIDsEqual(c.model.ID, currentModel.ID) && !UUIDsEqual(c.vendorId, currentVendorId)
-        );
-        break;
-        
-      case 'NextBestModel':
-        // Consider all models, apply model strategy preference
-        candidates = availableCandidates;
-        if (modelStrategy === 'RequireSameModel') {
-          candidates = candidates.filter(c => UUIDsEqual(c.model.ID, currentModel.ID));
-        } else if (modelStrategy === 'PreferSameModel') {
-          // Sort to put same model first
-          candidates.sort((a, b) => {
-            const aSameModel = UUIDsEqual(a.model.ID, currentModel.ID) ? 1 : 0;
-            const bSameModel = UUIDsEqual(b.model.ID, currentModel.ID) ? 1 : 0;
-            return bSameModel - aSameModel;
-          });
-        } else if (modelStrategy === 'PreferDifferentModel') {
-          // Sort to put different models first
-          candidates.sort((a, b) => {
-            const aDiffModel = !UUIDsEqual(a.model.ID, currentModel.ID) ? 1 : 0;
-            const bDiffModel = !UUIDsEqual(b.model.ID, currentModel.ID) ? 1 : 0;
-            return bDiffModel - aDiffModel;
-          });
-        }
-        break;
-        
-      case 'PowerRank':
-        // Use all candidates, they're already sorted by power rank
-        candidates = availableCandidates;
-        break;
-        
-      default:
-        candidates = [];
-    }
-
-    // If we have context length errors, prioritize models with larger context windows
-    if (hasContextLengthError) {
-      const currentMaxTokens = currentModel.ModelVendors?.length > 0 ?
-        Math.max(...currentModel.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
-
-      // Filter out models with same or smaller context windows
-      candidates = candidates.filter(c => {
-        const candidateMaxTokens = c.model.ModelVendors?.length > 0 ?
-          Math.max(...c.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
-        return candidateMaxTokens > currentMaxTokens;
-      });
-
-      // If no larger models exist, this is a fatal error - return empty to stop retrying
-      if (candidates.length === 0) {
-        LogStatusEx({
-          message: `❌ Context length exceeded and no models with larger context windows available. Current model: ${currentModel.Name} (${currentMaxTokens} max tokens). This is a fatal error.`,
-          category: 'AI',
-          additionalArgs: [{
-            currentModel: currentModel.Name,
-            currentMaxTokens,
-            availableModels: allCandidates.map(c => c.model.Name).join(', '),
-            reason: 'No models with larger context windows available for failover'
-          }]
+      // Find most common validation error
+      if (validationAttempts.some(a => !a.success)) {
+        const errorCounts = new Map<string, number>();
+        validationAttempts.forEach(attempt => {
+          if (!attempt.success && attempt.errorMessage) {
+            const count = errorCounts.get(attempt.errorMessage) || 0;
+            errorCounts.set(attempt.errorMessage, count + 1);
+          }
         });
-        // Return empty array - caller will see no candidates and stop retrying
-        return [];
-      }
-
-      // Sort by priority first (existing algorithm), then by context window size as tiebreaker
-      candidates.sort((a, b) => {
-        // Primary sort: priority (higher is better) - maintains existing algorithm
-        if (a.priority !== b.priority) {
-          return b.priority - a.priority;
+        
+        if (errorCounts.size > 0) {
+          const [commonError] = [...errorCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+          promptRun.CommonValidationError = commonError.substring(0, 255); // Truncate to fit column
         }
-
-        // Secondary sort: context window size (largest first) - only as tiebreaker
-        const aMaxTokens = a.model.ModelVendors?.length > 0 ?
-          Math.max(...a.model.ModelVendors.map((mv: MJAIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
-        const bMaxTokens = b.model.ModelVendors?.length > 0 ?
-          Math.max(...b.model.ModelVendors.map((mv: MJAIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
-
-        return bMaxTokens - aMaxTokens;
-      });
-
-      // Log context-aware failover selection
-      const bestCandidate = candidates[0];
-      const bestCandidateMaxTokens = bestCandidate.model.ModelVendors?.length > 0 ?
-        Math.max(...bestCandidate.model.ModelVendors.map((mv: MJAIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
-      LogStatusEx({
-        message: `🔄 Context-aware failover: Selected model ${bestCandidate.model.Name} with ${bestCandidateMaxTokens} max input tokens (vs ${currentMaxTokens} for failed model)`,
-        category: 'AI',
-        additionalArgs: [{
-          currentModel: currentModel.Name,
-          currentMaxTokens,
-          selectedModel: bestCandidate.model.Name,
-          selectedMaxTokens: bestCandidateMaxTokens,
-          candidateCount: candidates.length
-        }]
+      }
+      
+      // Store detailed attempts in JSON columns
+      promptRun.ValidationAttempts = JSON.stringify(validationAttempts.map(a => ({
+        attemptNumber: a.attemptNumber,
+        success: a.success,
+        errorMessage: a.errorMessage,
+        validationErrorCount: a.validationErrors?.length || 0,
+        timestamp: a.timestamp.toISOString(),
+        outputLength: a.rawOutput?.length || 0
+      })));
+      
+      promptRun.ValidationSummary = JSON.stringify({
+        totalAttempts: validationAttempts.length,
+        successfulAttempts: validationAttempts.filter(a => a.success).length,
+        finalSuccess: parsedResult.validationResult?.Success || false,
+        validationBehavior: promptRun.ValidationBehavior,
+        retryStrategy: promptRun.RetryStrategy,
+        maxRetriesConfigured: promptRun.MaxRetriesConfigured,
+        actualRetriesUsed: validationAttempts.length - 1,
+        totalDurationMS: executionTimeMS,
+        retryDurationMS: promptRun.TotalRetryDurationMS || 0,
+        outputType: prompt.OutputType || 'unknown',
+        hasOutputExample: !!(prompt.OutputExample),
+        schemaValidationUsed: !!(prompt.OutputExample && prompt.OutputType === 'object'),
+        finalValidationErrors: parsedResult.validationResult?.Errors?.map(e => ({
+          source: e.Source,
+          message: e.Message,
+          type: e.Type,
+          value: e.Value
+        })) || [],
+        validationDecision: this.getValidationDecisionDescription(
+          parsedResult.validationResult?.Success || false,
+          validationAttempts.length,
+          promptRun.ValidationBehavior || 'Warn'
+        ),
+        jsonRepairInfo: promptRun._jsonRepairInfo || null
       });
     } else {
-      // Final sort by priority (higher is better) for non-context-length errors
-      candidates.sort((a, b) => b.priority - a.priority);
+      // No validation attempts (possibly skipped validation)
+      promptRun.ValidationAttemptCount = 1; // At least one attempt was made
+      promptRun.SuccessfulValidationCount = parsedResult.validationResult?.Success !== false ? 1 : 0;
+      promptRun.FinalValidationPassed = parsedResult.validationResult?.Success !== false;
+      promptRun.LastAttemptAt = endTime;
+      promptRun.TotalRetryDurationMS = 0;
+
+      // Even without validation, persist JSON repair info if a repair occurred
+      if (promptRun._jsonRepairInfo) {
+        promptRun.ValidationSummary = JSON.stringify({
+          jsonRepairInfo: promptRun._jsonRepairInfo
+        });
+      }
     }
-    
-    return candidates;
+
+    // Success and Status were set by FinalizeRunRecord from the outcome updatePromptRun passed it.
+    // Set ErrorDetails if failed
+    if (!promptRun.Success) {
+      if (!modelResult.success && modelResult.errorMessage) {
+        promptRun.ErrorDetails = modelResult.errorMessage;
+      } else if (parsedResult.validationResult?.Success === false) {
+        promptRun.ErrorDetails = `Validation failed: ${parsedResult.validationResult.Errors?.map(e => e.Message).join(', ')}`;
+      }
+    }
   }
 
   /**
-   * Logs a failover attempt for tracking and debugging.
-   * 
-   * @param promptId - The ID of the prompt being executed
-   * @param attempt - The failover attempt details
-   * @param willRetry - Whether another attempt will be made
-   * 
-   * @remarks
-   * This method logs detailed information about each failover attempt to help with
-   * debugging and monitoring. Override this method to implement custom logging or
-   * integrate with external monitoring systems.
+   * Provides a human-readable description of the validation decision
    */
-  protected logFailoverAttempt(
-    promptId: string,
-    attempt: FailoverAttempt,
-    willRetry: boolean
-  ): void {
-    const message = `Failover attempt ${attempt.attemptNumber} for prompt ${promptId}`;
-    const metadata = {
-      promptId,
-      attemptNumber: attempt.attemptNumber,
-      modelId: attempt.modelId,
-      vendorId: attempt.vendorId,
-      errorType: attempt.errorType,
-      duration: attempt.duration,
-      willRetry,
-      error: attempt.error.message
-    };
-
-    if (willRetry) {
-      LogStatusEx({
-        message: `⚡ ${message}`,
-        category: 'AI',
-        additionalArgs: [metadata]
-      });
+  private getValidationDecisionDescription(
+    finalSuccess: boolean, 
+    totalAttempts: number, 
+    validationBehavior: string
+  ): string {
+    if (finalSuccess) {
+      return totalAttempts === 1 
+        ? 'Validation passed on first attempt'
+        : `Validation passed after ${totalAttempts} attempts`;
     } else {
-      LogErrorEx({
-        message: message,
-        error: attempt.error,
-        category: 'AI',
-        severity: 'error',
-        metadata: metadata
-      });
+      switch (validationBehavior) {
+        case 'Strict':
+          return `Validation failed after ${totalAttempts} attempts - execution marked as failed (Strict mode)`;
+        case 'Warn':
+          return `Validation failed after ${totalAttempts} attempts - warning logged, execution continued (Warn mode)`;
+        case 'None':
+          return `Validation skipped or ignored (None mode)`;
+        default:
+          return `Validation failed after ${totalAttempts} attempts - behavior: ${validationBehavior}`;
+      }
     }
+  }
+
+  /**
+   * Resolves the scalar inference parameters for a run: each value is the per-request override
+   * from `additionalParameters` when supplied, otherwise the prompt's configured default. This
+   * is the single source of truth for parameter precedence so {@link executeModel} (ChatParams)
+   * and {@link createPromptRun} (the persisted record) stay in lockstep. Stop sequences and
+   * assistant prefill are intentionally excluded — their representations differ per target.
+   */
+  private resolveScalarInferenceParams(
+    prompt: MJAIPromptEntityExtended,
+    additionalParameters?: Record<string, unknown>
+  ): ResolvedScalarInferenceParams {
+    const pick = <T>(override: unknown, promptDefault: T | null | undefined): T | undefined =>
+      override !== undefined ? (override as T) : (promptDefault != null ? promptDefault : undefined);
+    const ap = additionalParameters;
+    return {
+      temperature: pick<number>(ap?.temperature, prompt.Temperature),
+      topP: pick<number>(ap?.topP, prompt.TopP),
+      topK: pick<number>(ap?.topK, prompt.TopK),
+      minP: pick<number>(ap?.minP, prompt.MinP),
+      frequencyPenalty: pick<number>(ap?.frequencyPenalty, prompt.FrequencyPenalty),
+      presencePenalty: pick<number>(ap?.presencePenalty, prompt.PresencePenalty),
+      seed: pick<number>(ap?.seed, prompt.Seed),
+      includeLogProbs: pick<boolean>(ap?.includeLogProbs, prompt.IncludeLogProbs),
+      topLogProbs: pick<number>(ap?.topLogProbs, prompt.TopLogProbs),
+    };
   }
 }
 

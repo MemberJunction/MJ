@@ -1,0 +1,29 @@
+{
+  "id": "demoloop-parallel-weather-stock-01",
+  "agent": "Demo Loop Agent",
+  "tags": [
+    "parallel-actions"
+  ],
+  "description": "One question warranting two different tools. Distinct actions rather than the same one twice, so a provider that collapses duplicates cannot pass by accident.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "What's the weather in Seattle, and what is AAPL trading at?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Get Weather"
+      },
+      {
+        "name": "Get Stock Price"
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

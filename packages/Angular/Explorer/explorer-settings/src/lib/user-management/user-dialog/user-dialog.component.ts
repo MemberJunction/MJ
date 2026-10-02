@@ -4,7 +4,9 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJUserEntity, MJRoleEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { EnrolledRow, ServerRefusalReasons } from '../transaction-group-refusals';
 export interface UserDialogData {
   user?: MJUserEntity;
   mode: 'create' | 'edit';
@@ -24,23 +26,77 @@ export interface UserDialogResult {
   styleUrls: ['./user-dialog.component.css']
 })
 export class UserDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges {
-  @Input() data: UserDialogData | null = null;
-  @Input() visible = false;
-  @Output() result = new EventEmitter<UserDialogResult>();
+  @Input() Data: UserDialogData | null = null;
+
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: UserDialogData | null) {
+    this.Data = value;
+  }
+  /** @deprecated Use {@link Data}. */
+  get data(): UserDialogData | null {
+    return this.Data;
+  }
+  @Input() Visible = false;
+
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: UserDialogComponent['Visible']) {
+    this.Visible = value;
+  }
+  /** @deprecated Use {@link Visible}. */
+  get visible(): UserDialogComponent['Visible'] {
+    return this.Visible;
+  }
+  @Output() Result = new EventEmitter<UserDialogResult>();
+
+  /**
+   * @deprecated Use {@link Result}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (result) keeps working. Must stay AFTER Result: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() result = this.Result;
 
   private fb = inject(FormBuilder);
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
   private get metadata() { return this.ProviderToUse; }
-  public userForm: FormGroup;
+  public UserForm: FormGroup;
+
+  /** @deprecated Use {@link UserForm}. */
+  public get userForm(): FormGroup {
+    return this.UserForm;
+  }
+  /** @deprecated Use {@link UserForm}. */
+  public set userForm(value: FormGroup) {
+    this.UserForm = value;
+  }
   public isLoading = false;
   public error: string | null = null;
-  public selectedRoleIds = new Set<string>();
-  public existingUserRoles: MJUserRoleEntity[] = [];
+  public SelectedRoleIds = new Set<string>();
+
+  /** @deprecated Use {@link SelectedRoleIds}. */
+  public get selectedRoleIds() {
+    return this.SelectedRoleIds;
+  }
+  /** @deprecated Use {@link SelectedRoleIds}. */
+  public set selectedRoleIds(value) {
+    this.SelectedRoleIds = value;
+  }
+  public ExistingUserRoles: MJUserRoleEntity[] = [];
+
+  /** @deprecated Use {@link ExistingUserRoles}. */
+  public get existingUserRoles(): MJUserRoleEntity[] {
+    return this.ExistingUserRoles;
+  }
+  /** @deprecated Use {@link ExistingUserRoles}. */
+  public set existingUserRoles(value: MJUserRoleEntity[]) {
+    this.ExistingUserRoles = value;
+  }
 
   constructor() {
     super();
-    this.userForm = this.fb.group({
+    this.UserForm = this.fb.group({
       name: ['', [Validators.required, Validators.email]],
       firstName: [''],
       lastName: [''],
@@ -58,10 +114,10 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
   ngOnChanges(changes: SimpleChanges): void {
     // Always clear state when data changes to prevent persistence bugs
     if (changes['data']) {
-      this.selectedRoleIds.clear();
-      this.existingUserRoles = [];
+      this.SelectedRoleIds.clear();
+      this.ExistingUserRoles = [];
       
-      if (this.data?.user && this.isEditMode) {
+      if (this.Data?.user && this.IsEditMode) {
         this.loadUserData();
       } else {
         this.resetForm();
@@ -69,7 +125,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
     }
     
     // Reset form when dialog becomes visible and not in edit mode
-    if (changes['visible'] && this.visible && !this.isEditMode) {
+    if (changes['visible'] && this.Visible && !this.IsEditMode) {
       this.resetForm();
     }
   }
@@ -79,7 +135,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
   }
 
   private resetForm(): void {
-    this.userForm.reset({
+    this.UserForm.reset({
       name: '',
       firstName: '',
       lastName: '',
@@ -88,30 +144,40 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       type: 'User',
       isActive: true
     });
-    this.selectedRoleIds.clear();
+    this.SelectedRoleIds.clear();
     this.error = null;
   }
 
   @HostListener('document:keydown.escape', ['$event'])
   onEscapeKey(event: Event): void {
-    if (this.visible) {
+    if (this.Visible) {
       this.onCancel();
     }
   }
 
-  public get windowTitle(): string {
-    return this.isEditMode ? 'Edit User' : 'Create New User';
+  public get WindowTitle(): string {
+    return this.IsEditMode ? 'Edit User' : 'Create New User';
   }
 
+  /** @deprecated Use {@link WindowTitle}. */
+  public get windowTitle(): string {
+    return this.WindowTitle;
+  }
+
+  public get IsEditMode(): boolean {
+    return this.Data?.mode === 'edit';
+  }
+
+  /** @deprecated Use {@link IsEditMode}. */
   public get isEditMode(): boolean {
-    return this.data?.mode === 'edit';
+    return this.IsEditMode;
   }
 
   private async loadUserData(): Promise<void> {
-    if (!this.data?.user) return;
+    if (!this.Data?.user) return;
 
-    const user = this.data.user;
-    this.userForm.patchValue({
+    const user = this.Data.user;
+    this.UserForm.patchValue({
       name: user.Name,
       firstName: user.FirstName,
       lastName: user.LastName,
@@ -135,10 +201,10 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       });
 
       if (result.Success && result.Results) {
-        this.existingUserRoles = result.Results;
+        this.ExistingUserRoles = result.Results;
         // Pre-select existing roles
-        for (const userRole of this.existingUserRoles) {
-          this.selectedRoleIds.add(userRole.RoleID);
+        for (const userRole of this.ExistingUserRoles) {
+          this.SelectedRoleIds.add(userRole.RoleID);
         }
       }
     } catch (error) {
@@ -146,27 +212,37 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
     }
   }
 
-  public onRoleToggle(roleId: string, event: Event): void {
+  public OnRoleToggle(roleId: string, event: Event): void {
     event.stopPropagation();
     const checkbox = event.target as HTMLInputElement;
     if (checkbox.checked) {
-      this.selectedRoleIds.add(roleId);
+      this.SelectedRoleIds.add(roleId);
     } else {
-      this.selectedRoleIds.delete(roleId);
+      this.SelectedRoleIds.delete(roleId);
     }
   }
 
+  /** @deprecated Use {@link OnRoleToggle}. */
+  public onRoleToggle(roleId: string, event: Event): void {
+    return this.OnRoleToggle(roleId, event);
+  }
+
+  public ToggleRole(roleId: string): void {
+    if (this.SelectedRoleIds.has(roleId)) {
+      this.SelectedRoleIds.delete(roleId);
+    } else {
+      this.SelectedRoleIds.add(roleId);
+    }
+  }
+
+  /** @deprecated Use {@link ToggleRole}. */
   public toggleRole(roleId: string): void {
-    if (this.selectedRoleIds.has(roleId)) {
-      this.selectedRoleIds.delete(roleId);
-    } else {
-      this.selectedRoleIds.add(roleId);
-    }
+    return this.ToggleRole(roleId);
   }
 
-  public async onSubmit(): Promise<void> {
-    if (this.userForm.invalid) {
-      this.markFormGroupTouched(this.userForm);
+  public async OnSubmit(): Promise<void> {
+    if (this.UserForm.invalid) {
+      this.markFormGroupTouched(this.UserForm);
       return;
     }
 
@@ -176,9 +252,9 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
     try {
       let user: MJUserEntity;
 
-      if (this.isEditMode && this.data?.user) {
+      if (this.IsEditMode && this.Data?.user) {
         // Edit existing user
-        user = this.data.user;
+        user = this.Data.user;
       } else {
         // Create new user
         user = await this.metadata.GetEntityObject<MJUserEntity>('MJ: Users');
@@ -186,7 +262,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       }
 
       // Update user properties
-      const formValue = this.userForm.value;
+      const formValue = this.UserForm.value;
       user.Name = formValue.name;
       user.FirstName = formValue.firstName;
       user.LastName = formValue.lastName;
@@ -204,7 +280,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       // Handle role assignments
       await this.updateUserRoles(user.ID);
 
-      this.result.emit({ action: 'save', user });
+      this.Result.emit({ action: 'save', user });
 
     } catch (error: unknown) {
       console.error('Error saving user:', error);
@@ -220,14 +296,19 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
     }
   }
 
+  /** @deprecated Use {@link OnSubmit}. */
+  public async onSubmit(): Promise<void> {
+    return this.OnSubmit();
+  }
+
   private async updateUserRoles(userId: string): Promise<void> {
     try {
       // Get current role IDs from existing UserRole entities
-      const existingRoleIds = new Set(this.existingUserRoles.map(ur => ur.RoleID));
+      const existingRoleIds = new Set(this.ExistingUserRoles.map(ur => ur.RoleID));
 
       // Determine roles to add and remove
-      const rolesToAdd = Array.from(this.selectedRoleIds).filter(roleId => !existingRoleIds.has(roleId));
-      const rolesToRemove = this.existingUserRoles.filter(userRole => !this.selectedRoleIds.has(userRole.RoleID));
+      const rolesToAdd = Array.from(this.SelectedRoleIds).filter(roleId => !existingRoleIds.has(roleId));
+      const rolesToRemove = this.ExistingUserRoles.filter(userRole => !this.SelectedRoleIds.has(userRole.RoleID));
 
       if (rolesToAdd.length === 0 && rolesToRemove.length === 0) {
         return;
@@ -236,9 +317,25 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       // Batch all role deletes and adds into one transactional GraphQL call
       const tg = await this.metadata.CreateTransactionGroup();
 
+      // Each Delete()/Save() only ENROLS the row in the group; the write is deferred to Submit().
+      // A false return therefore means the row was refused CLIENT-side and never enrolled — so
+      // submitting anyway writes a PARTIAL change, or an empty one whose Submit() returns true for
+      // having nothing to do, and either way the dialog closes reporting success. Same rule and
+      // same reason as `UserManagementComponent.executeBulkRoleAssign`, where the transaction-group
+      // semantics — and why the server-side #4282 guard is NOT what this catches — are set out in full.
+      const refusals: string[] = [];
+      // Enrolled rows are kept so the SERVER's reason can be read back off them below; without
+      // that, the reason #4309 puts on LatestResult has nobody left to read it.
+      const enrolled: EnrolledRow[] = [];
+
       for (const userRole of rolesToRemove) {
         userRole.TransactionGroup = tg;
-        await userRole.Delete();
+        if (!await userRole.Delete()) {
+          refusals.push(`Remove ${this.describeRole(userRole.RoleID)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        else {
+          enrolled.push({ Label: `Remove ${this.describeRole(userRole.RoleID)}`, Entity: userRole });
+        }
       }
 
       for (const roleId of rolesToAdd) {
@@ -247,11 +344,27 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
         userRole.UserID = userId;
         userRole.RoleID = roleId;
         userRole.TransactionGroup = tg;
-        await userRole.Save();
+        if (!await userRole.Save()) {
+          refusals.push(`Add ${this.describeRole(roleId)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        else {
+          enrolled.push({ Label: `Add ${this.describeRole(roleId)}`, Entity: userRole });
+        }
+      }
+
+      if (refusals.length > 0) {
+        // Nothing was written: the refused rows never enrolled, and the rest are still only queued
+        // because Submit() is not reached.
+        throw new Error(`Failed to update user roles — no role changes were made.\n${refusals.join('\n')}`);
       }
 
       if (!await tg.Submit()) {
-        throw new Error('Failed to update user roles — all changes have been rolled back');
+        // Every row enrolled, so this is a SERVER-side refusal (or a rollback). Since #4309 the
+        // server says which row and why, and that reason is now on each entity's LatestResult.
+        const reasons = ServerRefusalReasons(enrolled);
+        throw new Error(reasons.length > 0
+          ? `Failed to update user roles — all changes have been rolled back.\n${reasons.join('\n')}`
+          : 'Failed to update user roles — all changes have been rolled back');
       }
     } catch (error) {
       console.error('Error updating user roles:', error);
@@ -259,8 +372,13 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
     }
   }
 
+  /** Names a role for a refusal message; falls back to the ID when the catalog has no match. */
+  private describeRole(roleId: string): string {
+    return this.Data?.availableRoles.find(r => UUIDsEqual(r.ID, roleId))?.Name ?? roleId;
+  }
+
   public onCancel(): void {
-    this.result.emit({ action: 'cancel' });
+    this.Result.emit({ action: 'cancel' });
   }
 
   private markFormGroupTouched(formGroup: FormGroup): void {

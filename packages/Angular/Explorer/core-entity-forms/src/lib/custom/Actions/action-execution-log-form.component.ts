@@ -36,28 +36,154 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
     public record!: MJActionExecutionLogEntity;
 
     // Related entities
-    public action: MJActionEntity | null = null;
-    public user: MJUserEntity | null = null;
+    public Action: MJActionEntity | null = null;
+
+    /** @deprecated Use {@link Action}. */
+    public get action(): MJActionEntity | null {
+      return this.Action;
+    }
+    /** @deprecated Use {@link Action}. */
+    public set action(value: MJActionEntity | null) {
+      this.Action = value;
+    }
+    public User: MJUserEntity | null = null;
+
+    /** @deprecated Use {@link User}. */
+    public get user(): MJUserEntity | null {
+      return this.User;
+    }
+    /** @deprecated Use {@link User}. */
+    public set user(value: MJUserEntity | null) {
+      this.User = value;
+    }
 
     // Loading states
-    public isLoadingAction = false;
-    public isLoadingUser = false;
+    public IsLoadingAction = false;
+
+    /** @deprecated Use {@link IsLoadingAction}. */
+    public get isLoadingAction() {
+      return this.IsLoadingAction;
+    }
+    /** @deprecated Use {@link IsLoadingAction}. */
+    public set isLoadingAction(value) {
+      this.IsLoadingAction = value;
+    }
+    public IsLoadingUser = false;
+
+    /** @deprecated Use {@link IsLoadingUser}. */
+    public get isLoadingUser() {
+      return this.IsLoadingUser;
+    }
+    /** @deprecated Use {@link IsLoadingUser}. */
+    public set isLoadingUser(value) {
+      this.IsLoadingUser = value;
+    }
 
     // Formatted JSON fields
-    public formattedParams: string = '';
-    public formattedMessage: string = '';
+    public FormattedParams: string = '';
+
+    /** @deprecated Use {@link FormattedParams}. */
+    public get formattedParams(): string {
+      return this.FormattedParams;
+    }
+    /** @deprecated Use {@link FormattedParams}. */
+    public set formattedParams(value: string) {
+      this.FormattedParams = value;
+    }
+    public FormattedMessage: string = '';
+
+    /** @deprecated Use {@link FormattedMessage}. */
+    public get formattedMessage(): string {
+      return this.FormattedMessage;
+    }
+    /** @deprecated Use {@link FormattedMessage}. */
+    public set formattedMessage(value: string) {
+      this.FormattedMessage = value;
+    }
 
     // Unified parameter display
-    public allParameters: DisplayParameter[] = [];
-    public paramCounts: Record<TypeFilter, number> = { All: 0, Input: 0, Output: 0, Both: 0 };
-    public hasAnyParameters = false;
+    public AllParameters: DisplayParameter[] = [];
+
+    /** @deprecated Use {@link AllParameters}. */
+    public get allParameters(): DisplayParameter[] {
+      return this.AllParameters;
+    }
+    /** @deprecated Use {@link AllParameters}. */
+    public set allParameters(value: DisplayParameter[]) {
+      this.AllParameters = value;
+    }
+    public ParamCounts: Record<TypeFilter, number> = { All: 0, Input: 0, Output: 0, Both: 0 };
+
+    /** @deprecated Use {@link ParamCounts}. */
+    public get paramCounts(): Record<TypeFilter, number> {
+      return this.ParamCounts;
+    }
+    /** @deprecated Use {@link ParamCounts}. */
+    public set paramCounts(value: Record<TypeFilter, number>) {
+      this.ParamCounts = value;
+    }
+    public HasAnyParameters = false;
+
+    /** @deprecated Use {@link HasAnyParameters}. */
+    public get hasAnyParameters() {
+      return this.HasAnyParameters;
+    }
+    /** @deprecated Use {@link HasAnyParameters}. */
+    public set hasAnyParameters(value) {
+      this.HasAnyParameters = value;
+    }
 
     // Filter / sort / view state
-    public typeFilter: TypeFilter = 'All';
-    public searchText: string = '';
-    public sortKey: SortKey = 'type';
-    public sortDir: SortDir = 'asc';
-    public showRawJson: boolean = false;
+    public TypeFilter: TypeFilter = 'All';
+
+    /** @deprecated Use {@link TypeFilter}. */
+    public get typeFilter(): TypeFilter {
+      return this.TypeFilter;
+    }
+    /** @deprecated Use {@link TypeFilter}. */
+    public set typeFilter(value: TypeFilter) {
+      this.TypeFilter = value;
+    }
+    public SearchText: string = '';
+
+    /** @deprecated Use {@link SearchText}. */
+    public get searchText(): string {
+      return this.SearchText;
+    }
+    /** @deprecated Use {@link SearchText}. */
+    public set searchText(value: string) {
+      this.SearchText = value;
+    }
+    public SortKey: SortKey = 'type';
+
+    /** @deprecated Use {@link SortKey}. */
+    public get sortKey(): SortKey {
+      return this.SortKey;
+    }
+    /** @deprecated Use {@link SortKey}. */
+    public set sortKey(value: SortKey) {
+      this.SortKey = value;
+    }
+    public SortDir: SortDir = 'asc';
+
+    /** @deprecated Use {@link SortDir}. */
+    public get sortDir(): SortDir {
+      return this.SortDir;
+    }
+    /** @deprecated Use {@link SortDir}. */
+    public set sortDir(value: SortDir) {
+      this.SortDir = value;
+    }
+    public ShowRawJson: boolean = false;
+
+    /** @deprecated Use {@link ShowRawJson}. */
+    public get showRawJson(): boolean {
+      return this.ShowRawJson;
+    }
+    /** @deprecated Use {@link ShowRawJson}. */
+    public set showRawJson(value: boolean) {
+      this.ShowRawJson = value;
+    }
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -78,34 +204,34 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
     private async loadAction() {
         if (!this.record.ActionID) return;
         
-        this.isLoadingAction = true;
+        this.IsLoadingAction = true;
         try {
             const md = this.ProviderToUse;
-            this.action = await md.GetEntityObject<MJActionEntity>('MJ: Actions');
-            if (this.action) {
-                await this.action.Load(this.record.ActionID);
+            this.Action = await md.GetEntityObject<MJActionEntity>('MJ: Actions');
+            if (this.Action) {
+                await this.Action.Load(this.record.ActionID);
             }
         } catch (error) {
             console.error('Error loading action:', error);
         } finally {
-            this.isLoadingAction = false;
+            this.IsLoadingAction = false;
         }
     }
 
     private async loadUser() {
         if (!this.record.UserID) return;
         
-        this.isLoadingUser = true;
+        this.IsLoadingUser = true;
         try {
             const md = this.ProviderToUse;
-            this.user = await md.GetEntityObject<MJUserEntity>('MJ: Users');
-            if (this.user) {
-                await this.user.Load(this.record.UserID);
+            this.User = await md.GetEntityObject<MJUserEntity>('MJ: Users');
+            if (this.User) {
+                await this.User.Load(this.record.UserID);
             }
         } catch (error) {
             console.error('Error loading user:', error);
         } finally {
-            this.isLoadingUser = false;
+            this.IsLoadingUser = false;
         }
     }
 
@@ -121,13 +247,13 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
             try {
                 const parsed = JSON.parse(this.record.Params);
                 const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
-                this.formattedParams = JSON.stringify(recursivelyParsed, null, 2);
+                this.FormattedParams = JSON.stringify(recursivelyParsed, null, 2);
 
                 if (Array.isArray(recursivelyParsed)) {
                     this.buildDisplayParameters(recursivelyParsed as ActionParameter[]);
                 }
             } catch (e) {
-                this.formattedParams = this.record.Params;
+                this.FormattedParams = this.record.Params;
             }
         }
 
@@ -136,9 +262,9 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
             try {
                 const parsed = JSON.parse(this.record.Message);
                 const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
-                this.formattedMessage = JSON.stringify(recursivelyParsed, null, 2);
+                this.FormattedMessage = JSON.stringify(recursivelyParsed, null, 2);
             } catch (e) {
-                this.formattedMessage = this.record.Message;
+                this.FormattedMessage = this.record.Message;
             }
         }
     }
@@ -148,15 +274,15 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
      * operate on a cheap, pre-computed structure.
      */
     private buildDisplayParameters(params: ActionParameter[]) {
-        this.paramCounts = { All: 0, Input: 0, Output: 0, Both: 0 };
-        this.allParameters = params
+        this.ParamCounts = { All: 0, Input: 0, Output: 0, Both: 0 };
+        this.AllParameters = params
             .filter((p) => p && typeof p.Name === 'string')
             .map((p) => {
                 const valueKind = this.detectValueKind(p.Value);
                 const isExpandable = valueKind === 'array' || valueKind === 'object';
-                this.paramCounts.All += 1;
+                this.ParamCounts.All += 1;
                 if (p.Type === 'Input' || p.Type === 'Output' || p.Type === 'Both') {
-                    this.paramCounts[p.Type] += 1;
+                    this.ParamCounts[p.Type] += 1;
                 }
                 return {
                     Name: p.Name,
@@ -169,7 +295,7 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
                     FormattedValue: isExpandable ? JSON.stringify(p.Value, null, 2) : ''
                 };
             });
-        this.hasAnyParameters = this.allParameters.length > 0;
+        this.HasAnyParameters = this.AllParameters.length > 0;
     }
 
     private detectValueKind(value: unknown): DisplayParameter['ValueKind'] {
@@ -216,11 +342,11 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
 
     // --- Filter / sort / view helpers (invoked from template) ----------------
 
-    public get filteredParameters(): DisplayParameter[] {
-        const needle = this.searchText.trim().toLowerCase();
-        let list = this.allParameters;
-        if (this.typeFilter !== 'All') {
-            list = list.filter((p) => p.Type === this.typeFilter);
+    public get FilteredParameters(): DisplayParameter[] {
+        const needle = this.SearchText.trim().toLowerCase();
+        let list = this.AllParameters;
+        if (this.TypeFilter !== 'All') {
+            list = list.filter((p) => p.Type === this.TypeFilter);
         }
         if (needle) {
             list = list.filter(
@@ -230,9 +356,9 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
             );
         }
         const typeOrder: Record<ParamType, number> = { Input: 0, Both: 1, Output: 2 };
-        const dirMult = this.sortDir === 'asc' ? 1 : -1;
+        const dirMult = this.SortDir === 'asc' ? 1 : -1;
         return [...list].sort((a, b) => {
-            if (this.sortKey === 'name') {
+            if (this.SortKey === 'name') {
                 return dirMult * a.Name.localeCompare(b.Name, undefined, { sensitivity: 'base' });
             }
             const typeCmp = typeOrder[a.Type] - typeOrder[b.Type];
@@ -241,42 +367,82 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         });
     }
 
-    public setTypeFilter(filter: TypeFilter): void {
-        this.typeFilter = filter;
+    /** @deprecated Use {@link FilteredParameters}. */
+    public get filteredParameters(): DisplayParameter[] {
+      return this.FilteredParameters;
     }
 
-    public toggleSort(key: SortKey): void {
-        if (this.sortKey === key) {
-            this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+    public SetTypeFilter(filter: TypeFilter): void {
+        this.TypeFilter = filter;
+    }
+
+    /** @deprecated Use {@link SetTypeFilter}. */
+    public setTypeFilter(filter: TypeFilter): void {
+      return this.SetTypeFilter(filter);
+    }
+
+    public ToggleSort(key: SortKey): void {
+        if (this.SortKey === key) {
+            this.SortDir = this.SortDir === 'asc' ? 'desc' : 'asc';
         } else {
-            this.sortKey = key;
-            this.sortDir = 'asc';
+            this.SortKey = key;
+            this.SortDir = 'asc';
         }
     }
 
-    public toggleExpanded(param: DisplayParameter): void {
+    /** @deprecated Use {@link ToggleSort}. */
+    public toggleSort(key: SortKey): void {
+      return this.ToggleSort(key);
+    }
+
+    public ToggleExpanded(param: DisplayParameter): void {
         if (!param.IsExpandable) return;
         param.Expanded = !param.Expanded;
     }
 
+    /** @deprecated Use {@link ToggleExpanded}. */
+    public toggleExpanded(param: DisplayParameter): void {
+      return this.ToggleExpanded(param);
+    }
+
+    public ToggleRawJson(): void {
+        this.ShowRawJson = !this.ShowRawJson;
+    }
+
+    /** @deprecated Use {@link ToggleRawJson}. */
     public toggleRawJson(): void {
-        this.showRawJson = !this.showRawJson;
+      return this.ToggleRawJson();
     }
 
+    public ClearFilters(): void {
+        this.TypeFilter = 'All';
+        this.SearchText = '';
+    }
+
+    /** @deprecated Use {@link ClearFilters}. */
     public clearFilters(): void {
-        this.typeFilter = 'All';
-        this.searchText = '';
+      return this.ClearFilters();
     }
 
-    public trackParam(_index: number, p: DisplayParameter): string {
+    public TrackParam(_index: number, p: DisplayParameter): string {
         return `${p.Type}::${p.Name}`;
     }
 
-    public copyParamValue(param: DisplayParameter): void {
+    /** @deprecated Use {@link TrackParam}. */
+    public trackParam(_index: number, p: DisplayParameter): string {
+      return this.TrackParam(_index, p);
+    }
+
+    public CopyParamValue(param: DisplayParameter): void {
         const text = param.IsExpandable
             ? param.FormattedValue
             : this.formatScalarForCopy(param.Value);
-        void this.copyToClipboard(text);
+        void this.CopyToClipboard(text);
+    }
+
+    /** @deprecated Use {@link CopyParamValue}. */
+    public copyParamValue(param: DisplayParameter): void {
+      return this.CopyParamValue(param);
     }
 
     private formatScalarForCopy(value: unknown): string {
@@ -290,7 +456,7 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
      * Returns the icon class for a value kind — rendered to the left of each
      * preview so object/array/scalar rows are visually distinct at a glance.
      */
-    public getValueKindIcon(kind: DisplayParameter['ValueKind']): string {
+    public GetValueKindIcon(kind: DisplayParameter['ValueKind']): string {
         switch (kind) {
             case 'string': return 'fa-quote-right';
             case 'number': return 'fa-hashtag';
@@ -302,32 +468,62 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         }
     }
 
-    public getTypeLabel(type: ParamType): string {
+    /** @deprecated Use {@link GetValueKindIcon}. */
+    public getValueKindIcon(kind: DisplayParameter['ValueKind']): string {
+      return this.GetValueKindIcon(kind);
+    }
+
+    public GetTypeLabel(type: ParamType): string {
         return type === 'Both' ? 'In/Out' : type;
     }
 
+    /** @deprecated Use {@link GetTypeLabel}. */
+    public getTypeLabel(type: ParamType): string {
+      return this.GetTypeLabel(type);
+    }
+
     // Navigation
-    navigateToEntity(entityName: string, recordId: string | null) {
+    NavigateToEntity(entityName: string, recordId: string | null) {
         if (!recordId) return;
-        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
     }
 
-    navigateToAction() {
+    /** @deprecated Use {@link NavigateToEntity}. */
+    navigateToEntity(entityName: string, recordId: string | null) {
+      return this.NavigateToEntity(entityName, recordId);
+    }
+
+    NavigateToAction() {
         if (this.record.ActionID) {
-            this.navigateToEntity('MJ: Actions', this.record.ActionID);
+            this.NavigateToEntity('MJ: Actions', this.record.ActionID);
         }
     }
 
-    navigateToUser() {
+    /** @deprecated Use {@link NavigateToAction}. */
+    navigateToAction() {
+      return this.NavigateToAction();
+    }
+
+    NavigateToUser() {
         if (this.record.UserID) {
-            this.navigateToEntity('MJ: Users', this.record.UserID);
+            this.NavigateToEntity('MJ: Users', this.record.UserID);
         }
+    }
+
+    /** @deprecated Use {@link NavigateToUser}. */
+    navigateToUser() {
+      return this.NavigateToUser();
     }
 
     // UI Helpers
-    getExecutionDuration(): number {
+    GetExecutionDuration(): number {
         if (!this.record.StartedAt || !this.record.EndedAt) return 0;
         return new Date(this.record.EndedAt).getTime() - new Date(this.record.StartedAt).getTime();
+    }
+
+    /** @deprecated Use {@link GetExecutionDuration}. */
+    getExecutionDuration(): number {
+      return this.GetExecutionDuration();
     }
 
     formatDuration(ms: number): string {
@@ -337,7 +533,7 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         return `${(ms / 3600000).toFixed(1)}h`;
     }
 
-    getResultCodeColor(): string {
+    GetResultCodeColor(): string {
         const code = this.record.ResultCode?.toLowerCase();
         if (code === 'success' || code === 'ok' || code === 'completed' || code === '200') {
             return 'var(--mj-status-success)';
@@ -345,7 +541,12 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         return 'var(--mj-status-error)';
     }
 
-    getResultCodeIcon(): string {
+    /** @deprecated Use {@link GetResultCodeColor}. */
+    getResultCodeColor(): string {
+      return this.GetResultCodeColor();
+    }
+
+    GetResultCodeIcon(): string {
         const code = this.record.ResultCode?.toLowerCase();
         if (code === 'success' || code === 'ok' || code === 'completed' || code === '200') {
             return 'fa-check-circle';
@@ -353,14 +554,19 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         return 'fa-times-circle';
     }
 
+    /** @deprecated Use {@link GetResultCodeIcon}. */
+    getResultCodeIcon(): string {
+      return this.GetResultCodeIcon();
+    }
+
     // Save handlers for JSON fields
-    async saveParams() {
+    async SaveParams() {
         if (!this.EditMode) return;
         
         try {
             // Validate JSON
-            JSON.parse(this.formattedParams);
-            this.record.Params = this.formattedParams;
+            JSON.parse(this.FormattedParams);
+            this.record.Params = this.FormattedParams;
             await this.record.Save();
         } catch (e) {
             console.error('Invalid JSON in Params field:', e);
@@ -368,26 +574,41 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         }
     }
 
-    async saveMessage() {
+    /** @deprecated Use {@link SaveParams}. */
+    async saveParams() {
+      return this.SaveParams();
+    }
+
+    async SaveMessage() {
         if (!this.EditMode) return;
         
         try {
             // Validate JSON
-            JSON.parse(this.formattedMessage);
-            this.record.Message = this.formattedMessage;
+            JSON.parse(this.FormattedMessage);
+            this.record.Message = this.FormattedMessage;
             await this.record.Save();
         } catch (e) {
             console.error('Invalid JSON in Message field:', e);
             // Could show notification here
         }
     }
+
+    /** @deprecated Use {@link SaveMessage}. */
+    async saveMessage() {
+      return this.SaveMessage();
+    }
     
-    async copyToClipboard(text: string) {
+    async CopyToClipboard(text: string) {
         try {
             await navigator.clipboard.writeText(text);
             // Could show a toast notification here
         } catch (err) {
             console.error('Failed to copy to clipboard:', err);
         }
+    }
+
+    /** @deprecated Use {@link CopyToClipboard}. */
+    async copyToClipboard(text: string) {
+      return this.CopyToClipboard(text);
     }
 }

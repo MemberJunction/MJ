@@ -74,7 +74,12 @@ export class OmnibarRecordProvider extends OmnibarProvider {
     ): Promise<Map<string, string>> {
         const resolved = new Map<string, string>();
         try {
-            const inputs = targets.map((t) => ({ EntityName: t.entityName, CompositeKey: CompositeKey.FromID(t.recordId) }));
+            // Recents span arbitrary entities whose key column can have any name; `FromID` assumed
+            // `ID` and left those records showing a raw id instead of a name.
+            const inputs = targets.map((t) => ({
+                EntityName: t.entityName,
+                CompositeKey: CompositeKey.FromURLSegment(md.EntityByName(t.entityName), t.recordId),
+            }));
             const results = await md.GetEntityRecordNames(inputs, user);
             for (const r of results ?? []) {
                 if (r.Success && r.RecordName) {
@@ -147,7 +152,7 @@ export class OmnibarRecordProvider extends OmnibarProvider {
             const result = await rv.RunView<Record<string, unknown>>({
                 EntityName: entity.Name,
                 ExtraFilter: escaped.length > 0 ? `${nameField.Name} LIKE '%${escaped}%'` : '',
-                Fields: [entity.FirstPrimaryKey.Name, nameField.Name],
+                Fields: [...entity.PrimaryKeys.map((pk) => pk.Name), nameField.Name],
                 OrderBy: nameField.Name,
                 MaxRows: MAX_RECORD_ROWS,
                 ResultType: 'simple',
@@ -156,7 +161,8 @@ export class OmnibarRecordProvider extends OmnibarProvider {
                 return [];
             }
             return result.Results.map((row) => {
-                const recordId = String(row[entity.FirstPrimaryKey.Name]);
+                // Compact key segment (raw value, or "F1|v1||F2|v2" for a composite key) — the palette resolves it with FromURLSegment
+                const recordId = CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment();
                 const name = String(row[nameField.Name] ?? recordId);
                 const nav: OmnibarNavPayload = { kind: 'record', entityName: entity.Name, recordId };
                 return {

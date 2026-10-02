@@ -149,7 +149,7 @@ function distributeChildren(
         if (!(collection instanceof RelatedRecordCollection)) {
             continue;
         }
-        const key = normalizeKey(parent.FirstPrimaryKey?.Value);
+        const key = normalizeKey(parent.FirstPrimaryKey?.Value); // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         collection.SetLoadedItems(byParent.get(key) ?? []);
     }
 }
@@ -163,7 +163,7 @@ function distributeChildren(
 function collectParentKeys(parents: BaseEntity[]): string[] {
     const keys = new Set<string>();
     for (const parent of parents) {
-        const value = parent.FirstPrimaryKey?.Value;
+        const value = parent.FirstPrimaryKey?.Value; // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         if (value !== null && value !== undefined && value !== '') {
             keys.add(String(value));
         }

@@ -116,7 +116,7 @@ const DEFAULT_CONFIG: QueryGenConfig = {
  * @param cliOptions - Options provided via command line
  * @returns Merged configuration ready for use
  */
-export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig {
+export function LoadConfig(cliOptions: Record<string, unknown>): QueryGenConfig {
   // Start with defaults
   const config: QueryGenConfig = { ...DEFAULT_CONFIG };
 
@@ -171,6 +171,11 @@ export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig 
   }
 
   return config;
+}
+
+/** @deprecated Use {@link LoadConfig}. */
+export function loadConfig(cliOptions: Record<string, unknown>): QueryGenConfig {
+  return LoadConfig(cliOptions);
 }
 
 /**

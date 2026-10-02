@@ -23,14 +23,15 @@ import type {
 import { ClassifyError } from './types.js';
 import { ExtractRetryAfterFromError } from './RetryAfter.js';
 import {
-    discoverFromStream,
-    pickKeyFromStats,
-    pickPrimaryKeyFromStats,
+    DiscoverFromStream,
+    PickKeyFromStats,
+    PickPrimaryKeyFromStats,
+    PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE,
     type StreamDiscoveryOptions,
     type PkPickOptions,
 } from './StreamingDiscovery.js';
 import { AdaptiveConcurrencyController, RunAdaptive, type AdaptiveItemOutcome } from './AdaptiveConcurrency.js';
-import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
+import { FlattenRecord, HasNestedObject } from './RecordFlatten.js';
 import { DiscoveryWatchdog } from './DiscoveryWatchdog.js';
 
 /** Result of testing a connection to an external system */
@@ -376,6 +377,17 @@ export interface RateLimitPolicy {
     MinTokensPerSec?: number;
 }
 
+/**
+ * Records sampled per table during discovery, by default.
+ *
+ * Deliberately equal to the classifier's significance floor
+ * ({@link PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE}): sampling exists to answer three questions, and 50 rows
+ * fully answers two of them. Raising it only sharpens the third (largest observed string), which has
+ * its own safety nets, so the extra rows are paid on every object of every connection to improve one
+ * answer in three. Per-connection `discoveryMaxRecords` raises it where that trade is worth making.
+ */
+const DEFAULT_DISCOVERY_SAMPLE_TARGET = PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
+
 export abstract class BaseIntegrationConnector {
 
     // ─── Capability Getters ──────────────────────────────────────────
@@ -653,14 +665,14 @@ export abstract class BaseIntegrationConnector {
         // as the key. Mirrors the sync-intake flatten (FieldMappingEngine) EXACTLY, so the field
         // names discovered here match what sync produces. A flat record passes through unchanged.
         async function* flattenRecords(): AsyncIterable<Record<string, unknown>> {
-            for await (const r of records) yield hasNestedObject(r) ? flattenRecord(r) : r;
+            for await (const r of records) yield HasNestedObject(r) ? FlattenRecord(r) : r;
         }
-        const scan = await discoverFromStream(flattenRecords(), opts.Discovery);
+        const scan = await DiscoverFromStream(flattenRecords(), opts.Discovery);
         // Provable-only identity in ONE pass: best contender per subset size (1,2,3…) → the SMALLEST
         // size whose best contender is a provable key (single OR composite), decided by the Chao1
         // domain-saturation test on the streamed sample. No fabricated keys; a genuinely-keyless object
         // simply gets no PK and is honestly not added downstream.
-        const key = pickKeyFromStats(scan.Columns, scan.RowSamples, opts.Pk);
+        const key = PickKeyFromStats(scan.Columns, scan.RowSamples, opts.Pk);
         let pkFieldNames: string[] = key.Fields ?? [];
         let pkReason = key.Reason;
         if (pkFieldNames.length === 0) {
@@ -673,7 +685,7 @@ export abstract class BaseIntegrationConnector {
             // objects still get no PK (content-hash identity handles dedup).
             // #A4 — tell the PK picker whether the scan saw the WHOLE stream; a time-budget-truncated scan
             // must not yield a confident soft key from a partial prefix.
-            const soft = pickPrimaryKeyFromStats(scan.Columns, { ...opts.Pk, ScanComplete: scan.StoppedReason !== 'time-budget' });
+            const soft = PickPrimaryKeyFromStats(scan.Columns, { ...opts.Pk, ScanComplete: scan.StoppedReason !== 'time-budget' });
             if (soft.Field) { pkFieldNames = [soft.Field]; pkReason = `[soft-fallback] ${soft.Reason}`; }
         }
         const pkFields = new Set<string>(pkFieldNames);
@@ -781,7 +793,20 @@ export abstract class BaseIntegrationConnector {
         // discovery budget an operator actually wants to lower for a slow source the ONLY one that needed
         // an app setting and a process restart. Same precedence as the others now:
         // explicit opts > per-connection Configuration > operator env > default.
-        const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
+        // The DEFAULT is the per-table sample target: ~50 records, the same figure the value-statistic
+        // classifier treats as significant (PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE). It was 500, which is
+        // 10x what any of the three questions sampling answers actually needs:
+        //   - a significant primary key — 50 rows IS the significance floor; more changes no verdict,
+        //   - custom-discoverable columns — a column present in the data shows up almost immediately,
+        //   - the largest string — the only one that genuinely benefits from more rows.
+        // That last one is why this is a KNOB and not a constant. Width has real safety nets (the
+        // bucket pads to 2x the observed max, the overlay only ever GROWS a width, and a value that
+        // overflows at sync time is recorded as a widening candidate rather than lost), so paying 10x
+        // the discovery time on every object by default to sharpen one of three answers is the wrong
+        // trade. A connection that needs deeper width fidelity raises `discoveryMaxRecords`.
+        //
+        // Precedence unchanged: explicit opts > per-connection Configuration > operator env > default.
+        const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', DEFAULT_DISCOVERY_SAMPLE_TARGET);
         // Announce intent AND cost. Until now only the FAILURE branch below said anything, so a
         // healthy-but-slow object, an object grinding out its whole time budget, and one that will
         // never return were indistinguishable from outside the process. The watchdog names whatever

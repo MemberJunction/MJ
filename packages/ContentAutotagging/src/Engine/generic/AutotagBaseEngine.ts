@@ -24,7 +24,7 @@ import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
-import { AIPromptRunner, AIModelRunner } from '@memberjunction/ai-prompts'
+import { AIPromptRunner, AIEmbeddingRunner } from '@memberjunction/ai-prompts'
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts'
 import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
@@ -44,11 +44,19 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities'
  * Items sharing the same pair are batched together for efficient processing.
  */
 export interface ResolvedVectorInfrastructure {
-    embedding: BaseEmbeddings;
+    /**
+     * @deprecated Embedding goes through AIEmbeddingRunner, pinned to {@link embeddingModelID}. For
+     * older callers this is still a working driver, built on first read with the legacy
+     * environment-variable key.
+     */
+    embedding?: BaseEmbeddings;
     vectorDB: VectorDBBase;
     indexName: string;
     embeddingModelName: string;
-    /** The AI model ID for the embedding model (UUID), used by AIModelRunner for tracking */
+    /**
+     * The embedding model (`MJ: AI Models.ID`). Every embedding call for this index pins it as
+     * `ModelID`, so the index only ever holds vectors from this model.
+     */
     embeddingModelID: string;
     /**
      * Reduced embedding dimensions from `MJ: Vector Indexes.Dimensions`, when set. Passed to the
@@ -201,8 +209,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     private static readonly AI_PROMPT_RUN_ID_KEY = '__aiPromptRunID';
 
     // Cached metadata unique to this engine — loaded by BaseEngine.Config()
-    private _ContentTypeAttributes: MJContentTypeAttributeEntity[] = [];
-    private _ContentSourceTypeParams: MJContentSourceTypeParamEntity[] = [];
+    private _contentTypeAttributes: MJContentTypeAttributeEntity[] = [];
+    private _contentSourceTypeParams: MJContentSourceTypeParamEntity[] = [];
 
     /** Shortcut to KnowledgeHubMetadataEngine */
     private get khEngine(): KnowledgeHubMetadataEngine { return KnowledgeHubMetadataEngine.Instance; }
@@ -214,9 +222,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     /** All content file types — delegated to KnowledgeHubMetadataEngine */
     public get ContentFileTypes(): MJContentFileTypeEntity[] { return this.khEngine.ContentFileTypes; }
     /** All content type attributes, cached at startup */
-    public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] { return this._ContentTypeAttributes; }
+    public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] { return this._contentTypeAttributes; }
     /** All content source type params, cached at startup */
-    public get ContentSourceTypeParams(): MJContentSourceTypeParamEntity[] { return this._ContentSourceTypeParams; }
+    public get ContentSourceTypeParams(): MJContentSourceTypeParamEntity[] { return this._contentSourceTypeParams; }
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<unknown> {
         // Content Types, Content Source Types, and Content File Types are delegated to
@@ -227,12 +235,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: Content Type Attributes',
-                PropertyName: '_ContentTypeAttributes',
+                PropertyName: '_contentTypeAttributes',
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Content Source Type Params',
-                PropertyName: '_ContentSourceTypeParams',
+                PropertyName: '_contentSourceTypeParams',
             },
         ];
         await this.Load(configs, provider, forceRefresh, contextUser);
@@ -336,6 +344,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             batchNum++;
             anyItemsProcessed = true;
 
+            // The source's classification config and the type's model / tag limits are read from the
+            // KnowledgeHub cache per item; catch a source or type created after it loaded.
+            await this.ensureItemMetadataCached(batch, contextUser);
+
             // Rate limit before each batch of parallel LLM calls.
             await this.LLMRateLimiter.Acquire();
 
@@ -431,7 +443,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             processRunParams.startTime = new Date();
             processRunParams.endTime = new Date();
             processRunParams.numItemsProcessed = totalProcessed - resumeOffset;
-            await this.saveProcessRun(processRunParams, contextUser);
+            await this.SaveProcessRun(processRunParams, contextUser);
         }
     }
 
@@ -464,8 +476,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         await this.updateContentItemTaggingStatus(params.contentItemID, 'Processing', contextUser);
 
         try {
-            const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(params, contextUser);
-            await this.saveLLMResults(LLMResults, contextUser);
+            const LLMResults: JsonObject = await this.PromptAndRetrieveResultsFromLLM(params, contextUser);
+            await this.SaveLLMResults(LLMResults, contextUser);
             // A8: Update tagging status to Complete
             await this.updateContentItemTaggingStatus(params.contentItemID, 'Complete', contextUser);
         } catch (e) {
@@ -608,7 +620,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 parentTagName: string | null,
                 ctxUser: UserInfo
             ) => {
-                await this.BridgeContentItemTagToTaxonomy(contentItemTag, parentTagName, ctxUser);
+                await this.bridgeContentItemTagToTaxonomy(contentItemTag, parentTagName, ctxUser);
             };
             LogStatus(`[TaxonomyBridge] Bridge callback installed`);
         } catch (e) {
@@ -674,7 +686,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * - For Entity sources: tags the original entity record (e.g., Products row)
      * - For non-Entity sources (RSS, Website, etc.): tags the ContentItem itself
      */
-    private async BridgeContentItemTagToTaxonomy(
+    private async bridgeContentItemTagToTaxonomy(
         contentItemTag: MJContentItemTagEntity,
         parentTagName: string | null,
         contextUser: UserInfo
@@ -887,7 +899,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return (source.ConfigurationObject as IContentSourceClassificationConfiguration | null) ?? null;
     }
 
-    public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
+    public async PromptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
         await AIEngine.Instance.Config(false, contextUser);
 
         // Resolve the effective classification context once per item (async lookup);
@@ -896,7 +908,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         const prompt = this.getAutotagPrompt();
         const tokenLimit = this.resolveTokenLimit(params.modelID);
-        const chunks = await this.chunkExtractedText(params.text, tokenLimit);
+        const chunks = await this.ChunkExtractedText(params.text, tokenLimit);
 
         if (chunks.length === 0 || (chunks.length === 1 && (!chunks[0] || chunks[0].trim().length === 0))) {
             LogError(`[Autotag] No text to process for item ${params.contentItemID}`);
@@ -908,7 +920,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         for (let ci = 0; ci < chunks.length; ci++) {
             try {
-                LLMResults = await this.processChunkWithPromptRunner(prompt, params, chunks[ci], LLMResults, contextUser);
+                LLMResults = await this.ProcessChunkWithPromptRunner(prompt, params, chunks[ci], LLMResults, contextUser);
             } catch (chunkError) {
                 LogError(`[Autotag] Chunk ${ci + 1}/${chunks.length} failed for item ${params.contentItemID}: ${chunkError instanceof Error ? chunkError.message : String(chunkError)}`);
             }
@@ -918,6 +930,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         LLMResults.processEndTime = new Date();
         LLMResults.contentItemID = params.contentItemID;
         return LLMResults;
+    }
+
+    /** @deprecated Use {@link PromptAndRetrieveResultsFromLLM}. */
+    public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
+        return this.PromptAndRetrieveResultsFromLLM(params, contextUser);
     }
 
     /**
@@ -940,7 +957,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Uses the prompt's configured model by default. If ContentType.AIModelID is set,
      * it is passed as a runtime model override via AIPromptParams.override.
      */
-    public async processChunkWithPromptRunner(
+    public async ProcessChunkWithPromptRunner(
         prompt: MJAIPromptEntityExtended,
         params: ContentItemProcessParams,
         chunk: string,
@@ -1004,22 +1021,44 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return LLMResults;
     }
 
-    public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+    /** @deprecated Use {@link ProcessChunkWithPromptRunner}. */
+    public async processChunkWithPromptRunner(
+        prompt: MJAIPromptEntityExtended,
+        params: ContentItemProcessParams,
+        chunk: string,
+        LLMResults: JsonObject,
+        contextUser: UserInfo
+    ): Promise<JsonObject> {
+        return this.ProcessChunkWithPromptRunner(prompt, params, chunk, LLMResults, contextUser);
+    }
+
+    public async SaveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         if (LLMResults.isValidContent === true) {
-            await this.saveResultsToContentItemAttribute(LLMResults, contextUser);
-            await this.saveContentItemTags(LLMResults.contentItemID as string, LLMResults, contextUser);
+            await this.SaveResultsToContentItemAttribute(LLMResults, contextUser);
+            await this.SaveContentItemTags(LLMResults.contentItemID as string, LLMResults, contextUser);
         } else if (LLMResults.isValidContent === false) {
-            await this.deleteInvalidContentItem(LLMResults.contentItemID as string, contextUser);
+            LogStatus(`[Autotag] LLM judged content item ${LLMResults.contentItemID} INVALID — deleting it. Title: ${String(LLMResults.title ?? '')} | Reason/description: ${String(LLMResults.description ?? LLMResults.reason ?? '')}`.slice(0, 600));
+            await this.DeleteInvalidContentItem(LLMResults.contentItemID as string, contextUser);
         } else {
             LogError(`[Autotag] Unexpected LLM format for item ${LLMResults.contentItemID} — isValidContent missing. Keys: ${Object.keys(LLMResults).join(', ')}`);
         }
     }
 
-    public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo): Promise<void> {
+    /** @deprecated Use {@link SaveLLMResults}. */
+    public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        return this.SaveLLMResults(LLMResults, contextUser);
+    }
+
+    public async DeleteInvalidContentItem(contentItemID: string, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const contentItem: MJContentItemEntity = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
         await contentItem.Load(contentItemID);
         await contentItem.Delete();
+    }
+
+    /** @deprecated Use {@link DeleteInvalidContentItem}. */
+    public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo): Promise<void> {
+        return this.DeleteInvalidContentItem(contentItemID, contextUser);
     }
 
     /**
@@ -1065,7 +1104,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * ({@link MAX_EMBEDDING_TOKENS}) — these two chunk sites feed different consumers and
      * must not be collapsed into one call. Tagging chunks are transient and never persisted.
      */
-    public async chunkExtractedText(text: string, tokenLimit: number): Promise<string[]> {
+    public async ChunkExtractedText(text: string, tokenLimit: number): Promise<string[]> {
         try {
             const maxChunkTokens = Math.ceil(tokenLimit / 1.5);
 
@@ -1085,6 +1124,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             LogError('Could not chunk the text');
             return [text];
         }
+    }
+
+    /** @deprecated Use {@link ChunkExtractedText}. */
+    public async chunkExtractedText(text: string, tokenLimit: number): Promise<string[]> {
+        return this.ChunkExtractedText(text, tokenLimit);
     }
 
     /**
@@ -1125,7 +1169,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * After each tag is saved, invokes the OnContentItemTagSaved callback (if set)
      * for taxonomy bridge processing.
      */
-    public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+    public async SaveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const keywords = LLMResults.keywords;
         if (!keywords || !Array.isArray(keywords)) return;
@@ -1187,11 +1231,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
+    /** @deprecated Use {@link SaveContentItemTags}. */
+    public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        return this.SaveContentItemTags(contentItemID, LLMResults, contextUser);
+    }
+
     /**
      * Saves LLM-extracted attributes to the database.
      * Updates content item name/description, then creates attribute records for other fields.
      */
-    public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+    public async SaveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const contentItemID = LLMResults.contentItemID as string;
         const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent', AutotagBaseEngine.AI_PROMPT_RUN_ID_KEY]);
@@ -1228,16 +1277,26 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
+    /** @deprecated Use {@link SaveResultsToContentItemAttribute}. */
+    public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        return this.SaveResultsToContentItemAttribute(LLMResults, contextUser);
+    }
+
     /**
      * Retrieves all content sources for a given content source type.
      * Throws if no sources are found.
      */
-    public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
+    public async GetAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
         const sources = await this.GetAllContentSourcesSafe(contextUser, contentSourceTypeID);
         if (sources.length === 0) {
             throw new Error(`No content sources found for content source type with ID '${contentSourceTypeID}'`);
         }
         return sources;
+    }
+
+    /** @deprecated Use {@link GetAllContentSources}. */
+    public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
+        return this.GetAllContentSources(contextUser, contentSourceTypeID);
     }
 
     /**
@@ -1256,7 +1315,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return sourceType.ID;
     }
 
-    public async getContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<Map<string, ContentSourceTypeParamValue>> {
+    public async GetContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<Map<string, ContentSourceTypeParamValue>> {
         const contentSourceParams = new Map<string, ContentSourceTypeParamValue>();
 
         const rv = new RunView();
@@ -1272,7 +1331,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 params.contentSourceID = contentSource.ID;
 
                 if (contentSourceParam.Value) {
-                    params.value = this.castValueAsCorrectType(contentSourceParam.Value, params.type);
+                    params.value = this.CastValueAsCorrectType(contentSourceParam.Value, params.type);
                 }
                 contentSourceParams.set(params.name, params.value);
             }
@@ -1283,8 +1342,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return contentSourceParams;
     }
 
+    /** @deprecated Use {@link GetContentSourceParams}. */
+    public async getContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<Map<string, ContentSourceTypeParamValue>> {
+        return this.GetContentSourceParams(contentSource, contextUser);
+    }
+
     public GetDefaultContentSourceTypeParams(contentSourceTypeParamID: string): ContentSourceTypeParams {
-        const result = this._ContentSourceTypeParams.find(p => UUIDsEqual(p.ID, contentSourceTypeParamID));
+        const result = this._contentSourceTypeParams.find(p => UUIDsEqual(p.ID, contentSourceTypeParamID));
         if (!result) {
             throw new Error(`Content Source Type Param with ID '${contentSourceTypeParamID}' not found in cached metadata`);
         }
@@ -1292,20 +1356,20 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const params = new ContentSourceTypeParams();
         params.name = result.Name;
         params.type = result.Type.toLowerCase();
-        params.value = this.castValueAsCorrectType(result.DefaultValue ?? '', params.type);
+        params.value = this.CastValueAsCorrectType(result.DefaultValue ?? '', params.type);
         return params;
     }
 
-    public castValueAsCorrectType(value: string, type: string): ContentSourceTypeParamValue {
+    public CastValueAsCorrectType(value: string, type: string): ContentSourceTypeParamValue {
         switch (type) {
             case 'number':
                 return parseInt(value, 10);
             case 'boolean':
-                return this.stringToBoolean(value);
+                return this.StringToBoolean(value);
             case 'string':
                 return value;
             case 'string[]':
-                return this.parseStringArray(value);
+                return this.ParseStringArray(value);
             case 'regexp':
                 return new RegExp(value.replace(/\\\\/g, '\\'));
             default:
@@ -1313,26 +1377,46 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public stringToBoolean(str: string): boolean {
+    /** @deprecated Use {@link CastValueAsCorrectType}. */
+    public castValueAsCorrectType(value: string, type: string): ContentSourceTypeParamValue {
+        return this.CastValueAsCorrectType(value, type);
+    }
+
+    public StringToBoolean(str: string): boolean {
         return str === 'true';
     }
 
-    public parseStringArray(value: string): string[] {
+    /** @deprecated Use {@link StringToBoolean}. */
+    public stringToBoolean(str: string): boolean {
+        return this.StringToBoolean(str);
+    }
+
+    public ParseStringArray(value: string): string[] {
         return JSON.parse(value) as string[];
+    }
+
+    /** @deprecated Use {@link ParseStringArray}. */
+    public parseStringArray(value: string): string[] {
+        return this.ParseStringArray(value);
     }
 
     /**
      * Converts a run date to the user's local timezone.
      */
-    public async convertLastRunDateToTimezone(lastRunDate: Date): Promise<Date> {
+    public async ConvertLastRunDateToTimezone(lastRunDate: Date): Promise<Date> {
         const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         return toZonedTime(lastRunDate, userTimeZone);
+    }
+
+    /** @deprecated Use {@link ConvertLastRunDateToTimezone}. */
+    public async convertLastRunDateToTimezone(lastRunDate: Date): Promise<Date> {
+        return this.ConvertLastRunDateToTimezone(lastRunDate);
     }
 
     /**
      * Retrieves the last run date for a content source. Returns epoch date if no runs exist.
      */
-    public async getContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
+    public async GetContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
         const rv = new RunView();
         // Exclude 'Running' status to avoid using the current in-progress run's
         // start time as the cutoff — that would cause the provider to skip all records.
@@ -1345,7 +1429,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         if (results.Success && results.Results.length) {
             const lastRunDate = results.Results[0].__mj_CreatedAt;
-            return this.convertLastRunDateToTimezone(lastRunDate);
+            return this.ConvertLastRunDateToTimezone(lastRunDate);
         }
 
         if (results.Success) {
@@ -1353,6 +1437,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
 
         throw new Error(`Failed to retrieve last run date for content source with ID ${contentSourceID}`);
+    }
+
+    /** @deprecated Use {@link GetContentSourceLastRunDate}. */
+    public async getContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
+        return this.GetContentSourceLastRunDate(contentSourceID, contextUser);
     }
 
     public GetContentItemParams(contentTypeID: string): { modelID: string; minTags: number; maxTags: number } {
@@ -1392,7 +1481,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetAdditionalContentTypePrompt(contentTypeID: string): string {
-        const attrs = this._ContentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID));
+        const attrs = this._contentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID));
         if (attrs.length === 0) return '';
 
         return attrs.map(attr =>
@@ -1407,17 +1496,27 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return `${contentTypeName} in ${fileTypeName} format obtained from a ${sourceTypeName} source`;
     }
 
-    public async getChecksumFromURL(url: string): Promise<string> {
+    public async GetChecksumFromURL(url: string): Promise<string> {
         const response = await HttpGet<string>(url, { ResponseType: 'text' });
         const content = String(response.Data);
         return crypto.createHash('sha256').update(content).digest('hex');
     }
 
-    public async getChecksumFromText(text: string): Promise<string> {
+    /** @deprecated Use {@link GetChecksumFromURL}. */
+    public async getChecksumFromURL(url: string): Promise<string> {
+        return this.GetChecksumFromURL(url);
+    }
+
+    public async GetChecksumFromText(text: string): Promise<string> {
         return crypto.createHash('sha256').update(text).digest('hex');
     }
 
-    public async getContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
+    /** @deprecated Use {@link GetChecksumFromText}. */
+    public async getChecksumFromText(text: string): Promise<string> {
+        return this.GetChecksumFromText(text);
+    }
+
+    public async GetContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
         const url = contentSourceParams.URL;
         const rv = new RunView();
         const results = await rv.RunView<MJContentItemEntity>({
@@ -1433,10 +1532,15 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         throw new Error(`Content item with URL ${url} not found`);
     }
 
+    /** @deprecated Use {@link GetContentItemIDFromURL}. */
+    public async getContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
+        return this.GetContentItemIDFromURL(contentSourceParams, contextUser);
+    }
+
     /**
      * Saves process run metadata to the database (backward-compatible simple version).
      */
-    public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
+    public async SaveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
         const md = this.ProviderToUse;
         const processRun = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', contextUser);
         processRun.NewRecord();
@@ -1447,6 +1551,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         processRun.ProcessedItems = processRunParams.numItemsProcessed;
         processRun.StartedByUserID = contextUser.ID;
         await processRun.Save();
+    }
+
+    /** @deprecated Use {@link SaveProcessRun}. */
+    public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
+        return this.SaveProcessRun(processRunParams, contextUser);
     }
 
     /**
@@ -1554,17 +1663,27 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         };
     }
 
-    public async parsePDF(dataBuffer: Buffer): Promise<string> {
+    public async ParsePDF(dataBuffer: Buffer): Promise<string> {
         const dataPDF = await pdfParse(dataBuffer);
         return dataPDF.text;
     }
 
-    public async parseDOCX(dataBuffer: Buffer): Promise<string> {
+    /** @deprecated Use {@link ParsePDF}. */
+    public async parsePDF(dataBuffer: Buffer): Promise<string> {
+        return this.ParsePDF(dataBuffer);
+    }
+
+    public async ParseDOCX(dataBuffer: Buffer): Promise<string> {
         const dataDOCX = await officeparser.parseOffice(dataBuffer);
         return dataDOCX.toText();
     }
 
-    public async parseHTML(data: string): Promise<string> {
+    /** @deprecated Use {@link ParseDOCX}. */
+    public async parseDOCX(dataBuffer: Buffer): Promise<string> {
+        return this.ParseDOCX(dataBuffer);
+    }
+
+    public async ParseHTML(data: string): Promise<string> {
         try {
             const $ = cheerio.load(data);
             $('script, style, nav, footer, header, .hidden').remove();
@@ -1575,17 +1694,27 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    public async parseFileFromPath(filePath: string): Promise<string> {
+    /** @deprecated Use {@link ParseHTML}. */
+    public async parseHTML(data: string): Promise<string> {
+        return this.ParseHTML(data);
+    }
+
+    public async ParseFileFromPath(filePath: string): Promise<string> {
         const dataBuffer = await fs.promises.readFile(filePath);
         const fileExtension = filePath.split('.').pop()?.toLowerCase();
         switch (fileExtension) {
             case 'pdf':
-                return this.parsePDF(dataBuffer);
+                return this.ParsePDF(dataBuffer);
             case 'docx':
-                return this.parseDOCX(dataBuffer);
+                return this.ParseDOCX(dataBuffer);
             default:
                 throw new Error(`File type '${fileExtension}' not supported`);
         }
+    }
+
+    /** @deprecated Use {@link ParseFileFromPath}. */
+    public async parseFileFromPath(filePath: string): Promise<string> {
+        return this.ParseFileFromPath(filePath);
     }
 
     // ---- Direct Vectorization ----
@@ -1597,7 +1726,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * (first active VectorIndex). Each group is processed in configurable batches with
      * parallel upserts within each batch.
      *
-     * Uses AIModelRunner to create AIPromptRun records for each embedding batch,
+     * Uses AIEmbeddingRunner to create AIPromptRun records for each embedding batch,
      * enabling token/cost tracking and linking to ContentProcessRunDetail records.
      *
      * @param items - content items to vectorize
@@ -1654,14 +1783,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /**
      * Process a single infrastructure group: embed texts in batches and upsert to vector DB.
-     * Uses AIModelRunner for each embedding batch to create AIPromptRun records with
+     * Uses AIEmbeddingRunner for each embedding batch to create AIPromptRun records with
      * token/cost tracking. Upserts within each batch run in parallel for throughput.
      *
      * @param items - content items in this infrastructure group
      * @param infra - resolved embedding + vector DB infrastructure
      * @param tagMap - pre-loaded tags for metadata enrichment
      * @param batchSize - number of items per embedding batch
-     * @param contextUser - current user for AIModelRunner tracking
+     * @param contextUser - current user for AIEmbeddingRunner tracking
      * @param onBatchComplete - callback invoked after each batch with item count
      * @returns count of vectorized items and collected AIPromptRun IDs
      */
@@ -1676,7 +1805,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     ): Promise<{ vectorized: number; promptRunIDs: string[] }> {
         let vectorized = 0;
         const promptRunIDs: string[] = [];
-        const modelRunner = new AIModelRunner();
+        const embeddingRunner = new AIEmbeddingRunner();
 
         // Provider directives are built for every item BEFORE any embedding spend. A driver may
         // reject a record from BuildProviderDirectives (e.g. a mandatory routing value its config
@@ -1713,8 +1842,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             // Rate limit embedding API call
             await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
 
-            // Use AIModelRunner to embed texts with AIPromptRun tracking
-            const runResult = await modelRunner.RunEmbedding({
+            // Use AIEmbeddingRunner to embed texts with AIPromptRun tracking
+            const runResult = await embeddingRunner.RunEmbedding({
                 Texts: texts,
                 ModelID: infra.embeddingModelID,
                 PromptID: embeddingPromptID,
@@ -1755,9 +1884,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Resolve the "Content Embedding" prompt ID from AIEngine for AIModelRunner tracking.
-     * Returns undefined if the prompt is not found (AIModelRunner will fall back to
-     * the first active Embedding-type prompt).
+     * Resolve the "Content Embedding" prompt ID from AIEngine for AIEmbeddingRunner tracking.
+     * Returns undefined if the prompt is not found (AIEmbeddingRunner then uses the first
+     * active Embedding-type prompt).
      */
     private resolveEmbeddingPromptID(): string | undefined {
         const prompt = AIEngine.Instance.Prompts.find(
@@ -1766,8 +1895,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (prompt) {
             return prompt.ID;
         }
-        // Fall back: let AIModelRunner find the first active Embedding prompt
-        LogStatus('[Autotag] "Content Embedding" prompt not found — AIModelRunner will use default embedding prompt');
+        // Fall back: let AIEmbeddingRunner find the first active Embedding prompt
+        LogStatus('[Autotag] "Content Embedding" prompt not found — AIEmbeddingRunner will use default embedding prompt');
         return undefined;
     }
 
@@ -2509,7 +2638,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const texts = embeddable.map(e => e.chunk.text);
         await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
 
-        const runResult = await new AIModelRunner().RunEmbedding({
+        const runResult = await new AIEmbeddingRunner().RunEmbedding({
             Texts: texts,
             ModelID: infra.embeddingModelID,
             PromptID: this.resolveEmbeddingPromptID(),
@@ -2593,14 +2722,22 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     /**
      * Load content source and content type records for all unique source/type IDs
      * referenced by the given items. Returns maps keyed by normalized ID.
+     *
+     * Every vectorization entry point (VectorizeContentItems, PurgeDeletedChunks,
+     * EmbedPendingChunks, vector dedup) builds its maps here, so this is where a stale
+     * KnowledgeHub cache is caught — see {@link ensureItemMetadataCached}. The per-item storage
+     * config ({@link resolveItemVectorStorageConfig}) reads the same cache later in the pass, so
+     * it sees the reloaded rows too.
      */
     private async loadContentSourceAndTypeMaps(
         items: MJContentItemEntity[],
-        _contextUser: UserInfo
+        contextUser: UserInfo
     ): Promise<{
         sourceMap: Map<string, Record<string, unknown>>;
         typeMap: Map<string, Record<string, unknown>>;
     }> {
+        await this.ensureItemMetadataCached(items, contextUser);
+
         const sourceIdSet = new Set(items.map(i => NormalizeUUID(i.ContentSourceID)));
         const typeIdSet = new Set(items.map(i => NormalizeUUID(i.ContentTypeID)));
 
@@ -2620,6 +2757,59 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
 
         return { sourceMap, typeMap };
+    }
+
+    /**
+     * Make sure the KnowledgeHub cache holds every content source and content type these items
+     * reference, reloading it ONCE when it does not.
+     *
+     * ── A MISS HERE MEANS THE CACHE IS STALE ────────────────────────────────────────────────────
+     * Both ids are required foreign keys on the item, so the rows exist; a miss means the cache
+     * loaded before they did. That is the normal state of a long-running worker: unless Redis
+     * cross-server cache sync is configured, nothing tells this process about a source another
+     * process created after it booted. And the source row is not decoration. It carries the item's
+     * routing (its EmbeddingModelID / VectorIndexID override) and its storage config
+     * (VectorIDStrategy, ChunkTextStorage, VectorMetadata, VectorEntityName). Read from a stale
+     * cache, every one of those silently falls back to the content type's values or the hard-coded
+     * defaults, so the item is embedded into the wrong index with the wrong vector ids until the
+     * worker restarts, and its later re-runs then write different ids.
+     *
+     * One `Config(true)` reloads all six KnowledgeHub sets in a single batched, cache-bypassing
+     * round trip. It runs only on a miss, so a warm cache costs nothing beyond the set lookups, and
+     * at most once per call however many items miss.
+     *
+     * Never makes things worse: a failed reload is logged and the pass continues on whatever the
+     * cache holds, which is exactly the pre-reload behavior (content type → default cascade).
+     */
+    private async ensureItemMetadataCached(items: MJContentItemEntity[], contextUser: UserInfo): Promise<void> {
+        const uncached = this.findUncachedItemMetadata(items);
+        if (uncached.length === 0) return;
+
+        LogStatus(`[Autotag] KnowledgeHub cache is missing ${uncached.length} row(s) these items reference (created after it loaded) — reloading it once: ${uncached.join(', ')}`);
+        try {
+            await this.khEngine.Config(true, contextUser, this.ProviderToUse);
+        } catch (e) {
+            LogError(`[Autotag] KnowledgeHub cache reload failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+
+        const stillUncached = this.findUncachedItemMetadata(items);
+        if (stillUncached.length > 0) {
+            LogError(`[Autotag] ${stillUncached.length} row(s) still absent from the KnowledgeHub cache after a reload: ${stillUncached.join(', ')} — items referencing them fall back to their content type / default configuration`);
+        }
+    }
+
+    /** The distinct content source / content type ids these items reference that the KnowledgeHub cache does not hold. */
+    private findUncachedItemMetadata(items: MJContentItemEntity[]): string[] {
+        const uncached = new Set<string>();
+        for (const item of items) {
+            if (item.ContentSourceID && !this.khEngine.GetContentSourceByID(item.ContentSourceID)) {
+                uncached.add(`content source ${NormalizeUUID(item.ContentSourceID)}`);
+            }
+            if (item.ContentTypeID && !this.khEngine.GetContentTypeByID(item.ContentTypeID)) {
+                uncached.add(`content type ${NormalizeUUID(item.ContentTypeID)}`);
+            }
+        }
+        return [...uncached];
     }
 
     /**
@@ -2749,15 +2939,19 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const driverClass = aiModel.DriverClass;
         const embeddingModelName = aiModel.APIName ?? aiModel.Name;
 
-        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${vectorIndex.Name}"`);
+        // The 3rd-party index is addressed by ExternalID (the provider-side name); Name is the MJ display label.
+        const externalIndexName = vectorIndex.ExternalID?.trim() || vectorIndex.Name;
+        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${externalIndexName}" (Vector Index "${vectorIndex.Name}")`);
 
-        const embedding = this.createEmbeddingInstance(driverClass);
         const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
+        const legacyEmbedding = this.legacyEmbeddingAccessor(driverClass);
 
         return {
-            embedding,
+            get embedding(): BaseEmbeddings | undefined {
+                return legacyEmbedding();
+            },
             vectorDB,
-            indexName: vectorIndex.Name,
+            indexName: externalIndexName,
             embeddingModelName,
             embeddingModelID,
             dimensions: vectorIndex.Dimensions ?? undefined,
@@ -2795,19 +2989,19 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return aiModel;
     }
 
-    /** Create a BaseEmbeddings instance for a given driver class */
-    private createEmbeddingInstance(driverClass: string): BaseEmbeddings {
-        // No pre-flight key check, deliberately — the same call the EntityDocument pipeline already
-        // makes (`entityVectorSync.ts`), for the reason documented there: an empty key is legitimate
-        // for local-only drivers (LocalEmbedding runs ONNX in-process and does `super(apiKey || 'local')`),
-        // and for a cloud driver that genuinely needs one the constructor or the first inference call
-        // raises a real provider-level auth error, which is more actionable than a guard here.
-        // Gating up front made local embedding models unusable from this pipeline without inventing a
-        // meaningless AI_VENDOR_API_KEY__LocalEmbedding.
-        const apiKey = GetAIAPIKey(driverClass);
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey || '');
-        if (!instance) throw new Error(`Failed to create embedding instance for ${driverClass}`);
-        return instance;
+    /**
+     * Backs the deprecated `ResolvedVectorInfrastructure.embedding`: builds the driver the way this
+     * engine did before AIEmbeddingRunner, on first read only. Nothing in MJ reads it, so normally
+     * nothing is built. An empty key is fine for keyless drivers such as LocalEmbedding.
+     */
+    private legacyEmbeddingAccessor(driverClass: string): () => BaseEmbeddings | undefined {
+        let driver: BaseEmbeddings | undefined;
+        return () => {
+            driver ??= MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+                BaseEmbeddings, driverClass, GetAIAPIKey(driverClass) || ''
+            ) ?? undefined;
+            return driver;
+        };
     }
 
     /**
@@ -3522,9 +3716,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         await this.EmbeddingRateLimiter.Acquire(Math.ceil(truncated.length / 4));
 
-        const modelRunner = new AIModelRunner();
+        const embeddingRunner = new AIEmbeddingRunner();
         const embeddingPromptID = this.resolveEmbeddingPromptID();
-        const runResult = await modelRunner.RunEmbedding({
+        const runResult = await embeddingRunner.RunEmbedding({
             ModelID: infra.embeddingModelID,
             Texts: [truncated],
             PromptID: embeddingPromptID ?? undefined,

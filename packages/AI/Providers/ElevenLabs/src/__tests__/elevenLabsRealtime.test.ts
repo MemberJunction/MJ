@@ -349,6 +349,28 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(cfg.SessionConfig['agentId']).toBe('agent_existing_7');
     });
 
+    it('resolves managed agent name from Config.Reasoning.Remote.Ref when Model is null/empty', async () => {
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_existing_remote', name: 'MJ Realtime Co-Agent', tools: [] }),
+        ];
+
+        const cfg = await driver.CreateClientSession({
+            Model: '',
+            Config: {
+                Reasoning: {
+                    Plane: 'remote',
+                    Remote: {
+                        Kind: 'hostedAgent',
+                        Ref: 'MJ Realtime Co-Agent',
+                    },
+                },
+            },
+        });
+
+        expect(cfg.SessionConfig['agentId']).toBe('agent_existing_remote');
+        expect(cfg.Model).toBe('MJ Realtime Co-Agent');
+    });
+
     it('matches the tool fingerprint ORDER-INSENSITIVELY', async () => {
         const toolB: RealtimeToolDefinition = { Name: 'b_tool', Description: 'b', ParametersSchema: {} };
         driver.Agents = [

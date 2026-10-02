@@ -1,0 +1,29 @@
+{
+  "id": "webresearch-clarify-ambiguous-01",
+  "agent": "Web Research Agent",
+  "description": "The request is too broad to search well. Clarifying is right; searching anyway is the over-eager failure this case exists to catch.",
+  "tags": [
+    "clarify",
+    "over-eager-detection",
+    "coherence"
+  ],
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Research AI."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "chat",
+    "message": {
+      "matcher": "nonEmpty"
+    },
+    "forbiddenActions": [
+      "Web Search",
+      "Web Page Content"
+    ]
+  }
+}

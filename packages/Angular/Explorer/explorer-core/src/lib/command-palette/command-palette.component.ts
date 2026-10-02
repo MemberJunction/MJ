@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener, ChangeDetectorRef, Input, Output, EventEmitter } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
@@ -26,11 +26,16 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   @ViewChild('searchInput') SearchInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('paletteModal') PaletteModal?: ElementRef<HTMLElement>;
+  /** Offers a "Search everything" row for the typed text. The host turns it on only when search is available. */
+  @Input() ShowSearch = false;
   @Output() AppSelected = new EventEmitter<string>();
   @Output() KnowledgeSearchRequested = new EventEmitter<string>();
 
   IsOpen = false;
   SearchQuery = '';
+  /** The element focus came from, so closing can hand it back (WCAG 2.4.3). */
+  private invoker: HTMLElement | null = null;
   AllApps: BaseApplication[] = [];
   FilteredApps: BaseApplication[] = [];
   SelectedIndex = 0;
@@ -56,8 +61,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     });
 
-    // Subscribe to application changes
-    this.appManager.AllApplications.pipe(takeUntil(this.destroy$)).subscribe((apps) => {
+    // The user's own apps — the same list Home, the app switcher and the omnibar show
+    this.appManager.Applications.pipe(takeUntil(this.destroy$)).subscribe((apps) => {
       this.AllApps = apps;
       this.filterAndSortApps();
     });
@@ -72,6 +77,11 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
    * Called when command palette opens
    */
   private onOpen(): void {
+    // Remember where focus came from BEFORE we take it, so Close() can hand it back.
+    // The palette opens from a global Cmd+K, so the invoker is whatever had focus.
+    const active = document.activeElement;
+    this.invoker = active instanceof HTMLElement && active !== document.body ? active : null;
+
     // Reset state
     this.SearchQuery = '';
     this.SelectedIndex = 0;
@@ -95,6 +105,66 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     this.SearchQuery = '';
     this.SelectedIndex = 0;
     this.IsNavigating = false;
+
+    // Return focus to the invoker. Guarded on the invoker still being in the document —
+    // selecting an app tears down the tab the invoker lived in, and focusing a detached
+    // node silently drops focus to <body>, which is the very thing this prevents.
+    const invoker = this.invoker;
+    this.invoker = null;
+    if (invoker && invoker.isConnected) {
+      invoker.focus();
+    }
+  }
+
+  /**
+   * Focusable descendants of the modal, in DOM order — the trap's cycle.
+   */
+  private focusableInModal(): HTMLElement[] {
+    const modal = this.PaletteModal?.nativeElement;
+    if (!modal) {
+      return [];
+    }
+    // No visibility filter is needed or wanted here: the entire modal lives inside an
+    // `@if (IsOpen)`, so everything this matches is genuinely rendered. (An `offsetParent`
+    // check would be actively wrong — the modal is positioned, and offsetParent is null for
+    // fixed-position subtrees in some engines and for everything under jsdom.)
+    const selector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(modal.querySelectorAll<HTMLElement>(selector));
+  }
+
+  /**
+   * Keep Tab inside the dialog (WCAG 2.4.3 / 2.1.2). `aria-modal` tells a screen reader the
+   * rest of the page is inert but does NOT stop Tab, so without this a keyboard user tabs
+   * straight out of an open palette into the page behind it and cannot see where they are.
+   */
+  private trapTab(event: KeyboardEvent): void {
+    const focusable = this.focusableInModal();
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+
+    if (event.shiftKey && (active === first || !active || !this.PaletteModal?.nativeElement.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    }
+    else if (!event.shiftKey && (active === last || !active || !this.PaletteModal?.nativeElement.contains(active))) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  /** True when the "Search everything" row is shown, below the app results. */
+  get HasSearchAction(): boolean {
+    return this.ShowSearch && this.SearchQuery.trim().length > 0;
+  }
+
+  /** Empty-state hint; points at the search row only when that row is shown. */
+  get NoResultsMessage(): string {
+    return this.HasSearchAction ? 'Try a different search term, or search everything below' : 'Try a different search term';
   }
 
   /**
@@ -205,6 +275,13 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   HandleKeyDown(event: KeyboardEvent): void {
     if (!this.IsOpen) return;
 
+    // Tab is handled first: the INPUT guard below would otherwise let Tab fall through to
+    // the browser and walk focus out of the dialog.
+    if (event.key === 'Tab') {
+      this.trapTab(event);
+      return;
+    }
+
     // Skip if user is typing in input (except for navigation keys)
     const target = event.target as HTMLElement;
     const navigationKeys = ['Escape', 'Enter', 'ArrowUp', 'ArrowDown'];
@@ -215,7 +292,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        // Allow selecting up to FilteredApps.length (the Knowledge Hub action is at that index)
+        // Allow selecting up to FilteredApps.length (the search row is at that index)
         this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.maxSelectableIndex());
         this.scrollToSelected();
         break;
@@ -230,8 +307,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
         event.preventDefault();
         if (this.SelectedIndex < this.FilteredApps.length && this.FilteredApps[this.SelectedIndex]) {
           this.SelectApp(this.FilteredApps[this.SelectedIndex]);
-        } else if (this.SearchQuery.trim().length > 0 && this.SelectedIndex === this.FilteredApps.length) {
-          // Knowledge Hub search action is selected
+        } else if (this.HasSearchAction && this.SelectedIndex === this.FilteredApps.length) {
+          // The search row is selected
           this.SearchKnowledgeHub();
         }
         break;
@@ -247,8 +324,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
    * Get the maximum selectable index (apps + knowledge search action if query present)
    */
   private maxSelectableIndex(): number {
-    const hasKnowledgeAction = this.SearchQuery.trim().length > 0;
-    return hasKnowledgeAction ? this.FilteredApps.length : this.FilteredApps.length - 1;
+    return this.HasSearchAction ? this.FilteredApps.length : this.FilteredApps.length - 1;
   }
 
   /**
