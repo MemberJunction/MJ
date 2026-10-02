@@ -5,7 +5,8 @@
 
 import { Pool, PoolClient, PoolConfig } from 'pg';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseAutoDocDriver } from './BaseAutoDocDriver.js';
+import { BaseAutoDocDriver, DriverProbeOutcome } from './BaseAutoDocDriver.js';
+import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -851,12 +852,19 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
       const [sourceSchema, sourceTableName] = this.parseTableIdentifier(sourceTable);
       const [targetSchema, targetTableName] = this.parseTableIdentifier(targetTable);
 
+      // NOTE: no `ORDER BY RANDOM()`. Randomising forces PostgreSQL to materialise
+      // and sort EVERY distinct value before applying the LIMIT, turning the cheap
+      // sample this is supposed to be into the most expensive query in the run —
+      // once per FK candidate, per column, per table. The SQL Server sibling has
+      // always used a plain `DISTINCT TOP n` with no sort. A plain LIMIT lets the
+      // planner stop as soon as it has enough rows; the sample is then biased by
+      // physical order, which is acceptable for a containment question ("do these
+      // values exist in the parent at all") and is documented as such.
       const query = `
         WITH source_sample AS (
           SELECT DISTINCT ${this.escapeIdentifier(sourceColumn)} as value
           FROM ${this.escapeIdentifier(sourceSchema)}.${this.escapeIdentifier(sourceTableName)}
           WHERE ${this.escapeIdentifier(sourceColumn)} IS NOT NULL
-          ORDER BY RANDOM()
           LIMIT ${sampleSize}
         ),
         target_values AS (
@@ -891,6 +899,85 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
       return matchingCount / totalSource;
     } catch (error) {
       return 0;
+    }
+  }
+
+  /**
+   * Probe whether a candidate key's child values exist in the parent column.
+   *
+   * Returns two integers and nothing else. Three PostgreSQL specifics:
+   *
+   *  - **Compared as text.** `child = parent` raises `42883 operator does not
+   *    exist: text = uuid` for the single most common soft-key shape — a connector
+   *    storing another system's uuid in a varchar column. `testValueOverlap`
+   *    swallows that as 0% overlap, so the strongest real cross-schema key in a
+   *    tenant is reported as a refutation. Casting both sides to text makes the
+   *    comparison possible, which is what lets that key be *found*. It does not
+   *    weaken refutation: a product-namespaced `'AA:1000000'` still does not equal
+   *    a bare `'1000000'`.
+   *  - **No `ORDER BY RANDOM()`** — see {@link testValueOverlap}.
+   *  - **`statement_timeout`** is set on a dedicated client and reset in `finally`,
+   *    so a slow probe is abandoned server-side instead of stalling the run, and
+   *    the setting never leaks back into the pool.
+   */
+  public async ProbeJoinContainment(
+    child: { Schema: string; Table: string; Column: string },
+    parent: { Schema: string; Table: string; Column: string },
+    sampleSize: number,
+    timeoutMs: number
+  ): Promise<DriverProbeOutcome> {
+    let client: PoolClient | null = null;
+    try {
+      if (!this.pool) {
+        await this.connect();
+      }
+      if (!this.pool) {
+        return { Ok: false, Reason: 'no PostgreSQL connection pool available' };
+      }
+      client = await this.pool.connect();
+
+      const childCol = this.escapeIdentifier(child.Column);
+      const parentCol = this.escapeIdentifier(parent.Column);
+      const query = `
+        WITH child_sample AS (
+          SELECT DISTINCT ${childCol}::text AS v
+          FROM ${this.escapeIdentifier(child.Schema)}.${this.escapeIdentifier(child.Table)}
+          WHERE ${childCol} IS NOT NULL
+          LIMIT ${Math.max(1, Math.floor(sampleSize))}
+        ),
+        parent_values AS (
+          SELECT DISTINCT ${parentCol}::text AS v
+          FROM ${this.escapeIdentifier(parent.Schema)}.${this.escapeIdentifier(parent.Table)}
+          WHERE ${parentCol} IS NOT NULL
+        )
+        SELECT COUNT(*)::bigint AS sampled_values,
+               COUNT(p.v)::bigint AS matched_values
+        FROM child_sample c
+        LEFT JOIN parent_values p ON c.v = p.v
+      `;
+
+      await client.query(`SET statement_timeout = ${Math.max(1, Math.floor(timeoutMs))}`);
+      const result = await client.query<{ sampled_values: string; matched_values: string }>(query);
+      const row = result.rows[0];
+      if (!row) {
+        return { Ok: false, Reason: 'probe returned no rows' };
+      }
+      return {
+        Ok: true,
+        SampledValues: Number(row.sampled_values),
+        MatchedValues: Number(row.matched_values)
+      };
+    } catch (error) {
+      return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
+    } finally {
+      if (client) {
+        try {
+          await client.query('RESET statement_timeout');
+        } catch {
+          // The client is being discarded anyway; a failed RESET must not mask the probe result.
+        }
+        client.release();
+      }
     }
   }
 
