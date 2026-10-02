@@ -204,6 +204,25 @@ describe('CloudflareDecision', () => {
       expect(calls[0].Init?.headers).toEqual({ Authorization: `Bearer ${API_TOKEN}`, 'Content-Type': 'application/json' });
     });
 
+    it("reads an AI Credential's JSON: its accountId wins over a compound apiKey and the environment", async () => {
+      process.env[CloudflareDecision.ACCOUNT_ID_ENV_VAR] = 'env-account';
+      const calls = fakeFetch(() => jsonResponse(WRAPPED_RESPONSE));
+      const driver = new CloudflareDecision(JSON.stringify({ apiKey: `other-account:${API_TOKEN}`, accountId: 'credential-account' }));
+      await driver.Decide(params());
+
+      expect(driver.AccountID).toBe('credential-account');
+      expect(calls[0].Url).toBe('https://api.cloudflare.com/client/v4/accounts/credential-account/ai/run/@cf/cloudflare/clef');
+      expect(calls[0].Init?.headers).toEqual({ Authorization: `Bearer ${API_TOKEN}`, 'Content-Type': 'application/json' });
+    });
+
+    it("reads a compound key from an AI Credential's apiKey", async () => {
+      const calls = fakeFetch(() => jsonResponse(WRAPPED_RESPONSE));
+      await new CloudflareDecision(JSON.stringify({ apiKey: COMPOUND_KEY })).Decide(params());
+
+      expect(calls[0].Url).toBe(CLEF_URL);
+      expect(calls[0].Init?.headers).toEqual({ Authorization: `Bearer ${API_TOKEN}`, 'Content-Type': 'application/json' });
+    });
+
     it('fails fatally, without a request, when neither the key nor the environment gives one', async () => {
       const calls = fakeFetch(() => jsonResponse(WRAPPED_RESPONSE));
       const result = await new CloudflareDecision(API_TOKEN).Decide(params());
@@ -233,6 +252,15 @@ describe('CloudflareDecision', () => {
       await new CloudflareDecision(COMPOUND_KEY).Decide(params());
 
       expect(calls[0].Url).toBe(`https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/my-gateway/workers-ai/@cf/cloudflare/clef`);
+    });
+
+    it("uses an AI Credential's endpoint as the base URL, over CLOUDFLARE_WORKERS_AI_BASE_URL", async () => {
+      process.env[CloudflareDecision.BASE_URL_ENV_VAR] = 'https://ignored.example.test';
+      const calls = fakeFetch(() => jsonResponse(BARE_RESPONSE));
+      const credential = JSON.stringify({ apiKey: COMPOUND_KEY, endpoint: 'https://gateway.ai.cloudflare.com/v1/{account_id}/gw/workers-ai' });
+      await new CloudflareDecision(credential).Decide(params());
+
+      expect(calls[0].Url).toBe(`https://gateway.ai.cloudflare.com/v1/${ACCOUNT_ID}/gw/workers-ai/@cf/cloudflare/clef`);
     });
 
     it('prefers the constructor URL, which needs no account ID when it has no placeholder', async () => {

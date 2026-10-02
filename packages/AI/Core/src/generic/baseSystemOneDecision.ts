@@ -1,16 +1,18 @@
 /**
  * @fileoverview Base class for decision drivers that speak the System One decisions wire format.
  *
- * TypeSafe's Jev (through OpenRouter's Decisions API) and Cloudflare's Clef models (through Workers AI)
- * take the same request (`{ model, state, questions }`) and return the same typed answers
- * (`{ model, answers, usage }`). This class owns that mapping; a subclass supplies only where the
- * request goes, how it is authenticated, and how its vendor wraps the response.
+ * TypeSafe's Jev (through OpenRouter's Decisions API), Cloudflare's Clef models (through Workers AI)
+ * and Kev (through OpenRouter, or any server with a `/v1/systemone` route) take the same request
+ * (`{ model, state, questions }`) and return the same typed answers (`{ model, answers, usage }`).
+ * This class owns that mapping; a subclass supplies only where the request goes, how it is
+ * authenticated, and how its vendor wraps the response.
  *
  * @module @memberjunction/ai
  */
 
 import { BaseDecision } from './baseDecision';
 import { ModelUsage } from './baseModel';
+import { AIErrorType } from './errorTypes';
 import {
     ChoiceQuestion,
     DecisionAnswer,
@@ -40,10 +42,64 @@ export type SystemOneHTTPError = Error & {
 type MapAnswerResult = { success: true; answer: DecisionAnswer } | { success: false; errorMessage: string };
 
 /**
+ * A decision driver's credential, read from the API key it was built with. A key resolved from an AI
+ * Credential arrives as that credential's values in JSON (`{"apiKey":"…"}` for the `API Key` type,
+ * `{"apiKey":"…","endpoint":"…"}` for `API Key with Endpoint`); a legacy key arrives as the raw string.
+ */
+export interface SystemOneCredential {
+    /** The API key or token. Empty when the credential has none. */
+    APIKey: string;
+    /** The credential's `endpoint`, when it has one. */
+    Endpoint?: string;
+    /** The credential's `accountId`, when it has one. */
+    AccountID?: string;
+}
+
+/**
+ * A configuration problem that stops a call before any request: a credential that lacks a part the
+ * driver needs. Another attempt would repeat it, so it is fatal and does not fail over.
+ */
+export interface SystemOneConfigurationError {
+    Message: string;
+    ErrorType: AIErrorType;
+}
+
+/**
  * Whether a parsed JSON value is a plain object (not null, not an array).
  */
 export function IsSystemOneWireObject(value: unknown): value is SystemOneWireObject {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Reads a decision driver's API key. A JSON object (what an AI Credential resolves to) gives its
+ * `apiKey`, `endpoint` and `accountId` string values; anything else is the API key as given.
+ */
+export function ParseSystemOneCredential(apiKey: string): SystemOneCredential {
+    const raw = apiKey ?? '';
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith('{')) {
+        return { APIKey: raw };
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(trimmed);
+    } catch {
+        return { APIKey: raw };
+    }
+    if (!IsSystemOneWireObject(parsed)) {
+        return { APIKey: raw };
+    }
+    return {
+        APIKey: stringValue(parsed['apiKey']) ?? '',
+        Endpoint: stringValue(parsed['endpoint']),
+        AccountID: stringValue(parsed['accountId']),
+    };
+}
+
+/** A trimmed, non-empty string value, or undefined. */
+function stringValue(value: unknown): string | undefined {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 /**
@@ -63,8 +119,12 @@ export function CreateSystemOneHTTPError(message: string, status: number): Syste
  * A subclass supplies, through protected hooks:
  * - {@link ServiceName} and {@link DefaultModel}, and {@link GetEndpointURL} for the URL;
  * - optionally {@link GetRequestHeaders} (default: a bearer API key), {@link GetWireModelName}
- *   (default: the model unchanged), {@link UnwrapResponse} (default: the body as sent) and
- *   {@link DescribeHTTPError} (default: the status and the start of the body).
+ *   (default: the model unchanged), {@link UnwrapResponse} (default: the body as sent),
+ *   {@link DescribeHTTPError} (default: the status and the start of the body) and
+ *   {@link GetConfigurationError} (default: none).
+ *
+ * {@link Credential} is the API key read with {@link ParseSystemOneCredential}, so a credential
+ * resolved from an AI Credential sends its `apiKey`, not its JSON.
  *
  * {@link SendRequest} is the one network call, so a test double overrides only it.
  *
@@ -73,12 +133,21 @@ export function CreateSystemOneHTTPError(message: string, status: number): Syste
  * result with a failover-eligible error (see {@link FailResult}).
  */
 export abstract class BaseSystemOneDecision extends BaseDecision {
+    private _credential: SystemOneCredential;
+
     /**
      * Creates the driver.
-     * @param apiKey The vendor credential. The default {@link GetRequestHeaders} sends it as a bearer token.
+     * @param apiKey The vendor credential: a raw API key, or an AI Credential's values in JSON. The
+     * default {@link GetRequestHeaders} sends its API key as a bearer token.
      */
     constructor(apiKey: string) {
         super(apiKey);
+        this._credential = ParseSystemOneCredential(apiKey);
+    }
+
+    /** The credential, read from the API key with {@link ParseSystemOneCredential}. */
+    protected get Credential(): SystemOneCredential {
+        return this._credential;
     }
 
     /** The API's name in error messages, such as `'OpenRouter Decisions API'`. */
@@ -94,11 +163,20 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
     protected abstract GetEndpointURL(model: string): string;
 
     /**
-     * The request headers. Defaults to the API key as a bearer token and a JSON content type.
+     * The request headers. Defaults to the credential's API key as a bearer token and a JSON content type.
      * @param _model The model being asked.
      */
     protected GetRequestHeaders(_model: string): Record<string, string> {
-        return { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' };
+        return { Authorization: `Bearer ${this.Credential.APIKey}`, 'Content-Type': 'application/json' };
+    }
+
+    /**
+     * What stops a call before any request, such as a credential without a part the driver needs, or
+     * undefined when nothing does. Defaults to undefined. {@link DoDecide} turns it into a fatal failure
+     * that does not fail over.
+     */
+    protected GetConfigurationError(): SystemOneConfigurationError | undefined {
+        return undefined;
     }
 
     /**
@@ -146,6 +224,10 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
      */
     protected async DoDecide(params: DecisionParams): Promise<DecisionResult> {
         const startTime = new Date();
+        const configurationError = this.GetConfigurationError();
+        if (configurationError) {
+            return this.configurationFailure(configurationError, startTime);
+        }
         const model = this.ResolveModel(params);
         const response = await this.postRequest(model, this.BuildRequestBody(model, params), params.CancellationToken);
 
@@ -188,6 +270,14 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
         result.errorMessage = message;
         result.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: true };
         result.Answers = {};
+        return result;
+    }
+
+    /** A failed result for a configuration problem: fatal, so the failover loop stops, and not failover-eligible. */
+    private configurationFailure(error: SystemOneConfigurationError, startTime: Date): DecisionResult {
+        const result = new DecisionResult(false, startTime, new Date());
+        result.errorMessage = error.Message;
+        result.errorInfo = { errorType: error.ErrorType, severity: 'Fatal', canFailover: false };
         return result;
     }
 

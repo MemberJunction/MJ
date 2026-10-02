@@ -2,9 +2,8 @@ import {
     BaseDecision,
     BaseSystemOneDecision,
     CreateSystemOneHTTPError,
-    DecisionParams,
-    DecisionResult,
     IsSystemOneWireObject,
+    SystemOneConfigurationError,
     SystemOneWireObject,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
@@ -13,7 +12,7 @@ import { RegisterClass } from '@memberjunction/global';
 const ACCOUNT_ID_PLACEHOLDER = '{account_id}';
 
 /** The parts of a Cloudflare credential: an API token, and an account ID when the key carries one. */
-interface CloudflareCredential {
+interface CloudflareKey {
     AccountID?: string;
     APIToken: string;
 }
@@ -27,11 +26,13 @@ interface CloudflareCredential {
  *
  * **Credentials.** Workers AI needs an account ID in the URL and an API token. The API key is either
  * `"<accountId>:<apiToken>"`, or the token alone with the account ID in the `CLOUDFLARE_ACCOUNT_ID`
- * environment variable. A key that names an account wins over the variable.
+ * environment variable. A key that names an account wins over the variable. An AI Credential's values
+ * arrive as JSON: its `apiKey` is read the same way, and an `accountId` field wins over both.
  *
  * **Endpoint.** `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run`, followed by the
- * model. To go through an AI Gateway instead, set `CLOUDFLARE_WORKERS_AI_BASE_URL` (or pass a base URL
- * to the constructor) to the URL the model is appended to, such as
+ * model. To go through an AI Gateway instead, set `CLOUDFLARE_WORKERS_AI_BASE_URL`, give the credential
+ * an `endpoint`, or pass a base URL to the constructor (the constructor wins, then the credential, then
+ * the variable): the URL the model is appended to, such as
  * `https://gateway.ai.cloudflare.com/v1/{account_id}/my-gateway/workers-ai`. `{account_id}` is replaced
  * with the account ID; a base URL without it needs none.
  *
@@ -57,19 +58,20 @@ export class CloudflareDecision extends BaseSystemOneDecision {
     private _baseURL: string;
 
     /**
-     * @param apiKey `"<accountId>:<apiToken>"`, or the API token alone (the account ID then comes from `CLOUDFLARE_ACCOUNT_ID`).
-     * @param baseURL Overrides the base URL, and `CLOUDFLARE_WORKERS_AI_BASE_URL`; see the class notes.
+     * @param apiKey `"<accountId>:<apiToken>"`, the API token alone (the account ID then comes from
+     * `CLOUDFLARE_ACCOUNT_ID`), or an AI Credential's values in JSON.
+     * @param baseURL Overrides the base URL, the credential's `endpoint` and `CLOUDFLARE_WORKERS_AI_BASE_URL`; see the class notes.
      */
     constructor(apiKey: string, baseURL?: string) {
         super(apiKey);
-        const credential = parseCredential(apiKey);
-        this._apiToken = credential.APIToken;
-        this._accountID = credential.AccountID ?? readEnv(CloudflareDecision.ACCOUNT_ID_ENV_VAR);
-        const base = nonEmpty(baseURL) ?? readEnv(CloudflareDecision.BASE_URL_ENV_VAR) ?? CloudflareDecision.DEFAULT_BASE_URL;
+        const key = splitAccountFromToken(this.Credential.APIKey);
+        this._apiToken = key.APIToken;
+        this._accountID = this.Credential.AccountID ?? key.AccountID ?? readEnv(CloudflareDecision.ACCOUNT_ID_ENV_VAR);
+        const base = nonEmpty(baseURL) ?? this.Credential.Endpoint ?? readEnv(CloudflareDecision.BASE_URL_ENV_VAR) ?? CloudflareDecision.DEFAULT_BASE_URL;
         this._baseURL = base.replace(/\/+$/, '');
     }
 
-    /** The Cloudflare account ID, from the API key or `CLOUDFLARE_ACCOUNT_ID`; undefined when neither has one. */
+    /** The Cloudflare account ID, from the credential, the API key or `CLOUDFLARE_ACCOUNT_ID`; undefined when none has one. */
     public get AccountID(): string | undefined {
         return this._accountID;
     }
@@ -126,35 +128,28 @@ export class CloudflareDecision extends BaseSystemOneDecision {
     }
 
     /**
-     * Fails without a request when the credential is incomplete. That is a configuration error another
-     * attempt would repeat, so it is fatal and does not fail over.
+     * A credential without a token, or without an account ID when the URL needs one, stops the call
+     * before any request: a fatal Authentication error that names how to supply it.
      */
-    protected async DoDecide(params: DecisionParams): Promise<DecisionResult> {
-        const missing = this.missingCredential();
-        if (missing) {
-            const now = new Date();
-            const result = new DecisionResult(false, now, now);
-            result.errorMessage = missing;
-            result.errorInfo = { errorType: 'Authentication', severity: 'Fatal', canFailover: false };
-            return result;
-        }
-        return super.DoDecide(params);
-    }
-
-    /** What the credential lacks, as an error message, or undefined when it is complete. */
-    private missingCredential(): string | undefined {
+    protected GetConfigurationError(): SystemOneConfigurationError | undefined {
         if (this._apiToken.length === 0) {
-            return `${this.ServiceName} has no API token: set the API key to '<accountId>:<apiToken>', or to the token with ${CloudflareDecision.ACCOUNT_ID_ENV_VAR} set`;
+            return {
+                ErrorType: 'Authentication',
+                Message: `${this.ServiceName} has no API token: set the API key to '<accountId>:<apiToken>', or to the token with ${CloudflareDecision.ACCOUNT_ID_ENV_VAR} set`,
+            };
         }
         if (!this.AccountID && this.BaseURL.includes(ACCOUNT_ID_PLACEHOLDER)) {
-            return `${this.ServiceName} has no Cloudflare account ID: set the API key to '<accountId>:<apiToken>', or set the ${CloudflareDecision.ACCOUNT_ID_ENV_VAR} environment variable`;
+            return {
+                ErrorType: 'Authentication',
+                Message: `${this.ServiceName} has no Cloudflare account ID: set the API key to '<accountId>:<apiToken>', or set the ${CloudflareDecision.ACCOUNT_ID_ENV_VAR} environment variable`,
+            };
         }
         return undefined;
     }
 }
 
 /** Splits `"<accountId>:<apiToken>"` at its first colon; a key with no colon is the token alone. */
-function parseCredential(apiKey: string): CloudflareCredential {
+function splitAccountFromToken(apiKey: string): CloudflareKey {
     const key = (apiKey ?? '').trim();
     const colon = key.indexOf(':');
     if (colon < 0) {

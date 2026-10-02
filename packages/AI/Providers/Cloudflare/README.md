@@ -83,7 +83,7 @@ Workers AI needs two things: the Cloudflare **account ID**, which goes in the UR
 
 A key that names an account wins over the variable. If neither gives an account ID, the call fails without a request, with a fatal `Authentication` error that names both options.
 
-The key resolves like any model's: an AI Credential Binding (on the prompt-model, model-vendor or vendor row, or a default credential of the `Cloudflare` vendor's `API Key` type), or else the legacy environment variable, which is keyed by driver class:
+The key resolves like any model's: an AI Credential Binding (on the prompt-model, model-vendor or vendor row, or a default credential of the `Cloudflare` vendor's `API Key` type), or else the legacy environment variable, which is keyed by driver class. A bound credential reaches the driver as its values in JSON (`{"apiKey":"…"}`); the driver reads its `apiKey` the same way, so `"<accountId>:<apiToken>"` works there too. A credential that also has an `accountId` field wins over both, and an `endpoint` field sets the base URL (see AI Gateway below).
 
 ```bash
 AI_VENDOR_API_KEY__CLOUDFLAREDECISION=0123456789abcdef0123456789abcdef:your-api-token
@@ -100,7 +100,7 @@ To send the calls through a Cloudflare AI Gateway, set `CLOUDFLARE_WORKERS_AI_BA
 CLOUDFLARE_WORKERS_AI_BASE_URL=https://gateway.ai.cloudflare.com/v1/{account_id}/my-gateway/workers-ai
 ```
 
-`{account_id}` is replaced with the account ID. A base URL without the placeholder needs no account ID.
+A credential's `endpoint` does the same. The constructor wins, then the credential, then the variable. `{account_id}` is replaced with the account ID. A base URL without the placeholder needs no account ID.
 
 ## Errors and failover
 
@@ -112,7 +112,7 @@ CLOUDFLARE_WORKERS_AI_BASE_URL=https://gateway.ai.cloudflare.com/v1/{account_id}
 ## Not supported yet
 
 - **Images.** Workers AI accepts up to four images with the state (`images`, a Clef extension to the System One format). MJ's `DecisionParams` has no images, so the driver does not send them.
-- **Self-hosted Clef.** The weights are open, but this driver speaks Workers AI's URL and envelope. A generic self-hosted System One driver would be a small subclass of `BaseSystemOneDecision`.
+- **Self-hosted Clef.** The weights are open, but this driver speaks Workers AI's URL and envelope. A server with a `/v1/systemone` route is reached through `SystemOneDecision` in [`@memberjunction/ai-systemone`](../SystemOne/README.md); llama.cpp's Clef support is planned. Clef is not on OpenRouter yet.
 
 ## Class Registration
 

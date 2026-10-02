@@ -3,6 +3,8 @@ import {
     BaseSystemOneDecision,
     CreateSystemOneHTTPError,
     IsSystemOneWireObject,
+    ParseSystemOneCredential,
+    SystemOneConfigurationError,
 } from '../generic/baseSystemOneDecision';
 import {
     ChoiceAnswer,
@@ -48,6 +50,13 @@ class TestSystemOneDecision extends BaseSystemOneDecision {
     protected async SendRequest(url: string, init: RequestInit): Promise<Response> {
         this.Sent.push({ Url: url, Init: init, Body: JSON.parse(String(init.body)) });
         return this.Responder();
+    }
+}
+
+/** A driver whose configuration check fails, as one whose credential lacks a part it needs. */
+class MisconfiguredSystemOneDecision extends TestSystemOneDecision {
+    protected GetConfigurationError(): SystemOneConfigurationError | undefined {
+        return { Message: 'Test Decisions API has no endpoint', ErrorType: 'NoCredentials' };
     }
 }
 
@@ -164,6 +173,46 @@ describe('BaseSystemOneDecision', () => {
             expect(result.success).toBe(true);
             expect(fetchStub).toHaveBeenCalledTimes(1);
             expect(fetchStub.mock.calls[0][0]).toBe('https://fetch.example.test/decide');
+        });
+    });
+
+    describe('the credential', () => {
+        it("sends an AI Credential's apiKey as the bearer token, not its JSON", async () => {
+            const driver = new TestSystemOneDecision(JSON.stringify({ apiKey: 'sk-from-credential' }));
+            await driver.Decide(params());
+
+            expect(driver.Sent[0].Init.headers).toEqual({ Authorization: 'Bearer sk-from-credential', 'Content-Type': 'application/json' });
+        });
+
+        it('sends a raw API key exactly as given', async () => {
+            const driver = new TestSystemOneDecision(' raw-key ');
+            await driver.Decide(params());
+
+            expect(driver.Sent[0].Init.headers).toEqual({ Authorization: 'Bearer  raw-key ', 'Content-Type': 'application/json' });
+        });
+
+        it('ParseSystemOneCredential reads apiKey, endpoint and accountId from JSON and keeps anything else raw', () => {
+            expect(ParseSystemOneCredential('{"apiKey":" k ","endpoint":"https://e.example.test","accountId":"acct"}'))
+                .toEqual({ APIKey: 'k', Endpoint: 'https://e.example.test', AccountID: 'acct' });
+            expect(ParseSystemOneCredential('{"apiKey":"k"}')).toEqual({ APIKey: 'k', Endpoint: undefined, AccountID: undefined });
+            expect(ParseSystemOneCredential('{"endpoint":"https://e.example.test","apiKey":""}'))
+                .toEqual({ APIKey: '', Endpoint: 'https://e.example.test', AccountID: undefined });
+            expect(ParseSystemOneCredential('{"apiKey":7}')).toEqual({ APIKey: '', Endpoint: undefined, AccountID: undefined });
+            expect(ParseSystemOneCredential('acct:token')).toEqual({ APIKey: 'acct:token' });
+            expect(ParseSystemOneCredential('{not json')).toEqual({ APIKey: '{not json' });
+            expect(ParseSystemOneCredential('["a"]')).toEqual({ APIKey: '["a"]' });
+            expect(ParseSystemOneCredential('')).toEqual({ APIKey: '' });
+        });
+
+        it('fails fatally, without a request, when the configuration check reports a problem', async () => {
+            const driver = new MisconfiguredSystemOneDecision();
+            const result = await driver.Decide(params());
+
+            expect(driver.Sent).toHaveLength(0);
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toBe('Test Decisions API has no endpoint');
+            expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Fatal', canFailover: false });
+            expect(result.Answers).toEqual({});
         });
     });
 
