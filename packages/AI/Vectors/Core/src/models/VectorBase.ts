@@ -180,7 +180,7 @@ export class VectorBase {
      * says out loud which model it picked and that nobody asked for it.
      */
     protected GetAIModel(id?: string): MJAIModelEntityExtended {
-        const embeddings = AIEngine.Instance.Models.filter(m => this.IsEmbeddingsModel(m));
+        const embeddings = AIEngine.Instance.Models.filter(m => this.isEmbeddingsModel(m));
 
         if (id) {
             const model = embeddings.find(m => UUIDsEqual(m.ID, id));
@@ -204,7 +204,7 @@ export class VectorBase {
         // has always tolerated it. Rank within whichever set we end up using.
         const active = embeddings.filter(m => m.IsActive !== false);
         const pool = active.length > 0 ? active : embeddings;
-        const chosen = [...pool].sort(VectorBase.CompareEmbeddingModelPreference)[0];
+        const chosen = [...pool].sort(VectorBase.compareEmbeddingModelPreference)[0];
 
         LogError(
             `GetAIModel was called with no model ID, so the embedding model was chosen by ranking rather than by configuration: ` +
@@ -219,7 +219,7 @@ export class VectorBase {
      * matched the literal spelling only, so a type row stored as `embeddings` silently made
      * every embedding model invisible.
      */
-    private IsEmbeddingsModel(model: MJAIModelEntityExtended): boolean {
+    private isEmbeddingsModel(model: MJAIModelEntityExtended): boolean {
         return (model.AIModelType ?? '').trim().toLowerCase() === 'embeddings';
     }
 
@@ -227,7 +227,7 @@ export class VectorBase {
      * Total order over embedding models for the no-`id` fallback: higher `PowerRank` first
      * (a null rank sorts last), then name ascending so the result never depends on row order.
      */
-    private static CompareEmbeddingModelPreference(a: MJAIModelEntityExtended, b: MJAIModelEntityExtended): number {
+    private static compareEmbeddingModelPreference(a: MJAIModelEntityExtended, b: MJAIModelEntityExtended): number {
         const rankA = a.PowerRank ?? Number.NEGATIVE_INFINITY;
         const rankB = b.PowerRank ?? Number.NEGATIVE_INFINITY;
         if (rankA !== rankB) {

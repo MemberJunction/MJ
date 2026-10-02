@@ -537,7 +537,7 @@ export class EntityVectorSyncer extends VectorBase {
       return vectorIndex.Dimensions;
     }
 
-    const described = await this.DescribeIndexInProvider(vectorIndex, vectorDB);
+    const described = await this.describeIndexInProvider(vectorIndex, vectorDB);
     if (described) {
       LogStatus(`Vector index "${vectorIndex.Name}" had no Dimensions recorded; the provider reports ${described.dimension}. Writing it back to the record.`);
       vectorIndex.Dimensions = described.dimension;
@@ -575,7 +575,7 @@ export class EntityVectorSyncer extends VectorBase {
    * A provider that reports `dimension: 0` is reporting "I do not know" (Qdrant's list endpoint
    * does exactly this), not a zero-width index, so it is treated as no answer.
    */
-  private async DescribeIndexInProvider(vectorIndex: MJVectorIndexEntity, vectorDB: VectorDBBase): Promise<IndexDescription | null> {
+  private async describeIndexInProvider(vectorIndex: MJVectorIndexEntity, vectorDB: VectorDBBase): Promise<IndexDescription | null> {
     const wanted = [vectorIndex.ExternalID, vectorIndex.Name]
       .filter((n): n is string => !!n && n.trim().length > 0)
       .map(n => n.trim().toLowerCase());
