@@ -51,16 +51,20 @@ interface SimpleVectorProviderConfig {
 }
 
 /**
- * Per-call cache of (indexName → loaded entity rows + parsed vectors).
- * Lives at module scope so repeated queries inside one process don't re-read
- * the DB. Cleared on `DeleteAllRecords` or when the entity row count changes.
+ * Per-index cache of the parsed vectors (indexName → service + rows), so a
+ * query whose rows have not changed skips re-parsing every vector. The rows
+ * themselves are still read on every query, as the calling user. Cleared on
+ * `DeleteAllRecords`; an entry is reused only when the index config and the
+ * fingerprint of the rows just read both match (see `rowsFingerprint`).
  */
 const indexCache = new Map<string, {
-    config: SimpleVectorProviderConfig;
+    /** The index's ProviderConfig the entry was built from, serialized */
+    configJSON: string;
     /** Metadata for `config.entityName` — supplies the real primary key column(s) used to key rows. */
     entity: EntityInfo;
     service: SimpleVectorService;
-    rowCount: number;
+    /** Fingerprint of the rows the entry was built from */
+    rowsFingerprint: string;
     rowsByID: Map<string, Record<string, unknown>>;
 }>();
 
@@ -123,13 +127,16 @@ export class SimpleVectorDatabase extends VectorDBBase {
     /** Materialize the index — load rows from the configured entity, parse
      *  each row's vector, and pack them into a `SimpleVectorService`.
      *
-     *  **Cache freshness model:** the cache key is `indexName` and the
-     *  validity signal is `rowCount`. This means in-place edits of an
-     *  existing row's `EmbeddingVector` (without changing the row count)
-     *  are NOT detected by the cache — the stale vector will be returned
-     *  until the process restarts or the row is deleted/inserted.
-     *  This is acceptable for the dev/agent-memory positioning of this
-     *  driver; production-scale corpora should use Pinecone/Qdrant. */
+     *  **Cache freshness model:** the rows are read on every query, as the
+     *  calling user, so row-level security always applies. The parsed
+     *  vectors are reused only when the index config is unchanged and the
+     *  rows just read have the same keys, `__mj_UpdatedAt` values and
+     *  vector presence as the rows they were built from. A user who sees a
+     *  different set of rows therefore never receives another user's
+     *  vectors. An edit that bypasses `BaseEntity` (raw SQL that changes a
+     *  vector without touching `__mj_UpdatedAt`) is not detected; call
+     *  `DeleteAllRecords` after one. Production-scale corpora should use
+     *  Pinecone/Qdrant. */
     private async loadIndex(indexName: string, contextUser: UserInfo | undefined): Promise<{
         config: SimpleVectorProviderConfig;
         entity: EntityInfo;
@@ -143,14 +150,35 @@ export class SimpleVectorDatabase extends VectorDBBase {
         if (fetched == null) return null;
         const { entity, rows } = fetched;
 
+        const configJSON = JSON.stringify(config);
+        const rowsFingerprint = this.rowsFingerprint(rows, config, entity);
         const cached = indexCache.get(indexName);
-        if (cached && cached.rowCount === rows.length) {
-            return { config: cached.config, entity: cached.entity, service: cached.service, rowsByID: cached.rowsByID };
+        if (cached && cached.configJSON === configJSON && cached.rowsFingerprint === rowsFingerprint) {
+            return { config, entity: cached.entity, service: cached.service, rowsByID: cached.rowsByID };
         }
 
         const { service, rowsByID } = this.buildServiceFromRows(rows, config, entity);
-        indexCache.set(indexName, { config, entity, service, rowCount: rows.length, rowsByID });
+        indexCache.set(indexName, { configJSON, entity, service, rowsFingerprint, rowsByID });
         return { config, entity, service, rowsByID };
+    }
+
+    /**
+     * Identifies the rows a cached index was built from: each row's primary
+     * key, `__mj_UpdatedAt` and whether it has a vector, in the order read.
+     * Far cheaper than re-parsing every vector, and it differs whenever the
+     * rows a query sees differ — another user's row-level security, an
+     * insert-plus-delete that keeps the count, or a vector added or edited.
+     */
+    private rowsFingerprint(rows: Array<Record<string, unknown>>, config: SimpleVectorProviderConfig, entity: EntityInfo): string {
+        const parts: string[] = new Array(rows.length);
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const key = CompositeKey.FromEntityRecord(entity, row);
+            const updatedAt = row['__mj_UpdatedAt'];
+            const stamp = updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt ?? '');
+            parts[i] = `${key.ToURLSegment()}\u0001${stamp}\u0001${row[config.vectorField] ? 1 : 0}`;
+        }
+        return parts.join('\u0002');
     }
 
     /** Run RunView for the configured entity; returns null if the entity is
