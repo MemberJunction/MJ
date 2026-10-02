@@ -1,5 +1,5 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { NodeSnapshotFromRecord, RubricScoring, RubricVersionDiff, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type VersionChange } from '@memberjunction/rubrics-base';
+import { NodeSnapshotFromRecord, RubricScoring, RubricVersionDiff, SnapshotFromRows, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type SnapshotRows, type VersionChange } from '@memberjunction/rubrics-base';
 
 /** One answer on the scoring form. Groups are not answered. */
 export interface RubricFormAnswer {
@@ -363,9 +363,89 @@ export interface PublishPreview {
     higherBumps: ('Major' | 'Minor' | 'Patch')[];
 }
 
+/**
+ * The snapshot publish uses. Empty wording becomes blank, so a Guidance box
+ * that only holds '' is identical to a base with no guidance.
+ */
+export function SharedVersion(version: RubricVersionSnapshot): RubricVersionSnapshot {
+    return SnapshotFromRows(snapshotRows(version));
+}
+
+function snapshotRows(version: RubricVersionSnapshot): SnapshotRows {
+    return {
+        version: {
+            ID: version.id,
+            MajorVersion: version.majorVersion ?? null,
+            MinorVersion: version.minorVersion ?? null,
+            PatchVersion: version.patchVersion ?? null,
+            NotApplicablePolicy: version.notApplicablePolicy,
+            PassThreshold: version.passThreshold ?? null,
+            MinimumCompleteness: version.minimumCompleteness ?? null,
+            Instructions: version.instructions ?? null,
+            ScoreDisplayMin: version.scoreDisplayMin,
+            ScoreDisplayMax: version.scoreDisplayMax,
+        },
+        rubricId: version.rubricId,
+        criteria: version.nodes.map(node => ({
+            ID: node.id,
+            Key: node.key,
+            ParentID: node.parentId ?? null,
+            Name: node.name,
+            Description: node.description ?? null,
+            Guidance: node.guidance ?? null,
+            NodeType: node.nodeType,
+            ScaleID: node.scaleId ?? null,
+            Weight: node.weight,
+            IsAdvisory: node.isAdvisory,
+            IsGate: node.isGate,
+            GateMinimumScore: node.gateMinimumScore ?? null,
+            NotApplicablePolicy: node.notApplicablePolicy ?? null,
+            RollupMethod: node.rollupMethod ?? null,
+            EvidenceRequired: node.evidenceRequired,
+            RationaleRequired: node.rationaleRequired,
+            Sequence: node.sequence,
+            EvaluatorConfig: node.evaluatorConfig ?? null,
+        })),
+        anchors: version.nodes.flatMap(node => (node.anchors ?? []).map((anchor, sequence) => ({
+            ID: `${node.id}:${sequence}`,
+            CriterionID: node.id,
+            ScaleLevelID: anchor.scaleLevelId ?? null,
+            AnchorValue: anchor.anchorValue ?? null,
+            Descriptor: anchor.descriptor,
+            Sequence: sequence,
+        }))),
+        bands: version.bands.map(band => ({
+            ID: band.id,
+            Label: band.label,
+            Description: band.description ?? null,
+            MinScore: band.minScore,
+            MaxScore: band.maxScore,
+            DisplayTone: band.displayTone,
+            Sequence: band.sequence,
+        })),
+        scales: version.scales.map(scale => ({
+            ID: scale.id,
+            ScaleType: scale.scaleType,
+            MinValue: scale.minValue ?? null,
+            MaxValue: scale.maxValue ?? null,
+            Step: scale.step ?? null,
+            HigherIsBetter: scale.higherIsBetter,
+        })),
+        levels: version.scales.flatMap(scale => scale.levels.map(level => ({
+            ID: level.id,
+            ScaleID: scale.id,
+            Label: level.label,
+            Value: level.value,
+            NormalizedValue: level.normalizedValue,
+            Description: level.description ?? null,
+            Sequence: level.sequence,
+        }))),
+    };
+}
+
 /** The dialog shows this. Confirming is the host's job. The widget does not publish. */
 export function PublishPreview(base: RubricVersionSnapshot | null, draft: RubricVersionSnapshot, requested?: 'Major' | 'Minor' | 'Patch' | null): PublishPreview {
-    const diff = RubricVersionDiff.diff(base, draft, requested);
+    const diff = RubricVersionDiff.diff(base ? SharedVersion(base) : null, SharedVersion(draft), requested);
     const computed = diff.computedBump;
     return {
         computedBump: computed,
@@ -413,12 +493,14 @@ export function sampleMatchesTree(nodes: { id: string; nodeType: string }[], ans
 }
 
 export function VersionRows(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): DiffRow[] {
-    const diff = RubricVersionDiff.diff(base, draft);
-    const keys = [...new Set([...base.nodes.map(node => node.key), ...draft.nodes.map(node => node.key)])];
+    const leftVersion = SharedVersion(base);
+    const rightVersion = SharedVersion(draft);
+    const diff = RubricVersionDiff.diff(leftVersion, rightVersion);
+    const keys = [...new Set([...leftVersion.nodes.map(node => node.key), ...rightVersion.nodes.map(node => node.key)])];
     const rows: DiffRow[] = keys.map(key => ({
         key,
-        left: base.nodes.find(node => node.key === key)?.name ?? null,
-        right: draft.nodes.find(node => node.key === key)?.name ?? null,
+        left: leftVersion.nodes.find(node => node.key === key)?.name ?? null,
+        right: rightVersion.nodes.find(node => node.key === key)?.name ?? null,
         marks: diff.changes.filter(change => change.subject === key),
     }));
     const extras = new Map<string, VersionChange[]>();
@@ -431,8 +513,8 @@ export function VersionRows(base: RubricVersionSnapshot, draft: RubricVersionSna
     for (const [subject, changes] of extras) {
         rows.push({
             key: subject,
-            left: sideText(base, subject),
-            right: sideText(draft, subject),
+            left: sideText(leftVersion, subject),
+            right: sideText(rightVersion, subject),
             marks: changes,
         });
     }

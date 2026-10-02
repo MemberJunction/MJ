@@ -175,6 +175,17 @@ describe('publish, diff, and comparison', () => {
         expect(widened.find(row => row.key === 'High')?.marks.some(mark => mark.property === 'band added')).toBe(true);
     });
 
+    it('does not show Patch when blank guidance is identical to the server snapshot', () => {
+        const base = snap(1, null);
+        const blank = { ...base, nodes: [{ ...base.nodes[0], guidance: '' }] };
+        const preview = publishPreview(base, blank);
+        expect(preview.computedBump).toBeNull();
+        expect(preview.identical).toBe(true);
+        expect(preview.nextVersion).toBeNull();
+        expect(VersionRows(base, blank).find(row => row.key === 'clarity')?.marks ?? []).toEqual([]);
+        expect(publishPreview(base, { ...base, nodes: [{ ...base.nodes[0], guidance: 'Cite the figure.' }] }).computedBump).toBe('Patch');
+    });
+
     it('shows Initial for a first publish', () => {
         const preview = publishPreview(null, snap(1, null));
         expect(preview.computedBump).toBeNull();
