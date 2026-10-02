@@ -60,7 +60,8 @@
     "fields": {
       "Name": "MJ: Rubric Evaluations",
       "BaseViewGenerated": false,
-      "GeneratedBaseViewName": "vwRubricEvaluationsGenerated"
+      "GeneratedBaseViewName": "vwRubricEvaluationsGenerated",
+      "AllowCaching": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluations"
@@ -74,7 +75,8 @@
     "fields": {
       "Name": "MJ: Rubric Evaluation Scores",
       "BaseViewGenerated": false,
-      "GeneratedBaseViewName": "vwRubricEvaluationScoresGenerated"
+      "GeneratedBaseViewName": "vwRubricEvaluationScoresGenerated",
+      "AllowCaching": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores"

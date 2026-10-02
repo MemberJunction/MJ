@@ -49,8 +49,8 @@
     (metadata/entities/.layered-base-views.json and .rubric-label-name-fields.json), applied
     with mj sync push. They are not updated from a migration. Two further files, forced by
     ordering:
-      V202609302343  the captured inner vw*Generated views (no Entity or EntityField DML)
-      V202609302344  the wrapper views, then the capture that registers their columns
+      V202609302343  the captured inner vw*Generated views, including the EntityField rows that register them
+      V202609302344  the consensus wrapper views, then the capture that registers their columns
     See the plan, section "Layered base views: the migration sequence".
 
     TestRubric is DEPRECATED alongside this migration, through metadata rather than DDL:
@@ -494,10 +494,14 @@ END;
 GO
 
 -- 4a2. Delete a draft version and the tree that hangs off it.
---      FK_RubricCriterion_RubricVersion is ON DELETE CASCADE, but that cascade deletes
---      every criterion in one statement while FK_RubricCriterion_Parent is NO ACTION, so a
---      child still pointing at its parent rejects the delete. A second ON DELETE CASCADE on
---      the self-FK is illegal: SQL Server reports multiple cascade paths from RubricVersion.
+--      FK_RubricCriterion_RubricVersion is ON DELETE CASCADE, but that cascade is unused:
+--      this INSTEAD OF trigger deletes the criteria itself, before the foreign key can fire.
+--      The unused cascade also blocks a future INSTEAD OF DELETE on RubricCriterion, because
+--      SQL Server will not put an instead-of trigger on the target of a cascade.
+--      The cascade would also delete every criterion in one statement while
+--      FK_RubricCriterion_Parent is NO ACTION, so a child still pointing at its parent
+--      rejects the delete. A second ON DELETE CASCADE on the self-FK is illegal: SQL Server
+--      reports multiple cascade paths from RubricVersion.
 --      Criterion levels and bands are NO ACTION too, so one anchor or one band fails the
 --      same way. This trigger runs instead of the delete, refuses a non-draft (51101)
 --      before touching a row, and otherwise clears leaves before parents.

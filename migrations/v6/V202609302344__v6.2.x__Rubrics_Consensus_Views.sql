@@ -4,10 +4,9 @@
     Layered-base-view flags (BaseViewGenerated = 0, GeneratedBaseViewName) live in
     metadata/entities/.layered-base-views.json and are applied with mj sync push. They are not
     set from a migration. The inner views vwRubricEvaluationsGenerated and
-    vwRubricEvaluationScoresGenerated are created by the CodeGen section of
-    V202609302342, which is why this file is separate: a view cannot be created before the
-    view it selects from, and hand-written SQL cannot sit below a CodeGen section that is
-    replaced wholesale on the next capture.
+    vwRubricEvaluationScoresGenerated are created by V202609302343. This file is separate
+    because a view cannot be created before the view it selects from, and hand-written SQL
+    cannot sit below a CodeGen section that is replaced wholesale on the next capture.
 
     The public base views below wrap the inner views with `SELECT g.*` plus the columns
     CodeGen cannot produce, so every foreign-key display field keeps regenerating underneath
@@ -3758,10 +3757,22 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    IF EXISTS (
+        SELECT 1
+        FROM [${flyway:defaultSchema}].[RubricEvaluation]
+        WHERE [ID] = @ID AND [Status] <> N'Draft'
+    )
+    BEGIN
+        THROW 51109, 'A submitted evaluation cannot be deleted.', 1;
+    END
+
+    DELETE FROM [${flyway:defaultSchema}].[RubricEvaluationScore]
+    WHERE [EvaluationID] = @ID;
+
     DELETE FROM
         [${flyway:defaultSchema}].[RubricEvaluation]
     WHERE
-        [ID] = @ID
+        [ID] = @ID AND [Status] = N'Draft'
 
 
     -- Check if the delete was successful

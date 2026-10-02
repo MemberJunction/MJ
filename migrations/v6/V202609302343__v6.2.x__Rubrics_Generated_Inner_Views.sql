@@ -1,8 +1,10 @@
 /*
-    Rubrics, step 2 of 3 — the generated inner views only.
+    Rubrics, step 2 of 3 — the captured inner views and the EntityField rows that register them.
 
-    There is no hand-written DML in this file. BaseViewGenerated, GeneratedBaseViewName, and
-    the Label name-field pins are metadata, not SQL:
+    This file contains the generated vwRubricEvaluationsGenerated and
+    vwRubricEvaluationScoresGenerated views, and the EntityField inserts from that capture.
+    It is not the metadata that sets BaseViewGenerated. Those flags, GeneratedBaseViewName,
+    and the Label name-field pins are metadata, not SQL:
 
       metadata/entities/.layered-base-views.json
       metadata/entities/.rubric-label-name-fields.json
