@@ -389,8 +389,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 const poolResult = await this._connectionManager.Pool.query(quotedQuery, processedParams);
                 return poolResult.rows as T[];
             }
-            this.AssertAmbientTransactionUsable();
-            const source = this._transaction ?? this._connectionManager.Pool;
+            const source = this.resolveQuerySource();
             const result = await source.query(quotedQuery, processedParams);
             return result.rows as T[];
         } catch (err) {
@@ -415,16 +414,31 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     /**
      * Execute a parameterized statement for a colocated vector provider against this
-     * connection. Uses the active transaction client when one is open (so vector writes
-     * commit/rollback with the entity write), otherwise the shared pool. Placeholders use
-     * PG's native `$1..$n`. Deliberately bypasses {@link ExecuteSQL}'s PascalCase
-     * auto-quoting — the vector provider emits its own correctly-quoted SQL.
+     * connection. Uses the transaction client when the caller is part of the open transaction
+     * (so vector writes commit/rollback with the entity write), otherwise the shared pool — an
+     * unrelated caller on a shared instance must not join it (#4786). Placeholders use PG's
+     * native `$1..$n`. Deliberately bypasses {@link ExecuteSQL}'s PascalCase auto-quoting — the
+     * vector provider emits its own correctly-quoted SQL.
      */
     public async RunColocatedSQL<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
-        this.AssertAmbientTransactionUsable();
-        const source = this._transaction ?? this._connectionManager.Pool;
+        const source = this.resolveQuerySource();
         const result = await source.query(sql, params ? [...params] : undefined);
         return result.rows as T[];
+    }
+
+    /**
+     * Where a statement runs: the transaction client when the caller is part of the open transaction,
+     * otherwise the pool — an unrelated caller on a shared instance must not join it (#4786). Checks
+     * membership before {@link AssertAmbientTransactionUsable} so a member of a doomed transaction still
+     * fails loudly even after the handle has been nulled (e.g. by a failed savepoint rollback) — an
+     * unrelated caller falling through to the pool must never depend on that ordering.
+     */
+    private resolveQuerySource(): pg.PoolClient | pg.Pool {
+        if (!this.IsCallerInAmbientTransaction()) {
+            return this._connectionManager.Pool;
+        }
+        this.AssertAmbientTransactionUsable();
+        return this._transaction ?? this._connectionManager.Pool;
     }
 
     // ─── Transaction Management ──────────────────────────────────────
