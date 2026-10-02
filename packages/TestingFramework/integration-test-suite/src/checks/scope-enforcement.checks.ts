@@ -222,7 +222,7 @@ async function runCleanup(cleanup: Cleanup[]): Promise<void> {
  * short-circuits). A control key carrying ONLY the Allow rule proves the seeded `MJAPI` ceiling admits
  * `entity:read`, so the deny in the first key is genuinely the thing flipping the decision.
  */
-export async function CheckSe1_DenyPrecedence(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSe1DenyPrecedence(ctx: IntegrationCheckContext): Promise<void> {
     const engine = GetAPIKeyEngine();
     await engine.Config(true, ctx.User);
     const readScopeId = scopeIdByPath(engine, 'entity:read');
@@ -258,13 +258,18 @@ export async function CheckSe1_DenyPrecedence(ctx: IntegrationCheckContext): Pro
     }
 }
 
+/** @deprecated Use {@link CheckSe1DenyPrecedence}. */
+export async function CheckSe1_DenyPrecedence(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSe1DenyPrecedence(ctx);
+}
+
 /**
  * SE2 ★ — the application ceiling caps the key. A key granting BOTH `entity:read` and `agent:execute`
  * is bound to a throwaway application whose ceiling admits ONLY `entity:read`. The `agent:execute`
  * request is denied at the APPLICATION level even though the key grants it; the `entity:read` request
  * passes both levels. Proves the ceiling is a hard cap, not merely advisory.
  */
-export async function CheckSe2_AppCeilingCapsKey(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSe2AppCeilingCapsKey(ctx: IntegrationCheckContext): Promise<void> {
     const engine = GetAPIKeyEngine();
     await engine.Config(true, ctx.User);
     const readScopeId = scopeIdByPath(engine, 'entity:read');
@@ -299,6 +304,11 @@ export async function CheckSe2_AppCeilingCapsKey(ctx: IntegrationCheckContext): 
     }
 }
 
+/** @deprecated Use {@link CheckSe2AppCeilingCapsKey}. */
+export async function CheckSe2_AppCeilingCapsKey(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSe2AppCeilingCapsKey(ctx);
+}
+
 /**
  * SE3 ★ — application binding. A key bound to application X is refused when presented against a
  * different application (`MJAPI`), even for `entity:read` which both would admit. The binding gate
@@ -306,7 +316,7 @@ export async function CheckSe2_AppCeilingCapsKey(ctx: IntegrationCheckContext): 
  * app Y's surface at all. The positive control (same key against X) proves the binding, not a bad
  * scope, is what refuses Y.
  */
-export async function CheckSe3_AppBinding(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSe3AppBinding(ctx: IntegrationCheckContext): Promise<void> {
     const engine = GetAPIKeyEngine();
     await engine.Config(true, ctx.User);
     const readScopeId = scopeIdByPath(engine, 'entity:read');
@@ -345,6 +355,11 @@ export async function CheckSe3_AppBinding(ctx: IntegrationCheckContext): Promise
     }
 }
 
+/** @deprecated Use {@link CheckSe3AppBinding}. */
+export async function CheckSe3_AppBinding(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSe3AppBinding(ctx);
+}
+
 /**
  * SE4 ★ — the unscoped-key default. A key with NO rule for `entity:read` (but an application ceiling
  * that DOES admit it) resolves by the evaluator's `defaultBehaviorNoScopes`. Driving the REAL
@@ -353,7 +368,7 @@ export async function CheckSe3_AppBinding(ctx: IntegrationCheckContext): Promise
  * asserted to deny, pinning that the production default is the SAFE one (`'deny'`), even though a bare
  * `new ScopeEvaluator()` defaults to `'allow'`.
  */
-export async function CheckSe4_UnscopedKeyDefault(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSe4UnscopedKeyDefault(ctx: IntegrationCheckContext): Promise<void> {
     const engine = GetAPIKeyEngine();
     await engine.Config(true, ctx.User);
     const readScopeId = scopeIdByPath(engine, 'entity:read');
@@ -403,6 +418,11 @@ export async function CheckSe4_UnscopedKeyDefault(ctx: IntegrationCheckContext):
     }
 }
 
+/** @deprecated Use {@link CheckSe4UnscopedKeyDefault}. */
+export async function CheckSe4_UnscopedKeyDefault(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSe4UnscopedKeyDefault(ctx);
+}
+
 /**
  * SE5 ★ — `full_access` is an ORDINARY scope at the engine boundary. A key granted `full_access` is
  * allowed for `full_access` but the engine does NOT implicitly grant an unrelated scope the key has no
@@ -411,7 +431,7 @@ export async function CheckSe4_UnscopedKeyDefault(ctx: IntegrationCheckContext):
  * full_access grant confers exactly `full_access`. Pinning this keeps the bypass a single, auditable
  * resolver seam and prevents it from silently migrating into the engine.
  */
-export async function CheckSe5_FullAccessIsOrdinaryAtEngine(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSe5FullAccessIsOrdinaryAtEngine(ctx: IntegrationCheckContext): Promise<void> {
     const engine = GetAPIKeyEngine();
     await engine.Config(true, ctx.User);
     const fullAccessId = scopeIdByPath(engine, 'full_access');
@@ -445,16 +465,21 @@ export async function CheckSe5_FullAccessIsOrdinaryAtEngine(ctx: IntegrationChec
     }
 }
 
+/** @deprecated Use {@link CheckSe5FullAccessIsOrdinaryAtEngine}. */
+export async function CheckSe5_FullAccessIsOrdinaryAtEngine(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSe5FullAccessIsOrdinaryAtEngine(ctx);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // registration
 // ─────────────────────────────────────────────────────────────────────────────────────────
 
 export const ScopeEnforcementChecks: NamedCheck[] = [
-    { Id: 'scope-enforcement.SE1', Name: 'SE1: an equal-priority Deny rule beats an Allow rule (deny-precedence)', Fn: CheckSe1_DenyPrecedence },
-    { Id: 'scope-enforcement.SE2', Name: 'SE2: the application scope ceiling caps a key that grants a scope the ceiling omits', Fn: CheckSe2_AppCeilingCapsKey },
-    { Id: 'scope-enforcement.SE3', Name: 'SE3: a key bound to app X is refused against app Y (binding runs before the ceiling)', Fn: CheckSe3_AppBinding },
-    { Id: 'scope-enforcement.SE4', Name: 'SE4: an unscoped key resolves by defaultBehaviorNoScopes; the shared engine defaults to deny', Fn: CheckSe4_UnscopedKeyDefault },
-    { Id: 'scope-enforcement.SE5', Name: 'SE5: full_access is an ordinary scope at the engine (the bypass is a resolver-only concern)', Fn: CheckSe5_FullAccessIsOrdinaryAtEngine }
+    { Id: 'scope-enforcement.SE1', Name: 'SE1: an equal-priority Deny rule beats an Allow rule (deny-precedence)', Fn: CheckSe1DenyPrecedence },
+    { Id: 'scope-enforcement.SE2', Name: 'SE2: the application scope ceiling caps a key that grants a scope the ceiling omits', Fn: CheckSe2AppCeilingCapsKey },
+    { Id: 'scope-enforcement.SE3', Name: 'SE3: a key bound to app X is refused against app Y (binding runs before the ceiling)', Fn: CheckSe3AppBinding },
+    { Id: 'scope-enforcement.SE4', Name: 'SE4: an unscoped key resolves by defaultBehaviorNoScopes; the shared engine defaults to deny', Fn: CheckSe4UnscopedKeyDefault },
+    { Id: 'scope-enforcement.SE5', Name: 'SE5: full_access is an ordinary scope at the engine (the bypass is a resolver-only concern)', Fn: CheckSe5FullAccessIsOrdinaryAtEngine }
 ];
 
 for (const check of ScopeEnforcementChecks) {

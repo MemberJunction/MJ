@@ -48,23 +48,23 @@
             unimplemented. Leave a capability off if the platform / driver does not support it.
         </p>
 
-        @for (group of FeatureGroups; track group.title) {
+        @for (group of FeatureGroups; track group.Title) {
             <div class="bp-group">
                 <div class="bp-group-header">
-                    <i class="fa-solid {{ group.icon }}"></i>
-                    <span>{{ group.title }}</span>
+                    <i class="fa-solid {{ group.Icon }}"></i>
+                    <span>{{ group.Title }}</span>
                 </div>
                 <div class="bp-feature-list">
-                    @for (feature of group.features; track feature.key) {
+                    @for (feature of group.Features; track feature.Key) {
                         <div class="bp-feature-row">
                             <div class="label">
-                                <span class="t">{{ feature.label }}</span>
-                                <span class="d">{{ feature.description }}</span>
+                                <span class="t">{{ feature.Label }}</span>
+                                <span class="d">{{ feature.Description }}</span>
                             </div>
                             <div class="bp-switch"
-                                 [class.on]="IsFeatureOn(feature.key)"
+                                 [class.on]="IsFeatureOn(feature.Key)"
                                  [class.disabled]="!EditMode"
-                                 (click)="ToggleFeature(feature.key, !IsFeatureOn(feature.key))">
+                                 (click)="ToggleFeature(feature.Key, !IsFeatureOn(feature.Key))">
                             </div>
                         </div>
                     }

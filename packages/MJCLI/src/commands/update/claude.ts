@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
-import { installPack } from '../../lib/claude-pack/PackInstaller.js';
-import { formatJson, formatPretty } from '../../lib/claude-pack/PackOutputFormatter.js';
-import { mapFlagsToInstallOptions } from '../install/claude.js';
+import { InstallPack } from '../../lib/claude-pack/PackInstaller.js';
+import { FormatJson, FormatPretty } from '../../lib/claude-pack/PackOutputFormatter.js';
+import { MapFlagsToInstallOptions } from '../install/claude.js';
 
 /**
  * `mj update:claude` — refresh the Claude Code pack in the current directory.
@@ -70,10 +70,10 @@ export default class UpdateClaude extends Command {
 
     async run(): Promise<void> {
         const { flags } = await this.parse(UpdateClaude);
-        const baseOpts = mapFlagsToInstallOptions(flags, (msg) => {
+        const baseOpts = MapFlagsToInstallOptions(flags, (msg) => {
             if (flags.verbose && !flags.json) this.log(msg);
         });
-        const result = await installPack({
+        const result = await InstallPack({
             ...baseOpts,
             CheckOnly: flags.check === true,
             RefreshCommands: flags['refresh-commands'] === true,
@@ -82,9 +82,9 @@ export default class UpdateClaude extends Command {
         });
 
         if (flags.json) {
-            this.log(formatJson(result));
+            this.log(FormatJson(result));
         } else {
-            this.log(formatPretty(result));
+            this.log(FormatPretty(result));
         }
 
         if (!result.ok) this.exit(1);

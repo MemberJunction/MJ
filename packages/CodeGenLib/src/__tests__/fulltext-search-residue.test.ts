@@ -146,7 +146,7 @@ function makeEntity(overrides: Init = {}): EntityInfo {
 
 /**
  * A connection standing in for a table with NO `PRIMARY KEY` constraint: the PK-index query
- * returns no rows, which is what makes `getEntityPrimaryKeyIndexName` throw. Every statement is
+ * returns no rows, which is what makes `GetEntityPrimaryKeyIndexName` throw. Every statement is
  * recorded so a test can assert the lookup did not even reach the database.
  */
 function makePKLessConnection(log: string[]): CodeGenConnection {
@@ -197,7 +197,7 @@ describe('full-text search: the PK-index precondition belongs to SQL Server only
             const log: string[] = [];
             const codeGen = codeGenFor(new PostgreSQLCodeGenProvider());
 
-            const result = await codeGen.generateEntityFullTextSearchSQL(makePKLessConnection(log), makeEntity());
+            const result = await codeGen.GenerateEntityFullTextSearchSQL(makePKLessConnection(log), makeEntity());
 
             // Before the fix this rejected with `Could not find primary key index for entity Test Entity`.
             expect(result.sql).toContain('__mj_fts_vector');
@@ -209,7 +209,7 @@ describe('full-text search: the PK-index precondition belongs to SQL Server only
             const log: string[] = [];
             const codeGen = codeGenFor(new PostgreSQLCodeGenProvider());
 
-            await codeGen.generateEntityFullTextSearchSQL(makePKLessConnection(log), makeEntity());
+            await codeGen.GenerateEntityFullTextSearchSQL(makePKLessConnection(log), makeEntity());
 
             // Not merely "tolerates a failed lookup" — the round trip is not made.
             expect(log).toEqual([]);
@@ -234,7 +234,7 @@ describe('full-text search: the PK-index precondition belongs to SQL Server only
             const log: string[] = [];
             const codeGen = codeGenFor(new SQLServerCodeGenProvider());
 
-            const result = await codeGen.generateEntityFullTextSearchSQL(makeIndexedConnection(log), makeEntity());
+            const result = await codeGen.GenerateEntityFullTextSearchSQL(makeIndexedConnection(log), makeEntity());
 
             expect(log.length).toBe(1);
             expect(log[0]).toContain('sys.indexes');
@@ -246,7 +246,7 @@ describe('full-text search: the PK-index precondition belongs to SQL Server only
             const codeGen = codeGenFor(new SQLServerCodeGenProvider());
 
             await expect(
-                codeGen.generateEntityFullTextSearchSQL(makePKLessConnection(log), makeEntity())
+                codeGen.GenerateEntityFullTextSearchSQL(makePKLessConnection(log), makeEntity())
             ).rejects.toThrow('Could not find primary key index for entity Test Entity');
             expect(log.length).toBe(1);
         });
@@ -255,7 +255,7 @@ describe('full-text search: the PK-index precondition belongs to SQL Server only
             const log: string[] = [];
             const codeGen = codeGenFor(new SQLServerCodeGenProvider());
 
-            await codeGen.generateEntityFullTextSearchSQL(
+            await codeGen.GenerateEntityFullTextSearchSQL(
                 makePKLessConnection(log),
                 makeEntity({ FullTextIndexGenerated: false })
             );
@@ -279,7 +279,7 @@ describe('full-text search: an empty user cache names the condition and the reme
     async function captureError(): Promise<Error> {
         const codeGen = codeGenFor(new PostgreSQLCodeGenProvider());
         try {
-            await codeGen.generateEntityFullTextSearchSQL(makePKLessConnection([]), needsWriteBack());
+            await codeGen.GenerateEntityFullTextSearchSQL(makePKLessConnection([]), needsWriteBack());
         } catch (e) {
             return e as Error;
         }
@@ -323,7 +323,7 @@ describe('full-text search: an empty user cache names the condition and the reme
         cache.state.users = [{ ID: 'user-1', Name: 'codegen' } as UserInfo];
         const codeGen = codeGenFor(new PostgreSQLCodeGenProvider());
 
-        const result = await codeGen.generateEntityFullTextSearchSQL(makePKLessConnection([]), needsWriteBack());
+        const result = await codeGen.GenerateEntityFullTextSearchSQL(makePKLessConnection([]), needsWriteBack());
 
         expect(writeBack.record.saveCount).toBe(1);
         expect(writeBack.record.loadedID).toBe('entity-1');

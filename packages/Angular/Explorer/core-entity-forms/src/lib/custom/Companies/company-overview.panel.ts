@@ -137,10 +137,10 @@ export class CompanyOverviewPanel extends BaseFormPanel<MJCompanyEntity> impleme
     }
 
     public ngOnInit(): void {
-        this.LoadEmployees();
+        this.loadEmployees();
     }
 
-    private async LoadEmployees(): Promise<void> {
+    private async loadEmployees(): Promise<void> {
         if (!this.Record?.ID) return;
         try {
             const rv = new RunView();

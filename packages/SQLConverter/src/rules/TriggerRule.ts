@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers } from './ExpressionHelpers.js';
+import { ConvertIdentifiers } from './ExpressionHelpers.js';
 
 /**
  * Hand-written PG equivalents for complex triggers that use SQL Server-specific
@@ -128,7 +128,7 @@ export class TriggerRule implements IConversionRule {
 
   /** Convert basic T-SQL trigger body expressions to PG */
   private convertBasicBody(body: string): string {
-    body = convertIdentifiers(body);
+    body = ConvertIdentifiers(body);
     body = body.replace(/(?<![a-zA-Z])N'/g, "'");
     body = body.replace(/\bINSERTED\b/gi, 'NEW');
     body = body.replace(/\bDELETED\b/gi, 'OLD');
@@ -163,7 +163,7 @@ CREATE TRIGGER "${triggerName}"
     triggerName: string, tableName: string, event: string, body: string,
   ): string {
     // Convert identifier brackets: [col] → "col"
-    body = convertIdentifiers(body);
+    body = ConvertIdentifiers(body);
 
     // TRIGGER_NESTLEVEL() → pg_trigger_depth()
     body = body.replace(/\bTRIGGER_NESTLEVEL\s*\(\s*\)/gi, 'pg_trigger_depth()');

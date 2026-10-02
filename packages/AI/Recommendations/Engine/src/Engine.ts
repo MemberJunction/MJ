@@ -8,20 +8,20 @@ import { RecommendationRequest, RecommendationResult } from './generic/types';
  * Engine class to be used for running all recommendation requests
  */
 export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBase> {
-  private _RecommendationProviders: MJRecommendationProviderEntity[] = [];
+  private _recommendationProviders: MJRecommendationProviderEntity[] = [];
 
   public static get Instance(): RecommendationEngineBase {
     return super.getInstance<RecommendationEngineBase>();
   }
 
   public get RecommendationProviders(): MJRecommendationProviderEntity[] {
-    return this._RecommendationProviders;
+    return this._recommendationProviders;
   }
 
   public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
     const params: Array<Partial<BaseEnginePropertyConfig>> = [
       {
-        PropertyName: '_RecommendationProviders',
+        PropertyName: '_recommendationProviders',
         EntityName: 'MJ: Recommendation Providers',
         CacheLocal: true
       },
@@ -52,7 +52,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       throw new Error(`Could not find driver for provider: ${provider.Name}`);
     }
 
-    const recommendations: MJRecommendationEntity[] = await this.GetRecommendationEntities(request);
+    const recommendations: MJRecommendationEntity[] = await this.getRecommendationEntities(request);
     LogStatus(`Processing ${recommendations.length} recommendations`);
 
     if(recommendations.length == 0) {
@@ -81,7 +81,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     }
 
     if(request.CreateErrorList){
-      const errorList: MJListEntity | null = await this.CreateRecommendationErrorList(recommendationRunEntity.ID, recommendations[0].SourceEntityID, request.CurrentUser);
+      const errorList: MJListEntity | null = await this.createRecommendationErrorList(recommendationRunEntity.ID, recommendations[0].SourceEntityID, request.CurrentUser);
       if(errorList){
         request.ErrorListID = errorList.ID;
       }
@@ -101,9 +101,9 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return recommendResult;
   }
 
-  private async GetRecommendationEntities(request: RecommendationRequest): Promise<MJRecommendationEntity[]> {
+  private async getRecommendationEntities(request: RecommendationRequest): Promise<MJRecommendationEntity[]> {
     if(request.Recommendations){
-      const invalidEntities: MJRecommendationEntity[] = request.Recommendations.filter((r) => !this.IsNullOrUndefined(r.RecommendationRunID) || r.IsSaved);
+      const invalidEntities: MJRecommendationEntity[] = request.Recommendations.filter((r) => !this.isNullOrUndefined(r.RecommendationRunID) || r.IsSaved);
       if(invalidEntities.length > 0){
         throw new Error(`Recommendation entities must be new, not saved and have their RecommendationRunID not set. Invalid entities: ${invalidEntities.map((r) => r.ID).join(',')}`);
       }
@@ -111,7 +111,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       return request.Recommendations;
     }
     else if(request.ListID){
-      return await this.GetRecommendationsByListID(request.ListID, request.CurrentUser);
+      return await this.getRecommendationsByListID(request.ListID, request.CurrentUser);
     }
     else if(request.EntityAndRecordsInfo){
       const entityName = request.EntityAndRecordsInfo.EntityName;
@@ -125,11 +125,11 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
         throw new Error('RecordIDs are required in EntityAndRecordsInfo');
       }
 
-      return await this.GetRecommendationsByRecordIDs(entityName, recordIDs, request.CurrentUser);
+      return await this.getRecommendationsByRecordIDs(entityName, recordIDs, request.CurrentUser);
     }
   }
 
-  private async GetRecommendationsByListID(listID: string, currentUser?: UserInfo): Promise<MJRecommendationEntity[]> {
+  private async getRecommendationsByListID(listID: string, currentUser?: UserInfo): Promise<MJRecommendationEntity[]> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const md = this.ProviderToUse;
 
@@ -196,7 +196,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return recommendations;
   }
 
-  private async GetRecommendationsByRecordIDs(entityName: string, recordIDs: Array<string | number>, currentUser?: UserInfo): Promise<MJRecommendationEntity[]> {
+  private async getRecommendationsByRecordIDs(entityName: string, recordIDs: Array<string | number>, currentUser?: UserInfo): Promise<MJRecommendationEntity[]> {
     const md = this.ProviderToUse;
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
@@ -249,7 +249,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return recordIDs.map((id) => `(${CompositeKey.FromURLSegment(entity, String(id)).ToWhereClause()})`).join(' OR ');
   }
 
-  private async CreateRecommendationErrorList(recommendationRunID: string, entityID: string, currentUser?: UserInfo): Promise<MJListEntity | null> {
+  private async createRecommendationErrorList(recommendationRunID: string, entityID: string, currentUser?: UserInfo): Promise<MJListEntity | null> {
     const md = this.ProviderToUse;
     const list: MJListEntity = await md.GetEntityObject<MJListEntity>('MJ: Lists', currentUser);
     list.Name = `Recommendation Run ${recommendationRunID} Errors`;
@@ -268,7 +268,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return list;
   }
 
-  private IsNullOrUndefined(value: unknown): boolean {
+  private isNullOrUndefined(value: unknown): boolean {
     return value === null || value === undefined;
   }
 }

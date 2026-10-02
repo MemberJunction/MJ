@@ -18,7 +18,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJAIRemoteBrowserProviderEntity: MockRemoteBrowserProviderEntity,
 }));
 
-import { featuresOf, KNOWN_REMOTE_BROWSER_FEATURE_KEYS } from '../remote-browser-features';
+import { FeaturesOf, KNOWN_REMOTE_BROWSER_FEATURE_KEYS } from '../remote-browser-features';
 import { MJAIRemoteBrowserProviderEntity } from '@memberjunction/core-entities';
 
 function makeProvider(
@@ -30,14 +30,14 @@ function makeProvider(
 describe('featuresOf', () => {
     it('returns the typed flags when present', () => {
         const p = makeProvider({ RawCdpControl: true, LiveView: true });
-        expect(featuresOf(p).RawCdpControl).toBe(true);
-        expect(featuresOf(p).LiveView).toBe(true);
+        expect(FeaturesOf(p).RawCdpControl).toBe(true);
+        expect(FeaturesOf(p).LiveView).toBe(true);
     });
 
     it('returns an empty object when SupportedFeaturesObject is null (fail-closed)', () => {
         const p = makeProvider(null);
-        expect(featuresOf(p)).toEqual({});
-        expect(featuresOf(p).HumanTakeover).toBeUndefined();
+        expect(FeaturesOf(p)).toEqual({});
+        expect(FeaturesOf(p).HumanTakeover).toBeUndefined();
     });
 });
 

@@ -10,12 +10,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 let runViewResult: { Success: boolean; Results: unknown[]; ErrorMessage?: string } = { Success: true, Results: [] };
+let lastExtraFilter: string | undefined;
 
 vi.mock('@memberjunction/core', () => ({
     Metadata: class {},
     CompositeKey: class {},
     RunView: class {
-        async RunView() {
+        async RunView(params: { ExtraFilter?: string }) {
+            lastExtraFilter = params.ExtraFilter;
             return runViewResult;
         }
     },
@@ -28,6 +30,7 @@ const user = {} as never;
 beforeEach(() => {
     vi.clearAllMocks();
     runViewResult = { Success: true, Results: [] };
+    lastExtraFilter = undefined;
 });
 
 describe('CheckSchemaSharedByOtherApps', () => {
@@ -56,5 +59,21 @@ describe('CheckSchemaSharedByOtherApps', () => {
         expect(r.Shared).toBe(true);
         expect(r.CheckFailed).toBe(true);
         expect(r.ErrorMessage).toContain('db down');
+    });
+
+    it('first install (no app row yet, excludeAppId empty) → no ID exclusion in the filter', async () => {
+        // A fresh install that adopts an existing schema has no MJ: Open Apps row, so the caller
+        // passes ''. `ID <> ''` against a uniqueidentifier column fails on SQL Server ("Conversion
+        // failed when converting from a character string to uniqueidentifier"), which turned every
+        // such check into CheckFailed and hid a real co-tenant.
+        await CheckSchemaSharedByOtherApps(user, 'app_schema', '');
+        expect(lastExtraFilter).toBeDefined();
+        expect(lastExtraFilter).toContain("LOWER('app_schema')");
+        expect(lastExtraFilter).not.toMatch(/\bID\s*<>/);
+    });
+
+    it('excludes this app by ID when it has one', async () => {
+        await CheckSchemaSharedByOtherApps(user, 'app_schema', 'app-1');
+        expect(lastExtraFilter).toContain("ID <> 'app-1'");
     });
 });

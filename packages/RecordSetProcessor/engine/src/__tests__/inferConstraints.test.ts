@@ -5,7 +5,7 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { DataFeatureSpec } from '@memberjunction/feature-pipelines';
-import { InferProcessor, setNestedValue } from '../processors/InferProcessor';
+import { InferProcessor, SetNestedValue } from '../processors/InferProcessor';
 
 describe('InferProcessor constraint enforcement', () => {
     const USER = {} as UserInfo;
@@ -412,36 +412,36 @@ describe('InferProcessor constraint enforcement', () => {
         const payload: Record<string, unknown> = {};
 
         // Attack 1: direct __proto__
-        setNestedValue(payload, '__proto__.polluted', 'PWNED');
+        SetNestedValue(payload, '__proto__.polluted', 'PWNED');
         const testObj1: Record<string, unknown> = {};
         expect(testObj1['polluted']).toBeUndefined();
         expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
 
         // Attack 2: constructor.prototype
-        setNestedValue(payload, 'constructor.prototype.isAdmin', true);
+        SetNestedValue(payload, 'constructor.prototype.isAdmin', true);
         const testObj2: Record<string, unknown> = {};
         expect(testObj2['isAdmin']).toBeUndefined();
         expect(Object.prototype.hasOwnProperty('isAdmin')).toBe(false);
 
         // Attack 3: direct prototype
-        setNestedValue(payload, 'prototype.polluted', 'PWNED');
+        SetNestedValue(payload, 'prototype.polluted', 'PWNED');
         const testObj3: Record<string, unknown> = {};
         expect(testObj3['polluted']).toBeUndefined();
         expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
 
         // Attack 4: inside array index
-        setNestedValue(payload, 'items[0].__proto__.polluted', 'PWNED');
+        SetNestedValue(payload, 'items[0].__proto__.polluted', 'PWNED');
         const testObj4: Record<string, unknown> = {};
         expect(testObj4['polluted']).toBeUndefined();
         expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
 
-        setNestedValue(payload, 'items[0].constructor.prototype.isAdmin', true);
+        SetNestedValue(payload, 'items[0].constructor.prototype.isAdmin', true);
         const testObj5: Record<string, unknown> = {};
         expect(testObj5['isAdmin']).toBeUndefined();
         expect(Object.prototype.hasOwnProperty('isAdmin')).toBe(false);
 
         // Valid assignment still works with nested paths
-        setNestedValue(payload, 'profile.user.name', 'Alice');
+        SetNestedValue(payload, 'profile.user.name', 'Alice');
         const profile = payload['profile'] as Record<string, unknown>;
         const user = profile['user'] as Record<string, unknown>;
         expect(user['name']).toBe('Alice');

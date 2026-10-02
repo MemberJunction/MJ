@@ -234,6 +234,7 @@ import { MJExperimentSessionIterationFormComponent } from "./Entities/MJExperime
 import { MJExplorerNavigationItemFormComponent } from "./Entities/MJExplorerNavigationItem/mjexplorernavigationitem.form.component";
 import { MJExternalDataSourceFormComponent } from "./Entities/MJExternalDataSource/mjexternaldatasource.form.component";
 import { MJExternalDataSourceTypeFormComponent } from "./Entities/MJExternalDataSourceType/mjexternaldatasourcetype.form.component";
+import { MJFeaturePipelineTypeFormComponent } from "./Entities/MJFeaturePipelineType/mjfeaturepipelinetype.form.component";
 import { MJFeatureValueCacheFormComponent } from "./Entities/MJFeatureValueCache/mjfeaturevaluecache.form.component";
 import { MJFeatureValueFormComponent } from "./Entities/MJFeatureValue/mjfeaturevalue.form.component";
 import { MJFileCategoryFormComponent } from "./Entities/MJFileCategory/mjfilecategory.form.component";
@@ -315,6 +316,8 @@ import { MJRecommendationProviderFormComponent } from "./Entities/MJRecommendati
 import { MJRecommendationRunFormComponent } from "./Entities/MJRecommendationRun/mjrecommendationrun.form.component";
 import { MJRecordChangeFormComponent } from "./Entities/MJRecordChange/mjrecordchange.form.component";
 import { MJRecordChangeReplayRunFormComponent } from "./Entities/MJRecordChangeReplayRun/mjrecordchangereplayrun.form.component";
+import { MJRecordCloneLogFormComponent } from "./Entities/MJRecordCloneLog/mjrecordclonelog.form.component";
+import { MJRecordCloneLogItemFormComponent } from "./Entities/MJRecordCloneLogItem/mjrecordclonelogitem.form.component";
 import { MJRecordGeoCodeFormComponent } from "./Entities/MJRecordGeoCode/mjrecordgeocode.form.component";
 import { MJRecordLinkFormComponent } from "./Entities/MJRecordLink/mjrecordlink.form.component";
 import { MJRecordMergeDeletionLogFormComponent } from "./Entities/MJRecordMergeDeletionLog/mjrecordmergedeletionlog.form.component";
@@ -730,6 +733,7 @@ declarations: [
     MJExperimentSessionIterationFormComponent,
     MJListCategoryFormComponent,
     MJQueryFormComponent,
+    MJRecordCloneLogFormComponent,
     MJTestRunOutputFormComponent,
     MJTestRunOutputTypeFormComponent
 ],
@@ -853,6 +857,7 @@ declarations: [
     MJAISkillPermissionFormComponent,
     MJAPIScopeFormComponent,
     MJDashboardCategoryLinkFormComponent,
+    MJFeaturePipelineTypeFormComponent,
     MJGeneratedCodeFormComponent,
     MJMLTrainingRunFormComponent,
     MJUserApplicationEntityFormComponent
@@ -1064,6 +1069,7 @@ declarations: [
     MJIntegrationObjectFieldFormComponent,
     MJListInvitationFormComponent,
     MJQueueFormComponent,
+    MJRecordCloneLogItemFormComponent,
     MJSearchScopeEntityFormComponent,
     MJSignatureRequestLogFormComponent,
     MJUserApplicationFormComponent,

@@ -4,21 +4,21 @@ import { LogError } from '@memberjunction/core'
 
 
 export class ChatWelcomeQuestion {
-  public topLine: string="";
-  public bottomLine: string="";
-  public prompt: string="";
+  public topLine: string="";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public bottomLine: string="";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public prompt: string="";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 export class ChatMessage {
-  public message!: string;
-  public senderName!: string;
-  public senderType: 'user' | 'ai' = 'user';
-  public id?: string | number | null;
+  public message!: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public senderName!: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public senderType: 'user' | 'ai' = 'user';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  public id?: string | number | null;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   /** Optional: indicates a tool execution is in progress */
-  public toolName?: string;
+  public toolName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   /** Optional: indicates a thinking/processing state */
-  public isThinking?: boolean;
+  public isThinking?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   /** Timestamp when the message was created */
-  public timestamp: Date = new Date();
+  public timestamp: Date = new Date();  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   constructor(message: string, senderName: string, senderType: 'user' | 'ai', id: string | number | null = null) {
     this.message = message;
@@ -66,12 +66,12 @@ export class ChatComponent implements AfterViewInit {
    */
   @Input() public Placeholder: string = 'Type a message...';
 
-  private _ShowWaitingIndicator: boolean = false;
+  private _showWaitingIndicator: boolean = false;
   @Input() public get ShowWaitingIndicator(): boolean {
-    return this._ShowWaitingIndicator;
+    return this._showWaitingIndicator;
   }
   public set ShowWaitingIndicator(value: boolean) {
-    this._ShowWaitingIndicator = value;
+    this._showWaitingIndicator = value;
     this.cd?.detectChanges(); // Manually trigger change detection
     if (!value)  {
       this.FocusTextArea();
@@ -86,28 +86,60 @@ export class ChatComponent implements AfterViewInit {
   @Output() ClearChatRequested = new EventEmitter<void>();
 
   @ViewChild('messagesContainer', { static: true }) private messagesContainer!: ElementRef;
-  @ViewChild('theInput') theInput: ElementRef | undefined;
+  @ViewChild('theInput') TheInput: ElementRef | undefined;
 
-  public currentMessage: string = '';
-  public showingClearAllDialog: boolean = false;
+  /** @deprecated Use {@link TheInput}. */
+  get theInput(): ElementRef | undefined {
+    return this.TheInput;
+  }
+  /** @deprecated Use {@link TheInput}. */
+  set theInput(value: ElementRef | undefined) {
+    this.TheInput = value;
+  }
+
+  public CurrentMessage: string = '';
+
+  /** @deprecated Use {@link CurrentMessage}. */
+  public get currentMessage(): string {
+    return this.CurrentMessage;
+  }
+  /** @deprecated Use {@link CurrentMessage}. */
+  public set currentMessage(value: string) {
+    this.CurrentMessage = value;
+  }
+  public ShowingClearAllDialog: boolean = false;
+
+  /** @deprecated Use {@link ShowingClearAllDialog}. */
+  public get showingClearAllDialog(): boolean {
+    return this.ShowingClearAllDialog;
+  }
+  /** @deprecated Use {@link ShowingClearAllDialog}. */
+  public set showingClearAllDialog(value: boolean) {
+    this.ShowingClearAllDialog = value;
+  }
   constructor(private markdownService: MarkdownService, private cd: ChangeDetectorRef) {}
 
   public SendCurrentMessage(): void {
-    if (this.currentMessage.trim() !== '') {
-      this.SendMessage(this.currentMessage, 'User', 'user', null);
-      this.currentMessage = ''; // Clear the input field
+    if (this.CurrentMessage.trim() !== '') {
+      this.SendMessage(this.CurrentMessage, 'User', 'user', null);
+      this.CurrentMessage = ''; // Clear the input field
     }
   }
 
-  public handleInputChange(event: any) {
-    const val = this.theInput?.nativeElement.value;
+  public HandleInputChange(event: any) {
+    const val = this.TheInput?.nativeElement.value;
     this.InternalAllowSend = this.AllowSend && (val ? val.length > 0 : false);
     this.resizeTextInput();
   }
 
+  /** @deprecated Use {@link HandleInputChange}. */
+  public handleInputChange(event: any) {
+    return this.HandleInputChange(event);
+  }
+
   protected resizeTextInput() {
     try {
-      const textarea = this.theInput?.nativeElement;
+      const textarea = this.TheInput?.nativeElement;
       if (textarea) {
         textarea.style.height = 'auto'; // Reset height to recalculate
         textarea.style.height = `${textarea.scrollHeight}px`; // Set to scrollHeight    
@@ -141,11 +173,11 @@ export class ChatComponent implements AfterViewInit {
     this.cd.detectChanges(); // Manually trigger change detection
 
     this.FocusTextArea();
-    this.showingClearAllDialog = false;
+    this.ShowingClearAllDialog = false;
   }
 
   protected FocusTextArea() {
-    setTimeout(() => this.theInput?.nativeElement.focus(), 0); // use a timeout to ensure that angular has updated the DOM
+    setTimeout(() => this.TheInput?.nativeElement.focus(), 0); // use a timeout to ensure that angular has updated the DOM
   }
 
   protected async AppendMessage(message: ChatMessage, fireEvent: boolean = true) {
@@ -208,12 +240,17 @@ export class ChatComponent implements AfterViewInit {
 
   public ShowScrollToBottomButton: boolean = false;
 
-  handleCheckScroll(): void {
+  HandleCheckScroll(): void {
     const element = this.messagesContainer.nativeElement;
     if (element.scrollHeight - element.scrollTop > element.clientHeight) {
       this.ShowScrollToBottomButton = true;
     } else {
       this.ShowScrollToBottomButton = false;
     }
+  }
+
+  /** @deprecated Use {@link HandleCheckScroll}. */
+  handleCheckScroll(): void {
+    return this.HandleCheckScroll();
   }
 }

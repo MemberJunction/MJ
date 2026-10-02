@@ -10,7 +10,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ContentItemDetail } from '../shared/classify.types';
-import { formatWeight, tagFontSize } from '../shared/classify.format';
+import { FormatWeight, TagFontSize } from '../shared/classify.format';
 
 @Component({
     standalone: false,
@@ -30,6 +30,6 @@ export class ClassifyItemDetailDialogComponent extends BaseAngularComponent {
     @Output() OpenRecordRequested = new EventEmitter<ContentItemDetail>();
 
     // Template-facing formatters
-    public readonly FormatWeight = formatWeight;
-    public readonly TagFontSize = tagFontSize;
+    public readonly FormatWeight = FormatWeight;
+    public readonly TagFontSize = TagFontSize;
 }

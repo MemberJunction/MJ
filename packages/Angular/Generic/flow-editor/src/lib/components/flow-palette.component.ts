@@ -39,7 +39,7 @@ export class FlowPaletteComponent {
     this.NodeTypeActivated.emit(nodeType);
   }
 
-  get categories(): string[] {
+  get Categories(): string[] {
     const cats = new Set<string>();
     for (const nt of this.NodeTypes) {
       if (nt.Draggable !== false) {
@@ -47,6 +47,11 @@ export class FlowPaletteComponent {
       }
     }
     return Array.from(cats);
+  }
+
+  /** @deprecated Use {@link Categories}. */
+  get categories(): string[] {
+    return this.Categories;
   }
 
   GetTypesForCategory(category: string): FlowNodeTypeConfig[] {

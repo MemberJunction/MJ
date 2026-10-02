@@ -21,7 +21,7 @@ class StatusBadgeStub { @Input() status = ''; @Input() showIcon = false; }
 class CostDisplayStub { @Input() cost = 0; @Input() showIcon = false; @Input() decimals = 2; }
 
 const result = (over: Partial<OracleResult> = {}): OracleResult =>
-  ({ name: 'Exact Match', status: 'Passed', score: 0.9, cost: 0.0001, duration: 250, ...over }) as OracleResult;
+  ({ Name: 'Exact Match', Status: 'Passed', Score: 0.9, Cost: 0.0001, Duration: 250, ...over }) as OracleResult;
 
 const render = (results: OracleResult[]) =>
   renderComponentFixture(OracleBreakdownTableComponent, {
@@ -39,31 +39,31 @@ describe('OracleBreakdownTableComponent (DOM)', () => {
   });
 
   it('renders one row per oracle result with the aggregate header', () => {
-    const fixture = render([result({ name: 'A' }), result({ name: 'B' })]);
+    const fixture = render([result({ Name: 'A' }), result({ Name: 'B' })]);
     expect(queryAll(fixture, '.table-row').length).toBe(2);
     expect(query(fixture, '.aggregate-score')).not.toBeNull();
   });
 
   it('shows each oracle name and formats sub-second durations in ms', () => {
-    const fixture = render([result({ name: 'Semantic Match', duration: 250 })]);
+    const fixture = render([result({ Name: 'Semantic Match', Duration: 250 })]);
     expect(text(fixture, '.oracle-name span')).toBe('Semantic Match');
     expect(fixture.nativeElement.textContent).toContain('250ms');
   });
 
   it('marks a result with an error and renders its error message row', () => {
-    const fixture = render([result({ status: 'Error', errorMessage: 'boom happened' })]);
+    const fixture = render([result({ Status: 'Error', ErrorMessage: 'boom happened' })]);
     expect(query(fixture, '.table-row.has-error')).not.toBeNull();
     expect(text(fixture, '.error-message')).toContain('boom happened');
   });
 
   it('reports the number of oracles run in the summary footer', () => {
-    const fixture = render([result({ name: 'A' }), result({ name: 'B' }), result({ name: 'C' })]);
+    const fixture = render([result({ Name: 'A' }), result({ Name: 'B' }), result({ Name: 'C' })]);
     expect(query(fixture, '.breakdown-summary')).not.toBeNull();
     expect(fixture.nativeElement.textContent).toContain('3');
   });
 
   it('shows a passed-status icon for a passed oracle', () => {
-    const fixture = render([result({ status: 'Passed' })]);
+    const fixture = render([result({ Status: 'Passed' })]);
     expect(query(fixture, '.oracle-icon.fa-check-circle')).not.toBeNull();
   });
 });

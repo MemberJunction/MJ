@@ -54,6 +54,8 @@ import {
   RunQueryWithCacheCheckParams,
   SaveContext,
   RestoreContext,
+  CloneContext,
+  RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
 } from '@memberjunction/core';
@@ -79,7 +81,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -88,8 +90,13 @@ import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
  * batch-execution methods that need a live mssql connection, so this is the
  * seam where the behaviour can actually be asserted. See issue #3171.
  */
-export function escapeRegExpLiteral(literal: string): string {
+export function EscapeRegExpLiteral(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** @deprecated Use {@link EscapeRegExpLiteral}. */
+export function escapeRegExpLiteral(literal: string): string {
+  return EscapeRegExpLiteral(literal);
 }
 /**
  * Checks whether an error indicates a stale/dead database connection that
@@ -431,8 +438,13 @@ export class SQLServerDataProvider
    *   console.log('Transaction active:', isActive);
    * });
    */
-  public get transactionState$(): Observable<boolean> {
+  public get TransactionState$(): Observable<boolean> {
     return this._transactionState$.asObservable();
+  }
+
+  /** @deprecated Use {@link TransactionState$}. */
+  public get transactionState$(): Observable<boolean> {
+    return this.TransactionState$;
   }
   
   /**
@@ -462,10 +474,15 @@ export class SQLServerDataProvider
   /**
    * Gets whether a transaction is currently active
    */
-  public get isTransactionActive(): boolean {
+  public get IsTransactionActive(): boolean {
     // Always return instance-level state
     // Request-specific state should be accessed via getTransactionContext
     return this._transactionState$.value;
+  }
+
+  /** @deprecated Use {@link IsTransactionActive}. */
+  public get isTransactionActive(): boolean {
+    return this.IsTransactionActive;
   }
 
   /**
@@ -1395,11 +1412,15 @@ export class SQLServerDataProvider
 
     // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
     // referencing `@ID` (set below from the result table).
-    const restoreClause = payload.source === 'Restore'
+    const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
                                                                                         @RestoredFromID='${payload.restoredFromID}',
                                                                                         @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : payload.source === 'Clone'
+      ? `,
+                                                                                        @Source='Clone',
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
     const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
                                                                                         @RecordID=@ID,
@@ -1409,7 +1430,7 @@ export class SQLServerDataProvider
                                                                                         @ChangesDescription='${payload.changesDescription}',
                                                                                         @FullRecordJSON='${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
-                                                                                        @Comments=null${restoreClause}`;
+                                                                                        @Comments=null${lineageClause}`;
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
     const sql = `
@@ -1580,6 +1601,7 @@ export class SQLServerDataProvider
     user: UserInfo,
     wrapRecordIdInQuotes: boolean,
     restoreContext?: RestoreContext | null,
+    cloneContext?: CloneContext | null,
   ) {
     // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
     // so SQL Server and PostgreSQL share one implementation. We only render
@@ -1593,15 +1615,20 @@ export class SQLServerDataProvider
       user,
       restoreContext,
       "'",
+      cloneContext,
     );
     if (!payload) return null;
 
     const quotes = wrapRecordIdInQuotes ? "'" : '';
-    const restoreClause = payload.source === 'Restore'
+    const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
                                                                                         @RestoredFromID='${payload.restoredFromID}',
                                                                                         @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : payload.source === 'Clone'
+      ? `,
+                                                                                        @Source='Clone',
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
 
     return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
@@ -1612,7 +1639,7 @@ export class SQLServerDataProvider
                                                                                         @ChangesDescription='${payload.changesDescription}',
                                                                                         @FullRecordJSON='${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
-                                                                                        @Comments=null${restoreClause}`;
+                                                                                        @Comments=null${lineageClause}`;
   }
   /**
    * Implements the abstract BuildRecordChangeSQL from DatabaseProviderBase.
@@ -1627,8 +1654,9 @@ export class SQLServerDataProvider
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
     restoreContext?: RestoreContext | null,
+    cloneContext?: CloneContext | null,
   ): { sql: string; parameters?: unknown[] } | null {
-    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext);
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext);
     if (sql) return { sql };
     return null;
   }
@@ -1642,7 +1670,7 @@ export class SQLServerDataProvider
    * @internal
    */
   protected GetDeleteSQL(entity: BaseEntity, user: UserInfo): string {
-    const result = this.GetDeleteSQLWithDetails(entity, user);
+    const result = this.getDeleteSQLWithDetails(entity, user);
     return result.fullSQL;
   }
 
@@ -1650,7 +1678,7 @@ export class SQLServerDataProvider
    * This function generates both the full SQL (with record change metadata) and the simple stored procedure call for delete
    * @returns Object with fullSQL and simpleSQL properties
    */
-  private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
+  private getDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
@@ -1700,7 +1728,7 @@ export class SQLServerDataProvider
                         )
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext)}
+                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext, entity.CloneContext)}
                     END
 
                     SELECT ${sReturnList}`;
@@ -1725,7 +1753,7 @@ export class SQLServerDataProvider
   // above). See plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
   protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult {
-    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
+    const sqlDetails = this.getDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
     return {
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,
@@ -2136,7 +2164,7 @@ export class SQLServerDataProvider
               // See issue #3171.
               const prefixed = `@${paramName}`;
               processedQuery = processedQuery.replace(
-                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
                 () => prefixed,
               );
             }
@@ -2263,7 +2291,7 @@ export class SQLServerDataProvider
               // See issue #3171.
               const prefixed = `@${paramName}`;
               processedQuery = processedQuery.replace(
-                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
                 () => prefixed,
               );
             }
@@ -2463,7 +2491,9 @@ export class SQLServerDataProvider
     safeChangesJSON: string,
     safeChangesDesc: string,
     safePKValue: string,
-    safeUserId: string
+    safeUserId: string,
+    source?: RecordChangeSource,
+    changeContext?: string | null,
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
@@ -2473,6 +2503,12 @@ export class SQLServerDataProvider
     const recordID = entityInfo.PrimaryKeys
       .map(pk => `${pk.CodeName}${CompositeKey.DefaultValueDelimiter}${safePKValue}`)
       .join(CompositeKey.DefaultFieldDelimiter);
+
+    const lineageClause = source === 'Clone'
+      ? `,
+        @Source='Clone',
+        @ChangeContext=N'${EscapeSQLString(changeContext)}'`
+      : '';
 
     return `
 DECLARE ${varName} NVARCHAR(MAX) = (
@@ -2489,7 +2525,7 @@ IF ${varName} IS NOT NULL
         @ChangesDescription='${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
-        @Comments=NULL;`;
+        @Comments=NULL${lineageClause};`;
   }
 
   protected override get HasPhysicalTransaction(): boolean {
@@ -2625,7 +2661,7 @@ IF ${varName} IS NOT NULL
    */
   public async RefreshIfNeeded(): Promise<boolean> {
     // Skip refresh if a transaction is active
-    if (this.isTransactionActive) {
+    if (this.IsTransactionActive) {
       LogStatus('Skipping metadata refresh - transaction is active');
       return false;
     }

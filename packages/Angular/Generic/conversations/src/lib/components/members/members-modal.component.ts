@@ -228,64 +228,168 @@ interface ConversationMember {
   `]
 })
 export class MembersModalComponent {
-  @Input() isVisible = false;
-  @Input() conversation?: MJConversationEntity;
-  @Input() currentUser!: UserInfo;
-  @Output() cancelled = new EventEmitter<void>();
-  @Output() membersChanged = new EventEmitter<void>();
+  @Input() IsVisible = false;
 
-  members: ConversationMember[] = [];
-  newMemberEmail = '';
-  newMemberRole: 'member' | 'owner' = 'member';
-  isLoading = false;
-  errorMessage = '';
+  /** @deprecated Use {@link IsVisible}. */
+  @Input() set isVisible(value: MembersModalComponent['IsVisible']) {
+    this.IsVisible = value;
+  }
+  /** @deprecated Use {@link IsVisible}. */
+  get isVisible(): MembersModalComponent['IsVisible'] {
+    return this.IsVisible;
+  }
+  @Input() Conversation?: MJConversationEntity;
 
-  get modalTitle(): string {
-    return `Manage Members: ${this.conversation?.Name || 'Conversation'}`;
+  /** @deprecated Use {@link Conversation}. */
+  @Input() set conversation(value: MJConversationEntity | undefined) {
+    this.Conversation = value;
+  }
+  /** @deprecated Use {@link Conversation}. */
+  get conversation(): MJConversationEntity | undefined {
+    return this.Conversation;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Output() Cancelled = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Cancelled}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (cancelled) keeps working. Must stay AFTER Cancelled: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() cancelled = this.Cancelled;
+  @Output() MembersChanged = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link MembersChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (membersChanged) keeps working. Must stay AFTER MembersChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() membersChanged = this.MembersChanged;
+
+  Members: ConversationMember[] = [];
+
+  /** @deprecated Use {@link Members}. */
+  get members(): ConversationMember[] {
+    return this.Members;
+  }
+  /** @deprecated Use {@link Members}. */
+  set members(value: ConversationMember[]) {
+    this.Members = value;
+  }
+  NewMemberEmail = '';
+
+  /** @deprecated Use {@link NewMemberEmail}. */
+  get newMemberEmail() {
+    return this.NewMemberEmail;
+  }
+  /** @deprecated Use {@link NewMemberEmail}. */
+  set newMemberEmail(value) {
+    this.NewMemberEmail = value;
+  }
+  NewMemberRole: 'member' | 'owner' = 'member';
+
+  /** @deprecated Use {@link NewMemberRole}. */
+  get newMemberRole(): 'member' | 'owner' {
+    return this.NewMemberRole;
+  }
+  /** @deprecated Use {@link NewMemberRole}. */
+  set newMemberRole(value: 'member' | 'owner') {
+    this.NewMemberRole = value;
+  }
+  IsLoading = false;
+
+  /** @deprecated Use {@link IsLoading}. */
+  get isLoading() {
+    return this.IsLoading;
+  }
+  /** @deprecated Use {@link IsLoading}. */
+  set isLoading(value) {
+    this.IsLoading = value;
+  }
+  ErrorMessage = '';
+
+  /** @deprecated Use {@link ErrorMessage}. */
+  get errorMessage() {
+    return this.ErrorMessage;
+  }
+  /** @deprecated Use {@link ErrorMessage}. */
+  set errorMessage(value) {
+    this.ErrorMessage = value;
   }
 
-  roleOptions = [
+  get ModalTitle(): string {
+    return `Manage Members: ${this.Conversation?.Name || 'Conversation'}`;
+  }
+
+  /** @deprecated Use {@link ModalTitle}. */
+  get modalTitle(): string {
+    return this.ModalTitle;
+  }
+
+  RoleOptions = [
     { value: 'member', label: 'Member' },
     { value: 'owner', label: 'Owner' }
   ];
 
+  /** @deprecated Use {@link RoleOptions}. */
+  get roleOptions() {
+    return this.RoleOptions;
+  }
+  /** @deprecated Use {@link RoleOptions}. */
+  set roleOptions(value) {
+    this.RoleOptions = value;
+  }
+
   constructor(private dialogService: DialogService) {}
 
   ngOnChanges(): void {
-    if (this.isVisible && this.conversation) {
+    if (this.IsVisible && this.Conversation) {
       this.loadMembers();
     }
   }
 
   private async loadMembers(): Promise<void> {
-    if (!this.conversation) return;
+    if (!this.Conversation) return;
 
-    this.isLoading = true;
-    this.errorMessage = '';
+    this.IsLoading = true;
+    this.ErrorMessage = '';
 
     try {
       // TODO: Load from ConversationMembers entity when available
       // For now, show the owner
-      this.members = [
+      this.Members = [
         {
-          id: 'owner-' + this.conversation.ID,
-          userId: this.conversation.UserID || '',
+          id: 'owner-' + this.Conversation.ID,
+          userId: this.Conversation.UserID || '',
           userName: 'Owner',
-          userEmail: this.currentUser.Email,
+          userEmail: this.CurrentUser.Email,
           role: 'owner',
-          addedAt: this.conversation.__mj_CreatedAt
+          addedAt: this.Conversation.__mj_CreatedAt
         }
       ];
     } catch (error) {
       console.error('Error loading members:', error);
-      this.errorMessage = 'Failed to load members';
+      this.ErrorMessage = 'Failed to load members';
     } finally {
-      this.isLoading = false;
+      this.IsLoading = false;
     }
   }
 
-  async onAddMember(): Promise<void> {
-    const email = this.newMemberEmail.trim();
+  async OnAddMember(): Promise<void> {
+    const email = this.NewMemberEmail.trim();
     if (!email) return;
 
     // Simple email validation
@@ -295,13 +399,13 @@ export class MembersModalComponent {
     }
 
     // Check if already a member
-    if (this.members.some(m => m.userEmail === email)) {
+    if (this.Members.some(m => m.userEmail === email)) {
       await this.dialogService.alert('Already a Member', 'This user is already a member');
       return;
     }
 
-    this.isLoading = true;
-    this.errorMessage = '';
+    this.IsLoading = true;
+    this.ErrorMessage = '';
 
     try {
       // TODO: Create ConversationMember entity when available
@@ -310,23 +414,28 @@ export class MembersModalComponent {
         userId: 'unknown',
         userName: email.split('@')[0],
         userEmail: email,
-        role: this.newMemberRole,
+        role: this.NewMemberRole,
         addedAt: new Date()
       };
 
-      this.members.push(newMember);
-      this.newMemberEmail = '';
-      this.newMemberRole = 'member';
-      this.membersChanged.emit();
+      this.Members.push(newMember);
+      this.NewMemberEmail = '';
+      this.NewMemberRole = 'member';
+      this.MembersChanged.emit();
     } catch (error) {
       console.error('Error adding member:', error);
-      this.errorMessage = 'Failed to add member';
+      this.ErrorMessage = 'Failed to add member';
     } finally {
-      this.isLoading = false;
+      this.IsLoading = false;
     }
   }
 
-  async onRemoveMember(member: ConversationMember): Promise<void> {
+  /** @deprecated Use {@link OnAddMember}. */
+  async onAddMember(): Promise<void> {
+    return this.OnAddMember();
+  }
+
+  async OnRemoveMember(member: ConversationMember): Promise<void> {
     const confirmed = await this.dialogService.confirm({
       title: 'Remove Member',
       message: `Remove ${member.userEmail} from this conversation?`,
@@ -336,30 +445,40 @@ export class MembersModalComponent {
 
     if (!confirmed) return;
 
-    this.isLoading = true;
-    this.errorMessage = '';
+    this.IsLoading = true;
+    this.ErrorMessage = '';
 
     try {
       // TODO: Delete ConversationMember entity when available
-      this.members = this.members.filter(m => m.id !== member.id);
-      this.membersChanged.emit();
+      this.Members = this.Members.filter(m => m.id !== member.id);
+      this.MembersChanged.emit();
     } catch (error) {
       console.error('Error removing member:', error);
-      this.errorMessage = 'Failed to remove member';
+      this.ErrorMessage = 'Failed to remove member';
     } finally {
-      this.isLoading = false;
+      this.IsLoading = false;
     }
   }
 
-  onCancel(): void {
-    this.cancelled.emit();
+  /** @deprecated Use {@link OnRemoveMember}. */
+  async onRemoveMember(member: ConversationMember): Promise<void> {
+    return this.OnRemoveMember(member);
+  }
+
+  OnCancel(): void {
+    this.Cancelled.emit();
     this.resetForm();
   }
 
+  /** @deprecated Use {@link OnCancel}. */
+  onCancel(): void {
+    return this.OnCancel();
+  }
+
   private resetForm(): void {
-    this.newMemberEmail = '';
-    this.newMemberRole = 'member';
-    this.errorMessage = '';
-    this.isVisible = false;
+    this.NewMemberEmail = '';
+    this.NewMemberRole = 'member';
+    this.ErrorMessage = '';
+    this.IsVisible = false;
   }
 }

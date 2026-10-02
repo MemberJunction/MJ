@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { INTERACTIVITY_PROBE } from './element-extraction.js';
+import { INTERACTIVITYPROBE } from './element-extraction.js';
 
 /**
  * A roving-tabindex composite marks every INACTIVE item `tabindex="-1"` and only
@@ -26,7 +26,7 @@ function render(html: string): void {
     Object.defineProperty(window, 'innerHeight', { value: 720, configurable: true });
 }
 
-const names = (): string[] => INTERACTIVITY_PROBE().map(e => e.name).filter(Boolean) as string[];
+const names = (): string[] => INTERACTIVITYPROBE().map(e => e.name).filter(Boolean) as string[];
 
 describe('the probe and roving tabindex (review: non-blocking)', () => {
     beforeEach(() => { document.body.innerHTML = ''; });

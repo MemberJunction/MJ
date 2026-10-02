@@ -61,7 +61,8 @@ vi.mock('dotenv', () => ({
 }));
 
 vi.mock('../config', () => ({
-  __API_KEY: 'env-sendgrid-key',
+  API_KEY: 'env-sendgrid-key',
+    get __API_KEY() { return this.API_KEY; },
 }));
 
 // ---------------------------------------------------------------------------

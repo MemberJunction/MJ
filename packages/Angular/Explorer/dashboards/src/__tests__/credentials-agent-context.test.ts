@@ -9,8 +9,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildCredentialsAgentContext,
-    isValidCredentialsTab,
+    BuildCredentialsAgentContext,
+    IsValidCredentialsTab,
     VALID_CREDENTIALS_TABS,
     CredentialsAgentContextInput,
 } from '../Credentials/credentials-agent-context';
@@ -33,30 +33,30 @@ function makeInput(overrides: Partial<CredentialsAgentContextInput> = {}): Crede
 
 describe('isValidCredentialsTab', () => {
     it('accepts the five known tabs', () => {
-        expect(isValidCredentialsTab('overview')).toBe(true);
-        expect(isValidCredentialsTab('credentials')).toBe(true);
-        expect(isValidCredentialsTab('types')).toBe(true);
-        expect(isValidCredentialsTab('categories')).toBe(true);
-        expect(isValidCredentialsTab('audit')).toBe(true);
+        expect(IsValidCredentialsTab('overview')).toBe(true);
+        expect(IsValidCredentialsTab('credentials')).toBe(true);
+        expect(IsValidCredentialsTab('types')).toBe(true);
+        expect(IsValidCredentialsTab('categories')).toBe(true);
+        expect(IsValidCredentialsTab('audit')).toBe(true);
     });
 
     it('rejects unknown strings', () => {
-        expect(isValidCredentialsTab('secrets')).toBe(false);
-        expect(isValidCredentialsTab('Overview')).toBe(false); // case-sensitive
-        expect(isValidCredentialsTab('')).toBe(false);
+        expect(IsValidCredentialsTab('secrets')).toBe(false);
+        expect(IsValidCredentialsTab('Overview')).toBe(false); // case-sensitive
+        expect(IsValidCredentialsTab('')).toBe(false);
     });
 
     it('rejects non-string values', () => {
-        expect(isValidCredentialsTab(null)).toBe(false);
-        expect(isValidCredentialsTab(undefined)).toBe(false);
-        expect(isValidCredentialsTab(42)).toBe(false);
-        expect(isValidCredentialsTab({})).toBe(false);
+        expect(IsValidCredentialsTab(null)).toBe(false);
+        expect(IsValidCredentialsTab(undefined)).toBe(false);
+        expect(IsValidCredentialsTab(42)).toBe(false);
+        expect(IsValidCredentialsTab({})).toBe(false);
     });
 });
 
 describe('buildCredentialsAgentContext', () => {
     it('reports the full non-sensitive context', () => {
-        const ctx = buildCredentialsAgentContext(makeInput());
+        const ctx = BuildCredentialsAgentContext(makeInput());
         expect(ctx).toEqual({
             ActiveTab: 'overview',
             TabLabel: 'Overview',
@@ -74,26 +74,26 @@ describe('buildCredentialsAgentContext', () => {
 
     it('bounds the type-name list with a truncation flag', () => {
         const many = Array.from({ length: AGENT_CONTEXT_NAME_LIST_CAP + 6 }, (_, i) => `Type ${i}`);
-        const ctx = buildCredentialsAgentContext(makeInput({ TypeNames: many }));
+        const ctx = BuildCredentialsAgentContext(makeInput({ TypeNames: many }));
         expect((ctx['TypeNames'] as string[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
         expect(ctx['TypeNamesTruncated']).toBe(true);
     });
 
     it('carries through the active tab and label', () => {
-        const ctx = buildCredentialsAgentContext(makeInput({ ActiveTab: 'audit', TabLabel: 'Audit Trail' }));
+        const ctx = BuildCredentialsAgentContext(makeInput({ ActiveTab: 'audit', TabLabel: 'Audit Trail' }));
         expect(ctx['ActiveTab']).toBe('audit');
         expect(ctx['TabLabel']).toBe('Audit Trail');
     });
 
     it('carries through the loading flag and counts', () => {
-        const ctx = buildCredentialsAgentContext(makeInput({ IsLoading: true, CredentialCount: 0, TypeCount: 0 }));
+        const ctx = BuildCredentialsAgentContext(makeInput({ IsLoading: true, CredentialCount: 0, TypeCount: 0 }));
         expect(ctx['IsLoading']).toBe(true);
         expect(ctx['CredentialCount']).toBe(0);
         expect(ctx['TypeCount']).toBe(0);
     });
 
     it('exposes only the known non-sensitive keys — no extra fields slip in', () => {
-        const ctx = buildCredentialsAgentContext(makeInput());
+        const ctx = BuildCredentialsAgentContext(makeInput());
         expect(Object.keys(ctx).sort()).toEqual(
             [
                 'ActiveTab', 'CategoryCount', 'CategoryNames', 'CategoryNamesTruncated',
@@ -121,7 +121,7 @@ describe('buildCredentialsAgentContext', () => {
 
         // Build with deliberately hostile inputs to prove the helper only emits
         // the whitelisted metadata fields and ignores anything else.
-        const ctx = buildCredentialsAgentContext(makeInput({
+        const ctx = BuildCredentialsAgentContext(makeInput({
             ActiveTab: 'credentials',
             TabLabel: 'Credentials',
         }));

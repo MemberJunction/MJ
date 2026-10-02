@@ -8,7 +8,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { HttpGet } from '@memberjunction/network-utils';
 import { BaseWebSearchProvider } from '../BaseWebSearchProvider';
 import { WebSearchCapabilities, WebSearchHit, WebSearchParams, WebSearchProviderResponse } from '../types';
-import { classifyHttpFailure, failure } from './httpFailure';
+import { ClassifyHttpFailure, Failure } from './httpFailure';
 
 interface GoogleSearchItem {
     title?: string;
@@ -102,14 +102,14 @@ export class GoogleCustomSearchWebSearchProvider extends BaseWebSearchProvider {
                 { Query: query, Timeout: 15000 },
             );
             if (!response.Data) {
-                return failure('transient', 'Empty response from Google Custom Search.');
+                return Failure('transient', 'Empty response from Google Custom Search.');
             }
             return {
                 Success: true,
                 Hits: (response.Data.items ?? []).map((item) => this.toHit(item)),
             };
         } catch (e) {
-            return classifyHttpFailure(e, 'Google Custom Search');
+            return ClassifyHttpFailure(e, 'Google Custom Search');
         }
     }
 

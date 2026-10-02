@@ -165,12 +165,17 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
      * implementation reports valid (panels that don't need extra validation
      * can leave this method off).
      */
-    public validate(): ValidationResult {
+    public Validate(): ValidationResult {
         // Inline construction — ValidationResult is a class in @memberjunction/core,
         // not a plain interface, so callers can construct via `new`.
         const result = new ValidationResult();
         result.Success = true;
         return result;
+    }
+
+    /** @deprecated Use {@link Validate}. */
+    public validate(): ValidationResult {
+        return this.Validate();
     }
 
     /**

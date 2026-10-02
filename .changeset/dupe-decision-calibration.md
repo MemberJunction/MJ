@@ -1,0 +1,5 @@
+---
+"@memberjunction/ai-vector-dupe": patch
+---
+
+The duplicate check's `Decision` reasoning mode now calibrates each decision model's probability for that model (Platt scaling) before banding it, at a band set from the duplicate-check measurement. A candidate is flagged at a calibrated 0.7 or above, and the decision stage of `DecisionThenPrompt` keeps candidates at a calibrated 0.3 or above for the prompt. Each calibration is tied to the exact model it was fitted on (the MJ decision model and the resolved model behind it, through `FindDecisionCalibration`), so Jev at another version, or LLM Decision answered by another chat model, is uncalibrated. A model with no calibration gives no calibrated probability: the entry check (`CheckRecordValues`) then flags nothing and returns `Failed`, as it does for a failed decision, and batch `Decision` mode flags its candidates for review. The provider logs a missing calibration once per model. Each candidate also carries the model's own `RawProbability`; `BuildDecisionParams` and `CalibrationFor` are protected extension points, and the shipped calibrations are exported.

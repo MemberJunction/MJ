@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Page } from 'playwright';
-import { extractInteractiveElements } from '../browser/element-extraction.js';
+import { ExtractInteractiveElements } from '../browser/element-extraction.js';
 
 /**
  * Bounding the in-page interactivity probe.
@@ -29,7 +29,7 @@ describe('extractInteractiveElements — probe is bounded', () => {
             evaluate: vi.fn(() => new Promise<never>(() => {})),
         } as unknown as Page;
 
-        await expect(extractInteractiveElements(page, 50)).resolves.toEqual([]);
+        await expect(ExtractInteractiveElements(page, 50)).resolves.toEqual([]);
     }, 2000);
 
     it('returns extracted elements when the probe answers within the bound', async () => {
@@ -51,7 +51,7 @@ describe('extractInteractiveElements — probe is bounded', () => {
             ]),
         } as unknown as Page;
 
-        const elements = await extractInteractiveElements(page, 5000);
+        const elements = await ExtractInteractiveElements(page, 5000);
 
         expect(elements).toHaveLength(1);
         expect(elements[0].Role).toBe('button');
@@ -64,7 +64,7 @@ describe('extractInteractiveElements — probe is bounded', () => {
         } as unknown as Page;
 
         const started = Date.now();
-        await extractInteractiveElements(page, 30_000);
+        await ExtractInteractiveElements(page, 30_000);
 
         // A Promise.race that leaves its timer pending would still resolve here,
         // so this asserts the fast path is not gated on the bound elapsing.
@@ -78,6 +78,6 @@ describe('extractInteractiveElements — probe is bounded', () => {
             }),
         } as unknown as Page;
 
-        await expect(extractInteractiveElements(page, 50)).resolves.toEqual([]);
+        await expect(ExtractInteractiveElements(page, 50)).resolves.toEqual([]);
     });
 });
