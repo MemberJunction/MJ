@@ -150,14 +150,23 @@ function makeField(opts: FieldOpts): EntityFieldInfo {
     return f;
 }
 
+/**
+ * Builds a real EntityInfo via the prototype — NOT a `{ ... } as unknown as EntityInfo` literal.
+ *
+ * That distinction is load-bearing now that the SUT reads `entityInfo.HasSearchFields` (a getter
+ * on EntityInfo.prototype) rather than scanning `.Fields` inline. A plain object literal has no
+ * prototype, so the getter would be `undefined` — falsy — and every entity would silently take the
+ * "no search surface" branch, making an assertion about the `(1=0)` fallback pass for the wrong
+ * reason. Seeding `_Fields` on a prototype-backed object keeps the getter live. See MJ#4581.
+ */
 function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string; fields: EntityFieldInfo[] }): EntityInfo {
     // EntityInfo has a heavy constructor / initialization path; we build a
     // minimal shape via Object.create + property assignment. The SUT only
     // touches FullTextSearchEnabled, FullTextSearchFunction, SchemaName,
     // FirstPrimaryKey?.Name, and Fields.
     const entity = Object.create(EntityInfo.prototype) as EntityInfo;
-    // Both `FirstPrimaryKey` and `Fields` are getters on EntityInfo (Fields → _Fields,
-    // FirstPrimaryKey → Fields.find(IsPrimaryKey)). We seed the private `_Fields` backing
+    // Both `FirstPrimaryKey` and `Fields` are getters on EntityInfo (Fields → _fields,
+    // FirstPrimaryKey → Fields.find(IsPrimaryKey)). We seed the private `_fields` backing
     // store with a synthetic PK plus the test fields, and the getters resolve naturally.
     // IncludeInUserSearchAPI defaults to null (falsy), so the per-field search loop skips the PK.
     const pkField = new EntityFieldInfo();
@@ -167,7 +176,7 @@ function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string
         FullTextSearchEnabled: !!opts.ftx,
         FullTextSearchFunction: opts.ftxFunction ?? 'fnSearchTest',
         SchemaName: 'crm',
-        _Fields: [pkField, ...opts.fields],
+        _fields: [pkField, ...opts.fields],
     });
     return entity;
 }
@@ -436,13 +445,13 @@ describe('createViewUserSearchSQL — type guards', () => {
         expect(sql).toBe(`(([Name]  LIKE N'%foo%' ESCAPE '\\'))`);
     });
 
-    it('Returns empty when no field is eligible', () => {
+    it('Returns (1=0) when no field is eligible', () => {
         const e = makeEntity({ fields: [
             makeField({ name: 'ID', type: 'uniqueidentifier', predicate: 'Contains' }),
             makeField({ name: 'Year', type: 'int', predicate: 'Contains' }),
         ] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe('');
+        expect(sql).toBe('(1=0)');
     });
 
     it('IncludeInUserSearchAPI=false is skipped even on a text field', () => {
@@ -511,5 +520,64 @@ describe('createViewUserSearchSQL — FTX path is unchanged', () => {
         const sql = provider.buildSQL(e, 'foo AND bar');
         expect(sql).toContain('fnSearchAccount');
         expect(sql).toContain(' AND ');
+    });
+});
+
+describe('createViewUserSearchSQL — the empty-predicate fallback (MJ#4581)', () => {
+    // Two different reasons produce an empty per-field predicate, and they do NOT deserve the
+    // same answer.
+    //
+    //   (a) The entity declares NO searchable field at all. The caller asked to filter by a
+    //       surface this entity does not have. Nothing was withheld from them, so the term is
+    //       ignored and the WHERE clause is left alone — a generic grid keeps showing its rows.
+    //       This no-op is also pinned end-to-end by integration check runview-matrix.RVM9.
+    //
+    //   (b) The entity DOES declare searchable fields, but every one dropped out — denied by
+    //       field-level security, or not a sensible text-search target. Returning the whole
+    //       table would imply the search ran when it did not, and in the FLS case would hand
+    //       back rows the caller tried to narrow by a field they cannot see. So: `(1=0)`.
+
+    const someUser = { Email: 'x@y.com' } as unknown as UserInfo;
+
+    it('(a) an entity with NO searchable field ignores the term entirely', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', include: false })] });
+        expect(provider.buildSQL(e, 'zzz-no-such-term-anywhere')).toBe('');
+    });
+
+    it('(a) holds even when the entity has several non-searchable fields', () => {
+        const e = makeEntity({ fields: [
+            makeField({ name: 'Name', include: false }),
+            makeField({ name: 'Code', include: false }),
+            makeField({ name: 'Year', type: 'int', include: false }),
+        ] });
+        expect(provider.buildSQL(e, 'anything')).toBe('');
+    });
+
+    it('(b) a searchable field denied by field-level security yields (1=0), not the whole table', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        Object.assign(e, {
+            EnableFieldLevelSecurity: true,
+            GetDeniedReadFields: () => new Set(['name']),
+        });
+        expect(provider.buildSQL(e, 'Union Pacific', someUser)).toBe('(1=0)');
+    });
+
+    it('(b) a searchable field that is not a sensible text target also yields (1=0)', () => {
+        // Declared searchable, but an int with no UserSearchParamFormatAPI builds no predicate.
+        const e = makeEntity({ fields: [makeField({ name: 'Year', type: 'int', paramFormat: null })] });
+        expect(provider.buildSQL(e, 'Union Pacific')).toBe('(1=0)');
+    });
+
+    it('an empty term never reaches (1=0) — the fallback is gated on a non-blank term', () => {
+        // createViewUserSearchSQL is not the empty-term guard; its caller is
+        // (`if (params.UserSearchString && params.UserSearchString.length > 0)`), so a
+        // searchable entity handed '' still builds a match-everything LIKE here. What matters
+        // for this fallback is only that a blank term can never SYNTHESISE (1=0) out of nothing.
+        const notSearchable = makeEntity({ fields: [makeField({ name: 'Name', include: false })] });
+        expect(provider.buildSQL(notSearchable, '')).toBe('');
+        expect(provider.buildSQL(notSearchable, '   ')).toBe('');
+
+        const searchable = makeEntity({ fields: [makeField({ name: 'Name' })] });
+        expect(provider.buildSQL(searchable, '   ')).not.toBe('(1=0)');
     });
 });

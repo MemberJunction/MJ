@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SupportWidgetElement, defineSupportWidgetElement, WIDGET_TAG_NAME } from '../ui/support-widget-element.js';
+import { SupportWidgetElement, DefineSupportWidgetElement, WIDGET_TAG_NAME } from '../ui/support-widget-element.js';
 import { MockWidgetTransport } from '../transport/mock-widget-transport.js';
 import { MockVoiceController } from '../voice/mock-voice-controller.js';
 import type { WidgetSession, WidgetModality } from '../types.js';
@@ -9,7 +9,7 @@ function session(modality: WidgetModality): WidgetSession {
 }
 
 function mount(modality: WidgetModality, voice?: MockVoiceController): SupportWidgetElement {
-    defineSupportWidgetElement();
+    DefineSupportWidgetElement();
     const el = document.createElement(WIDGET_TAG_NAME) as SupportWidgetElement;
     el.SetSession(session(modality));
     el.SetTransport(new MockWidgetTransport());
@@ -81,7 +81,7 @@ describe('SupportWidgetElement — voice affordance', () => {
 
     it('hides the mic when the browser cannot capture audio (no secure context / getUserMedia)', () => {
         // Build the element manually so the capability probe is wired BEFORE mount.
-        defineSupportWidgetElement();
+        DefineSupportWidgetElement();
         const el = document.createElement(WIDGET_TAG_NAME) as SupportWidgetElement;
         el.SetSession(session('Both'));
         el.SetTransport(new MockWidgetTransport());
@@ -92,7 +92,7 @@ describe('SupportWidgetElement — voice affordance', () => {
     });
 
     it('re-shows the mic when capability is later reported supported', () => {
-        defineSupportWidgetElement();
+        DefineSupportWidgetElement();
         const el = document.createElement(WIDGET_TAG_NAME) as SupportWidgetElement;
         el.SetSession(session('Both'));
         el.SetTransport(new MockWidgetTransport());

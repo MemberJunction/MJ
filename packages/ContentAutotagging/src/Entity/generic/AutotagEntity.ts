@@ -13,7 +13,7 @@ import {
  * This replaces the manual interface that was needed before CodeGen emitted the typed accessor.
  */
 type IContentSourceConfiguration = MJContentSourceEntity_IContentSourceConfiguration;
-import { EntityDocumentTemplateParser } from "@memberjunction/ai-vector-sync";
+import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import { TagEngine, TaxonomyMode } from "@memberjunction/tag-engine";
 import { TagScopeContext } from "@memberjunction/tag-engine-base";
@@ -59,13 +59,13 @@ export class AutotagEntity extends AutotagBase {
         }
 
         // Cache content source configs and set up taxonomy
-        await this.SetupTaxonomyAndBridge(contentSources, contextUser);
+        await this.setupTaxonomyAndBridge(contentSources, contextUser);
 
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
 
         // Also pick up previously failed items — ContentItems that exist but have
         // no tags (LLM call failed due to rate limits, network errors, etc.)
-        const retryItems = await this.GetUntaggedContentItems(contentSources);
+        const retryItems = await this.getUntaggedContentItems(contentSources);
         if (retryItems.length > 0) {
             LogStatus(`AutotagEntity: found ${retryItems.length} previously failed items to retry`);
         }
@@ -96,7 +96,7 @@ export class AutotagEntity extends AutotagBase {
      * Initialize the TagEngine, inject taxonomy into the prompt, and set up the
      * bridge callback that links ContentItemTags to formal Tag + TaggedItem records.
      */
-    private async SetupTaxonomyAndBridge(
+    private async setupTaxonomyAndBridge(
         contentSources: MJContentSourceEntity[],
         contextUser: UserInfo
     ): Promise<void> {
@@ -163,7 +163,7 @@ export class AutotagEntity extends AutotagBase {
             parentTagName: string | null,
             ctxUser: UserInfo
         ) => {
-            await this.BridgeContentItemTagToTaxonomy(contentItemTag, parentTagName, ctxUser);
+            await this.bridgeContentItemTagToTaxonomy(contentItemTag, parentTagName, ctxUser);
         };
 
         // Per-batch budget gate — pause the run when any source's budget is exceeded.
@@ -193,7 +193,7 @@ export class AutotagEntity extends AutotagBase {
      * Uses TagEngine.ResolveTag() for semantic matching with mode/threshold from source config.
      * Creates a TaggedItem linking the resolved Tag to the source entity record.
      */
-    private async BridgeContentItemTagToTaxonomy(
+    private async bridgeContentItemTagToTaxonomy(
         contentItemTag: MJContentItemTagEntity,
         parentTagName: string | null,
         contextUser: UserInfo
@@ -344,7 +344,7 @@ export class AutotagEntity extends AutotagBase {
      * Find ContentItems that exist for these sources but have no ContentItemTag records.
      * These are items where the LLM tagging failed on a previous run (rate limits, network errors, etc.).
      */
-    private async GetUntaggedContentItems(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
+    private async getUntaggedContentItems(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
         if (contentSources.length === 0) return [];
 
         const sourceIDs = contentSources.map(s => `'${s.ID}'`).join(',');
@@ -366,7 +366,7 @@ export class AutotagEntity extends AutotagBase {
 
         for (const contentSource of contentSources) {
             try {
-                const items = await this.ProcessContentSource(contentSource);
+                const items = await this.processContentSource(contentSource);
                 contentItemsToProcess.push(...items);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -381,7 +381,7 @@ export class AutotagEntity extends AutotagBase {
      * Process a single entity-type ContentSource: load entity records modified since last run,
      * render via EntityDocument template, create/update ERD and ContentItem records.
      */
-    private async ProcessContentSource(contentSource: MJContentSourceEntity): Promise<MJContentItemEntity[]> {
+    private async processContentSource(contentSource: MJContentSourceEntity): Promise<MJContentItemEntity[]> {
         const entityID = contentSource.EntityID;
         const entityDocumentID = contentSource.EntityDocumentID;
 
@@ -391,13 +391,13 @@ export class AutotagEntity extends AutotagBase {
         }
 
         // Load the EntityDocument
-        const entityDocument = await this.LoadEntityDocument(entityDocumentID);
+        const entityDocument = await this.loadEntityDocument(entityDocumentID);
         if (!entityDocument) {
             LogError(`AutotagEntity: EntityDocument ${entityDocumentID} not found for source "${contentSource.Name}"`);
             return [];
         }
 
-        const templateText = await this.GetTemplateText(entityDocument);
+        const templateText = await this.getTemplateText(entityDocument);
         if (!templateText) {
             LogError(`AutotagEntity: no template content found for EntityDocument "${entityDocument.Name}"`);
             return [];
@@ -413,7 +413,7 @@ export class AutotagEntity extends AutotagBase {
 
         // Get records modified since last run
         const lastRunDate = await this.engine.getContentSourceLastRunDate(contentSource.ID, this.contextUser);
-        const modifiedRecords = await this.GetModifiedRecords(entityInfo.Name, lastRunDate);
+        const modifiedRecords = await this.getModifiedRecords(entityInfo.Name, lastRunDate);
 
         if (modifiedRecords.length === 0) {
             LogStatus(`AutotagEntity: no modified records for entity "${entityInfo.Name}" since ${lastRunDate.toISOString()}`);
@@ -423,10 +423,10 @@ export class AutotagEntity extends AutotagBase {
         LogStatus(`AutotagEntity: processing ${modifiedRecords.length} modified records for entity "${entityInfo.Name}"`);
 
         // Load existing ERD records for this entity document to enable upsert
-        const existingERDs = await this.LoadExistingERDs(entityDocumentID, entityID);
+        const existingERDs = await this.loadExistingERDs(entityDocumentID, entityID);
 
         // Load existing ContentItems for this source to enable upsert
-        const existingContentItems = await this.LoadExistingContentItems(contentSource.ID);
+        const existingContentItems = await this.loadExistingContentItems(contentSource.ID);
 
         // Process each record: render template → create/update ERD → create/update ContentItem
         const contentItems: MJContentItemEntity[] = [];
@@ -438,7 +438,7 @@ export class AutotagEntity extends AutotagBase {
             const recordID = CompositeKey.FromEntityRecord(entityInfo, record).ToCompactURLSegment();
             try {
                 const recordName = this.buildContentItemName(entityInfo, record);
-                const contentItem = await this.ProcessSingleRecord(
+                const contentItem = await this.processSingleRecord(
                     record, recordID, recordName, contentSource, entityDocument,
                     templateText, parser, existingERDs, existingContentItems
                 );
@@ -486,7 +486,7 @@ export class AutotagEntity extends AutotagBase {
     /**
      * Load an EntityDocument by ID using RunView.
      */
-    private async LoadEntityDocument(entityDocumentID: string): Promise<MJEntityDocumentEntity | null> {
+    private async loadEntityDocument(entityDocumentID: string): Promise<MJEntityDocumentEntity | null> {
         const rv = new RunView();
         const result = await rv.RunView<MJEntityDocumentEntity>({
             EntityName: 'MJ: Entity Documents',
@@ -505,7 +505,7 @@ export class AutotagEntity extends AutotagBase {
      * Retrieves the template text from the EntityDocument's linked Template.
      * Ensures TemplateEngineServer is configured before accessing Templates.
      */
-    private async GetTemplateText(entityDocument: MJEntityDocumentEntity): Promise<string | null> {
+    private async getTemplateText(entityDocument: MJEntityDocumentEntity): Promise<string | null> {
         if (!entityDocument.TemplateID) return null;
 
         // Ensure engine is loaded (no-op if already configured)
@@ -523,7 +523,7 @@ export class AutotagEntity extends AutotagBase {
     /**
      * Query entity records modified since lastRunDate using __mj_UpdatedAt.
      */
-    private async GetModifiedRecords(entityName: string, lastRunDate: Date): Promise<Record<string, unknown>[]> {
+    private async getModifiedRecords(entityName: string, lastRunDate: Date): Promise<Record<string, unknown>[]> {
         const rv = new RunView();
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: entityName,
@@ -541,7 +541,7 @@ export class AutotagEntity extends AutotagBase {
      * Load existing EntityRecordDocument records for this entity document,
      * keyed by normalized RecordID for fast lookup.
      */
-    private async LoadExistingERDs(
+    private async loadExistingERDs(
         entityDocumentID: string,
         entityID: string
     ): Promise<Map<string, MJEntityRecordDocumentEntity>> {
@@ -565,7 +565,7 @@ export class AutotagEntity extends AutotagBase {
      * Load existing ContentItems for this content source, keyed by normalized
      * EntityRecordDocumentID for fast lookup during upsert.
      */
-    private async LoadExistingContentItems(
+    private async loadExistingContentItems(
         contentSourceID: string
     ): Promise<Map<string, MJContentItemEntity>> {
         const rv = new RunView();
@@ -589,7 +589,7 @@ export class AutotagEntity extends AutotagBase {
     /**
      * Process a single entity record: render template, create/update ERD, create/update ContentItem.
      */
-    private async ProcessSingleRecord(
+    private async processSingleRecord(
         record: Record<string, unknown>,
         recordID: string,
         recordName: string,
@@ -611,7 +611,7 @@ export class AutotagEntity extends AutotagBase {
         }
 
         // 2. Create or update EntityRecordDocument
-        const erd = await this.UpsertEntityRecordDocument(
+        const erd = await this.upsertEntityRecordDocument(
             entityID, recordID, entityDocument, renderedText, existingERDs
         );
 
@@ -619,7 +619,7 @@ export class AutotagEntity extends AutotagBase {
         const checksum = await this.engine.getChecksumFromText(renderedText);
 
         // 4. Create or update ContentItem linked to ERD
-        const contentItem = await this.UpsertContentItem(
+        const contentItem = await this.upsertContentItem(
             contentSource, erd, renderedText, checksum, record, recordName, existingContentItems
         );
 
@@ -629,7 +629,7 @@ export class AutotagEntity extends AutotagBase {
     /**
      * Create or update an EntityRecordDocument snapshot.
      */
-    private async UpsertEntityRecordDocument(
+    private async upsertEntityRecordDocument(
         entityID: string,
         recordID: string,
         entityDocument: MJEntityDocumentEntity,
@@ -670,7 +670,7 @@ export class AutotagEntity extends AutotagBase {
      * Only creates a new ContentItem if the checksum changed (content actually changed)
      * or if no ContentItem exists yet for this ERD.
      */
-    private async UpsertContentItem(
+    private async upsertContentItem(
         contentSource: MJContentSourceEntity,
         erd: MJEntityRecordDocumentEntity,
         text: string,

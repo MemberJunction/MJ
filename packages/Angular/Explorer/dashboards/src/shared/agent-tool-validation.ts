@@ -30,7 +30,7 @@ export const VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION = ['all', 'favorites'] as
  * @param allowed - The set of permitted string values.
  * @param paramName - Parameter name for the error message.
  */
-export function validateEnumParam<T extends string>(
+export function ValidateEnumParam<T extends string>(
     raw: unknown,
     allowed: readonly T[],
     paramName: string,
@@ -48,12 +48,21 @@ export function validateEnumParam<T extends string>(
     };
 }
 
+/** @deprecated Use {@link ValidateEnumParam}. */
+export function validateEnumParam<T extends string>(
+    raw: unknown,
+    allowed: readonly T[],
+    paramName: string,
+): { ok: true; value: T } | { ok: false; result: AgentToolResult } {
+    return ValidateEnumParam(raw, allowed, paramName);
+}
+
 /**
  * Validate that a raw, untrusted tool parameter is a string. Returns the string
  * on success or a typed failure result. Never throws. Empty strings are allowed
  * (callers that require non-empty should check `value` themselves).
  */
-export function validateStringParam(
+export function ValidateStringParam(
     raw: unknown,
     paramName: string,
 ): { ok: true; value: string } | { ok: false; result: AgentToolResult } {
@@ -61,6 +70,14 @@ export function validateStringParam(
         return { ok: true, value: raw };
     }
     return { ok: false, result: { Success: false, ErrorMessage: `${paramName} must be a string.` } };
+}
+
+/** @deprecated Use {@link ValidateStringParam}. */
+export function validateStringParam(
+    raw: unknown,
+    paramName: string,
+): { ok: true; value: string } | { ok: false; result: AgentToolResult } {
+    return ValidateStringParam(raw, paramName);
 }
 
 /**
@@ -80,9 +97,14 @@ export const AGENT_CONTEXT_NAME_LIST_CAP = 25;
  * @param cap - maximum entries to keep (defaults to {@link AGENT_CONTEXT_NAME_LIST_CAP})
  * @returns the first `cap` names; a new array (never mutates the input)
  */
-export function boundNameList(names: readonly string[], cap: number = AGENT_CONTEXT_NAME_LIST_CAP): string[] {
+export function BoundNameList(names: readonly string[], cap: number = AGENT_CONTEXT_NAME_LIST_CAP): string[] {
     const safeCap = Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : AGENT_CONTEXT_NAME_LIST_CAP;
     return names.slice(0, safeCap);
+}
+
+/** @deprecated Use {@link BoundNameList}. */
+export function boundNameList(names: readonly string[], cap: number = AGENT_CONTEXT_NAME_LIST_CAP): string[] {
+    return BoundNameList(names, cap);
 }
 
 /**
@@ -90,7 +112,7 @@ export function boundNameList(names: readonly string[], cap: number = AGENT_CONT
  * number (accepting numeric strings). Returns the number on success or a typed
  * failure result. Never throws.
  */
-export function validateNonNegativeNumberParam(
+export function ValidateNonNegativeNumberParam(
     raw: unknown,
     paramName: string,
 ): { ok: true; value: number } | { ok: false; result: AgentToolResult } {
@@ -99,4 +121,12 @@ export function validateNonNegativeNumberParam(
         return { ok: true, value };
     }
     return { ok: false, result: { Success: false, ErrorMessage: `${paramName} must be a non-negative number.` } };
+}
+
+/** @deprecated Use {@link ValidateNonNegativeNumberParam}. */
+export function validateNonNegativeNumberParam(
+    raw: unknown,
+    paramName: string,
+): { ok: true; value: number } | { ok: false; result: AgentToolResult } {
+    return ValidateNonNegativeNumberParam(raw, paramName);
 }

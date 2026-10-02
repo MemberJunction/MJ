@@ -12,7 +12,7 @@ import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
-import { envIntOverride } from './env-config';
+import { EnvIntOverride } from './env-config';
 
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
@@ -44,7 +44,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * to bound the row-materialization cost of the parallel fan-out), or override the default at
      * process start via the `MJ_SEARCH_PER_ENTITY_FETCH_DEPTH` environment variable.
      */
-    public static PerEntityFetchDepth = envIntOverride('MJ_SEARCH_PER_ENTITY_FETCH_DEPTH', 15);
+    public static PerEntityFetchDepth = EnvIntOverride('MJ_SEARCH_PER_ENTITY_FETCH_DEPTH', 15);
 
     /**
      * Per-entity hard timeout, in milliseconds. If one entity's RunView takes longer
@@ -64,7 +64,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * EntitySearchProvider.PerEntityTimeoutMS = 30_000;
      * ```
      */
-    public static PerEntityTimeoutMS = envIntOverride('MJ_SEARCH_PER_ENTITY_TIMEOUT_MS', 3000);
+    public static PerEntityTimeoutMS = EnvIntOverride('MJ_SEARCH_PER_ENTITY_TIMEOUT_MS', 3000);
 
     /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.
@@ -194,12 +194,38 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
     /**
      * Get the list of entities eligible for search, optionally filtered by name.
+     *
+     * `AllowUserSearchAPI` alone is not enough. An entity can carry that flag while declaring
+     * no `IncludeInUserSearchAPI` field at all — CodeGen defaults the entity flag to true, but
+     * the field flags are only set when smart-field analysis runs, so any entity created
+     * without it starts search-enabled with nothing to search. For those, `UserSearchString`
+     * is a documented no-op (MJ#4581/#4582): the provider ignores the term and returns the
+     * UNFILTERED table. The scorer then discards every row, because none of them matched
+     * anything — so the round-trip can only ever produce load, never a result.
+     *
+     * `HasSearchFields` is the same predicate the data provider uses to tell "this entity has
+     * no search surface" from "every candidate field dropped out at runtime" (FLS-denied, or
+     * not a text-search target). The latter still gets queried: it returns `(1=0)` cheaply and
+     * is a real, if empty, answer. Only the no-surface case is skipped here.
+     *
+     * A full-text-search entity with no per-field flags is deliberately NOT exempted here, even
+     * though `createViewUserSearchSQL` would happily take its FTS branch. This provider could not
+     * use the rows: `convertResults` scores by counting which `IncludeInUserSearchAPI` fields
+     * contain the query, so with none declared `matchedFields` is 0 and every row is dropped.
+     * Exempting them buys a per-keystroke round-trip whose results are discarded. Full-text
+     * entities are served by `FullTextSearchProvider`, which calls the provider's `FullTextSearch`
+     * directly and emits `SourceType: 'fulltext'` — that is where their coverage comes from.
+     *
+     * Note this is a screen, not a substitute for the metadata being right — `AllowUserSearchAPI`
+     * should be off on such an entity (see `metadata/entities/.entity-search-exclusions.json`).
+     * It is the backstop that keeps a newly-added entity from silently costing every keystroke
+     * a round-trip until someone notices and adds it to that list.
      */
     private getSearchableEntities(
         md: IMetadataProvider,
         filters: SearchFilters | undefined
     ): { Name: string }[] {
-        let entities = md.Entities.filter(e => e.AllowUserSearchAPI);
+        let entities = md.Entities.filter(e => e.AllowUserSearchAPI && e.HasSearchFields);
 
         if (filters?.EntityNames?.length) {
             const allowedNames = new Set(filters.EntityNames.map(n => n.toLowerCase()));
@@ -316,6 +342,11 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 }
             }
 
+            // If zero searchable fields matched the query in memory, do not assign a baseline score — drop the record.
+            if (matchedFields === 0) {
+                return null;
+            }
+
             // Score: base from field match ratio, boost for name field matches
             // Range: ~0.15 (weak match in one field) to ~0.95 (name field + multiple fields)
             const fieldRatio = matchedFields / totalSearchableFields;
@@ -323,21 +354,25 @@ export class EntitySearchProvider extends BaseSearchProvider {
             const nameBoost = nameFieldMatch ? 0.35 : 0;  // +0.35 for name field match
             const score = Math.min(baseScore + nameBoost, 0.95);
 
-            return {
+            const entityDisplayName = entityInfo?.DisplayName || entityName;
+            const resultItem: SearchResultItem = {
                 ID: recordID,
                 EntityName: entityName,
+                EntityDisplayName: entityDisplayName,
                 RecordID: recordID,
                 SourceType: 'entity',
-                ResultType: 'entity-record' as SearchResultType,
+                ResultType: 'entity-record',
                 Title: title,
                 Snippet: snippet,
                 Score: Math.round(score * 100) / 100, // Round to 2 decimal places
                 ScoreBreakdown: { Entity: Math.round(score * 100) / 100 },
                 Tags: [],
                 EntityIcon: entityInfo?.Icon ?? undefined,
+                RecordName: title !== 'Record' ? title : undefined,
                 MatchedAt: new Date()
             };
-        });
+            return resultItem;
+        }).filter((item): item is SearchResultItem => item != null);
     }
 
     /**

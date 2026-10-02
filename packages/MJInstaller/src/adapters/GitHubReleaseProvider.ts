@@ -213,6 +213,7 @@ export class GitHubReleaseProvider {
       const release = (await releaseResponse.json()) as GitHubRelease;
       return this.mapRelease(release);
     }
+    this.drainBody(releaseResponse);
 
     // If rate-limited, skip the commits API too — resolve without any API calls.
     // The zipball download URL is deterministic from the tag name alone.
@@ -341,10 +342,12 @@ export class GitHubReleaseProvider {
     if (this.isRateLimited(response)) {
       // Graceful degradation — return empty so ListReleases falls through to
       // the tag-based fallback path (which also degrades gracefully).
+      this.drainBody(response);
       return [];
     }
 
     if (!response.ok) {
+      this.drainBody(response);
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
     }
 
@@ -418,10 +421,12 @@ export class GitHubReleaseProvider {
       // Both releases and tags are rate-limited. Return empty — the caller
       // (ScaffoldPhase) will surface a NO_RELEASES error that suggests using
       // `-t <tag>` to specify a version directly (which doesn't need the API).
+      this.drainBody(response);
       return [];
     }
 
     if (!response.ok) {
+      this.drainBody(response);
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
     }
 
@@ -453,10 +458,12 @@ export class GitHubReleaseProvider {
 
     // Rate-limited — fall back to API-free resolution
     if (this.isRateLimited(response)) {
+      this.drainBody(response);
       return this.resolveTagWithoutApi(tagName);
     }
 
     if (!response.ok) {
+      this.drainBody(response);
       throw new Error(`Tag "${tagName}" not found (HTTP ${response.status}).`);
     }
 
@@ -528,7 +535,10 @@ export class GitHubReleaseProvider {
   private async fetchCommitDate(commitUrl: string): Promise<Date> {
     try {
       const response = await this.githubFetch(commitUrl);
-      if (!response.ok) return new Date();
+      if (!response.ok) {
+        this.drainBody(response);
+        return new Date();
+      }
       const data = (await response.json()) as GitHubCommitResponse;
       return new Date(data.commit.committer.date);
     } catch {
@@ -585,5 +595,16 @@ export class GitHubReleaseProvider {
     }
 
     return fetch(url, { headers });
+  }
+
+  /**
+   * Release a response body that the caller isn't going to read (a rate-limited or
+   * error branch that falls through to a fallback instead of calling `.json()`).
+   * Without this, Node's `undici` keeps the underlying socket open pending
+   * consumption, tying up a connection for the rest of the process — this package
+   * doesn't depend on `@memberjunction/network-utils`, so the drain is inline.
+   */
+  private drainBody(response: Response): void {
+    void response.body?.cancel().catch(() => {});
   }
 }

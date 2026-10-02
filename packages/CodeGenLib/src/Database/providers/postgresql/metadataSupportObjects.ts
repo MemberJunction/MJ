@@ -20,8 +20,13 @@
  * The DDL is authored as plain PostgreSQL against the literal __mj schema
  * and parameterized at runtime; String.raw keeps regex backslashes intact.
  */
-export function buildMetadataSupportObjectsSQL(mjCoreSchema: string): string {
+export function BuildMetadataSupportObjectsSQL(mjCoreSchema: string): string {
     return METADATA_SUPPORT_OBJECTS_DDL.split('__mj').join(mjCoreSchema);
+}
+
+/** @deprecated Use {@link BuildMetadataSupportObjectsSQL}. */
+export function buildMetadataSupportObjectsSQL(mjCoreSchema: string): string {
+  return BuildMetadataSupportObjectsSQL(mjCoreSchema);
 }
 const METADATA_SUPPORT_OBJECTS_DDL: string = String.raw`
 -- ----------------------------------------------------------------------------

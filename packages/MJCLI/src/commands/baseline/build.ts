@@ -4,16 +4,16 @@ import * as path from 'node:path';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 
-import { resolveConnection, isTty } from '../../baseline/cli-helpers';
-import { openConnection } from '../../baseline/connection';
-import { introspectMssql } from '../../baseline/introspector-mssql';
-import { dumpTables } from '../../baseline/data-dumper';
-import { emitBaselineTsql } from '../../baseline/emitter';
+import { ResolveConnection, IsTty } from '../../baseline/cli-helpers';
+import { OpenConnection } from '../../baseline/connection';
+import { IntrospectMssql } from '../../baseline/introspector-mssql';
+import { DumpTables } from '../../baseline/data-dumper';
+import { EmitBaselineTsql } from '../../baseline/emitter';
 import {
-  baselineFilename,
-  computeAutoBaselineStamp,
-  discoverMigrationsSourceDir,
-  findLatestVersionedMigration,
+  BaselineFilename,
+  ComputeAutoBaselineStamp,
+  DiscoverMigrationsSourceDir,
+  FindLatestVersionedMigration,
 } from '../../baseline/util';
 
 export default class BaselineBuild extends Command {
@@ -76,7 +76,7 @@ export default class BaselineBuild extends Command {
 
     const { baselineVersion, generatedAtUtc, autoSource } = this.resolveVersionAndStamp(flags);
 
-    const connectionParams = resolveConnection({ database: flags.database }, 'mssql');
+    const connectionParams = ResolveConnection({ database: flags.database }, 'mssql');
 
     const excludedDataTables = new Set<string>(
       flags['exclude-data']
@@ -88,7 +88,7 @@ export default class BaselineBuild extends Command {
     excludedDataTables.add('flyway_schema_history');
     excludedDataTables.add('dbo.flyway_schema_history');
 
-    const useSpinner = isTty();
+    const useSpinner = IsTty();
     const spinner = useSpinner ? ora() : null;
 
     const phase = (text: string) => {
@@ -107,46 +107,46 @@ export default class BaselineBuild extends Command {
       this.log(chalk.dim(`  Auto-detected baseline: v${baselineVersion}.x (from ${autoSource.filename})`));
       this.log(chalk.dim(`  Auto timestamp        : ${autoSource.timestamp} + 1m`));
     }
-    phase(`Connecting to ${connectionParams.database}@${connectionParams.host}`);
-    const db = await openConnection(connectionParams);
+    phase(`Connecting to ${connectionParams.Database}@${connectionParams.Host}`);
+    const db = await OpenConnection(connectionParams);
 
     try {
-      succeed(`Connected to ${connectionParams.database}`);
+      succeed(`Connected to ${connectionParams.Database}`);
 
       phase(`Introspecting schema`);
-      const snapshot = await introspectMssql(db, {
+      const snapshot = await IntrospectMssql(db, {
         onPhase: (p) => { if (flags.verbose) this.log(`  - ${p}`); },
       });
       succeed(
-        `Introspected ${snapshot.tables.length} tables, ` +
-        `${snapshot.views.length} views, ` +
-        `${snapshot.procedures.length} procs, ` +
-        `${snapshot.functions.length} functions`,
+        `Introspected ${snapshot.Tables.length} tables, ` +
+        `${snapshot.Views.length} views, ` +
+        `${snapshot.Procedures.length} procs, ` +
+        `${snapshot.Functions.length} functions`,
       );
 
       const dumps = flags['no-data'] ? [] : await (async () => {
         phase(`Dumping table data (every row, every column)`);
-        const result = await dumpTables(
+        const result = await DumpTables(
           db,
-          snapshot.tables,
-          { excludedTables: excludedDataTables },
+          snapshot.Tables,
+          { ExcludedTables: excludedDataTables },
           {
-            onTable: (table, count) => {
-              if (flags.verbose) this.log(`    ${table.schema}.${table.name}: ${count} rows`);
-              else if (spinner) spinner.text = `Dumping ${table.schema}.${table.name} (${count} rows)`;
+            OnTable: (table, count) => {
+              if (flags.verbose) this.log(`    ${table.Schema}.${table.Name}: ${count} rows`);
+              else if (spinner) spinner.text = `Dumping ${table.Schema}.${table.Name} (${count} rows)`;
             },
           },
         );
-        const totalRows = result.reduce((sum, d) => sum + d.rowCount, 0);
+        const totalRows = result.reduce((sum, d) => sum + d.RowCount, 0);
         succeed(`Dumped ${totalRows.toLocaleString()} rows across ${result.length} tables`);
         return result;
       })();
 
       phase('Emitting baseline SQL');
-      const sql = emitBaselineTsql({
-        snapshot,
-        dataDumps: dumps,
-        options: {
+      const sql = EmitBaselineTsql({
+        Snapshot: snapshot,
+        DataDumps: dumps,
+        Options: {
           baselineVersion,
           description: flags.description,
           generatedAtUtc,
@@ -162,7 +162,7 @@ export default class BaselineBuild extends Command {
         return;
       }
 
-      const filename = baselineFilename({ generatedAtUtc, baselineVersion });
+      const filename = BaselineFilename({ generatedAtUtc, baselineVersion });
       fs.mkdirSync(flags.out, { recursive: true });
       const fullPath = path.resolve(flags.out, filename);
       fs.writeFileSync(fullPath, sql, 'utf8');
@@ -202,24 +202,24 @@ export default class BaselineBuild extends Command {
       }
       return { baselineVersion: explicit, generatedAtUtc: new Date(), autoSource: null };
     }
-    const sourceDir = flags['source-dir'] ?? discoverMigrationsSourceDir(process.cwd());
+    const sourceDir = flags['source-dir'] ?? DiscoverMigrationsSourceDir(process.cwd());
     if (!sourceDir) {
       this.error(
         'No --baseline-version provided and could not auto-discover a migrations directory. ' +
           'Pass --source-dir or --baseline-version.',
       );
     }
-    const latest = findLatestVersionedMigration(sourceDir);
+    const latest = FindLatestVersionedMigration(sourceDir);
     if (!latest) {
       this.error(
         `No V-files found in ${sourceDir}. Pass --baseline-version explicitly or point --source-dir at a folder with V<ts>__v<Major>.<Minor>...sql migrations.`,
       );
     }
-    const { generatedAtUtc } = computeAutoBaselineStamp(latest.timestamp);
+    const { generatedAtUtc } = ComputeAutoBaselineStamp(latest.Timestamp);
     return {
-      baselineVersion: latest.majorMinor,
+      baselineVersion: latest.MajorMinor,
       generatedAtUtc,
-      autoSource: { filename: latest.filename, timestamp: latest.timestamp },
+      autoSource: { filename: latest.Filename, timestamp: latest.Timestamp },
     };
   }
 }

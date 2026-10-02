@@ -1,0 +1,72 @@
+{
+  "id": "webresearch-terminal-done-01",
+  "agent": "Web Research Agent",
+  "tags": [
+    "terminal-synthesis",
+    "coherence-gate",
+    "coherence",
+    "implicit-payload-first"
+  ],
+  "description": "Enough sources gathered. Finishing is right; searching once more is the over-eager failure. Under native mode this asks whether declaring tools suppresses the envelope's completion. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+  "input": {
+    "payload": {
+      "sources": [
+        {
+          "id": "src_001"
+        },
+        {
+          "id": "src_002"
+        },
+        {
+          "id": "src_003"
+        },
+        {
+          "id": "src_004"
+        },
+        {
+          "id": "src_005"
+        }
+      ],
+      "findings": [
+        {
+          "content": "A"
+        },
+        {
+          "content": "B"
+        },
+        {
+          "content": "C"
+        }
+      ]
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Find five authoritative sources on grid-scale battery storage."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Web Search succeeded — 5 credible sources summarized into payload.sources."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete",
+        "forbiddenActions": [
+          "Web Search",
+          "Web Page Content"
+        ]
+      },
+      {
+        "kind": "payloadChange",
+        "forbiddenActions": [
+          "Web Search",
+          "Web Page Content"
+        ]
+      }
+    ]
+  }
+}

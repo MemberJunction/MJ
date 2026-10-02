@@ -86,7 +86,7 @@
             </div>
             <div class="result-card-body">
                 <div class="result-card-title" [innerHTML]="HighlightMatch(result.RecordName || result.Title)"></div>
-                <div class="result-card-entity" [innerHTML]="HighlightMatch(result.EntityName)"></div>
+                <div class="result-card-entity" [innerHTML]="HighlightMatch(result.EntityDisplayName || result.EntityName)"></div>
                 @if (result.Tags && result.Tags.length > 0) {
                     <div class="result-card-tags">
                         @for (tag of result.Tags.slice(0, 5); track tag) {
@@ -130,7 +130,7 @@
                 <div class="detail-meta">
                     <div class="detail-meta-item">
                         <i class="fa-solid fa-layer-group"></i>
-                        <span>{{ result.EntityName }}</span>
+                        <span>{{ result.EntityDisplayName || result.EntityName }}</span>
                     </div>
                     <div class="detail-meta-item">
                         <i class="fa-solid fa-fingerprint"></i>

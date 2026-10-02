@@ -23,6 +23,7 @@ export * from './lib/types/entity-form-config';
 // Section indicators (unsaved-changes dot + invalid-field count on panels and the chrome rail)
 export * from './lib/section-indicators/form-section-indicators';
 export * from './lib/section-indicators/form-section-indicator-coordinator.service';
+export * from './lib/section-indicators/form-section-field-host';
 
 // Form resolution (form-variant / interactive-override picker — Generic, no Explorer deps)
 export * from './lib/resolver/form-resolver.service';
@@ -48,11 +49,17 @@ export * from './lib/base-form-section-info';
 export * from './lib/form-state.interface';
 export * from './lib/form-state.service';
 export * from './lib/form-record-refresh.coordinator';
+export * from './lib/form-field-edit.coordinator';
+
+// Entry-time duplicate check (flags possible duplicates while a new record is entered)
+export * from './lib/duplicate-entry-check/duplicate-entry-check';
 
 // Components
 export * from './lib/toolbar/form-toolbar.component';
 export * from './lib/field/form-field.component';
 export * from './lib/field/fk-search-utils';
+export * from './lib/field/fk-lookup-strategy';
+export * from './lib/field/default-fk-lookup-strategy';
 export * from './lib/field/linked-field-options';
 export * from './lib/panel/collapsible-panel.component';
 export * from './lib/container/record-form-container.component';

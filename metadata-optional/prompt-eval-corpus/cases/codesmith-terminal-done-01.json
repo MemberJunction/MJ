@@ -1,0 +1,46 @@
+{
+  "id": "codesmith-terminal-done-01",
+  "agent": "Codesmith Agent",
+  "tags": [
+    "terminal-synthesis",
+    "coherence-gate",
+    "implicit-payload-first"
+  ],
+  "description": "Code ran and produced the result. The agent must finish and write code/results/iterations to the payload rather than iterating for its own sake. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+  "input": {
+    "payload": {
+      "iterations": 1,
+      "code": "output = _.meanBy(input.rows, 'v');",
+      "results": {
+        "mean": 21.4
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Compute the mean of rows.v."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Execute Code succeeded. output = { mean: 21.4 }"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete",
+        "forbiddenActions": [
+          "Execute Code"
+        ]
+      },
+      {
+        "kind": "payloadChange",
+        "forbiddenActions": [
+          "Execute Code"
+        ]
+      }
+    ]
+  }
+}

@@ -37,7 +37,7 @@ export interface RestarLayeredOuterViewArgs {
 
 const IDENT = String.raw`(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)`;
 
-export function restarLayeredOuterView(args: RestarLayeredOuterViewArgs): string {
+export function RestarLayeredOuterView(args: RestarLayeredOuterViewArgs): string {
     const innerCols = new Set(args.innerColumns.map((c) => c));
     if (innerCols.size === 0) {
         throw new LayeredOuterRestarError('innerColumns is empty; cannot restar a layered outer view');
@@ -51,7 +51,7 @@ export function restarLayeredOuterView(args: RestarLayeredOuterViewArgs): string
         throw new LayeredOuterRestarError(`outer view definition does not start with SELECT: ${def.slice(0, 80)}`);
     }
 
-    const fromPos = findTopLevelKeyword(def, 'from');
+    const fromPos = FindTopLevelKeyword(def, 'from');
     if (fromPos < 0) {
         throw new LayeredOuterRestarError('outer view definition has no top-level FROM');
     }
@@ -60,7 +60,7 @@ export function restarLayeredOuterView(args: RestarLayeredOuterViewArgs): string
     const fromAndRest = def.slice(fromPos).trim();
     const alias = detectInnerAlias(fromAndRest, args.innerViewName) ?? 'g';
 
-    const items = splitTopLevelCommaList(selectList);
+    const items = SplitTopLevelCommaList(selectList);
     if (items.length === 0) {
         throw new LayeredOuterRestarError('outer view SELECT list is empty');
     }
@@ -87,12 +87,26 @@ export function restarLayeredOuterView(args: RestarLayeredOuterViewArgs): string
     return rebuildSelect(alias, items.slice(consumed), fromAndRest);
 }
 
-export function buildCreateOrReplaceLayeredOuterViewSQL(
+/** @deprecated Use {@link RestarLayeredOuterView}. */
+export function restarLayeredOuterView(args: RestarLayeredOuterViewArgs): string {
+    return RestarLayeredOuterView(args);
+}
+
+export function BuildCreateOrReplaceLayeredOuterViewSQL(
     schema: string,
     outerView: string,
     restarredSelect: string,
 ): string {
     return `CREATE OR REPLACE VIEW ${quoteQualified(schema, outerView)}\nAS\n${restarredSelect}`;
+}
+
+/** @deprecated Use {@link BuildCreateOrReplaceLayeredOuterViewSQL}. */
+export function buildCreateOrReplaceLayeredOuterViewSQL(
+    schema: string,
+    outerView: string,
+    restarredSelect: string,
+): string {
+    return BuildCreateOrReplaceLayeredOuterViewSQL(schema, outerView, restarredSelect);
 }
 
 function rebuildSelect(alias: string, extras: string[], fromAndRest: string): string {
@@ -116,7 +130,7 @@ function quoteQualified(schema: string, name: string): string {
  * Index of a top-level SQL keyword (FROM, etc.) in `sql`, ignoring matches
  * inside parentheses or quoted identifiers/strings.
  */
-export function findTopLevelKeyword(sql: string, keyword: string): number {
+export function FindTopLevelKeyword(sql: string, keyword: string): number {
     const target = keyword.toLowerCase();
     let depth = 0;
     let i = 0;
@@ -149,7 +163,12 @@ export function findTopLevelKeyword(sql: string, keyword: string): number {
     return -1;
 }
 
-export function splitTopLevelCommaList(list: string): string[] {
+/** @deprecated Use {@link FindTopLevelKeyword}. */
+export function findTopLevelKeyword(sql: string, keyword: string): number {
+    return FindTopLevelKeyword(sql, keyword);
+}
+
+export function SplitTopLevelCommaList(list: string): string[] {
     const items: string[] = [];
     let depth = 0;
     let start = 0;
@@ -181,6 +200,11 @@ export function splitTopLevelCommaList(list: string): string[] {
         items.push(last);
     }
     return items;
+}
+
+/** @deprecated Use {@link SplitTopLevelCommaList}. */
+export function splitTopLevelCommaList(list: string): string[] {
+    return SplitTopLevelCommaList(list);
 }
 
 function skipQuoted(sql: string, start: number, quote: string): number {

@@ -104,11 +104,47 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
     `]
 })
 export class QueryPartComponent extends BaseDashboardPart implements AfterViewInit, OnDestroy {
-    @ViewChild('queryViewer') queryViewer!: QueryViewerComponent;
+    @ViewChild('queryViewer') QueryViewer!: QueryViewerComponent;
 
-    public hasQuery = false;
-    public queryId: string | null = null;
-    public showToolbar = true;
+    /** @deprecated Use {@link QueryViewer}. */
+    get queryViewer(): QueryViewerComponent {
+      return this.QueryViewer;
+    }
+    /** @deprecated Use {@link QueryViewer}. */
+    set queryViewer(value: QueryViewerComponent) {
+      this.QueryViewer = value;
+    }
+
+    public HasQuery = false;
+
+    /** @deprecated Use {@link HasQuery}. */
+    public get hasQuery() {
+      return this.HasQuery;
+    }
+    /** @deprecated Use {@link HasQuery}. */
+    public set hasQuery(value) {
+      this.HasQuery = value;
+    }
+    public QueryId: string | null = null;
+
+    /** @deprecated Use {@link QueryId}. */
+    public get queryId(): string | null {
+      return this.QueryId;
+    }
+    /** @deprecated Use {@link QueryId}. */
+    public set queryId(value: string | null) {
+      this.QueryId = value;
+    }
+    public ShowToolbar = true;
+
+    /** @deprecated Use {@link ShowToolbar}. */
+    public get showToolbar() {
+      return this.ShowToolbar;
+    }
+    /** @deprecated Use {@link ShowToolbar}. */
+    public set showToolbar(value) {
+      this.ShowToolbar = value;
+    }
 
     private queryEntity: MJQueryEntity | null = null;
     private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -129,7 +165,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         const queryName = config?.['queryName'] as string | undefined;
 
         if (!queryId && !queryName) {
-            this.hasQuery = false;
+            this.HasQuery = false;
             this.cdr.detectChanges();
             return;
         }
@@ -149,19 +185,19 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
                     throw new Error('Query not found');
                 }
 
-                this.queryId = queryId;
+                this.QueryId = queryId;
             } else if (queryName) {
                 // Query by name - find the query ID from metadata
                 const queryInfo = p.Queries.find(q => q.Name === queryName);
                 if (queryInfo) {
-                    this.queryId = queryInfo.ID;
+                    this.QueryId = queryInfo.ID;
                 } else {
                     throw new Error(`Query "${queryName}" not found`);
                 }
             }
 
-            this.hasQuery = true;
-            this.showToolbar = (config?.['showParameterControls'] as boolean) !== false;
+            this.HasQuery = true;
+            this.ShowToolbar = (config?.['showParameterControls'] as boolean) !== false;
 
             // Set auto-refresh if configured
             const autoRefreshSeconds = (config?.['autoRefreshSeconds'] as number) || 0;
@@ -175,7 +211,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         }
     }
 
-    public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
+    public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {
         // Emit data change event with clicked entity info (for any listeners that need it)
         this.emitDataChanged({
             type: 'entity-link-click',
@@ -194,21 +230,36 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         }
     }
 
-    public onQueryError(error: Error): void {
+    /** @deprecated Use {@link OnEntityLinkClick}. */
+    public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
+      return this.OnEntityLinkClick(event);
+    }
+
+    public OnQueryError(error: Error): void {
         console.error('[QueryPart] Query error:', error.message);
     }
 
-    public refreshQuery(): void {
-        if (this.queryViewer) {
-            this.queryViewer.Refresh();
+    /** @deprecated Use {@link OnQueryError}. */
+    public onQueryError(error: Error): void {
+      return this.OnQueryError(error);
+    }
+
+    public RefreshQuery(): void {
+        if (this.QueryViewer) {
+            this.QueryViewer.Refresh();
         }
+    }
+
+    /** @deprecated Use {@link RefreshQuery}. */
+    public refreshQuery(): void {
+      return this.RefreshQuery();
     }
 
     private startAutoRefresh(seconds: number): void {
         this.stopAutoRefresh();
         if (seconds > 0) {
             this.autoRefreshTimer = setInterval(() => {
-                this.refreshQuery();
+                this.RefreshQuery();
             }, seconds * 1000);
         }
     }
@@ -223,6 +274,6 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     protected override cleanup(): void {
         this.stopAutoRefresh();
         this.queryEntity = null;
-        this.queryId = null;
+        this.QueryId = null;
     }
 }

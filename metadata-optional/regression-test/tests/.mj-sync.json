@@ -1,0 +1,18 @@
+{
+  "entity": "MJ: Tests",
+  "filePattern": "**/.*.json",
+  "ignoreDirectories": ["regression/traces", "regression/scripts"],
+  "pull": {
+    "filter": "TypeID IN (SELECT ID FROM __mj.TestType WHERE Name = 'Computer Use')",
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: Test Types",
+        "field": "Name"
+      }
+    },
+    "externalizeFields": [
+      { "field": "Configuration.ReplayScript", "pattern": "@file:regression/scripts/{Name}.json" },
+      { "field": "Configuration.PendingReplayScript", "pattern": "@file:regression/scripts/{Name}.pending.json" }
+    ]
+  }
+}

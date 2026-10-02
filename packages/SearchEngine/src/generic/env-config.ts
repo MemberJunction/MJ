@@ -18,7 +18,7 @@ import { LogErrorEx } from '@memberjunction/core';
  * an ops-side typo surfaces at boot instead of silently reverting to the default. An unset
  * variable is the normal path and stays silent.
  */
-export function envIntOverride(name: string, defaultValue: number): number {
+export function EnvIntOverride(name: string, defaultValue: number): number {
     const raw = typeof process !== 'undefined' ? process.env?.[name] : undefined;
     // Unset (or explicitly emptied) — the normal path, no override, no noise.
     if (raw === undefined || raw === '') {
@@ -34,4 +34,9 @@ export function envIntOverride(name: string, defaultValue: number): number {
         category: 'SearchEngineConfig',
     });
     return defaultValue;
+}
+
+/** @deprecated Use {@link EnvIntOverride}. */
+export function envIntOverride(name: string, defaultValue: number): number {
+    return EnvIntOverride(name, defaultValue);
 }

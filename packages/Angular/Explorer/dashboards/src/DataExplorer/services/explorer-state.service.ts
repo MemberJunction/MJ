@@ -55,7 +55,7 @@ export class ExplorerStateService {
    * Set the context filter and load context-specific state.
    * Call this before using the service to ensure proper context isolation.
    */
-  async setContext(filter: DataExplorerFilter | null): Promise<void> {
+  async SetContext(filter: DataExplorerFilter | null): Promise<void> {
     this.currentFilter = filter;
     await this.loadState();
     // Load application entities first (needed for filtering recent/favorite records)
@@ -67,6 +67,11 @@ export class ExplorerStateService {
       this.loadRecentRecords()
     ]);
     this.updateBreadcrumbs();
+  }
+
+  /** @deprecated Use {@link SetContext}. */
+  async setContext(filter: DataExplorerFilter | null): Promise<void> {
+    return this.SetContext(filter);
   }
 
   /**
@@ -153,18 +158,23 @@ export class ExplorerStateService {
   /**
    * Update state partially
    */
-  updateState(partial: Partial<DataExplorerState>): void {
+  UpdateState(partial: Partial<DataExplorerState>): void {
     const newState = { ...this.state$.value, ...partial };
     this.state$.next(newState);
     this.updateBreadcrumbs();
     this.debouncedSave();
   }
 
+  /** @deprecated Use {@link UpdateState}. */
+  updateState(partial: Partial<DataExplorerState>): void {
+    return this.UpdateState(partial);
+  }
+
   /**
    * Set selected entity
    * Caches current entity's filter before switching, restores new entity's cached filter
    */
-  selectEntity(entityName: string | null): void {
+  SelectEntity(entityName: string | null): void {
     const currentState = this.state$.value;
     const entityCache = { ...currentState.entityCache };
 
@@ -186,7 +196,7 @@ export class ExplorerStateService {
     // Evict old entries if cache is too large (LRU)
     this.evictOldCacheEntries(entityCache);
 
-    this.updateState({
+    this.UpdateState({
       selectedEntityName: entityName,
       selectedViewId: null, // Reset view when entity changes
       smartFilterPrompt: restoredFilter, // Restore cached filter or empty
@@ -194,6 +204,11 @@ export class ExplorerStateService {
       detailPanelOpen: false,
       entityCache
     });
+  }
+
+  /** @deprecated Use {@link SelectEntity}. */
+  selectEntity(entityName: string | null): void {
+    return this.SelectEntity(entityName);
   }
 
   /**
@@ -214,53 +229,83 @@ export class ExplorerStateService {
   /**
    * Set selected view
    */
-  selectView(viewId: string | null): void {
-    this.updateState({
+  SelectView(viewId: string | null): void {
+    this.UpdateState({
       selectedViewId: viewId,
       viewModified: false // Reset modified state when selecting a different view
     });
   }
 
+  /** @deprecated Use {@link SelectView}. */
+  selectView(viewId: string | null): void {
+    return this.SelectView(viewId);
+  }
+
   /**
    * Mark the current view as modified (has unsaved changes)
    */
+  SetViewModified(modified: boolean): void {
+    this.UpdateState({ viewModified: modified });
+  }
+
+  /** @deprecated Use {@link SetViewModified}. */
   setViewModified(modified: boolean): void {
-    this.updateState({ viewModified: modified });
+    return this.SetViewModified(modified);
   }
 
   /**
    * Toggle the view configuration panel
    */
+  ToggleViewConfigPanel(): void {
+    this.UpdateState({ viewConfigPanelOpen: !this.state$.value.viewConfigPanelOpen });
+  }
+
+  /** @deprecated Use {@link ToggleViewConfigPanel}. */
   toggleViewConfigPanel(): void {
-    this.updateState({ viewConfigPanelOpen: !this.state$.value.viewConfigPanelOpen });
+    return this.ToggleViewConfigPanel();
   }
 
   /**
    * Open the view configuration panel
    */
+  OpenViewConfigPanel(): void {
+    this.UpdateState({ viewConfigPanelOpen: true });
+  }
+
+  /** @deprecated Use {@link OpenViewConfigPanel}. */
   openViewConfigPanel(): void {
-    this.updateState({ viewConfigPanelOpen: true });
+    return this.OpenViewConfigPanel();
   }
 
   /**
    * Close the view configuration panel
    */
+  CloseViewConfigPanel(): void {
+    this.UpdateState({ viewConfigPanelOpen: false });
+  }
+
+  /** @deprecated Use {@link CloseViewConfigPanel}. */
   closeViewConfigPanel(): void {
-    this.updateState({ viewConfigPanelOpen: false });
+    return this.CloseViewConfigPanel();
   }
 
   /**
    * Set view mode
    */
+  SetViewMode(mode: DataExplorerViewMode): void {
+    this.UpdateState({ viewMode: mode });
+  }
+
+  /** @deprecated Use {@link SetViewMode}. */
   setViewMode(mode: DataExplorerViewMode): void {
-    this.updateState({ viewMode: mode });
+    return this.SetViewMode(mode);
   }
 
   /**
    * Set smart filter prompt
    * Also updates the entity cache for the current entity
    */
-  setSmartFilterPrompt(prompt: string): void {
+  SetSmartFilterPrompt(prompt: string): void {
     const currentState = this.state$.value;
     const entityCache = { ...currentState.entityCache };
 
@@ -277,7 +322,12 @@ export class ExplorerStateService {
       }
     }
 
-    this.updateState({ smartFilterPrompt: prompt, entityCache });
+    this.UpdateState({ smartFilterPrompt: prompt, entityCache });
+  }
+
+  /** @deprecated Use {@link SetSmartFilterPrompt}. */
+  setSmartFilterPrompt(prompt: string): void {
+    return this.SetSmartFilterPrompt(prompt);
   }
 
   /**
@@ -285,38 +335,53 @@ export class ExplorerStateService {
    * @param recordId The composite key string for the record
    * @param recordName Optional display name for the record (for breadcrumbs)
    */
-  selectRecord(recordId: string | null, recordName?: string): void {
-    this.updateState({
+  SelectRecord(recordId: string | null, recordName?: string): void {
+    this.UpdateState({
       selectedRecordId: recordId,
       selectedRecordName: recordName || null,
       detailPanelOpen: recordId !== null
     });
   }
 
+  /** @deprecated Use {@link SelectRecord}. */
+  selectRecord(recordId: string | null, recordName?: string): void {
+    return this.SelectRecord(recordId, recordName);
+  }
+
   /**
    * Close detail panel
    */
-  closeDetailPanel(): void {
-    this.updateState({
+  CloseDetailPanel(): void {
+    this.UpdateState({
       detailPanelOpen: false,
       selectedRecordId: null,
       selectedRecordName: null
     });
   }
 
+  /** @deprecated Use {@link CloseDetailPanel}. */
+  closeDetailPanel(): void {
+    return this.CloseDetailPanel();
+  }
+
   /**
    * Toggle navigation panel collapsed state
    */
-  toggleNavigationPanel(): void {
-    this.updateState({
+  ToggleNavigationPanel(): void {
+    this.UpdateState({
       navigationPanelCollapsed: !this.state$.value.navigationPanelCollapsed
     });
+  }
+
+  /** @deprecated Use {@link ToggleNavigationPanel}. */
+  toggleNavigationPanel(): void {
+    return this.ToggleNavigationPanel();
   }
 
   /**
    * Expand navigation panel and ensure a specific section is expanded
    */
-  expandAndFocusSection(section: 'favorites' | 'recent' | 'entities'): void {
+  ExpandAndFocusSection(section: 'favorites' | 'recent' | 'entities'): void {
     const updates: Partial<DataExplorerState> = {
       navigationPanelCollapsed: false
     };
@@ -334,13 +399,18 @@ export class ExplorerStateService {
         break;
     }
 
-    this.updateState(updates);
+    this.UpdateState(updates);
+  }
+
+  /** @deprecated Use {@link ExpandAndFocusSection}. */
+  expandAndFocusSection(section: 'favorites' | 'recent' | 'entities'): void {
+    return this.ExpandAndFocusSection(section);
   }
 
   /**
    * Add item to recent history
    */
-  addRecentItem(item: Omit<RecentItem, 'timestamp'>): void {
+  AddRecentItem(item: Omit<RecentItem, 'timestamp'>): void {
     const recentItems = [...this.state$.value.recentItems];
 
     // Remove existing entry if present (match by entity and composite key)
@@ -362,13 +432,18 @@ export class ExplorerStateService {
       recentItems.length = MAX_RECENT_ITEMS;
     }
 
-    this.updateState({ recentItems });
+    this.UpdateState({ recentItems });
+  }
+
+  /** @deprecated Use {@link AddRecentItem}. */
+  addRecentItem(item: Omit<RecentItem, 'timestamp'>): void {
+    return this.AddRecentItem(item);
   }
 
   /**
    * Add item to favorites
    */
-  addFavorite(item: FavoriteItem): void {
+  AddFavorite(item: FavoriteItem): void {
     const favorites = [...this.state$.value.favorites];
 
     // Check if already exists
@@ -381,29 +456,44 @@ export class ExplorerStateService {
 
     if (!exists) {
       favorites.push(item);
-      this.updateState({ favorites });
+      this.UpdateState({ favorites });
     }
+  }
+
+  /** @deprecated Use {@link AddFavorite}. */
+  addFavorite(item: FavoriteItem): void {
+    return this.AddFavorite(item);
   }
 
   /**
    * Remove item from favorites
    */
-  removeFavorite(item: FavoriteItem): void {
+  RemoveFavorite(item: FavoriteItem): void {
     const favorites = this.state$.value.favorites.filter(f =>
       !(f.type === item.type &&
         f.entityName === item.entityName &&
         f.compositeKeyString === item.compositeKeyString &&
         f.viewId === item.viewId)
     );
-    this.updateState({ favorites });
+    this.UpdateState({ favorites });
+  }
+
+  /** @deprecated Use {@link RemoveFavorite}. */
+  removeFavorite(item: FavoriteItem): void {
+    return this.RemoveFavorite(item);
   }
 
   /**
    * Toggle section expanded state
    */
-  toggleSection(section: 'favorites' | 'recent' | 'entities' | 'views'): void {
+  ToggleSection(section: 'favorites' | 'recent' | 'entities' | 'views'): void {
     const key = `${section}SectionExpanded` as keyof DataExplorerState;
-    this.updateState({ [key]: !this.state$.value[key] } as Partial<DataExplorerState>);
+    this.UpdateState({ [key]: !this.state$.value[key] } as Partial<DataExplorerState>);
+  }
+
+  /** @deprecated Use {@link ToggleSection}. */
+  toggleSection(section: 'favorites' | 'recent' | 'entities' | 'views'): void {
+    return this.ToggleSection(section);
   }
 
   /**
@@ -451,9 +541,9 @@ export class ExplorerStateService {
 
     // Add entity breadcrumb if selected
     if (state.selectedEntityName) {
-      const entityInfo = this.metadata.Entities.find(e => e.Name === state.selectedEntityName);
+      const entityInfo = this.metadata.Entities.find(e => e.Name.toLowerCase() === state.selectedEntityName?.toLowerCase());
       breadcrumbs.push({
-        label: state.selectedEntityName,
+        label: entityInfo?.DisplayNameOrName || state.selectedEntityName,
         type: 'entity',
         entityName: state.selectedEntityName,
         icon: entityInfo?.Icon ? this.formatEntityIcon(entityInfo.Icon) : 'fa-solid fa-table'
@@ -535,11 +625,11 @@ export class ExplorerStateService {
    * Navigate to a specific breadcrumb level.
    * Clears any selection deeper than the clicked breadcrumb.
    */
-  navigateToBreadcrumb(breadcrumb: BreadcrumbItem): void {
+  NavigateToBreadcrumb(breadcrumb: BreadcrumbItem): void {
     switch (breadcrumb.type) {
       case 'application':
         // Clear entity and record selection (show home view)
-        this.updateState({
+        this.UpdateState({
           selectedEntityName: null,
           selectedViewId: null,
           selectedRecordId: null,
@@ -552,7 +642,7 @@ export class ExplorerStateService {
       case 'entity':
         // Keep entity selected, clear record selection
         if (breadcrumb.entityName) {
-          this.updateState({
+          this.UpdateState({
             selectedRecordId: null,
             selectedRecordName: null,
             detailPanelOpen: false
@@ -566,6 +656,11 @@ export class ExplorerStateService {
     }
   }
 
+  /** @deprecated Use {@link NavigateToBreadcrumb}. */
+  navigateToBreadcrumb(breadcrumb: BreadcrumbItem): void {
+    return this.NavigateToBreadcrumb(breadcrumb);
+  }
+
   // ========================================
   // HOME SCREEN ENTITY MANAGEMENT
   // ========================================
@@ -573,8 +668,13 @@ export class ExplorerStateService {
   /**
    * Toggle between showing all entities or just common (DefaultForNewUser) entities
    */
+  ToggleShowAllEntities(): void {
+    this.UpdateState({ showAllEntities: !this.state$.value.showAllEntities });
+  }
+
+  /** @deprecated Use {@link ToggleShowAllEntities}. */
   toggleShowAllEntities(): void {
-    this.updateState({ showAllEntities: !this.state$.value.showAllEntities });
+    return this.ToggleShowAllEntities();
   }
 
   // ========================================
@@ -584,23 +684,33 @@ export class ExplorerStateService {
   /**
    * Toggle the quick access (right) panel open/closed
    */
+  ToggleQuickAccessPanel(): void {
+    this.UpdateState({ quickAccessPanelOpen: !this.state$.value.quickAccessPanelOpen });
+  }
+
+  /** @deprecated Use {@link ToggleQuickAccessPanel}. */
   toggleQuickAccessPanel(): void {
-    this.updateState({ quickAccessPanelOpen: !this.state$.value.quickAccessPanelOpen });
+    return this.ToggleQuickAccessPanel();
   }
 
   /**
    * Toggle a quick access section's expanded state
    */
-  toggleQuickAccessSection(sectionId: string): void {
+  ToggleQuickAccessSection(sectionId: string): void {
     const sections = { ...this.state$.value.quickAccessSections };
     sections[sectionId] = sections[sectionId] === false; // default to expanded (true)
-    this.updateState({ quickAccessSections: sections });
+    this.UpdateState({ quickAccessSections: sections });
+  }
+
+  /** @deprecated Use {@link ToggleQuickAccessSection}. */
+  toggleQuickAccessSection(sectionId: string): void {
+    return this.ToggleQuickAccessSection(sectionId);
   }
 
   /**
    * Toggle an application group's expanded/collapsed state
    */
-  toggleAppGroupExpanded(appId: string): void {
+  ToggleAppGroupExpanded(appId: string): void {
     const expanded = [...this.state$.value.expandedAppGroups];
     const index = expanded.indexOf(appId);
     if (index >= 0) {
@@ -608,20 +718,30 @@ export class ExplorerStateService {
     } else {
       expanded.push(appId);
     }
-    this.updateState({ expandedAppGroups: expanded });
+    this.UpdateState({ expandedAppGroups: expanded });
+  }
+
+  /** @deprecated Use {@link ToggleAppGroupExpanded}. */
+  toggleAppGroupExpanded(appId: string): void {
+    return this.ToggleAppGroupExpanded(appId);
   }
 
   /**
    * Set the home view mode (all vs favorites)
    */
+  SetHomeViewMode(mode: 'all' | 'favorites'): void {
+    this.UpdateState({ homeViewMode: mode });
+  }
+
+  /** @deprecated Use {@link SetHomeViewMode}. */
   setHomeViewMode(mode: 'all' | 'favorites'): void {
-    this.updateState({ homeViewMode: mode });
+    return this.SetHomeViewMode(mode);
   }
 
   /**
    * Track entity access - called when user navigates to an entity
    */
-  trackEntityAccess(entityName: string, entityId: string): void {
+  TrackEntityAccess(entityName: string, entityId: string): void {
     const recentEntityAccesses = [...this.state$.value.recentEntityAccesses];
 
     // Find existing entry
@@ -652,13 +772,18 @@ export class ExplorerStateService {
       recentEntityAccesses.length = MAX_RECENT_ENTITIES;
     }
 
-    this.updateState({ recentEntityAccesses });
+    this.UpdateState({ recentEntityAccesses });
+  }
+
+  /** @deprecated Use {@link TrackEntityAccess}. */
+  trackEntityAccess(entityName: string, entityId: string): void {
+    return this.TrackEntityAccess(entityName, entityId);
   }
 
   /**
    * Add entity to favorites using User Favorites entity
    */
-  async addEntityToFavorites(entityName: string, entityId: string): Promise<boolean> {
+  async AddEntityToFavorites(entityName: string, entityId: string): Promise<boolean> {
     try {
       const userId = this.metadata.CurrentUser?.ID;
       if (!userId) return false;
@@ -688,7 +813,7 @@ export class ExplorerStateService {
           entityName,
           entityId
         }];
-        this.updateState({ favoriteEntities });
+        this.UpdateState({ favoriteEntities });
       }
       return saved;
     } catch (error) {
@@ -697,10 +822,15 @@ export class ExplorerStateService {
     }
   }
 
+  /** @deprecated Use {@link AddEntityToFavorites}. */
+  async addEntityToFavorites(entityName: string, entityId: string): Promise<boolean> {
+    return this.AddEntityToFavorites(entityName, entityId);
+  }
+
   /**
    * Remove entity from favorites
    */
-  async removeEntityFromFavorites(entityId: string): Promise<boolean> {
+  async RemoveEntityFromFavorites(entityId: string): Promise<boolean> {
     try {
       const favorites = this.state$.value.favoriteEntities;
       const favorite = favorites.find(f => f.entityId === entityId);
@@ -715,7 +845,7 @@ export class ExplorerStateService {
       if (deleted) {
         // Update local state
         const favoriteEntities = favorites.filter(f => f.entityId !== entityId);
-        this.updateState({ favoriteEntities });
+        this.UpdateState({ favoriteEntities });
       }
       return deleted;
     } catch (error) {
@@ -724,11 +854,21 @@ export class ExplorerStateService {
     }
   }
 
+  /** @deprecated Use {@link RemoveEntityFromFavorites}. */
+  async removeEntityFromFavorites(entityId: string): Promise<boolean> {
+    return this.RemoveEntityFromFavorites(entityId);
+  }
+
   /**
    * Check if an entity is favorited
    */
-  isEntityFavorited(entityId: string): boolean {
+  IsEntityFavorited(entityId: string): boolean {
     return this.state$.value.favoriteEntities.some(f => f.entityId === entityId);
+  }
+
+  /** @deprecated Use {@link IsEntityFavorited}. */
+  isEntityFavorited(entityId: string): boolean {
+    return this.IsEntityFavorited(entityId);
   }
 
   /**
@@ -793,7 +933,7 @@ export class ExplorerStateService {
           });
         }
       }
-      this.updateState({ favoriteEntities });
+      this.UpdateState({ favoriteEntities });
     } catch (error) {
       console.warn('Failed to load favorite entities:', error);
     }
@@ -889,8 +1029,13 @@ export class ExplorerStateService {
   /**
    * Refresh recent records (call after navigating to a record)
    */
-  async refreshRecentRecords(): Promise<void> {
+  async RefreshRecentRecords(): Promise<void> {
     await this.loadRecentRecords();
+  }
+
+  /** @deprecated Use {@link RefreshRecentRecords}. */
+  async refreshRecentRecords(): Promise<void> {
+    return this.RefreshRecentRecords();
   }
 
   /**
@@ -903,7 +1048,7 @@ export class ExplorerStateService {
    * @param recordId The record ID (primary key value)
    * @param recordName Optional display name for the record
    */
-  addLocalRecentRecord(entityName: string, entityId: string, recordId: string, recordName?: string): void {
+  AddLocalRecentRecord(entityName: string, entityId: string, recordId: string, recordName?: string): void {
     // Filter by application context if applicable
     if (this.currentFilter?.applicationId && !this.applicationEntities.some(ae => UUIDsEqual(ae.EntityID, entityId))) {
       return; // Don't add records from entities not in this application
@@ -939,6 +1084,11 @@ export class ExplorerStateService {
     }
 
     this.recentRecords$.next(currentRecords);
+  }
+
+  /** @deprecated Use {@link AddLocalRecentRecord}. */
+  addLocalRecentRecord(entityName: string, entityId: string, recordId: string, recordName?: string): void {
+    return this.AddLocalRecentRecord(entityName, entityId, recordId, recordName);
   }
 
   /**
@@ -1012,7 +1162,7 @@ export class ExplorerStateService {
       }
 
       this.favoriteRecords$.next(favoriteRecords);
-      this.updateState({ favoriteRecords });
+      this.UpdateState({ favoriteRecords });
     } catch (error) {
       console.warn('Failed to load favorite records:', error);
     }

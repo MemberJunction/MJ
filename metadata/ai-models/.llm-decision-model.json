@@ -1,0 +1,46 @@
+[
+  {
+    "fields": {
+      "Name": "LLM Decision",
+      "Description": "Answers typed decisions (Likelihood, Choice, Score) with a chat model, through the LLM Decision prompt. It is the fallback when no native decision model is available or configured: slower and less consistent than a native decision model, but it needs no extra vendor account.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 50,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MemberJunction",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "LLMDecision",
+            "APIName": "LLM Decision",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1073BD87-1BBA-4534-B146-2C4C3D3C34A0"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:23:48.503Z",
+            "checksum": "b126c6fbbcbc87915ae0eed08b2b74e0319e0e8ec51b2432a61f960948da76b6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "ECE88C9A-14C9-412C-8675-1CB8325C9B1C"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T23:23:48.456Z",
+      "checksum": "0e1358b474ae22c2ef15587057392ec90dd34e3e0b4d29a77dfac767b42c4d38"
+    }
+  }
+]

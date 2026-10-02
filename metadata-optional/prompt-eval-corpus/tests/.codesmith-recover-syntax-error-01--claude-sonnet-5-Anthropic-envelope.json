@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-recover-syntax-error-01 [claude-sonnet-5 · Anthropic · envelope]",
+    "Description": "The prior code threw. The agent must retry with corrected code rather than reporting failure on the first stumble — loop resilience.",
+    "InputDefinition": {
+      "payload": {
+        "iterations": 1,
+        "errors": [
+          "SyntaxError: Unexpected token '}'"
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Group the records by category and count them."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Execute Code FAILED: SyntaxError: Unexpected token '}' at line 3."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-recover-syntax-error-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Execute Code",
+            "params": {
+              "code": {
+                "matcher": "nonEmpty"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Execute Code",
+                "params": {
+                  "code": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "B88BD293-181C-47EF-AC19-1C808F1A1C82"
+  }
+}

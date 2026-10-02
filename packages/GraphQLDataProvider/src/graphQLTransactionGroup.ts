@@ -1,4 +1,4 @@
-import { TransactionGroupBase, TransactionResult } from "@memberjunction/core";
+import { BaseEntity, BaseEntityResult, TransactionGroupBase, TransactionResult } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { SafeJSONParse } from "@memberjunction/global";
@@ -106,6 +106,9 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
                 const resultJSON = data.ResultsJSON[i];
                 const resultObject = SafeJSONParse(resultJSON);
                 const item = this.PendingTransactions[i];
+                if (!transactionSucceeded) {
+                    this.recordServerFailure(item.BaseEntity, data.ErrorMessages?.[i]);
+                }
                 returnResults.push(new TransactionResult(item, resultObject, transactionSucceeded && resultObject !== null));
             }
             return returnResults;
@@ -113,5 +116,47 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
         else {
             throw new Error('Failed to execute transaction group');
         }
+    }
+
+    /**
+     * Copies the server's own failure result for one item onto that item's entity, so the caller can
+     * say WHICH row failed and why (#4309).
+     *
+     * The reason was always on the wire — `TransactionGroupResolver.PrepareReturnValue` maps
+     * `ErrorMessages` from every entity's `LatestResult` — and this class discarded it, leaving
+     * `TransactionGroupBase.Submit()`'s notification handler to record the generic
+     * "Transaction group failed" instead. `TransactionResult`'s own docstring already directs
+     * consumers to `BaseEntity.LatestResult`, so that is where this belongs rather than on a new
+     * field nothing reads yet.
+     *
+     * Registering here rather than in the notification handler is what makes it stick:
+     * `BaseEntity`'s handler only invents its generic result when NOTHING was added to the history
+     * (`currentResultCount === this.ResultHistory.length`), and `HandleSubmit` runs first.
+     *
+     * The predicate is whether the server sent an actual REASON, not whether it sent `Success:
+     * false` — every item of a failed group reports false. `DatabaseProviderBase` registers an
+     * entity's result *before* enrolling the row and only flips it to true in the transaction
+     * callback, so a row that enrolled and was then abandoned serializes as `Success: false` with
+     * an EMPTY message. Keying on the flag would overwrite `BaseEntity`'s own "Transaction group
+     * failed" with a blank one, making the report worse for every non-refused row. So this only
+     * ever UPGRADES the message, and stays silent when it has nothing to add.
+     */
+    private recordServerFailure(entity: BaseEntity, errorMessageJSON: string | undefined): void {
+        const serverResult = SafeJSONParse<Partial<BaseEntityResult>>(errorMessageJSON ?? '');
+        if (!serverResult || serverResult.Success !== false) {
+            return;
+        }
+        const message = serverResult.Message?.trim();
+        if (!message && (serverResult.Errors?.length ?? 0) === 0) {
+            return; // failed, but the server told us nothing this entity does not already know
+        }
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = serverResult.Type ?? (entity.IsSaved ? 'update' : 'create');
+        result.Message = message ?? null;
+        result.Errors = serverResult.Errors ?? [];
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        entity.RegisterResultHistoryEntry(result);
     }
 }

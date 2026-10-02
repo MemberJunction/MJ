@@ -136,6 +136,15 @@ export class EntityDocumentVectorSource implements IClusterVectorSource {
         }
 
         const docs = result.Results;
+        const unvectorizedDocs = docs.filter((d) => !d.AIModelID || d.AIModelID.trim().length === 0);
+        if (unvectorizedDocs.length > 0) {
+            const summary = unvectorizedDocs.map((d) => `"${d.Name}"`).join(', ');
+            throw new Error(
+                `Cannot cluster documents without an embedding model (e.g. Context documents without vectorization). ` +
+                `Selected: ${summary}. Choose documents that are vectorized with an embedding model.`,
+            );
+        }
+
         const distinctModels = new Set(docs.map((d) => (d.AIModelID || '').toLowerCase()));
         if (distinctModels.size > 1) {
             const summary = docs.map((d) => `"${d.Name}" (${d.AIModel || 'unknown model'})`).join(', ');

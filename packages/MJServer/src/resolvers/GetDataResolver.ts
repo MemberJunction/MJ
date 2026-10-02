@@ -6,8 +6,8 @@ import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { NoLog } from '../logging/NoLog.js';
 import { v4 as uuidv4 } from 'uuid';
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
-import { getDbType } from '../index.js';
-import { getSystemUser } from '../auth/index.js';
+import { GetDbType } from '../index.js';
+import { GetSystemUser } from '../auth/index.js';
 import sql from 'mssql';
  
 @InputType()
@@ -125,7 +125,7 @@ export class GetDataResolver {
             LogStatus(`GetData invoked: ${input.Queries.length} queries`);
 
             // validate the token
-            if (!isTokenValid(input.Token)) {
+            if (!IsTokenValid(input.Token)) {
                 throw new Error(`Token ${input.Token} is not valid or has expired`);
             }
 
@@ -139,8 +139,8 @@ export class GetDataResolver {
             // Queries may contain {{query:"CategoryPath/QueryName(params)"}} tokens that
             // reference reusable queries. These must be resolved to CTEs before raw SQL execution.
             const compositionEngine = new QueryCompositionEngine();
-            const platform = getDbType();
-            const systemUser = await getSystemUser();
+            const platform = GetDbType();
+            const systemUser = await GetSystemUser();
 
             // Execute all queries in parallel, but execute each individual query in its own try catch block so that if one fails, the others can still be processed
             // and also so that we can capture the error message for each query and return it
@@ -204,7 +204,7 @@ export class GetDataResolver {
                                 Queries: input.Queries, 
                                 ErrorMessages: errorMessages }
 
-            recordTokenUse(input.Token, {request: input, results: returnVal});
+            RecordTokenUse(input.Token, {request: input, results: returnVal});
 
             // Success below is derived from having no errorMessages, check that array
             return returnVal;
@@ -296,7 +296,7 @@ const __defaultTokenLifeSpan = 1000 * 60 * 5; // 5 minutes
  * Critical finding).
  * @param now injectable for tests; defaults to the real current time
  */
-export function pruneExpiredTokens(now: Date = new Date()): void {
+export function PruneExpiredTokens(now: Date = new Date()): void {
     for (let i = __accessTokens.length - 1; i >= 0; i--) {
         if (__accessTokens[i].ExpiresAt <= now) {
             __accessTokens.splice(i, 1);
@@ -304,17 +304,27 @@ export function pruneExpiredTokens(now: Date = new Date()): void {
     }
 }
 
+/** @deprecated Use {@link PruneExpiredTokens}. */
+export function pruneExpiredTokens(now: Date = new Date()): void {
+    return PruneExpiredTokens(now);
+}
+
 /** Number of tokens currently tracked (post-sweep, at last mutation). Exposed for tests/diagnostics. */
-export function getAccessTokenCount(): number {
+export function GetAccessTokenCount(): number {
     return __accessTokens.length;
 }
 
-export function registerAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: any): GetDataAccessToken {
-    pruneExpiredTokens();
+/** @deprecated Use {@link GetAccessTokenCount}. */
+export function getAccessTokenCount(): number {
+    return GetAccessTokenCount();
+}
+
+export function RegisterAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: any): GetDataAccessToken {
+    PruneExpiredTokens();
 
     const tokenToUse = token || uuidv4();
 
-    if (tokenExists(tokenToUse)) {
+    if (TokenExists(tokenToUse)) {
         // should never happen if we used the uuidv4() function but could happen if someone tries to use a custom token
         throw new Error(`Token ${tokenToUse} already exists`);
     }
@@ -327,7 +337,12 @@ export function registerAccessToken(token?: string, lifeSpan: number = __default
     __accessTokens.push(newToken);
     return newToken;
 }
-export function deleteAccessToken(token: string) {
+
+/** @deprecated Use {@link RegisterAccessToken}. */
+export function registerAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: any): GetDataAccessToken {
+    return RegisterAccessToken(token, lifeSpan, requestorPayload);
+}
+export function DeleteAccessToken(token: string) {
     const index = __accessTokens.findIndex((t) => t.Token === token);
     if (index >= 0) {
         __accessTokens.splice(index, 1);
@@ -336,17 +351,32 @@ export function deleteAccessToken(token: string) {
         throw new Error(`Token ${token} does not exist`);
     }
 }
-export function tokenExists(token: string) {
+
+/** @deprecated Use {@link DeleteAccessToken}. */
+export function deleteAccessToken(token: string) {
+    return DeleteAccessToken(token);
+}
+export function TokenExists(token: string) {
     return __accessTokens.find((t) => t.Token === token) !== undefined;
 }
-export function isTokenValid(token: string) {
+
+/** @deprecated Use {@link TokenExists}. */
+export function tokenExists(token: string) {
+    return TokenExists(token);
+}
+export function IsTokenValid(token: string) {
     const t = __accessTokens.find((t) => t.Token === token);
     if (t) {
         return t.ExpiresAt > new Date();
     }
     return false;
+}
+
+/** @deprecated Use {@link IsTokenValid}. */
+export function isTokenValid(token: string) {
+    return IsTokenValid(token);
 } 
-export function recordTokenUse(token: string, usePayload: any) {
+export function RecordTokenUse(token: string, usePayload: any) {
     const t = __accessTokens.find((t) => t.Token === token);
     if (t) {
         if (!t.TokenUses) {
@@ -357,4 +387,9 @@ export function recordTokenUse(token: string, usePayload: any) {
     else {
         throw new Error(`Token ${token} does not exist`);
     }
+}
+
+/** @deprecated Use {@link RecordTokenUse}. */
+export function recordTokenUse(token: string, usePayload: any) {
+    return RecordTokenUse(token, usePayload);
 }

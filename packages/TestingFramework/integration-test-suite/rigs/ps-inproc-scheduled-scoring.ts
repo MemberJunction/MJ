@@ -39,7 +39,7 @@
  *
  * Exit code: 0 = passed (or cleanly skipped), 1 = failures, 2 = bootstrap error.
  */
-import { bootstrapAI } from './lib/ai-bootstrap';
+import { BootstrapAI } from './lib/ai-bootstrap';
 import {
   RunView,
   UserInfo,
@@ -340,7 +340,7 @@ async function cleanup(md: IMetadataProvider, user: UserInfo, ids: {
 
 async function main(): Promise<void> {
   const t0 = Date.now();
-  const { user, provider } = await bootstrapAI();
+  const { user, provider } = await BootstrapAI();
   const md = provider;
 
   let scheduledJobId: string | undefined;
