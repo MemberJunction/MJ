@@ -39,6 +39,20 @@
       {
         "fields": {
           "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric Consensus",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F2BE0462-B8C6-44ED-B041-0C6512F60DCD"
+        },
+        "deleteRecord": {
+          "delete": true,
+          "deletedAt": "2026-10-02T04:09:00.000Z"
+        }
+      },
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
           "ActionID": "@lookup:MJ: Actions.Name=Get Rubric Subject",
           "Status": "Active"
         },

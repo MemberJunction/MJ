@@ -63,8 +63,16 @@ describe('shipped rubric metadata', () => {
 
     it('does not give the Rubric Evaluation Agent Get Rubric Consensus', () => {
         const agent = JSON.parse(readFileSync(join(root, 'agents/.rubric-evaluation-agent.json'), 'utf8'));
-        const actions = agent.relatedEntities['MJ: AI Agent Actions'].map((row: { fields: { ActionID: string } }) => row.fields.ActionID);
-        expect(actions).not.toContain('@lookup:MJ: Actions.Name=Get Rubric Consensus');
+        const actions = agent.relatedEntities['MJ: AI Agent Actions'] as { fields: { ActionID: string }; primaryKey: { ID: string }; deleteRecord?: { delete: boolean; deletedAt?: string } }[];
+        const consensus = actions.find(row => row.primaryKey.ID === 'F2BE0462-B8C6-44ED-B041-0C6512F60DCD');
+        expect(consensus?.fields.ActionID).toBe('@lookup:MJ: Actions.Name=Get Rubric Consensus');
+        expect(consensus?.deleteRecord).toEqual({ delete: true, deletedAt: '2026-10-02T04:09:00.000Z' });
+        const live = actions.filter(row => row.deleteRecord?.delete !== true).map(row => row.fields.ActionID);
+        expect(live).not.toContain('@lookup:MJ: Actions.Name=Get Rubric Consensus');
+        expect(live).toEqual([
+            '@lookup:MJ: Actions.Name=Get Rubric',
+            '@lookup:MJ: Actions.Name=Get Rubric Subject',
+        ]);
         const prompt = readFileSync(join(root, 'prompts/templates/rubrics/rubric-evaluation-agent.md'), 'utf8');
         expect(prompt).not.toMatch(/Use Get Rubric Consensus/);
         expect(prompt).toContain('Do not call Get Rubric Consensus.');
