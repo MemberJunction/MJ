@@ -317,7 +317,7 @@ The flow:
 3. **Assemble** — call `FeatureAssemblyExecutor` with `context='train'` → raw matrix + schema + preprocessing recipe.
 4. **Carve the locked holdout FIRST** — a leading `LockedHoldoutFraction` slice the search *never sees*, scored exactly once on the final model (§5.1).
 5. **Call the sidecar `/train`** — get back the artifact, `fitted_preprocessing`, train+validation metrics, feature importance, and `holdout_metrics`.
-6. **Persist the artifact** to MJStorage (`MJ: Files`) via an injected store.
+6. **Persist the artifact** to MJStorage (`MJ: Files`) via an injected store. The production store uploads the bytes to a **File Storage Account** (preferring one for the most-preferred active provider) and records the File row's `ProviderID` + `ProviderKey`, so any host sharing the database and storage provider can score the model. Training fails with a clear error when no File Storage Account is configured. Models trained before this (File row with no `ProviderKey`, bytes under `PS_ARTIFACT_DIR` or `<os.tmpdir()>/mj-ps-artifacts`) still score on the host that trained them; retrain to move them to storage.
 7. **Create the immutable `MJ: ML Models` row** (`Status='Draft'`) carrying `FittedPreprocessing`, `FeatureSchema`, `Metrics`, `HoldoutMetrics`, `FeatureImportance`, and full `Lineage`.
 8. **Leakage check** — run `detectSingleFeatureDominance`; a dominant feature flags the run and blocks auto-promotion.
 9. **Finalize the run** (`Completed`/`Failed`, results, costs, notes).

@@ -78,10 +78,7 @@ export class MJSidecarPredictor implements ISidecarPredictor {
 // NOTE on `IArtifactLoader`:
 //
 // The read-side artifact loader is the counterpart to the training
-// `MJFilesArtifactStore.save`. Like the training store, the byte transfer to
-// MJStorage is wired by the layer that owns the storage binding (provider id +
-// MJStorage driver). The Engine package deliberately does NOT import MJStorage
-// drivers (keeping it slim + trivially mockable), so the production
-// `IArtifactLoader` is supplied by that higher layer (or by the sidecar's own
-// warm artifact cache keyed by model id). Tests inject an in-memory loader; see
-// `./artifact-loader` for the in-memory implementation.
+// `MJFilesArtifactStore.save`. The production loader, `MJStorageArtifactLoader`
+// in `./artifact-loader`, downloads the bytes from the storage provider named on
+// the artifact's `MJ: Files` row through MJStorage's `FileStorageEngine`. Tests
+// inject the in-memory loader from the same module.

@@ -9,16 +9,20 @@
  * - {@link InMemoryArtifactLoader} — for unit tests (no DB, no MJStorage), which
  *   can also bridge a training-time `InMemoryArtifactStore.Saved` map so a model
  *   trained in-memory can be scored in-memory in the same test.
- * - {@link LocalArtifactLoader} — the read-side inverse of `MJFilesArtifactStore`.
- *   The fileId is the real `MJ: Files` row id and the bytes live on local disk at
- *   `<baseDir>/<fileId>.bin` (dev / on-prem); this reads that path and returns its
- *   bytes, or `null` when absent. **Production follow-up**: a provider `GetObject`
- *   keyed by the File id replaces the local `readFile`.
+ * - {@link MJStorageArtifactLoader} — the production loader, the read-side inverse
+ *   of `MJFilesArtifactStore`. The fileId is the real `MJ: Files` row id; it loads
+ *   that row and downloads the bytes from the row's storage provider at its
+ *   `ProviderKey`, so any host sharing the database and provider can score (#4991).
+ * - {@link LocalArtifactLoader} — reads `<baseDir>/<fileId>.bin` from local disk.
+ *   Only models trained before #4991 have bytes there (their File row has no
+ *   `ProviderKey`); {@link MJStorageArtifactLoader} delegates those to it.
  */
 
 import { readFile } from 'node:fs/promises';
 
-import { LogError, type UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import type { MJFileEntity } from '@memberjunction/core-entities';
+import { FileStorageEngine } from '@memberjunction/storage';
 
 import { ResolveLocalArtifactBaseDir, LocalArtifactPath } from '../training/artifact-store';
 import type { IArtifactLoader } from './types';
@@ -64,17 +68,93 @@ export class InMemoryArtifactLoader implements IArtifactLoader {
 }
 
 /**
- * The single production {@link IArtifactLoader} — the read-side inverse of
- * {@link MJFilesArtifactStore}. Given a fileId (= the real `MJ: Files` row id the
- * artifact was stored under), it reads the bytes from local disk at
- * `<baseDir>/<fileId>.bin` and returns them, or `null` when the file is absent.
+ * Options for {@link MJStorageArtifactLoader}.
+ */
+export interface MJStorageArtifactLoaderOptions {
+  /** Metadata provider the File row is loaded through (defaults to `Metadata.Provider`). */
+  Provider?: IMetadataProvider;
+  /**
+   * Loader for artifacts trained before #4991, whose File row has no `ProviderKey`
+   * because the bytes were written to the training host's disk. Defaults to a
+   * {@link LocalArtifactLoader}.
+   */
+  LegacyLoader?: IArtifactLoader;
+}
+
+/**
+ * The production {@link IArtifactLoader} — the read-side inverse of
+ * `MJFilesArtifactStore`. Given a fileId (the `MJ: Files` row id the artifact was
+ * stored under), it loads the File row and downloads the bytes from that row's
+ * storage provider at its `ProviderKey`. Every host that shares the database and
+ * the storage provider gets the same bytes.
  *
- * A missing file is a normal, expected `null` (the model has no persisted artifact);
- * only a genuine I/O failure (permissions, corruption) is logged.
+ * Returns `null` when the File row or the object does not exist, or when no File
+ * Storage Account can read the row's provider; the reason is logged.
+ */
+export class MJStorageArtifactLoader implements IArtifactLoader {
+  private readonly legacyLoader: IArtifactLoader;
+
+  constructor(private readonly options: MJStorageArtifactLoaderOptions = {}) {
+    this.legacyLoader = options.LegacyLoader ?? new LocalArtifactLoader();
+  }
+
+  /** @inheritdoc */
+  public async load(fileId: string, contextUser?: UserInfo): Promise<Uint8Array | null> {
+    const file = await this.loadFileRow(fileId, contextUser);
+    if (!file) {
+      return null;
+    }
+    if (!file.ProviderKey) {
+      // Trained before #4991: the bytes were written to the training host's disk.
+      return this.legacyLoader.load(fileId, contextUser);
+    }
+    return this.download(file, file.ProviderKey, contextUser);
+  }
+
+  /** Load the `MJ: Files` row, or `null` when it does not exist. */
+  private async loadFileRow(fileId: string, contextUser?: UserInfo): Promise<MJFileEntity | null> {
+    const md = this.options.Provider ?? Metadata.Provider;
+    const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+    if (!(await file.Load(fileId))) {
+      LogError(`MJStorageArtifactLoader: no MJ: Files row '${fileId}' for the model artifact`);
+      return null;
+    }
+    return file;
+  }
+
+  /** Download the object a File row points at from the row's storage provider. */
+  private async download(file: MJFileEntity, objectKey: string, contextUser?: UserInfo): Promise<Uint8Array | null> {
+    if (!contextUser) {
+      LogError(`MJStorageArtifactLoader: a context user is required to download artifact '${file.ID}' from storage`);
+      return null;
+    }
+    try {
+      const engine = FileStorageEngine.Instance;
+      await engine.Config(false, contextUser, this.options.Provider);
+      const accounts = engine.GetAccountsByProviderID(file.ProviderID);
+      if (accounts.length === 0) {
+        LogError(`MJStorageArtifactLoader: no File Storage Account for provider '${file.ProviderID}', so artifact '${file.ID}' cannot be read`);
+        return null;
+      }
+      const driver = await engine.GetDriver(accounts[0].ID, contextUser);
+      const content = await driver.GetObject({ fullPath: objectKey });
+      return new Uint8Array(content);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`MJStorageArtifactLoader: failed to download artifact '${file.ID}' at '${objectKey}': ${message}`);
+      return null;
+    }
+  }
+}
+
+/**
+ * Reads an artifact from local disk at `<baseDir>/<fileId>.bin` and returns its
+ * bytes, or `null` when the file is absent. Only models trained before #4991 have
+ * bytes on disk; {@link MJStorageArtifactLoader} delegates those File rows here.
  *
- * **NOT for multi-host production** — it can only read paths on the machine the
- * artifact was written to. **Production follow-up**: replace the local `readFile`
- * with a provider `GetObject` keyed by the File id; the id contract is unchanged.
+ * A missing file is a normal, expected `null`; only a genuine I/O failure
+ * (permissions, corruption) is logged. It can only read paths on the machine the
+ * artifact was written to.
  */
 export class LocalArtifactLoader implements IArtifactLoader {
   private readonly baseDir: string;

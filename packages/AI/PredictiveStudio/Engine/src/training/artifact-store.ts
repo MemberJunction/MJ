@@ -5,39 +5,43 @@
  * model artifact is kept out of the `MJ: ML Models` row and referenced by file
  * id; this module provides:
  *
- * - {@link MJFilesArtifactStore} — the single coherent store: it records a real
- *   `MJ: Files` row (so `MLModel.ArtifactFileID` satisfies its FK to `__mj.File`)
- *   AND writes the serialized bytes to local disk at `<baseDir>/<file.ID>.bin`. It
- *   returns the real File row id, which the matching loader uses to read the bytes
- *   back. Kept dependency-light: it does not import MJStorage cloud drivers.
+ * - {@link MJFilesArtifactStore} — the production store: it uploads the serialized
+ *   bytes to a File Storage Account through MJStorage (`FileStorageEngine`) and
+ *   records the `MJ: Files` row that points at them (`ProviderID` + `ProviderKey`,
+ *   `Status = 'Uploaded'`). It returns the real File row id, so
+ *   `MLModel.ArtifactFileID` satisfies its FK to `__mj.File`, and the matching
+ *   `MJStorageArtifactLoader` downloads the bytes back from that row's provider.
  * - {@link InMemoryArtifactStore} — an in-memory map used by unit tests (no DB).
  *
- * ## The real-File-id + local-bytes convention (dev / on-prem)
+ * ## Why the bytes live in the storage provider
  *
- * `MLModel.ArtifactFileID` is a FK to `__mj.File`, so the fileId MUST be a genuine
- * `MJ: Files` row id — a bare random UUID would violate `FK_MLModel_ArtifactFile`.
- * Therefore the store ALWAYS creates the File row (stamped with the active storage
- * `ProviderID`) and returns `file.ID`. For this dev / on-prem mode the bytes are
- * persisted to **local disk** keyed by that same id (`<baseDir>/<file.ID>.bin`,
- * {@link resolveLocalArtifactBaseDir}); the scoring loader reads them back by id.
+ * A model trained on one host must score on any other host that shares the
+ * database and the storage provider — a second MJAPI node, a redeployed container,
+ * another developer's machine (#4991). Bytes written to the training host's disk
+ * only exist there, and under the default `os.tmpdir()` location not even there
+ * for long. The File row is the whole contract: whoever can read it can fetch the
+ * bytes.
  *
- * **Production follow-up**: replace the local `writeFile` with a real storage
- * `PutObject` against the provider (and the loader with a `GetObject`); the File
- * row + id contract is unchanged, so only the byte transport moves to the cloud.
+ * Models trained before this change have a File row with no `ProviderKey`; their
+ * bytes are still on the training host's disk at `<baseDir>/<file.ID>.bin`
+ * ({@link ResolveLocalArtifactBaseDir}). The loader keeps reading those so existing
+ * models do not stop scoring where they used to; retraining moves them to storage.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { RunView, LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJFileEntity } from '@memberjunction/core-entities';
+import { FileStorageEngine, type FileStorageBase } from '@memberjunction/storage';
 import type { IArtifactStore, IEntityFactory } from './types';
 
 /**
- * Resolve the base directory artifact bytes are written to: env `PS_ARTIFACT_DIR`
- * when set, else `<os.tmpdir()>/mj-ps-artifacts`. Centralized so the store (write)
- * and the loader (read) agree on the location (bytes live at `<baseDir>/<file.ID>.bin`).
+ * Resolve the base directory that artifacts trained before #4991 were written to:
+ * env `PS_ARTIFACT_DIR` when set, else `<os.tmpdir()>/mj-ps-artifacts`. New
+ * artifacts go to the storage provider; this is read only to keep scoring those
+ * older models (bytes at `<baseDir>/<file.ID>.bin`).
  */
 export function ResolveLocalArtifactBaseDir(): string {
   const fromEnv = process.env.PS_ARTIFACT_DIR;
@@ -53,9 +57,8 @@ export function resolveLocalArtifactBaseDir(): string {
 }
 
 /**
- * Build the absolute path an artifact with the given File-row fileId lives at:
- * `<baseDir>/<fileId>.bin`. Shared by the store (write) and the loader (read) so
- * they agree on the on-disk layout.
+ * Build the absolute path a pre-#4991 artifact with the given File-row fileId lives
+ * at: `<baseDir>/<fileId>.bin`.
  *
  * @param baseDir the resolved artifact base directory
  * @param fileId the `MJ: Files` row id the artifact was stored under
@@ -86,90 +89,160 @@ export class InMemoryArtifactStore implements IArtifactStore {
   }
 }
 
+/** Object-key prefix every model artifact is uploaded under in the storage provider. */
+export const ARTIFACT_OBJECT_PREFIX = 'predictive-studio/model-artifacts';
+
+/**
+ * Build the storage object key for a new artifact:
+ * `predictive-studio/model-artifacts/<uuid>/<name>`. The uuid keeps two artifacts
+ * with the same name from overwriting each other; path separators in the name are
+ * replaced so it stays one path segment.
+ *
+ * @param name the human-readable artifact name
+ */
+export function BuildArtifactObjectKey(name: string): string {
+  const cleanName =
+    name
+      .replace(/[/\\]+/g, '_')
+      .replace(/^\.+/, '')
+      .trim() || 'model.bin';
+  return `${ARTIFACT_OBJECT_PREFIX}/${randomUUID()}/${cleanName}`;
+}
+
 /**
  * Options for {@link MJFilesArtifactStore}.
  */
 export interface MJFilesArtifactStoreOptions {
   /**
-   * Storage-provider id to stamp on the `MJ: Files` row (`ProviderID`). Required in
-   * practice — the column is NOT NULL — and supplied by {@link buildArtifactStore}
-   * from the active `MJ: File Storage Providers` row.
+   * The preferred storage provider (the most-preferred active `MJ: File Storage
+   * Providers` row, from {@link ResolveActiveFileStorageProviderId}). When a File
+   * Storage Account exists for it, the artifact is uploaded there; otherwise the
+   * engine's default account is used.
    */
   providerId?: string;
   /** MIME content type recorded on the file (defaults to `application/octet-stream`). */
   contentType?: string;
-  /**
-   * Base directory the serialized bytes are written to. Defaults to
-   * {@link resolveLocalArtifactBaseDir} (env `PS_ARTIFACT_DIR`, else
-   * `<os.tmpdir()>/mj-ps-artifacts`). Injectable so tests target a scratch dir.
-   */
-  baseDir?: string;
+  /** Metadata provider the storage engine loads its accounts through (multi-provider correctness). */
+  provider?: IMetadataProvider;
+}
+
+/** The account a save uploads to, and the provider its File row is stamped with. */
+interface ArtifactStorageTarget {
+  Driver: FileStorageBase;
+  ProviderID: string;
 }
 
 /**
- * The single coherent {@link IArtifactStore}: it creates a real `MJ: Files` row
- * (through the injected {@link IEntityFactory}, stamped with the active storage
- * `ProviderID`) AND persists the serialized artifact bytes to local disk at
- * `<baseDir>/<file.ID>.bin`. It returns the real File row id so
- * `MLModel.ArtifactFileID` satisfies its FK to `__mj.File`, and the matching
- * {@link LocalArtifactLoader} reads the bytes back by that id.
+ * The production {@link IArtifactStore}. It uploads the serialized artifact bytes
+ * to a File Storage Account through MJStorage, then records the `MJ: Files` row that
+ * points at them (through the injected {@link IEntityFactory}). It returns the real
+ * File row id so `MLModel.ArtifactFileID` satisfies its FK to `__mj.File`, and any
+ * host that can read that row can download the bytes.
  *
- * Why both halves: the FK forces a genuine File row id, but `MJ: Files.Save()` only
- * records the metadata row — it never moves bytes — so for this dev / on-prem mode
- * we write the bytes ourselves, keyed by the File id. **Production follow-up**:
- * swap the local `writeFile` for a real provider `PutObject`; the id contract is
- * unchanged.
+ * Upload happens before the row is saved, and a failed save deletes the uploaded
+ * object, so a failure never leaves a File row that points at nothing.
  */
 export class MJFilesArtifactStore implements IArtifactStore {
-  private readonly baseDir: string;
-
   constructor(
     private readonly entityFactory: IEntityFactory,
     private readonly options: MJFilesArtifactStoreOptions = {},
-  ) {
-    this.baseDir = options.baseDir ?? ResolveLocalArtifactBaseDir();
-  }
+  ) {}
 
   /** @inheritdoc */
   public async save(bytes: Uint8Array, name: string, contextUser?: UserInfo): Promise<string> {
+    if (!contextUser) {
+      throw new Error('MJFilesArtifactStore: a context user is required to upload a model artifact to storage');
+    }
+    const target = await this.resolveStorageTarget(contextUser);
+    const objectKey = BuildArtifactObjectKey(name);
+    const contentType = this.options.contentType ?? 'application/octet-stream';
+    await this.uploadBytes(target.Driver, objectKey, bytes, contentType);
+    return this.recordFileRow(target, objectKey, bytes.byteLength, name, contentType, contextUser);
+  }
+
+  /**
+   * Pick the File Storage Account to upload to: an account for the preferred
+   * provider when one exists, else the engine's default account. Throws when no
+   * account is configured — without one there is nowhere other hosts can read from.
+   */
+  private async resolveStorageTarget(contextUser: UserInfo): Promise<ArtifactStorageTarget> {
+    const engine = FileStorageEngine.Instance;
+    await engine.Config(false, contextUser, this.options.provider);
+
+    const preferred = this.options.providerId ? engine.GetAccountsByProviderID(this.options.providerId) : [];
+    if (preferred.length > 0 && this.options.providerId) {
+      return { Driver: await engine.GetDriver(preferred[0].ID, contextUser), ProviderID: this.options.providerId };
+    }
+
+    const fallback = engine.ResolveStorageAccount();
+    if (!fallback) {
+      const message =
+        'no File Storage Account is configured. Model artifacts are stored in MJStorage so that any host sharing the ' +
+        'database can score the model; configure a File Storage Account (MJ: File Storage Accounts) for an active provider.';
+      LogError(`MJFilesArtifactStore: ${message}`);
+      throw new Error(`Failed to persist model artifact: ${message}`);
+    }
+    return { Driver: await engine.GetDriver(fallback.account.ID, contextUser), ProviderID: fallback.provider.ID };
+  }
+
+  /** Upload the bytes, throwing when the driver reports failure. */
+  private async uploadBytes(driver: FileStorageBase, objectKey: string, bytes: Uint8Array, contentType: string): Promise<void> {
+    const uploaded = await driver.PutObject(objectKey, Buffer.from(bytes), contentType);
+    if (!uploaded) {
+      LogError(`MJFilesArtifactStore: storage refused the upload of '${objectKey}'`);
+      throw new Error(`Failed to persist model artifact bytes: storage refused the upload of '${objectKey}'`);
+    }
+  }
+
+  /**
+   * Save the `MJ: Files` row for an uploaded object and return its id. On a failed
+   * save the object is deleted again, so no orphan is left in storage.
+   */
+  private async recordFileRow(
+    target: ArtifactStorageTarget,
+    objectKey: string,
+    byteLength: number,
+    name: string,
+    contentType: string,
+    contextUser: UserInfo,
+  ): Promise<string> {
     const file = await this.entityFactory.getEntityObject<MJFileEntity>('MJ: Files', contextUser);
     file.Name = name;
-    file.ContentType = this.options.contentType ?? 'application/octet-stream';
-    if (this.options.providerId) {
-      file.ProviderID = this.options.providerId;
-    }
-    file.Description = `Predictive Studio model artifact (${bytes.byteLength} bytes)`;
+    file.ContentType = contentType;
+    file.ProviderID = target.ProviderID;
+    file.ProviderKey = objectKey;
+    file.Status = 'Uploaded';
+    file.Description = `Predictive Studio model artifact (${byteLength} bytes)`;
 
-    const saved = await file.Save();
-    if (!saved) {
-      const message = file.LatestResult?.CompleteMessage ?? 'unknown error';
-      LogError(`MJFilesArtifactStore: failed to persist artifact file row '${name}': ${message}`);
-      throw new Error(`Failed to persist model artifact file: ${message}`);
+    if (await file.Save()) {
+      return file.ID;
     }
+    const message = file.LatestResult?.CompleteMessage ?? 'unknown error';
+    LogError(`MJFilesArtifactStore: failed to persist artifact file row '${name}': ${message}`);
+    await this.deleteOrphan(target.Driver, objectKey);
+    throw new Error(`Failed to persist model artifact file: ${message}`);
+  }
 
-    // The File row exists but holds no bytes; persist them locally keyed by the real
-    // File id (dev/on-prem). Production follow-up: a provider PutObject instead.
+  /** Best-effort removal of an uploaded object whose File row could not be saved. */
+  private async deleteOrphan(driver: FileStorageBase, objectKey: string): Promise<void> {
     try {
-      await mkdir(this.baseDir, { recursive: true });
-      await writeFile(LocalArtifactPath(this.baseDir, file.ID), bytes);
+      if (await driver.DeleteObject(objectKey)) {
+        return;
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      LogError(`MJFilesArtifactStore: persisted File row '${file.ID}' but failed to write bytes under '${this.baseDir}': ${message}`);
-      throw new Error(`Failed to persist model artifact bytes: ${message}`);
+      LogError(`MJFilesArtifactStore: deleting orphaned object '${objectKey}' threw: ${error instanceof Error ? error.message : String(error)}`);
+      return;
     }
-
-    return file.ID;
+    LogError(`MJFilesArtifactStore: orphaned object '${objectKey}' — its File row failed to save and the delete also failed`);
   }
 }
 
 // ----- Store wiring (shared by every training wiring site) ---------------------
 
 /**
- * Resolve the id of the first **active** `MJ: File Storage Providers` row, or
- * `null` when none is active. The provider id is stamped on every artifact's
- * `MJ: Files` row (its `ProviderID` is NOT NULL); a seeded active provider (e.g.
- * "Local Storage") is what lets {@link MJFilesArtifactStore} create a valid File row
- * in dev / on-prem deployments.
+ * Resolve the id of the most-preferred **active** `MJ: File Storage Providers` row,
+ * or `null` when none is active. {@link MJFilesArtifactStore} uploads to an account
+ * for this provider when one exists.
  *
  * @param contextUser the acting user (server-side data access is user-scoped)
  * @param provider optional provider for multi-provider correctness
@@ -207,21 +280,21 @@ export async function resolveActiveFileStorageProviderId(
 }
 
 /**
- * Build the training-side {@link IArtifactStore}, stamping the resolved active
- * storage `providerId` on every File row. The store creates a real `MJ: Files` row
- * (FK-valid `ArtifactFileID`) and writes the bytes to local disk keyed by that id
- * (dev / on-prem). When no active provider exists the File row's NOT-NULL
- * `ProviderID` cannot be set and `Save()` will fail with a clear error — seed an
- * active provider (e.g. "Local Storage") to enable artifact persistence.
+ * Build the training-side {@link IArtifactStore}. The store uploads the bytes to a
+ * File Storage Account (preferring one for `providerId`) and records the
+ * `MJ: Files` row that points at them, returning an FK-valid `ArtifactFileID`.
+ * When no File Storage Account is configured, `save()` fails with an error that
+ * says so.
  *
- * @param providerId the active storage-provider id (or `null` when none is active)
+ * @param providerId the preferred storage-provider id (or `null` when none is active)
  * @param entityFactory the entity-creation seam the store records the File row through
+ * @param provider optional metadata provider the storage engine loads accounts through
  */
-export function BuildArtifactStore(providerId: string | null, entityFactory: IEntityFactory): IArtifactStore {
-  return new MJFilesArtifactStore(entityFactory, { providerId: providerId ?? undefined });
+export function BuildArtifactStore(providerId: string | null, entityFactory: IEntityFactory, provider?: IMetadataProvider): IArtifactStore {
+  return new MJFilesArtifactStore(entityFactory, { providerId: providerId ?? undefined, provider });
 }
 
 /** @deprecated Use {@link BuildArtifactStore}. */
-export function buildArtifactStore(providerId: string | null, entityFactory: IEntityFactory): IArtifactStore {
-  return BuildArtifactStore(providerId, entityFactory);
+export function buildArtifactStore(providerId: string | null, entityFactory: IEntityFactory, provider?: IMetadataProvider): IArtifactStore {
+  return BuildArtifactStore(providerId, entityFactory, provider);
 }

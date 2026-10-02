@@ -55,9 +55,9 @@ export class UnresolvedPipelineResolver implements IPipelineResolver {
  *
  * The artifact store is built the same way the standalone training path builds it:
  * resolve the active `MJ: File Storage Providers` id (see
- * {@link resolveActiveFileStorageProviderId}) and stamp it on the store, which
- * creates a real `MJ: Files` row and writes the bytes to local disk keyed by that
- * id (dev / on-prem). Async so the provider lookup is part of the wiring.
+ * {@link ResolveActiveFileStorageProviderId}) and hand it to the store, which
+ * uploads the bytes to a File Storage Account through MJStorage and records the
+ * `MJ: Files` row that points at them. Async so the provider lookup is part of the wiring.
  *
  * @param contextUser request user — threaded for isolation/audit
  * @param provider optional provider for multi-provider correctness
@@ -72,7 +72,7 @@ export async function BuildProductionExperimentDeps(
     entityFactory,
     recordLoader: new RunViewRecordLoader(),
     sidecar: new MJSidecarTrainer(),
-    artifactStore: BuildArtifactStore(providerId, entityFactory),
+    artifactStore: BuildArtifactStore(providerId, entityFactory, provider),
     contextUser,
     provider,
   };

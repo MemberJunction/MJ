@@ -94,10 +94,9 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
   /**
    * Build the engine's production dependency bundle from the action's run params
    * (threading `ContextUser` + `Provider` for isolation/multi-provider
-   * correctness). Resolves the active File Storage Provider once and picks the
-   * artifact-store family accordingly (MJ-Files when a provider is active, local
-   * disk when none is — the dev/on-prem fallback; see
-   * {@link resolveActiveFileStorageProviderId}). Async so the provider lookup is
+   * correctness). Resolves the preferred active File Storage Provider once (see
+   * {@link ResolveActiveFileStorageProviderId}); the artifact store uploads the
+   * model bytes to an account for it through MJStorage. Async so the provider lookup is
    * part of the wiring; overridable so tests inject in-memory seams.
    */
   protected async buildDeps(params: RunActionParams): Promise<TrainingDeps> {
@@ -107,7 +106,7 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
       entityFactory,
       recordLoader: new RunViewRecordLoader(),
       sidecar: new MJSidecarTrainer(),
-      artifactStore: BuildArtifactStore(providerId, entityFactory),
+      artifactStore: BuildArtifactStore(providerId, entityFactory, params.Provider),
       contextUser: params.ContextUser,
       provider: params.Provider,
     };
