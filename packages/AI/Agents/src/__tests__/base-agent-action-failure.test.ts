@@ -42,6 +42,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/actions', () => ({
+    BaseAction: class BaseAction {},
     ActionEngineServer: {
         get Instance() {
             return harness.actionEngineInstance;

@@ -353,7 +353,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         vectorDBInstance.TryWireColocatedHost(this.Provider);
         if (vectorDBInstance.SupportsColocatedQuery) {
             const colocated = await vectorDBInstance.ColocatedQuery({
-                indexName: vectorIndex.ExternalID?.trim() || vectorIndex.Name, // provider-side index name; Name is the MJ label
+                indexName: AIEngine.Instance.GetProviderIndexName(vectorIndex),
                 vector: queryVector,
                 keyword: queryText,
                 topK,
@@ -396,7 +396,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         options: QueryByVectorValues,
         contextUser: UserInfo
     ): Promise<VectorMatch[]> {
-        const response: BaseResponse = await vectorDB.QueryIndex({ ...options, id: vectorIndex.ExternalID?.trim() || vectorIndex.Name }, contextUser);
+        const response: BaseResponse = await vectorDB.QueryIndex({ ...options, id: AIEngine.Instance.GetProviderIndexName(vectorIndex) }, contextUser);
         return this.matchesOf(response);
     }
 

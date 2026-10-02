@@ -26,6 +26,7 @@ import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
 import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
+import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -133,6 +134,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['user-routines', UserRoutinesChecks, 16],
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
+        ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -219,6 +221,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-artifact-tools': 9,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
+        'agent-decisions-switch': 9,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 11,
@@ -290,6 +293,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runquery-params': 10,
         'runview-features': 6,
         'role-elevation': 6,
+        'rubrics': 11,
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
@@ -334,7 +338,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(96);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(98);
     });
 });
 
@@ -477,6 +481,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'record-cloning.RC8',
         'record-cloning.RC9',
         'role-elevation.RE6',
+        'rubrics.R7',
+        'rubrics.R8',
+        'rubrics.R9',
+        'rubrics.W1',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',

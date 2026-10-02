@@ -57,6 +57,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/actions', () => ({
+    BaseAction: class BaseAction {},
     ActionEngineServer: {
         get Instance() {
             return harness.actionEngineInstance;
@@ -552,8 +553,8 @@ const ONE_ACTION_HIDDEN = '1 of your actions is not described below. If none bel
 
 const TEST_USER = { ID: USER_ID, Name: 'Catalog Tester', Email: 'catalog@test.mj' } as unknown as UserInfo;
 
-/** Narrowing on: 2 actions (and skills), 1 sub-agent. */
-const NARROWED = { maxActionsInPrompt: 2, maxSubAgentsInPrompt: 1 };
+/** Narrowing on, with the master switch for decision-model use: 2 actions (and skills), 1 sub-agent. */
+const NARROWED = { decisionsEnabled: true, maxActionsInPrompt: 2, maxSubAgentsInPrompt: 1 };
 
 /** What the decision says about each unpinned item. */
 const PROBABILITIES: Record<string, number> = {
@@ -657,10 +658,11 @@ describe('catalog narrowing — off by default', () => {
     });
 
     it.each([
-        ['the shipped default of -1', { maxActionsInPrompt: -1, maxSubAgentsInPrompt: -1 }],
-        ['0', { maxActionsInPrompt: 0, maxSubAgentsInPrompt: 0 }],
-        ['limits the catalog does not exceed', { maxActionsInPrompt: 5, maxSubAgentsInPrompt: 3 }],
-        ['an action limit the unpinned actions already fit', { maxActionsInPrompt: 4 }],
+        ['the shipped default of -1', { decisionsEnabled: true, maxActionsInPrompt: -1, maxSubAgentsInPrompt: -1 }],
+        ['0', { decisionsEnabled: true, maxActionsInPrompt: 0, maxSubAgentsInPrompt: 0 }],
+        ['limits the catalog does not exceed', { decisionsEnabled: true, maxActionsInPrompt: 5, maxSubAgentsInPrompt: 3 }],
+        ['an action limit the unpinned actions already fit', { decisionsEnabled: true, maxActionsInPrompt: 4 }],
+        ['limits that would narrow, without the master switch (decisionsEnabled)', { maxActionsInPrompt: 2, maxSubAgentsInPrompt: 1 }],
     ])('changes nothing with %s', async (_label, promptParams) => {
         harness.agent = makeAgentRow(promptParams);
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask');
@@ -768,7 +770,7 @@ describe('catalog narrowing — with a limit', () => {
 
     it('names every hidden sub-agent and skill, and counts the hidden actions', async () => {
         // A limit of 1 hides two actions and two skills.
-        harness.agent = makeAgentRow({ maxActionsInPrompt: 1, maxSubAgentsInPrompt: 1 });
+        harness.agent = makeAgentRow({ decisionsEnabled: true, maxActionsInPrompt: 1, maxSubAgentsInPrompt: 1 });
         vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answerByName(PROBABILITIES));
         const { agent, runner } = makeAgent(twoTurnScript());
 
@@ -888,7 +890,7 @@ describe('catalog narrowing — with a limit', () => {
     });
 
     it('narrows only the list whose limit is set', async () => {
-        harness.agent = makeAgentRow({ maxSubAgentsInPrompt: 1 });
+        harness.agent = makeAgentRow({ decisionsEnabled: true, maxSubAgentsInPrompt: 1 });
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answerByName(PROBABILITIES));
         const { agent, runner } = makeAgent(twoTurnScript());
 
@@ -1186,7 +1188,7 @@ describe('catalog narrowing — skills', () => {
 
     it('narrows the catalog after the policy, even when a filterAvailableSkills override skips super', async () => {
         // Actions (and so skills) narrowed to 1. The policy refuses Tax Advisor, leaving 2 skills.
-        harness.agent = makeAgentRow({ maxActionsInPrompt: 1 });
+        harness.agent = makeAgentRow({ decisionsEnabled: true, maxActionsInPrompt: 1 });
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answerByName(PROBABILITIES));
         const { agent, runner } = makeAgent(twoTurnScript(), new NoTaxAdvisorAgent());
 
