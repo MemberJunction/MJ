@@ -201,6 +201,14 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
                 `(only types with RequireToken may issue token-only claims)`
             );
         }
+        // ...and the CALLER must hold the token. With no recipient no email is sent, so a token
+        // generated here would be returned to nobody, and the claim could never be redeemed.
+        if (!normalizedEmail && !params.VerificationToken && !params.MagicLinkInviteID) {
+            throw new Error(
+                'A token-only IdentityClaim needs a caller-supplied VerificationToken (or a MagicLinkInviteID): ' +
+                'with no recipient email, a generated token would be delivered to no one'
+            );
+        }
 
         const expiresAt = this.resolveClaimExpiry(params, claimType);
 
@@ -277,9 +285,6 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
     }
 
     /**
-     * Sends a claimant email notification using CommunicationEngine and TemplateEngineServer
-     */
-    /**
      * When a new claim expires: an explicit `ExpiresAt` wins, otherwise whole days from
      * `ExpiresInDays`, the type's `DefaultExpirationDays`, or 30.
      *
@@ -301,6 +306,9 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         return expiresAt;
     }
 
+    /**
+     * Sends a claimant email notification using CommunicationEngine and TemplateEngineServer
+     */
     private async sendClaimEmail(
         claim: MJIdentityClaimEntity,
         claimType: MJIdentityClaimTypeEntity,

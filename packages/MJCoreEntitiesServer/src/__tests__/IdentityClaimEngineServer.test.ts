@@ -717,6 +717,16 @@ describe('IdentityClaimEngineServer', () => {
             expect(send).not.toHaveBeenCalled();
         });
 
+        it('refuses a token-only claim when the caller holds no token — it could never be redeemed', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const mockClaim = createMockClaim();
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+            vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByName').mockReturnValue(tokenOnlyType());
+
+            await expect(engine.CreateClaim({ ClaimTypeName: 'TestClaim' })).rejects.toThrow(/caller-supplied VerificationToken/);
+            expect(mockClaim.Save).not.toHaveBeenCalled();
+        });
+
         it('still requires an email for a type that does not require a token', async () => {
             const engine = IdentityClaimEngineServer.Instance;
             vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(createMockClaim() as unknown as MJIdentityClaimEntity);
