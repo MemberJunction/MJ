@@ -29,7 +29,11 @@ Clef speaks the System One decisions format, the one TypeSafe's Jev speaks: `{ m
 
 ## Usage
 
-Most callers reach Clef through `AIDecisionRunner` (`@memberjunction/ai-prompts`). The shipped `Default Decision` prompt does **not** bind Clef: it still asks Jev first, then `LLM Decision`. To ask Clef, name it in the call, or bind it in a prompt of your own:
+Most callers reach Clef through `AIDecisionRunner` (`@memberjunction/ai-prompts`). The shipped `Default Decision` prompt does **not** bind Clef: it still asks Jev first, then `LLM Decision`. To ask Clef, name it in the call, or bind it in a prompt of your own.
+
+**As a fallback.** Like every active `Decision` model, Clef (and Clef-flash) joins the power-matched fallback candidates of any Decision prompt that does not set `RequireSpecificModels`, ranked by closeness to the prompt's `PowerRank`, and only when its Cloudflare key resolves. For the shipped `Default Decision` that means after Jev and `LLM Decision`. `LLM Decision` needs no credential and `Default Decision` has no failover strategy, so in practice Clef is reached there only when `LLM Decision` is unavailable or failover is turned on.
+
+Naming Clef in the call:
 
 ```typescript
 import { AIEngine } from '@memberjunction/aiengine';
@@ -81,7 +85,7 @@ Workers AI needs two things: the Cloudflare **account ID**, which goes in the UR
 1. **In the key**, as `"<accountId>:<apiToken>"`. This is the simplest, and the only way to use two accounts in one process.
 2. **In the environment**, as `CLOUDFLARE_ACCOUNT_ID`, with the key holding the token alone.
 
-A key that names an account wins over the variable. If neither gives an account ID, the call fails without a request, with a fatal `Authentication` error that names both options.
+A key that names an account wins over the variable. If neither gives an account ID, the call fails without a request, with a `NoCredentials` error that names both options. It allows failover, so a misconfigured Clef does not stop the runner from trying the next decision model.
 
 The key resolves like any model's: an AI Credential Binding (on the prompt-model, model-vendor or vendor row, or a default credential of the `Cloudflare` vendor's `API Key` type), or else the legacy environment variable, which is keyed by driver class. A bound credential reaches the driver as its values in JSON (`{"apiKey":"…"}`); the driver reads its `apiKey` the same way, so `"<accountId>:<apiToken>"` works there too. A credential that also has an `accountId` field wins over both, and an `endpoint` field sets the base URL (see AI Gateway below).
 
@@ -105,7 +109,8 @@ A credential's `endpoint` does the same. The constructor wins, then the credenti
 ## Errors and failover
 
 - A `429` or a `5xx` is thrown with its HTTP status, so `AIDecisionRunner` fails over to the next decision model. The message names Cloudflare's `errors[].message`.
-- A `401` is a fatal `Authentication` error.
+- A missing token or account ID fails before any request with a `NoCredentials` error that allows failover.
+- A `401` is an `Authentication` error. `ErrorAnalyzer` rates it fatal, which stops the failover loop.
 - A `200` whose envelope says `success: false` fails with the envelope's messages.
 - A response that cannot be mapped (a missing answer, a choice that is not an option, probabilities that sum to 0) fails with a `ModelError` that allows failover.
 

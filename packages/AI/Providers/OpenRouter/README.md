@@ -99,6 +99,8 @@ given.
 SiliconFlow) through the same Decisions API, so the `Kev-4B` model's OpenRouter row uses
 `OpenRouterDecision` and the same key. Its other route, a self-hosted Kev server, uses
 `SystemOneDecision` in [`@memberjunction/ai-systemone`](../SystemOne/README.md).
+`Default Decision` does not bind Kev-4B, but as an active Decision model it is one of the
+power-matched fallbacks, after Jev and `LLM Decision`, for any host that has this key.
 
 **The wire format.** Jev and Kev speak the System One decisions format. `OpenRouterDecision` extends
 `BaseSystemOneDecision` (`@memberjunction/ai`), which owns the request and answer mapping; this class

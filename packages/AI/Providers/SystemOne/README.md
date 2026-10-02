@@ -31,9 +31,11 @@ graph TD
 2. the credential's `endpoint`: bind an AI Credential of type **API Key with Endpoint** to the model's `System One Endpoint` row;
 3. the `SYSTEMONE_BASE_URL` environment variable.
 
-`/v1/systemone` is appended unless the URL already ends with it (a URL ending in `/v1` gets `/systemone`). With no endpoint, the call fails before any request with a fatal `NoCredentials` error naming both options.
+`/v1/systemone` is appended unless the URL already ends with it (a URL ending in `/v1` gets `/systemone`). With no endpoint, the call fails before any request with a `NoCredentials` error naming both options. It allows failover, so an unconfigured Kev size does not stop the runner from trying the next decision model, including another Kev size with its own endpoint.
 
-**One server per model.** Credentials bind per model-vendor row, so each Kev size can point at its own deployment: bind one `API Key with Endpoint` credential to `Kev-4B`'s `System One Endpoint` row, another to `Kev-27B`'s. The runner looks for a binding on the prompt-model row first, then the model-vendor row, then the vendor, then a default credential of the vendor's type, then the legacy environment variable.
+**One server per model.** A Kev deployment serves exactly one size, and every Kev size's row shares the one `System One Endpoint` vendor, so bind each credential to a **model-vendor row**: one `API Key with Endpoint` credential on `Kev-4B`'s `System One Endpoint` row, another on `Kev-27B`'s. The runner looks for a binding on the prompt-model row first, then the model-vendor row, then the vendor, then a default credential of the vendor's type, then the legacy environment variable.
+
+> **Do not bind a Kev endpoint at the vendor level, or as the type's default credential, or through `SYSTEMONE_BASE_URL` alone, unless you run one Kev size only.** Each of those resolves for *every* Kev row, so every size would be sent to the same server, and the runs would be recorded against sizes that never answered. The server cannot tell you: Kev's server accepts the same model names (`kev-latest`, `jev-latest`) whatever size it serves, and echoes the name it was sent. If you do run one size only, deactivate the other sizes' `System One Endpoint` rows.
 
 **The token** is optional. With one, the request carries `Authorization: Bearer <token>`. With none, it carries no `Authorization` header, because a local `llama-server` or Kev server is open by default. Leave the credential's `apiKey` empty for an open server.
 
@@ -73,10 +75,13 @@ params.override = { modelId: kev4b.ID, vendorId: systemOneEndpoint.ID };
 
 The shipped `Default Decision` prompt does not bind any Kev model.
 
+**As a fallback.** Like every active `Decision` model, each Kev size joins the power-matched fallback candidates of any Decision prompt that does not set `RequireSpecificModels`, ranked by closeness to the prompt's `PowerRank`, and only when its credential resolves. For the shipped `Default Decision` that means after Jev and `LLM Decision`. `LLM Decision` needs no credential and `Default Decision` has no failover strategy, so in practice Kev is reached there only when `LLM Decision` is unavailable or failover is turned on. `Kev-4B`'s OpenRouter row uses the same OpenRouter key as Jev, so a host already set up for Jev has Kev-4B among those fallbacks with no further setup.
+
 ## Errors and failover
 
 - A `429` or a `5xx` is thrown with its HTTP status, so `AIDecisionRunner` fails over to the next decision model.
-- A `401` is a fatal `Authentication` error.
+- A missing endpoint fails before any request with a `NoCredentials` error that allows failover.
+- A `401` is an `Authentication` error. `ErrorAnalyzer` rates it fatal, which stops the failover loop.
 - The message names the server's own text: Kev's `detail` (a string, or a list of `{ msg }`) or llama.cpp's `error.message`.
 - A response that cannot be mapped fails with a `ModelError` that allows failover.
 
