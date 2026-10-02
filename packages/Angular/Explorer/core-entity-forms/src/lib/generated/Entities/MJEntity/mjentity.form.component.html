@@ -2738,25 +2738,50 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Scoped Notification Configs Section -->
+    <!-- Rubric Evaluations (Subject Entity ID) Section -->
     <mj-collapsible-panel
-        SectionKey="mJScopedNotificationConfigs"
-        SectionName="Scoped Notification Configs"
-        Icon="fa fa-bell"
+        SectionKey="mJRubricEvaluationsSubjectEntityID"
+        SectionName="Rubric Evaluations (Subject Entity ID)"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJScopedNotificationConfigs')"
+        [BadgeCount]="GetSectionRowCount('mJRubricEvaluationsSubjectEntityID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scoped Notification Configs','PrimaryScopeEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Scoped Notification Configs','PrimaryScopeEntityID')"
-                [AllowLoad]="IsSectionExpanded('mJScopedNotificationConfigs')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Evaluations','SubjectEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Evaluations','SubjectEntityID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricEvaluationsSubjectEntityID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJScopedNotificationConfigs', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricEvaluationsSubjectEntityID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Rubric Evaluations (Context Entity ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRubricEvaluationsContextEntityID"
+        SectionName="Rubric Evaluations (Context Entity ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRubricEvaluationsContextEntityID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Evaluations','ContextEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Evaluations','ContextEntityID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricEvaluationsContextEntityID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricEvaluationsContextEntityID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

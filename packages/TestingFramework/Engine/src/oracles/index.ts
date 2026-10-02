@@ -13,3 +13,5 @@ export * from './LLMJudgeOracle';
 export * from './DecisionJudgeOracle';
 export * from './ExactMatchOracle';
 export * from './SQLValidatorOracle';
+export * from './RubricOracle';
+export * from './rubric-resolution';

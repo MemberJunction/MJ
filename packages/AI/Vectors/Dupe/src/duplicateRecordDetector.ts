@@ -45,6 +45,7 @@ import {
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
 import { EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { AIEngine } from "@memberjunction/aiengine";
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
@@ -1020,11 +1021,11 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         // Resolve the vector index name from the entity document's VectorIndexID
-        // Uses KnowledgeHubMetadataEngine cache instead of a RunView query
+        // Uses the AIEngine vector index cache instead of a RunView query
         if (entityDocument.VectorIndexID) {
-            const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
+            const vectorIndex = AIEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
             if (vectorIndex) {
-                this.indexName = vectorIndex.Name;
+                this.indexName = AIEngine.Instance.GetProviderIndexName(vectorIndex);
             }
         }
         if (!this.indexName) {

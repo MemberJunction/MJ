@@ -253,7 +253,11 @@ async function loadChunks(ctx: IntegrationCheckContext, itemID: string): Promise
     const r = await new RunView().RunView<MJContentItemChunkEntity>({ EntityName: 'MJ: Content Item Chunks', ExtraFilter: `ContentItemID='${itemID}'`, OrderBy: 'Sequence ASC', ResultType: 'entity_object' }, ctx.User);
     return r.Results;
 }
-/** Refresh the KH cache so a just-created source (+ the fixture index) is visible to the engine. */
+/**
+ * Refresh the KH cache so a just-created source is visible to the engine. The fixture index needs no
+ * reload: it is saved through BaseEntity, and AIEngineBase (which owns the Vector Indexes cache) picks
+ * it up from the save event.
+ */
 async function refreshEngines(ctx: IntegrationCheckContext): Promise<void> {
     await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
 }
@@ -602,7 +606,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('content-vectorization', {
         await AIEngine.Instance.Config(false, ctx.User, ctx.Provider);
         await KnowledgeHubMetadataEngine.Instance.Config(false, ctx.User, ctx.Provider);
         await AutotagBaseEngine.Instance.Config(false, ctx.User, ctx.Provider);
-        const idx = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0];
+        const idx = AIEngine.Instance.VectorIndexes[0];
         if (!idx?.EmbeddingModelID || !idx?.VectorDatabaseID) {
             S.Skip = true;
             S.SkipReason = 'no Vector Index with an embedding model + vector DB to borrow — content vectorization cannot be exercised';

@@ -1,0 +1,78 @@
+{
+  "fields": {
+    "Name": "Awards",
+    "Status": "Active",
+    "Description": "Eligibility is a gate at 1. Craft weighs 2. Pass threshold 0.6. See guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "ID": "FDE5A507-C3A8-45C0-B450-330FECB95F70"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Worked example from guides/RUBRICS_GUIDE.md. Draft because publish stamps are not set here.",
+          "PassThreshold": 0.6
+        },
+        "primaryKey": {
+          "ID": "F494515D-0177-460F-8523-875037C66675"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "eligible",
+                "Name": "Eligible",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)",
+                "GateMinimumScore": 1
+              },
+              "primaryKey": {
+                "ID": "A87EC1B1-2895-4FE0-B2C0-CD76FEB9C36E"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "craft",
+                "Name": "Craft",
+                "NodeType": "Criterion",
+                "Weight": 2,
+                "IsGate": false,
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "36B0EE12-37CE-45B1-A78E-6CDD1A917D55"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "originality",
+                "Name": "Originality",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "CF7DEE2F-84D0-4AAC-A292-9952982EC66F"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

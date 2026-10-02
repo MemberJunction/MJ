@@ -1,6 +1,8 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { TestRunSummary } from '../../services/testing-instrumentation.service';
+import { Component, Input, Output, EventEmitter, inject } from '@angular/core';
+import type { IMetadataProvider } from '@memberjunction/core';
+import { TestRunSummary, TestingInstrumentationService } from '../../services/testing-instrumentation.service';
 import { OracleResult } from './oracle-breakdown-table.component';
+import { RubricRunView } from '@memberjunction/ng-testing';
 
 @Component({
   standalone: false,
@@ -61,6 +63,9 @@ import { OracleResult } from './oracle-breakdown-table.component';
             <div class="oracle-section">
               <app-oracle-breakdown-table [results]="oracleResults"></app-oracle-breakdown-table>
             </div>
+          }
+          @if (RubricView) {
+            <mj-testing-rubric-result [OracleResults]="oracleResults" [Provider]="SessionProvider"></mj-testing-rubric-result>
           }
           <!-- Result Details -->
           @if (resultDetails) {
@@ -376,6 +381,15 @@ import { OracleResult } from './oracle-breakdown-table.component';
   `]
 })
 export class TestRunDetailPanelComponent {
+  private readonly session = inject(TestingInstrumentationService, { optional: true });
+
+  /** The signed-in session provider. An input wins; otherwise the testing service's provider is used. */
+  @Input() Provider: IMetadataProvider | null = null;
+
+  public get SessionProvider(): IMetadataProvider | null {
+    return this.Provider ?? this.session?.Provider ?? null;
+  }
+
   @Input() TestRun!: TestRunSummary;
 
   /** @deprecated Use {@link TestRun}. */
@@ -392,6 +406,10 @@ export class TestRunDetailPanelComponent {
   @Input() set oracleResults(value: OracleResult[]) {
     this.OracleResults = value;
   }
+  get RubricView() {
+    return RubricRunView(this.OracleResults);
+  }
+
   /** @deprecated Use {@link OracleResults}. */
   get oracleResults(): OracleResult[] {
     return this.OracleResults;
