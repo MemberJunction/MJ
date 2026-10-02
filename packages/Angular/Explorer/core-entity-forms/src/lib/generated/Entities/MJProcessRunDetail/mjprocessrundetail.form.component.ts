@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Process Run Details') // Tell MemberJunction about this class
 @Component({
@@ -19,7 +20,8 @@ export class MJProcessRunDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'executionStatus', sectionName: 'Execution Status', isExpanded: true },
             { sectionKey: 'executionResults', sectionName: 'Execution Results', isExpanded: true },
             { sectionKey: 'tracingAndLogs', sectionName: 'Tracing and Logs', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }
 }

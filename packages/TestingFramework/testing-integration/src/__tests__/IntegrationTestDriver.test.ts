@@ -20,7 +20,8 @@ vi.mock('../bootstrap', () => ({
     getActiveIntegrationStorage: () => ({ SetCount: (_category: string) => 0, ResetCounts: () => { /* no-op */ } }),
     getActiveIntegrationBootstrap: () => mockActiveBootstrap(),
     getActiveIntegrationClientBootstrap: () => null,
-    bootstrapIntegrationServer: async () => { throw new Error('unit test must not self-bootstrap'); },
+    BootstrapIntegrationServer: async () => { throw new Error('unit test must not self-bootstrap'); },
+    get bootstrapIntegrationServer() { return this.BootstrapIntegrationServer; },
     bootstrapIntegrationClient: async () => { throw new Error('unit test must not self-bootstrap'); },
     serverProcessAlreadyClaimed: () => mockServerClaimed()
 }));

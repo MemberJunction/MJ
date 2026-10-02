@@ -250,3 +250,39 @@ describe('ApplyStyleOverrides fontScale', () => {
     expect(styles.typography.fontSize.md).toBe('12px');
   });
 });
+
+describe('BuildStylesFromTheme — token reader', () => {
+  it('reads tokens through a supplied function when there is no DOM', () => {
+    // React Native holds the same `--mj-*` VALUES but has no stylesheet to read them from. The
+    // mapping is shared so a native surface and a browser cannot derive different ComponentStyles
+    // from the same theme.
+    const tokens: Record<string, string> = {
+      '--mj-brand-primary': '#0076b6',
+      '--mj-bg-page': '#f8fafc',
+      '--mj-text-primary': '#1e293b',
+    };
+    const styles = BuildStylesFromTheme((t) => tokens[t]);
+    expect(styles.colors.primary).toBe('#0076b6');
+    expect(styles.colors.background).toBe('#f8fafc');
+    expect(styles.colors.text).toBe('#1e293b');
+  });
+
+  it('keeps the default for any token the reader does not define', () => {
+    const defaults = SetupStyles();
+    const styles = BuildStylesFromTheme((t) => (t === '--mj-brand-primary' ? '#ff0000' : undefined));
+    expect(styles.colors.primary).toBe('#ff0000');
+    expect(styles.colors.secondary).toBe(defaults.colors.secondary);
+  });
+
+  it('builds a chart palette from the viz tokens a reader exposes', () => {
+    const styles = BuildStylesFromTheme((t) => {
+      const m = /^--mj-viz-(\d+)$/.exec(t);
+      return m && Number(m[1]) <= 3 ? `#00000${m[1]}` : undefined;
+    });
+    expect(styles.chartPalette).toEqual(['#000001', '#000002', '#000003']);
+  });
+
+  it('still returns defaults when given nothing and there is no DOM', () => {
+    expect(BuildStylesFromTheme().colors.primary).toBe(SetupStyles().colors.primary);
+  });
+});

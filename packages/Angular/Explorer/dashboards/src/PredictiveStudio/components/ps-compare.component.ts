@@ -5,8 +5,8 @@ import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import {
   PSCompareColumn,
   PSCompareMetricRow,
-  buildCompareMetricRows,
-  deriveCompareColumns,
+  BuildCompareMetricRows,
+  DeriveCompareColumns,
 } from '../predictive-studio.view-models';
 
 /** A selectable session option for the compare picker. */
@@ -75,11 +75,11 @@ interface SessionOption {
                   </div>
                 }
                 @for (row of metricRows; track row.label) {
-                  <div class="rowhdr"><span>{{ row.label }}</span><span class="h ps-muted ps-small">{{ row.qualifier }}</span></div>
-                  @for (v of row.values; track $index) {
-                    <div class="cell" [class.best]="$index === row.bestIndex">
+                  <div class="rowhdr"><span>{{ row.label }}</span><span class="h ps-muted ps-small">{{ row.Qualifier }}</span></div>
+                  @for (v of row.Values; track $index) {
+                    <div class="cell" [class.best]="$index === row.BestIndex">
                       <span class="v">{{ v }}</span>
-                      @if ($index === row.bestIndex) { <span class="best-pill">BEST</span> }
+                      @if ($index === row.BestIndex) { <span class="best-pill">BEST</span> }
                     </div>
                   }
                 }
@@ -101,21 +101,57 @@ export class PSCompareComponent implements OnInit {
   @Input() engine!: PredictiveStudioEngine;
 
   /** Sessions with ≥2 scored iterations — the comparable set. */
-  public sessionOptions: SessionOption[] = [];
-  public selectedSessionId = '';
-  public runs: PSCompareColumn[] = [];
-  public metricRows: PSCompareMetricRow[] = [];
+  public SessionOptions: SessionOption[] = [];
+
+  /** @deprecated Use {@link SessionOptions}. */
+  public get sessionOptions(): SessionOption[] {
+    return this.SessionOptions;
+  }
+  /** @deprecated Use {@link SessionOptions}. */
+  public set sessionOptions(value: SessionOption[]) {
+    this.SessionOptions = value;
+  }
+  public SelectedSessionId = '';
+
+  /** @deprecated Use {@link SelectedSessionId}. */
+  public get selectedSessionId() {
+    return this.SelectedSessionId;
+  }
+  /** @deprecated Use {@link SelectedSessionId}. */
+  public set selectedSessionId(value) {
+    this.SelectedSessionId = value;
+  }
+  public Runs: PSCompareColumn[] = [];
+
+  /** @deprecated Use {@link Runs}. */
+  public get runs(): PSCompareColumn[] {
+    return this.Runs;
+  }
+  /** @deprecated Use {@link Runs}. */
+  public set runs(value: PSCompareColumn[]) {
+    this.Runs = value;
+  }
+  public MetricRows: PSCompareMetricRow[] = [];
+
+  /** @deprecated Use {@link MetricRows}. */
+  public get metricRows(): PSCompareMetricRow[] {
+    return this.MetricRows;
+  }
+  /** @deprecated Use {@link MetricRows}. */
+  public set metricRows(value: PSCompareMetricRow[]) {
+    this.MetricRows = value;
+  }
 
   ngOnInit(): void {
     this.buildSessionOptions();
-    this.selectedSessionId = this.sessionOptions[0]?.id ?? '';
-    this.rebuild();
+    this.SelectedSessionId = this.SessionOptions[0]?.id ?? '';
+    this.Rebuild();
   }
 
   /** List sessions that have at least two scored iterations (the only ones worth comparing). */
   private buildSessionOptions(): void {
     const sessions = this.engine?.Sessions ?? [];
-    this.sessionOptions = sessions
+    this.SessionOptions = sessions
       .map((s) => {
         const scoredCount = this.engine.IterationRowsForSession(s.ID).filter((it) => it.Score != null).length;
         return { id: s.ID, name: s.Name, scoredCount };
@@ -124,26 +160,41 @@ export class PSCompareComponent implements OnInit {
   }
 
   /** Derive the compare columns + metric rows for the selected session. */
-  public rebuild(): void {
-    if (!this.selectedSessionId) {
-      this.runs = [];
-      this.metricRows = [];
+  public Rebuild(): void {
+    if (!this.SelectedSessionId) {
+      this.Runs = [];
+      this.MetricRows = [];
       return;
     }
-    const rows = this.engine.IterationRowsForSession(this.selectedSessionId);
-    this.runs = deriveCompareColumns(rows, 3);
-    this.metricRows = buildCompareMetricRows(this.runs);
+    const rows = this.engine.IterationRowsForSession(this.SelectedSessionId);
+    this.Runs = DeriveCompareColumns(rows, 3);
+    this.MetricRows = BuildCompareMetricRows(this.Runs);
+  }
+
+  /** @deprecated Use {@link Rebuild}. */
+  public rebuild(): void {
+    return this.Rebuild();
   }
 
   /** CSS grid template — stub column + one fraction per run column. */
+  public get GridTemplate(): string {
+    return `200px repeat(${this.Runs.length}, 1fr)`;
+  }
+
+  /** @deprecated Use {@link GridTemplate}. */
   public get gridTemplate(): string {
-    return `200px repeat(${this.runs.length}, 1fr)`;
+    return this.GridTemplate;
   }
 
   /** A plain-language verdict naming the best run by holdout score. */
-  public get verdict(): string {
-    const best = this.runs.find((r) => r.isBest);
+  public get Verdict(): string {
+    const best = this.Runs.find((r) => r.isBest);
     if (!best || best.holdoutAuc == null) return 'Pick the run that wins on the holdout score — the honest out-of-sample number.';
     return `${best.label} (${best.algorithm}) leads on the holdout score at ${best.holdoutAuc.toFixed(3)} — prefer the holdout number over training metrics when promoting.`;
+  }
+
+  /** @deprecated Use {@link Verdict}. */
+  public get verdict(): string {
+    return this.Verdict;
   }
 }

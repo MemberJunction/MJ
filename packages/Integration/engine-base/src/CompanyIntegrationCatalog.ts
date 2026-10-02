@@ -62,6 +62,53 @@ export const CATALOG_FIELD_COLUMNS = [
 ] as const;
 
 /**
+ * The three columns of a per-connection field row that the dependency walk reads.
+ *
+ * The walk is the one consumer that needs every field of a connection that points at another
+ * object, and it needs nothing else of them, so those are loaded for the whole connection as plain
+ * rows — never entities — while full field rows are loaded one object at a time. Conflating the two
+ * is what forced the whole catalog to be resident.
+ */
+export const CATALOG_EDGE_COLUMNS = ['ID', 'CompanyIntegrationObjectID', 'RelatedCompanyIntegrationObjectID'] as const;
+
+/** One dependency edge: a field of one per-connection object pointing at another of the same connection. */
+export interface CatalogDependencyEdge {
+    ID: string;
+    CompanyIntegrationObjectID: string;
+    RelatedCompanyIntegrationObjectID: string | null;
+}
+
+/**
+ * The per-connection catalog of the scope in force, as its owner hands it to the engine base
+ * through `IntegrationEngineBase.CatalogDataResolver`.
+ *
+ * Raw rows rather than projections, so projection and memoisation have one home (the engine base)
+ * and a scope owner cannot hand over a projection that skipped the column check.
+ */
+export interface CatalogScopeData {
+    /** Every object row of the connection in scope, loaded when the scope was entered. */
+    Objects: BaseEntity[];
+    /**
+     * Full field rows of the objects warm right now, keyed by lowercased object id. Field rows are
+     * fetched one object at a time into a bounded cache, so an object absent from this map is COLD,
+     * which is a different thing from an object with no fields.
+     */
+    FieldsByObjectID: ReadonlyMap<string, BaseEntity[]>;
+    /**
+     * The connection's dependency edges: one per field that points at another object. Required
+     * whenever a dependency order is asked for: a missing edge set does not fail, it silently
+     * reorders a sync, children first.
+     */
+    Edges?: readonly CatalogDependencyEdge[];
+    /**
+     * True when the scope's owner warms every object before reading it, so a read of a cold object
+     * is a missed warm site and throws. False for owners that have no warm sites yet, whose cold
+     * reads answer empty exactly as they did before the catalog stopped being resident.
+     */
+    RequireWarmFields: boolean;
+}
+
+/**
  * Legacy read names mapped onto their per-connection columns.
  *
  * A connector resolving a dependency edge reads `f.RelatedIntegrationObjectID` and matches it

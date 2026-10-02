@@ -4,7 +4,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData } from '@memberjunction/core-entities';
 import { RecordProcessHistoryComponent } from '@memberjunction/ng-record-process-studio';
 import { AgentToolResult } from '../shared/agent-tool-validation';
-import { buildHistoryAgentContext, resolveRowByIDOrName } from './bulk-operations-agent-helpers';
+import { BuildHistoryAgentContext, ResolveRowByIDOrName } from './bulk-operations-agent-helpers';
 
 /**
  * "Run History" sub-page of the Bulk Operations shell. A thin host that renders the generic, self-contained
@@ -76,7 +76,7 @@ export class BulkOperationsRunHistoryComponent extends BaseResourceComponent imp
             return;
         }
         const open = h.OpenRunRow;
-        this.navigationService.SetAgentContext(this, buildHistoryAgentContext({
+        this.navigationService.SetAgentContext(this, BuildHistoryAgentContext({
             Mode: h.Mode,
             Runs: h.Runs,
             OpenRunID: open?.ID ?? null,
@@ -189,6 +189,6 @@ export class BulkOperationsRunHistoryComponent extends BaseResourceComponent imp
         h: RecordProcessHistoryComponent,
         rawRef: unknown,
     ): { ok: true; value: RecordProcessHistoryComponent['Runs'][number] } | { ok: false; result: AgentToolResult } {
-        return resolveRowByIDOrName(h.Runs, rawRef, 'run', 'bulk operation run', (r) => r.ProcessName);
+        return ResolveRowByIDOrName(h.Runs, rawRef, 'run', 'bulk operation run', (r) => r.ProcessName);
     }
 }

@@ -341,7 +341,7 @@ import { ToastService } from '../../services/toast.service';
 export class ExportModalComponent {
   private _isVisible = false;
   @Input()
-  set isVisible(value: boolean) {
+  set IsVisible(value: boolean) {
     const opening = value && !this._isVisible;
     this._isVisible = value;
     if (opening) {
@@ -351,29 +351,110 @@ export class ExportModalComponent {
       // pass must bind [branding] FIRST (Angular sets inputs in template order).
       // chat-area's template does; a host mounting with isVisible already true and
       // branding bound after would get the checkbox defaulted off.
-      this.exportOptions.includeTheme = !!this.branding;
+      this.ExportOptions.includeTheme = !!this.Branding;
     }
   }
-  get isVisible(): boolean {
+  get IsVisible(): boolean {
     return this._isVisible;
   }
 
-  @Input() conversation?: MJConversationEntity;
-  @Input() currentUser!: UserInfo;
+  /** @deprecated Use {@link IsVisible}. */
+  get isVisible(): boolean {
+    return this.IsVisible;
+  }
+  /** @deprecated Use {@link IsVisible}. */
+  @Input() set isVisible(value: boolean) {
+    this.IsVisible = value;
+  }
+
+  @Input() Conversation?: MJConversationEntity;
+
+  /** @deprecated Use {@link Conversation}. */
+  @Input() set conversation(value: MJConversationEntity | undefined) {
+    this.Conversation = value;
+  }
+  /** @deprecated Use {@link Conversation}. */
+  get conversation(): MJConversationEntity | undefined {
+    return this.Conversation;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
   /**
    * Host-supplied export branding (theme tokens / logo / title). When set, the
    * HTML format's "Include branding" checkbox defaults on and the branding is
    * passed to {@link ExportService} on export. See `ExportBranding`.
    */
-  @Input() branding: ExportBranding | null = null;
-  @Output() cancelled = new EventEmitter<void>();
-  @Output() exported = new EventEmitter<void>();
+  @Input() Branding: ExportBranding | null = null;
 
-  selectedFormat: ExportFormat | null = 'markdown';
-  isExporting = false;
-  errorMessage = '';
+  /** @deprecated Use {@link Branding}. */
+  @Input() set branding(value: ExportBranding | null) {
+    this.Branding = value;
+  }
+  /** @deprecated Use {@link Branding}. */
+  get branding(): ExportBranding | null {
+    return this.Branding;
+  }
+  @Output() Cancelled = new EventEmitter<void>();
 
-  exportOptions: ExportOptions = {
+  /**
+   * @deprecated Use {@link Cancelled}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (cancelled) keeps working. Must stay AFTER Cancelled: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() cancelled = this.Cancelled;
+  @Output() Exported = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Exported}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (exported) keeps working. Must stay AFTER Exported: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() exported = this.Exported;
+
+  SelectedFormat: ExportFormat | null = 'markdown';
+
+  /** @deprecated Use {@link SelectedFormat}. */
+  get selectedFormat(): ExportFormat | null {
+    return this.SelectedFormat;
+  }
+  /** @deprecated Use {@link SelectedFormat}. */
+  set selectedFormat(value: ExportFormat | null) {
+    this.SelectedFormat = value;
+  }
+  IsExporting = false;
+
+  /** @deprecated Use {@link IsExporting}. */
+  get isExporting() {
+    return this.IsExporting;
+  }
+  /** @deprecated Use {@link IsExporting}. */
+  set isExporting(value) {
+    this.IsExporting = value;
+  }
+  ErrorMessage = '';
+
+  /** @deprecated Use {@link ErrorMessage}. */
+  get errorMessage() {
+    return this.ErrorMessage;
+  }
+  /** @deprecated Use {@link ErrorMessage}. */
+  set errorMessage(value) {
+    this.ErrorMessage = value;
+  }
+
+  ExportOptions: ExportOptions = {
     includeMessages: true,
     includeMetadata: true,
     prettyPrint: true,
@@ -382,16 +463,30 @@ export class ExportModalComponent {
     themeMode: 'light'
   };
 
+  /** @deprecated Use {@link ExportOptions}. */
+  get exportOptions(): ExportOptions {
+    return this.ExportOptions;
+  }
+  /** @deprecated Use {@link ExportOptions}. */
+  set exportOptions(value: ExportOptions) {
+    this.ExportOptions = value;
+  }
+
   /** Format-aware hint under the "Include branding" checkbox. */
-  get brandingHint(): string {
-    if (this.selectedFormat === 'html') {
-      if (!this.exportOptions.includeCSS) {
+  get BrandingHint(): string {
+    if (this.SelectedFormat === 'html') {
+      if (!this.ExportOptions.includeCSS) {
         return 'Requires "Include CSS styling"';
       }
-      return `Embed the app's theme colors${this.branding?.logoUrl ? ', logo,' : ''} and attribution line`;
+      return `Embed the app's theme colors${this.Branding?.logoUrl ? ', logo,' : ''} and attribution line`;
     }
-    const logo = this.branding?.logoUrl && this.selectedFormat === 'markdown' ? ', logo,' : '';
+    const logo = this.Branding?.logoUrl && this.SelectedFormat === 'markdown' ? ', logo,' : '';
     return `Add the title${logo} and attribution line`;
+  }
+
+  /** @deprecated Use {@link BrandingHint}. */
+  get brandingHint(): string {
+    return this.BrandingHint;
   }
 
   /**
@@ -406,26 +501,36 @@ export class ExportModalComponent {
    *   format.
    */
   private resolveExportOptions(): ExportOptions {
-    const unstyledHtml = this.selectedFormat === 'html' && !this.exportOptions.includeCSS;
-    const brandingOn = !!this.exportOptions.includeTheme && !unstyledHtml;
+    const unstyledHtml = this.SelectedFormat === 'html' && !this.ExportOptions.includeCSS;
+    const brandingOn = !!this.ExportOptions.includeTheme && !unstyledHtml;
     return {
-      ...this.exportOptions,
+      ...this.ExportOptions,
       includeTheme: brandingOn,
-      branding: brandingOn ? (this.branding ?? undefined) : undefined
+      branding: brandingOn ? (this.Branding ?? undefined) : undefined
     };
   }
 
+  get ExportTitle(): string {
+    return `Export: ${this.Conversation?.Name || 'Conversation'}`;
+  }
+
+  /** @deprecated Use {@link ExportTitle}. */
   get exportTitle(): string {
-    return `Export: ${this.conversation?.Name || 'Conversation'}`;
+    return this.ExportTitle;
   }
 
+  get CanExport(): boolean {
+    return !this.IsExporting &&
+           !!this.SelectedFormat &&
+           (this.ExportOptions.includeMessages === true);
+  }
+
+  /** @deprecated Use {@link CanExport}. */
   get canExport(): boolean {
-    return !this.isExporting &&
-           !!this.selectedFormat &&
-           (this.exportOptions.includeMessages === true);
+    return this.CanExport;
   }
 
-  formats = [
+  Formats = [
     {
       value: 'markdown' as ExportFormat,
       name: 'Markdown',
@@ -452,67 +557,91 @@ export class ExportModalComponent {
     }
   ];
 
+  /** @deprecated Use {@link Formats}. */
+  get formats() {
+    return this.Formats;
+  }
+  /** @deprecated Use {@link Formats}. */
+  set formats(value) {
+    this.Formats = value;
+  }
+
   constructor(
     private exportService: ExportService,
     private dialogService: DialogService,
     private toastService: ToastService
   ) {}
 
-  selectFormat(format: ExportFormat): void {
-    if (!this.isExporting) {
-      this.selectedFormat = format;
+  SelectFormat(format: ExportFormat): void {
+    if (!this.IsExporting) {
+      this.SelectedFormat = format;
     }
   }
 
-  async onExport(): Promise<void> {
-    if (!this.canExport || !this.conversation) {
+  /** @deprecated Use {@link SelectFormat}. */
+  selectFormat(format: ExportFormat): void {
+    return this.SelectFormat(format);
+  }
+
+  async OnExport(): Promise<void> {
+    if (!this.CanExport || !this.Conversation) {
       return;
     }
 
-    if (!this.exportOptions.includeMessages) {
-      this.errorMessage = 'At least "Include messages" must be selected';
+    if (!this.ExportOptions.includeMessages) {
+      this.ErrorMessage = 'At least "Include messages" must be selected';
       return;
     }
 
-    this.isExporting = true;
-    this.errorMessage = '';
+    this.IsExporting = true;
+    this.ErrorMessage = '';
 
     try {
       await this.exportService.exportConversation(
-        this.conversation.ID,
-        this.selectedFormat!,
-        this.currentUser,
+        this.Conversation.ID,
+        this.SelectedFormat!,
+        this.CurrentUser,
         this.resolveExportOptions()
       );
 
       this.toastService.success('Conversation exported successfully');
-      this.exported.emit();
+      this.Exported.emit();
       this.resetForm();
     } catch (error) {
       console.error('Error exporting conversation:', error);
-      this.errorMessage = error instanceof Error ? error.message : 'Failed to export conversation';
-      this.toastService.error(this.errorMessage);
+      this.ErrorMessage = error instanceof Error ? error.message : 'Failed to export conversation';
+      this.toastService.error(this.ErrorMessage);
     } finally {
-      this.isExporting = false;
+      this.IsExporting = false;
     }
   }
 
-  onCancel(): void {
-    this.cancelled.emit();
+  /** @deprecated Use {@link OnExport}. */
+  async onExport(): Promise<void> {
+    return this.OnExport();
+  }
+
+  OnCancel(): void {
+    this.Cancelled.emit();
     this.resetForm();
   }
 
+  /** @deprecated Use {@link OnCancel}. */
+  onCancel(): void {
+    return this.OnCancel();
+  }
+
   private resetForm(): void {
-    this.selectedFormat = 'markdown';
-    this.errorMessage = '';
-    this.exportOptions = {
+    this.SelectedFormat = 'markdown';
+    this.ErrorMessage = '';
+    this.ExportOptions = {
       includeMessages: true,
       includeMetadata: true,
       prettyPrint: true,
       includeCSS: true,
-      includeTheme: !!this.branding,
+      includeTheme: !!this.Branding,
       themeMode: 'light'
     };
-    this.isVisible = false;
+    this.IsVisible = false;
   }
 }

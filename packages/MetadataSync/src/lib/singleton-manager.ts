@@ -32,7 +32,7 @@ let syncEngineInitPromise: Promise<SyncEngine> | null = null;
  * // Use syncEngine for operations
  * ```
  */
-export async function getSyncEngine(contextUser: UserInfo): Promise<SyncEngine> {
+export async function GetSyncEngine(contextUser: UserInfo): Promise<SyncEngine> {
   // Return existing engine if already initialized
   if (globalSyncEngine) {
     return globalSyncEngine;
@@ -53,13 +53,23 @@ export async function getSyncEngine(contextUser: UserInfo): Promise<SyncEngine> 
   return syncEngineInitPromise;
 }
 
+/** @deprecated Use {@link GetSyncEngine}. */
+export async function getSyncEngine(contextUser: UserInfo): Promise<SyncEngine> {
+  return GetSyncEngine(contextUser);
+}
+
 /**
  * Reset the singleton SyncEngine instance
  * 
  * Should be called when cleaning up resources to ensure a fresh
  * instance is created on the next request.
  */
-export function resetSyncEngine(): void {
+export function ResetSyncEngine(): void {
   globalSyncEngine = null;
   syncEngineInitPromise = null;
+}
+
+/** @deprecated Use {@link ResetSyncEngine}. */
+export function resetSyncEngine(): void {
+  return ResetSyncEngine();
 }

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-    createRingCentralSoftphone,
-    parseInvite,
-    getHeader,
-    extractSipNumber,
+    CreateRingCentralSoftphone,
+    ParseInvite,
+    GetHeader,
+    ExtractSipNumber,
     type InboundInviteInfo,
 } from '../ringcentral-softphone-handle';
 import type { RtpConstructors, SoftphoneCallSession, SoftphoneClient, SoftphoneInviteMessage } from '../softphone-types';
@@ -57,14 +57,14 @@ const invite = (callId: string, from: string, to: string): SoftphoneInviteMessag
 describe('RingCentralSoftphoneHandle', () => {
     it('register() delegates to the client', async () => {
         const fake = fakeClient();
-        const handle = await createRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
+        const handle = await CreateRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
         await handle.register();
         expect(fake.isRegistered()).toBe(true);
     });
 
     it('parks an inbound INVITE and notifies onInvite listeners with parsed identity', async () => {
         const fake = fakeClient();
-        const handle = await createRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
+        const handle = await CreateRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
         const seen: InboundInviteInfo[] = [];
         handle.onInvite((i) => seen.push(i));
 
@@ -76,7 +76,7 @@ describe('RingCentralSoftphoneHandle', () => {
 
     it('answerCall() answers the parked INVITE for a call id, once', async () => {
         const fake = fakeClient();
-        const handle = await createRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
+        const handle = await CreateRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
         fake.fireInvite(invite('CID-9', '+1', '+2'));
 
         await handle.answerCall('CID-9');
@@ -88,13 +88,13 @@ describe('RingCentralSoftphoneHandle', () => {
 
     it('answerCall() throws for an unknown call id', async () => {
         const fake = fakeClient();
-        const handle = await createRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
+        const handle = await CreateRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
         await expect(handle.answerCall('NOPE')).rejects.toThrow(/no parked INVITE/);
     });
 
     it('declineCall() declines + forgets a parked INVITE; no-op for unknown', async () => {
         const fake = fakeClient();
-        const handle = await createRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
+        const handle = await CreateRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
         fake.fireInvite(invite('CID-9', '+1', '+2'));
         await handle.declineCall('CID-9');
         expect(fake.declined).toHaveLength(1);
@@ -103,14 +103,14 @@ describe('RingCentralSoftphoneHandle', () => {
 
     it('placeCall() forwards the destination to the client', async () => {
         const fake = fakeClient();
-        const handle = await createRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
+        const handle = await CreateRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
         await handle.placeCall('+15550001111');
         expect(fake.placed).toEqual(['+15550001111']);
     });
 
     it('ignores an INVITE with no Call-ID rather than crashing the registration', async () => {
         const fake = fakeClient();
-        const handle = await createRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
+        const handle = await CreateRingCentralSoftphone({} as never, { createClient: () => fake.client, rtp: RTP });
         const seen: InboundInviteInfo[] = [];
         handle.onInvite((i) => seen.push(i));
         fake.fireInvite({ headers: { From: '<sip:+1@h>', To: '<sip:+2@h>' } });
@@ -120,27 +120,27 @@ describe('RingCentralSoftphoneHandle', () => {
 
 describe('parseInvite / getHeader / extractSipNumber (pure)', () => {
     it('parseInvite pulls callId/from/to from SIP headers', () => {
-        const info = parseInvite(invite('C1', '+15551112222', '+15553334444'));
+        const info = ParseInvite(invite('C1', '+15551112222', '+15553334444'));
         expect(info).toEqual({ callId: 'C1', from: '+15551112222', to: '+15553334444' });
     });
 
     it('parseInvite returns null without a Call-ID', () => {
-        expect(parseInvite({ headers: { From: '<sip:+1@h>' } })).toBeNull();
+        expect(ParseInvite({ headers: { From: '<sip:+1@h>' } })).toBeNull();
     });
 
     it('getHeader is case-insensitive', () => {
         const headers = { 'CALL-id': 'abc', from: 'x' };
-        expect(getHeader(headers, 'Call-ID')).toBe('abc');
-        expect(getHeader(headers, 'From')).toBe('x');
-        expect(getHeader(headers, 'Missing')).toBe('');
+        expect(GetHeader(headers, 'Call-ID')).toBe('abc');
+        expect(GetHeader(headers, 'From')).toBe('x');
+        expect(GetHeader(headers, 'Missing')).toBe('');
     });
 
     it('extractSipNumber handles display-name, angle brackets, bare sip:, and tel:', () => {
-        expect(extractSipNumber('"Jane Doe" <sip:+15551234567@sip.rc.com>;tag=9')).toBe('+15551234567');
-        expect(extractSipNumber('<sip:+15551234567@sip.rc.com>')).toBe('+15551234567');
-        expect(extractSipNumber('sip:1001@pbx.local')).toBe('1001');
-        expect(extractSipNumber('tel:+15559998888')).toBe('+15559998888');
-        expect(extractSipNumber('')).toBe('');
-        expect(extractSipNumber('garbage')).toBe('');
+        expect(ExtractSipNumber('"Jane Doe" <sip:+15551234567@sip.rc.com>;tag=9')).toBe('+15551234567');
+        expect(ExtractSipNumber('<sip:+15551234567@sip.rc.com>')).toBe('+15551234567');
+        expect(ExtractSipNumber('sip:1001@pbx.local')).toBe('1001');
+        expect(ExtractSipNumber('tel:+15559998888')).toBe('+15559998888');
+        expect(ExtractSipNumber('')).toBe('');
+        expect(ExtractSipNumber('garbage')).toBe('');
     });
 });

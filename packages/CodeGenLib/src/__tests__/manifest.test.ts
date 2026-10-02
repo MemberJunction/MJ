@@ -3,7 +3,7 @@ import ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
-import { generateClassRegistrationsManifest, resolveSubpathExports, resolveLazySubpathExports } from '../Manifest/GenerateClassRegistrationsManifest';
+import { GenerateClassRegistrationsManifest, ResolveSubpathExports, ResolveLazySubpathExports } from '../Manifest/GenerateClassRegistrationsManifest';
 
 // We test the pure functions from the manifest generator by importing via a module-level mock setup.
 // Many functions in the manifest generator are module-private, but we can test the exported types
@@ -673,7 +673,7 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
     });
 
     it('should add missing transitive dependencies to package.json', async () => {
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -692,7 +692,7 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
     });
 
     it('should NOT modify package.json when syncDependencies is false', async () => {
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -717,7 +717,7 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
             }
         }, null, 2);
 
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -733,7 +733,7 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
     });
 
     it('should sort dependencies alphabetically after adding', async () => {
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -751,7 +751,7 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
     });
 
     it('should include the provider class in the generated manifest', async () => {
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -865,7 +865,7 @@ describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
     });
 
     it('should NOT find classes from dist/ when scanDist is false (default)', async () => {
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -876,7 +876,7 @@ describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
     });
 
     it('should find classes from dist/ when scanDist is true', async () => {
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -899,7 +899,7 @@ describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
         virtualFiles[`${appDir}/node_modules/@test/dist-only/dist/index.d.ts`] =
             'export declare class SrcOnlyClass extends BaseEntity {}\n';
 
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -929,7 +929,7 @@ describe('resolveSubpathExports', () => {
             main: './dist/index.js'
         }) as string & Buffer);
 
-        const result = resolveSubpathExports('/test/pkg');
+        const result = ResolveSubpathExports('/test/pkg');
         expect(result.size).toBe(0);
     });
 
@@ -942,7 +942,7 @@ describe('resolveSubpathExports', () => {
             }
         }) as string & Buffer);
 
-        const result = resolveSubpathExports('/test/pkg');
+        const result = ResolveSubpathExports('/test/pkg');
         expect(result.size).toBe(0);
     });
 
@@ -964,7 +964,7 @@ describe('resolveSubpathExports', () => {
             return '{}' as string & Buffer;
         });
 
-        const result = resolveSubpathExports('/test/pkg');
+        const result = ResolveSubpathExports('/test/pkg');
         expect(result.size).toBe(1);
         expect(result.has('./feature-a.module')).toBe(true);
         const names = result.get('./feature-a.module')!;
@@ -1000,7 +1000,7 @@ describe('resolveSubpathExports', () => {
             return '' as string & Buffer;
         });
 
-        const result = resolveSubpathExports('/test/pkg');
+        const result = ResolveSubpathExports('/test/pkg');
         expect(result.size).toBe(1);
         const names = result.get('./ai.module')!;
         expect(names.has('AIDashboardsModule')).toBe(true);
@@ -1020,7 +1020,7 @@ describe('resolveSubpathExports', () => {
         vi.mocked(fs.existsSync).mockReturnValue(true);
         vi.mocked(fs.readFileSync).mockReturnValue(pkgJson as string & Buffer);
 
-        const result = resolveSubpathExports('/test/pkg');
+        const result = ResolveSubpathExports('/test/pkg');
         expect(result.size).toBe(0);
     });
 
@@ -1046,7 +1046,7 @@ describe('resolveSubpathExports', () => {
         });
 
         // Should not hang or throw
-        const result = resolveSubpathExports('/test/pkg');
+        const result = ResolveSubpathExports('/test/pkg');
         expect(result.size).toBe(1);
         const names = result.get('./a')!;
         expect(names.has('ClassA')).toBe(true);
@@ -1165,7 +1165,7 @@ describe('Lazy Config Generation - Integration', () => {
     });
 
     it('should generate lazy config with keys grouped by subpath', async () => {
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -1202,7 +1202,7 @@ describe('Lazy Config Generation - Integration', () => {
     });
 
     it('should not generate lazy config when lazyConfigPath is not set', async () => {
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -1225,7 +1225,7 @@ describe('Lazy Config Generation - Integration', () => {
             "export class OverviewComponent extends BaseResourceComponent {}"
         ].join('\n');
 
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -1275,7 +1275,7 @@ describe('Lazy Config Generation - Integration', () => {
             "export class ServerPlugin extends BaseResourceComponent {}"
         ].join('\n');
 
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -1330,7 +1330,7 @@ describe('Lazy Config Generation - Integration', () => {
         addPluginPackage('alpha', 'AlphaPlugin');
         addPluginPackage('beta', 'BetaPlugin');
 
-        const result = await generateClassRegistrationsManifest({
+        const result = await GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -1436,7 +1436,7 @@ describe('generateClassRegistrationsManifest - RegisterClassEx decorator', () =>
 
     async function run(options: Record<string, unknown> = {}) {
         wireFsMocks();
-        return generateClassRegistrationsManifest({
+        return GenerateClassRegistrationsManifest({
             outputPath,
             appDir,
             verbose: false,
@@ -1605,7 +1605,7 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
             }
         });
 
-        expect(() => resolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR)).toThrow(/has not been built/);
+        expect(() => ResolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR)).toThrow(/has not been built/);
     });
 
     it('names the package and the directory it looked in, so the message is actionable', () => {
@@ -1616,23 +1616,23 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
             }
         });
 
-        expect(() => resolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR))
+        expect(() => ResolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR))
             .toThrow(/@memberjunction\/ng-dashboards/);
-        expect(() => resolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR))
+        expect(() => ResolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR))
             .toThrow(new RegExp(PKG_DIR.replace(/\//g, '\\/')));
     });
 
     it('does NOT throw for a package that legitimately declares no subpath exports', () => {
         mockPackage({ name: '@memberjunction/ng-shared', exports: { '.': { types: './dist/index.d.ts' } } });
 
-        expect(() => resolveLazySubpathExports('@memberjunction/ng-shared', PKG_DIR)).not.toThrow();
-        expect(resolveLazySubpathExports('@memberjunction/ng-shared', PKG_DIR).size).toBe(0);
+        expect(() => ResolveLazySubpathExports('@memberjunction/ng-shared', PKG_DIR)).not.toThrow();
+        expect(ResolveLazySubpathExports('@memberjunction/ng-shared', PKG_DIR).size).toBe(0);
     });
 
     it('does NOT throw for a package with no exports field at all', () => {
         mockPackage({ name: '@memberjunction/legacy', main: './dist/index.js' });
 
-        expect(() => resolveLazySubpathExports('@memberjunction/legacy', PKG_DIR)).not.toThrow();
+        expect(() => ResolveLazySubpathExports('@memberjunction/legacy', PKG_DIR)).not.toThrow();
     });
 
     // Regression: the first cut of this guard asked "is there any key besides '.'", which is true
@@ -1648,7 +1648,7 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
             }
         });
 
-        expect(() => resolveLazySubpathExports('@memberjunction/ng-bootstrap', PKG_DIR)).not.toThrow();
+        expect(() => ResolveLazySubpathExports('@memberjunction/ng-bootstrap', PKG_DIR)).not.toThrow();
     });
 
     it('does NOT throw when the only extra exports are untyped, however many there are', () => {
@@ -1661,7 +1661,7 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
             }
         });
 
-        expect(() => resolveLazySubpathExports('@memberjunction/whatever', PKG_DIR)).not.toThrow();
+        expect(() => ResolveLazySubpathExports('@memberjunction/whatever', PKG_DIR)).not.toThrow();
     });
 
     it('does NOT throw once the package is built — the subpaths resolve', () => {
@@ -1676,6 +1676,6 @@ describe('Manifest Generator - lazy subpath resolution refuses to guess', () => 
             [path.resolve(PKG_DIR, './dist/core-dashboards.module.d.ts')]
         );
 
-        expect(() => resolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR)).not.toThrow();
+        expect(() => ResolveLazySubpathExports('@memberjunction/ng-dashboards', PKG_DIR)).not.toThrow();
     });
 });

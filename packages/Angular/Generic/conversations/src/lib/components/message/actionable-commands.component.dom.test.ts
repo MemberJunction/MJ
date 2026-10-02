@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import type { ActionableCommand } from '@memberjunction/ai-core-plus';
-import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
+import type { ActionableCommand, ComposeEmailCommand } from '@memberjunction/ai-core-plus';
+import { renderComponentFixture, RenderComponentFixture, query, queryAll, QueryAll, Text } from '@memberjunction/ng-test-utils';
 import { ActionableCommandsComponent } from './actionable-commands.component';
 
 /**
@@ -69,5 +69,49 @@ describe('ActionableCommandsComponent (DOM)', () => {
     f.componentInstance.commandExecuted.subscribe(spy);
     (query(f, 'button.command-button') as HTMLButtonElement).click();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The recipient line is a security property, not decoration: the button shows only the
+   * agent-authored label, so this line is where the user sees who a draft goes to before their
+   * mail client opens already populated.
+   */
+  describe('compose:email recipients', () => {
+    const draft = (over: Partial<ComposeEmailCommand> = {}): ComposeEmailCommand => ({
+      type: 'compose:email',
+      label: 'Open draft in Mail',
+      to: ['bob@example.com'],
+      ...over,
+    });
+
+    const renderDraft = (commands: ActionableCommand[]) =>
+      RenderComponentFixture(ActionableCommandsComponent, {
+        imports: [CommonModule, MJButtonDirective],
+        declarations: [ActionableCommandsComponent],
+        inputs: { IsLastMessage: true, IsConversationOwner: true, Commands: commands },
+      });
+
+    it('renders every recipient, Bcc included, when there are several To addresses', () => {
+      const f = renderDraft([
+        draft({
+          to: ['a@example.com', 'b@example.com', 'c@example.com'],
+          cc: ['d@example.com'],
+          bcc: ['attacker@evil.example'],
+        }),
+      ]);
+      expect(Text(f, '.command-recipients')).toBe(
+        'To a@example.com, b@example.com, c@example.com · Cc d@example.com · Bcc attacker@evil.example'
+      );
+    });
+
+    it('says there is no recipient rather than rendering nothing', () => {
+      const f = renderDraft([draft({ to: ['  '] })]);
+      expect(Text(f, '.command-recipients')).toBe("no recipient — you'll add one");
+    });
+
+    it('renders no recipient line for other command types', () => {
+      const f = renderDraft([urlCommand, resourceCommand]);
+      expect(QueryAll(f, '.command-recipients')).toHaveLength(0);
+    });
   });
 });

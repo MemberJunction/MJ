@@ -1,0 +1,50 @@
+{
+  "id": "codesmith-payload-write-results-01",
+  "agent": "Codesmith Agent",
+  "tags": [
+    "payload-change",
+    "regression-watch",
+    "implicit-payload-first"
+  ],
+  "description": "The agent's own payload contract names code/results/iterations. This is the envelope-side regression watch: payload writes must survive native mode unchanged. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+  "input": {
+    "payload": {
+      "task": "count by category",
+      "inputData": {
+        "rows": [
+          {
+            "c": "a"
+          },
+          {
+            "c": "b"
+          },
+          {
+            "c": "a"
+          }
+        ]
+      },
+      "iterations": 1
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Count the rows by category."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Execute Code succeeded. output = { a: 2, b: 1 }"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete"
+      },
+      {
+        "kind": "payloadChange"
+      }
+    ]
+  }
+}

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-    buildDuplicateAgentContext,
-    resolveEntityDoc,
-    resolveEntityFilter,
-    buildDupeNotFoundError,
-    capDupeNames,
+    BuildDuplicateAgentContext,
+    ResolveEntityDoc,
+    ResolveEntityFilter,
+    BuildDupeNotFoundError,
+    CapDupeNames,
     DUPE_AGENT_CONTEXT_NAME_LIST_CAP,
     DupeEntityDocCandidate,
     DuplicateAgentContextInput,
@@ -43,7 +43,7 @@ function baseInput(over: Partial<DuplicateAgentContextInput> = {}): DuplicateAge
 describe('capDupeNames', () => {
     it('caps at the configured limit and never mutates input', () => {
         const names = Array.from({ length: 40 }, (_, i) => `n${i}`);
-        const out = capDupeNames(names);
+        const out = CapDupeNames(names);
         expect(out).toHaveLength(DUPE_AGENT_CONTEXT_NAME_LIST_CAP);
         expect(names).toHaveLength(40);
     });
@@ -51,76 +51,76 @@ describe('capDupeNames', () => {
 
 describe('resolveEntityDoc', () => {
     it('resolves by exact id (case-insensitive)', () => {
-        const r = resolveEntityDoc('d1', docs);
-        expect(r.ok && r.value.ID).toBe('D1');
+        const r = ResolveEntityDoc('d1', docs);
+        expect(r.Ok && r.Value.ID).toBe('D1');
     });
     it('resolves by document name', () => {
-        const r = resolveEntityDoc('Companies Dedup', docs);
-        expect(r.ok && r.value.ID).toBe('D2');
+        const r = ResolveEntityDoc('Companies Dedup', docs);
+        expect(r.Ok && r.Value.ID).toBe('D2');
     });
     it('resolves by entity name', () => {
-        const r = resolveEntityDoc('members', docs);
-        expect(r.ok && r.value.ID).toBe('D1');
+        const r = ResolveEntityDoc('members', docs);
+        expect(r.Ok && r.Value.ID).toBe('D1');
     });
     it('resolves by partial contains', () => {
-        const r = resolveEntityDoc('compan', docs);
-        expect(r.ok && r.value.ID).toBe('D2');
+        const r = ResolveEntityDoc('compan', docs);
+        expect(r.Ok && r.Value.ID).toBe('D2');
     });
     it('returns a tolerant error on miss', () => {
-        const r = resolveEntityDoc('zzz', docs);
-        expect(r.ok).toBe(false);
-        if (!r.ok) expect(r.error).toContain('Members Dedup');
+        const r = ResolveEntityDoc('zzz', docs);
+        expect(r.Ok).toBe(false);
+        if (!r.Ok) expect(r.Error).toContain('Members Dedup');
     });
     it('errors on empty input', () => {
-        const r = resolveEntityDoc('   ', docs);
-        expect(r.ok).toBe(false);
+        const r = ResolveEntityDoc('   ', docs);
+        expect(r.Ok).toBe(false);
     });
 });
 
 describe('resolveEntityFilter', () => {
     it('treats empty / "all" as the no-filter sentinel', () => {
-        expect(resolveEntityFilter('', ['Members'])).toEqual({ ok: true, value: '' });
-        expect(resolveEntityFilter('all', ['Members'])).toEqual({ ok: true, value: '' });
+        expect(ResolveEntityFilter('', ['Members'])).toEqual({ Ok: true, Value: '' });
+        expect(ResolveEntityFilter('all', ['Members'])).toEqual({ Ok: true, Value: '' });
     });
     it('resolves to the canonical entity name', () => {
-        const r = resolveEntityFilter('members', ['Members', 'Companies']);
-        expect(r.ok && r.value).toBe('Members');
+        const r = ResolveEntityFilter('members', ['Members', 'Companies']);
+        expect(r.Ok && r.Value).toBe('Members');
     });
     it('resolves partial', () => {
-        const r = resolveEntityFilter('comp', ['Members', 'Companies']);
-        expect(r.ok && r.value).toBe('Companies');
+        const r = ResolveEntityFilter('comp', ['Members', 'Companies']);
+        expect(r.Ok && r.Value).toBe('Companies');
     });
     it('errors on miss', () => {
-        const r = resolveEntityFilter('xyz', ['Members']);
-        expect(r.ok).toBe(false);
+        const r = ResolveEntityFilter('xyz', ['Members']);
+        expect(r.Ok).toBe(false);
     });
 });
 
 describe('buildDupeNotFoundError', () => {
     it('handles the empty-candidate case', () => {
-        expect(buildDupeNotFoundError('x', [])).toContain('no entity documents');
+        expect(BuildDupeNotFoundError('x', [])).toContain('no entity documents');
     });
     it('reports overflow count when truncated', () => {
         const names = Array.from({ length: 30 }, (_, i) => `doc${i}`);
-        expect(buildDupeNotFoundError('x', names)).toContain('+5 more');
+        expect(BuildDupeNotFoundError('x', names)).toContain('+5 more');
     });
 });
 
 describe('buildDuplicateAgentContext', () => {
     it('reports idle status with no stage', () => {
-        const ctx = buildDuplicateAgentContext(baseInput());
+        const ctx = BuildDuplicateAgentContext(baseInput());
         expect(ctx['DetectionStatus']).toBe('idle');
         expect(ctx['DetectionStage']).toBeUndefined();
         expect(ctx['EntityFilter']).toBe('All');
     });
     it('reports running status + stage when detecting', () => {
-        const ctx = buildDuplicateAgentContext(baseInput({ IsDetecting: true, DetectionStage: 'Vectorizing', DetectionProgress: 42 }));
+        const ctx = BuildDuplicateAgentContext(baseInput({ IsDetecting: true, DetectionStage: 'Vectorizing', DetectionProgress: 42 }));
         expect(ctx['DetectionStatus']).toBe('running');
         expect(ctx['DetectionStage']).toBe('Vectorizing');
         expect(ctx['DetectionProgress']).toBe(42);
     });
     it('only surfaces score/date filters when set', () => {
-        const ctx = buildDuplicateAgentContext(baseInput({ MinScore: 0.5, MaxScore: 0.9, DateFrom: '2026-01-01' }));
+        const ctx = BuildDuplicateAgentContext(baseInput({ MinScore: 0.5, MaxScore: 0.9, DateFrom: '2026-01-01' }));
         expect(ctx['MinScore']).toBe(0.5);
         expect(ctx['MaxScore']).toBe(0.9);
         expect(ctx['DateFrom']).toBe('2026-01-01');
@@ -128,14 +128,14 @@ describe('buildDuplicateAgentContext', () => {
     });
     it('bounds and counts name lists', () => {
         const entityNames = Array.from({ length: 30 }, (_, i) => `E${i}`);
-        const ctx = buildDuplicateAgentContext(baseInput({ EntityNames: entityNames, EntityDocNames: ['Members Dedup'] }));
+        const ctx = BuildDuplicateAgentContext(baseInput({ EntityNames: entityNames, EntityDocNames: ['Members Dedup'] }));
         expect((ctx['AvailableEntities'] as string[]).length).toBe(DUPE_AGENT_CONTEXT_NAME_LIST_CAP);
         expect(ctx['AvailableEntityCount']).toBe(30);
         expect(ctx['AvailableEntityDocuments']).toEqual(['Members Dedup']);
         expect(ctx['AvailableEntityDocumentCount']).toBeUndefined();
     });
     it('passes through the selected doc id+name', () => {
-        const ctx = buildDuplicateAgentContext(baseInput({ SelectedEntityDocID: 'D1', SelectedEntityDocName: 'Members Dedup' }));
+        const ctx = BuildDuplicateAgentContext(baseInput({ SelectedEntityDocID: 'D1', SelectedEntityDocName: 'Members Dedup' }));
         expect(ctx['SelectedEntityDocID']).toBe('D1');
         expect(ctx['SelectedEntityDocName']).toBe('Members Dedup');
     });

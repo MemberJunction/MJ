@@ -1,0 +1,34 @@
+{
+  "id": "editor-parallel-link-checks-01",
+  "agent": "Editor Agent",
+  "tags": [
+    "parallel-actions",
+    "param-fidelity"
+  ],
+  "description": "Two URLs to validate. Tests whether the model batches the same action twice in one turn rather than serializing across iterations.",
+  "input": {
+    "payload": {
+      "draft": {
+        "links": [
+          "https://example.org/a",
+          "https://example.org/b"
+        ]
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Validate both links in the draft before we publish."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "URL Link Validator"
+      }
+    ],
+    "allowAdditionalActions": true
+  }
+}

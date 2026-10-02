@@ -366,3 +366,56 @@ describe('ParseSerializedMentions + writeValue rehydration', () => {
         expect(editor.textContent).toBe('nothing fancy here');
     });
 });
+
+describe('disabled file drops', () => {
+    function mount(disabled: boolean): ComponentFixture<MentionEditorComponent> {
+        const user = new UserInfo();
+        user.ID = 'u-drop';
+        user.Name = 'Drop Tester';
+        return renderComponentFixture(MentionEditorComponent, {
+            imports: [CommonModule, MJEmptyStateComponent],
+            declarations: [MentionEditorComponent, MentionDropdownComponent],
+            inputs: { currentUser: user, Disabled: disabled },
+        });
+    }
+
+    function fileList(file: File): FileList {
+        return {
+            0: file,
+            length: 1,
+            item: (i: number) => (i === 0 ? file : null),
+            *[Symbol.iterator]() {
+                yield file;
+            },
+        } as FileList;
+    }
+
+    function dropFile(f: ComponentFixture<MentionEditorComponent>, file: File): void {
+        const container = query(f, '.mention-editor-container') as HTMLElement;
+        const event = new Event('drop', { bubbles: true, cancelable: true });
+        Object.defineProperty(event, 'dataTransfer', { value: { files: fileList(file) } });
+        container.dispatchEvent(event);
+    }
+
+    it('OnDrop with Disabled = true adds no attachment', () => {
+        const file = new File(['png-bytes'], 'shot.png', { type: 'image/png' });
+        const f = mount(true);
+        const processFile = vi.spyOn(
+            f.componentInstance as unknown as { processFile(file: File): Promise<void> },
+            'processFile'
+        ).mockResolvedValue(undefined);
+
+        dropFile(f, file);
+
+        expect(processFile).not.toHaveBeenCalled();
+        expect(f.componentInstance.pendingAttachments).toEqual([]);
+
+        // Same drop reaches the attachment path once Disabled is cleared, so the
+        // assertion above is not a vacuous "event never fired".
+        processFile.mockClear();
+        f.componentRef.setInput('Disabled', false);
+        f.detectChanges();
+        dropFile(f, file);
+        expect(processFile).toHaveBeenCalledTimes(1);
+    });
+});

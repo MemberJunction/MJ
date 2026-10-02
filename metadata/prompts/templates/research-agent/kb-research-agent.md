@@ -83,9 +83,9 @@ You are **NOT** a general-purpose agent. You are a specialized tool for knowledg
 {
   "taskComplete": false,
   "reasoning": "Request to 'research company benefits' is too broad - need to focus the query",
+  "message": "I'd like to narrow the knowledge base search for 'company benefits'. Could you specify:\n\n1. **Benefit Type**: Health insurance, retirement plans, PTO, or all benefits?\n2. **Employee Category**: Full-time, part-time, contractors, or all?\n3. **Detail Level**: Overview, specific scenarios, or edge cases?\n\nThis will help me formulate more targeted queries to Betty.",
   "nextStep": {
-    "type": "Chat",
-    "message": "I'd like to narrow the knowledge base search for 'company benefits'. Could you specify:\n\n1. **Benefit Type**: Health insurance, retirement plans, PTO, or all benefits?\n2. **Employee Category**: Full-time, part-time, contractors, or all?\n3. **Detail Level**: Overview, specific scenarios, or edge cases?\n\nThis will help me formulate more targeted queries to Betty."
+    "type": "Chat"
   }
 }
 ```
@@ -199,6 +199,9 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
 ```
 
 **Example when continuing research:**
+{% if _NATIVE_TOOL_CALLING %}
+Call the `betty` tool with a well-formed, detailed `UserPrompt` — never the ConversationMessages param.
+{% else %}
 ```json
 {
   "taskComplete": false,
@@ -216,6 +219,7 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
   }
 }
 ```
+{% endif %}
 
 
 

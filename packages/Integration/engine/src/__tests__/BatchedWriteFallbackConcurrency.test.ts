@@ -28,7 +28,7 @@ type Fallback = {
         batch: unknown[], ci: unknown, map: unknown, result: { RecordsProcessed: number; RecordsErrored: number; Errors: unknown[] },
         user: unknown, logger: unknown, hashes: unknown, skipIds: unknown, recordMaps: unknown, useProviderTransaction?: boolean,
     ) => Promise<void>;
-    ApplySingleRecord: (...args: unknown[]) => Promise<void>;
+    applySingleRecord: (...args: unknown[]) => Promise<void>;
     ProviderToUse: unknown;
 };
 
@@ -36,7 +36,7 @@ type Fallback = {
 const makeEngine = (calls: ProviderCalls, depth: { value: number }, applied: string[], failOn?: string) => {
     const engine = Object.create(IntegrationEngine.prototype) as unknown as Fallback;
     Object.defineProperty(engine, 'ProviderToUse', { value: makeProvider(calls, depth), configurable: true });
-    engine.ApplySingleRecord = async (record: unknown) => {
+    engine.applySingleRecord = async (record: unknown) => {
         const id = (record as { ExternalRecord: { ExternalID: string } }).ExternalRecord.ExternalID;
         applied.push(id);
         if (id === failOn) throw new Error('permanent: validation failed');
@@ -103,8 +103,8 @@ describe('applyRecordsIndividually — provider transactions are what break conc
         let maxDepth = 0;
         const applied: string[] = [];
         const engine = makeEngine(calls, depth, applied) as Fallback;
-        const inner = engine.ApplySingleRecord;
-        engine.ApplySingleRecord = async (...args: unknown[]) => {
+        const inner = engine.applySingleRecord;
+        engine.applySingleRecord = async (...args: unknown[]) => {
             maxDepth = Math.max(maxDepth, depth.value);
             await new Promise((r) => setTimeout(r, 0)); // force interleaving between the two maps
             return inner(...args);

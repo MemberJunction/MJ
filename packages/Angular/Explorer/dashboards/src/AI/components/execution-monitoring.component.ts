@@ -9,6 +9,7 @@ import {
   ChartData,
   ExecutionDetails
 } from '../services/ai-instrumentation.service';
+import { ComputeCoveragePercent, GetBucketSizeMs } from '../services/ai-usage-analytics.compute';
 import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
@@ -18,46 +19,46 @@ import { MJAIPromptRunEntityExtended, MJAIAgentRunEntityExtended, MJAIModelEntit
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 export interface DrillDownTab {
-  id: string;
-  title: string;
-  type: 'chart' | 'executions' | 'model-detail';
-  data?: any;
-  timestamp?: Date;
-  metric?: string;
-  closeable: boolean;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  type: 'chart' | 'executions' | 'model-detail';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  data?: any;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  timestamp?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  metric?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  closeable: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ExecutionRecord {
-  id: string;
-  type: 'prompt' | 'agent';
-  name: string;
-  model?: string;
-  status: string;
-  startTime: Date;
-  endTime?: Date;
-  duration: number;
-  cost: number;
-  tokens: number;
-  errorMessage?: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  type: 'prompt' | 'agent';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  model?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  endTime?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  duration: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tokens: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ExecutionMonitoringState {
-  selectedTimeRange: string;
-  refreshInterval: number;
-  panelStates: {
+  selectedTimeRange: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  refreshInterval: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  panelStates: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     cost: boolean;
     efficiency: boolean;
     executions: boolean;
   };
-  drillDownTabs: Array<{
+  drillDownTabs: Array<{  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     id: string;
     title: string;
     type: string;
     timestamp?: string;
     metric?: string;
   }>;
-  activeTabId: string;
-  splitterSizes?: number[];
+  activeTabId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  splitterSizes?: number[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 /**
  * AI Monitor Resource - displays AI execution monitoring and analytics
@@ -213,6 +214,7 @@ export interface ExecutionMonitoringState {
                           [data]="(trends$ | async) ?? []"
                           title="Execution Trends"
                           [config]="timeSeriesConfig"
+                          [BucketSizeMs]="TrendBucketMs"
                           (dataPointClick)="onDataPointClick($event)"
                           (timeRangeChange)="onChartTimeRangeChange($event)"
                         ></app-time-series-chart>
@@ -1684,54 +1686,221 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   private stateChangeSubject$ = new Subject<ExecutionMonitoringState>();
 
   // Configuration
-  selectedTimeRange = '24h';
+  SelectedTimeRange = '24h';
+
+  /** @deprecated Use {@link SelectedTimeRange}. */
+  get selectedTimeRange() {
+    return this.SelectedTimeRange;
+  }
+  /** @deprecated Use {@link SelectedTimeRange}. */
+  set selectedTimeRange(value) {
+    this.SelectedTimeRange = value;
+  }
   isLoading = false;
 
   // Chart configurations
-  timeSeriesConfig = {
+  TimeSeriesConfig = {
     showGrid: true,
     showTooltip: true,
     animationDuration: 500,
     useDualAxis: true
   };
 
-  heatmapConfig = {
+  /** @deprecated Use {@link TimeSeriesConfig}. */
+  get timeSeriesConfig() {
+    return this.TimeSeriesConfig;
+  }
+  /** @deprecated Use {@link TimeSeriesConfig}. */
+  set timeSeriesConfig(value) {
+    this.TimeSeriesConfig = value;
+  }
+
+  HeatmapConfig = {
     height: 350,
     showTooltip: true,
     animationDuration: 300
   };
 
+  /** @deprecated Use {@link HeatmapConfig}. */
+  get heatmapConfig() {
+    return this.HeatmapConfig;
+  }
+  /** @deprecated Use {@link HeatmapConfig}. */
+  set heatmapConfig(value) {
+    this.HeatmapConfig = value;
+  }
+
   // Data streams
-  kpis$: Observable<DashboardKPIs>;
-  trends$: Observable<TrendData[]>;
-  liveExecutions$: Observable<LiveExecution[]>;
-  chartData$: Observable<ChartData>;
+  Kpis$: Observable<DashboardKPIs>;
+
+  /** @deprecated Use {@link Kpis$}. */
+  get kpis$(): Observable<DashboardKPIs> {
+    return this.Kpis$;
+  }
+  /** @deprecated Use {@link Kpis$}. */
+  set kpis$(value: Observable<DashboardKPIs>) {
+    this.Kpis$ = value;
+  }
+  Trends$: Observable<TrendData[]>;
+
+  /** @deprecated Use {@link Trends$}. */
+  get trends$(): Observable<TrendData[]> {
+    return this.Trends$;
+  }
+  /** @deprecated Use {@link Trends$}. */
+  set trends$(value: Observable<TrendData[]>) {
+    this.Trends$ = value;
+  }
+  LiveExecutions$: Observable<LiveExecution[]>;
+
+  /** @deprecated Use {@link LiveExecutions$}. */
+  get liveExecutions$(): Observable<LiveExecution[]> {
+    return this.LiveExecutions$;
+  }
+  /** @deprecated Use {@link LiveExecutions$}. */
+  set liveExecutions$(value: Observable<LiveExecution[]>) {
+    this.LiveExecutions$ = value;
+  }
+  ChartData$: Observable<ChartData>;
+
+  /** @deprecated Use {@link ChartData$}. */
+  get chartData$(): Observable<ChartData> {
+    return this.ChartData$;
+  }
+  /** @deprecated Use {@link ChartData$}. */
+  set chartData$(value: Observable<ChartData>) {
+    this.ChartData$ = value;
+  }
 
   // Derived data streams
-  kpiCards$: Observable<KPICardData[]>;
-  performanceMatrix$: Observable<HeatmapData[]>;
-  costData$: Observable<{ model: string; cost: number; tokens: number }[]>;
-  tokenEfficiency$: Observable<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]>;
+  KpiCards$: Observable<KPICardData[]>;
+
+  /** @deprecated Use {@link KpiCards$}. */
+  get kpiCards$(): Observable<KPICardData[]> {
+    return this.KpiCards$;
+  }
+  /** @deprecated Use {@link KpiCards$}. */
+  set kpiCards$(value: Observable<KPICardData[]>) {
+    this.KpiCards$ = value;
+  }
+  PerformanceMatrix$: Observable<HeatmapData[]>;
+
+  /** @deprecated Use {@link PerformanceMatrix$}. */
+  get performanceMatrix$(): Observable<HeatmapData[]> {
+    return this.PerformanceMatrix$;
+  }
+  /** @deprecated Use {@link PerformanceMatrix$}. */
+  set performanceMatrix$(value: Observable<HeatmapData[]>) {
+    this.PerformanceMatrix$ = value;
+  }
+  CostData$: Observable<{ model: string; cost: number | null; tokens: number }[]>;
+
+  /** @deprecated Use {@link CostData$}. */
+  get costData$(): Observable<{ model: string; cost: number | null; tokens: number }[]> {
+    return this.CostData$;
+  }
+  /** @deprecated Use {@link CostData$}. */
+  set costData$(value: Observable<{ model: string; cost: number | null; tokens: number }[]>) {
+    this.CostData$ = value;
+  }
+  TokenEfficiency$: Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]>;
+
+  /** @deprecated Use {@link TokenEfficiency$}. */
+  get tokenEfficiency$(): Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]> {
+    return this.TokenEfficiency$;
+  }
+  /** @deprecated Use {@link TokenEfficiency$}. */
+  set tokenEfficiency$(value: Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]>) {
+    this.TokenEfficiency$ = value;
+  }
 
   // Modal state
-  selectedExecution: LiveExecution | null = null;
-  executionDetails: ExecutionDetails | null = null;
-  loadingExecutionDetails = false;
+  SelectedExecution: LiveExecution | null = null;
+
+  /** @deprecated Use {@link SelectedExecution}. */
+  get selectedExecution(): LiveExecution | null {
+    return this.SelectedExecution;
+  }
+  /** @deprecated Use {@link SelectedExecution}. */
+  set selectedExecution(value: LiveExecution | null) {
+    this.SelectedExecution = value;
+  }
+  ExecutionDetails: ExecutionDetails | null = null;
+
+  /** @deprecated Use {@link ExecutionDetails}. */
+  get executionDetails(): ExecutionDetails | null {
+    return this.ExecutionDetails;
+  }
+  /** @deprecated Use {@link ExecutionDetails}. */
+  set executionDetails(value: ExecutionDetails | null) {
+    this.ExecutionDetails = value;
+  }
+  LoadingExecutionDetails = false;
+
+  /** @deprecated Use {@link LoadingExecutionDetails}. */
+  get loadingExecutionDetails() {
+    return this.LoadingExecutionDetails;
+  }
+  /** @deprecated Use {@link LoadingExecutionDetails}. */
+  set loadingExecutionDetails(value) {
+    this.LoadingExecutionDetails = value;
+  }
 
   // Drill-down tab state
-  drillDownTabs: DrillDownTab[] = [];
-  activeTabId: string = 'main-chart';
-  loadingDrillDown = false;
+  DrillDownTabs: DrillDownTab[] = [];
+
+  /** @deprecated Use {@link DrillDownTabs}. */
+  get drillDownTabs(): DrillDownTab[] {
+    return this.DrillDownTabs;
+  }
+  /** @deprecated Use {@link DrillDownTabs}. */
+  set drillDownTabs(value: DrillDownTab[]) {
+    this.DrillDownTabs = value;
+  }
+  ActiveTabId: string = 'main-chart';
+
+  /** @deprecated Use {@link ActiveTabId}. */
+  get activeTabId(): string {
+    return this.ActiveTabId;
+  }
+  /** @deprecated Use {@link ActiveTabId}. */
+  set activeTabId(value: string) {
+    this.ActiveTabId = value;
+  }
+  LoadingDrillDown = false;
+
+  /** @deprecated Use {@link LoadingDrillDown}. */
+  get loadingDrillDown() {
+    return this.LoadingDrillDown;
+  }
+  /** @deprecated Use {@link LoadingDrillDown}. */
+  set loadingDrillDown(value) {
+    this.LoadingDrillDown = value;
+  }
 
   // Panel state for collapsible sections
-  panelStates = {
+  PanelStates = {
     cost: true,
     efficiency: true,  // Expanded by default
     executions: false
   };
 
+  /** @deprecated Use {@link PanelStates}. */
+  get panelStates() {
+    return this.PanelStates;
+  }
+  /** @deprecated Use {@link PanelStates}. */
+  set panelStates(value) {
+    this.PanelStates = value;
+  }
+
+  get ActiveTab(): DrillDownTab | undefined {
+    return this.DrillDownTabs.find(tab => tab.id === this.ActiveTabId);
+  }
+
+  /** @deprecated Use {@link ActiveTab}. */
   get activeTab(): DrillDownTab | undefined {
-    return this.drillDownTabs.find(tab => tab.id === this.activeTabId);
+    return this.ActiveTab;
   }
 
   constructor(
@@ -1740,10 +1909,10 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   ) {
     super();
     // Initialize data streams
-    this.kpis$ = this.instrumentationService.kpis$;
-    this.trends$ = this.instrumentationService.trends$;
-    this.liveExecutions$ = this.instrumentationService.liveExecutions$;
-    this.chartData$ = this.instrumentationService.chartData$;
+    this.Kpis$ = this.instrumentationService.kpis$;
+    this.Trends$ = this.instrumentationService.trends$;
+    this.LiveExecutions$ = this.instrumentationService.liveExecutions$;
+    this.ChartData$ = this.instrumentationService.chartData$;
 
     // Subscribe to loading state from service
     this.instrumentationService.isLoading$.pipe(
@@ -1754,11 +1923,11 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     });
 
     // Derived streams
-    this.kpiCards$ = this.kpis$.pipe(
+    this.KpiCards$ = this.Kpis$.pipe(
       map(kpis => this.createKPICards(kpis))
     );
 
-    this.performanceMatrix$ = this.chartData$.pipe(
+    this.PerformanceMatrix$ = this.ChartData$.pipe(
       map(data => data.performanceMatrix.map(item => ({
         agent: item.agent,
         model: item.model,
@@ -1767,11 +1936,11 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       })))
     );
 
-    this.costData$ = this.chartData$.pipe(
+    this.CostData$ = this.ChartData$.pipe(
       map(data => data.costByModel)
     );
 
-    this.tokenEfficiency$ = this.chartData$.pipe(
+    this.TokenEfficiency$ = this.ChartData$.pipe(
       map(data => data.tokenEfficiency)
     );
   }
@@ -1781,13 +1950,13 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     this.instrumentationService.Provider = this.ProviderToUse;
     // Load initial state if provided from resource configuration
     if (this.Data?.Configuration) {
-      this.loadUserState(this.Data.Configuration);
+      this.LoadUserState(this.Data.Configuration);
     } else {
       // Default initialization
-      this.setTimeRange(this.selectedTimeRange);
+      this.setTimeRange(this.SelectedTimeRange);
       
       // Initialize with main chart tab
-      this.drillDownTabs = [
+      this.DrillDownTabs = [
         {
           id: 'main-chart',
           title: 'Execution Trends',
@@ -1821,17 +1990,17 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   private getCurrentState(): ExecutionMonitoringState {
     return {
-      selectedTimeRange: this.selectedTimeRange,
+      selectedTimeRange: this.SelectedTimeRange,
       refreshInterval: 0, // Always manual refresh now
-      panelStates: { ...this.panelStates },
-      drillDownTabs: this.drillDownTabs.map(tab => ({
+      panelStates: { ...this.PanelStates },
+      drillDownTabs: this.DrillDownTabs.map(tab => ({
         id: tab.id,
         title: tab.title,
         type: tab.type,
         timestamp: tab.timestamp?.toISOString(),
         metric: tab.metric
       })),
-      activeTabId: this.activeTabId
+      activeTabId: this.ActiveTabId
     };
   }
 
@@ -1840,10 +2009,10 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     this.stateChangeSubject$.next(currentState);
   }
 
-  public loadUserState(state: Partial<ExecutionMonitoringState>): void {
+  public LoadUserState(state: Partial<ExecutionMonitoringState>): void {
     
     if (state.selectedTimeRange) {
-      this.selectedTimeRange = state.selectedTimeRange;
+      this.SelectedTimeRange = state.selectedTimeRange;
       this.setTimeRange(state.selectedTimeRange);
     }
     
@@ -1851,11 +2020,11 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     
     if (state.panelStates) {
       // Only override if state has explicit panel states, otherwise keep defaults
-      this.panelStates = { ...this.panelStates, ...state.panelStates };
+      this.PanelStates = { ...this.PanelStates, ...state.panelStates };
     }
     
     if (state.drillDownTabs && state.drillDownTabs.length > 0) {
-      this.drillDownTabs = state.drillDownTabs.map(tab => ({
+      this.DrillDownTabs = state.drillDownTabs.map(tab => ({
         ...tab,
         type: tab.type as 'chart' | 'executions' | 'model-detail',
         timestamp: tab.timestamp ? new Date(tab.timestamp) : undefined,
@@ -1863,7 +2032,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       }));
     } else {
       // Initialize with default tab if not provided
-      this.drillDownTabs = [
+      this.DrillDownTabs = [
         {
           id: 'main-chart',
           title: 'Execution Trends',
@@ -1874,11 +2043,21 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     }
     
     if (state.activeTabId) {
-      this.activeTabId = state.activeTabId;
+      this.ActiveTabId = state.activeTabId;
     }
   }
 
+  /** @deprecated Use {@link LoadUserState}. */
+  public loadUserState(state: Partial<ExecutionMonitoringState>): void {
+    return this.LoadUserState(state);
+  }
+
   private createKPICards(kpis: DashboardKPIs): KPICardData[] {
+    const covPriced = kpis.Coverage?.PricedRuns ?? 0;
+    const covUnpriced = kpis.Coverage?.UnpricedRuns ?? 0;
+    const covTotal = covPriced + covUnpriced;
+    const coveragePct = Math.round(ComputeCoveragePercent(kpis.Coverage));
+
     return [
       {
         title: 'Total Executions',
@@ -1889,10 +2068,20 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       },
       {
         title: 'Total Cost',
-        value: `$${kpis.totalCost.toFixed(4)}`,
+        value: kpis.totalCost !== null
+          ? `${kpis.costCurrency === 'USD' ? '$' : kpis.costCurrency + ' '}${kpis.totalCost.toFixed(4)}`
+          : '\u2014',
         icon: 'fa-dollar-sign',
         color: 'warning',
-        subtitle: `${kpis.costCurrency} • $${kpis.dailyCostBurn.toFixed(2)}/day`
+        // Mixed currencies: the total is in one of them; the others are left out rather than added at 1:1.
+        subtitle: `covers ${coveragePct}% of runs` + (kpis.IsMixedCurrency ? ` \u00b7 ${kpis.costCurrency} only` : '')
+      },
+      {
+        title: 'Coverage',
+        value: `${coveragePct}%`,
+        icon: 'fa-shield-halved',
+        color: coveragePct >= 90 ? 'success' : coveragePct >= 70 ? 'warning' : 'danger',
+        subtitle: `${covPriced} of ${covTotal} runs priced`
       },
       {
         title: 'Success Rate',
@@ -1910,10 +2099,10 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       },
       {
         title: 'Token Usage',
-        value: this.formatTokens(kpis.totalTokens),
+        value: this.FormatTokens(kpis.totalTokens),
         icon: 'fa-coins',
         color: 'primary',
-        subtitle: `$${kpis.costPerToken.toFixed(6)}/token`
+        subtitle: kpis.costPerToken !== null ? `$${kpis.costPerToken.toFixed(6)}/token` : '\u2014'
       },
       {
         title: 'Top Model',
@@ -1925,20 +2114,29 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     ];
   }
 
-  onTimeRangeChange(): void {
+  OnTimeRangeChange(): void {
     // Simply change time range - loading state is managed by the service
-    this.setTimeRange(this.selectedTimeRange);
+    this.setTimeRange(this.SelectedTimeRange);
     this.emitStateChange();
   }
 
+  /** @deprecated Use {@link OnTimeRangeChange}. */
+  onTimeRangeChange(): void {
+    return this.OnTimeRangeChange();
+  }
+
+  /** Width of each trend bucket, the same rule the service buckets by. */
+  public TrendBucketMs: number | null = null;
+
   private setTimeRange(range: string): void {
     const { start, end } = this.getTimeRangeFromSelection(range);
+    this.TrendBucketMs = GetBucketSizeMs(start, end);
     this.instrumentationService.setDateRange(start, end);
   }
   
   private getTimeRangeFromSelection(range?: string): { start: Date; end: Date } {
     const now = new Date();
-    const selectedRange = range || this.selectedTimeRange;
+    const selectedRange = range || this.SelectedTimeRange;
     let start: Date;
 
     switch (selectedRange) {
@@ -1964,23 +2162,33 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return { start, end: now };
   }
 
-  refreshData(): void {
+  RefreshData(): void {
     // Simply trigger refresh - loading state is managed by the service
     this.instrumentationService.refresh();
   }
 
-  onExecutionClick(execution: LiveExecution): void {
-    this.selectedExecution = execution;
+  /** @deprecated Use {@link RefreshData}. */
+  refreshData(): void {
+    return this.RefreshData();
+  }
+
+  OnExecutionClick(execution: LiveExecution): void {
+    this.SelectedExecution = execution;
     this.loadExecutionDetails(execution);
   }
 
-  onDataPointClick(event: DataPointClickEvent): void {
+  /** @deprecated Use {@link OnExecutionClick}. */
+  onExecutionClick(execution: LiveExecution): void {
+    return this.OnExecutionClick(execution);
+  }
+
+  OnDataPointClick(event: DataPointClickEvent): void {
     const timestamp = event.data.timestamp;
     const metric = event.metric;
     
     // Create new drill-down tab
     const tabId = `drill-down-${timestamp.getTime()}-${metric}`;
-    const tabTitle = `${this.getMetricDisplayLabel(metric)} - ${this.formatTimestamp(timestamp)}`;
+    const tabTitle = `${this.GetMetricDisplayLabel(metric)} - ${this.FormatTimestamp(timestamp)}`;
     
     const newTab: DrillDownTab = {
       id: tabId,
@@ -1992,99 +2200,137 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     };
     
     // Add tab if it doesn't exist
-    if (!this.drillDownTabs.find(tab => tab.id === tabId)) {
-      this.drillDownTabs.push(newTab);
+    if (!this.DrillDownTabs.find(tab => tab.id === tabId)) {
+      this.DrillDownTabs.push(newTab);
       this.emitStateChange(); // Emit state when new tab is added
       this.cdr.markForCheck();
     }
     
     // Switch to the new tab
-    this.selectTab(tabId);
+    this.SelectTab(tabId);
     
     // Load drill-down data
     this.loadDrillDownData(newTab);
   }
 
-  onChartTimeRangeChange(range: string): void {
-    this.selectedTimeRange = range;
+  /** @deprecated Use {@link OnDataPointClick}. */
+  onDataPointClick(event: DataPointClickEvent): void {
+    return this.OnDataPointClick(event);
+  }
+
+  OnChartTimeRangeChange(range: string): void {
+    this.SelectedTimeRange = range;
     this.setTimeRange(range);
   }
 
-  private getMetricValue(data: TrendData, metric: string): number {
+  /** @deprecated Use {@link OnChartTimeRangeChange}. */
+  onChartTimeRangeChange(range: string): void {
+    return this.OnChartTimeRangeChange(range);
+  }
+
+  private getMetricValue(data: TrendData, metric: string): number | null {
     switch (metric) {
       case 'executions': return data.executions;
       case 'cost': return data.cost;
       case 'tokens': return data.tokens;
       case 'avgTime': return data.avgTime;
       case 'errors': return data.errors;
-      default: return 0;
+      default: return null;
     }
   }
 
-  private formatMetricValue(metric: string, value: number): string {
+  private formatMetricValue(metric: string, value: number | null): string {
+    if (value === null || value === undefined) {
+      return '\u2014';
+    }
     switch (metric) {
       case 'executions': return value.toLocaleString();
       case 'cost': return `$${value.toFixed(4)}`;
       case 'tokens': return value.toLocaleString();
       case 'avgTime': return `${(value / 1000).toFixed(1)}s`;
       case 'errors': return value.toString();
-      default: return value.toString();
+      default: return String(value);
     }
   }
 
   private async loadExecutionDetails(execution: LiveExecution): Promise<void> {
-    this.loadingExecutionDetails = true;
-    this.executionDetails = null;
+    this.LoadingExecutionDetails = true;
+    this.ExecutionDetails = null;
 
     try {
       const details = await this.instrumentationService.getExecutionDetails(
         execution.id,
         execution.type
       );
-      this.executionDetails = details;
+      this.ExecutionDetails = details;
     } catch (error) {
       console.error('Error loading execution details:', error);
     } finally {
-      this.loadingExecutionDetails = false;
+      this.LoadingExecutionDetails = false;
     }
   }
 
-  closeExecutionModal(): void {
-    this.selectedExecution = null;
-    this.executionDetails = null;
-    this.loadingExecutionDetails = false;
+  CloseExecutionModal(): void {
+    this.SelectedExecution = null;
+    this.ExecutionDetails = null;
+    this.LoadingExecutionDetails = false;
   }
 
-  openFullRecord(): void {
-    if (this.selectedExecution) {
+  /** @deprecated Use {@link CloseExecutionModal}. */
+  closeExecutionModal(): void {
+    return this.CloseExecutionModal();
+  }
+
+  OpenFullRecord(): void {
+    if (this.SelectedExecution) {
       // Determine the entity name based on the execution type
-      const entityName = this.selectedExecution.type === 'prompt'
+      const entityName = this.SelectedExecution.type === 'prompt'
         ? 'MJ: AI Prompt Runs'
         : 'MJ: AI Agent Runs';
 
       // Open the record using NavigationService
-      const compositeKey = CompositeKey.FromID(this.selectedExecution.id);
+      const compositeKey = CompositeKey.FromID(this.SelectedExecution.id);
       this.navigationService.OpenEntityRecord(entityName, compositeKey);
 
       // Close the modal
-      this.closeExecutionModal();
+      this.CloseExecutionModal();
     }
   }
 
+  /** @deprecated Use {@link OpenFullRecord}. */
+  openFullRecord(): void {
+    return this.OpenFullRecord();
+  }
+
   // Utility methods for templates
-  trackByKpiTitle(index: number, kpi: KPICardData): string {
+  TrackByKpiTitle(index: number, kpi: KPICardData): string {
     return kpi.title;
   }
 
+  /** @deprecated Use {@link TrackByKpiTitle}. */
+  trackByKpiTitle(index: number, kpi: KPICardData): string {
+    return this.TrackByKpiTitle(index, kpi);
+  }
+
+  TrackByCostModel(index: number, item: { model: string; cost: number; tokens: number }): string {
+    return item.model;
+  }
+
+  /** @deprecated Use {@link TrackByCostModel}. */
   trackByCostModel(index: number, item: { model: string; cost: number; tokens: number }): string {
+    return this.TrackByCostModel(index, item);
+  }
+
+  TrackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number | null }): string {
     return item.model;
   }
 
-  trackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number }): string {
-    return item.model;
+  /** @deprecated Use {@link TrackByEfficiencyModel}. */
+  trackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number | null }): string {
+    return this.TrackByEfficiencyModel(index, item);
   }
 
-  formatTokens(tokens: number): string {
+  FormatTokens(tokens: number): string {
     if (tokens >= 1000000) {
       return `${(tokens / 1000000).toFixed(1)}M`;
     } else if (tokens >= 1000) {
@@ -2093,42 +2339,87 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return tokens.toString();
   }
 
-  formatCurrency(amount: number, decimals: number = 4): string {
+  /** @deprecated Use {@link FormatTokens}. */
+  formatTokens(tokens: number): string {
+    return this.FormatTokens(tokens);
+  }
+
+  formatCurrency(amount: number | null | undefined, decimals: number = 4): string {
+    if (amount === null || amount === undefined) {
+      return '\u2014';
+    }
     return `$${amount.toFixed(decimals)}`;
   }
 
-  formatCostPerToken(cost: number, tokens: number): string {
-    const costPer1K = tokens > 0 ? (cost / tokens) * 1000 : 0;
+  FormatCostPerToken(cost: number | null | undefined, tokens: number): string {
+    if (cost === null || cost === undefined || tokens <= 0) {
+      return '\u2014';
+    }
+    const costPer1K = (cost / tokens) * 1000;
     return `$${costPer1K.toFixed(4)}/1K tokens`;
   }
 
-  getCostBarWidth(cost: number, maxCost: number): number {
-    return maxCost > 0 ? (cost / maxCost) * 100 : 0;
+  /** @deprecated Use {@link FormatCostPerToken}. */
+  formatCostPerToken(cost: number | null | undefined, tokens: number): string {
+    return this.FormatCostPerToken(cost, tokens);
   }
 
-  getMaxCost(costData: { cost: number }[]): number {
-    return Math.max(...costData.map(item => item.cost));
+  GetCostBarWidth(cost: number | null | undefined, maxCost: number): number {
+    if (cost === null || cost === undefined || maxCost <= 0) {
+      return 0;
+    }
+    return (cost / maxCost) * 100;
   }
 
-  getTokenRatio(input: number, output: number): string {
+  /** @deprecated Use {@link GetCostBarWidth}. */
+  getCostBarWidth(cost: number | null | undefined, maxCost: number): number {
+    return this.GetCostBarWidth(cost, maxCost);
+  }
+
+  GetMaxCost(costData: { cost: number | null }[]): number {
+    const priced = costData.map(item => item.cost).filter((c): c is number => c !== null && c !== undefined);
+    return priced.length > 0 ? Math.max(...priced) : 0;
+  }
+
+  /** @deprecated Use {@link GetMaxCost}. */
+  getMaxCost(costData: { cost: number | null }[]): number {
+    return this.GetMaxCost(costData);
+  }
+
+  GetTokenRatio(input: number, output: number): string {
     const total = input + output;
     if (total === 0) return '0:0';
     const ratio = output / input;
     return `1:${ratio.toFixed(1)}`;
   }
 
-  getTokenPercentage(tokens: number, total: number): number {
+  /** @deprecated Use {@link GetTokenRatio}. */
+  getTokenRatio(input: number, output: number): string {
+    return this.GetTokenRatio(input, output);
+  }
+
+  GetTokenPercentage(tokens: number, total: number): number {
     return total > 0 ? (tokens / total) * 100 : 0;
   }
 
-  getCostPerToken(cost: number, tokens: number): string {
+  /** @deprecated Use {@link GetTokenPercentage}. */
+  getTokenPercentage(tokens: number, total: number): number {
+    return this.GetTokenPercentage(tokens, total);
+  }
+
+  GetCostPerToken(cost: number, tokens: number): string {
     const costPer1K = tokens > 0 ? (cost / tokens) * 1000 : 0;
     return costPer1K.toFixed(4);
   }
 
+  /** @deprecated Use {@link GetCostPerToken}. */
+  getCostPerToken(cost: number, tokens: number): string {
+    return this.GetCostPerToken(cost, tokens);
+  }
+
   // Tab management methods
-  selectTab(tabId: string): void {
-    this.activeTabId = tabId;
+  SelectTab(tabId: string): void {
+    this.ActiveTabId = tabId;
     // Trigger chart resize after tab switch to fix chart rendering
     setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
@@ -2137,44 +2428,64 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     this.cdr.markForCheck();
   }
 
-  closeTab(event: MouseEvent, tabId: string): void {
+  /** @deprecated Use {@link SelectTab}. */
+  selectTab(tabId: string): void {
+    return this.SelectTab(tabId);
+  }
+
+  CloseTab(event: MouseEvent, tabId: string): void {
     event.stopPropagation();
     
-    const tabIndex = this.drillDownTabs.findIndex(tab => tab.id === tabId);
+    const tabIndex = this.DrillDownTabs.findIndex(tab => tab.id === tabId);
     if (tabIndex === -1) return;
     
     // Remove the tab
-    this.drillDownTabs.splice(tabIndex, 1);
+    this.DrillDownTabs.splice(tabIndex, 1);
     
     // If we closed the active tab, switch to another tab
-    if (this.activeTabId === tabId) {
-      if (this.drillDownTabs.length > 0) {
+    if (this.ActiveTabId === tabId) {
+      if (this.DrillDownTabs.length > 0) {
         // Switch to the previous tab or first tab
         const newActiveIndex = Math.max(0, tabIndex - 1);
-        this.activeTabId = this.drillDownTabs[newActiveIndex].id;
+        this.ActiveTabId = this.DrillDownTabs[newActiveIndex].id;
         // Trigger resize after tab switch
         setTimeout(() => {
           window.dispatchEvent(new Event('resize'));
         }, 100);
       } else {
         // No tabs left, this shouldn't happen as main chart is not closeable
-        this.activeTabId = 'main-chart';
+        this.ActiveTabId = 'main-chart';
       }
     }
     
     this.emitStateChange();
   }
 
+  /** @deprecated Use {@link CloseTab}. */
+  closeTab(event: MouseEvent, tabId: string): void {
+    return this.CloseTab(event, tabId);
+  }
+
   // KPI click handling
-  onKpiClick(kpi: KPICardData): void {
+  OnKpiClick(kpi: KPICardData): void {
     if (kpi.title === 'Top Model' && kpi.value !== 'N/A') {
       this.openModelDrillDown(String(kpi.value));
     }
     // Add other KPI drill-downs as needed
   }
 
-  isKpiClickable(kpi: KPICardData): boolean {
+  /** @deprecated Use {@link OnKpiClick}. */
+  onKpiClick(kpi: KPICardData): void {
+    return this.OnKpiClick(kpi);
+  }
+
+  IsKpiClickable(kpi: KPICardData): boolean {
     return kpi.title === 'Top Model' && kpi.value !== 'N/A';
+  }
+
+  /** @deprecated Use {@link IsKpiClickable}. */
+  isKpiClickable(kpi: KPICardData): boolean {
+    return this.IsKpiClickable(kpi);
   }
 
   private async openModelDrillDown(modelName: string): Promise<void> {
@@ -2182,8 +2493,8 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     const tabTitle = `Model: ${modelName}`;
     
     // Check if tab already exists
-    if (this.drillDownTabs.find(tab => tab.id === tabId)) {
-      this.selectTab(tabId);
+    if (this.DrillDownTabs.find(tab => tab.id === tabId)) {
+      this.SelectTab(tabId);
       return;
     }
     
@@ -2195,8 +2506,8 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       closeable: true
     };
     
-    this.drillDownTabs.push(newTab);
-    this.selectTab(tabId);
+    this.DrillDownTabs.push(newTab);
+    this.SelectTab(tabId);
     
     // Load model details
     this.loadModelDetails(newTab, modelName);
@@ -2205,7 +2516,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   private async loadDrillDownData(tab: DrillDownTab): Promise<void> {
     if (!tab.timestamp) return;
     
-    this.loadingDrillDown = true;
+    this.LoadingDrillDown = true;
     
     try {
       // Determine bucket size based on selected time range
@@ -2250,12 +2561,14 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIPromptRunEntityExtended>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'RunAt DESC' 
+          OrderBy: 'RunAt DESC',
+          MaxRows: 500
         }),
         RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIAgentRunEntityExtended>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'StartedAt DESC' 
+          OrderBy: 'StartedAt DESC',
+          MaxRows: 500
         })
       ]);
       
@@ -2315,13 +2628,13 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       tab.data = [];
       this.cdr.markForCheck();
     } finally {
-      this.loadingDrillDown = false;
+      this.LoadingDrillDown = false;
       this.cdr.markForCheck();
     }
   }
 
   private async loadModelDetails(tab: DrillDownTab, modelName: string): Promise<void> {
-    this.loadingDrillDown = true;
+    this.LoadingDrillDown = true;
     
     try {
       // Find model by name
@@ -2350,21 +2663,31 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       console.error('Error loading model details:', error);
       tab.data = null;
     } finally {
-      this.loadingDrillDown = false;
+      this.LoadingDrillDown = false;
     }
   }
 
   // Helper methods for drill-down
 
-  formatTimestamp(timestamp: Date): string {
+  FormatTimestamp(timestamp: Date): string {
     return timestamp.toLocaleString();
   }
 
-  formatTime(time: Date): string {
+  /** @deprecated Use {@link FormatTimestamp}. */
+  formatTimestamp(timestamp: Date): string {
+    return this.FormatTimestamp(timestamp);
+  }
+
+  FormatTime(time: Date): string {
     return time.toLocaleTimeString();
   }
 
-  getMetricDisplayLabel(metric: string): string {
+  /** @deprecated Use {@link FormatTime}. */
+  formatTime(time: Date): string {
+    return this.FormatTime(time);
+  }
+
+  GetMetricDisplayLabel(metric: string): string {
     const labels: { [key: string]: string } = {
       executions: 'Executions',
       cost: 'Cost',
@@ -2375,21 +2698,41 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return labels[metric] || metric;
   }
 
-  getFormattedTimestamp(tab: DrillDownTab | undefined): string {
-    return tab?.timestamp ? this.formatTimestamp(tab.timestamp) : '';
+  /** @deprecated Use {@link GetMetricDisplayLabel}. */
+  getMetricDisplayLabel(metric: string): string {
+    return this.GetMetricDisplayLabel(metric);
   }
 
+  GetFormattedTimestamp(tab: DrillDownTab | undefined): string {
+    return tab?.timestamp ? this.FormatTimestamp(tab.timestamp) : '';
+  }
+
+  /** @deprecated Use {@link GetFormattedTimestamp}. */
+  getFormattedTimestamp(tab: DrillDownTab | undefined): string {
+    return this.GetFormattedTimestamp(tab);
+  }
+
+  GetFormattedMetricLabel(tab: DrillDownTab | undefined): string {
+    return tab?.metric ? this.GetMetricDisplayLabel(tab.metric) : '';
+  }
+
+  /** @deprecated Use {@link GetFormattedMetricLabel}. */
   getFormattedMetricLabel(tab: DrillDownTab | undefined): string {
-    return tab?.metric ? this.getMetricDisplayLabel(tab.metric) : '';
+    return this.GetFormattedMetricLabel(tab);
   }
 
   // Panel management methods
-  onPanelExpandedChange(panelName: 'cost' | 'efficiency' | 'executions', expanded: boolean): void {
-    this.panelStates[panelName] = expanded;
+  OnPanelExpandedChange(panelName: 'cost' | 'efficiency' | 'executions', expanded: boolean): void {
+    this.PanelStates[panelName] = expanded;
     this.emitStateChange();
   }
 
-  viewExecutionDetail(execution: ExecutionRecord): void {
+  /** @deprecated Use {@link OnPanelExpandedChange}. */
+  onPanelExpandedChange(panelName: 'cost' | 'efficiency' | 'executions', expanded: boolean): void {
+    return this.OnPanelExpandedChange(panelName, expanded);
+  }
+
+  ViewExecutionDetail(execution: ExecutionRecord): void {
     // Convert ExecutionRecord to LiveExecution format for the modal
     const liveExecution: LiveExecution = {
       id: execution.id,
@@ -2402,7 +2745,12 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       tokens: execution.tokens
     };
     
-    this.onExecutionClick(liveExecution);
+    this.OnExecutionClick(liveExecution);
+  }
+
+  /** @deprecated Use {@link ViewExecutionDetail}. */
+  viewExecutionDetail(execution: ExecutionRecord): void {
+    return this.ViewExecutionDetail(execution);
   }
 
   formatDuration(milliseconds: number): string {
@@ -2419,13 +2767,18 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     }
   }
 
-  getDuration(details: ExecutionDetails): number {
+  GetDuration(details: ExecutionDetails): number {
     const start = details.startTime.getTime();
     const end = details.endTime ? details.endTime.getTime() : Date.now();
     return end - start;
   }
 
-  onSplitterLayoutChange(event: any): void {
+  /** @deprecated Use {@link GetDuration}. */
+  getDuration(details: ExecutionDetails): number {
+    return this.GetDuration(details);
+  }
+
+  OnSplitterLayoutChange(event: any): void {
     // Trigger window resize event to force charts to recalculate dimensions
     setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
@@ -2433,6 +2786,11 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
     // Emit state change when splitter changes
     this.emitStateChange();
+  }
+
+  /** @deprecated Use {@link OnSplitterLayoutChange}. */
+  onSplitterLayoutChange(event: any): void {
+    return this.OnSplitterLayoutChange(event);
   }
 
   // === BaseResourceComponent Required Methods ===
