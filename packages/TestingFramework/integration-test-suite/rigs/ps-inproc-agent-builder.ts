@@ -26,7 +26,7 @@
  *
  * Exit code: 0 = passed (or cleanly skipped), 1 = failures, 2 = bootstrap error.
  */
-import { bootstrapAI } from './lib/ai-bootstrap';
+import { BootstrapAI } from './lib/ai-bootstrap';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import '@memberjunction/core-entities';
 import { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
@@ -115,7 +115,7 @@ async function cleanup(md: IMetadataProvider, user: UserInfo, ids: { modelId?: s
 }
 
 async function main(): Promise<void> {
-  const { provider, user } = await bootstrapAI();
+  const { provider, user } = await BootstrapAI();
   banner('PREDICTIVE STUDIO AGENT — DETERMINISTIC BUILDER (in-process)');
 
   // Resolve scope sanity: Memberships must exist (AssociationDemo loaded).

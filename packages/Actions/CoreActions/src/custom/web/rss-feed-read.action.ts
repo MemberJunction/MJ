@@ -2,13 +2,14 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
+import { SafeFetch } from "@memberjunction/network-utils";
 import {
     FeedArticle,
     ScoredFeedArticle,
-    filterByAge,
-    filterRelevant,
-    parseFeedArticles,
-    scoreAndRankArticles,
+    FilterByAge,
+    FilterRelevant,
+    ParseFeedArticles,
+    ScoreAndRankArticles,
 } from "./rss-feed-parsing";
 
 /** One feed to read. `Name` is what a merged result set is attributed to. */
@@ -138,9 +139,9 @@ export class ReadRSSFeedAction extends BaseAction {
             };
         }
 
-        const aged = filterByAge(allArticles, maxAgeDays, now, includeUndated);
-        const ranked = scoreAndRankArticles(aged.kept, keywords, maxAgeDays, now);
-        const relevant = filterRelevant(ranked, keywords);
+        const aged = FilterByAge(allArticles, maxAgeDays, now, includeUndated);
+        const ranked = ScoreAndRankArticles(aged.kept, keywords, maxAgeDays, now);
+        const relevant = FilterRelevant(ranked, keywords);
         const top = relevant.slice(0, maxResults);
 
         LogStatus(
@@ -181,7 +182,9 @@ export class ReadRSSFeedAction extends BaseAction {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), ReadRSSFeedAction.FETCH_TIMEOUT_MS);
         try {
-            const response = await fetch(url, {
+            // Route through the SSRF guard: feed URLs are caller-controlled, so private/loopback/
+            // link-local/reserved targets are blocked and every redirect hop is re-validated.
+            const response = await SafeFetch(url, {
                 signal: controller.signal,
                 headers: {
                     'User-Agent': ReadRSSFeedAction.USER_AGENT,
@@ -222,7 +225,7 @@ export class ReadRSSFeedAction extends BaseAction {
 
     private async fetchAndParse(feed: RSSFeedInput): Promise<FeedArticle[]> {
         const xml = await this.FetchFeed(feed.url);
-        return parseFeedArticles(xml, feed.name);
+        return ParseFeedArticles(xml, feed.name);
     }
 
     /**

@@ -25,7 +25,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunView, LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, Metadata, RunView, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import type {
     BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams,
@@ -57,6 +57,8 @@ interface SimpleVectorProviderConfig {
  */
 const indexCache = new Map<string, {
     config: SimpleVectorProviderConfig;
+    /** Metadata for `config.entityName` — supplies the real primary key column(s) used to key rows. */
+    entity: EntityInfo;
     service: SimpleVectorService;
     rowCount: number;
     rowsByID: Map<string, Record<string, unknown>>;
@@ -130,33 +132,37 @@ export class SimpleVectorDatabase extends VectorDBBase {
      *  driver; production-scale corpora should use Pinecone/Qdrant. */
     private async loadIndex(indexName: string, contextUser: UserInfo | undefined): Promise<{
         config: SimpleVectorProviderConfig;
+        entity: EntityInfo;
         service: SimpleVectorService;
         rowsByID: Map<string, Record<string, unknown>>;
     } | null> {
         const config = await this.loadIndexConfig(indexName, contextUser);
         if (!config) return null;
 
-        const rows = await this.fetchEntityRows(config, contextUser);
-        if (rows == null) return null;
+        const fetched = await this.fetchEntityRows(config, contextUser);
+        if (fetched == null) return null;
+        const { entity, rows } = fetched;
 
         const cached = indexCache.get(indexName);
         if (cached && cached.rowCount === rows.length) {
-            return { config: cached.config, service: cached.service, rowsByID: cached.rowsByID };
+            return { config: cached.config, entity: cached.entity, service: cached.service, rowsByID: cached.rowsByID };
         }
 
-        const { service, rowsByID } = this.buildServiceFromRows(rows, config);
-        indexCache.set(indexName, { config, service, rowCount: rows.length, rowsByID });
-        return { config, service, rowsByID };
+        const { service, rowsByID } = this.buildServiceFromRows(rows, config, entity);
+        indexCache.set(indexName, { config, entity, service, rowCount: rows.length, rowsByID });
+        return { config, entity, service, rowsByID };
     }
 
     /** Run RunView for the configured entity; returns null if the entity is
-     *  unknown or the RunView call failed (both already logged). */
+     *  unknown or the RunView call failed (both already logged). The entity's
+     *  metadata comes back alongside the rows because its primary key column(s)
+     *  — not a hardcoded `ID` — are what key each vector. */
     private async fetchEntityRows(
         config: SimpleVectorProviderConfig,
         contextUser: UserInfo | undefined,
-    ): Promise<Array<Record<string, unknown>> | null> {
+    ): Promise<{ entity: EntityInfo; rows: Array<Record<string, unknown>> } | null> {
         const md = new Metadata(); // global-provider-ok: VectorDBBase has no per-request provider context; entity lookup is read-only metadata access
-        const entity = md.Entities.find(e => e.Name === config.entityName);
+        const entity = md.EntityByName(config.entityName);
         if (!entity) return null;
 
         const rv = new RunView();
@@ -170,7 +176,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
             LogError(`SimpleVectorDatabase.loadIndex: RunView on "${config.entityName}" failed: ${r.ErrorMessage}`);
             return null;
         }
-        return r.Results ?? [];
+        return { entity, rows: r.Results ?? [] };
     }
 
     /** Parse each row's vector field, validate it's a numeric array, and
@@ -182,14 +188,19 @@ export class SimpleVectorDatabase extends VectorDBBase {
     private buildServiceFromRows(
         rows: Array<Record<string, unknown>>,
         config: SimpleVectorProviderConfig,
+        entity: EntityInfo,
     ): { service: SimpleVectorService; rowsByID: Map<string, Record<string, unknown>> } {
         const service = new SimpleVectorService();
         const entries: Array<{ key: string; vector: number[]; metadata: Record<string, unknown> }> = [];
         const rowsByID = new Map<string, Record<string, unknown>>();
         for (const row of rows) {
-            const id = String(row['ID'] ?? '');
+            // Key each vector by the row's full primary key — any column name(s) — in the prefixed
+            // CompositeKey segment form vector metadata carries. `row['ID']` skipped every row of an
+            // entity whose key isn't called ID, leaving the index silently empty.
+            const key = CompositeKey.FromEntityRecord(entity, row);
             const vecRaw = row[config.vectorField];
-            if (!id || !vecRaw) continue;
+            if (!key.HasValue || !vecRaw) continue;
+            const id = key.ToURLSegment();
             try {
                 const vector = typeof vecRaw === 'string' ? JSON.parse(vecRaw) : vecRaw;
                 if (Array.isArray(vector) && vector.every(v => typeof v === 'number')) {
@@ -207,12 +218,14 @@ export class SimpleVectorDatabase extends VectorDBBase {
     /** Build the metadata bag returned in QueryIndex matches. Mirrors what
      *  Pinecone/Qdrant return so {@link VectorSearchProvider.convertMatches}
      *  can consume it without special-casing. */
-    private buildMatchMetadata(row: Record<string, unknown>, config: SimpleVectorProviderConfig): Record<string, unknown> {
+    private buildMatchMetadata(row: Record<string, unknown>, config: SimpleVectorProviderConfig, entity: EntityInfo): Record<string, unknown> {
+        const key = CompositeKey.FromEntityRecord(entity, row);
         const meta: Record<string, unknown> = {
             Entity: config.entityName,
-            // RecordID in CompositeKey URL format ("ID|<value>") so VectorSearchProvider's
-            // CompositeKey parser treats it the same as a Pinecone-stored ID.
-            RecordID: `ID|${String(row['ID'] ?? '')}`,
+            // RecordID in the prefixed CompositeKey segment form ("Field|value", or "F1|v1||F2|v2"
+            // for a composite key) built from the entity's real primary key(s), so
+            // VectorSearchProvider's CompositeKey parser treats it the same as a Pinecone-stored ID.
+            RecordID: key.HasValue ? key.ToURLSegment() : '',
         };
         if (config.titleField && row[config.titleField] != null) {
             meta['Title'] = String(row[config.titleField]);
@@ -257,7 +270,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
                 matches: matches.map(m => ({
                     id: m.key,
                     score: m.score,
-                    metadata: this.buildMatchMetadata(loaded.rowsByID.get(m.key) ?? {}, loaded.config),
+                    metadata: this.buildMatchMetadata(loaded.rowsByID.get(m.key) ?? {}, loaded.config, loaded.entity),
                 })),
             },
         };

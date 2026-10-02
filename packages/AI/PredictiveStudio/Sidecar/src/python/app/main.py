@@ -171,6 +171,16 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     rows = req.data.rows
     target_idx = columns.index(target)
 
+    # Filter out rows where target is None (unlabeled / in-flight rows cannot be used for training)
+    valid_indices = [i for i, r in enumerate(rows) if r[target_idx] is not None]
+    if not valid_indices:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target column '{target}' contains only null values in training data.",
+        )
+    if len(valid_indices) < len(rows):
+        rows = [rows[i] for i in valid_indices]
+
     # Fit preprocessing on the FULL training data, then transform. This `fitted`
     # payload is FROZEN: it is what gets applied (never re-fit) to the locked
     # holdout below and at /predict — the anti-skew guarantee (plan §6.2).
@@ -283,7 +293,10 @@ def _prepare_forwarded_holdout(
     # Map each holdout row to a feature-name -> value dict (the /predict shape)
     # so the frozen `preprocessing.transform` apply-path produces a positionally
     # identical vector to training.
-    hold_rows = req.holdout.rows
+    # Exclude holdout rows with null targets (unlabeled rows cannot be evaluated).
+    hold_rows = [r for r in req.holdout.rows if r[target_idx] is not None]
+    if not hold_rows:
+        return None
     feature_dicts = [
         {c: r[i] for i, c in enumerate(hold_columns) if c != req.target}
         for r in hold_rows
@@ -440,10 +453,14 @@ def _extract_importance(estimator: Any, columns: List[str]) -> Dict[str, float]:
     if hasattr(estimator, "feature_importances_"):
         values = np.asarray(estimator.feature_importances_, dtype=float)
     elif hasattr(estimator, "coef_"):
-        coef = np.asarray(estimator.coef_, dtype=float)
-        values = np.abs(coef).sum(axis=0) if coef.ndim > 1 else np.abs(coef)
+        raw = np.asarray(estimator.coef_, dtype=float)
+        # Multi-class linear models produce (n_classes, n_features); sum magnitudes across classes
+        values = np.sum(np.abs(raw), axis=0) if raw.ndim > 1 else np.abs(raw)
     else:
         return {}
+    total = float(np.sum(np.abs(values)))
+    if total > 0:
+        values = values / total
     n = min(len(columns), len(values))
     return {columns[i]: float(values[i]) for i in range(n)}
 
@@ -468,7 +485,9 @@ def predict(req: PredictRequest) -> PredictResponse:
     """
     try:
         estimator, _ = artifacts.load_estimator(req.artifact_b64, req.model_id)
-    except ValueError as exc:
+    except (ValueError, artifacts.ArtifactRefusedError) as exc:
+        # ArtifactRefusedError is a ValueError too; named here so the intent is visible:
+        # a refused or malformed artifact is the caller's error, never a 500.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not req.fitted_preprocessing or "output_columns" not in req.fitted_preprocessing:

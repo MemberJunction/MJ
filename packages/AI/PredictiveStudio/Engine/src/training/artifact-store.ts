@@ -39,12 +39,17 @@ import type { IArtifactStore, IEntityFactory } from './types';
  * when set, else `<os.tmpdir()>/mj-ps-artifacts`. Centralized so the store (write)
  * and the loader (read) agree on the location (bytes live at `<baseDir>/<file.ID>.bin`).
  */
-export function resolveLocalArtifactBaseDir(): string {
+export function ResolveLocalArtifactBaseDir(): string {
   const fromEnv = process.env.PS_ARTIFACT_DIR;
   if (fromEnv && fromEnv.trim().length > 0) {
     return fromEnv.trim();
   }
   return join(tmpdir(), 'mj-ps-artifacts');
+}
+
+/** @deprecated Use {@link ResolveLocalArtifactBaseDir}. */
+export function resolveLocalArtifactBaseDir(): string {
+  return ResolveLocalArtifactBaseDir();
 }
 
 /**
@@ -55,8 +60,13 @@ export function resolveLocalArtifactBaseDir(): string {
  * @param baseDir the resolved artifact base directory
  * @param fileId the `MJ: Files` row id the artifact was stored under
  */
-export function localArtifactPath(baseDir: string, fileId: string): string {
+export function LocalArtifactPath(baseDir: string, fileId: string): string {
   return join(baseDir, `${fileId}.bin`);
+}
+
+/** @deprecated Use {@link LocalArtifactPath}. */
+export function localArtifactPath(baseDir: string, fileId: string): string {
+  return LocalArtifactPath(baseDir, fileId);
 }
 
 /**
@@ -117,7 +127,7 @@ export class MJFilesArtifactStore implements IArtifactStore {
     private readonly entityFactory: IEntityFactory,
     private readonly options: MJFilesArtifactStoreOptions = {},
   ) {
-    this.baseDir = options.baseDir ?? resolveLocalArtifactBaseDir();
+    this.baseDir = options.baseDir ?? ResolveLocalArtifactBaseDir();
   }
 
   /** @inheritdoc */
@@ -141,7 +151,7 @@ export class MJFilesArtifactStore implements IArtifactStore {
     // File id (dev/on-prem). Production follow-up: a provider PutObject instead.
     try {
       await mkdir(this.baseDir, { recursive: true });
-      await writeFile(localArtifactPath(this.baseDir, file.ID), bytes);
+      await writeFile(LocalArtifactPath(this.baseDir, file.ID), bytes);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       LogError(`MJFilesArtifactStore: persisted File row '${file.ID}' but failed to write bytes under '${this.baseDir}': ${message}`);
@@ -165,7 +175,7 @@ export class MJFilesArtifactStore implements IArtifactStore {
  * @param provider optional provider for multi-provider correctness
  * @returns the active provider id, or `null` when none is active
  */
-export async function resolveActiveFileStorageProviderId(
+export async function ResolveActiveFileStorageProviderId(
   contextUser?: UserInfo,
   provider?: IMetadataProvider,
 ): Promise<string | null> {
@@ -188,6 +198,14 @@ export async function resolveActiveFileStorageProviderId(
   return result.Results[0].ID ?? null;
 }
 
+/** @deprecated Use {@link ResolveActiveFileStorageProviderId}. */
+export async function resolveActiveFileStorageProviderId(
+  contextUser?: UserInfo,
+  provider?: IMetadataProvider,
+): Promise<string | null> {
+  return ResolveActiveFileStorageProviderId(contextUser, provider);
+}
+
 /**
  * Build the training-side {@link IArtifactStore}, stamping the resolved active
  * storage `providerId` on every File row. The store creates a real `MJ: Files` row
@@ -199,6 +217,11 @@ export async function resolveActiveFileStorageProviderId(
  * @param providerId the active storage-provider id (or `null` when none is active)
  * @param entityFactory the entity-creation seam the store records the File row through
  */
-export function buildArtifactStore(providerId: string | null, entityFactory: IEntityFactory): IArtifactStore {
+export function BuildArtifactStore(providerId: string | null, entityFactory: IEntityFactory): IArtifactStore {
   return new MJFilesArtifactStore(entityFactory, { providerId: providerId ?? undefined });
+}
+
+/** @deprecated Use {@link BuildArtifactStore}. */
+export function buildArtifactStore(providerId: string | null, entityFactory: IEntityFactory): IArtifactStore {
+  return BuildArtifactStore(providerId, entityFactory);
 }

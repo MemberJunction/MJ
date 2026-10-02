@@ -88,8 +88,8 @@ If tests fail because of your change, **update them**. If they fail for other re
 
 **Integration tests** — the deterministic tier must be run headless and pass:
 ```bash
-pnpm run test:integration    # = MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"
-npx mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bundle while iterating
+pnpm run test:integration    # = MJ_INTEGRATION_TEST=1 pnpm mj test suite "Integration Tests — Deterministic"
+pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bundle while iterating
 ```
 Unit tests passing is necessary but **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen have been applied. Full details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
 
@@ -105,7 +105,7 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 
 **CodeGen reads JSONType definitions from the database, not from `metadata/`.** Run `mj sync push` **before** `mj codegen`, or CodeGen regenerates from stale definitions and *silently deletes* properties from the generated types. Full ordering + why it's silent: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
-**A CodeGen `EntityField` INSERT in a migration must never carry a literal `Sequence`.** The number CodeGen writes is a temporary placeholder that a *repeatable* script renumbers — and Flyway runs every versioned migration before any repeatable script, so on a from-scratch database it never gets renumbered in time and a second migration touching the same entity collides on `UQ_EntityField_EntityID_Sequence`. It then reports itself as an unrelated foreign-key error. This cannot fail on a working dev database; it fails only on fresh installs. Use an apply-time `MAX(Sequence)+1` expression. Gate: `.github/scripts/check-migration-entityfield-sequence.sh`. Full explanation: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+**A CodeGen `EntityField` INSERT in a migration must never carry a literal `Sequence`.** The number CodeGen writes is a temporary placeholder that a *repeatable* script renumbers — and Flyway runs every versioned migration before any repeatable script, so on a from-scratch database it never gets renumbered in time and a second migration touching the same entity collides on `UQ_EntityField_EntityID_Sequence`. It then reports itself as an unrelated foreign-key error. This cannot fail on a working dev database; it fails only on fresh installs. Use an apply-time `MAX(Sequence)+1` expression. Gate: `node .github/scripts/check-migration-entityfield-sequence.mjs`. Full explanation: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
 **One database per agent.** Before `mj migrate` / `mj codegen` / `mj sync push`, confirm no other session is using your `DB_DATABASE` — a git worktree isolates the filesystem, **not** the database. Interleaved CodeGen runs leave metadata demanding view columns that no longer exist, and *both* runs report success while someone else's server logs the errors. Rules + the incident that produced them: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 

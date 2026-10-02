@@ -1241,3 +1241,36 @@
 ::ng-deep .ag-header-cell.mj-grid-filler-header:hover {
   background-color: transparent !important;
 }
+
+/* AG Grid injects cellRenderer HTML without Angular attributes, so these
+   must pierce encapsulation or the image renders at intrinsic SVG size. */
+::ng-deep .ag-cell.mj-grid-image-cell {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 4px !important;
+}
+::ng-deep .ag-header-cell.mj-grid-image-header .ag-header-cell-label {
+  justify-content: center;
+}
+::ng-deep .cell-image-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--mj-bg-surface-sunken);
+  flex-shrink: 0;
+}
+::ng-deep .cell-image {
+  width: 100%;
+  height: 100%;
+  max-width: 28px;
+  max-height: 28px;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}

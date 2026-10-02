@@ -1,0 +1,33 @@
+{
+  "id": "sage-chat-general-knowledge-01",
+  "agent": "Sage",
+  "tags": [
+    "clarify",
+    "coherence",
+    "coherence-gate"
+  ],
+  "description": "Answerable from the model's own knowledge with 26 tools declared. Any action call here is a failure — the purest form of the coherence probe.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "In one sentence, what does ROI stand for?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        }
+      },
+      {
+        "kind": "taskComplete"
+      }
+    ]
+  }
+}

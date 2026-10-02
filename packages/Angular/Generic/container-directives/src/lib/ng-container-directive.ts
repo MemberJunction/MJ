@@ -22,5 +22,5 @@ export class Container {
    * Constructor that exposes the ViewContainerRef for the element
    * @param viewContainerRef The ViewContainerRef for the element this directive is applied to
    */
-  constructor(public viewContainerRef: ViewContainerRef) { }
+  constructor(public viewContainerRef: ViewContainerRef) { }  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }

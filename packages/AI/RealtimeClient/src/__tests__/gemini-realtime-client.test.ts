@@ -792,5 +792,50 @@ describe('GeminiRealtimeClient', () => {
             client.LastConnectArgs?.OnClose(new CloseEvent('close'));
             expect(states[states.length - 1]).toBe('closed');
         });
+
+        it('should emit fatal error when the socket closes abnormally with error code', async () => {
+            const { states, errors } = collect(client);
+            await connect(client);
+            client.LastConnectArgs?.OnClose(
+                new CloseEvent('close', { code: 1007, reason: 'Thinking level must be specified for this model.' })
+            );
+            expect(states[states.length - 1]).toBe('error');
+            expect(errors).toEqual([
+                {
+                    Message: 'Gemini Live connection closed (1007): Thinking level must be specified for this model.',
+                    Fatal: true,
+                },
+            ]);
+        });
+
+        it('should send mic chunks in both listening and speaking states (full duplex / barge-in)', async () => {
+            const { states } = collect(client);
+            await connect(client);
+            expect(states[states.length - 1]).toBe('listening');
+
+            // 1. In listening state: sends mic chunk
+            client.OnPcmChunk?.('chunk-1');
+            expect(client.Fake.RealtimeInputs).toHaveLength(1);
+            expect(client.Fake.RealtimeInputs[0].audio?.data).toBe('chunk-1');
+
+            // 2. Transition to speaking state (model starts speaking)
+            client.Emit({
+                serverContent: {
+                    outputTranscription: { text: 'Hello!' },
+                },
+            } as LiveServerMessage);
+            expect(states[states.length - 1]).toBe('speaking');
+
+            // 3. In speaking state: mic chunk MUST still be sent (barge-in / duplex)
+            client.OnPcmChunk?.('chunk-2-barge-in');
+            expect(client.Fake.RealtimeInputs).toHaveLength(2);
+            expect(client.Fake.RealtimeInputs[1].audio?.data).toBe('chunk-2-barge-in');
+
+            // 4. In closed state: mic chunk dropped
+            await client.Disconnect();
+            expect(states[states.length - 1]).toBe('closed');
+            client.OnPcmChunk?.('chunk-3-after-close');
+            expect(client.Fake.RealtimeInputs).toHaveLength(2);
+        });
     });
 });

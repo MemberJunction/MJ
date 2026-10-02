@@ -65,9 +65,18 @@ sequenceDiagram
 ## Verbs and plugins
 
 Callers use the **verb** column. Plugins are ClassFactory keys
-`` `${verb}:${Integration.Name}` ``. Integration.Name must match the MJ
-Integrations row exactly (`QuickBooks Online`,
-`Microsoft Dynamics 365 Business Central`).
+`` `${verb}:${canonical name}` `` (`QuickBooks Online`,
+`Microsoft Dynamics 365 Business Central`). A connection is also found under
+an alias of its ERP (`ERP_INTEGRATION_ALIASES`): Business Central connections
+made by MJ's Integrations connector (`business-central`) or by older hosts
+(`BusinessCentral`) dispatch to the Business Central plugins.
+
+**Which connection.** Pass `CompanyIntegrationID` to name the exact
+connection; it must belong to `CompanyID`, be active, and be an accounting
+connection. Without it, the company's active accounting connections are
+searched, and more than one match is refused (`AMBIGUOUS_ACCOUNTING_INTEGRATION`)
+rather than guessed at, even when `IntegrationName` narrows the search. The
+dispatcher passes the chosen `CompanyIntegrationID` on to the plugin.
 
 | Verb (dispatcher key) | QuickBooks Online | Business Central | Notes |
 |---|---|---|---|
@@ -100,8 +109,13 @@ Backward-compat ClassFactory keys still resolve (same classes, second
 |---|---|
 | `SUCCESS` | Plugin completed |
 | `PROVIDER_NOT_REGISTERED` | No plugin for `` `${verb}:${integration.Name}` `` |
-| `NO_ACCOUNTING_INTEGRATION` | Company has no QBO/BC `CompanyIntegration` |
-| `VALIDATION_ERROR` | Missing `CompanyID`, or journal lines do not balance |
+| `NO_ACCOUNTING_INTEGRATION` | Company has no active QBO/BC `CompanyIntegration` |
+| `AMBIGUOUS_ACCOUNTING_INTEGRATION` | More than one active connection matches; pass `CompanyIntegrationID` |
+| `COMPANY_INTEGRATION_NOT_FOUND` | `CompanyIntegrationID` does not exist |
+| `COMPANY_INTEGRATION_WRONG_COMPANY` | `CompanyIntegrationID` belongs to another company |
+| `COMPANY_INTEGRATION_INACTIVE` | `CompanyIntegrationID` is not active |
+| `NOT_ACCOUNTING_INTEGRATION` | `CompanyIntegrationID` is not an accounting (or not the `IntegrationName`) connection |
+| `VALIDATION_ERROR` | Missing `CompanyID`, malformed `CompanyIntegrationID`, or journal lines do not balance |
 | `ERROR` | Structural line problems, missing context user, HTTP failure |
 
 Journal **structure** (missing Lines, < 2 lines, both debit and credit, negative
@@ -150,7 +164,17 @@ One row per company per ERP. Hosts pick their ERP; this package is not married t
 
 **QuickBooks Online:** `ExternalSystemID` = Realm ID, `CustomAttribute1` = `production` or `sandbox`.
 
-**Business Central:** `ExternalSystemID` = BC company GUID, `CustomAttribute1` = environment name.
+**Business Central (legacy):** `ExternalSystemID` = BC company GUID, `CustomAttribute1` = environment name.
+
+**Business Central (Integrations connector):** a connection with a `CredentialID`, or a
+`Configuration` carrying a tenant or environment, is resolved the way the
+`business-central` connector does it: `{ ...Configuration, ...Credential.Values }`,
+with `ClientId`/`ClientSecret`/`TenantId`/`CompanyId`/`Environment` (or the
+connector's other spellings, e.g. `tenantId`, `environmentName`), falling back to
+the `ClientID`, `ClientSecret`, `APIKey` (tenant) and `ExternalSystemID` (company)
+columns. The environment is required. The token is an Entra ID client-credentials
+token (`AuthorityHost` and `Scope` are optional). The environment variables below
+are not used for these connections.
 
 ### 3. Environment variables (preferred over database tokens)
 
@@ -293,7 +317,7 @@ sequenceDiagram
 ## API reference (legacy vendor actions)
 
 Common inputs on every action: `CompanyID` (required), `FiscalYear`,
-`AccountingPeriod`.
+`AccountingPeriod`, `IntegrationName`, `CompanyIntegrationID`.
 
 ### CreateJournalEntry / CreateQuickBooksJournalEntryAction / CreateBusinessCentralJournalEntryAction
 

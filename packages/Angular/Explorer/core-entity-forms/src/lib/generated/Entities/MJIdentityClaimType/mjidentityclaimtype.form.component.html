@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Claim Type Definition Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="claimTypeDefinition"
-        SectionName="Claim Type Definition"
-        Icon="fa fa-id-card"
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -36,6 +36,22 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="DriverClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Configuration"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="DefaultExpirationDays"
             Type="number"
             [EditMode]="EditMode"
@@ -49,42 +65,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Driver Configuration Section -->
-    <mj-collapsible-panel
-        SectionKey="driverConfiguration"
-        SectionName="Driver Configuration"
-        Icon="fa fa-plug"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DriverClass"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="code"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- System Metadata Section -->
-    <mj-collapsible-panel
-        SectionKey="systemMetadata"
-        SectionName="System Metadata"
-        Icon="fa fa-cog"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -114,7 +94,7 @@
     <mj-collapsible-panel
         SectionKey="mJIdentityClaims"
         SectionName="Identity Claims"
-        Icon="fa fa-id-card"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

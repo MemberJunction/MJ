@@ -33,6 +33,23 @@
 export type DiagnosticStatus = 'pass' | 'fail' | 'warn' | 'info';
 
 /**
+ * Diagnostic functional scope.
+ */
+export type DiagnosticScope = 'install' | 'runtime' | 'ai' | 'metadata' | 'agent' | (string & {});
+
+/**
+ * Machine-readable remediation descriptor for autonomous agent self-healing.
+ */
+export interface DiagnosticRemediation {
+  /** Type of remediation: automated shell command or manual action. */
+  Type: 'command' | 'manual';
+  /** Exact command the agent can execute to resolve this diagnostic failure. */
+  Command?: string;
+  /** Whether the remediation is safe to auto-apply without explicit user confirmation. */
+  SafeToAutoApply?: boolean;
+}
+
+/**
  * A single diagnostic check result, produced by preflight or doctor checks.
  *
  * @see PreflightPhase — produces checks for Node version, npm, disk space, ports, SQL connectivity, OS, and write permissions.
@@ -47,6 +64,14 @@ export interface DiagnosticCheck {
   Message: string;
   /** Actionable remediation step, present only for `'fail'` and `'warn'` statuses. */
   SuggestedFix?: string;
+  /** Stable machine-readable diagnostic code (e.g. `"AI_CREDENTIAL_MISSING"`, `"PORT_CONFLICT"`). */
+  Code?: string;
+  /** Functional scope of this check. */
+  Scope?: DiagnosticScope;
+  /** Optional structured diagnostic evidence for automated reasoning. */
+  Evidence?: Record<string, unknown>;
+  /** Structured remediation instructions for autonomous agent execution. */
+  Remediation?: DiagnosticRemediation;
 }
 
 /**
@@ -63,6 +88,10 @@ export interface EnvironmentInfo {
   NpmVersion: string;
   /** CPU architecture (e.g., `"x64"`, `"arm64"`). */
   Architecture: string;
+  /** Configured package manager for this install (default `'pnpm'`). */
+  PackageManager?: 'npm' | 'pnpm';
+  /** Version of the configured package manager, or `"not found"`. */
+  PackageManagerVersion?: string;
 }
 
 /**
@@ -137,6 +166,33 @@ export class Diagnostics {
    * @param check - The diagnostic check result to add.
    */
   AddCheck(check: DiagnosticCheck): void {
+    if (!check.Scope) {
+      check.Scope = 'install';
+    }
+    if (!check.Code) {
+      check.Code = check.Name.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    }
     this.Checks.push(check);
+  }
+
+  /**
+   * Return a structured machine-readable JSON representation suitable for agentic consumption.
+   */
+  toJSON(): Record<string, unknown> {
+    const passedCount = this.Checks.filter((c) => c.Status === 'pass').length;
+    return {
+      Summary: {
+        Passed: passedCount,
+        Warnings: this.Warnings.length,
+        Failures: this.Failures.length,
+        Total: this.Checks.length,
+        HasFailures: this.HasFailures,
+      },
+      Environment: this.Environment,
+      LastInstall: this.LastInstall,
+      Checks: this.Checks,
+      Failures: this.Failures,
+      Warnings: this.Warnings,
+    };
   }
 }

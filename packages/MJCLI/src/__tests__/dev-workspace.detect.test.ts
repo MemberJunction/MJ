@@ -13,8 +13,7 @@ import {
   LoadRepo,
   MJ_MONOREPO_PACKAGE_NAME,
   ParseWorkspacePackagesGlobs,
-  SelectPackagesGlobs,
-} from '../lib/dev-workspace/detect.js';
+  SelectPackagesGlobs, SelectAppGlobs } from '../lib/dev-workspace/detect.js';
 import { CreateFixtureParent, RemoveFixture } from './dev-workspace-fixture.js';
 
 let parent: string | null = null;
@@ -32,6 +31,55 @@ describe('DetectCandidates', () => {
     const candidates = DetectCandidates(parent);
     expect(candidates.map((c) => c.Name)).toEqual(['bizapps-tasks']);
     expect(candidates[0].Reasons).toContain('mj-app-json');
+  });
+
+  it('reads a member mj-app.json into MjAppJson, client entries included', () => {
+    parent = CreateFixtureParent({
+      'bizapps-caliber': {
+        RootPackageJson: { name: 'caliber' },
+        MjAppJson: {
+          name: 'mj-bizapps-caliber',
+          packages: { client: [{ name: '@mj-biz-apps/caliber-ng', role: 'bootstrap', startupExport: 'LoadCaliber' }] },
+        },
+      },
+    });
+    const [member] = DetectCandidates(parent);
+    expect(member.MjAppJson?.packages?.client).toEqual([
+      { name: '@mj-biz-apps/caliber-ng', role: 'bootstrap', startupExport: 'LoadCaliber' },
+    ]);
+  });
+
+  // Detection walks EVERY sibling directory, before the Reasons filter and long before --exclude.
+  // A broken mj-app.json in a repo the user excludes must not take the whole command down with it —
+  // the failure belongs to whoever actually reads the declaration (rkihm-BC review, R1).
+  it('does not abort detection when a sibling ships an unparseable mj-app.json', () => {
+    parent = CreateFixtureParent({
+      'bizapps-good': { RootPackageJson: { name: 'good' }, MjAppJson: true },
+      'bizapps-rotten': { RootPackageJson: { name: 'rotten' }, Files: { 'mj-app.json': '{ this is not json' } },
+    });
+    const names = DetectCandidates(parent).map((c) => c.Name);
+    expect(names).toEqual(['bizapps-good', 'bizapps-rotten']);
+  });
+
+  it('records the parse failure on the candidate instead of throwing', () => {
+    parent = CreateFixtureParent({
+      'bizapps-rotten': { RootPackageJson: { name: 'rotten' }, Files: { 'mj-app.json': '{ this is not json' } },
+    });
+    const [repo] = DetectCandidates(parent);
+    expect(repo.MjAppJson).toBeNull();
+    expect(repo.MjAppJsonError).toMatch(/mj-app\.json/);
+  });
+
+  it('still throws on an unparseable root package.json — that repo is not loadable at all', () => {
+    parent = CreateFixtureParent({ 'bizapps-x': { Files: { 'package.json': '{ nope' } } });
+    expect(() => DetectCandidates(parent)).toThrow(/Unparseable JSON/);
+  });
+
+  it('leaves MjAppJson null for a member that ships none', () => {
+    parent = CreateFixtureParent({
+      'plain-repo': { RootPackageJson: { name: 'plain' }, Packages: { Lib: { name: '@mj-biz-apps/lib' } } },
+    });
+    expect(DetectCandidates(parent)[0].MjAppJson).toBeNull();
   });
 
   it('detects a repo whose library packages mention the @mj-biz-apps scope (name or deps)', () => {
@@ -119,6 +167,36 @@ describe('LoadRepo', () => {
     const repo = LoadRepo(parent, 'plain');
     expect(repo).not.toBeNull();
     expect(repo!.Reasons).toEqual([]);
+  });
+
+  it('admits explicitly allowed app-shell globs for a host member (--apps) and enumerates their packages', () => {
+    parent = CreateFixtureParent({
+      'Skip-Brain': {
+        RootPackageJson: { name: 'skip_brain' },
+        Packages: { agents: { name: '@skip-brain/agents' } },
+        Files: {
+          'apps/API/package.json': JSON.stringify({ name: 'skip_api_engine' }),
+          'apps/MJAPI/package.json': JSON.stringify({ name: 'skip_brain_mj_api' }),
+          'apps/Admin/package.json': JSON.stringify({ name: 'skip_brain_admin' }),
+        },
+      },
+    });
+    const plain = LoadRepo(parent, 'Skip-Brain')!;
+    expect(plain.Packages.map((p) => p.RelPath)).toEqual(['packages/agents']);
+    expect(plain.AppGlobs).toBeUndefined();
+    const withApps = LoadRepo(parent, 'Skip-Brain', { AppGlobs: ['apps/API', './apps/MJAPI', 'apps/API'] })!;
+    expect(withApps.AppGlobs).toEqual(['apps/API', 'apps/MJAPI']);
+    expect(withApps.Packages.map((p) => p.RelPath)).toEqual(['packages/agents', 'apps/API', 'apps/MJAPI']);
+    expect(withApps.Packages.map((p) => p.PackageJson.name)).toContain('skip_brain_mj_api');
+    expect(withApps.WorkspaceGlobs).toEqual(['packages/*']); // the packages-rooted rule is untouched
+  });
+
+  it('refuses negated, packages-rooted, escaping and odd-shaped --apps globs', () => {
+    expect(() => SelectAppGlobs(['!apps/x'])).toThrow(/negation/);
+    expect(() => SelectAppGlobs(['packages/x'])).toThrow(/packages-rooted/);
+    expect(() => SelectAppGlobs(['../x'])).toThrow(/without '\.\.'/);
+    expect(() => SelectAppGlobs(['apps/**'])).toThrow(/unsupported shape/);
+    expect(SelectAppGlobs(['apps/*', ' apps/API '])).toEqual(['apps/*', 'apps/API']);
   });
 
   it('defaults WorkspaceGlobs to packages/* for a repo with no pnpm-workspace.yaml', () => {

@@ -1,4 +1,12 @@
-import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
+import {
+    ClientRealtimeSessionConfig,
+    DEFAULT_REALTIME_AUDIO_TRACKS,
+    RealtimeTrack,
+    RealtimeTrackDescriptor,
+    RealtimeTrackDirection,
+    ResolveRequestedTracks,
+    RealtimeUsageModalityDetail,
+} from '@memberjunction/ai';
 import { IRealtimeAudioMeter, REALTIME_AUDIO_BIN_COUNT } from '../audio/audioMeter';
 
 /**
@@ -54,6 +62,13 @@ export interface RealtimeClientTranscript {
      * duplicate. Absent/`false` on ordinary turns and on interim deltas.
      */
     ReplacesPrevious?: boolean;
+    /**
+     * `true` when this transcript represents model-authored reasoning / thought summaries
+     * (e.g. Gemini Extended Thinking `part.thought === true`), rather than a spoken progress update.
+     * Thought transcripts render into a narration delegation card and are never synthesized
+     * as audio or chained into spoken narration history.
+     */
+    IsThought?: boolean;
 }
 
 /**
@@ -90,6 +105,19 @@ export interface RealtimeClientUsage {
     InputTokens?: number;
     /** Output tokens reported in this update (a delta for the completed response/turn). */
     OutputTokens?: number;
+    /**
+     * Session duration in seconds reported by the provider or transport (e.g. OpenAI Live's
+     * 15 s WebRTC session pre-bill and cumulative voice duration snapshots).
+     */
+    DurationSeconds?: number;
+    /** Per-modality breakdown of input tokens (text, audio, image/video). */
+    InputTokenDetails?: RealtimeUsageModalityDetail;
+    /** Per-modality breakdown of output tokens (text, audio). */
+    OutputTokenDetails?: RealtimeUsageModalityDetail;
+    /** Cumulative video frames processed or sent across inbound video tracks. */
+    VideoFrames?: number;
+    /** Cumulative duration in seconds across inbound video tracks. */
+    VideoSeconds?: number;
     /** The raw provider usage payload, for hosts that want provider-specific detail. */
     Raw?: unknown;
 }
@@ -209,12 +237,76 @@ export abstract class BaseRealtimeClient {
     private interruptionHandler?: () => void;
     private usageHandler?: (usage: RealtimeClientUsage) => void;
     private remoteVideoHandler?: (stream: MediaStream) => void;
+    private trackHandler?: (track: RealtimeTrack) => void;
+
+    // ── Media-track state and negotiation ──────────────────────────────────────
+    /** Tracks requested, established, or denied on this session. */
+    protected tracks: RealtimeTrack[] = [];
+
+    /**
+     * Established tracks on this session (tracks in the `'live'` state).
+     */
+    public get EstablishedTracks(): readonly RealtimeTrack[] {
+        return this.tracks.filter((t) => t.State === 'live');
+    }
+
+    /**
+     * All tracks evaluated for this session (including `'unsupported'` or `'denied'`).
+     */
+    public get AllTracks(): readonly RealtimeTrack[] {
+        return this.tracks;
+    }
+
+    /**
+     * Returns whether a track of the requested modality and direction is established and `'live'`.
+     */
+    public IsTrackEstablished(modality: string, direction: RealtimeTrackDirection): boolean {
+        const mod = modality.trim().toLowerCase();
+        return this.tracks.some(
+            (t) => t.State === 'live' && String(t.Descriptor.Modality).trim().toLowerCase() === mod && t.Descriptor.Direction === direction
+        );
+    }
+
+    /**
+     * Negotiates requested tracks against model capability.
+     * Audio (inbound + outbound) is the baseline floor of every realtime session;
+     * any additional requested tracks (such as channel video) are unioned onto this baseline floor.
+     */
+    protected negotiateTracks(
+        requested: readonly RealtimeTrackDescriptor[] | undefined,
+        supported: readonly RealtimeTrackDescriptor[] | undefined
+    ): RealtimeTrack[] {
+        const trackMap = new Map<string, RealtimeTrackDescriptor>();
+        for (const t of DEFAULT_REALTIME_AUDIO_TRACKS) {
+            trackMap.set(`${t.Direction}:${t.Modality}`, t);
+        }
+        if (requested) {
+            for (const t of requested) {
+                trackMap.set(`${t.Direction}:${t.Modality}`, t);
+            }
+        }
+        const effectiveRequested: readonly RealtimeTrackDescriptor[] = Array.from(trackMap.values());
+        const effectiveSupported = supported ?? DEFAULT_REALTIME_AUDIO_TRACKS;
+        const resolved = ResolveRequestedTracks(
+            effectiveRequested,
+            effectiveSupported,
+            (d, i) => `${d.Direction}:${String(d.Modality)}:${i}`
+        );
+        this.tracks = resolved.map((t) => ({
+            ...t,
+            State: t.State === 'requested' ? 'live' : t.State,
+        }));
+        for (const track of this.tracks) {
+            this.emitTrackStateChange(track);
+        }
+        return this.tracks;
+    }
 
     // ── Audio-activity metering (capability surface — see driver obligation #9) ─
     /** Meter over the USER's microphone, when the driver attached one. */
-    private inputAudioMeter: IRealtimeAudioMeter | null = null;
+    protected inputAudioMeter: IRealtimeAudioMeter | null = null;
     /** Meter over the AGENT's audio output, when the driver attached one. */
-    private outputAudioMeter: IRealtimeAudioMeter | null = null;
+    protected outputAudioMeter: IRealtimeAudioMeter | null = null;
 
     /**
      * The session's current audible activity, or `null` when this driver attached no
@@ -472,7 +564,30 @@ export abstract class BaseRealtimeClient {
         this.remoteVideoHandler = handler;
     }
 
+    /**
+     * Registers the track-state-change handler — invoked when tracks transition in lifecycle
+     * (e.g. established to `'live'`, `'denied'`, or `'unsupported'`).
+     */
+    public OnTrackStateChange(handler: (track: RealtimeTrack) => void): void {
+        this.trackHandler = handler;
+    }
+
+    /**
+     * Streams one video frame as base64-encoded image data to the model.
+     * Optional capability — drivers that support inbound video tracks implement this.
+     *
+     * @param base64Image Base64-encoded image data.
+     * @param mimeType Image MIME type (defaults to 'image/jpeg').
+     * @returns `true` if accepted and sent; `false` if dropped (throttled, unestablished, etc.).
+     */
+    public SendVideoFrame?(base64Image: string, mimeType?: string): boolean;
+
     // ── Protected emit helpers for concrete drivers ───────────────────────────
+
+    /** Emits a track state change to the registered handler (if any). */
+    protected emitTrackStateChange(track: RealtimeTrack): void {
+        this.trackHandler?.(track);
+    }
 
     /** Emits a transcript event to the registered handler (if any). */
     protected emitTranscript(transcript: RealtimeClientTranscript): void {

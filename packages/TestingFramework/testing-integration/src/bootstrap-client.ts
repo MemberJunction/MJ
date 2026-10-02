@@ -21,12 +21,12 @@ import '@memberjunction/core-entities';
 import { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import { LoadEnv, LoadClientConfig } from './config';
 import {
-    assertOwnsProcess,
-    getActiveIntegrationStorage,
-    preflightMJAPI,
-    getActiveIntegrationClientBootstrap,
-    _setActiveStorage,
-    _setCurrentClientBootstrap,
+    AssertOwnsProcess,
+    GetActiveIntegrationStorage,
+    PreflightMJAPI,
+    GetActiveIntegrationClientBootstrap,
+    SetActiveStorage,
+    SetCurrentClientBootstrap,
     type IntegrationClientContext
 } from './bootstrap-shared';
 
@@ -37,8 +37,8 @@ import {
  * process registers only CLIENT entity subclasses (via the `@memberjunction/core-entities`
  * import above), never the server ones.
  */
-export async function bootstrapIntegrationClient(): Promise<IntegrationClientContext> {
-    const existing = getActiveIntegrationClientBootstrap();
+export async function BootstrapIntegrationClient(): Promise<IntegrationClientContext> {
+    const existing = GetActiveIntegrationClientBootstrap();
     if (existing) {
         return existing;
     }
@@ -48,13 +48,13 @@ export async function bootstrapIntegrationClient(): Promise<IntegrationClientCon
     // INSTRUMENTED cache satisfies the ownership invariant — every cache read/write is already
     // counted — so reuse it rather than refusing. Only a cache initialized by someone ELSE
     // (e.g. co-hosted inside a live MJAPI) is grounds for refusal.
-    const preInstalled = getActiveIntegrationStorage();
+    const preInstalled = GetActiveIntegrationStorage();
     if (!preInstalled) {
-        assertOwnsProcess();
+        AssertOwnsProcess();
     }
     const client = LoadClientConfig();
     // Preflight BEFORE mutating cache/provider state — a dead MJAPI fails fast and clearly.
-    await preflightMJAPI(client.Url, client.MJAPIKey);
+    await PreflightMJAPI(client.Url, client.MJAPIKey);
 
     let storage: InstrumentedLocalStorageProvider;
     if (preInstalled) {
@@ -62,7 +62,7 @@ export async function bootstrapIntegrationClient(): Promise<IntegrationClientCon
     } else {
         storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
         await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: false });
-        _setActiveStorage(storage);
+        SetActiveStorage(storage);
     }
 
     const config = new GraphQLProviderConfigData(
@@ -78,6 +78,11 @@ export async function bootstrapIntegrationClient(): Promise<IntegrationClientCon
     await setupGraphQLClient(config);
 
     const ctx: IntegrationClientContext = { Storage: storage, Client: client };
-    _setCurrentClientBootstrap(ctx);
+    SetCurrentClientBootstrap(ctx);
     return ctx;
+}
+
+/** @deprecated Use {@link BootstrapIntegrationClient}. */
+export async function bootstrapIntegrationClient(): Promise<IntegrationClientContext> {
+    return BootstrapIntegrationClient();
 }

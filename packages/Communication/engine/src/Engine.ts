@@ -21,7 +21,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
      * CommunicationEngine.Instance was a SECOND BaseEngine singleton issuing a duplicate RunViews batch and
      * holding a second copy of all 5 communication arrays.
      */
-    private get Base(): CommunicationEngineBase {
+    private get base(): CommunicationEngineBase {
         return CommunicationEngineBase.Instance;
     }
 
@@ -36,20 +36,32 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
         if (contextUser) {
             this._contextUser = contextUser;
         }
-        await this.Base.Config(forceRefresh, contextUser, provider);
+        await this.base.Config(forceRefresh, contextUser, provider);
     }
 
     /** True once the underlying CommunicationEngineBase cache has loaded. */
-    public get Loaded(): boolean { return this.Base.Loaded; }
+    public get Loaded(): boolean { return this.base.Loaded; }
 
-    public get ContextUser(): UserInfo { return this._contextUser ?? this.Base.ContextUser; }
+    public get ContextUser(): UserInfo { return this._contextUser ?? this.base.ContextUser; }
     public set ContextUser(value: UserInfo) { this._contextUser = value; }
 
+    /**
+     * Cache of provider instances, keyed by provider name. Providers are stateless aside from
+     * their own internal SDK-client caches (e.g. TwilioProvider/GmailProvider/MSGraphProvider's
+     * `MJLruCache`), and those caches only pay off if the provider instance itself survives
+     * across calls. Without this cache, `GetProvider()` asked `ClassFactory.CreateInstance` for
+     * a brand-new instance on every single send — including once per recipient during a bulk
+     * `SendMessages` — so each provider's client-caching fix was silently thrown away the moment
+     * the call returned. Bounded by the number of distinct registered provider names (a handful,
+     * admin-managed via `MJ: Communication Providers`), so no eviction is needed.
+     */
+    private _providerInstanceCache: Map<string, BaseCommunicationProvider> = new Map();
+
     // ── Proxied cached collections (single source of truth: CommunicationEngineBase.Instance) ──
-    public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] { return this.Base.BaseMessageTypes; }
-    public get Providers(): MJCommunicationProviderEntityExtended[] { return this.Base.Providers; }
-    public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] { return this.Base.ProviderMessageTypes; }
-    public get Metadata() { return this.Base.Metadata; }
+    public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] { return this.base.BaseMessageTypes; }
+    public get Providers(): MJCommunicationProviderEntityExtended[] { return this.base.Providers; }
+    public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] { return this.base.ProviderMessageTypes; }
+    public get Metadata() { return this.base.Metadata; }
 
      /**
       * Gets an instance of the class for the specified provider. The provider must be one of the providers that are configured in the system.
@@ -61,14 +73,20 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
         }
 
+        const cached = this._providerInstanceCache.get(providerName);
+        if (cached) {
+            return cached;
+        }
+
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseCommunicationProvider>(BaseCommunicationProvider, providerName);
         if (instance) {
-            // make sure the class we got back is NOT an instance of the base class, that is the default behavior of CreateInstance if we 
+            // make sure the class we got back is NOT an instance of the base class, that is the default behavior of CreateInstance if we
             // dont have a registration for the class we are looking for
             if (instance.constructor.name === 'BaseCommunicationProvider'){
                 throw new Error(`Provider ${providerName} not found.`);
             }
             else {
+                this._providerInstanceCache.set(providerName, instance);
                 return instance; // we got a valid instance of the sub-class we were looking for
             }
         }
@@ -106,7 +124,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
         previewOnly: boolean = false,
         credentials?: ProviderCredentialsBase
      ): Promise<MessageResult[]> {
-        const run = await this.Base.StartRun();
+        const run = await this.base.StartRun();
         if (!run)
             throw new Error(`Failed to start communication run.`);
 
@@ -119,7 +137,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
             results.push(result);
         }
 
-        if (!await this.Base.EndRun(run))
+        if (!await this.base.EndRun(run))
             throw new Error(`Failed to end communication run.`);
 
         return results;
@@ -182,7 +200,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
                 return { Success: true, Error: '', Message: processedMessage };
             }
             else {
-                const log = await this.Base.StartLog(processedMessage, run);
+                const log = await this.base.StartLog(processedMessage, run);
                 if (log) {
                     const sendResult = await provider.SendSingleMessage(processedMessage, credentials);
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';

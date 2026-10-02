@@ -11,8 +11,8 @@ import {
     UserRoutinesCommandCenterComponent,
     UserRoutinesView,
 } from '@memberjunction/ng-user-routines';
-import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
-import { buildUserRoutinesAgentContext, resolveRoutineByIDOrName, RoutineSummaryRow } from './user-routines-agent-context';
+import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
+import { BuildUserRoutinesAgentContext, ResolveRoutineByIDOrName, RoutineSummaryRow } from './user-routines-agent-context';
 
 /**
  * Routines app — full-page Explorer host for the User Routines command center
@@ -117,7 +117,7 @@ export class UserRoutinesResourceComponent extends BaseResourceComponent {
 
     /** Opens the linked execution record (Agent Run / Prompt Run / Action Log) in a tab. */
     public OnHistoryRecordOpened(args: HistoryRecordOpenedEventArgs): void {
-        this.navigationService.OpenEntityRecord(args.EntityName, CompositeKey.FromID(args.RecordID));
+        this.navigationService.OpenEntityRecord(args.EntityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(args.EntityName), args.RecordID));
     }
 
     public OnSearchChange(value: string): void {
@@ -155,7 +155,7 @@ export class UserRoutinesResourceComponent extends BaseResourceComponent {
     private publishAgentContext(): void {
         this.navigationService.SetAgentContext(
             this,
-            buildUserRoutinesAgentContext({
+            BuildUserRoutinesAgentContext({
                 ActiveView: this.ActiveView,
                 SearchText: this.SearchText,
                 StatusFilter: this.StatusFilter,
@@ -248,7 +248,7 @@ export class UserRoutinesResourceComponent extends BaseResourceComponent {
     }
 
     private async handleSearch(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
-        const check = validateStringParam(params['query'], 'query');
+        const check = ValidateStringParam(params['query'], 'query');
         if (!check.ok) {
             return check.result;
         }
@@ -257,7 +257,7 @@ export class UserRoutinesResourceComponent extends BaseResourceComponent {
     }
 
     private async handleStatusFilter(params: Record<string, unknown>): Promise<AgentToolResult> {
-        const check = validateStringParam(params['status'], 'status');
+        const check = ValidateStringParam(params['status'], 'status');
         if (!check.ok) {
             return check.result;
         }
@@ -271,7 +271,7 @@ export class UserRoutinesResourceComponent extends BaseResourceComponent {
     }
 
     private async handleSelect(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
-        const resolved = resolveRoutineByIDOrName(this.routineRows(), params['routine']);
+        const resolved = ResolveRoutineByIDOrName(this.routineRows(), params['routine']);
         if (!resolved.ok) {
             return { Success: false, ErrorMessage: resolved.error };
         }
@@ -281,7 +281,7 @@ export class UserRoutinesResourceComponent extends BaseResourceComponent {
     }
 
     private async handleEdit(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
-        const resolved = resolveRoutineByIDOrName(this.routineRows(), params['routine']);
+        const resolved = ResolveRoutineByIDOrName(this.routineRows(), params['routine']);
         if (!resolved.ok) {
             return { Success: false, ErrorMessage: resolved.error };
         }

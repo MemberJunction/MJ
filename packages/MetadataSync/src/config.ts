@@ -22,23 +22,23 @@ import { configManager } from './lib/config-manager';
  */
 export interface MJConfig {
   /** Database platform (defaults to 'sqlserver'). Set to 'postgresql' for PG-backed MJ instances. */
-  dbPlatform?: 'sqlserver' | 'postgresql';
+  dbPlatform?: 'sqlserver' | 'postgresql';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database server hostname or IP address */
-  dbHost: string;
+  dbHost: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database server port (defaults to 1433 for SQL Server, 5432 for PostgreSQL) */
-  dbPort?: number;
+  dbPort?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database name to connect to */
-  dbDatabase: string;
+  dbDatabase: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database authentication username */
-  dbUsername: string;
+  dbUsername: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database authentication password */
-  dbPassword: string;
+  dbPassword: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether to trust the server certificate (Y/N) */
-  dbTrustServerCertificate?: string;
+  dbTrustServerCertificate?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether to encrypt the connection (Y/N, auto-detected for Azure SQL) */
-  dbEncrypt?: string;
+  dbEncrypt?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** SQL Server instance name (for named instances) */
-  dbInstanceName?: string;
+  dbInstanceName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Per-request timeout in milliseconds for the database connection. When set, it is
    * applied to the mssql pool's `requestTimeout` (SQL Server) or the pg client's
@@ -46,7 +46,7 @@ export interface MJConfig {
    * (mssql: 15000ms). Long-running operations (e.g. `mj app remove` dropping a large
    * schema) require raising this above the default to avoid a premature request timeout.
    */
-  dbRequestTimeout?: number;
+  dbRequestTimeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Startup section from mj.config.cjs. `mode` controls engine pre-warm during provider
    * bootstrap: 'full' pre-warms all @RegisterForStartup engines at boot; 'task' (the
@@ -54,11 +54,11 @@ export interface MJConfig {
    * Left as a plain string here — validation happens in ResolveStartupMode, and the
    * MJ_STARTUP_MODE env var overrides this per invocation (highest precedence).
    */
-  startup?: {
+  startup?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     mode?: string;
   };
   /** Schema name for MemberJunction core tables (defaults to __mj) */
-  mjCoreSchema?: string;
+  mjCoreSchema?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Allow additional properties for extensibility */
   [key: string]: any;
 }
@@ -71,24 +71,24 @@ export interface MJConfig {
  */
 export interface SyncConfig {
   /** Version of the sync configuration format */
-  version: string;
+  version: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Glob pattern for finding data files (defaults to "*.json") */
-  filePattern?: string;
+  filePattern?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** 
    * Directory processing order (only applies to root-level config, not inherited by subdirectories)
    * Specifies the order in which subdirectories should be processed to handle dependencies.
    * Directories not listed in this array will be processed after the ordered ones in alphabetical order.
    */
-  directoryOrder?: string[];
+  directoryOrder?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** 
    * Directories to ignore during processing
    * Can be directory names or glob patterns relative to the location of the .mj-sync.json file
    * Cumulative: subdirectories inherit and add to parent ignoreDirectories
    * Examples: ["output", "examples", "temp"]
    */
-  ignoreDirectories?: string[];
+  ignoreDirectories?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Push command configuration */
-  push?: {
+  push?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Whether to validate records before pushing to database */
     validateBeforePush?: boolean;
     /** Whether to require user confirmation before push */
@@ -105,9 +105,21 @@ export interface SyncConfig {
      * Defaults to false.
      */
     alwaysPush?: boolean;
+    /**
+     * Default for every entity directory in this tree: whether each JSON-root graph gets its own
+     * connection and transaction. Defaults to false, and an entity directory's own
+     * `push.isolatedTransactions` overrides it.
+     * - `false` (default): all-or-nothing. Every create, update and delete runs in one database
+     *   transaction, one graph at a time. If anything fails, nothing is saved.
+     * - `true`: sibling graphs run in parallel (`--parallel-batch-size`) on their own connections,
+     *   and each create and update commits as soon as it is saved. A failure does NOT roll those
+     *   back. For entities that manage their own transaction scopes and want the parallelism.
+     * The CLI flags `--isolated-transactions` / `--no-isolated-transactions` override both.
+     */
+    isolatedTransactions?: boolean;
   };
   /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
-  sqlLogging?: {
+  sqlLogging?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Whether to enable SQL logging during push operations */
     enabled?: boolean;
     /** Directory to output SQL log files (relative to command execution directory, defaults to './sql_logging') */
@@ -138,14 +150,14 @@ export interface SyncConfig {
     variableBatchThreshold?: number;
   };
   /** Watch command configuration */
-  watch?: {
+  watch?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Milliseconds to wait before processing file changes */
     debounceMs?: number;
     /** File patterns to ignore during watch */
     ignorePatterns?: string[];
   };
   /** User role validation configuration */
-  userRoleValidation?: {
+  userRoleValidation?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Whether to enable user role validation for UserID fields */
     enabled?: boolean;
     /** List of role names that are allowed to be referenced in metadata */
@@ -158,7 +170,7 @@ export interface SyncConfig {
    * When enabled, resolution information for @lookup and @parent references is written to files.
    * Defaults to false. Entity-level .mj-sync.json files can override this setting.
    */
-  emitSyncNotes?: boolean;
+  emitSyncNotes?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -232,6 +244,19 @@ export interface EntityConfig {
    * Examples: ["output", "examples", "temp"]
    */
   ignoreDirectories?: string[];
+  /**
+   * Declarative collection configuration for composition axes.
+   * Key is collection property name (e.g. "Lines", "Payments").
+   */
+  collections?: Record<string, {
+    /** Membership mode: 'upsert' (default) or 'authoritative' (opt-in) */
+    mode?: 'upsert' | 'authoritative';
+    /**
+     * Maximum percentage of loaded collection rows that can be implied-deleted
+     * under authoritative mode before push refuses (default: 20%).
+     */
+    maxImpliedDeletePercent?: number;
+  }>;
   /** Pull command specific configuration */
   pull?: {
     /** Glob pattern for finding existing files to update (defaults to filePattern) */
@@ -263,12 +288,29 @@ export interface EntityConfig {
         extension?: string;
       }
     } | Array<{
-      /** Field name to externalize */
+      /** Field name to externalize, or a dotted path to a property inside a JSON field.
+       *
+       * A bare name externalizes the whole field: "TemplateText".
+       *
+       * A dotted path externalizes just that property and leaves an `@file:` reference in
+       * its place, so a column that mixes hand-authored config with a machine-generated
+       * artifact stays readable: "Configuration.ReplayScript". Push already resolves
+       * nested references, so the value round-trips with no push-side configuration.
+       *
+       * A property the record does not carry is skipped entirely — no file, no key — so
+       * records that never produced the artifact are left byte-identical. A whole-field
+       * config for the same field takes precedence over its dotted paths.
+       *
+       * NOTE: externalization is driven entirely by this config, not by what the metadata
+       * file already contains. Pulling a field (or sub-property) that currently holds an
+       * `@file:` reference *without* an entry here inlines the database value and orphans
+       * the file.
+       */
       field: string;
       /** Pattern for the output file. Supports placeholders:
        * - {Name}: Entity's name field value
        * - {ID}: Entity's ID
-       * - {FieldName}: The field being externalized
+       * - {FieldName}: The field being externalized (the leaf name, for a dotted path)
        * - Any other {FieldName} from the entity
        * Example: "@file:templates/{Name}.template.md"
        */
@@ -290,6 +332,36 @@ export interface EntityConfig {
     ignoreNullFields?: boolean;
     /** Whether to ignore virtual fields during pull (defaults to false) */
     ignoreVirtualFields?: boolean;
+  };
+  /**
+   * Push-specific options for this entity directory. Applied only on `mj sync push`
+   * (not pull). Add new per-save / per-entity push knobs here rather than as global
+   * CLI flags so each entity can opt in independently.
+   */
+  push?: {
+    /**
+     * Maps to `EntitySaveOptions.SkipGeoCoding` so sample data with pre-filled
+     * lat/lng (or display-only geo entities) does not call the geocoding provider.
+     * Per-entity, not a global CLI kill switch.
+     */
+    skipGeoCoding?: boolean;
+    /**
+     * Whether this entity's JSON-root graphs each get their own connection and transaction, so
+     * siblings can be written in parallel. Overrides the root config; the CLI flags
+     * `--isolated-transactions` / `--no-isolated-transactions` override this.
+     *
+     * `true` buys parallelism and costs atomicity: each create and update commits as it is saved,
+     * so a later failure leaves them behind. Nested transaction scopes inside a save work either
+     * way — on the shared connection they become savepoints — so choose this for throughput on
+     * entities whose partial writes are acceptable, not to make nested scopes work.
+     */
+    isolatedTransactions?: boolean;
+    /**
+     * When false, skips creating or updating sync metadata blocks (`record.sync`)
+     * on records pushed from this directory. Used by decision metadata directories
+     * so decision files never carry sync blocks. Defaults to true.
+     */
+    writeSyncMetadata?: boolean;
   };
   /**
    * Whether to emit __mj_sync_notes in record files during push operations.
@@ -326,8 +398,13 @@ export interface FolderConfig {
  * }
  * ```
  */
-export function loadMJConfig(): MJConfig | null {
+export function LoadMJConfig(): MJConfig | null {
   return configManager.loadMJConfig();
+}
+
+/** @deprecated Use {@link LoadMJConfig}. */
+export function loadMJConfig(): MJConfig | null {
+  return LoadMJConfig();
 }
 
 /**
@@ -348,7 +425,7 @@ export function loadMJConfig(): MJConfig | null {
  * }
  * ```
  */
-export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
+export async function LoadSyncConfig(dir: string): Promise<SyncConfig | null> {
   const configPath = path.join(dir, '.mj-sync.json');
   
   if (await fs.pathExists(configPath)) {
@@ -361,6 +438,11 @@ export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
   }
   
   return null;
+}
+
+/** @deprecated Use {@link LoadSyncConfig}. */
+export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
+  return LoadSyncConfig(dir);
 }
 
 /**
@@ -381,7 +463,7 @@ export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
  * }
  * ```
  */
-export async function loadEntityConfig(dir: string): Promise<EntityConfig | null> {
+export async function LoadEntityConfig(dir: string): Promise<EntityConfig | null> {
   const configPath = path.join(dir, '.mj-sync.json');
   
   if (await fs.pathExists(configPath)) {
@@ -396,6 +478,11 @@ export async function loadEntityConfig(dir: string): Promise<EntityConfig | null
   }
   
   return null;
+}
+
+/** @deprecated Use {@link LoadEntityConfig}. */
+export async function loadEntityConfig(dir: string): Promise<EntityConfig | null> {
+  return LoadEntityConfig(dir);
 }
 
 /**
@@ -416,7 +503,7 @@ export async function loadEntityConfig(dir: string): Promise<EntityConfig | null
  * }
  * ```
  */
-export async function loadFolderConfig(dir: string): Promise<FolderConfig | null> {
+export async function LoadFolderConfig(dir: string): Promise<FolderConfig | null> {
   const configPath = path.join(dir, '.mj-folder.json');
   
   if (await fs.pathExists(configPath)) {
@@ -429,4 +516,9 @@ export async function loadFolderConfig(dir: string): Promise<FolderConfig | null
   }
   
   return null;
+}
+
+/** @deprecated Use {@link LoadFolderConfig}. */
+export async function loadFolderConfig(dir: string): Promise<FolderConfig | null> {
+  return LoadFolderConfig(dir);
 }

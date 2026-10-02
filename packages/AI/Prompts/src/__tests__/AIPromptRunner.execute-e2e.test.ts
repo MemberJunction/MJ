@@ -7,7 +7,7 @@
  * execution → parse/validate → retry → result assembly → fire-and-forget persistence, plus
  * cancellation and the parallel-execution aggregation path.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const h = vi.hoisted(() => {
   const norm = (s: unknown): string => (s == null ? '' : String(s).trim().toLowerCase());
@@ -79,6 +79,7 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 });
 
 import { AIPromptRunner } from '../AIPromptRunner';
+import { GetToolCallingDecision, GetToolCallingMode } from '../nativeToolCallingGate';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
 import { ChildPromptParam } from '@memberjunction/ai-core-plus';
@@ -262,6 +263,51 @@ describe('ExecutePrompt — hierarchical child-prompt composition', () => {
   });
 });
 
+describe('RenderChildPromptTemplates — public child render without execution', () => {
+  it('renders the children keyed by parent placeholder and makes no model call', async () => {
+    testLLM.Script({ kind: 'succeed', content: 'must not be called' });
+    const te = mockTemplateEngine();
+    (runner as unknown as { _templateEngine: unknown })._templateEngine = te;
+    const parent = makePrompt({ TemplateID: 'tmpl-parent', OutputType: 'string' });
+    const child = makePrompt({ ID: 'child-1', Name: 'Child', TemplateID: 'tmpl-child', OutputType: 'string' });
+    const childParams = { prompt: child, contextUser: { ID: 'u1' }, data: {} };
+    const params = makeParams(parent, { conversationMessages: undefined, templateMessageRole: 'system' });
+
+    const out = await runner.RenderChildPromptTemplates([new ChildPromptParam(childParams as never, 'agentSpecificPrompt')], params as never);
+
+    expect(out.renderedTemplates).toEqual({ agentSpecificPrompt: 'rendered:tmpl-child' });
+    const renderCalls = (te as { __renderCalls: string[] }).__renderCalls;
+    expect(renderCalls).toEqual(['tmpl-child']);          // only the child — the parent is untouched
+    expect(testLLM.CallCount).toBe(0);                     // nothing executed
+  });
+
+  it('returns an empty map for no children', async () => {
+    const params = makeParams(makePrompt(), {});
+    const out = await runner.RenderChildPromptTemplates([], params as never);
+    expect(out.renderedTemplates).toEqual({});
+  });
+
+  it('produces the same text the hierarchical execution path embeds', async () => {
+    testLLM.Script({ kind: 'succeed', content: 'composed answer' });
+    const te = mockTemplateEngine();
+    (runner as unknown as { _templateEngine: unknown })._templateEngine = te;
+    const parent = makePrompt({ TemplateID: 'tmpl-parent', OutputType: 'string' });
+    const child = makePrompt({ ID: 'child-1', Name: 'Child', TemplateID: 'tmpl-child', OutputType: 'string' });
+    const childParams = { prompt: child, contextUser: { ID: 'u1' }, data: {} };
+    const children = [new ChildPromptParam(childParams as never, 'agentSpecificPrompt')];
+    const params = makeParams(parent, { conversationMessages: undefined, templateMessageRole: 'system', childPrompts: children });
+
+    const pre = await runner.RenderChildPromptTemplates(children, params as never);
+    const result = await runner.ExecutePrompt(params as never);
+
+    expect(result.success).toBe(true);
+    // The execution path rendered the same child template (same ID) — pre-render and in-run agree.
+    const renderCalls = (te as { __renderCalls: string[] }).__renderCalls;
+    expect(renderCalls.filter(c => c === 'tmpl-child')).toHaveLength(2);
+    expect(pre.renderedTemplates.agentSpecificPrompt).toBe('rendered:tmpl-child');
+  });
+});
+
 describe('ExecutePrompt — parallel execution aggregation', () => {
   it('aggregates tokens across tasks, selects a result, and surfaces additionalResults', async () => {
     testLLM.Script({ kind: 'succeed', content: 'unused' });
@@ -319,4 +365,86 @@ describe('ExecutePrompt — agent attribution on the prompt run', () => {
         const stamped = (result.promptRun as unknown as { AgentID: string | null }).AgentID;
         expect(stamped == null).toBe(true);
     });
+});
+
+describe('ExecutePrompt — the gate decision reaches the ChatResult', () => {
+  // The runner tagged the REQUEST with the whole decision but
+  // copied only the mode onto the RESULT, which reset `toolResults` to false on the fresh object. The agent
+  // loop reads `toolResults` off the result, so native tool-result turns were never sent. This drives the
+  // real executeModel path end to end; the harness TestLLM ignores tools (SupportsTools false), which is
+  // fine — the seam under test is the runner's bookkeeping, not the driver.
+  type EngineWithCatalog = { GetEffectiveModelConfiguration?: (modelID: string, vendorRowID?: string) => unknown };
+  const engine = h.engine as unknown as EngineWithCatalog;
+
+  afterEach(() => { delete engine.GetEffectiveModelConfiguration; });
+
+  it('copies mode AND toolResults from the request onto the result when the catalog asks for native results', async () => {
+    engine.GetEffectiveModelConfiguration = () => ({ LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeToolResults: true } });
+    testLLM.Script({ kind: 'succeed', content: 'done' });
+    const tools = [{ name: 'get_weather', description: 'Call this for the weather.', inputSchema: { type: 'object', properties: {} } }];
+    const result = await runner.ExecutePrompt(makeParams(makePrompt(), { tools }) as never);
+    expect(result.success).toBe(true);
+    expect(GetToolCallingMode(result.chatResult)).toBe('Native');
+    expect(GetToolCallingDecision(result.chatResult)).toMatchObject({ useNativeTools: true, mode: 'Native', controlFlow: 'envelope', toolResults: true });
+  });
+
+  it('carries toolResults: false when the catalog does not ask for native results', async () => {
+    engine.GetEffectiveModelConfiguration = () => ({ LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true } });
+    testLLM.Script({ kind: 'succeed', content: 'done' });
+    const tools = [{ name: 'get_weather', inputSchema: { type: 'object', properties: {} } }];
+    const result = await runner.ExecutePrompt(makeParams(makePrompt(), { tools }) as never);
+    expect(GetToolCallingDecision(result.chatResult)).toMatchObject({ mode: 'Native', toolResults: false });
+  });
+
+  it('still records Envelope on the result when the gate is closed', async () => {
+    engine.GetEffectiveModelConfiguration = () => ({ LLM: { SupportsNativeToolCalling: true } });
+    testLLM.Script({ kind: 'succeed', content: 'done' });
+    const tools = [{ name: 'get_weather', inputSchema: { type: 'object', properties: {} } }];
+    const result = await runner.ExecutePrompt(makeParams(makePrompt(), { tools }) as never);
+    expect(GetToolCallingDecision(result.chatResult)).toMatchObject({ mode: 'Envelope', useNativeTools: false, toolResults: false });
+  });
+});
+
+describe('ExecutePrompt — implicit control flow treats plain text as the terminal form (results §16.5)', () => {
+  type EngineWithCatalog = { GetEffectiveModelConfiguration?: (modelID: string, vendorRowID?: string) => unknown };
+  const engine = h.engine as unknown as EngineWithCatalog;
+  const IMPLICIT = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeControlFlow: 'implicit' } };
+  const HYBRID = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true } };
+  const tools = [
+    { name: 'get_weather', inputSchema: { type: 'object', properties: {} } },
+    { name: 'ask_user', inputSchema: { type: 'object', properties: { message: { type: 'string' } } } },
+  ];
+  const objectPrompt = () => makePrompt({ OutputType: 'object', OutputExample: JSON.stringify({ taskComplete: true, message: 'x' }), ValidationBehavior: 'Warn', MaxRetries: 2 });
+  const prose = 'I have retrieved all 214 models from `[__mj].vwAIModels`, sorted by PowerRank. Done.';
+
+  afterEach(() => { delete engine.GetEffectiveModelConfiguration; });
+
+  it('accepts prose on an object-typed prompt under implicit control flow: success, no validation error, no repair', async () => {
+    engine.GetEffectiveModelConfiguration = () => IMPLICIT;
+    testLLM.Script({ kind: 'succeed', content: prose });
+    const result = await runner.ExecutePrompt(makeParams(objectPrompt(), { tools, controlFlowToolNames: ['ask_user'] }) as never);
+    expect(GetToolCallingMode(result.chatResult)).toBe('NativeImplicit');
+    expect(result.success).toBe(true);
+    expect(result.result).toBe(prose);
+    expect(result.validationResult?.Success).toBe(true);
+    expect(result.errorMessage).toBeUndefined();
+    expect(lastPromptRun?.Success).toBe(true);
+    expect(lastPromptRun?.Status).toBe('Completed');
+  });
+
+  it('still parses and validates a JSON envelope under implicit control flow', async () => {
+    engine.GetEffectiveModelConfiguration = () => IMPLICIT;
+    testLLM.Script({ kind: 'succeed', content: JSON.stringify({ taskComplete: true, message: 'all done' }) });
+    const result = await runner.ExecutePrompt<{ taskComplete: boolean; message: string }>(makeParams(objectPrompt(), { tools, controlFlowToolNames: ['ask_user'] }) as never);
+    expect(result.success).toBe(true);
+    expect(result.result).toEqual({ taskComplete: true, message: 'all done' });
+  });
+
+  it('leaves the hybrid and envelope paths unchanged: prose on an object prompt is still a validation failure', async () => {
+    engine.GetEffectiveModelConfiguration = () => HYBRID;
+    testLLM.Script({ kind: 'succeed', content: prose });
+    const result = await runner.ExecutePrompt(makeParams(objectPrompt(), { tools: [tools[0]] }) as never);
+    expect(GetToolCallingMode(result.chatResult)).toBe('Native');
+    expect(result.validationResult?.Success).toBe(false);
+  });
 });

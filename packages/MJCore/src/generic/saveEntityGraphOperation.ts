@@ -42,7 +42,7 @@
  * @module @memberjunction/core
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SerializeValidationErrors, type SerializedValidationError } from '@memberjunction/global';
 import { BaseRemotableOperation } from './baseRemotableOperation';
 import type { RemoteOpServerContext } from './baseRemotableOperation';
 import { BaseEntity } from './baseEntity';
@@ -80,6 +80,15 @@ export type SaveEntityGraphOutput = {
     Success: boolean;
     /** Failure detail when `Success` is false. */
     ErrorMessage?: string;
+    /**
+     * The refusal's structured errors when `Success` is false and validation is what refused —
+     * `root.LatestResult.Errors` flattened by `SerializeValidationErrors`, one entry per offending
+     * field. `ErrorMessage` is the same refusal as prose; this is the version a form can paint from.
+     * A graph save reaches the client through the remote-operation transport, not `ResolverBase`, so
+     * without this field a `ValidateAsync()` refusal on an RRC / graph-saved entity would toast and
+     * never highlight — the parity the plain-save path gets from `extensions.validationErrors`.
+     */
+    ValidationErrors?: SerializedValidationError[];
     /**
      * The root record's field values **after** the save — server-assigned primary keys, computed
      * columns, sequence numbers, trigger-populated fields.
@@ -160,6 +169,7 @@ export class SaveEntityGraphOperation extends BaseRemotableOperation<SaveEntityG
             return {
                 Success: false,
                 ErrorMessage: detail,
+                ValidationErrors: SerializeValidationErrors(root.LatestResult?.Errors),
                 Fields: root.GetAll(),
                 Companions: await root.SerializeCompanions(),
             };

@@ -13,34 +13,42 @@ import type {
     MJConversationArtifactVersionEntity,
 } from '@memberjunction/core-entities';
 import type { ComponentSpec } from '@memberjunction/react-runtime';
-import { parseChartSpec, type ChartSpec } from '@/components/charts/chart-spec';
-import { toInteractiveSpec } from '@/data/services/interactive-components';
+import { ParseChartSpec, type ChartSpec } from '@/components/charts/chart-spec';
+import { ToInteractiveSpec } from '@/data/services/interactive-components';
 
 /** The renderer the UI should use for an artifact's content, chosen by {@link classify}. */
 export type ArtifactRenderKind = 'json-table' | 'json' | 'markdown' | 'code' | 'html' | 'chart' | 'interactive' | 'text';
 
 /** A fully-loaded artifact: metadata, latest-version content, and any parsed payload the chosen renderer needs. */
 export type LoadedArtifact = {
-    id: string;
-    name: string;
-    description: string | null;
-    typeName: string;
-    version: number;
-    versionCount: number;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    TypeName: string;
+    Version: number;
+    VersionCount: number;
     /** Raw version content. */
-    content: string;
+    content: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    /**
+     * The version's MIME type, when the record carries one.
+     *
+     * Always null for `MJ: Conversation Artifact Versions`, which has no such column — the type
+     * name is its only classifier. Kept on the shape because a registered renderer matches on
+     * EITHER, and the newer `MJ: Artifact Versions` model does record a MIME type.
+     */
+    ContentType: string | null;
     /** How the UI should render `content`. */
-    kind: ArtifactRenderKind;
+    kind: ArtifactRenderKind;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** When kind is json-table, parsed rows. */
-    rows?: Record<string, unknown>[];
+    Rows?: Record<string, unknown>[];
     /** When kind is json (object), parsed object. */
-    json?: unknown;
+    Json?: unknown;
     /** When kind is chart, the normalized chart spec. */
-    chart?: ChartSpec;
+    chart?: ChartSpec;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** When kind is interactive, the parsed react-runtime component spec. */
-    spec?: ComponentSpec;
+    Spec?: ComponentSpec;
     /** When kind is code, a best-effort source language hint for highlighting. */
-    language?: string;
+    Language?: string;
 };
 
 /** Classified content: the render kind plus any parsed payload the UI needs. */
@@ -84,12 +92,12 @@ function classify(typeName: string, content: string): Classification {
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
         try {
             const parsed: unknown = JSON.parse(trimmed);
-            const chart = parseChartSpec(parsed);
+            const chart = ParseChartSpec(parsed);
             if (chart) return { kind: 'chart', chart, json: parsed };
             // Interactive react-runtime component specs carry both a `name` and a
             // `code` body — charts (chartType/data) and plain data JSON never do,
             // so this branch can't reclassify them.
-            const spec = toInteractiveSpec(parsed, typeName);
+            const spec = ToInteractiveSpec(parsed, typeName);
             if (spec) return { kind: 'interactive', spec };
             if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
                 return { kind: 'json-table', rows: parsed as Record<string, unknown>[] };
@@ -120,7 +128,7 @@ function classify(typeName: string, content: string): Classification {
  * @param contextUser Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
  * @returns A {@link LoadedArtifact}, or `null` if the artifact can't be loaded.
  */
-export async function loadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
+export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
@@ -149,16 +157,21 @@ export async function loadArtifact(artifactId: string, contextUser?: UserInfo): 
         id: artifact.ID,
         name: artifact.Name,
         description: artifact.Description,
-        typeName: artifact.ArtifactType ?? 'Artifact',
-        version: latest?.Version ?? 1,
-        versionCount: versions.length,
+        TypeName: artifact.ArtifactType ?? 'Artifact',
+        // Always null for this entity: `MJ: Conversation Artifact Versions` has no content-type
+        // column — the type name is the only classifier it carries. Kept on the shape because a
+        // registered renderer matches on EITHER, and the newer `MJ: Artifact Versions` model does
+        // record a MIME type.
+        ContentType: null,
+        Version: latest?.Version ?? 1,
+        VersionCount: versions.length,
         content,
         kind,
-        rows,
-        json,
+        Rows: rows,
+        Json: json,
         chart,
-        spec,
-        language,
+        Spec: spec,
+        Language: language,
     };
 }
 
@@ -171,18 +184,18 @@ export type ArtifactTypeCategory = 'table' | 'chart' | 'document';
 
 /** Lightweight artifact summary for the conversation artifact dock. */
 export type ArtifactSummary = {
-    id: string;
-    name: string;
-    description: string | null;
-    typeName: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    TypeName: string;
     /** Bucket for the Tables / Charts / Documents filter chips. */
-    category: ArtifactTypeCategory;
+    Category: ArtifactTypeCategory;
     /** Short preview snippet (from description, else the content head). */
-    preview: string;
+    Preview: string;
     /** Attributed agent id (the agent whose message produced the version), if known. */
-    agentId: string | null;
+    AgentId: string | null;
     /** Attributed agent display name, if known. */
-    agentName: string | null;
+    AgentName: string | null;
 };
 
 /** Bucket an artifact into a dock category using its type + latest content. */
@@ -219,7 +232,7 @@ function quotedIdList(ids: string[]): string {
  * @param conversationId The conversation whose artifacts to load.
  * @param contextUser    Optional acting user (server-side scoping).
  */
-export async function loadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
+export async function LoadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     const rv = new RunView();
@@ -249,11 +262,11 @@ export async function loadConversationArtifacts(conversationId: string, contextU
             id: artifact.ID,
             name: artifact.Name,
             description: artifact.Description,
-            typeName,
-            category: categorize(typeName, content),
-            preview: previewOf(artifact.Description, content),
-            agentId,
-            agentName: agentId ? (agentNameById.get(agentId) ?? null) : null,
+            TypeName: typeName,
+            Category: categorize(typeName, content),
+            Preview: previewOf(artifact.Description, content),
+            AgentId: agentId,
+            AgentName: agentId ? (agentNameById.get(agentId) ?? null) : null,
         } satisfies ArtifactSummary;
     });
 }

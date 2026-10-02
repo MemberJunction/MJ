@@ -43,7 +43,7 @@ export interface TargetPaths {
 }
 
 /** Compute every target path for a given install directory. */
-export function targetPathsFor(targetDir: string): TargetPaths {
+export function TargetPathsFor(targetDir: string): TargetPaths {
   const root = path.resolve(targetDir);
   const claudeDir = path.join(root, '.claude');
   const mjDir = path.join(claudeDir, 'mj');
@@ -61,6 +61,11 @@ export function targetPathsFor(targetDir: string): TargetPaths {
   };
 }
 
+/** @deprecated Use {@link TargetPathsFor}. */
+export function targetPathsFor(targetDir: string): TargetPaths {
+  return TargetPathsFor(targetDir);
+}
+
 // ---------------------------------------------------------------------------
 // Pack source paths (when loading from a local copy of the MJ repo)
 // ---------------------------------------------------------------------------
@@ -72,7 +77,7 @@ export function targetPathsFor(targetDir: string): TargetPaths {
  *
  * Returns the resolved root of the pack contents, or null if neither shape works.
  */
-export function resolveLocalPackRoot(fromPath: string, mjMajor: string): string | null {
+export function ResolveLocalPackRoot(fromPath: string, mjMajor: string): string | null {
   const abs = path.resolve(fromPath);
 
   // Shape A: MJ repo root — look for templates/claude-pack/dist/v{N}/
@@ -92,6 +97,11 @@ export function resolveLocalPackRoot(fromPath: string, mjMajor: string): string 
   return null;
 }
 
+/** @deprecated Use {@link ResolveLocalPackRoot}. */
+export function resolveLocalPackRoot(fromPath: string, mjMajor: string): string | null {
+  return ResolveLocalPackRoot(fromPath, mjMajor);
+}
+
 // ---------------------------------------------------------------------------
 // MJ major version detection
 // ---------------------------------------------------------------------------
@@ -104,13 +114,18 @@ export function resolveLocalPackRoot(fromPath: string, mjMajor: string): string 
  * Rejects: empty, `next`, `latest`, `*`, anything without a leading digit
  * after the strip.
  */
-export function parseSemverMajor(version: string): string | null {
+export function ParseSemverMajor(version: string): string | null {
   const trimmed = version.trim();
   if (!trimmed) return null;
   // Strip common range/prefix chars: ^ ~ >= <= = > < v
   const stripped = trimmed.replace(/^(\^|~|>=|<=|>|<|=|v)+/, '');
   const match = stripped.match(/^(\d+)(?:\.|$)/);
   return match ? match[1] : null;
+}
+
+/** @deprecated Use {@link ParseSemverMajor}. */
+export function parseSemverMajor(version: string): string | null {
+  return ParseSemverMajor(version);
 }
 
 /**
@@ -187,12 +202,17 @@ function collectMJDeps(targetDir: string): Array<{ name: string; version: string
  * Returns `null` if no MJ dependency is declared anywhere reachable (e.g.,
  * a fresh `mj install` that hasn't run `npm install` yet, or a non-MJ project).
  */
-export function detectMJMajor(targetDir: string): string | null {
+export function DetectMJMajor(targetDir: string): string | null {
   for (const { version } of collectMJDeps(targetDir)) {
-    const major = parseSemverMajor(version);
+    const major = ParseSemverMajor(version);
     if (major) return major;
   }
   return null;
+}
+
+/** @deprecated Use {@link DetectMJMajor}. */
+export function detectMJMajor(targetDir: string): string | null {
+  return DetectMJMajor(targetDir);
 }
 
 /**
@@ -201,12 +221,17 @@ export function detectMJMajor(targetDir: string): string | null {
  * subdirs. Returns the bare semver with any `^`/`~`/`>=` prefix stripped,
  * or `null` if nothing is reachable.
  */
-export function detectMJVersionString(targetDir: string): string | null {
+export function DetectMJVersionString(targetDir: string): string | null {
   for (const { version } of collectMJDeps(targetDir)) {
     const stripped = version.replace(/^(\^|~|>=|<=|>|<|=|v)+/, '');
     if (/^\d+\./.test(stripped)) return stripped;
   }
   return null;
+}
+
+/** @deprecated Use {@link DetectMJVersionString}. */
+export function detectMJVersionString(targetDir: string): string | null {
+  return DetectMJVersionString(targetDir);
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +247,11 @@ const DEFAULT_RAW_BASE = 'https://raw.githubusercontent.com/MemberJunction/MJ';
  * `ref` defaults to `main`. Callers that want pinned-to-tag behavior should
  * pass the tag explicitly (e.g. `v5.33.0`) — see plan §8.5.
  */
-export function buildRemoteUrlPrefix(mjMajor: string, ref: string = 'main'): string {
+export function BuildRemoteUrlPrefix(mjMajor: string, ref: string = 'main'): string {
   return `${DEFAULT_RAW_BASE}/${ref}/templates/claude-pack/dist/v${mjMajor}/`;
+}
+
+/** @deprecated Use {@link BuildRemoteUrlPrefix}. */
+export function buildRemoteUrlPrefix(mjMajor: string, ref: string = 'main'): string {
+  return BuildRemoteUrlPrefix(mjMajor, ref);
 }

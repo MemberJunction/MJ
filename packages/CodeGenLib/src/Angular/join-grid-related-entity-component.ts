@@ -103,6 +103,10 @@ export class JoinGridRelatedEntityGenerator extends RelatedEntityDisplayComponen
         if (!config)
             throw new Error("Invalid configuration for JoinGrid component for relationship " + input.RelationshipInfo!.ID);
 
+        // The join entity's FK back to the parent, and the parent key column that FK references.
+        const parentFK = this.GetForeignKey(input.RelationshipInfo!.RelatedEntity, input.Entity!.Name);
+        const parentKeyField = this.GetParentKeyFieldName(input.Entity!, parentFK);
+
         const template = `<mj-join-grid
     [ShowSaveButton]="false"
     [ShowCancelButton]="false"
@@ -116,9 +120,9 @@ export class JoinGridRelatedEntityGenerator extends RelatedEntityDisplayComponen
     ColumnsMode="Fields"
     JoinEntityName="${input.RelationshipInfo!.RelatedEntity}"
     JoinEntityRowForeignKey="${this.GetForeignKeyName(input.RelationshipInfo!.RelatedEntity, config.RowsEntityName)}"
-    [JoinEntityExtraFilter]="'${this.GetForeignKeyName(input.RelationshipInfo!.RelatedEntity, input.Entity!.Name)}=' + record.${input.Entity!.FirstPrimaryKey.Name}"
+    [JoinEntityExtraFilter]="'${parentFK.Name}=' + record.${parentKeyField}"
     [JoinEntityDisplayColumns]="${config.JoinEntityDisplayColumns ? `[${config.JoinEntityDisplayColumns.map(c => `'${c}'`).join(',')}]` : '[]'}"
-    [NewRecordDefaultValues]="{${this.GetForeignKeyName(input.RelationshipInfo!.RelatedEntity, input.Entity!.Name)}: record.${input.Entity!.FirstPrimaryKey.Name}}"
+    [NewRecordDefaultValues]="{${parentFK.Name}: record.${parentKeyField}}"
 >
 </mj-join-grid>
 `

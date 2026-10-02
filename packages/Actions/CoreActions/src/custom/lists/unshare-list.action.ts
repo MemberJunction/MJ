@@ -3,7 +3,7 @@ import type { ActionResultSimple, RunActionParams } from '@memberjunction/action
 import { RegisterClass } from '@memberjunction/global';
 import { ListSharing } from '@memberjunction/lists';
 
-import { getStringParam, missingParam } from './_action-helpers';
+import { GetStringParam, MissingParam } from './_action-helpers';
 
 /**
  * Revoke a previously-granted permission row. Soft-revokes (sets
@@ -13,8 +13,8 @@ import { getStringParam, missingParam } from './_action-helpers';
 @RegisterClass(BaseAction, 'Unshare List')
 export class UnshareListAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const permissionId = getStringParam(params, 'PermissionID');
-    if (!permissionId) return missingParam('PermissionID');
+    const permissionId = GetStringParam(params, 'PermissionID');
+    if (!permissionId) return MissingParam('PermissionID');
 
     const sharing = new ListSharing(params.ContextUser, params.Provider);
     const result = await sharing.Unshare(permissionId);

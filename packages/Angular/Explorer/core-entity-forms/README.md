@@ -480,3 +480,25 @@ Virtual entities are defined by setting the `IsVirtualEntity` flag in the entity
 For more information on virtual entities and implementation, see:
 - [Virtual Entities Documentation](../../../MJCore/docs/virtual-entities.md)
 
+## Predictive Studio Intelligence Panel (`ModelPredictionPanel`)
+
+The `ModelPredictionPanel` is a reusable, high-performance form panel that embeds MemberJunction Predictive Studio machine learning insights directly into entity record forms.
+
+### Features
+
+- **Score Badges & Risk Levels**: Prominently displays the latest prediction value, confidence interval, and qualitative risk/propensity tier (Low, Medium, High, Critical) with semantic status styling.
+- **Key Drivers & Feature Impacts**: Visualizes the top positive and negative contributing factors for the prediction, showing operators *why* the model scored the record the way it did.
+- **Historical Prediction Timeline**: Graphically tracks how predictions have evolved across past inference cycles, allowing users to spot improving or deteriorating trends.
+- **Two-Way Predictive Studio Deep Linking**:
+  - Clicking the model badge or header navigates directly to the model's cockpit in **Predictive Studio** with the active model and evaluation context preselected.
+  - Origin crumbs track provenance so operators can jump from record to model and back seamlessly.
+
+### Usage in Custom Record Forms
+
+```typescript
+import { ModelPredictionPanel } from '@memberjunction/ng-core-entity-forms';
+
+// In custom entity form template or panel configuration:
+// <mj-model-prediction-panel [entity]="recordEntity" [recordId]="record.ID" />
+```
+

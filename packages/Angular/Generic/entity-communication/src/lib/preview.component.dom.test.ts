@@ -18,10 +18,10 @@ import { EntityCommunicationsPreviewComponent } from './preview.component';
  * setting that state directly.
  *
  * Why we suppress ngOnInit's data load: ngOnInit() throws unless entityInfo/runViewParams
- * are present and then calls loadTemplates() which uses a bare `new RunView()` against the
+ * are present and then calls LoadTemplates() which uses a bare `new RunView()` against the
  * global provider (the component pre-dates the @Input() Provider pattern, so there is no
  * provider seam to intercept). We satisfy the guard with minimal typed stubs and stub
- * loadTemplates() to a resolved no-op in `setup` (before the first detectChanges), so the
+ * LoadTemplates() to a resolved no-op in `setup` (before the first detectChanges), so the
  * render reflects ONLY the state we set — no backend, no real RunView, no NG0100.
  *
  * The real children (mjButton directive, <mj-loading>, mjSafeRichHtml pipe) are replaced
@@ -59,7 +59,7 @@ class PreviewTestComponent extends EntityCommunicationsPreviewComponent {
 
 // Minimal typed stand-ins to satisfy ngOnInit's required-input guard. Only their presence
 // (truthiness) matters for these template tests; their fields are never read because
-// loadTemplates() / loadMessagePreviews() are not exercised here.
+// LoadTemplates() / loadMessagePreviews() are not exercised here.
 const entityInfoStub = { ID: 'entity-1', Name: 'Test Entity' } as unknown as EntityInfo;
 const runViewParamsStub: RunViewParams = { EntityName: 'Test Entity' };
 
@@ -79,9 +79,12 @@ describe('EntityCommunicationsPreviewComponent (DOM)', () => {
       inputs: { entityInfo: entityInfoStub, runViewParams: runViewParamsStub },
       setup: (instance) => {
         // Neutralize the real data load so the render reflects only the state we set.
-        // loadTemplates() runs from ngOnInit and uses a bare `new RunView()` against the
+        // LoadTemplates() runs from ngOnInit and uses a bare `new RunView()` against the
         // unconfigured global provider; stub it to a resolved no-op.
-        instance.loadTemplates = vi.fn().mockResolvedValue(undefined);
+        // Stubbed under the CANONICAL name: `loadTemplates` is now a @deprecated alias that
+        // forwards to this one, and ngOnInit calls the canonical name — so a stub on the alias
+        // intercepts nothing and the real RunView fires against an unconfigured provider.
+        instance.LoadTemplates = vi.fn().mockResolvedValue(undefined);
         setState(instance);
       },
     });

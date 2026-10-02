@@ -1064,3 +1064,17 @@
     padding: 8px;
   }
 }
+
+/* No-plugin fallback: a file card with a download action, text underneath when it is text-like */
+.file-fallback { display: flex; flex-direction: column; gap: var(--mj-space-3, 12px); padding: var(--mj-space-4, 16px); }
+.file-fallback-card {
+  display: flex; align-items: center; gap: var(--mj-space-3, 12px);
+  padding: var(--mj-space-3, 12px) var(--mj-space-4, 16px);
+  border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md, 8px);
+  background: var(--mj-bg-surface-card, var(--mj-bg-surface));
+}
+.file-fallback-card > i { font-size: 1.5rem; color: var(--mj-brand-primary); }
+.file-fallback-meta { flex: 1; min-width: 0; }
+.file-fallback-name { font-weight: var(--mj-font-semibold, 600); color: var(--mj-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-fallback-sub { font-size: var(--mj-text-sm, 0.85rem); color: var(--mj-text-muted); }
+.file-fallback-text { max-height: 60vh; overflow: auto; margin: 0; }

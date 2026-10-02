@@ -1,0 +1,857 @@
+/**
+ * The recorded-trace lifecycle: URL normalization for stable keying, distilling a
+ * passing run into a replayable trace, deciding which execution tier a test runs
+ * in, and diffing a fresh derivation against the stored trace to surface UI drift.
+ *
+ * Pure and app-agnostic throughout — no browser, clock, or I/O. Callers supply
+ * timestamps, build identity, variables, and `volatileParams`.
+ */
+
+import { ComputerUseResult } from '../types/results.js';
+import { StepRecord } from '../types/judge.js';
+import type { BrowserAction, ClickAction, InteractiveElement, BoundingBox } from '../types/browser.js';
+import {
+    ComputerUseTrace,
+    TraceStep,
+    TraceAction,
+    TraceTarget,
+    TraceViewport,
+    StepPrecondition,
+    StepPostcondition,
+    GoalPostcondition,
+    TraceActionMethod,
+} from '../types/trace.js';
+
+// ─── URL Normalization ─────────────────────────────────
+
+/** Matches a UUID (any version) anywhere in a string; global + case-insensitive. */
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/** The token a UUID is replaced with — stable across visits/platforms. */
+export const UUID_TOKEN = '{uuid}';
+
+/**
+ * The token as the URL parser renders it once it has been through a pathname.
+ *
+ * Normalization runs twice on different inputs — at record time to build the
+ * stored pattern, and at replay time on both that pattern and the live URL — so
+ * it MUST be idempotent. It was not: `{uuid}` in a path comes back out of
+ * `new URL()` as `%7Buuid%7D`, so a stored pattern normalized to something no
+ * live URL could equal and every record-detail step diverged on a correct URL.
+ */
+const ENCODED_UUID_TOKEN_RE = /%7Buuid%7D/gi;
+
+/**
+ * Normalize a URL for stable trace keying / comparison. Returns the input
+ * (trimmed) unchanged when it can't be parsed as a URL — a best-effort that
+ * never throws.
+ */
+export function NormalizeTraceUrl(url: string, volatileParams: string[] = []): string {
+    const raw = (url ?? '').trim();
+    if (!raw) {
+        return '';
+    }
+
+    let parsed: URL;
+    try {
+        parsed = new URL(raw);
+    } catch {
+        // Not an absolute URL — normalize UUIDs in the raw string at least, so a
+        // path-only pattern (e.g. '/app/record/<uuid>') still keys stably.
+        return raw.replace(UUID_RE, () => UUID_TOKEN);
+    }
+
+    const volatile = new Set(volatileParams.map(p => p.toLowerCase()));
+    // Re-encode through URLSearchParams rather than joining the decoded values by
+    // hand. `searchParams` DECODES, so emitting raw turned `redirect_uri=a%3Fb%26c`
+    // into `redirect_uri=a?b&c`, which a second pass then re-parsed as extra
+    // parameters and re-sorted. Normalization has to be idempotent: the pattern is
+    // normalized at record time and AGAIN inside traceUrlMatches, while the live URL
+    // is normalized once, so a non-idempotent pass made a URL stop matching itself
+    // and every step carrying a redirect_uri diverged on every replay.
+    const params: [string, string][] = [];
+    parsed.searchParams.forEach((value, name) => {
+        if (!volatile.has(name.toLowerCase())) {
+            params.push([name, value.replace(UUID_RE, () => UUID_TOKEN)]);
+        }
+    });
+    params.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+
+    const path = parsed.pathname.replace(UUID_RE, () => UUID_TOKEN).replace(ENCODED_UUID_TOKEN_RE, () => UUID_TOKEN);
+    const query = params.length > 0
+        ? '?' + params.map(([n, v]) => `${encodeQueryPart(n)}=${encodeQueryPart(v)}`).join('&')
+        : '';
+    // Hash fragment is intentionally dropped.
+    return `${parsed.origin}${path}${query}`;
+}
+
+/** @deprecated Use {@link NormalizeTraceUrl}. */
+export function normalizeTraceUrl(url: string, volatileParams: string[] = []): string {
+ return NormalizeTraceUrl(url, volatileParams);
+}
+
+
+/**
+ * Re-escape the characters that would change how a query string PARSES, and only
+ * those: `%`, `&`, `=`, `#`, `?`, `+`.
+ *
+ * `searchParams` hands back decoded values, so emitting them raw let a value
+ * containing `&` or `=` re-parse as extra parameters on the next pass — and
+ * normalization runs more than once (record time, then again inside
+ * traceUrlMatches), so a URL stopped matching itself. Full `encodeURIComponent`
+ * would fix that too, but it also escapes spaces and braces, which breaks the
+ * `{uuid}` token and stops variable tokenization finding a value like `Acme Corp`.
+ * Escaping only the structural characters keeps both properties.
+ */
+function encodeQueryPart(part: string): string {
+    return part
+        .replace(/%/g, '%25')    // first, so the escapes below are not re-escaped
+        .replace(/&/g, '%26')
+        .replace(/=/g, '%3D')
+        .replace(/#/g, '%23')
+        .replace(/\?/g, '%3F')
+        .replace(/\+/g, '%2B');
+}
+
+/**
+ * Whether an actual URL satisfies a recorded URL pattern. Both are normalized first.
+ *
+ * An ABSOLUTE pattern (one carrying an origin) is matched structurally: same origin,
+ * and the same path or a deeper one at a `/` boundary, with the pattern's query
+ * parameters all present. It used to be plain containment, which made every
+ * full-URL assertion vacuous — the pattern `http://localhost:4200/` matched
+ * `http://localhost:4200/login-error`, so a goal postcondition distilled from a run
+ * ending at the app root passed on any URL of that origin, error pages included.
+ *
+ * A path-FRAGMENT pattern (e.g. `/app/data`) keeps containment semantics, which is
+ * what makes it a fragment. An empty pattern matches anything.
+ */
+export function TraceUrlMatches(pattern: string, actualUrl: string, volatileParams: string[] = []): boolean {
+    const p = NormalizeTraceUrl(pattern, volatileParams);
+    if (!p) {
+        return true;
+    }
+    const a = NormalizeTraceUrl(actualUrl, volatileParams);
+
+    let patternUrl: URL;
+    let actualParsed: URL;
+    try {
+        patternUrl = new URL(p);
+        actualParsed = new URL(a);
+    } catch {
+        return a.includes(p);   // fragment pattern (or an unparseable actual): containment
+    }
+
+    if (patternUrl.origin !== actualParsed.origin) {
+        return false;
+    }
+    if (!pathContains(patternUrl.pathname, actualParsed.pathname)) {
+        return false;
+    }
+    for (const [name, value] of patternUrl.searchParams) {
+        if (!actualParsed.searchParams.getAll(name).includes(value)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** @deprecated Use {@link TraceUrlMatches}. */
+export function traceUrlMatches(pattern: string, actualUrl: string, volatileParams: string[] = []): boolean {
+ return TraceUrlMatches(pattern, actualUrl, volatileParams);
+}
+
+/** Same path, or a descendant of it — `/app/data` contains `/app/data/records`
+ *  but not `/app/data-archive`. */
+function pathContains(patternPath: string, actualPath: string): boolean {
+    // A trailing slash is cosmetic, except on the root itself: a pattern of "/" means
+    // the root page, NOT "anywhere on this origin" — treating it as the latter is how
+    // the login smoke test's URL assertion passed on /login-error.
+    const base = patternPath.length > 1 && patternPath.endsWith('/')
+        ? patternPath.slice(0, -1)
+        : patternPath;
+    if (base === '/' || base === '') {
+        return actualPath === '/' || actualPath === '';
+    }
+    return actualPath === base || actualPath.startsWith(`${base}/`);
+}
+
+// ─── Recording ─────────────────────────────────────────
+
+/** Options for {@link recordTrace}. */
+export interface RecordTraceOptions {
+    /** The passing run to distill (assumed to have passed {@link isRecordableRun}). */
+    result: ComputerUseResult;
+    /** Stable per-test identifier the trace is keyed by. */
+    testId: string;
+ /** The (frozen) goal text — hashed into the trace forinvalidation. */
+    goal: string;
+    /** Opaque build identity at record time; '' when the caller has none. */
+    appBuildHash?: string;
+    /** Opaque app/package version string (generic — Layer 2 stamps its own). */
+    appVersion?: string;
+    /** ISO-8601 record timestamp — supplied by the caller (recorder is clock-free). */
+    recordedAt: string;
+    /** Declared variable NAMES (values are never stored). */
+    variables?: string[];
+    /**
+     * Concrete values used this run, keyed by variable name. Used ONLY to
+     * tokenize Text/Url back to `%name%` placeholders so the trace is reusable
+     * with fresh values. Never stored.
+     */
+    variableValues?: Record<string, string>;
+    /** App-specific volatile query params to strip from recorded URLs (from AppProfile). */
+    volatileParams?: string[];
+    /** Viewport at record time; defaults to 1280×720. */
+    viewport?: { width: number; height: number };
+    /** Distilled goal-level postconditions; [] when none. */
+    goalPostconditions?: GoalPostcondition[];
+}
+
+/** Browser-action types that distill to a replay TraceStep. */
+const RECORDABLE_METHODS: Record<string, TraceActionMethod> = {
+    Click: 'click',
+    ClickElement: 'click',
+    Type: 'type',
+    TypeIntoElement: 'type',
+    Keypress: 'keypress',
+    Navigate: 'navigate',
+    GoBack: 'goBack',
+    GoForward: 'goForward',
+    Refresh: 'refresh',
+};
+
+/** Action types that are legal in a recordable run but produce NO trace step. */
+const DROPPED_TYPES = new Set(['Wait', 'Scroll']);
+
+/**
+ * Fraction of the union two boxes must share before they are treated as the same
+ * element. Generous on purpose: a coordinate click's box and the element's own box
+ * come from different measurements of the same thing, so they agree closely but
+ * rarely exactly.
+ */
+const BOX_MATCH_MIN_OVERLAP = 0.5;
+
+/** Intersection-over-union of two boxes; 0 when they do not overlap. */
+function boxOverlap(a: BoundingBox, b: BoundingBox): number {
+    const width = Math.min(a.XMax, b.XMax) - Math.max(a.XMin, b.XMin);
+    const height = Math.min(a.YMax, b.YMax) - Math.max(a.YMin, b.YMin);
+    if (width <= 0 || height <= 0) {
+        return 0;
+    }
+    const intersection = width * height;
+    const areaA = Math.max(0, a.XMax - a.XMin) * Math.max(0, a.YMax - a.YMin);
+    const areaB = Math.max(0, b.XMax - b.XMin) * Math.max(0, b.YMax - b.YMin);
+    const union = areaA + areaB - intersection;
+    return union > 0 ? intersection / union : 0;
+}
+
+/**
+ * The element a coordinate click landed on, found by hit-testing its bounding box
+ * against the step's extracted elements.
+ *
+ * A coordinate `Click` carries pixels; the trace is built on re-resolvable identity
+ * (role + name + selector). Recording the pixels would give replay something it
+ * cannot heal and that breaks on any layout change, so instead we recover the
+ * identity the click threw away — the element list was already captured for this
+ * step, and each entry carries its own box.
+ *
+ * Returns undefined rather than guessing: an ambiguous or absent match means the
+ * step is not recordable, which is strictly better than a script that clicks the
+ * wrong thing later. A wrapper containing the target loses to the target itself
+ * because overlap is scored against the union, which a large wrapper inflates.
+ */
+export function ResolveElementByBox(
+    box: BoundingBox | undefined,
+    elements: InteractiveElement[]
+): InteractiveElement | undefined {
+    if (!box) {
+        return undefined;
+    }
+    let best: InteractiveElement | undefined;
+    let bestScore = 0;
+    for (const el of elements) {
+        if (!el.BoundingBox) {
+            continue;
+        }
+        const score = boxOverlap(box, el.BoundingBox);
+        if (score > bestScore) {
+            bestScore = score;
+            best = el;
+        }
+    }
+    return bestScore >= BOX_MATCH_MIN_OVERLAP ? best : undefined;
+}
+
+/** @deprecated Use {@link ResolveElementByBox}. */
+export function resolveElementByBox(
+    box: BoundingBox | undefined,
+    elements: InteractiveElement[]
+): InteractiveElement | undefined {
+ return ResolveElementByBox(box, elements);
+}
+
+/**
+ * Whether a click action needs grounding help — a coordinate click that named no
+ * selector. `ClickElement` already carries an element index, so it is never here.
+ */
+function isUngroundedClick(action: BrowserAction): action is ClickAction {
+    return action.Type === 'Click' && !action.Selector;
+}
+
+/**
+ * Whether a type action named no element. Unlike a click, a coordinate `Type`
+ * carries no bounding box, so there is nothing to hit-test and no way to recover
+ * the target: `planReplayActions` needs a selector and the healer needs a
+ * role/name, and neither exists. The run cannot be replayed and must not be kept.
+ */
+function isUngroundedType(action: BrowserAction): boolean {
+    return action.Type === 'Type' && !action.Selector;
+}
+
+/**
+ * Whether a run is clean enough to record as a trace. Returns a reason on
+ * refusal so the caller can log why a pass was not recorded. Layer 2 should
+ * additionally require all oracles green before calling {@link recordTrace}.
+ */
+export function IsRecordableRun(result: ComputerUseResult): { recordable: boolean; reason?: string } {
+    if (result.Status !== 'Completed') {
+        return { recordable: false, reason: `status is ${result.Status}, not Completed` };
+    }
+    if (!result.FinalJudgeVerdict?.Done) {
+        return { recordable: false, reason: 'final judge verdict is not Done' };
+    }
+    if (result.FailureReason) {
+        return { recordable: false, reason: `carries a failure reason (${result.FailureReason})` };
+    }
+    for (const step of result.Steps) {
+        if (step.Error) {
+            return { recordable: false, reason: `step ${step.StepNumber} errored` };
+        }
+        if (step.ToolCalls.length > 0) {
+            return { recordable: false, reason: `step ${step.StepNumber} used tool calls (not deterministically replayable)` };
+        }
+        for (const action of successfulActions(step)) {
+            if (!DROPPED_TYPES.has(action.Type) && !(action.Type in RECORDABLE_METHODS)) {
+                return { recordable: false, reason: `step ${step.StepNumber} used non-replayable action ${action.Type}` };
+            }
+            // A coordinate click we cannot tie back to an element records a target
+            // with neither a selector to act on nor a role/name to heal from. Such a
+            // step diverges on every future run, so the whole trace is worthless —
+            // refuse it here rather than storing a script that dies mid-trajectory.
+            if (isUngroundedClick(action) && !ResolveElementByBox(action.BoundingBox, step.InteractiveElements)) {
+                return {
+                    recordable: false,
+                    reason: `step ${step.StepNumber} used a coordinate click that matches no extracted element (nothing to replay or heal from)`,
+                };
+            }
+            if (isUngroundedType(action)) {
+                return {
+                    recordable: false,
+                    reason: `step ${step.StepNumber} used a type action with no element selector (nothing to replay or heal from)`,
+                };
+            }
+        }
+    }
+    return { recordable: true };
+}
+
+/** @deprecated Use {@link IsRecordableRun}. */
+export function isRecordableRun(result: ComputerUseResult): { recordable: boolean; reason?: string } {
+ return IsRecordableRun(result);
+}
+
+/** Distill a passing {@link ComputerUseResult} into a {@link ComputerUseTrace}. */
+export function RecordTrace(options: RecordTraceOptions): ComputerUseTrace {
+    const volatile = options.volatileParams ?? [];
+    const trace = new ComputerUseTrace();
+    trace.TestId = options.testId;
+    trace.AppBuildHash = options.appBuildHash ?? '';
+    trace.AppVersion = options.appVersion ?? '';
+    trace.GoalHash = HashGoal(options.goal);
+    trace.RecordedAt = options.recordedAt;
+    trace.Variables = options.variables ?? [];
+    trace.GoalPostconditions = options.goalPostconditions ?? [];
+
+    const viewport = new TraceViewport();
+    if (options.viewport) {
+        viewport.Width = options.viewport.width;
+        viewport.Height = options.viewport.height;
+    }
+    trace.Viewport = viewport;
+
+    for (const step of options.result.Steps) {
+        trace.Steps.push(...distillStep(step, volatile, options.variableValues));
+    }
+
+    // Final sweep: every string in the finished trace, not just the fields someone
+    // remembered to tokenize at construction time. Idempotent — a value already
+    // replaced is gone, so the second pass finds nothing.
+    tokenizeTraceDeep(trace.Steps, options.variableValues);
+    tokenizeTraceDeep(trace.GoalPostconditions, options.variableValues);
+    return trace;
+}
+
+/** @deprecated Use {@link RecordTrace}. */
+export function recordTrace(options: RecordTraceOptions): ComputerUseTrace {
+ return RecordTrace(options);
+}
+
+/**
+ * A stable, non-cryptographic hash of the goal text (djb2 → hex). The goal is
+ * frozen fixture data: a reword changes the hash and demotes the test to the
+ * LLM tier. Trivial whitespace differences are collapsed first so
+ * reformatting alone doesn't invalidate. Exported sokeying reuses it.
+ */
+export function HashGoal(goal: string): string {
+    const normalized = (goal ?? '').trim().replace(/\s+/g, ' ');
+    let h = 5381;
+    for (let i = 0; i < normalized.length; i++) {
+        h = ((h << 5) + h + normalized.charCodeAt(i)) >>> 0;
+    }
+    return h.toString(16).padStart(8, '0');
+}
+
+/** @deprecated Use {@link HashGoal}. */
+export function hashGoal(goal: string): string {
+ return HashGoal(goal);
+}
+
+// ─── Internals ─────────────────────────────────────────────
+
+/** The successfully-executed actions of a step, in order. */
+function successfulActions(step: StepRecord): BrowserAction[] {
+    return step.ActionResults.filter(r => r.Success).map(r => r.Action);
+}
+
+/**
+ * Flatten one recorded step into zero or more replay steps — one per
+ * successfully-executed, replayable action. The parent step's instruction +
+ * urlBefore ride along; the first emitted step carries the URL precondition and
+ * the last carries the navigation postcondition (when the step changed URL).
+ */
+function distillStep(
+    step: StepRecord,
+    volatile: string[],
+    variableValues?: Record<string, string>
+): TraceStep[] {
+    const urlBefore = NormalizeTraceUrl(step.UrlBefore || step.Url, volatile);
+    const urlAfter = NormalizeTraceUrl(step.UrlAfter || step.UrlBefore || step.Url, volatile);
+    // Tokenized like Text/Url: the controller narrates what it is doing, so a
+    // login step's reasoning quotes the very credentials it was handed
+    // ("log in using (user / hunter2)"). Untokenized, every recorded login wrote
+    // the password verbatim into metadata that gets committed.
+    // Tokenize BEFORE truncating: compactInstruction cuts at 200 characters, and a
+    // credential straddling the cut survived as a fragment when the order was reversed.
+    const instruction = compactInstruction(tokenize(step.ControllerReasoning, variableValues) ?? '');
+    const elementsByIndex = indexElements(step.InteractiveElements);
+
+    const actions = successfulActions(step).filter(a => a.Type in RECORDABLE_METHODS);
+    const out: TraceStep[] = [];
+    actions.forEach((action, i) => {
+        const traceStep = new TraceStep();
+        traceStep.Instruction = instruction;
+        traceStep.UrlBefore = urlBefore;
+        traceStep.Action = mapAction(action, elementsByIndex, volatile, variableValues);
+
+        const pre = new StepPrecondition();
+        pre.WaitForTarget = traceStep.Action.Target !== undefined;
+        // Only the first action of a batch asserts the entry URL — later actions
+        // in the same step run on a page that may already have moved.
+        if (i === 0 && urlBefore) {
+            pre.UrlPattern = urlBefore;
+        }
+        traceStep.Precondition = pre;
+
+        // The last action of a step that changed the URL gets a navigation
+        // postcondition — the highest-signal, cheapest drift check.
+        if (i === actions.length - 1 && urlAfter && urlAfter !== urlBefore) {
+            const post = new StepPostcondition();
+            post.UrlPattern = urlAfter;
+            traceStep.Postcondition = post;
+        }
+        out.push(traceStep);
+    });
+    return out;
+}
+
+/** Map a StepRecord's InteractiveElements by their per-snapshot index. */
+function indexElements(elements: InteractiveElement[]): Map<number, InteractiveElement> {
+    const map = new Map<number, InteractiveElement>();
+    for (const el of elements) {
+        map.set(el.Index, el);
+    }
+    return map;
+}
+
+/** Translate one recordable browser action into a {@link TraceAction}. */
+function mapAction(
+    action: BrowserAction,
+    elementsByIndex: Map<number, InteractiveElement>,
+    volatile: string[],
+    variableValues?: Record<string, string>
+): TraceAction {
+    const ta = new TraceAction();
+    ta.Method = RECORDABLE_METHODS[action.Type];
+
+    switch (action.Type) {
+        case 'Click':
+            ta.Button = action.Button;
+            ta.ClickCount = action.ClickCount;
+            // A coordinate click names no element, so recover the one it landed on
+            // from its box — that yields the same role/name/selector a ClickElement
+            // would have recorded, and so the same replayability and healability.
+            // `isRecordableRun` has already refused the run if this cannot resolve.
+            ta.Target =
+                targetFromElement(ResolveElementByBox(action.BoundingBox, [...elementsByIndex.values()]))
+                ?? targetFromSelectorOrBox(action.Selector, action.BoundingBox);
+            break;
+        case 'ClickElement':
+            ta.Button = action.Button;
+            ta.ClickCount = action.ClickCount;
+            ta.Target = targetFromElement(elementsByIndex.get(action.Index));
+            break;
+        case 'Type':
+            ta.Text = tokenize(action.Text, variableValues);
+            ta.Target = action.Selector ? targetFromSelectorOrBox(action.Selector) : undefined;
+            break;
+        case 'TypeIntoElement':
+            ta.Text = tokenize(action.Text, variableValues);
+            ta.PressEnter = action.PressEnter;
+            ta.Target = targetFromElement(elementsByIndex.get(action.Index));
+            break;
+        case 'Keypress':
+            ta.Key = action.Key;
+            break;
+        case 'Navigate':
+            ta.Url = tokenize(NormalizeTraceUrl(action.Url, volatile), variableValues);
+            break;
+        // GoBack / GoForward / Refresh carry no fields.
+    }
+    return ta;
+}
+
+function targetFromElement(el: InteractiveElement | undefined): TraceTarget | undefined {
+    if (!el) {
+        return undefined;
+    }
+    const t = new TraceTarget();
+    t.Role = el.Role || undefined;
+    t.Name = el.Name || undefined;
+    t.Selector = el.Selector || undefined;
+    t.Scope = el.Scope || undefined;
+    t.BoundingBox = el.BoundingBox;
+    return t;
+}
+
+function targetFromSelectorOrBox(selector?: string, box?: BoundingBox): TraceTarget | undefined {
+    if (!selector && !box) {
+        return undefined;
+    }
+    const t = new TraceTarget();
+    t.Selector = selector || undefined;
+    t.BoundingBox = box;
+    return t;
+}
+
+/** Replace concrete variable values with `%name%` placeholders (Stagehand discipline). */
+function tokenize(text: string | undefined, variableValues?: Record<string, string>): string | undefined {
+    if (text === undefined || !variableValues) {
+        return text;
+    }
+    let out = text;
+    for (const [name, value] of Object.entries(variableValues)) {
+        if (isTokenizable(value)) {
+            out = out.split(value).join(`%${name}%`);
+        }
+    }
+    return out;
+}
+
+/** Below this, a value collides with ordinary text more often than it protects anything. */
+const MIN_TOKENIZE_LENGTH = 4;
+/** A digits-only value has to be at least this long to be worth the collision risk. */
+const MIN_NUMERIC_TOKENIZE_LENGTH = 8;
+
+/**
+ * Whether a variable's value is worth substituting out of the recorded trace.
+ *
+ * The driver stringifies EVERY variable before recording, so a step budget of 20
+ * arrives as "20" — and a blind replacement then rewrites the port in
+ * `localhost:4200` to `localhost:4%retries%0`, corrupting a URL that had nothing
+ * to do with the variable. Short and scalar-shaped values are skipped: they are
+ * configuration, not secrets, and they match far too much.
+ */
+function isTokenizable(value: string): boolean {
+    if (!value || value.length < MIN_TOKENIZE_LENGTH) {
+        return false;
+    }
+    if (/^(true|false|null|undefined)$/i.test(value)) {
+        return false;
+    }
+    if (/^\d+$/.test(value) && value.length < MIN_NUMERIC_TOKENIZE_LENGTH) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Replace every variable value everywhere in a finished trace.
+ *
+ * Tokenizing at each construction site meant every new recorded field was in the
+ * clear until someone remembered it: `UrlBefore`, both `UrlPattern` guards and
+ * `Target.Name` all stored credentials verbatim, so a `?login_hint=` URL or a
+ * "Continue as <email>" button name went into committed metadata. One pass over
+ * the built object cannot be forgotten by the next field that gets added.
+ */
+function tokenizeTraceDeep<T>(node: T, variableValues?: Record<string, string>): T {
+    if (!variableValues) {
+        return node;
+    }
+    if (typeof node === 'string') {
+        return (tokenize(node, variableValues) ?? node) as unknown as T;
+    }
+    if (Array.isArray(node)) {
+        node.forEach((item, i) => { node[i] = tokenizeTraceDeep(item, variableValues); });
+        return node;
+    }
+    if (node && typeof node === 'object') {
+        for (const key of Object.keys(node as Record<string, unknown>)) {
+            const rec = node as Record<string, unknown>;
+            rec[key] = tokenizeTraceDeep(rec[key], variableValues);
+        }
+        return node;
+    }
+    return node;
+}
+
+/** The heal-prompt seed / human label: first line of the reasoning, bounded. */
+function compactInstruction(reasoning: string): string {
+    return (reasoning ?? '').trim().split('\n')[0].slice(0, 200);
+}
+
+// ─── Tier Decision ─────────────────────────────────────
+
+/**
+ * Execution tier for a test on a given run:
+ * - `'replay'`           — deterministic replay, no heal expected (exact build match).
+ * - `'replay-with-heal'` — replay, but tolerate per-step self-heal on drift.
+ * - `'llm'`              — full LLM controller (today's engine); records on pass.
+ */
+export type ReplayTier = 'replay' | 'replay-with-heal' | 'llm';
+
+/** Default heal-rate at/above which a test is demoted from replay to the LLM tier. */
+export const DEFAULT_HEAL_RATE_DEMOTE_THRESHOLD = 0.5;
+
+export interface TierDecisionInput {
+    /** The recorded trace for this test, or null/undefined when none exists. */
+    trace?: ComputerUseTrace | null;
+    /** The test's current (live) goal text — hashed and compared to the trace's GoalHash. */
+    currentGoal: string;
+    /** The current build identity (opaque). Empty/undefined when the stack can't provide one. */
+    currentBuildHash?: string;
+    /** The current app/version identity (opaque). Advisory alongside the build hash. */
+    currentAppVersion?: string;
+    /**
+     * Rolling heal rate for this test from recent replays (0..1); undefined when
+     * unknown (first replay, no telemetry). A high value means the cached
+     * trajectory keeps drifting — re-derive rather than heal every step.
+     */
+    healRate?: number;
+    /** Demote to the LLM tier when {@link healRate} ≥ this (default 0.5). */
+    healRateThreshold?: number;
+}
+
+export interface TierDecision {
+    tier: ReplayTier;
+    reason: string;
+}
+
+/** Whether the live goal text still matches the trace's frozen goal hash. */
+export function GoalMatchesTrace(trace: ComputerUseTrace, currentGoal: string): boolean {
+    return trace.GoalHash === HashGoal(currentGoal);
+}
+
+/** @deprecated Use {@link GoalMatchesTrace}. */
+export function goalMatchesTrace(trace: ComputerUseTrace, currentGoal: string): boolean {
+ return GoalMatchesTrace(trace, currentGoal);
+}
+
+/**
+ * Decide the execution tier for a test. Precedence (first match wins):
+ *   1. No trace                     → llm
+ *   2. Goal reworded since record   → llm (re-derive & re-record)
+ *   3. Heal rate over threshold     → llm (persistent drift)
+ *   4. Exact build-hash match       → replay
+ *   5. Otherwise                    → replay-with-heal (default; build differs/unknown)
+ */
+export function DecideReplayTier(input: TierDecisionInput): TierDecision {
+    const { trace, currentGoal, currentBuildHash, healRate } = input;
+    const threshold = input.healRateThreshold ?? DEFAULT_HEAL_RATE_DEMOTE_THRESHOLD;
+
+    if (!trace) {
+        return { tier: 'llm', reason: 'no recorded trace for this test' };
+    }
+    if (!GoalMatchesTrace(trace, currentGoal)) {
+        return { tier: 'llm', reason: 'goal text changed since record — re-derive and re-record' };
+    }
+    if (healRate !== undefined && healRate >= threshold) {
+        return {
+            tier: 'llm',
+            reason: `heal rate ${(healRate * 100).toFixed(0)}% ≥ ${(threshold * 100).toFixed(0)}% — UI drifted past the cache; re-record`,
+        };
+    }
+
+    const recordedBuild = trace.AppBuildHash?.trim();
+    const liveBuild = currentBuildHash?.trim();
+    if (recordedBuild && liveBuild && recordedBuild === liveBuild) {
+        return { tier: 'replay', reason: 'exact build match — deterministic replay, no heal expected' };
+    }
+
+    return {
+        tier: 'replay-with-heal',
+        reason: liveBuild || recordedBuild
+            ? 'build identity differs from record — replay with heal expected'
+            : 'build identity unavailable — replay with heal expected (default)',
+    };
+}
+
+/** @deprecated Use {@link DecideReplayTier}. */
+export function decideReplayTier(input: TierDecisionInput): TierDecision {
+ return DecideReplayTier(input);
+}
+
+// ─── Drift Diff ────────────────────────────────────────
+
+/** Classification of how one step's fresh derivation differs from the recording. */
+export type TraceStepDiffKind =
+    | 'match'           // identical (semantically) — no drift
+    | 'selector-drift'  // same role+name, different selector — minor, heals
+    | 'target-changed'  // role or name changed — meaningful UI change
+    | 'method-changed'  // the action verb changed — meaningful
+    | 'url-changed';    // the step's entry URL changed — meaningful
+
+export interface TraceStepDiff {
+    index: number;
+    kind: TraceStepDiffKind;
+    detail: string;
+}
+
+export interface TraceDiff {
+    /** True when the fresh derivation matches the recording step-for-step (no drift). */
+    identical: boolean;
+    /** Steps the fresh derivation ADDED beyond the recording's length. */
+    addedSteps: number;
+    /** Steps the recording had that the fresh derivation dropped. */
+    removedSteps: number;
+    /** Per-step differences (only non-`match` steps). */
+    changedSteps: TraceStepDiff[];
+    /** Count of MEANINGFUL drift (excludes minor selector-drift). */
+    meaningfulDrift: number;
+    /** Human-readable one-line summary for the drift report. */
+    summary: string;
+}
+
+/**
+ * Compare a stored trace against a freshly-derived one (both for the same test).
+ * Steps are compared positionally; length differences surface as added/removed.
+ */
+export function DiffTraces(recorded: ComputerUseTrace, fresh: ComputerUseTrace): TraceDiff {
+    const recSteps = recorded.Steps;
+    const freshSteps = fresh.Steps;
+    const common = Math.min(recSteps.length, freshSteps.length);
+
+    const changedSteps: TraceStepDiff[] = [];
+    for (let i = 0; i < common; i++) {
+        const diff = diffStep(i, recSteps[i], freshSteps[i]);
+        if (diff.kind !== 'match') {
+            changedSteps.push(diff);
+        }
+    }
+
+    const addedSteps = Math.max(0, freshSteps.length - recSteps.length);
+    const removedSteps = Math.max(0, recSteps.length - freshSteps.length);
+    const meaningfulDrift =
+        changedSteps.filter(d => d.kind !== 'selector-drift').length + addedSteps + removedSteps;
+    const identical = changedSteps.length === 0 && addedSteps === 0 && removedSteps === 0;
+
+    return {
+        identical,
+        addedSteps,
+        removedSteps,
+        changedSteps,
+        meaningfulDrift,
+        summary: buildSummary(identical, meaningfulDrift, changedSteps, addedSteps, removedSteps),
+    };
+}
+
+/** @deprecated Use {@link DiffTraces}. */
+export function diffTraces(recorded: ComputerUseTrace, fresh: ComputerUseTrace): TraceDiff {
+ return DiffTraces(recorded, fresh);
+}
+
+// ─── Internals ─────────────────────────────────────────────
+
+function diffStep(index: number, rec: TraceStep, fresh: TraceStep): TraceStepDiff {
+    if (rec.Action.Method !== fresh.Action.Method) {
+        return { index, kind: 'method-changed', detail: `method ${rec.Action.Method} → ${fresh.Action.Method}` };
+    }
+    if (rec.UrlBefore !== fresh.UrlBefore) {
+        return { index, kind: 'url-changed', detail: `entry URL ${rec.UrlBefore || '(none)'} → ${fresh.UrlBefore || '(none)'}` };
+    }
+    const targetDiff = diffTarget(rec.Action.Target, fresh.Action.Target);
+    if (targetDiff) {
+        return { index, ...targetDiff };
+    }
+    return { index, kind: 'match', detail: 'match' };
+}
+
+function diffTarget(
+    rec: TraceTarget | undefined,
+    fresh: TraceTarget | undefined
+): { kind: TraceStepDiffKind; detail: string } | null {
+    const recRole = norm(rec?.Role);
+    const freshRole = norm(fresh?.Role);
+    const recName = norm(rec?.Name);
+    const freshName = norm(fresh?.Name);
+
+    if (recRole !== freshRole || recName !== freshName) {
+        return { kind: 'target-changed', detail: `target "${recRole} ${recName}" → "${freshRole} ${freshName}"` };
+    }
+    // Same semantic target; a differing selector is minor, healable drift.
+    if ((rec?.Selector ?? '') !== (fresh?.Selector ?? '')) {
+        return { kind: 'selector-drift', detail: `selector ${rec?.Selector ?? '(none)'} → ${fresh?.Selector ?? '(none)'}` };
+    }
+    return null;
+}
+
+function norm(s: string | undefined): string {
+    return (s ?? '').trim().toLowerCase();
+}
+
+function buildSummary(
+    identical: boolean,
+    meaningfulDrift: number,
+    changedSteps: TraceStepDiff[],
+    addedSteps: number,
+    removedSteps: number
+): string {
+    if (identical) {
+        return 'no drift — fresh derivation matches the recorded trace';
+    }
+    const parts: string[] = [];
+    if (meaningfulDrift > 0) {
+        parts.push(`${meaningfulDrift} meaningful drift`);
+    }
+    const selectorDrift = changedSteps.filter(d => d.kind === 'selector-drift').length;
+    if (selectorDrift > 0) {
+        parts.push(`${selectorDrift} selector-drift (healable)`);
+    }
+    if (addedSteps > 0) {
+        parts.push(`${addedSteps} added step(s)`);
+    }
+    if (removedSteps > 0) {
+        parts.push(`${removedSteps} removed step(s)`);
+    }
+    return parts.join(', ');
+}

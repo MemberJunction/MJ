@@ -13,7 +13,7 @@
  * @see https://learn.microsoft.com/en-us/adaptive-cards/
  */
 
-import { splitMarkdownIntoSections } from '../base/message-formatter.js';
+import { SplitMarkdownIntoSections } from '../base/message-formatter.js';
 
 /**
  * Convert Markdown text from an agent response to a Microsoft Teams Adaptive Card.
@@ -38,9 +38,9 @@ import { splitMarkdownIntoSections } from '../base/message-formatter.js';
  * // }
  * ```
  */
-export function markdownToAdaptiveCard(markdown: string): Record<string, unknown> {
+export function MarkdownToAdaptiveCard(markdown: string): Record<string, unknown> {
     const bodyElements: Record<string, unknown>[] = [];
-    const sections = splitMarkdownIntoSections(markdown);
+    const sections = SplitMarkdownIntoSections(markdown);
 
     for (const section of sections) {
         switch (section.Type) {
@@ -71,6 +71,11 @@ export function markdownToAdaptiveCard(markdown: string): Record<string, unknown
         '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
         body: bodyElements
     };
+}
+
+/** @deprecated Use {@link MarkdownToAdaptiveCard}. */
+export function markdownToAdaptiveCard(markdown: string): Record<string, unknown> {
+    return MarkdownToAdaptiveCard(markdown);
 }
 
 /**

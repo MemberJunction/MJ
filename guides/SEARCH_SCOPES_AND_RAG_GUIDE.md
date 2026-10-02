@@ -79,7 +79,7 @@ Create `metadata/search-scopes/.your-scope.json`:
 ]
 ```
 
-Run `npx mj sync push --dir=metadata --include="search-scopes"`.
+Run `pnpm mj sync push --dir=metadata --include="search-scopes"`.
 
 ### Personal vs. Organization-wide scopes
 - Set `OwnerUserID=<user-id>` for **personal scopes** (only visible to that user in the selector UI).

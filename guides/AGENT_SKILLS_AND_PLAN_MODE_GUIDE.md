@@ -17,7 +17,7 @@ A **Skill** (`MJ: AI Skills`) is a bundle of three things:
 | Piece | Column / table | Effect when the skill activates |
 |---|---|---|
 | **Instructions** | `AISkill.Instructions` (NVARCHAR MAX) | Appended to the agent's context for the rest of the run |
-| **Actions** | `MJ: AI Skill Actions` (junction → `Action`) | Added to the agent's available tool surface |
+| **Actions** | `MJ: AI Skill Actions` (junction → `Action`) | Added to the agent's run — described to the model and executable — when the row's `ExposeToModel` is set (the default). With it off, the action stays bundled for SKILL.md export and tooling but is left out of the run entirely; application code invokes it through the Actions API (see §1.3) |
 | **Sub-agents** | `MJ: AI Skill Sub Agents` (junction → `AIAgent`) | Added to the agent's available sub-agents |
 
 The point is **write-once, grant-to-many**: instead of copy-pasting the same instruction block + action set into every agent's system prompt, you author it once as a Skill and grant it to any agent that should have it. Skills are also **shareable** and **portable** (see §1.6, §1.7).
@@ -63,6 +63,33 @@ Because both defaults are `RequestedOnly`, the **Auto × Auto "super agent" post
 - **Consequential skill** (e.g. Communications — it *sends things*): keep `ActivationMode='RequestedOnly'`. No agent, regardless of posture, can self-activate it; users must `/skill` it in explicitly, and the skill's own confirm-before-send instructions still gate the act.
 - **Locked-down agent**: `SkillActivationMode='RequestedOnly'` — its prompt catalog is empty; skills only enter its runs when the user asks.
 
+### 1.2b Layering an application policy — `filterAvailableSkills`
+
+MJ's gates are User/Role and agent based; they have no notion of a tenant, a licence or an
+entitlement. An application that needs one overrides **one** protected hook:
+
+```typescript
+protected override async filterAvailableSkills(
+    skills: MJAISkillEntity[], purpose: SkillAvailabilityPurpose,
+    agent: MJAIAgentEntityExtended, contextUser?: UserInfo,
+): Promise<MJAISkillEntity[]> {
+    const usable = await myLicensing.usableSkillIDs(contextUser);   // cached — this runs every prompt turn
+    return skills.filter(s => usable.has(s.ID));                     // subset only; on error return []
+}
+```
+
+`BaseAgent` calls it after its own gates and before anything activates, at all three availability
+sites: the prompt **catalog** (`purpose: 'catalog'`), a model-initiated Skill step's validation and
+execution (`'auto-activation'`), and a user's explicit request (`'requested'`). So a skill the policy
+refuses is never offered, never self-activated, and refused (with the usual system note) when asked
+for. The default is the identity: without an override, MJ's gates are the whole policy.
+
+Two notes for override authors (and one on logs: a policy that throws *persistently* logs that error on every prompt turn via the catalog site — that is the fail-closed behaviour working, and the pattern to recognise). It is called at four sites (catalog on every prompt turn, Skill-step
+validation, Skill-step execution, requested pre-activation), so cache your lookups. And it is
+server-side: the composer's `/skill` warning (`conversation-agent.service.ts`) checks only MJ's own
+`GetSkillsForAgent`, so a client can still send a request the policy then refuses — it surfaces as
+the refusal note, not as a picker omission.
+
 ### 1.3 The runtime flow (Loop agent)
 
 ```
@@ -82,6 +109,7 @@ executeSkillStep  ── for each newly-activated skill:
         ├─ recordSkillActivationStep()   → AIAgentRunStep (StepType='Skill')
         ├─ buildSkillActivationMessage() → appends Instructions to conversationMessages
         └─ enableSkillCapabilities()     → pushes 'specific'-scoped add ActionChange/SubAgentChange
+                                          (Actions: the skill's ExposeToModel rows only — GetSkillExposedActionIDs)
         │
         ▼
 executePromptStep  ── loop continues; next turn's gatherPromptTemplateData picks up the widened tool surface
@@ -90,6 +118,7 @@ executePromptStep  ── loop continues; next turn's gatherPromptTemplateData p
 Key implementation notes (all in [`base-agent.ts`](../packages/AI/Agents/src/base-agent.ts)):
 
 - **`'Skill'` is a non-terminal step.** Like `'ClientTools'`, it is deliberately **not** part of the generated `AIAgentRun.FinalStep` union (that column is DB-CHECK-constrained to terminal outcomes). `BaseAgentNextStep.step` is typed off `FinalStep`, so the switch sites use an explicit `'Skill' as typeof …step` cast. It **is** in the `AIAgentRunStep.StepType` CHECK — that column records what executed, a different concern from a run's final outcome.
+- **`ExposeToModel` decides whether a bundled action joins the run at all** (v6.1.x, #4226). `enableSkillCapabilities` pushes `GetSkillExposedActionIDs(skill.ID)` — the rows with the flag set (default) — onto `params.actionChanges`. The run's effective action set is one list that is both the prompt's tool surface and the execution allow-list, so a row with the flag **off** is not described to the model *and* cannot be executed by the agent through any path (`Actions` step, a `PreProcessActionStep`, a loop's action lookup all resolve against that set and reject it). That is deliberate: hiding it from the prompt alone would still let the model call it by name the moment a skill's Instructions mention it. The row keeps the action associated with the skill for SKILL.md export and tooling; application code — a menu button in the skill's reply — invokes it directly through the Actions API, whose authorization is its own (bundling grants nothing there). Because the agent never runs such an action, skill attribution on the Actions step does not apply to it.
 - **Tool-surface widening uses `scope: 'specific'` targeting the activating agent's own ID** (`agentIds: [agent.ID]`), pushed onto `params.actionChanges` / `params.subAgentChanges`. This applies to the activating agent **at any depth** (a sub-agent that activates a skill still gets its tools — a `'root'` scope would only apply at depth 0) and never cascades to that agent's own sub-agents (via `filterActionChangesForSubAgent`). Because `params` is the same object for the whole run, every later turn's `gatherPromptTemplateData()` re-applies it automatically.
 - **Idempotent re-activation.** `_activatedSkillIDs` tracks what's already active; re-requesting an active skill is a harmless no-op (no duplicate instructions, no duplicate change entries).
 - **`_effectiveSubAgents`** mirrors `_effectiveActions` so a runtime-added sub-agent (from a skill) validates correctly in `validateSubAgentNextStep`. (This closed a pre-existing gap in the `subAgentChanges` mechanism that affected any consumer, not just Skills.)
@@ -170,6 +199,47 @@ A user can activate a skill for a message by typing **`/skill-name`** in the con
 
 `preActivateRequestedSkills` runs once at run start (**root agent only**), and activates each requested skill **only if it survives the guard**: it must be in `GetSkillsForAgent(agent, contextUser)` — i.e. the agent accepts it **and** the user may run it. Anything else is silently dropped, so a client can never smuggle in a skill the user or agent isn't entitled to. Surviving skills are activated through the same `recordSkillActivationStep` / `enableSkillCapabilities` / `buildSkillActivationMessage` machinery as a model-initiated `Skill` step, so their Instructions + bundled tools take effect from turn 1. Plan Mode is unaffected — pre-activation widens the tool surface, but the plan-approval gate still blocks *executing* those tools until approved.
 
+### 1.6b Skills and Scoped Search — the principal comes from the run
+
+`Scoped Search` takes an optional `AISkillID` input: the skill on whose behalf the search runs. The
+skill is a **principal** — its `SearchScopeAccess` / `MJ: AI Skill Search Scopes` can deny or widen a
+scope, and `ScopeDimensionResolver` binds it as `Principals.SkillID` into a dimension's expansion
+query (the mechanism behind "invoking this skill changes the content"). Inside a Loop agent that
+input is written by the model, so it cannot be the authority on which skill is active.
+
+`BaseAgent.ExecuteSingleAction` therefore stamps **`Context.ActiveSkillIDs`** — the skills the run has
+activated so far — onto every action call. `Scoped Search` reads it:
+
+| inside a run | outcome |
+|---|---|
+| no `AISkillID` named, exactly one skill active | that skill is the principal |
+| no `AISkillID` named, several active | no principal (verbose log) — the caller must say which |
+| `AISkillID` named and active in the run | accepted (the loaded skill's id is threaded) |
+| `AISkillID` named but NOT active in the run | `INVALID_PARAM` — the model may not widen its own reach |
+
+Outside a run (no `ActiveSkillIDs` on the context) the explicit input is the only source, unchanged.
+An app that gates activation with its own policy reads the same state through the protected
+`ActivatedSkillIDs` getter on `BaseAgent` rather than re-deriving it.
+
+### 1.6c Conversation-scoped skills — a mode that survives the turn
+
+By default a skill is active for the run that activated it (`AISkill.ActivationScope = 'Run'`). A
+skill that behaves as a **mode** — a persona, an assistant whose reply carries a menu pressed on the
+next turn — sets `ActivationScope = 'Conversation'`. Then:
+
+- when it activates in a run that has a `conversationId` (requested or self-activated), `BaseAgent`
+  writes an `MJ: Conversation Skills` row (`Status = 'Active'`, `ActivatedByRunID` = the run);
+- at the start of every later root run in that conversation, Active rows join `requestedSkillIDs`
+  before the gates — so the skill is re-activated with its Instructions and tools, subject to every
+  availability gate on that run;
+- a persisted skill a gate refuses this turn is skipped without a note (the user did not mention it)
+  and its row stays Active — retiring a mode is explicit, never a side effect of a gate miss;
+- the app's "leave the mode" gesture calls `BaseAgent.EndConversationSkill(conversationId, skillId,
+  user)`; a later activation re-uses the row.
+
+Each step is a protected hook (`loadConversationSkillIDs`, `persistConversationSkillActivation`) and
+fails soft. Precedent: `UserRoutine.RequestedSkillIDs`, the same idea keyed on a routine.
+
 ### 1.7 SKILL.md — portable import/export
 
 A skill can be exported to / imported from a portable **SKILL.md** file, so skills move across MJ instances:
@@ -182,6 +252,8 @@ category: Reporting
 actions:
   - Run Query
   - Generate PDF
+codeOnlyActions:
+  - Generate PDF
 subAgents:
   - Report Formatter Agent
 ---
@@ -190,12 +262,16 @@ Instructions body — plain markdown, appended to an accepting agent's system
 prompt when the skill is activated.
 ```
 
+`codeOnlyActions` (optional) names the `actions` bundled with `ExposeToModel = 0` — see §1.3. Absent key: no
+opinion, surviving rows keep their flag. Present but empty (`codeOnlyActions:` with no items, or `[]`): nothing is
+code-only — delete the last name and keep the key to put that action back into the run.
+
 **Why names, not IDs**: Action/sub-agent references in the frontmatter are **names**, because names are the only stable cross-instance reference. On import, names are resolved against the target instance's catalog; anything that doesn't resolve becomes a **non-fatal warning** (the skill still imports with whatever did resolve) — a skill authored elsewhere may reference actions this instance doesn't have.
 
 Two layers, in `@memberjunction/ai-agents`:
 
 - **`SkillMarkdownConverter`** — pure, dependency-free `Parse` / `Serialize`. Fully unit-tested in isolation. Hand-rolled parser (the frontmatter shape is small and fixed) rather than a YAML dependency.
-- **`SkillImportExportService`** — orchestrates against the DB: `Config()`s the AI + Action engines (idempotent) for name↔ID resolution, creates/updates the `MJ: AI Skills` row, and resyncs the two junction sets.
+- **`SkillImportExportService`** — orchestrates against the DB: `Config()`s the AI + Action engines (idempotent) for name↔ID resolution, creates/updates the `MJ: AI Skills` row, and resyncs the two junction sets. `AISkillAction.ExposeToModel` round-trips through the optional `codeOnlyActions` frontmatter list (names, a subset of `actions`): export writes it only when the skill has rows with the flag off, so older files are byte-identical; import applies it when present. A file without the key expresses no opinion, and the resync — which is delete-and-recreate — then carries each surviving row's flag across, so re-saving a skill's SKILL.md never turns a code-only action model-callable; only a genuinely new row takes the column default.
 
 Both are exposed as typed, provider-routed **Remote Operations** — `AISkill.ExportMarkdown` / `AISkill.ImportMarkdown` (see [REMOTE_OPERATIONS_GUIDE](REMOTE_OPERATIONS_GUIDE.md)) — so the browser calls `new AISkillExportMarkdownOperation().Execute(input, { provider })` with no bespoke resolver/GraphQL client.
 
@@ -264,9 +340,19 @@ Two subtleties worth calling out (both are load-bearing correctness points):
 
 **v5.44** — Migration [`V202606301200__v5.44.x__Agent_Skills_And_Plan_Mode.sql`](../migrations/v5). New tables: `AISkill`, `AISkillAction`, `AISkillSubAgent`, `AIAgentSkill`, `AISkillPermission` (User **xor** Role grantee + `CanView`/`CanRun`/`CanEdit`/`CanDelete`). Additive columns: `AIAgent.SupportsPlanMode` (default 1), `AIAgent.AcceptsSkills` (default `'None'`), `AISkill.IconClass` + `AISkill.Color` (UX metadata for the `/skill` picker). `AIAgentRunStep.StepType` CHECK extended with `'Plan'` and `'Skill'`. Composition junctions (`AISkillAction`/`AISkillSubAgent`) are intentionally **status-less** — member lifecycle is governed by `Action.Status`/`AIAgent.Status`; `Status` lives only on the grant (`AIAgentSkill`) and the catalog (`AISkill`). The `MJ: Permission Domains` catalog row for `AI Skill Permissions → MJAISkillPermissionProvider` is seeded via metadata sync (`metadata/permission-domains/`), not the migration.
 
-**v5.45** — Migration [`V202607020230__v5.45.x__AISkill_ActivationMode.sql`](../migrations/v5). Additive columns: `AISkill.ActivationMode` + `AIAgent.SkillActivationMode` (both `'Auto'`/`'RequestedOnly'`, default **`'RequestedOnly'`** — the double activation gate, §1.2a), `AIAgent.RequirePlanMode` (BIT, default 0 — mandatory plan mode, §2.1), `AIAgentRun.PlanMode` (BIT, default 0 — run-level stamp), `AIAgentRunStep.Skills` (NVARCHAR MAX, JSON-typed `Array<AgentSkillInvocation>` — per-step observability, §1.3a). The `Skills` JSON-type binding is seeded via metadata sync (`metadata/entities/.entity-field-jsontype-agent-run-step-skills.json` + `JSONType-interfaces/AgentSkillInvocation.ts`).
+**v5.45** — Migration [`V202607020314__v5.45.x__AISkill_ActivationMode.sql`](../migrations/v5). Additive columns: `AISkill.ActivationMode` + `AIAgent.SkillActivationMode` (both `'Auto'`/`'RequestedOnly'`, default **`'RequestedOnly'`** — the double activation gate, §1.2a), `AIAgent.RequirePlanMode` (BIT, default 0 — mandatory plan mode, §2.1), `AIAgentRun.PlanMode` (BIT, default 0 — run-level stamp), `AIAgentRunStep.Skills` (NVARCHAR MAX, JSON-typed `Array<AgentSkillInvocation>` — per-step observability, §1.3a). The `Skills` JSON-type binding is seeded via metadata sync (`metadata/entities/.entity-field-jsontype-agent-run-step-skills.json` + `JSONType-interfaces/AgentSkillInvocation.ts`).
 
 ---
+
+**v6.1.x** — Migration [`V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql`](../migrations/v6).
+Additive: `AISkillAction.ExposeToModel` (BIT NOT NULL, default 1). `1` = today's behaviour; `0` keeps the
+action bundled (SKILL.md export, tooling) but out of the agent's run — not described to the model, not
+executable by the agent. See §1.3; SKILL.md carries it as `codeOnlyActions` (§1.7).
+
+**v6.1.x** — Migration [`V202609031400__v6.1.x__Conversation_Scoped_Skill_Activation.sql`](../migrations/v6).
+Additive: `AISkill.ActivationScope` (`'Run'`/`'Conversation'`, default `'Run'`) and the
+`ConversationSkill` table (`MJ: Conversation Skills`: ConversationID, SkillID, Status
+`Active`/`Ended`, ActivatedByRunID, EndedAt; UNIQUE per conversation+skill). See §1.6c.
 
 ## 4. Where to look
 
@@ -278,10 +364,10 @@ Two subtleties worth calling out (both are load-bearing correctness points):
 | Skill permission runtime helper | `packages/AI/BaseAIEngine/src/AISkillPermissionHelper.ts` (open-by-default, cached) |
 | Skill permission unified provider | `packages/MJCoreEntities/src/custom/PermissionProviders/AISkillPermissionProvider.ts` (+ `index.ts` `LoadPermissionProviders`) |
 | Grantee-exclusivity validator | `packages/MJCoreEntitiesServer/src/custom/MJAISkillPermissionEntityServer.server.ts` |
-| Skill step + Plan Mode runtime + pre-activation | `packages/AI/Agents/src/base-agent.ts` (`executeSkillStep` family, `preActivateRequestedSkills`, `resolvePlanModeGate`, `executePlanStep`) |
+| Skill step + Plan Mode runtime + pre-activation | `packages/AI/Agents/src/base-agent.ts` (`executeSkillStep` family, `preActivateRequestedSkills`, `resolvePlanModeGate`, `executePlanStep`); `ExecuteSingleAction` stamps `Context.ActiveSkillIDs` |
 | Skill/Plan next-step parsing | `packages/AI/Agents/src/agent-types/loop-agent-type.ts`, `loop-agent-response-type.ts` |
 | Step-type union + params | `packages/AI/CorePlus/src/agent-types.ts` (`BaseAgentNextStep`, `AgentSkillActivationRequest`, `ExecuteAgentParams.planMode` / `.requestedSkillIDs`) |
-| `/skill` composer UX | `packages/Angular/Generic/conversations/src/lib/services/mention-autocomplete.service.ts`, `components/mention/mention-editor.component.ts`, `components/message/message-input.component.ts` |
+| `/skill` composer UX | `packages/Angular/Generic/conversations/src/lib/services/mention-autocomplete.service.ts` (`getSuggestions(…, '/', targetAgentId)` → `skillsForTarget` → `skill-picker-narrowing.ts` `IntersectAcceptedSkills`; the host binds `TargetAgentId` on `mj-ai-composer` — `mj-message-input` binds `pickerTargetAgentId`: an `@agent` chip in the draft, else its resolved agent), `components/mention/mention-editor.component.ts`, `components/message/message-input.component.ts` |
 | `requestedSkillIDs` transport | `AgentsClient/src/generic/AgentClientTypes.ts` + `AgentClientSession.ts`, `GraphQLDataProvider/src/graphQLAIClient.ts`, `MJServer/src/resolvers/RunAIAgentResolver.ts`, `ConversationsRuntime/src/agent-runner/ConversationAgentRunner.ts` |
 | SKILL.md | `packages/AI/Agents/src/SkillMarkdownConverter.ts`, `SkillImportExportService.ts`, `operations/AISkillMarkdownOperations.ts` |
 | Plan-approval resume | `packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts` |

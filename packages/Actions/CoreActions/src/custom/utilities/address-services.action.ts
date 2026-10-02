@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { HttpPost, IsHttpError } from "@memberjunction/network-utils";
 import { GeocodingProviderRegistry, IGeocodingProvider, ProviderGeocodeResult } from "@memberjunction/geo-core";
-import { getApiIntegrationsConfig } from "../../config";
+import { GetApiIntegrationsConfig } from "../../config";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -65,7 +65,7 @@ interface GoogleAddressValidationResponse {
 // ---------------------------------------------------------------------------
 
 function getGoogleApiKey(): string | undefined {
-    const config = getApiIntegrationsConfig();
+    const config = GetApiIntegrationsConfig();
     return config.google?.geocoding?.apiKey
         || process.env.GOOGLE_GEOCODING_API_KEY
         || process.env.GOOGLE_MAPS_API_KEY;

@@ -13,13 +13,16 @@
  * Only mocked: the mssql module and the entity-action/AI-action engines (no-op'd via
  * a protected-hook override so the hermetic test never reaches those subsystems).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
 
 import type { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
-import { EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
+import { EntitySaveOptions, EntityDeleteOptions, Metadata } from '@memberjunction/core';
+import type { IMetadataProvider } from '@memberjunction/core';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
+import { SQLServerTransactionGroup } from '../SQLServerTransactionGroup';
 import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
 import {
   TEST_USER,
@@ -76,6 +79,11 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
   protected override async HandleEntityAIActions(): Promise<void> {
     // no-op — AI engine not under test
   }
+
+  /** Exposes the save SQL pair (executed fullSQL, logged simpleSQL) for the replay-guard tests. */
+  public async SaveSQLForTest(entity: BaseEntity, isNew: boolean, user: UserInfo) {
+    return this.GenerateSaveSQL(entity, isNew, user, new EntitySaveOptions());
+  }
 }
 
 function makeProvider(): SaveDeleteTestProvider {
@@ -84,9 +92,9 @@ function makeProvider(): SaveDeleteTestProvider {
   return provider;
 }
 
-/** Extracts the uuid-derived variable suffix RenderSaveCallBinding appended (e.g. '_a1b2c3d4'). */
+/** Extracts the PK-hash variable suffix RenderSaveCallBinding appended (e.g. '_a1b2c3d4e5f6' or '_a1b2c3d4e5f6_2'). */
 function extractSuffix(sql: string, codeName: string): string {
-  const match = new RegExp(`@${codeName}(_[0-9a-f]{8})`).exec(sql);
+  const match = new RegExp(`@${codeName}(_[0-9a-f]{12}(?:_[0-9]+)?)`).exec(sql);
   expect(match, `expected a suffixed @${codeName} variable in:\n${sql}`).not.toBeNull();
   return (match as RegExpExecArray)[1];
 }
@@ -255,6 +263,93 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
   });
 });
 
+describe('SQLServerDataProvider replay form of a create (Metadata_Sync recordings, #4503)', () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('CREATE: the logged simpleSQL is guarded on the PK and falls back to spUpdate; the executed fullSQL is the plain create', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('ID', '82DFF26B-2ABB-4A69-8718-1FE550B60816');
+    entity.Set('Name', 'Azure Blob Storage');
+    entity.Set('IsActive', true);
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, true, TEST_USER);
+    const sfx = extractSuffix(fullSQL, 'ID');
+
+    expect(fullSQL).toContain('EXEC [dbo].spCreateWidget ');
+    expect(fullSQL).not.toContain('IF NOT EXISTS');
+    expect(fullSQL).not.toContain('spUpdateWidget');
+
+    expect(simpleSQL).toContain(`IF NOT EXISTS (SELECT 1 FROM [dbo].[Widget] WHERE [ID] = @ID${sfx})`);
+    expect(simpleSQL).toContain(`EXEC [dbo].spCreateWidget @ID=@ID${sfx}`);
+    expect(simpleSQL).toContain(`EXEC [dbo].spUpdateWidget @ID=@ID${sfx}`);
+    // Both branches consume the same DECLARE/SET block, declared once
+    expect(simpleSQL!.match(/DECLARE /g)).toHaveLength(1);
+    expect(simpleSQL!.match(/SET @ID/g)).toHaveLength(1);
+    // The update branch reuses the create's argument list verbatim
+    const createArgs = simpleSQL!.split('spCreateWidget ')[1].split('\nEND')[0];
+    const updateArgs = simpleSQL!.split('spUpdateWidget ')[1].split('\nEND')[0];
+    expect(updateArgs).toBe(createArgs);
+  });
+
+  it('CREATE on an entity with no generated update proc: guarded create, no ELSE branch', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo({ updateProc: false }), TEST_USER);
+    entity.Set('ID', 'A0000000-0000-0000-0000-00000000000A');
+    entity.Set('Name', 'No update proc');
+    entity.Set('IsActive', true);
+
+    const { simpleSQL } = await provider.SaveSQLForTest(entity, true, TEST_USER);
+
+    expect(simpleSQL).toContain('IF NOT EXISTS (SELECT 1 FROM [dbo].[Widget]');
+    expect(simpleSQL).toContain('EXEC [dbo].spCreateWidget');
+    expect(simpleSQL).not.toContain('ELSE');
+    expect(simpleSQL).not.toContain('spUpdateWidget');
+  });
+
+  it('UPDATE: the logged simpleSQL is the plain spUpdate call, no guard', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Renamed');
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+
+    expect(simpleSQL).toBe(fullSQL);
+    expect(simpleSQL).toContain('spUpdateWidget');
+    expect(simpleSQL).not.toContain('IF NOT EXISTS');
+  });
+
+  it('CREATE without TrackRecordChanges: the guarded form still reaches the SQL logger as the fallback', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: false }), TEST_USER);
+    entity.Set('Name', 'Plain');
+    entity.Set('IsActive', true);
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Plain' }] });
+    const logged: Array<{ query: string; fallback?: string }> = [];
+    // Same argument order as executeSQLCore's context.logSqlStatement call
+    (provider as unknown as { _logSqlStatement: unknown })._logSqlStatement = async (
+      query: string,
+      _params: unknown,
+      _description: string | undefined,
+      _ignoreLogging: boolean | undefined,
+      _isMutation: boolean | undefined,
+      fallback?: string,
+    ) => {
+      logged.push({ query, fallback });
+    };
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const save = logged.find((l) => l.query.includes('spCreateWidget'));
+    expect(save).toBeDefined();
+    expect(save!.query).not.toContain('IF NOT EXISTS');
+    expect(save!.fallback).toContain('IF NOT EXISTS (SELECT 1 FROM [dbo].[Widget]');
+    expect(save!.fallback).toContain('spUpdateWidget');
+  });
+});
+
 describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL → mssql request)', () => {
   beforeEach(() => {
     mssqlState.Reset();
@@ -323,5 +418,130 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
     expect(deleted).toBe(true);
+  });
+});
+
+describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('same record → same suffix across two independent Save() calls', async () => {
+    const info = makeWidgetEntityInfo();
+    const a = makeSavedWidgetEntity(info, TEST_USER);
+    const b = makeSavedWidgetEntity(info, TEST_USER);
+    a.Set('Name', 'Once');
+    b.Set('Name', 'Twice');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Once' }] });
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Twice' }] });
+    const provider = makeProvider();
+    await provider.Save(a, TEST_USER, new EntitySaveOptions());
+    await provider.Save(b, TEST_USER, new EntitySaveOptions());
+    const sfxA = extractSuffix(mssqlState.Queries[0].sql, 'Name');
+    const sfxB = extractSuffix(mssqlState.Queries[1].sql, 'Name');
+    expect(sfxA).toBe(sfxB);
+    expect(sfxA).toMatch(/^_[0-9a-f]{12}$/);
+    expect(sfxA).toBe(
+      '_' + GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']),
+    );
+  });
+
+  it('different records → different suffixes', async () => {
+    const info = makeWidgetEntityInfo();
+    const a = makeSavedWidgetEntity(info, TEST_USER);
+    const b = makeNewWidgetEntity(info, TEST_USER);
+    b.Set('ID', 'w-9999');
+    b.Set('Name', 'Other');
+    b.Set('IsActive', true);
+    a.Set('Name', 'First');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'First' }] });
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), ID: 'w-9999', Name: 'Other' }] });
+    const provider = makeProvider();
+    await provider.Save(a, TEST_USER, new EntitySaveOptions());
+    await provider.Save(b, TEST_USER, new EntitySaveOptions());
+    expect(extractSuffix(mssqlState.Queries[0].sql, 'Name')).not.toBe(
+      extractSuffix(mssqlState.Queries[1].sql, 'Name'),
+    );
+  });
+
+  describe('through a REAL SQLServerTransactionGroup (HandleSubmit reads Metadata.Provider)', () => {
+    let previousProvider: IMetadataProvider | undefined;
+    beforeEach(() => {
+      previousProvider = Metadata.Provider;
+    });
+    afterEach(() => {
+      Metadata.Provider = previousProvider as IMetadataProvider;
+    });
+
+    /** Every `@name` declared by a T-SQL batch, including comma-separated continuations. */
+    function declaredNames(sql: string): string[] {
+      return [...sql.matchAll(/(?:DECLARE\s+|,\s*\n\s*)@([A-Za-z0-9_]+)\s+[A-Z]/g)].map((m) => m[1]);
+    }
+
+    it('same record twice in one group (sequential path) → _hash then _hash_2, so TransactionGroup is honored at render time', async () => {
+      const info = makeWidgetEntityInfo();
+      const provider = makeProvider();
+      provider.SetTestEntities([info]);
+      Metadata.Provider = provider as unknown as IMetadataProvider;
+      const group = new SQLServerTransactionGroup();
+      const a = makeSavedWidgetEntity(info, TEST_USER);
+      const b = makeSavedWidgetEntity(info, TEST_USER);
+      a.TransactionGroup = group;
+      b.TransactionGroup = group;
+      a.Set('Name', 'One');
+      b.Set('Name', 'Two');
+      const saveA = provider.Save(a, TEST_USER, new EntitySaveOptions());
+      const saveB = provider.Save(b, TEST_USER, new EntitySaveOptions());
+      mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'One' }] });
+      mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Two' }] });
+
+      expect(await group.Submit()).toBe(true);
+      await Promise.all([saveA, saveB]);
+
+      expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
+      const first = extractSuffix(mssqlState.Queries[0].sql, 'Name');
+      expect(first).toBe('_' + GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']));
+      expect(extractSuffix(mssqlState.Queries[1].sql, 'Name')).toBe(`${first}_2`);
+    });
+
+    it('BatchedSubmit with a repeated hash: one batch, every local unique and item-scoped', async () => {
+      const info = makeWidgetEntityInfo();
+      const provider = makeProvider();
+      provider.SetTestEntities([info]);
+      Metadata.Provider = provider as unknown as IMetadataProvider;
+      const group = new SQLServerTransactionGroup();
+      group.BatchedSubmit = true;
+      const same1 = makeSavedWidgetEntity(info, TEST_USER);
+      const same2 = makeSavedWidgetEntity(info, TEST_USER);
+      const other = makeNewWidgetEntity(info, TEST_USER);
+      other.Set('ID', 'w-9999');
+      other.Set('Name', 'Other');
+      other.Set('IsActive', true);
+      for (const e of [same1, same2, other]) e.TransactionGroup = group;
+      same1.Set('Name', 'One');
+      same2.Set('Name', 'Two');
+      const saves = [same1, same2, other].map((e) => provider.Save(e, TEST_USER, new EntitySaveOptions()));
+      mssqlState.QueueResult({
+        recordsets: [
+          [{ __mj_batch_item: 0 }], [{ ...savedWidgetRow(), Name: 'One' }],
+          [{ __mj_batch_item: 1 }], [{ ...savedWidgetRow(), Name: 'Two' }],
+          [{ __mj_batch_item: 2 }], [{ ...savedWidgetRow(), ID: 'w-9999', Name: 'Other' }],
+        ],
+      });
+
+      expect(await group.Submit()).toBe(true);
+      await Promise.all(saves);
+
+      expect(mssqlState.Queries).toHaveLength(1);
+      const names = declaredNames(mssqlState.Queries[0].sql);
+      expect(names.length).toBeGreaterThan(3);
+      expect(new Set(names).size).toBe(names.length);
+      // The allocator's ordinal keeps the two same-record items apart …
+      const hash = GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']);
+      expect(names).toContain(`Name_${hash}_mjb0`);
+      expect(names).toContain(`Name_${hash}_2_mjb1`);
+      // … and scopeItemVariables scopes EVERY declared local of every item, not just the first.
+      expect(names.every((n) => /_mjb[0-2]$/.test(n))).toBe(true);
+    });
   });
 });

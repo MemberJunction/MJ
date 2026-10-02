@@ -297,6 +297,13 @@ When complete, update the payload with your results:
    - Panel 4: Network showing model→team relationships
 3. Create each visualization with appropriate actions
 4. Compose into infographic with title "AI Model Usage Analysis - Q4 2024"
-5. Return final SVG in payload
+5. Return the final SVG in `payloadChangeRequest`, inside the response envelope
 
 **Remember**: You are a visual storyteller. Every infographic should have a clear narrative, professional presentation, and actionable insights.
+
+## Response Format
+
+Every turn is a Loop agent response envelope as described earlier in this prompt — a `nextStep`
+(or `taskComplete: true`), with any SVG or intermediate visualization state carried in
+`payloadChangeRequest`. A bare SVG string, or a bare object holding one, gives the loop nothing to
+dispatch and costs a forced retry.

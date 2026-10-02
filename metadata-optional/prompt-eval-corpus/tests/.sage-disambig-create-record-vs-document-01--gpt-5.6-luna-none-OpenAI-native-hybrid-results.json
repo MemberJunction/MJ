@@ -1,0 +1,72 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "sage-disambig-create-record-vs-document-01 [gpt-5.6-luna@none · OpenAI · native-hybrid-results]",
+    "Description": "Create Record and Create Document are one word apart and do entirely different things. A structured data row is a Record.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Add a new customer row for Contoso Ltd with status Active."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "sage-disambig-create-record-vs-document-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Create Record"
+          }
+        ],
+        "allowAdditionalActions": false,
+        "forbiddenActions": [
+          "Create Document"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "native",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Create Record"
+              }
+            ],
+            "allowAdditionalActions": false,
+            "forbiddenActions": [
+              "Create Document"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "24CC68A2-90C8-4B89-A991-C8BA2C92C8BB"
+  }
+}

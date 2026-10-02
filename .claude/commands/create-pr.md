@@ -74,7 +74,7 @@ gh pr create --base next --title "Add sample query generation feature" --body "$
 - Improve documentation for new features
 
 ## Test plan
-- [ ] Run `npx mj dbdoc generate-queries` with different maxTokens values
+- [ ] Run `pnpm mj dbdoc generate-queries` with different maxTokens values
 - [ ] Verify queries are generated correctly
 - [ ] Check documentation is accurate and complete
 
