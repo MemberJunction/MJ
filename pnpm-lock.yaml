@@ -15491,6 +15491,9 @@ importers:
       '@memberjunction/ai-engine-base':
         specifier: 6.2.0-edge.1
         version: link:../../AI/BaseAIEngine
+      '@memberjunction/ai-openrouter':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Providers/OpenRouter
       '@memberjunction/ai-prompts':
         specifier: 6.2.0-edge.1
         version: link:../../AI/Prompts
@@ -15545,6 +15548,12 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.1
+        version: link:../../Credentials/Engine
+      '@memberjunction/encryption':
+        specifier: 6.2.0-edge.1
+        version: link:../../Encryption
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.1
         version: link:../../GenericDatabaseProvider
