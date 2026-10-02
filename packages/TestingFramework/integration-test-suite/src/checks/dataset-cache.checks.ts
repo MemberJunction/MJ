@@ -5,14 +5,20 @@
  * populates the cache, a warm call serves the same dataset, and the status APIs
  * (IsDatasetCached / IsDatasetCacheUpToDate) agree with the cached state.
  *
- * Assertions are BEHAVIORAL (the IsDatasetCached false→true transition, warm consistency,
- * status APIs), not instrumented-counter based — VERIFIED against the live server: the
- * dataset cache writes through the provider's OWN LocalStorageProvider (ProviderBase.
- * CacheDataset → SetItem with no category), which is a DIFFERENT storage from the
+ * Assertions are BEHAVIORAL, not instrumented-counter based — VERIFIED against the live server:
+ * the dataset cache writes through the provider's OWN LocalStorageProvider (ProviderBase.
+ * CacheDataset, into ProviderBase.DatasetCacheCategory), which is a DIFFERENT storage from the
  * InstrumentedLocalStorageProvider installed on LocalCacheManager. So the instrumented
  * RunViewCache counters never observe dataset writes on this transport, and the honest
  * proof is the cache's observable behavior, not a counter. (Aggregates DO flow through
  * LocalCacheManager and are counter-checked — see aggregates-cache.checks.ts.)
+ *
+ * DS1–DS3 assert the cache's STATE: that it was populated, that the status APIs agree, that a clear
+ * flips them back. None of them can tell a warm call that was SERVED from one that silently
+ * refetched — DS1 compares row counts between the two calls, which match either way. That blind
+ * spot is why the warm-serve path could be dead from `987a126aab` (2026-05-02) until
+ * `ProviderBase.DatasetCacheCategory`: the read named a category the writes did not, so it missed
+ * on every transport, refetched, and every assertion here still passed. DS4 closes it.
  *
  * Fixture: an EXISTING dataset name (default 'MJ_Metadata', a real seeded dataset). No row
  * mutation — purely read-and-observe. Read the name from the selector config when present.
@@ -93,6 +99,54 @@ export async function CheckDs3_ClearMakesUncachedAndStale(ctx: IntegrationCheckC
     return CheckDs3ClearMakesUncachedAndStale(ctx);
 }
 
+/**
+ * DS4: the warm call is SERVED FROM CACHE, not silently refetched.
+ *
+ * The only way to tell the two apart from outside the provider is to make the cached copy
+ * distinguishable from what the server would return, then ask for it. A sentinel written into the
+ * cached blob's `Status` does that: if the warm call returns the sentinel it came from the cache; if
+ * it returns the server's own status the cache missed and the call refetched.
+ *
+ * The sentinel deliberately leaves every per-entity ROW COUNT untouched. The freshness check
+ * compares those counts against the server precisely to catch pure deletes, so adding or removing
+ * rows would (correctly) invalidate the cache and the check would prove nothing about serving.
+ *
+ * The cache is cleared at the end whatever happens, so no sentinel-bearing copy outlives this check
+ * for the metadata bootstrap or a later bundle to read.
+ */
+export async function CheckDs4WarmIsServedFromCache(ctx: IntegrationCheckContext): Promise<void> {
+    const md = new Metadata(); // global-provider-ok: dedicated single-provider process (D1)
+    const name = datasetName(ctx);
+
+    await md.ClearDatasetCache(name);
+    const cold = await md.GetAndCacheDatasetByName(name, undefined, ctx.User);
+    Assert(cold != null && cold.Success, `cold GetAndCacheDatasetByName('${name}') failed`);
+
+    try {
+        const cached = await md.GetCachedDataset(name);
+        Assert(cached != null, 'the cold fetch must have written a cached copy to read back');
+
+        const sentinel = `ds4-served-from-cache-${Date.now()}`;
+        Assert(cached.Status !== sentinel, 'the sentinel must differ from what is already cached');
+        cached.Status = sentinel;
+        // A cached blob that has been through a JSON transport carries LatestUpdateDate as a string,
+        // and CacheDataset calls .toISOString() on it. Normalize so re-caching a read-back copy is
+        // transport-independent; production only ever re-caches a fresh server result.
+        cached.LatestUpdateDate = new Date(cached.LatestUpdateDate);
+        // No filters, so the key is the one the cold fetch above wrote.
+        await md.CacheDataset(name, undefined, cached);
+
+        const warm = await md.GetAndCacheDatasetByName(name, undefined, ctx.User);
+        Assert(warm != null && warm.Success, 'warm GetAndCacheDatasetByName failed');
+        AssertEqual(warm.Status, sentinel,
+            'the warm fetch must be SERVED from the dataset cache — a different Status means it missed and refetched from the server');
+        AssertEqual(warm.Results.length, cold.Results.length, 'the served copy must hold the same items as the cold fetch');
+    } finally {
+        // Never leave the sentinel behind, even if an assertion above failed.
+        await md.ClearDatasetCache(name);
+    }
+}
+
 /** The ordered 'dataset-cache' bundle. DS1 warms the cache that DS2 then inspects; DS3 clears it. */
 export const DatasetCacheChecks: NamedCheck[] = [
     {
@@ -109,6 +163,11 @@ export const DatasetCacheChecks: NamedCheck[] = [
         Id: 'dataset-cache.DS3',
         Name: 'DS3: ClearDatasetCache flips both status APIs back to false (a cleared dataset is never up-to-date)',
         Fn: CheckDs3ClearMakesUncachedAndStale
+    },
+    {
+        Id: 'dataset-cache.DS4',
+        Name: 'DS4: the warm fetch is served FROM the cache, not silently refetched (sentinel in the cached copy)',
+        Fn: CheckDs4WarmIsServedFromCache
     }
 ];
 
