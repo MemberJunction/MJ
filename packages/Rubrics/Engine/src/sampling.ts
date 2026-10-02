@@ -4,6 +4,7 @@ export {
     type DriftEvaluationRow, type DriftRunRow, type DriftScoreRow,
 } from '@memberjunction/rubrics-base';
 import { KeepSample, RubricIdFromVersion } from '@memberjunction/rubrics-base';
+import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 
 export interface SamplingLink {
     agentId: string;
@@ -87,6 +88,7 @@ export interface SamplingEvaluator {
         subjectEntityName: string;
         evaluator: 'LLM' | 'Deterministic' | 'AI';
         promptMode: 'SinglePass' | 'PerCriterion';
+        agent?: EvaluationAgentRunner;
     }): Promise<void>;
 }
 
@@ -98,6 +100,7 @@ export class EvaluateSampledAgentRuns {
         private readonly loader: SamplingLoader,
         private readonly engine: SamplingEvaluator,
         private readonly volumeCap: number = SAMPLING_VOLUME_CAP,
+        private readonly agent?: EvaluationAgentRunner,
     ) {}
 
     public Plan(input: Parameters<typeof SelectSampledRuns>[0]): ReturnType<typeof SelectSampledRuns> {
@@ -120,6 +123,7 @@ export class EvaluateSampledAgentRuns {
                     subjectEntityName: AGENT_RUN_SUBJECT,
                     evaluator: item.evaluator,
                     promptMode: item.promptMode,
+                    ...(this.agent ? { agent: this.agent } : {}),
                 });
             } catch (error) {
                 this.failures.push({ runId: item.runId, message: error instanceof Error ? error.message : String(error) });
@@ -165,6 +169,8 @@ export interface SamplingJobOptions {
     agentIds?: string[];
     volumeCap?: number;
     evaluatedBatchSize?: number;
+    /** Passed into EvaluateRecord for an Agent config. */
+    agent?: EvaluationAgentRunner;
 }
 
 export function SamplingSince(now: Date = new Date(), windowMs: number = SAMPLING_WINDOW_MS): string {
@@ -263,7 +269,12 @@ export function productionSamplingLoader(catalog: ProductionSamplingCatalog): Sa
 
 /** The scheduled job, built with a catalog that can see purpose. */
 export function ProductionSamplingJob(catalog: ProductionSamplingCatalog, engine: SamplingEvaluator, options: SamplingJobOptions = {}): EvaluateSampledAgentRuns {
-    return new EvaluateSampledAgentRuns(ProductionSamplingLoader(catalog, options), engine, options.volumeCap ?? SAMPLING_VOLUME_CAP);
+    return new EvaluateSampledAgentRuns(
+        ProductionSamplingLoader(catalog, options),
+        engine,
+        options.volumeCap ?? SAMPLING_VOLUME_CAP,
+        options.agent,
+    );
 }
 
 /** @deprecated Use {@link ProductionSamplingJob}. */

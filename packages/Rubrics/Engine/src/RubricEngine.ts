@@ -1,6 +1,6 @@
 import { SnapshotFromRows, type RubricAnswer, type RubricNodeSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { AgentRubricEvaluator, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
-import { LLMRubricEvaluator, type RubricEvaluatorMessages, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
+import { LLMRubricEvaluator, type RubricDecisionRunner, type RubricEvaluatorMessages, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 import { ShapeContent, type RubricSubjectContent } from './content.js';
 import { DeterministicRubricEvaluator } from './DeterministicRubricEvaluator.js';
 import { HumanRubricEvaluator, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
@@ -64,6 +64,7 @@ export interface EvaluateParams {
     agent?: EvaluationAgentRunner;
     promptRunner?: RubricPromptRunner;
     promptMode?: RubricPromptMode;
+    decisionRunner?: RubricDecisionRunner;
 }
 
 export interface EvaluateRecordInput {
@@ -127,6 +128,8 @@ export class RubricEngine {
         private evaluations: RubricEvaluationStore = unsetEvaluations,
         private records: RubricRecords = emptyRecords,
         private promptRun?: RubricPromptRun,
+        private decisionRunner?: RubricDecisionRunner,
+        private evaluationAgent?: EvaluationAgentRunner,
     ) {}
 
     /**
@@ -201,7 +204,7 @@ export class RubricEngine {
         }
         if (params.evaluator === 'LLM') {
             if (!params.promptRunner) throw new Error('An LLM evaluation requires a prompt runner.');
-            return new LLMRubricEvaluator(params.promptRunner, params.promptMode ?? 'SinglePass').evaluateContent(params.version, content);
+            return new LLMRubricEvaluator(params.promptRunner, params.promptMode ?? 'SinglePass', params.decisionRunner).evaluateContent(params.version, content);
         }
         return new DeterministicRubricEvaluator().evaluateData(params.version, content);
     }
@@ -245,7 +248,8 @@ export class RubricEngine {
             evaluator,
             promptMode,
             promptRunner: evaluator === 'LLM' ? this.rubricEvaluatorRunner() : undefined,
-            agent: input.agent,
+            decisionRunner: evaluator === 'LLM' && promptMode === 'PerCriterion' ? this.decisionRunner : undefined,
+            agent: input.agent ?? this.evaluationAgent,
             content: input.content,
             loadRecord: input.content ? undefined : async (entityName, recordId) => {
                 const rows = await this.records.rows(entityName, `ID=${sqlLiteral(recordId)}`);

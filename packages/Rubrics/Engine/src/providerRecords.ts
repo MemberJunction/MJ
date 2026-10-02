@@ -1,5 +1,7 @@
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import type { RubricDecisionRunner } from './LLMRubricEvaluator.js';
+import { RubricEvaluationAgentRunner } from './RubricEvaluationAgentRunner.js';
 import { RunView } from '@memberjunction/core';
 import { HighestNonDraftVersion, type RubricNodeSnapshot, type ScoredNode } from '@memberjunction/rubrics-base';
 import { RubricEngine, type RubricEvaluationStore, type RubricPromptRun, type RubricRecords } from './RubricEngine.js';
@@ -362,9 +364,43 @@ export function rubricEvaluatorPromptRun(provider: RubricProvider, user: unknown
 }
 
 /** A RubricEngine whose catalog, evaluations, and Rubric Evaluator prompt use the caller's provider. */
+/** PerCriterion asks AIDecisionRunner for a ScoreQuestion instead of sending the whole rubric. */
+export function PromptDecisionRunner(provider: unknown, user: unknown): RubricDecisionRunner {
+    return {
+        async score(key, question, state) {
+            const view = RunView.FromMetadataProvider(provider as never);
+            const found = await view.RunView({
+                EntityName: 'MJ: AI Prompts',
+                ExtraFilter: `Name='Rubric Evaluator'`,
+                ResultType: 'entity_object',
+                MaxRows: 1,
+            }, user as never);
+            const prompt = found.Results?.[0];
+            if (!found.Success || !prompt) throw new Error('The Rubric Evaluator prompt was not found.');
+            const { AIDecisionParams, AIDecisionRunner } = await import('@memberjunction/ai-prompts');
+            const params = new AIDecisionParams();
+            params.prompt = prompt as typeof params.prompt;
+            params.State = state;
+            params.Questions = { [key]: question };
+            params.contextUser = user as typeof params.contextUser;
+            const result = await new AIDecisionRunner().ExecuteDecision(params);
+            if (!result.success) throw new Error(result.errorMessage || 'The score decision failed.');
+            const answer = result.Answers[key];
+            if (!answer || answer.Kind !== 'Score') throw new Error('The decision did not return a score.');
+            return answer;
+        },
+    };
+}
+
 export function ProviderRubricEngine(provider: unknown, user: unknown): RubricEngine {
     const data = provider as RubricProvider;
-    return new RubricEngine(ProviderEvaluationStore(data, user), ProviderRecords(data, user), RubricEvaluatorPromptRun(data, user));
+    return new RubricEngine(
+        ProviderEvaluationStore(data, user),
+        ProviderRecords(data, user),
+        RubricEvaluatorPromptRun(data, user),
+        PromptDecisionRunner(data, user),
+        new RubricEvaluationAgentRunner(data, user),
+    );
 }
 
 /** @deprecated Use {@link ProviderRubricEngine}. */

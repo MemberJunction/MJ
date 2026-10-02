@@ -153,6 +153,40 @@ describe('LLMRubricEvaluator', () => {
         expect(output.answers.some(answer => answer.criterionId === 'b')).toBe(true);
     });
 
+    it('asks a ScoreQuestion for each leaf in PerCriterion', async () => {
+        const tree = version();
+        tree.scales[0].levels.push({ id: 'low', label: 'Low', value: 0, normalizedValue: 0, sequence: 1 });
+        const questions: { Kind: string; Levels: string[] }[] = [];
+        const decision = {
+            async score(_key: string, question: { Kind: string; Levels: string[] }) {
+                questions.push(question);
+                return { Kind: 'Score' as const, Value: question.Levels.length - 1, Probabilities: { High: 0.8, Low: 0.2 }, Confidence: 0.8 };
+            },
+        };
+        const runner = { async run() { throw new Error('the prompt runner is not used'); } };
+        const output = await new LLMRubricEvaluator(runner, 'PerCriterion', decision).evaluateContent(tree, { text: 'Easy to read.' });
+        expect(questions).toHaveLength(1);
+        expect(questions[0].Kind).toBe('Score');
+        expect(questions[0].Levels).toEqual(['Low', 'High']);
+        expect(output.answers[0].scaleLevelId).toBe('high');
+        expect(output.answers[0].confidence).toBe(0.8);
+    });
+
+    it('keeps a not-applicable sample and a numeric sample', async () => {
+        const skipped = await new LLMRubricEvaluator({
+            async run() { return JSON.stringify({ decisions: [{ key: 'clarity', notApplicable: true, rationale: 'skip', evidence: [] }] }); },
+        }).evaluateSamples(version(), { text: 'Easy to read.' }, 1);
+        expect(skipped.answers[0].isNotApplicable).toBe(true);
+
+        const tree = version();
+        tree.nodes[0].scaleId = 'numeric';
+        tree.scales.push({ id: 'numeric', scaleType: 'Numeric', minValue: 0, maxValue: 10, step: 1, higherIsBetter: true, levels: [] });
+        const numeric = await new LLMRubricEvaluator({
+            async run() { return JSON.stringify({ decisions: [{ key: 'clarity', value: 4, rationale: 'four', evidence: [] }] }); },
+        }).evaluateSamples(tree, { text: 'Easy to read.' }, 1);
+        expect(numeric.answers[0].rawValue).toBe(4);
+    });
+
     it('does not copy a keyless decision onto every criterion', async () => {
         const tree = version();
         tree.nodes.push({ ...tree.nodes[0], id: 'b', key: 'accuracy', name: 'Accuracy', anchors: [] });

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import type { ScoreAnswer, ScoreQuestion } from '@memberjunction/ai';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
@@ -16,6 +17,23 @@ export interface RubricEvaluatorMessages {
 /** A prompt already split. Tests return JSON. Production calls the model. */
 export interface RubricPromptRunner {
     run(prompt: RubricEvaluatorMessages): Promise<string>;
+}
+
+/** One ScoreQuestion about the subject. PerCriterion uses this instead of the whole-rubric prompt. */
+export interface RubricDecisionRunner {
+    score(key: string, question: ScoreQuestion, state: string): Promise<ScoreAnswer>;
+}
+
+/** Ordered levels, lowest to highest, for one criterion. Null when the scale has fewer than two labels. */
+export function ScoreQuestionForCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapshot): ScoreQuestion | null {
+    const scale = version.scales.find(item => item.id === node.scaleId);
+    const levels = [...(scale?.levels ?? [])].sort((left, right) => left.normalizedValue - right.normalizedValue || left.sequence - right.sequence);
+    if (levels.length < 2) return null;
+    return {
+        Kind: 'Score',
+        Instructions: [node.name, node.guidance ?? ''].filter(part => part.length > 0).join('\n\n'),
+        Levels: levels.map(level => level.label),
+    };
 }
 
 export interface LLMDecision {
@@ -50,7 +68,11 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
     public get EvaluatorName(): string {
         return 'LLM';
     }
-    public constructor(private readonly runner: RubricPromptRunner, private readonly mode: RubricPromptMode = 'SinglePass') {
+    public constructor(
+        private readonly runner: RubricPromptRunner,
+        private readonly mode: RubricPromptMode = 'SinglePass',
+        private readonly decision?: RubricDecisionRunner,
+    ) {
         super();
     }
 
@@ -130,25 +152,43 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         const chosen: LLMDecision[] = [];
         const sampleSpread: { key: string; levels: string[]; median: string }[] = [];
         for (const node of leaves) {
+            const samples = runs
+                .map(run => run.find(item => item.key === node.key))
+                .filter((item): item is LLMDecision => !!item);
             const levels: string[] = [];
-            for (const run of runs) {
-                const decision = run.find(item => item.key === node.key);
+            for (const decision of samples) {
+                if (decision.notApplicable) continue;
                 const label = labelOf(this.mode, decision);
                 if (label) levels.push(label);
             }
-            if (levels.length === 0) continue;
-            const median = medianLevel(version, node.scaleId, levels);
-            sampleSpread.push({ key: node.key, levels, median });
-            const sample = runs.map(run => run.find(item => item.key === node.key)).find(item => labelOf(this.mode, item) === median);
-            if (!sample) continue;
-            const probability = sample.probabilities?.[median];
-            chosen.push({
-                ...sample,
-                key: node.key,
-                level: median,
-                chosen: median,
-                confidence: probability ?? sample.confidence,
-            });
+            if (levels.length > 0) {
+                const median = medianLevel(version, node.scaleId, levels);
+                sampleSpread.push({ key: node.key, levels, median });
+                const sample = samples.find(item => labelOf(this.mode, item) === median);
+                if (!sample) continue;
+                const probability = sample.probabilities?.[median];
+                chosen.push({
+                    ...sample,
+                    key: node.key,
+                    level: median,
+                    chosen: median,
+                    confidence: probability ?? sample.confidence,
+                });
+                continue;
+            }
+            const notApplicable = samples.filter(item => item.notApplicable);
+            if (notApplicable.length > 0) {
+                sampleSpread.push({ key: node.key, levels: ['N/A'], median: 'N/A' });
+                chosen.push({ ...notApplicable[0], key: node.key, notApplicable: true });
+                continue;
+            }
+            const numeric = samples.filter(item => item.value != null);
+            if (numeric.length === 0) continue;
+            const values = numeric.map(item => item.value as number).sort((left, right) => left - right);
+            const medianValue = values[Math.floor((values.length - 1) / 2)];
+            const sample = numeric.find(item => item.value === medianValue) ?? numeric[0];
+            sampleSpread.push({ key: node.key, levels: values.map(String), median: String(medianValue) });
+            chosen.push({ ...sample, key: node.key, value: medianValue });
         }
         const once = new LLMRubricEvaluator({ async run() { return JSON.stringify({ decisions: chosen }); } }, 'SinglePass');
         const scored = await once.evaluateContent(version, content);
@@ -168,7 +208,24 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
 
     private async perCriterion(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
         const decisions: LLMDecision[] = [];
+        const state = SubjectBody(content);
         for (const node of version.nodes.filter(item => item.nodeType === 'Criterion')) {
+            const question = ScoreQuestionForCriterion(version, node);
+            if (question && this.decision) {
+                const answer = await this.decision.score(node.key, question, state);
+                const index = Math.min(question.Levels.length - 1, Math.max(0, Math.round(answer.Value)));
+                const level = question.Levels[index];
+                decisions.push({
+                    key: node.key,
+                    chosen: level,
+                    level,
+                    probabilities: answer.Probabilities,
+                    confidence: answer.Probabilities?.[level] ?? answer.Confidence,
+                    rationale: '',
+                    evidence: [],
+                });
+                continue;
+            }
             const raw = await this.runner.run(BuildRubricEvaluatorMessages(version, content, 'PerCriterion', node));
             const parsed = JSON.parse(raw) as LLMDecision;
             decisions.push({ ...parsed, key: node.key });

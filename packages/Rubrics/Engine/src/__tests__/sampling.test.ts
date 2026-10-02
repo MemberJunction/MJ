@@ -182,6 +182,23 @@ describe('production sampling', () => {
         expect(batches).toEqual([['a'], ['b']]);
     });
 
+    it('passes the agent runner when the config is Agent', async () => {
+        const agent = { async run() { return {}; } };
+        const seen: unknown[] = [];
+        const job = ProductionSamplingJob({
+            async links() {
+                return [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active', purpose: 'ProductionSampling', evaluatorConfig: { EvaluatorType: 'Agent' } }];
+            },
+            async runs() { return [{ id: 'open', agentId: 'agent', status: 'Completed' }]; },
+            async evaluated() { return []; },
+            async versions() { return []; },
+        }, {
+            async EvaluateRecord(input) { seen.push(input.agent); },
+        }, { agent });
+        await job.run();
+        expect(seen).toEqual([agent]);
+    });
+
     it('alerts when the current mean drops past the threshold', () => {
         const deltas = DriftDeltas(
             [{ key: 'facts', mean: 0.4 }, { key: 'tone', mean: 0.9 }],
