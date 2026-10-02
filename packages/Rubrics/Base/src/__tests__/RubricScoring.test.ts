@@ -261,4 +261,58 @@ describe('RubricScoring', () => {
         expect(Math.abs(sum - (result.normalizedScore ?? 0)) < 0.000002).toBe(true);
         expect(result.confidence).not.toBeNull();
     });
+
+    it('rounds 0.1, 0.2, and 0.7 before threshold, gate, band, and completeness comparisons', () => {
+        // 0.1 * 1 + 0.2 * 0 + 0.7 * 1 is 0.7999999999999999. Unrounded, that is
+        // below a threshold of 0.8, outside a band that starts at 0.8, and a
+        // failing gate. Six-place rounding makes it 0.8.
+        const scaleId = 'boundary';
+        const nodes: RubricNodeSnapshot[] = [
+            {
+                id: 'group',
+                key: 'group',
+                name: 'group',
+                nodeType: 'Group',
+                weight: 1,
+                isAdvisory: false,
+                isGate: true,
+                gateMinimumScore: 0.8,
+                rollupMethod: 'WeightedMean',
+                evidenceRequired: false,
+                rationaleRequired: false,
+                sequence: 0,
+            },
+            leaf({ id: 'a', key: 'a', parentId: 'group', weight: 0.1, scaleId }),
+            leaf({ id: 'b', key: 'b', parentId: 'group', weight: 0.2, scaleId }),
+            leaf({ id: 'c', key: 'c', parentId: 'group', weight: 0.7, scaleId }),
+        ];
+        const boundary = version(nodes, {
+            passThreshold: 0.8,
+            minimumCompleteness: 0.8,
+            scales: [{
+                id: scaleId,
+                scaleType: 'Levels',
+                higherIsBetter: true,
+                levels: [
+                    { id: 'no', label: 'No', value: 0, normalizedValue: 0, sequence: 0 },
+                    { id: 'yes', label: 'Yes', value: 1, normalizedValue: 1, sequence: 1 },
+                ],
+            }],
+            bands: [
+                { id: 'under', label: 'Under', minScore: 0, maxScore: 0.8, displayTone: 'Warning', sequence: 0 },
+                { id: 'met', label: 'Met', minScore: 0.8, maxScore: 1, displayTone: 'Success', sequence: 1 },
+            ],
+        });
+        const result = score(nodes, [
+            { criterionId: 'a', scaleLevelId: 'yes' },
+            { criterionId: 'b', scaleLevelId: 'no' },
+            { criterionId: 'c', scaleLevelId: 'yes' },
+        ], { version: boundary });
+        expect(result.normalizedScore).toBe(0.8);
+        expect(result.outcome).toBe('Passed');
+        expect(result.passed).toBe(true);
+        expect(result.gateFailed).toBe(false);
+        expect(result.bandId).toBe('met');
+        expect(result.completeness).toBe(1);
+    });
 });

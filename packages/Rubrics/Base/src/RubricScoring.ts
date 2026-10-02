@@ -61,7 +61,10 @@ interface Calc {
  * Passed. It is null for Scored, and for Incomplete when the version has no threshold
  * and no gate. Otherwise it is false.
  *
- * Stored decimals are rounded to 6 places after the arithmetic.
+ * Stored decimals are rounded to 6 places after the arithmetic. Threshold, gate,
+ * band, and completeness comparisons use that same rounding, so a float such as
+ * the weighted mean of 0.1, 0.2, and 0.7 is not treated as below the value it
+ * rounds to.
  */
 export class RubricScoring {
     public static Compute(input: RubricScoreInput): RubricScoreResult {
@@ -148,7 +151,7 @@ export class RubricScoring {
             confidence: null,
         };
         if (node.isGate && !node.isAdvisory) {
-            if (score !== null && score < (node.gateMinimumScore ?? 0)) calc.gateFailed = true;
+            if (score !== null && round6(score) < round6(node.gateMinimumScore ?? 0)) calc.gateFailed = true;
             if (score === null && unansweredLeaves > 0) calc.gateFailed = true;
         }
         return calc;
@@ -216,7 +219,7 @@ export class RubricScoring {
         const node = calc.node;
         if (!node.isGate || node.isAdvisory) return;
         if (calc.unanswered) calc.gateFailed = true;
-        if (calc.score !== null && calc.score < (node.gateMinimumScore ?? 0)) calc.gateFailed = true;
+        if (calc.score !== null && round6(calc.score) < round6(node.gateMinimumScore ?? 0)) calc.gateFailed = true;
     }
 
     private static hasValue(answer: RubricAnswer): boolean {
@@ -309,11 +312,11 @@ export class RubricScoring {
         gateFailed: boolean,
         threshold: number | null,
     ): RubricScoreResult['outcome'] {
-        if (minimum !== null && completeness < minimum) return 'Incomplete';
+        if (minimum !== null && round6(completeness) < round6(minimum)) return 'Incomplete';
         if (naFailure) return 'NotApplicableFailure';
         if (score === null) return 'Incomplete';
         if (gateFailed) return 'GateFailed';
-        if (threshold !== null) return score >= threshold ? 'Passed' : 'BelowThreshold';
+        if (threshold !== null) return round6(score) >= round6(threshold) ? 'Passed' : 'BelowThreshold';
         return 'Scored';
     }
 
@@ -330,10 +333,13 @@ export class RubricScoring {
 
     /** Half-open ranges. The band whose max is 1 also contains 1. */
     private static bandId(version: RubricVersionSnapshot, score: number): string | null {
+        const rounded = round6(score);
         const bands = [...version.bands].sort((a, b) => a.minScore - b.minScore || a.maxScore - b.maxScore);
         for (const band of bands) {
-            const top = band.maxScore === 1 && score === 1;
-            if (score >= band.minScore && (score < band.maxScore || top)) return band.id;
+            const min = round6(band.minScore);
+            const max = round6(band.maxScore);
+            const top = max === 1 && rounded === 1;
+            if (rounded >= min && (rounded < max || top)) return band.id;
         }
         return null;
     }
