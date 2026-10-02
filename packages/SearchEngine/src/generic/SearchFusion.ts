@@ -133,11 +133,12 @@ export class SearchFusion {
             }
         }
 
-        return fused.slice(0, maxResults).map(candidate => {
+        const ranked = fused.slice(0, maxResults).map(candidate => {
             const item = resultMap.get(candidate.ID);
             if (item) return { ...item, Score: candidate.Score };
             return this.createFallbackItem(candidate);
         });
+        return this.toDisplayScores(ranked, this.bestRawScore(entries.map(([, list]) => list)));
     }
 
     /**
@@ -181,14 +182,13 @@ export class SearchFusion {
                 });
             }
         }
-        // Ensure Score is the max of all ScoreBreakdown values (handles cases
-        // where dedup didn't merge but breakdown was set from a single source)
-        const deduplicated = Array.from(seen.values()).map(r => {
-            const breakdownValues = Object.values(r.ScoreBreakdown).filter((v): v is number => typeof v === 'number' && v > 0);
-            const breakdownMax = breakdownValues.length > 0 ? Math.max(...breakdownValues) : 0;
-            return breakdownMax > r.Score ? { ...r, Score: breakdownMax } : r;
-        });
-        return deduplicated.sort((a, b) => b.Score - a.Score);
+        // Score is the RANKING score: RRF (mapped onto the display scale by `toDisplayScores`) or
+        // a reranker's relevance. It is deliberately NOT raised to the max ScoreBreakdown value:
+        // breakdowns are raw, per-provider scores on different scales (cosine ~0.8 vs the keyword
+        // scorer's ~0.6), and sorting by them threw the fused order away, so an exact keyword
+        // match ranked below every semantic near-miss. A stable sort keeps tied RRF positions in
+        // fused order.
+        return Array.from(seen.values()).sort((a, b) => b.Score - a.Score);
     }
 
     /**
@@ -235,7 +235,7 @@ export class SearchFusion {
         }
 
         // Map fused candidates back to full result items
-        return fused.slice(0, maxResults).map(candidate => {
+        const ranked = fused.slice(0, maxResults).map(candidate => {
             const item = resultMap.get(candidate.ID);
             if (item) {
                 return { ...item, Score: candidate.Score };
@@ -243,6 +243,7 @@ export class SearchFusion {
             // Fallback (shouldn't happen in practice)
             return this.createFallbackItem(candidate);
         });
+        return this.toDisplayScores(ranked, this.bestRawScore(lists.map(l => l.Results)));
     }
 
     /**
@@ -284,6 +285,36 @@ export class SearchFusion {
      * Create a fallback SearchResultItem for a fused candidate that has
      * no matching full result item (defensive).
      */
+    /**
+     * Map RRF scores onto a readable 0-1 display scale WITHOUT changing the order.
+     *
+     * Raw RRF values are tiny (1/61 ≈ 0.016 at the top) and mean nothing to a person, but the
+     * order they produce is the whole point of fusion. So the top result shows the best raw
+     * score in the fused set, and every other result shows that value scaled by its RRF score
+     * relative to the top one. The mapping is monotone, so anything that sorts by `Score`
+     * afterwards (Deduplicate, the Explorer results grid) keeps the RRF order, and tied RRF
+     * positions show the same score.
+     */
+    private toDisplayScores(ranked: SearchResultItem[], bestRaw: number): SearchResultItem[] {
+        const topFused = ranked.length > 0 ? ranked[0].Score : 0;
+        if (topFused <= 0 || bestRaw <= 0) return ranked;
+        return ranked.map(r => ({ ...r, Score: bestRaw * (r.Score / topFused) }));
+    }
+
+    /** The best raw score across the lists being fused: each item's Score and its breakdown values. */
+    private bestRawScore(lists: SearchResultItem[][]): number {
+        let best = 0;
+        for (const list of lists) {
+            for (const r of list) {
+                if (r.Score > best) best = r.Score;
+                for (const v of Object.values(r.ScoreBreakdown ?? {})) {
+                    if (typeof v === 'number' && v > best) best = v;
+                }
+            }
+        }
+        return best;
+    }
+
     private createFallbackItem(candidate: ScoredCandidate): SearchResultItem {
         // If the ID is a compound key (EntityName::RecordID) used by CrossScopeFusion,
         // split it back out for readability.
