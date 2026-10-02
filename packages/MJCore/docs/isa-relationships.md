@@ -121,6 +121,8 @@ flowchart LR
 
 The chain is **bidirectional** — `_parentEntity` links upward and `_childEntity` links downward. Both directions share the **same object instances**, so dirty state, PK values, and field values are always in sync.
 
+A chain built from the child is linked both ways. `GetEntityObject('Webinars')` then `NewRecord()` points each parent that does not allow multiple subtypes back at that webinar, so `meeting.LeafEntity` and `product.LeafEntity` are the webinar. A parent save hook therefore sees the child's dirty fields, their old values, and their new values. `AttachToParent()` keeps that link when the parent row loads and when it is missing.
+
 When you work with a `WebinarEntity`:
 - `webinar.Set('StreamURL', '...')` → sets on Webinar's own fields
 - `webinar.Set('Name', '...')` → routes to `_parentEntity._parentEntity.Set('Name', ...)`
@@ -184,6 +186,8 @@ When a record is loaded at any level of the IS-A hierarchy, `BaseEntity.Initiali
 3. If a child is found, creates the child entity and wires the bidirectional chain
 4. Recursively discovers grandchildren (the child may also be a parent type)
 
+When the entity opts in to asking its subtype rule on load, step 2 is usually skipped; see [Knowing the Subtype on Load](#knowing-the-subtype-on-load).
+
 ```mermaid
 sequenceDiagram
     participant App as Application
@@ -225,6 +229,67 @@ This executes as PK lookups on clustered indexes — effectively instant, even w
 - **SQLServerDataProvider**: Builds and executes the UNION ALL query directly
 - **GraphQLDataProvider**: Calls the `FindISAChildEntity` GraphQL query endpoint on the server
 - **Server (MJServer)**: `ISAEntityResolver` exposes the `FindISAChildEntity` query, delegates to the provider
+
+### Knowing the Subtype on Load
+
+Without help, a loaded record with IS-A children costs the discovery query plus the child's load. In the browser each is a round trip, so opening one record takes three, and a `RunView` with `ResultType: 'entity_object'` pays two more for every row: 201 round trips for 100 records.
+
+A disjoint parent (`AllowMultipleSubtypes = false`) can opt in to asking its **subtype rule** first. When the rule names a child, that child's load — which happens anyway — checks the answer, and the discovery query runs only on a miss. One record then takes two round trips, and 100 records take 101.
+
+It is opt-in because the rule is written for creating records, and a load has to get its answer without a query:
+
+| Rule | Asked on load when |
+|---|---|
+| A registered `EntitySubtypeResolver` | Its class overrides `ResolveLoadHint`. `Resolve` answers the create-time question and may query; `ResolveLoadHint` answers from memory only, and returns `null` ("no hint") when it can't. A resolver that doesn't override it gives no hint, and the entity's `SubtypeSelector` isn't consulted in its place, because the resolver owns the rule: an app with a resolver and a selector gets load hints by overriding `ResolveLoadHint`. |
+| `Entity.SubtypeSelector` | It sets `"UseForLoadedRecords": true`, and every hop of its path is found among the entity objects that loaded `BaseEngine` caches hold. A hop that isn't cached gives no hint, never a query. |
+| The single-child default | Never. It decides what a new record becomes, not what an existing one is. |
+
+```json
+{ "Path": "ProductTypeID.ProductExtensionEntity", "UseForLoadedRecords": true }
+```
+
+A selector's cached hops are found through an index over each engine's array, rebuilt when the array gains or loses a row. Reading the keys never builds fields on the rows an engine holds in raw mode.
+
+A resolver answers the two questions separately. Creating a record can wait for an engine; loading one can't, so it reads the cache and gives no hint while the cache is cold:
+
+```typescript
+@RegisterClass(EntitySubtypeResolver, 'Products')
+export class ProductSubtypeResolver extends EntitySubtypeResolver {
+    // Creating a record: the answer must be right, so wait for the engine.
+    public async Resolve(record: BaseEntity): Promise<string | null> {
+        await ProductTypeEngine.Instance.Config(false, record.ContextCurrentUser);
+        return this.extensionFor(record);
+    }
+
+    // Loading a record: answer from memory, or not at all.
+    public override ResolveLoadHint(record: BaseEntity): string | null {
+        return ProductTypeEngine.Instance.Loaded ? this.extensionFor(record) : null;
+    }
+
+    private extensionFor(record: BaseEntity): string | null {
+        const product = record as ProductEntity;
+        return ProductTypeEngine.Instance.GetProductType(product.ProductTypeID)?.ProductExtensionEntity ?? null;
+    }
+}
+```
+
+`BaseEntity` checks the registered class for a `ResolveLoadHint` override once, without constructing it, so a resolver that doesn't give load hints is never constructed when records load. One that does is constructed once per entity and shared by every record it loads, so keep it stateless. Override it as a method: an arrow-function property isn't seen.
+
+For well-formed data, a hint changes the number of round trips, not which child is linked or whether the load succeeds:
+
+- **A hinted child with no row, where the record has no subtype row at all**, is a normal state: core never creates a subtype row on save, so a typed record saved through a generic form or an import, or older than its type's subtype, has none. The discovery query finds nothing, and the record loads with no child. That costs one extra round trip per load, so opt in when records of subtyped types have their subtype rows. Nothing is logged as an error; with verbose logging on (`MJ_VERBOSE`) there is one line per entity and hinted child.
+- **A hinted child with no row, where the record's subtype row is in another child**: the discovery query links the real one, and `LogError` reports that the rule and the data disagree, once per entity and pair of subtypes.
+- **"No subtype"** from the rule still runs the discovery query: only the query can tell whether an older record kept a child row.
+- **A child the user can't read** isn't loaded from the hint; the discovery path decides, as it would without a hint.
+- **A resolver that throws or rejects** is logged once per entity, **a rule that names an entity which isn't a declared IS-A child** once per name, and the record loads as it would without a hint.
+- **A promotion** (`AttachToParent`) loads the parent without asking its rule: the child row it adds doesn't exist yet.
+- **Overlapping parents** (`AllowMultipleSubtypes = true`) never ask the rule: they list every child with `FindISAChildEntities`.
+
+Three benign exceptions:
+
+- **Reading the hinted child's row fails**: the load falls back to the discovery query, so a transient failure now recovers where it used to fail the load. A lasting one reads the row twice, then fails as before. A failure after the row was read, such as in the child's own child discovery or its eager companions, fails the load at once, as it does without a hint.
+- **Two child rows**, which break the disjoint rule: the discovery query's `UNION ALL` has no order, so it links either one; a hint links the one the rule names.
+- **A provider without `FindISAChildEntity`** links no child without a hint, and the hinted child with one.
 
 ### ISAParent / ISAChild Accessors
 
@@ -358,7 +423,12 @@ sequenceDiagram
 
 **Save order:** Parent → ... → Child (Product first, then Meeting, then Webinar)
 
-**On failure:** The entire transaction is rolled back — no partial saves.
+**On failure:** The entire transaction is rolled back — no partial saves. Every level of the chain
+also goes back, in memory, to how it was before `Save()`. Each parent was finalized as saved and
+clean when its own write returned, so it gets back its saved flag, its values and its pending edits:
+a new chain reads as unsaved again, and a retry writes every level. An edit made while the save was
+in flight is kept, and still counts as an edit. The same holds on the client, where each parent's
+save is recorded in memory and the leaf's one mutation carries the whole chain.
 
 > ### ⚠️ Transaction handling changed in 6.2
 >
@@ -412,13 +482,31 @@ sequenceDiagram
     P->>DB: DELETE from Product
     DB-->>P: Success
 
-    W->>W: CommitISATransaction()
+    W->>W: scope.Commit()
+    W->>W: NewRecord() on every level, still linked
     W-->>App: true (success)
 ```
 
 **Delete order:** Child → ... → Parent (Webinar first, then Meeting, then Product)
 
 This order is required because of foreign key constraints — the child row references the parent row.
+
+A parent `Delete()` that the leaf calls with `IsParentEntityDelete` returns after that row is deleted. The call the application awaits is the leaf's.
+
+The GraphQL client sends one delete for the chain. `Delete()` with `IsParentEntityDelete` records success and does not send a second mutation for a row the leaf's mutation already removed.
+
+**On failure:** The entire transaction is rolled back, so no row is deleted, and every level of the
+chain stays in memory as it was before `Delete()`: saved, under the same key, and still linked, so the
+same call can be retried. That holds because nothing is reset until the chain commits: each level is
+reset with `NewRecord()` once the commit succeeds, and so is each record that a parent's related-record
+collections deleted along the way. The failure is recorded on the leaf, the record the application
+called, whichever level failed. A parent's failure reads
+`Failed to delete parent entity '<name>': <its reason>`, and a failed commit is recorded with the
+commit's own error.
+
+On the client there is nothing to roll back: each parent's delete is answered in memory, and the
+leaf's one mutation deletes the whole chain in a single server transaction. Each level resets as its
+delete returns, as before.
 
 ### Parent Delete Protection
 
@@ -632,6 +720,10 @@ webinar.NewRecord();
 ```
 
 You never set the ID yourself — that shared key IS the relationship.
+
+### EnsureISAChild on a new record
+
+`EnsureISAChild()` attaches the declared child and copies the shared key onto it. A record that is not saved yet has no child row to read, so this does not load one. A saved parent still reads, and an empty result is an answer rather than a logged error.
 
 ## Provider Implementation
 
@@ -930,5 +1022,6 @@ class BaseEntity {
 | `ISAChild` is null after Load | Provider doesn't implement `FindISAChildEntity` | Update provider or use `ResolveLeafEntity()` static method |
 | `ISAChild` is null on overlapping parent | Expected — overlapping parents return null for `ISAChild` | Use `ISAChildren` to get the list of child entity names |
 | Save on branch entity not saving all fields | Child entity not discovered | Ensure record was loaded with `Load()` (not just `SetMany()`) |
-| Child discovery adds latency | Extra query per Load for parent-type entities | PK lookups are sub-ms; consider Phase 5 optimization for high-traffic |
+| Child discovery adds latency | Extra query per Load for parent-type entities, and a round trip per record in the browser | Opt the entity in to load hints (`ResolveLoadHint`, or a selector with `UseForLoadedRecords`) — see [Knowing the Subtype on Load](#knowing-the-subtype-on-load) |
+| `IS-A load hint: ... The rule and the data disagree.` in the log | The entity's subtype rule names a child that has no row for this record, and its subtype row is in another child, e.g. its type changed after its subtype row was written | Fix the rule or the data. The record still loads correctly, but each load costs an extra round trip until then |
 | Parent not deleted after child delete | Other child records still exist (overlapping) | Expected — parent preserved while any child references it |

@@ -93,12 +93,17 @@ export class FeedbackModule {
    * })
    * ```
    */
-  static forRoot(config: FeedbackConfig): ModuleWithProviders<FeedbackModule> {
+  static ForRoot(config: FeedbackConfig): ModuleWithProviders<FeedbackModule> {
     return {
       ngModule: FeedbackModule,
       providers: [
         { provide: FEEDBACK_CONFIG, useValue: config }
       ]
     };
+  }
+
+  /** @deprecated Use {@link ForRoot}. */
+  static forRoot(config: FeedbackConfig): ModuleWithProviders<FeedbackModule> {
+    return this.ForRoot(config);
   }
 }

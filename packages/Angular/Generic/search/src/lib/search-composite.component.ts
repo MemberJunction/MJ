@@ -38,8 +38,26 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     protected searchService = inject(SearchService);
     private destroy$ = new Subject<void>();
 
-    @ViewChild('searchInput') searchInputRef!: SearchInputComponent;
-    @ViewChild('searchSuggest') searchSuggestRef!: SearchSuggestComponent;
+    @ViewChild('searchInput') SearchInputRef!: SearchInputComponent;
+
+    /** @deprecated Use {@link SearchInputRef}. */
+    get searchInputRef(): SearchInputComponent {
+        return this.SearchInputRef;
+    }
+    /** @deprecated Use {@link SearchInputRef}. */
+    set searchInputRef(value: SearchInputComponent) {
+        this.SearchInputRef = value;
+    }
+    @ViewChild('searchSuggest') SearchSuggestRef!: SearchSuggestComponent;
+
+    /** @deprecated Use {@link SearchSuggestRef}. */
+    get searchSuggestRef(): SearchSuggestComponent {
+        return this.SearchSuggestRef;
+    }
+    /** @deprecated Use {@link SearchSuggestRef}. */
+    set searchSuggestRef(value: SearchSuggestComponent) {
+        this.SearchSuggestRef = value;
+    }
 
     // --- Configuration Inputs ---
 
@@ -103,11 +121,11 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     /** The current min relevance percent from the suggest dropdown filter */
     /** Programmatically focus the search input (e.g. a host-owned Ctrl/Cmd+K chord). */
     public Focus(): void {
-        this.searchInputRef?.Focus();
+        this.SearchInputRef?.Focus();
     }
 
     public get MinRelevancePercent(): number {
-        return this.searchSuggestRef?.MinRelevancePercent ?? 0;
+        return this.SearchSuggestRef?.MinRelevancePercent ?? 0;
     }
     public PreviewResults: SearchResultItem[] = [];
     public RecentSearches: RecentSearch[] = [];
@@ -167,16 +185,16 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
         switch (event.key) {
             case 'ArrowDown':
                 event.preventDefault();
-                this.searchSuggestRef?.NavigateDown();
+                this.SearchSuggestRef?.NavigateDown();
                 break;
             case 'ArrowUp':
                 event.preventDefault();
-                this.searchSuggestRef?.NavigateUp();
+                this.SearchSuggestRef?.NavigateUp();
                 break;
             case 'Enter':
-                if (this.searchSuggestRef?.HighlightedIndex >= 0) {
+                if (this.SearchSuggestRef?.HighlightedIndex >= 0) {
                     event.preventDefault();
-                    this.searchSuggestRef.SelectHighlighted();
+                    this.SearchSuggestRef.SelectHighlighted();
                 }
                 break;
             case 'Tab': {
@@ -186,7 +204,7 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
                 // moves. Once the highlight walks off either end, Tab proceeds
                 // naturally (forward → the promo row / next control; backward →
                 // out of the bar).
-                const suggest = this.searchSuggestRef;
+                const suggest = this.SearchSuggestRef;
                 const count = suggest?.NavigableItemCount ?? 0;
                 if (!suggest || count === 0) {
                     break;
@@ -221,8 +239,8 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     /** Handle Enter press in the input */
     public OnQuerySubmit(query: string): void {
         // If a suggestion is highlighted, select it instead of searching
-        if (this.IsSuggestOpen && this.searchSuggestRef && this.searchSuggestRef.HighlightedIndex >= 0) {
-            this.searchSuggestRef.SelectHighlighted();
+        if (this.IsSuggestOpen && this.SearchSuggestRef && this.SearchSuggestRef.HighlightedIndex >= 0) {
+            this.SearchSuggestRef.SelectHighlighted();
             return;
         }
 
@@ -297,7 +315,7 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
 
     private openSuggest(): void {
         this.IsSuggestOpen = true;
-        this.searchSuggestRef?.ResetHighlight();
+        this.SearchSuggestRef?.ResetHighlight();
         // Refresh in the background so a record opened since the last dropdown
         // appears; name resolution is memoized in the service, so repeat opens
         // are cheap.
@@ -321,7 +339,7 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
 
     private closeSuggest(): void {
         this.IsSuggestOpen = false;
-        this.searchSuggestRef?.ResetHighlight();
+        this.SearchSuggestRef?.ResetHighlight();
         this.cdr.detectChanges();
     }
 

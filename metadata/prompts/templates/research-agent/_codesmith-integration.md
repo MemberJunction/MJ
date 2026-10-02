@@ -39,21 +39,7 @@ When you have structured data that requires mathematical operations, statistical
     "type": "Sub-Agent",
     "subAgent": {
       "name": "Codesmith Agent",
-      "message": "I have data in CSV format with 50 rows:
-
-[INCLUDE THE ACTUAL DATA HERE - CSV or JSON format]
-Item,Category,Value,Date
-Product A,Electronics,299.99,2024-01-15
-Product B,Electronics,149.99,2024-01-16
-...
-(paste all 50 rows)
-
-Please write JavaScript code to:
-1. [Specific calculation 1]
-2. [Specific calculation 2]
-3. [Specific analysis task 3]
-
-Return results as a JSON object with clear structure.",
+      "message": "I have data in CSV format with 50 rows:\n\n[INCLUDE THE ACTUAL DATA HERE - CSV or JSON format]\nItem,Category,Value,Date\nProduct A,Electronics,299.99,2024-01-15\nProduct B,Electronics,149.99,2024-01-16\n...\n(paste all 50 rows)\n\nPlease write JavaScript code to:\n1. [Specific calculation 1]\n2. [Specific calculation 2]\n3. [Specific analysis task 3]\n\nReturn results as a JSON object with clear structure.",
       "terminateAfter": false
     }
   }
@@ -108,7 +94,7 @@ Step 4: Add to Findings
           "data": "[CSV or JSON data here]",
           "source": {
             "type": "[web|database|storage|knowledge_base]",
-            "sources": ["src_001", "src_002", ...],
+            "sources": ["src_001", "src_002"],
             "searchQueries": ["your query"]
           }
         },

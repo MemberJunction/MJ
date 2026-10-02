@@ -1,9 +1,9 @@
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
-import { BaseEntity, BaseEntityResult, RecordChangePayload, RecordChangeSource, RestoreContext } from "./baseEntity";
+import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext, SerializeCloneChangeContext } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
-import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
+import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
@@ -83,6 +83,32 @@ export interface SaveContext {
 }
 
 /**
+ * Work handed to {@link DatabaseProviderBase.RunAfterCommit}. Runs at most once.
+ */
+export type PostCommitTask = () => Promise<void>;
+
+/**
+ * Identifies the transaction frames that were open at one moment, so work registered *later* with
+ * {@link DatabaseProviderBase.RunAfterCommit} is tied to the transaction it came from rather than to
+ * whatever transaction happens to be open when it registers.
+ *
+ * Capture it synchronously with {@link DatabaseProviderBase.CapturePostCommitToken} at the point the
+ * work is caused (e.g. in a save hook, before the first `await`). Opaque to callers — pass it back
+ * to the same provider unchanged.
+ */
+export interface PostCommitToken {
+    /**
+     * The outermost transaction the frames belong to, unique per process, or `null` when the work
+     * was caused with **no transaction open**. A `null` epoch is not "unknown": it says the save is
+     * already durable, so the task runs whenever it registers, rather than being attached to an
+     * unrelated transaction that happens to be open by then.
+     */
+    readonly Epoch: number | null;
+    /** Ids of the open frames, outermost first (the outermost transaction, then each savepoint). */
+    readonly FrameIds: readonly number[];
+}
+
+/**
  * This class is a generic server-side provider class to abstract database operations
  * on any database system and therefore be usable by server-side components that need to
  * do database operations but do not want close coupling with a specific database provider
@@ -114,7 +140,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         } catch {
             // CurrentUser is unavailable until the provider is configured — rely on options.user instead.
         }
-        return dispatchRemoteOperationInProcess<TInput, TOutput>(operationKey, input, options, this, fallbackUser);
+        return DispatchRemoteOperationInProcess<TInput, TOutput>(operationKey, input, options, this, fallbackUser);
     }
 
     /**
@@ -189,8 +215,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     /**
      * Independent instance that **shares the connection pool and metadata cache**
      * but has its own transaction stack. Same pattern MJAPI uses for per-request
-     * providers. Used by `mj sync push` so `--parallel-batch-size` (default 10)
-     * does not interleave `EntityTransactionScope`s on one provider.
+     * providers. Used by an entity directory that `mj sync push` writes with isolated
+     * transactions, so parallel graphs do not interleave `EntityTransactionScope`s on one provider.
      *
      * Not SQL Server-specific: each concrete provider implements this against
      * its own pool. {@link ReleaseIndependentInstance} must NOT close the pool.
@@ -224,6 +250,65 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async ResetTransactionState(): Promise<void> {
         /* no-op */
+    }
+
+    /**
+     * Run `task` once the ambient transaction on this provider has committed, or now if there is
+     * no ambient transaction.
+     *
+     * Use it for side effects that must only happen for work that is actually durable — queueing
+     * background jobs, firing deferred entity actions — and must not run *inside* the caller's
+     * transaction. Providers that track transactions (see `GenericDatabaseProvider`) queue the task
+     * while a transaction is open, run queued tasks in registration order after the **outermost**
+     * commit succeeds (once the transaction lock is released, so a task may open its own
+     * transaction), and discard them — without running them — when the transaction rolls back,
+     * fails to commit, or is abandoned.
+     *
+     * This default is for providers that do not track transactions: the task starts immediately.
+     *
+     * In every case the caller is never blocked by, and never sees an error from, a task that runs
+     * immediately: it is started fire-and-forget and a rejection is logged with {@link LogError}.
+     *
+     * **Registering late.** Work that is caused inside a transaction but registers after an `await`
+     * may find that transaction already settled. Capture a {@link PostCommitToken} with
+     * {@link CapturePostCommitToken} when the work is caused and pass it here: the task then follows
+     * the transaction the token names (run if it committed, dropped if it — or a savepoint the token
+     * was captured in — rolled back), not whatever is open when it registers. A token captured
+     * with no transaction open runs the task whenever it registers. Without a token at all the
+     * task follows the transaction open at registration time, which is right for a caller that
+     * registers synchronously inside its own transaction and wrong for a deferred one — so pass
+     * a token whenever registration can outlive the save.
+     *
+     * @param task The work to run. Should not throw; a rejection is logged and swallowed.
+     * @param description Short label used in log lines (e.g. `'Entity AI Action'`).
+     * @param _token Where the work was caused, from {@link CapturePostCommitToken}. Ignored by this
+     *              default, which has no transactions to follow.
+     */
+    public RunAfterCommit(task: PostCommitTask, description: string = 'post-commit task', _token?: PostCommitToken): void {
+        void this.RunPostCommitTaskSafely(task, description);
+    }
+
+    /**
+     * Snapshot of the transaction frames open right now, for a later {@link RunAfterCommit}.
+     * Synchronous by contract — call it before the first `await` of the code that causes the work.
+     *
+     * @returns `undefined` when no transaction is open. This default never tracks transactions, so
+     *          it always returns `undefined`.
+     */
+    public CapturePostCommitToken(): PostCommitToken | undefined {
+        return undefined;
+    }
+
+    /**
+     * Await one post-commit task, logging (never rethrowing) its failure. Shared by the immediate
+     * path of {@link RunAfterCommit} and by subclasses that drain a queue after commit.
+     */
+    protected async RunPostCommitTaskSafely(task: PostCommitTask, description: string): Promise<void> {
+        try {
+            await task();
+        } catch (e) {
+            LogError(`Post-commit task '${description}' failed: ${e instanceof Error ? e.message : String(e)}`, undefined, e);
+        }
     }
 
     /**
@@ -1073,6 +1158,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
+                undefined,
+                entity.CloneContext ? 'Clone' : 'Internal',
+                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
             );
         }
         return null;
@@ -1106,7 +1194,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             isMutation: true,
             description: `Save ${entity.EntityInfo.Name}`,
         };
-        if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+        // Always offer the record-change-free form to the SQL logger, not only when the
+        // entity tracks record changes: it is also the replay-safe form of a create for
+        // migration recordings (MemberJunction/MJ#4503). Execution still uses fullSQL.
+        if (sqlDetails.simpleSQL) {
             opts.simpleSQLFallback = sqlDetails.simpleSQL;
         }
         return opts;
@@ -1579,7 +1670,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     this.OnSuspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
-                    if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+                    if (sqlDetails.simpleSQL) {
                         extraData.simpleSQLFallback = sqlDetails.simpleSQL;
                     }
                     extraData.entityName = entity.EntityInfo.Name;
@@ -2017,8 +2108,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         type: 'Create' | 'Update' | 'Delete',
         user: UserInfo,
         restoreContext?: RestoreContext | null,
+        cloneContext?: CloneContext | null,
     ): Promise<unknown[] | undefined> {
-        const sqlResult = this.BuildRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, restoreContext);
+        const sqlResult = this.BuildRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, restoreContext, cloneContext);
         if (sqlResult) {
             return await this.ExecuteSQL(sqlResult.sql, sqlResult.parameters ?? undefined, undefined, user);
         }
@@ -2039,7 +2131,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Builds the dialect-agnostic payload for a RecordChange row from the
-     * entity's old/new data and an optional restore context. Concrete
+     * entity's old/new data and an optional restore or clone context. Concrete
      * providers consume the returned payload to render their dialect-specific
      * SQL (SQL Server EXEC, PostgreSQL INSERT, etc.).
      *
@@ -2063,6 +2155,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      *   lineage columns; otherwise `source='Internal'`.
      * @param quoteToEscape Quote character for `EscapeQuotesInProperties` and
      *   `DiffObjects`. Defaults to single quote.
+     * @param cloneContext When non-null, populates `source='Clone'` and the
+     *   structured `changeContext` JSON payload.
      */
     protected BuildRecordChangePayload(
         newData: Record<string, unknown> | null,
@@ -2073,7 +2167,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         user: UserInfo,
         restoreContext?: RestoreContext | null,
         quoteToEscape: string = "'",
+        cloneContext?: CloneContext | null,
     ): RecordChangePayload | null {
+        if (restoreContext && cloneContext) {
+            throw new Error('BuildRecordChangePayload: both restoreContext and cloneContext were provided; an operation cannot be both a restore and a clone');
+        }
+
         const isCreateOrDelete = oldData === null || newData === null;
         const changes = this.DiffObjects(
             oldData as Record<string, unknown>,
@@ -2091,7 +2190,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             ? this.CreateUserDescriptionOfChanges(changes!)
             : (!oldData ? 'Record Created' : 'Record Deleted');
 
-        const source: RecordChangeSource = restoreContext ? 'Restore' : 'Internal';
+        const source: RecordChangeSource = restoreContext ? 'Restore' : cloneContext ? 'Clone' : 'Internal';
+        const changeContext = cloneContext ? SerializeCloneChangeContext(cloneContext) : null;
 
         return {
             entityID: entityInfo.ID,
@@ -2104,6 +2204,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             fullRecordJSON,
             restoredFromID: restoreContext?.SourceChangeID ?? null,
             restoreReason: restoreContext?.Reason ?? null,
+            changeContext,
         };
     }
 
@@ -2123,6 +2224,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      *   written with `Source='Restore'`, `RestoredFromID = SourceChangeID`,
      *   and `RestoreReason = Reason`. Read by callers from
      *   `BaseEntity.RestoreContext` immediately before generating SQL.
+     * @param cloneContext When non-null, the resulting RecordChange row is
+     *   written with `Source='Clone'` and `ChangeContext` JSON provenance.
      */
     protected abstract BuildRecordChangeSQL(
         newData: Record<string, unknown> | null,
@@ -2133,6 +2236,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         type: 'Create' | 'Update' | 'Delete',
         user: UserInfo,
         restoreContext?: RestoreContext | null,
+        cloneContext?: CloneContext | null,
     ): { sql: string; parameters?: unknown[] } | null;
 
     /**
@@ -2146,6 +2250,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param userId The acting user ID
      * @param activeChildEntityName The child entity that initiated the save (to skip)
      * @param extraExecOptions Optional provider-specific execution options (e.g. connectionSource for SQL Server transactions)
+     * @param source The source discriminator for the record change row ('Internal' or 'Clone')
+     * @param changeContext Optional serialized JSON provenance for clone operations
      */
     protected async PropagateRecordChangesToSiblings(
         parentInfo: EntityInfo,
@@ -2154,6 +2260,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         userId: string,
         activeChildEntityName: string | undefined,
         extraExecOptions?: Record<string, unknown>,
+        source: RecordChangeSource = 'Internal',
+        changeContext: string | null = null,
     ): Promise<void> {
         const sqlParts: string[] = [];
 
@@ -2183,6 +2291,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     safeChangesDesc,
                     safePKValue,
                     safeUserId,
+                    source,
+                    changeContext,
                 ));
             }
         }
@@ -2211,6 +2321,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         safeChangesDesc: string,
         safePKValue: string,
         safeUserId: string,
+        source?: RecordChangeSource,
+        changeContext?: string | null,
     ): string;
 
     /**************************************************************************/
@@ -2273,6 +2385,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const e = this.EntityByName(request.EntityName);
         if (!e || !e.AllowRecordMerge)
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
+
+        // IS-A records: the dependency pass below re-points only the foreign keys that target this
+        // entity, and BaseEntity.Delete follows the shared key into the loser's subtype and parent
+        // rows, whose own references never moved. Refuse rather than half-merge.
+        if (e.ParentID)
+            throw new Error(`Entity ${request.EntityName} is an IS-A subtype; merging subtype records is not supported yet`);
+        if (e.ChildEntities.length > 0) {
+            for (const key of [request.SurvivingRecordCompositeKey, ...request.RecordsToMerge]) {
+                const child = await this.FindISAChildEntity(e, key.Values(), contextUser);
+                if (child)
+                    throw new Error(`Record ${key.ToString()} of ${request.EntityName} has a ${child.ChildEntityName} subtype row; merging records another entity extends is not supported yet`);
+            }
+        }
 
         const result: RecordMergeResult = {
             Success: false,
@@ -2433,4 +2558,11 @@ export interface ExecuteSQLOptions {
    * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
    */
   connectionSource?: object;
+  /**
+   * Run on the pool even while an ambient transaction is open, without naming a handle. For
+   * reads that are not part of any caller's unit of work — the metadata dataset a background
+   * refresh loads — so they never land on the transaction's connection beside its COMMIT. A
+   * pool read sees committed data only (#4514).
+   */
+  ignoreAmbientTransaction?: boolean;
 }

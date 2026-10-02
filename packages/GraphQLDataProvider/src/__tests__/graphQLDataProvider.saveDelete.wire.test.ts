@@ -264,6 +264,27 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             await provider.Save(plain, user, new EntitySaveOptions());
             expect(Object.prototype.hasOwnProperty.call(lastInputRecord(), 'RestoreContext___')).toBe(false);
         });
+
+        it('never sends a clone context: clones run on the server, and a client-supplied one would forge lineage', async () => {
+            const entity = loadedCustomer();
+            entity.Set('Name', 'Cloned Name');
+            entity.SetCloneContext({
+                CloneLogID: 'CLONE-LOG-001',
+                SourceEntityName: 'Customers',
+                SourceRecordID: 'CUST-ORIG',
+                RootEntityName: 'Customers',
+                RootSourceRecordID: 'CUST-ORIG',
+                RootTargetRecordID: 'CUST-0001',
+                Depth: 0,
+                Route: 'RootSave',
+                FieldChangeSummary: [],
+            });
+            GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001' }));
+
+            await provider.Save(entity, user, new EntitySaveOptions());
+
+            expect(Object.prototype.hasOwnProperty.call(lastInputRecord(), 'CloneContext___')).toBe(false);
+        });
     });
 
     describe('Save — short circuits and errors', () => {
@@ -277,6 +298,19 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(GraphQLWire.Requests).toHaveLength(0);
             expect(result).toEqual(entity.GetAll());
             expect(entity.LatestResult.Success).toBe(true);
+        });
+
+        it('IsParentEntityDelete returns true without any wire call (MJ#4864)', async () => {
+            const entity = loadedCustomer();
+            const options = new EntityDeleteOptions();
+            options.IsParentEntityDelete = true;
+
+            const result = await provider.Delete(entity, options, user);
+
+            expect(GraphQLWire.Requests).toHaveLength(0);
+            expect(result).toBe(true);
+            expect(entity.LatestResult?.Success).toBe(true);
+            expect(entity.LatestResult?.Type).toBe('delete');
         });
 
         it('surfaces the first GraphQL error message into LatestResult and returns null', async () => {

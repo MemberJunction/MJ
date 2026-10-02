@@ -1,0 +1,92 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-clarify-missing-data-01 [gemini-3.7-flash · Google · envelope]",
+    "Description": "The payload has no input data. Codesmith's prompt says ALWAYS write code and shows how to handle empty input in code, so executing defensive code is as correct as asking for the data (the agent's prompt is trusted).",
+    "InputDefinition": {
+      "payload": {
+        "task": "summarize the dataset"
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Summarize the dataset."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-clarify-missing-data-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            }
+          },
+          {
+            "kind": "taskComplete"
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Execute Code"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "chat",
+                "message": {
+                  "matcher": "nonEmpty"
+                }
+              },
+              {
+                "kind": "taskComplete"
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Execute Code"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "6BF8B6AC-A587-4925-A7A6-8793EAA78795"
+  }
+}

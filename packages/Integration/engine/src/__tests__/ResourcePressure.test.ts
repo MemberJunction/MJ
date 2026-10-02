@@ -105,7 +105,7 @@ describe('the sync loop emits pressure warnings', () => {
   const SRC = readFileSync(join(__dirname, '..', 'IntegrationEngine.ts'), 'utf-8');
 
   it('checks at an entity-map boundary, not per record', () => {
-    expect(SRC).toMatch(/this\.MergeResult\(aggregate, mapResult\);\s*\n\s*(?:const \w+ = )?await this\.warnOnResourcePressure\(/);
+    expect(SRC).toMatch(/this\.mergeResult\(aggregate, mapResult\);\s*\n\s*(?:const \w+ = )?await this\.warnOnResourcePressure\(/);
   });
 
   it('reports each code once per run', () => {

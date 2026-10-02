@@ -179,16 +179,21 @@ export class StylesTypeAnalyzer {
   /**
    * Checks if a property path is valid
    */
-  isValidPath(pathArray: string[]): boolean {
+  IsValidPath(pathArray: string[]): boolean {
     // Remove 'styles' from the beginning if present
     const cleanPath = pathArray[0] === 'styles' ? pathArray.slice(1) : pathArray;
     return this.validPaths.has(cleanPath.join('.'));
+  }
+
+  /** @deprecated Use {@link IsValidPath}. */
+  isValidPath(pathArray: string[]): boolean {
+    return this.IsValidPath(pathArray);
   }
   
   /**
    * Finds all paths containing a specific property name
    */
-  findPropertyPaths(propertyName: string): string[] {
+  FindPropertyPaths(propertyName: string): string[] {
     const paths: string[] = [];
     
     // Look for exact matches
@@ -198,11 +203,16 @@ export class StylesTypeAnalyzer {
     
     return paths;
   }
+
+  /** @deprecated Use {@link FindPropertyPaths}. */
+  findPropertyPaths(propertyName: string): string[] {
+    return this.FindPropertyPaths(propertyName);
+  }
   
   /**
    * Gets suggestions for an invalid path
    */
-  getSuggestionsForPath(invalidPath: string[]): {
+  GetSuggestionsForPath(invalidPath: string[]): {
     correctPaths: string[],
     availableAtParent: string[],
     didYouMean: string | null
@@ -222,7 +232,7 @@ export class StylesTypeAnalyzer {
     
     // Find where the misplaced property might exist
     const lastProp = cleanPath[cleanPath.length - 1];
-    suggestions.correctPaths = this.findPropertyPaths(lastProp)
+    suggestions.correctPaths = this.FindPropertyPaths(lastProp)
       .map(p => 'styles.' + p);
     
     // Get available properties at the parent level
@@ -253,12 +263,21 @@ export class StylesTypeAnalyzer {
     
     return suggestions;
   }
+
+  /** @deprecated Use {@link GetSuggestionsForPath}. */
+  getSuggestionsForPath(invalidPath: string[]): {
+    correctPaths: string[],
+    availableAtParent: string[],
+    didYouMean: string | null
+  } {
+    return this.GetSuggestionsForPath(invalidPath);
+  }
   
   /**
    * Gets the actual default value from the runtime styles object
    * This ensures we have a single source of truth for default values
    */
-  getDefaultValueForPath(pathArray: string[]): string {
+  GetDefaultValueForPath(pathArray: string[]): string {
     const cleanPath = pathArray[0] === 'styles' ? pathArray.slice(1) : pathArray;
     
     // Navigate the actual default styles object to get the real value
@@ -289,5 +308,10 @@ export class StylesTypeAnalyzer {
     }
     
     return "undefined";
+  }
+
+  /** @deprecated Use {@link GetDefaultValueForPath}. */
+  getDefaultValueForPath(pathArray: string[]): string {
+    return this.GetDefaultValueForPath(pathArray);
   }
 }

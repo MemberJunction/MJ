@@ -11,12 +11,12 @@ export type {
 } from './saveTypes.js';
 export {
     CRUDSprocType,
-    shouldIncludeFieldInParams,
-    needsClearCompanionBroadRule,
-    projectedParamCount,
-    useJsonArgShape,
+    ShouldIncludeFieldInParams, shouldIncludeFieldInParams,
+    NeedsClearCompanionBroadRule, needsClearCompanionBroadRule,
+    ProjectedParamCount, projectedParamCount,
+    UseJsonArgShape, useJsonArgShape,
 } from './crudSprocFieldRules.js';
-export { resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
+export { ResolveDbPlatformFromEnv, resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
 export {
     SystemUserFieldAccessLossReason,

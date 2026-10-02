@@ -53,43 +53,43 @@ export {
     RequestWithRawBody,
 } from './base/types.js';
 export {
-    splitMarkdownIntoSections,
-    convertToSlackMrkdwn,
-    convertBoldToSlackFormat,
-    convertLinksToSlackFormat,
-    truncateText,
-    splitTextIntoChunks,
+    SplitMarkdownIntoSections, splitMarkdownIntoSections,
+    ConvertToSlackMrkdwn, convertToSlackMrkdwn,
+    ConvertBoldToSlackFormat, convertBoldToSlackFormat,
+    ConvertLinksToSlackFormat, convertLinksToSlackFormat,
+    TruncateText, truncateText,
+    SplitTextIntoChunks, splitTextIntoChunks,
 } from './base/message-formatter.js';
 
 // Slack adapter
 export { SlackMessagingExtension } from './slack/SlackMessagingExtension.js';
 export { SlackAdapter } from './slack/SlackAdapter.js';
-export { markdownToBlocks } from './slack/slack-formatter.js';
-export { verifySlackSignature } from './slack/slack-routes.js';
-export { handleSlackInteraction, registerActiveForm } from './slack/slack-interactivity.js';
+export { MarkdownToBlocks, markdownToBlocks } from './slack/slack-formatter.js';
+export { VerifySlackSignature, verifySlackSignature } from './slack/slack-routes.js';
+export { HandleSlackInteraction, handleSlackInteraction, RegisterActiveForm, registerActiveForm } from './slack/slack-interactivity.js';
 export {
-    buildRichResponse,
-    buildAgentContextBlock,
-    buildTextBlocks,
-    buildArtifactCard,
-    buildActionButtons,
-    buildMediaBlocks,
-    buildErrorBlocks,
-    buildMetadataFooter,
-    buildDivider,
-    buildResponseForm,
-    buildFormModal,
-    buildNotificationBlocks,
-    getFullResponseText,
+    BuildRichResponse, buildRichResponse,
+    BuildAgentContextBlock, buildAgentContextBlock,
+    BuildTextBlocks, buildTextBlocks,
+    BuildArtifactCard, buildArtifactCard,
+    BuildActionButtons, buildActionButtons,
+    BuildMediaBlocks, buildMediaBlocks,
+    BuildErrorBlocks, buildErrorBlocks,
+    BuildMetadataFooter, buildMetadataFooter,
+    BuildDivider, buildDivider,
+    BuildResponseForm, buildResponseForm,
+    BuildFormModal, buildFormModal,
+    BuildNotificationBlocks, buildNotificationBlocks,
+    GetFullResponseText, getFullResponseText,
 } from './slack/slack-block-builder.js';
 export type { BuildRichResponseOptions } from './slack/slack-block-builder.js';
 
 // Teams adapter
 export { TeamsMessagingExtension } from './teams/TeamsMessagingExtension.js';
 export { TeamsAdapter } from './teams/TeamsAdapter.js';
-export { markdownToAdaptiveCard } from './teams/teams-formatter.js';
+export { MarkdownToAdaptiveCard, markdownToAdaptiveCard } from './teams/teams-formatter.js';
 export {
-    buildRichAdaptiveCard,
+    BuildRichAdaptiveCard, buildRichAdaptiveCard,
     buildAgentHeader as buildTeamsAgentHeader,
     buildTextBody as buildTeamsTextBody,
     buildArtifactCard as buildTeamsArtifactCard,

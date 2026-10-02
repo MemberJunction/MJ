@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { splitMigration, extractAffectedEntities } from '../MigrationSplitter.js';
+import { SplitMigration, ExtractAffectedEntities } from '../MigrationSplitter.js';
 
 /** Minimal reproduction of a CodeGen item header block. */
 const codegenItem = (title: string, body: string) =>
@@ -25,7 +25,7 @@ describe('splitMigration', () => {
         codegenItem('Base View SQL for Foo', 'CREATE VIEW __mj.vwFoos AS SELECT 1;'),
       ].join('\n');
 
-      const r = splitMigration(sql, 'feature.sql');
+      const r = SplitMigration(sql, 'feature.sql');
       expect(r.boundaryMethod).toBe('first-item-banner');
       // boundary points at the `/*` opener line (line 4)
       expect(r.codeGenBoundaryLine).toBe(4);
@@ -42,7 +42,7 @@ describe('splitMigration', () => {
         codegenItem('spCreate SQL for Foo', 'CREATE PROCEDURE __mj.spCreateFoo AS BEGIN SELECT 1; END;'),
       ].join('\n');
 
-      const r = splitMigration(sql);
+      const r = SplitMigration(sql);
       expect(r.boundaryMethod).toBe('code-gen-run-delimiter');
       expect(r.codeGenBoundaryLine).toBe(2);
       expect(r.handAuthored).toContain('CREATE TABLE __mj.Foo');
@@ -54,7 +54,7 @@ describe('splitMigration', () => {
 
     it('reports no codegen block for a pure hand-authored file', () => {
       const sql = "CREATE TABLE __mj.Foo (ID INT);\nALTER TABLE __mj.Foo ADD Name NVARCHAR(50);";
-      const r = splitMigration(sql);
+      const r = SplitMigration(sql);
       expect(r.boundaryMethod).toBe('no-codegen-block');
       expect(r.codeGenBoundaryLine).toBeNull();
       expect(r.codeGenBlock).toBe('');
@@ -69,7 +69,7 @@ describe('splitMigration', () => {
         'CREATE INDEX IX_Foo ON __mj.Foo(ID);',
         "INSERT INTO __mj.Bar (ID) VALUES ('x');",
       ].join('\n');
-      const r = splitMigration(sql);
+      const r = SplitMigration(sql);
       expect(r.routing).toBe('transpile-only');
       expect(r.handAuthoredRegions.map((f) => f.kind)).toContain('schema-ddl');
     });
@@ -83,7 +83,7 @@ describe('splitMigration', () => {
         '  UPDATE __mj.Job SET Claimed = 1;',
         'END;',
       ].join('\n');
-      const r = splitMigration(sql, 'Scheduling_Engine_Atomic_Sprocs.sql');
+      const r = SplitMigration(sql, 'Scheduling_Engine_Atomic_Sprocs.sql');
       expect(r.routing).toBe('needs-hand-authoring');
       const proc = r.handAuthoredRegions.find((f) => f.kind === 'hand-procedural');
       expect(proc).toBeDefined();
@@ -97,7 +97,7 @@ describe('splitMigration', () => {
         "SET @Name_da319a9d = 'GPT';",
         'EXEC __mj.spCreateAIModel @Name = @Name_da319a9d;',
       ].join('\n');
-      const r = splitMigration(sql, 'Metadata_Sync.sql');
+      const r = SplitMigration(sql, 'Metadata_Sync.sql');
       expect(r.routing).toBe('transpile-plus-reseed');
       expect(r.handAuthoredRegions.some((f) => f.kind === 'metadata-sync')).toBe(true);
     });
@@ -110,7 +110,7 @@ describe('splitMigration', () => {
         '',
         'EXEC __mj.spUpdateTemplate @ID = 1;',
       ].join('\n');
-      const r = splitMigration(sql, 'V_Metadata_Sync.sql');
+      const r = SplitMigration(sql, 'V_Metadata_Sync.sql');
       expect(r.routing).toBe('transpile-plus-reseed');
       const f = r.handAuthoredRegions.find((x) => x.kind === 'metadata-sync');
       expect(f?.evidence).toBe('MetadataSync push operation');
@@ -123,7 +123,7 @@ describe('splitMigration', () => {
         'CREATE TABLE __mj.Widget (ID UNIQUEIDENTIFIER NOT NULL);',
         "EXEC __mj.spCreateWidget @Name = 'Gizmo';",
       ].join('\n');
-      const r = splitMigration(sql, 'Feature.sql');
+      const r = SplitMigration(sql, 'Feature.sql');
       expect(r.routing).toBe('transpile-only');
       expect(r.handAuthoredRegions.some((f) => f.kind === 'metadata-sync')).toBe(false);
     });
@@ -136,14 +136,14 @@ describe('splitMigration', () => {
         '/* CREATE TRIGGER example in a block comment */',
         'ALTER TABLE __mj.Foo ADD Note NVARCHAR(50);',
       ].join('\n');
-      const r = splitMigration(sql);
+      const r = SplitMigration(sql);
       expect(r.routing).toBe('transpile-only');
       expect(r.handAuthoredRegions.some((f) => f.kind === 'hand-procedural')).toBe(false);
     });
 
     it('does not classify keywords inside string literals', () => {
       const sql = "INSERT INTO __mj.Doc (Body) VALUES ('You can CREATE FUNCTION here');";
-      const r = splitMigration(sql);
+      const r = SplitMigration(sql);
       expect(r.handAuthoredRegions.some((f) => f.kind === 'hand-procedural')).toBe(false);
       expect(r.handAuthoredRegions.some((f) => f.kind === 'data-dml')).toBe(true);
     });
@@ -157,7 +157,7 @@ describe('splitMigration', () => {
         'CREATE TABLE Foo and ALTER TABLE Bar in SQL.',
         "End of template';",
       ].join('\n');
-      const r = splitMigration(sql);
+      const r = SplitMigration(sql);
       expect(r.handAuthoredRegions.some((f) => f.kind === 'schema-ddl')).toBe(false);
     });
 
@@ -167,7 +167,7 @@ describe('splitMigration', () => {
         "''CREATE TABLE'' is just text here';",
         'ALTER TABLE __mj.Foo ADD Note NVARCHAR(50);',
       ].join('\n');
-      const r = splitMigration(sql);
+      const r = SplitMigration(sql);
       // The real ALTER TABLE after the literal IS classified; the quoted one is not.
       expect(r.handAuthoredRegions.filter((f) => f.kind === 'schema-ddl')).toHaveLength(1);
     });
@@ -176,7 +176,7 @@ describe('splitMigration', () => {
 
 describe('extractAffectedEntities', () => {
   it('returns [] for an empty block', () => {
-    expect(extractAffectedEntities('')).toEqual([]);
+    expect(ExtractAffectedEntities('')).toEqual([]);
   });
 
   it('captures the entity from a newer SQL-Code-Generation sproc header (-- Entity: gated by -- Item:)', () => {
@@ -192,7 +192,7 @@ describe('extractAffectedEntities', () => {
       'CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentRun"() RETURNS SETOF __mj."vwAIAgentRuns" AS $$ $$;',
     ].join('\n');
     // present in BOTH the provenance comment and the Entity/Item header → de-duped to one.
-    expect(extractAffectedEntities(block)).toEqual(['MJ: AI Agent Runs']);
+    expect(ExtractAffectedEntities(block)).toEqual(['MJ: AI Agent Runs']);
   });
 
   it('captures the entity from the older base-view banner (no -- Entity: line present)', () => {
@@ -208,12 +208,12 @@ describe('extractAffectedEntities', () => {
       '------------------------------------------------------------',
       'CREATE VIEW __mj."vwAIAgentRuns" AS SELECT 1;',
     ].join('\n');
-    expect(extractAffectedEntities(block)).toEqual(['MJ: AI Agent Runs']);
+    expect(ExtractAffectedEntities(block)).toEqual(['MJ: AI Agent Runs']);
   });
 
   it('captures the entity from a provenance-only header (no -- Entity:, no banner)', () => {
     const block = '/* Base View SQL for MJ: AI Prompts */\nCREATE VIEW __mj."vwAIPrompts" AS SELECT 1;';
-    expect(extractAffectedEntities(block)).toEqual(['MJ: AI Prompts']);
+    expect(ExtractAffectedEntities(block)).toEqual(['MJ: AI Prompts']);
   });
 
   it('captures cascade spDelete-only entities, in first-appearance order, de-duplicated', () => {
@@ -240,7 +240,7 @@ describe('extractAffectedEntities', () => {
       '-- Item: spDeleteAIConfiguration',
       'CREATE OR REPLACE FUNCTION __mj."spDeleteAIConfiguration"() RETURNS void AS $$ $$;',
     ].join('\n');
-    expect(extractAffectedEntities(block)).toEqual([
+    expect(ExtractAffectedEntities(block)).toEqual([
       'MJ: AI Prompt Runs',
       'MJ: AI Agents',
       'MJ: AI Configurations',
@@ -249,12 +249,12 @@ describe('extractAffectedEntities', () => {
 
   it('uses the DISPLAY name for an FK-index item, not the bare table name', () => {
     const block = ['-- Entity: MJ: AI Agent Runs', '-- Item: Index for Foreign Keys', 'CREATE INDEX i ON __mj."AIAgentRun" ("AgentID");'].join('\n');
-    expect(extractAffectedEntities(block)).toEqual(['MJ: AI Agent Runs']);
+    expect(ExtractAffectedEntities(block)).toEqual(['MJ: AI Agent Runs']);
   });
 
   it('excludes the table-name `Index for Foreign Keys for <Table>` provenance form', () => {
     const block = '/* Index for Foreign Keys for AIAgentRun */\nCREATE INDEX i ON __mj."AIAgentRun" ("AgentID");';
-    expect(extractAffectedEntities(block)).toEqual([]);
+    expect(ExtractAffectedEntities(block)).toEqual([]);
   });
 
   it('excludes entities merely mentioned in metadata DML / inline registration comments', () => {
@@ -269,12 +269,12 @@ describe('extractAffectedEntities', () => {
       'UPDATE __mj."EntityField" SET "DefaultInView" = TRUE WHERE "ID" = \'x\';',
     ].join('\n');
     // The inline `-- Entity:` is not line-anchored and not a generated-item header → excluded.
-    expect(extractAffectedEntities(block)).toEqual([]);
+    expect(ExtractAffectedEntities(block)).toEqual([]);
   });
 
   it('does not capture a line-anchored `-- Entity:` that does not head a generated item', () => {
     const block = ['-- Entity: MJ: Should Not Count', 'SELECT 1;'].join('\n');
-    expect(extractAffectedEntities(block)).toEqual([]);
+    expect(ExtractAffectedEntities(block)).toEqual([]);
   });
 
   it('is wired into splitMigration (affectedEntities populated from the codegen block; [] for hand-only)', () => {
@@ -288,9 +288,9 @@ describe('extractAffectedEntities', () => {
       '-----------------------------------------------------------------',
       'CREATE VIEW __mj."vwAIAgentRuns" AS SELECT 1;',
     ].join('\n');
-    expect(splitMigration(sql, 'feature.sql').affectedEntities).toEqual(['MJ: AI Agent Runs']);
+    expect(SplitMigration(sql, 'feature.sql').affectedEntities).toEqual(['MJ: AI Agent Runs']);
 
     const handOnly = 'CREATE TABLE __mj.Foo (ID INT);\nALTER TABLE __mj.Foo ADD Name NVARCHAR(50);';
-    expect(splitMigration(handOnly).affectedEntities).toEqual([]);
+    expect(SplitMigration(handOnly).affectedEntities).toEqual([]);
   });
 });

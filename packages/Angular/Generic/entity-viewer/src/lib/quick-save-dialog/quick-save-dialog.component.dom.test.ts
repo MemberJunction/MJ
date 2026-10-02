@@ -92,4 +92,67 @@ describe('QuickSaveDialogComponent (DOM)', () => {
     const fixture = render({ IsOpen: true, Summary: summary });
     expect(text(fixture, '.summary-items')).toContain('3 columns');
   });
+
+  /**
+   * #4220 — a default-view Save that carries a filter is promoted to a named view, so the
+   * dialog opens as a name prompt. It seeds a suggested name (one click to accept) and puts
+   * the cursor in the field with the text selected (one keystroke to replace).
+   */
+  describe('suggested name (#4220)', () => {
+    it('seeds the name field from SuggestedName when creating a new view', async () => {
+      const fixture = render({ IsOpen: true, SuggestedName: 'Accounts — Filtered' });
+      expect(fixture.componentInstance.Name).toBe('Accounts — Filtered');
+      // ngModel writes the seeded value to the element on a microtask.
+      await fixture.whenStable();
+      expect((query(fixture, '#quickSaveName') as HTMLInputElement).value).toBe('Accounts — Filtered');
+    });
+
+    it('enables Create immediately, so the suggestion is one click away', () => {
+      const fixture = render({ IsOpen: true, SuggestedName: 'Accounts — Filtered' });
+      expect((query(fixture, '.btn-primary') as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('emits the suggested name unchanged when accepted as-is', () => {
+      const fixture = render({ IsOpen: true, SuggestedName: 'Accounts — Filtered' });
+      const saves: QuickSaveEvent[] = capture(fixture.componentInstance.Save);
+      click(fixture, '.btn-primary');
+      expect(saves).toEqual([
+        { Name: 'Accounts — Filtered', Description: '', IsShared: false, SaveAsNew: true },
+      ]);
+    });
+
+    it('lets the user replace the suggestion', () => {
+      const fixture = render({ IsOpen: true, SuggestedName: 'Accounts — Filtered' });
+      const saves: QuickSaveEvent[] = capture(fixture.componentInstance.Save);
+      typeInto(fixture, '#quickSaveName', 'My Own Name');
+      fixture.detectChanges();
+      click(fixture, '.btn-primary');
+      expect(saves[0].Name).toBe('My Own Name');
+    });
+
+    it('leaves the name blank when no suggestion is supplied', () => {
+      const fixture = render({ IsOpen: true });
+      expect(fixture.componentInstance.Name).toBe('');
+      expect((query(fixture, '.btn-primary') as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('never overrides an existing view name with the suggestion', () => {
+      const viewEntity = { Name: 'Existing View', Description: 'desc', IsShared: true };
+      const fixture = render({
+        IsOpen: true,
+        SuggestedName: 'Accounts — Filtered',
+        ViewEntity: viewEntity,
+      });
+      expect(fixture.componentInstance.Name).toBe('Existing View');
+    });
+
+    it('focuses and selects the name field so typing replaces the suggestion', async () => {
+      const fixture = render({ IsOpen: true, SuggestedName: 'Accounts — Filtered' });
+      await fixture.whenStable();
+      const input = query(fixture, '#quickSaveName') as HTMLInputElement;
+      expect(document.activeElement).toBe(input);
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe('Accounts — Filtered'.length);
+    });
+  });
 });

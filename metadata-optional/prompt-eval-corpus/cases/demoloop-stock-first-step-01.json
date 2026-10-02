@@ -1,0 +1,26 @@
+{
+  "id": "demoloop-stock-first-step-01",
+  "agent": "Demo Loop Agent",
+  "tags": [
+    "first-step-action"
+  ],
+  "description": "Six actions, one obviously right. A control case: if this degrades, the problem is not catalog size.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "What is the current share price of MSFT?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Get Stock Price"
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

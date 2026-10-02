@@ -1,0 +1,43 @@
+{
+  "id": "marketing-terminal-done-01",
+  "agent": "Marketing Agent",
+  "tags": [
+    "terminal-synthesis",
+    "sub-agent-dispatch",
+    "implicit-payload-first"
+  ],
+  "description": "Every specialist has run and the payload is complete. An orchestrator's hardest decision is to stop delegating. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+  "input": {
+    "payload": {
+      "draft": {
+        "headline": "H",
+        "body": "B"
+      },
+      "edited": true,
+      "brandApproved": true,
+      "seoReviewed": true,
+      "published": true
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Take the launch announcement all the way through to publication."
+      },
+      {
+        "role": "user",
+        "content": "[Sub-Agent Result] Publisher Agent completed. Content published; payload.published = true."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete"
+      },
+      {
+        "kind": "payloadChange"
+      }
+    ]
+  }
+}

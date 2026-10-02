@@ -45,8 +45,8 @@ function fakeEntity(): FakeEntity {
 }
 
 type Host = {
-    SaveRecordMap: (ciID: string, externalID: string, entityID: string, entityRecordID: string, user: UserInfo) => Promise<void>;
-    CreateRunDetail: (run: unknown, entityMap: unknown, result: SyncResult, user: UserInfo) => Promise<void>;
+    saveRecordMap: (ciID: string, externalID: string, entityID: string, entityRecordID: string, user: UserInfo) => Promise<void>;
+    createRunDetail: (run: unknown, entityMap: unknown, result: SyncResult, user: UserInfo) => Promise<void>;
 };
 
 /** Runs `fn` on an engine built from its prototype, inside a run context — with or without a group. */
@@ -74,28 +74,28 @@ describe('SaveRecordMap and CreateRunDetail enrol in the active write group', ()
 
     it('a record map saved inside a batch travels in that batch\'s group', async () => {
         const recordMap = fakeEntity();
-        await inRun(GROUP, recordMap, host => host.SaveRecordMap('ci-1', 'ext-1', 'entity-1', 'rec-1', USER));
+        await inRun(GROUP, recordMap, host => host.saveRecordMap('ci-1', 'ext-1', 'entity-1', 'rec-1', USER));
         expect(recordMap.Save).toHaveBeenCalledTimes(1);
         expect(recordMap.GroupAtSave).toBe(GROUP);
     });
 
     it('a record map saved outside any group saves immediately, exactly as before', async () => {
         const recordMap = fakeEntity();
-        await inRun(undefined, recordMap, host => host.SaveRecordMap('ci-1', 'ext-1', 'entity-1', 'rec-1', USER));
+        await inRun(undefined, recordMap, host => host.saveRecordMap('ci-1', 'ext-1', 'entity-1', 'rec-1', USER));
         expect(recordMap.Save).toHaveBeenCalledTimes(1);
         expect(recordMap.GroupAtSave).toBeUndefined();
     });
 
     it('a run detail saved inside a batch travels in that batch\'s group', async () => {
         const detail = fakeEntity();
-        await inRun(GROUP, detail, host => host.CreateRunDetail(RUN, MAP, RESULT, USER));
+        await inRun(GROUP, detail, host => host.createRunDetail(RUN, MAP, RESULT, USER));
         expect(detail.Save).toHaveBeenCalledTimes(1);
         expect(detail.GroupAtSave).toBe(GROUP);
     });
 
     it('a run detail saved outside any group saves immediately, exactly as before', async () => {
         const detail = fakeEntity();
-        await inRun(undefined, detail, host => host.CreateRunDetail(RUN, MAP, RESULT, USER));
+        await inRun(undefined, detail, host => host.createRunDetail(RUN, MAP, RESULT, USER));
         expect(detail.Save).toHaveBeenCalledTimes(1);
         expect(detail.GroupAtSave).toBeUndefined();
     });

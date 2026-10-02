@@ -6,6 +6,11 @@ import { JsonWriteHelper } from './json-write-helper';
 import { EntityPropertyExtractor } from './EntityPropertyExtractor';
 import { FieldExternalizer } from './FieldExternalizer';
 import { RelatedEntityHandler } from './RelatedEntityHandler';
+import {
+  FindSubPropertyExternalizations,
+  ExternalizeSubProperties,
+  FieldExternalizerAdapter,
+} from './json-subproperty-externalization';
 import { METADATA_KEYWORDS, createKeywordReference } from '../constants/metadata-keywords';
 import { RelatedEntityConfig } from '../config';
 
@@ -30,7 +35,7 @@ export class RecordProcessor {
    * Batch pre-fetch related entities for a set of parent records.
    * Public facade so callers don't need direct access to relatedEntityHandler.
    */
-  async batchPrefetchRelatedEntities(
+  async BatchPrefetchRelatedEntities(
     parentPrimaryKeys: string[],
     relationConfig: RelatedEntityConfig,
     verbose?: boolean
@@ -38,10 +43,19 @@ export class RecordProcessor {
     return this.relatedEntityHandler.batchQueryRelatedEntities(parentPrimaryKeys, relationConfig, verbose);
   }
 
+  /** @deprecated Use {@link BatchPrefetchRelatedEntities}. */
+  async batchPrefetchRelatedEntities(
+    parentPrimaryKeys: string[],
+    relationConfig: RelatedEntityConfig,
+    verbose?: boolean
+  ): Promise<Map<string, BaseEntity[]>> {
+    return this.BatchPrefetchRelatedEntities(parentPrimaryKeys, relationConfig, verbose);
+  }
+
   /**
    * Processes a record into the standardized RecordData format
    */
-  async processRecord(
+  async ProcessRecord(
     record: BaseEntity,
     primaryKey: Record<string, any>,
     targetDir: string,
@@ -93,6 +107,23 @@ export class RecordProcessor {
       embeds,
       extension
     );
+  }
+
+  /** @deprecated Use {@link ProcessRecord}. */
+  async processRecord(
+    record: BaseEntity,
+    primaryKey: Record<string, any>,
+    targetDir: string,
+    entityConfig: EntityConfig,
+    verbose?: boolean,
+    isNewRecord: boolean = true,
+    existingRecordData?: RecordData,
+    currentDepth: number = 0,
+    ancestryPath: Set<string> = new Set(),
+    fieldOverrides?: Record<string, any>,
+    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
+  ): Promise<RecordData> {
+    return this.ProcessRecord(record, primaryKey, targetDir, entityConfig, verbose, isNewRecord, existingRecordData, currentDepth, ancestryPath, fieldOverrides, batchedRelatedData);
   }
 
   /**
@@ -376,14 +407,26 @@ export class RecordProcessor {
     
     const externalizePattern = this.getExternalizationPattern(fieldName, entityConfig);
     if (!externalizePattern) {
-      return fieldValue;
+      // No whole-field pattern. The field may still carry dotted configs targeting
+      // properties inside its JSON (`Configuration.ReplayScript`), which externalize the
+      // leaf and leave an `@file:` reference beside the hand-authored keys. A whole-field
+      // config takes precedence, so this only runs when there isn't one.
+      return await this.applyJsonSubPropertyExternalization(
+        fieldName,
+        fieldValue,
+        allProperties,
+        targetDir,
+        entityConfig,
+        existingRecordData,
+        verbose
+      );
     }
-    
+
     try {
       const existingFileReference = existingRecordData?.fields?.[fieldName];
       const recordData = this.createRecordDataForExternalization(allProperties);
       
-      return await this.fieldExternalizer.externalizeField(
+      return await this.fieldExternalizer.ExternalizeField(
         fieldName,
         fieldValue,
         externalizePattern,
@@ -398,6 +441,47 @@ export class RecordProcessor {
         console.warn(`Failed to externalize field ${fieldName}: ${error}`);
       }
       return fieldValue; // Keep original value if externalization fails
+    }
+  }
+
+  /**
+   * Externalizes any configured properties *inside* this field's JSON, returning the
+   * field with `@file:` references in their place. A no-op unless the field has dotted
+   * `externalizeFields` entries. Best-effort like the whole-field path: a failure keeps
+   * the original value rather than losing the pull.
+   */
+  private async applyJsonSubPropertyExternalization(
+    fieldName: string,
+    fieldValue: any,
+    allProperties: Record<string, any>,
+    targetDir: string,
+    entityConfig: EntityConfig,
+    existingRecordData: RecordData | undefined,
+    verbose?: boolean
+  ): Promise<any> {
+    const subConfigs = FindSubPropertyExternalizations(fieldName, entityConfig.pull?.externalizeFields);
+    if (subConfigs.length === 0) {
+      return fieldValue;
+    }
+
+    try {
+      return await ExternalizeSubProperties(
+        fieldValue,
+        subConfigs,
+        FieldExternalizerAdapter(
+          this.fieldExternalizer,
+          allProperties,
+          targetDir,
+          entityConfig.pull?.mergeStrategy || 'merge',
+          verbose
+        ),
+        existingRecordData?.fields?.[fieldName]
+      );
+    } catch (error) {
+      if (verbose) {
+        console.warn(`Failed to externalize sub-properties of ${fieldName}: ${error}`);
+      }
+      return fieldValue;
     }
   }
 
@@ -456,8 +540,8 @@ export class RecordProcessor {
   /**
    * Creates a BaseEntity-like object for externalization processing
    */
-  private createRecordDataForExternalization(allProperties: Record<string, any>): BaseEntity {
-    return allProperties as any as BaseEntity;
+  private createRecordDataForExternalization(allProperties: Record<string, any>): Record<string, unknown> {
+    return allProperties;
   }
 
   /**
@@ -490,7 +574,7 @@ export class RecordProcessor {
             relationConfig,
             entityConfig,
             existingRelated,
-            this.processRecord.bind(this),
+            this.ProcessRecord.bind(this),
             currentDepth,
             ancestryPath,
             batchedRelatedData.get(relationKey)!,
@@ -503,7 +587,7 @@ export class RecordProcessor {
             relationConfig,
             entityConfig,
             existingRelated,
-            this.processRecord.bind(this),
+            this.ProcessRecord.bind(this),
             currentDepth,
             ancestryPath,
             verbose
@@ -663,7 +747,7 @@ export class RecordProcessor {
             childPK[pk.Name] = child.Get(pk.Name);
           }
 
-          const childData = await this.processRecord(
+          const childData = await this.ProcessRecord(
             child,
             childPK,
             targetDir,

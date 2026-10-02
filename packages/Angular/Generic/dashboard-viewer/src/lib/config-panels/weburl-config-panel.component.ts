@@ -17,14 +17,68 @@ import { PanelConfig } from '../models/dashboard-types';
 export class WebURLConfigPanelComponent extends BaseConfigPanel {
     // Form fields
     public title = '';
-    public url = '';
-    public sandboxMode: 'standard' | 'strict' | 'permissive' = 'standard';
-    public allowFullscreen = true;
-    public refreshOnResize = false;
+    public Url = '';
+
+    /** @deprecated Use {@link Url}. */
+    public get url() {
+      return this.Url;
+    }
+    /** @deprecated Use {@link Url}. */
+    public set url(value) {
+      this.Url = value;
+    }
+    public SandboxMode: 'standard' | 'strict' | 'permissive' = 'standard';
+
+    /** @deprecated Use {@link SandboxMode}. */
+    public get sandboxMode(): 'standard' | 'strict' | 'permissive' {
+      return this.SandboxMode;
+    }
+    /** @deprecated Use {@link SandboxMode}. */
+    public set sandboxMode(value: 'standard' | 'strict' | 'permissive') {
+      this.SandboxMode = value;
+    }
+    public AllowFullscreen = true;
+
+    /** @deprecated Use {@link AllowFullscreen}. */
+    public get allowFullscreen() {
+      return this.AllowFullscreen;
+    }
+    /** @deprecated Use {@link AllowFullscreen}. */
+    public set allowFullscreen(value) {
+      this.AllowFullscreen = value;
+    }
+    public RefreshOnResize = false;
+
+    /** @deprecated Use {@link RefreshOnResize}. */
+    public get refreshOnResize() {
+      return this.RefreshOnResize;
+    }
+    /** @deprecated Use {@link RefreshOnResize}. */
+    public set refreshOnResize(value) {
+      this.RefreshOnResize = value;
+    }
 
     // Validation
-    public urlError = '';
-    public showUrlPreview = false;
+    public UrlError = '';
+
+    /** @deprecated Use {@link UrlError}. */
+    public get urlError() {
+      return this.UrlError;
+    }
+    /** @deprecated Use {@link UrlError}. */
+    public set urlError(value) {
+      this.UrlError = value;
+    }
+    public ShowUrlPreview = false;
+
+    /** @deprecated Use {@link ShowUrlPreview}. */
+    public get showUrlPreview() {
+      return this.ShowUrlPreview;
+    }
+    /** @deprecated Use {@link ShowUrlPreview}. */
+    public set showUrlPreview(value) {
+      this.ShowUrlPreview = value;
+    }
 
     constructor(cdr: ChangeDetectorRef) {
         super(cdr);
@@ -32,44 +86,44 @@ export class WebURLConfigPanelComponent extends BaseConfigPanel {
 
     public initFromConfig(config: PanelConfig | null): void {
         if (config && config.type === 'WebURL') {
-            this.url = (config['url'] as string) || '';
-            this.sandboxMode = (config['sandboxMode'] as 'standard' | 'strict' | 'permissive') || 'standard';
-            this.allowFullscreen = (config['allowFullscreen'] as boolean) ?? true;
-            this.refreshOnResize = (config['refreshOnResize'] as boolean) ?? false;
+            this.Url = (config['url'] as string) || '';
+            this.SandboxMode = (config['sandboxMode'] as 'standard' | 'strict' | 'permissive') || 'standard';
+            this.AllowFullscreen = (config['allowFullscreen'] as boolean) ?? true;
+            this.RefreshOnResize = (config['refreshOnResize'] as boolean) ?? false;
         } else {
             // Defaults for new WebURL panel
-            this.url = '';
-            this.sandboxMode = 'standard';
-            this.allowFullscreen = true;
-            this.refreshOnResize = false;
+            this.Url = '';
+            this.SandboxMode = 'standard';
+            this.AllowFullscreen = true;
+            this.RefreshOnResize = false;
         }
 
         this.title = this.panel?.title || '';
-        this.urlError = '';
-        this.showUrlPreview = this.url ? this.isValidUrl(this.url) : false;
+        this.UrlError = '';
+        this.ShowUrlPreview = this.Url ? this.isValidUrl(this.Url) : false;
         this.cdr.detectChanges();
     }
 
     public buildConfig(): PanelConfig {
         return {
             type: 'WebURL',
-            url: this.url.trim(),
-            sandboxMode: this.sandboxMode,
-            allowFullscreen: this.allowFullscreen,
-            refreshOnResize: this.refreshOnResize
+            url: this.Url.trim(),
+            sandboxMode: this.SandboxMode,
+            allowFullscreen: this.AllowFullscreen,
+            refreshOnResize: this.RefreshOnResize
         };
     }
 
     public override validate(): { valid: boolean; errors: string[] } {
         const errors: string[] = [];
-        this.urlError = '';
+        this.UrlError = '';
 
-        if (!this.url.trim()) {
-            this.urlError = 'URL is required';
-            errors.push(this.urlError);
-        } else if (!this.isValidUrl(this.url.trim())) {
-            this.urlError = 'Please enter a valid URL (e.g., https://example.com)';
-            errors.push(this.urlError);
+        if (!this.Url.trim()) {
+            this.UrlError = 'URL is required';
+            errors.push(this.UrlError);
+        } else if (!this.isValidUrl(this.Url.trim())) {
+            this.UrlError = 'Please enter a valid URL (e.g., https://example.com)';
+            errors.push(this.UrlError);
         }
 
         this.cdr.detectChanges();
@@ -77,9 +131,9 @@ export class WebURLConfigPanelComponent extends BaseConfigPanel {
     }
 
     public getDefaultTitle(): string {
-        if (this.url) {
+        if (this.Url) {
             try {
-                const hostname = new URL(this.url).hostname;
+                const hostname = new URL(this.Url).hostname;
                 return hostname || 'Web Page';
             } catch {
                 return 'Web Page';
@@ -93,16 +147,21 @@ export class WebURLConfigPanelComponent extends BaseConfigPanel {
     }
 
     // Form event handlers
-    public onTitleChange(): void {
+    public OnTitleChange(): void {
         this.emitConfigChanged();
     }
 
-    public onUrlChange(): void {
-        this.urlError = '';
-        this.showUrlPreview = false;
+    /** @deprecated Use {@link OnTitleChange}. */
+    public onTitleChange(): void {
+      return this.OnTitleChange();
+    }
 
-        if (this.url.trim() && this.isValidUrl(this.url.trim())) {
-            this.showUrlPreview = true;
+    public OnUrlChange(): void {
+        this.UrlError = '';
+        this.ShowUrlPreview = false;
+
+        if (this.Url.trim() && this.isValidUrl(this.Url.trim())) {
+            this.ShowUrlPreview = true;
             // Update title if it's still empty
             if (!this.title) {
                 this.title = this.getDefaultTitle();
@@ -113,18 +172,38 @@ export class WebURLConfigPanelComponent extends BaseConfigPanel {
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnUrlChange}. */
+    public onUrlChange(): void {
+      return this.OnUrlChange();
+    }
+
+    public OnSandboxModeChange(): void {
+        this.emitConfigChanged();
+    }
+
+    /** @deprecated Use {@link OnSandboxModeChange}. */
     public onSandboxModeChange(): void {
+      return this.OnSandboxModeChange();
+    }
+
+    public OnOptionChange(): void {
         this.emitConfigChanged();
     }
 
+    /** @deprecated Use {@link OnOptionChange}. */
     public onOptionChange(): void {
-        this.emitConfigChanged();
+      return this.OnOptionChange();
     }
 
-    public previewUrl(): void {
-        if (this.url && this.isValidUrl(this.url)) {
-            window.open(this.url, '_blank', 'noopener,noreferrer');
+    public PreviewUrl(): void {
+        if (this.Url && this.isValidUrl(this.Url)) {
+            window.open(this.Url, '_blank', 'noopener,noreferrer');
         }
+    }
+
+    /** @deprecated Use {@link PreviewUrl}. */
+    public previewUrl(): void {
+      return this.PreviewUrl();
     }
 
     private isValidUrl(url: string): boolean {
@@ -136,8 +215,8 @@ export class WebURLConfigPanelComponent extends BaseConfigPanel {
         }
     }
 
-    public getSandboxModeDescription(): string {
-        switch (this.sandboxMode) {
+    public GetSandboxModeDescription(): string {
+        switch (this.SandboxMode) {
             case 'strict':
                 return 'Only allows scripts to run. Most secure but may break some sites.';
             case 'permissive':
@@ -145,5 +224,10 @@ export class WebURLConfigPanelComponent extends BaseConfigPanel {
             default:
                 return 'Allows scripts, forms, and popups. Good balance of security and compatibility.';
         }
+    }
+
+    /** @deprecated Use {@link GetSandboxModeDescription}. */
+    public getSandboxModeDescription(): string {
+      return this.GetSandboxModeDescription();
     }
 }

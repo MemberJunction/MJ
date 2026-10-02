@@ -91,7 +91,16 @@ export class CardsViewRendererComponent extends BaseAngularComponent implements 
    * type's `config`), so the host sets it via a guarded `setInput`. Type matches
    * {@link EntityCardsComponent.cardTemplate}.
    */
-  @Input() cardTemplate: CardTemplate | null = null;
+  @Input() CardTemplate: CardTemplate | null = null;
+
+  /** @deprecated Use {@link CardTemplate}. */
+  @Input() set cardTemplate(value: CardTemplate | null) {
+    this.CardTemplate = value;
+  }
+  /** @deprecated Use {@link CardTemplate}. */
+  get cardTemplate(): CardTemplate | null {
+    return this.CardTemplate;
+  }
 
   /**
    * Optional map of record primary-key strings → hidden field names that matched the active
@@ -99,7 +108,16 @@ export class CardsViewRendererComponent extends BaseAngularComponent implements 
    * set by the host via a guarded `setInput`. Type matches
    * {@link EntityCardsComponent.hiddenFieldMatches}.
    */
-  @Input() hiddenFieldMatches: Map<string, string> = new Map();
+  @Input() HiddenFieldMatches: Map<string, string> = new Map();
+
+  /** @deprecated Use {@link HiddenFieldMatches}. */
+  @Input() set hiddenFieldMatches(value: Map<string, string>) {
+    this.HiddenFieldMatches = value;
+  }
+  /** @deprecated Use {@link HiddenFieldMatches}. */
+  get hiddenFieldMatches(): Map<string, string> {
+    return this.HiddenFieldMatches;
+  }
 
   // ---- IViewRenderer outputs ----
 
@@ -119,16 +137,26 @@ export class CardsViewRendererComponent extends BaseAngularComponent implements 
    * Relay `<mj-entity-cards>`'s selection event, normalizing to the raw record the host
    * expects (the host builds the composite key itself).
    */
-  onRecordSelected(event: RecordSelectedEvent): void {
+  OnRecordSelected(event: RecordSelectedEvent): void {
     this.recordSelected.emit(event.record);
+  }
+
+  /** @deprecated Use {@link OnRecordSelected}. */
+  onRecordSelected(event: RecordSelectedEvent): void {
+    return this.OnRecordSelected(event);
   }
 
   /**
    * Relay `<mj-entity-cards>`'s open event, normalizing to the raw record the host expects
    * (the host builds the composite key itself).
    */
-  onRecordOpened(event: RecordOpenedEvent): void {
+  OnRecordOpened(event: RecordOpenedEvent): void {
     this.recordOpened.emit(event.record);
+  }
+
+  /** @deprecated Use {@link OnRecordOpened}. */
+  onRecordOpened(event: RecordOpenedEvent): void {
+    return this.OnRecordOpened(event);
   }
 }
 

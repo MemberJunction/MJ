@@ -21,15 +21,15 @@ import { RunView } from '@memberjunction/core';
 import { FormOverrideDialogResult } from './components/form-override-dialog.component';
 import { EntityFormOverrideService } from './services/entity-form-override.service';
 import {
-  generateCanvasId,
+  GenerateCanvasId,
   type FormCanvasElement,
   type FormCanvasModel,
   type FormCanvasSection,
 } from './services/form-canvas-model';
-import { generateCodeFromCanvas } from './services/canvas-to-code';
+import { GenerateCodeFromCanvas } from './services/canvas-to-code';
 import {
-  buildCanvasEditClientTools,
-  buildCanvasStateSummary,
+  BuildCanvasEditClientTools,
+  BuildCanvasStateSummary,
   type CanvasEditHost,
 } from './services/canvas-edit-transforms';
 
@@ -68,14 +68,59 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   private static readonly USER_PREFS_KEY = 'ComponentStudio.UserPreferences';
 
   // --- Panel widths ---
-  public leftPanelWidth = 340;
-  public rightPanelWidth = 380;
-  public previewFlex = '1 1 50%';
-  public editorFlex = '1 1 50%';
+  public LeftPanelWidth = 340;
+
+  /** @deprecated Use {@link LeftPanelWidth}. */
+  public get leftPanelWidth() {
+    return this.LeftPanelWidth;
+  }
+  /** @deprecated Use {@link LeftPanelWidth}. */
+  public set leftPanelWidth(value) {
+    this.LeftPanelWidth = value;
+  }
+  public RightPanelWidth = 380;
+
+  /** @deprecated Use {@link RightPanelWidth}. */
+  public get rightPanelWidth() {
+    return this.RightPanelWidth;
+  }
+  /** @deprecated Use {@link RightPanelWidth}. */
+  public set rightPanelWidth(value) {
+    this.RightPanelWidth = value;
+  }
+  public PreviewFlex = '1 1 50%';
+
+  /** @deprecated Use {@link PreviewFlex}. */
+  public get previewFlex() {
+    return this.PreviewFlex;
+  }
+  /** @deprecated Use {@link PreviewFlex}. */
+  public set previewFlex(value) {
+    this.PreviewFlex = value;
+  }
+  public EditorFlex = '1 1 50%';
+
+  /** @deprecated Use {@link EditorFlex}. */
+  public get editorFlex() {
+    return this.EditorFlex;
+  }
+  /** @deprecated Use {@link EditorFlex}. */
+  public set editorFlex(value) {
+    this.EditorFlex = value;
+  }
   private previewFlexPercent = 50;
 
   // --- Dropdown states ---
-  public exportDropdownOpen = false;
+  public ExportDropdownOpen = false;
+
+  /** @deprecated Use {@link ExportDropdownOpen}. */
+  public get exportDropdownOpen() {
+    return this.ExportDropdownOpen;
+  }
+  /** @deprecated Use {@link ExportDropdownOpen}. */
+  public set exportDropdownOpen(value) {
+    this.ExportDropdownOpen = value;
+  }
 
   // --- Resize state ---
   public IsResizing = false;
@@ -116,19 +161,46 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    */
   private formAgentContextActive = false;
 
-  @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('fileInput', { static: false }) FileInput?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link FileInput}. */
+  get fileInput(): ElementRef<HTMLInputElement> | undefined {
+    return this.FileInput;
+  }
+  /** @deprecated Use {@link FileInput}. */
+  set fileInput(value: ElementRef<HTMLInputElement> | undefined) {
+    this.FileInput = value;
+  }
 
   protected override destroy$ = new Subject<void>();
   private get metadata(): IMetadataProvider { return this.ProviderToUse; }
 
   constructor(
-    public state: ComponentStudioStateService,
-    public versionService: ComponentVersionService,
+    public State: ComponentStudioStateService,
+    public VersionService: ComponentVersionService,
     private cdr: ChangeDetectorRef,
     private notificationService: MJNotificationService,
     private entityFormOverrideService: EntityFormOverrideService
   ) {
     super();
+  }
+
+  /** @deprecated Use {@link State}. */
+  public get state(): ComponentStudioStateService {
+    return this.State;
+  }
+  /** @deprecated Use {@link State}. */
+  public set state(value: ComponentStudioStateService) {
+    this.State = value;
+  }
+
+  /** @deprecated Use {@link VersionService}. */
+  public get versionService(): ComponentVersionService {
+    return this.VersionService;
+  }
+  /** @deprecated Use {@link VersionService}. */
+  public set versionService(value: ComponentVersionService) {
+    this.VersionService = value;
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -139,17 +211,17 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.initDashboard();
 
     // Subscribe to state changes for change detection
-    this.state.StateChanged.pipe(takeUntil(this.destroy$)).subscribe(() => {
+    this.State.StateChanged.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.cdr.detectChanges();
     });
 
     // Form Builder tab "Open in Chat" — relay to NavigationService.
-    this.state.OpenInChatRequested.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      this.OnOpenFormInChat();
+    this.State.OpenInChatRequested.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.onOpenFormInChat();
     });
 
     this.loadUserPreferences();
-    await this.state.LoadComponents();
+    await this.State.LoadComponents();
     this.NotifyLoadComplete();
   }
 
@@ -161,12 +233,12 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   protected initDashboard(): void {
     // Wire up provider-aware services for multi-provider support
-    this.state.Provider = this.ProviderToUse;
-    this.versionService.Provider = this.ProviderToUse;
+    this.State.Provider = this.ProviderToUse;
+    this.VersionService.Provider = this.ProviderToUse;
   }
 
   protected loadData(): void {
-    this.state.LoadComponents();
+    this.State.LoadComponents();
   }
 
   // ============================================================
@@ -188,15 +260,15 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   private applyPreferences(prefs: ComponentStudioPreferences): void {
-    if (prefs.leftPanelWidth) this.leftPanelWidth = prefs.leftPanelWidth;
-    if (prefs.rightPanelWidth) this.rightPanelWidth = prefs.rightPanelWidth;
+    if (prefs.leftPanelWidth) this.LeftPanelWidth = prefs.leftPanelWidth;
+    if (prefs.rightPanelWidth) this.RightPanelWidth = prefs.rightPanelWidth;
     if (prefs.previewFlexPercent) {
       this.previewFlexPercent = prefs.previewFlexPercent;
-      this.previewFlex = `1 1 ${prefs.previewFlexPercent}%`;
-      this.editorFlex = `1 1 ${100 - prefs.previewFlexPercent}%`;
+      this.PreviewFlex = `1 1 ${prefs.previewFlexPercent}%`;
+      this.EditorFlex = `1 1 ${100 - prefs.previewFlexPercent}%`;
     }
     if (prefs.isAIPanelCollapsed != null) {
-      this.state.IsAIPanelCollapsed = prefs.isAIPanelCollapsed;
+      this.State.IsAIPanelCollapsed = prefs.isAIPanelCollapsed;
     }
     if (prefs.isLeftPanelCollapsed != null) {
       this.IsLeftPanelCollapsed = prefs.isLeftPanelCollapsed;
@@ -208,10 +280,10 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   private getCurrentPreferences(): ComponentStudioPreferences {
     return {
-      leftPanelWidth: this.leftPanelWidth,
-      rightPanelWidth: this.rightPanelWidth,
+      leftPanelWidth: this.LeftPanelWidth,
+      rightPanelWidth: this.RightPanelWidth,
       previewFlexPercent: this.previewFlexPercent,
-      isAIPanelCollapsed: this.state.IsAIPanelCollapsed,
+      isAIPanelCollapsed: this.State.IsAIPanelCollapsed,
       isLeftPanelCollapsed: this.IsLeftPanelCollapsed,
       isEditorPanelCollapsed: this.IsEditorPanelCollapsed
     };
@@ -253,7 +325,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     // Ctrl+S / Cmd+S = Save Version
     if ((event.ctrlKey || event.metaKey) && event.key === 's') {
       event.preventDefault();
-      if (this.state.SelectedComponent) {
+      if (this.State.SelectedComponent) {
         this.SaveVersion();
       }
     }
@@ -264,12 +336,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       this.OnNewComponent();
     }
 
-    // Ctrl+/ or ? = Toggle keyboard shortcuts
-    if ((event.ctrlKey || event.metaKey) && event.key === '/') {
-      event.preventDefault();
-      this.ShowKeyboardShortcuts = !this.ShowKeyboardShortcuts;
-      this.cdr.detectChanges();
-    } else if (event.key === '?' && !isInputFocused) {
+    // ? = Toggle keyboard shortcuts (Ctrl/Cmd+/ belongs to the shell's command palette)
+    if (event.key === '?' && !isInputFocused) {
       this.ShowKeyboardShortcuts = !this.ShowKeyboardShortcuts;
       this.cdr.detectChanges();
     }
@@ -288,7 +356,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // ============================================================
 
   SaveVersion(): void {
-    if (!this.state.SelectedComponent) return;
+    if (!this.State.SelectedComponent) return;
     this.ShowSaveVersionDialog = true;
     this.cdr.detectChanges();
   }
@@ -300,39 +368,39 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     // content, serialize it to JSX BEFORE the version save so the canvas
     // edits actually persist. If the user is in the Code tab instead, the
     // EditableCode they hand-edited is already the source of truth.
-    if (this.IsFormRoleComponent && this.state.ActiveTab === 5 && this.state.FormCanvas && this.state.FormSchema) {
-      const canvas = this.state.FormCanvas;
-      const schema = this.state.FormSchema;
+    if (this.IsFormRoleComponent && this.State.ActiveTab === 5 && this.State.FormCanvas && this.State.FormSchema) {
+      const canvas = this.State.FormCanvas;
+      const schema = this.State.FormSchema;
       const name = canvas.title?.trim() || schema.displayName;
-      this.state.EditableCode = generateCodeFromCanvas(canvas, schema, name);
+      this.State.EditableCode = GenerateCodeFromCanvas(canvas, schema, name);
     }
 
     let success: boolean;
     if (result.Mode === 'update') {
-      success = await this.versionService.UpdateCurrentVersion(result.Comment || undefined);
+      success = await this.VersionService.UpdateCurrentVersion(result.Comment || undefined);
     } else {
-      success = await this.versionService.SaveVersion(result.Comment || undefined);
+      success = await this.VersionService.SaveVersion(result.Comment || undefined);
     }
 
     if (success) {
       this.LastSavedTime = new Date();
       this.notificationService.CreateSimpleNotification(
-        `Saved as v${this.versionService.CurrentVersionNumber}`,
+        `Saved as v${this.VersionService.CurrentVersionNumber}`,
         'success',
         3000
       );
-      this.state.HasUnsavedChanges = false;
+      this.State.HasUnsavedChanges = false;
 
       // For form-role Components, prompt the user to create an
       // EntityFormOverride so the saved Component actually activates for
       // someone. Skip silently if the post-save state didn't yield a
       // ComponentID (loading state, network blip).
-      if (this.IsFormRoleComponent && this.state.FormTargetEntityName) {
-        const spec = this.state.GetCurrentSpec?.();
+      if (this.IsFormRoleComponent && this.State.FormTargetEntityName) {
+        const spec = this.State.GetCurrentSpec?.();
         const componentID = (spec as { id?: string } | null)?.id ?? null;
         if (componentID) {
           this.PendingOverrideComponentID = componentID;
-          this.PendingOverrideEntityName = this.state.FormTargetEntityName;
+          this.PendingOverrideEntityName = this.State.FormTargetEntityName;
           this.PendingOverrideComponentName = spec?.name ?? '';
           this.ShowFormOverrideDialog = true;
         }
@@ -407,7 +475,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // ============================================================
 
   RefreshComponent(): void {
-    this.state.RefreshComponent.emit();
+    this.State.RefreshComponent.emit();
   }
 
   // ============================================================
@@ -415,7 +483,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // ============================================================
 
   ToggleAIPanel(): void {
-    this.state.IsAIPanelCollapsed = !this.state.IsAIPanelCollapsed;
+    this.State.IsAIPanelCollapsed = !this.State.IsAIPanelCollapsed;
     this.saveUserPreferences();
     this.cdr.detectChanges();
   }
@@ -434,11 +502,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   OnAskAIToFix(error: ComponentError): void {
     // Open AI panel if collapsed
-    if (this.state.IsAIPanelCollapsed) {
-      this.state.IsAIPanelCollapsed = false;
+    if (this.State.IsAIPanelCollapsed) {
+      this.State.IsAIPanelCollapsed = false;
     }
     // Send error to AI panel
-    this.state.SendErrorToAI.emit(error);
+    this.State.SendErrorToAI.emit(error);
     this.cdr.detectChanges();
   }
 
@@ -457,7 +525,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    * inspector or the default AI assistant panel.
    */
   public get IsFormRoleComponent(): boolean {
-    const spec = this.state.GetCurrentSpec?.();
+    const spec = this.State.GetCurrentSpec?.();
     return spec?.componentRole === 'form' || spec?.type === 'form';
   }
 
@@ -471,9 +539,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    */
   public OnFieldSnippetRequested(snippet: string): void {
     if (!snippet) return;
-    const existing = this.state.EditableCode ?? '';
+    const existing = this.State.EditableCode ?? '';
     const separator = existing.endsWith('\n') ? '\n' : '\n\n';
-    this.state.EditableCode = existing + separator + snippet + '\n';
+    this.State.EditableCode = existing + separator + snippet + '\n';
     this.cdr.detectChanges();
   }
 
@@ -485,7 +553,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // ============================================================
 
   public OnFormBuilderElementChanged(next: FormCanvasElement): void {
-    const canvas = this.state.FormCanvas;
+    const canvas = this.State.FormCanvas;
     if (!canvas) return;
     const updated: FormCanvasModel = {
       ...canvas,
@@ -498,7 +566,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   public OnFormBuilderSectionChanged(next: FormCanvasSection): void {
-    const canvas = this.state.FormCanvas;
+    const canvas = this.State.FormCanvas;
     if (!canvas) return;
     const updated: FormCanvasModel = {
       ...canvas,
@@ -508,7 +576,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   public OnFormBuilderElementDeleted(elementId: string): void {
-    const canvas = this.state.FormCanvas;
+    const canvas = this.State.FormCanvas;
     if (!canvas) return;
     const updated: FormCanvasModel = {
       ...canvas,
@@ -517,33 +585,33 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         elements: s.elements.filter(e => e.id !== elementId),
       })),
     };
-    this.state.FormSelectedElementId = null;
+    this.State.FormSelectedElementId = null;
     this.applyCanvasUpdate(updated);
   }
 
   public OnFormBuilderSectionDeleted(sectionId: string): void {
-    const canvas = this.state.FormCanvas;
+    const canvas = this.State.FormCanvas;
     if (!canvas) return;
     const updated: FormCanvasModel = {
       ...canvas,
       sections: canvas.sections.filter(s => s.id !== sectionId),
     };
-    this.state.FormSelectedSectionId = null;
+    this.State.FormSelectedSectionId = null;
     this.applyCanvasUpdate(updated);
   }
 
   public OnFormBuilderFieldAdded(payload: { fieldName: string }): void {
-    const canvas = this.state.FormCanvas;
+    const canvas = this.State.FormCanvas;
     if (!canvas) return;
-    const targetId = this.state.FormSelectedSectionId
-      ?? canvas.sections.find(s => s.elements.some(e => e.id === this.state.FormSelectedElementId))?.id
+    const targetId = this.State.FormSelectedSectionId
+      ?? canvas.sections.find(s => s.elements.some(e => e.id === this.State.FormSelectedElementId))?.id
       ?? canvas.sections[0]?.id;
     if (!targetId) return;
     const updated: FormCanvasModel = {
       ...canvas,
       sections: canvas.sections.map(s => s.id === targetId
         ? { ...s, elements: [...s.elements, {
-            id: generateCanvasId('field'),
+            id: GenerateCanvasId('field'),
             type: 'field',
             fieldName: payload.fieldName,
             span: 1,
@@ -559,8 +627,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    * pipeline.
    */
   private applyCanvasUpdate(next: FormCanvasModel): void {
-    this.state.FormCanvas = next;
-    this.state.HasUnsavedChanges = true;
+    this.State.FormCanvas = next;
+    this.State.HasUnsavedChanges = true;
     this.regenerateFormCodeFromCanvas();
     this.reemitFormAgentContext();
     this.cdr.detectChanges();
@@ -575,10 +643,10 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    */
   private buildCanvasEditHost(): CanvasEditHost {
     return {
-      GetCanvas: () => this.state.FormCanvas,
+      GetCanvas: () => this.State.FormCanvas,
       ApplyCanvas: (next: FormCanvasModel) => this.applyCanvasUpdate(next),
-      NewElementId: () => generateCanvasId('field'),
-      NewSectionId: () => generateCanvasId('section'),
+      NewElementId: () => GenerateCanvasId('field'),
+      NewSectionId: () => GenerateCanvasId('section'),
     };
   }
 
@@ -591,7 +659,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    * {@link buildCanvasStateSummary}.
    */
   private buildFormAgentContext(canvas: FormCanvasModel): Record<string, unknown> {
-    const schema = this.state.FormSchema;
+    const schema = this.State.FormSchema;
     return {
       activeForm: {
         entityName: canvas.entityName,
@@ -599,16 +667,16 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         sections: canvas.sections,
         // Deep canvas-state summary (bounded) — same shape Form Builder
         // publishes, so a co-agent driving either surface sees one model.
-        CanvasSummary: buildCanvasStateSummary(
+        CanvasSummary: BuildCanvasStateSummary(
           canvas,
           schema?.fields.map(f => f.name) ?? [],
-          this.state.FormSelectedElementId,
-          this.state.FormSelectedSectionId,
+          this.State.FormSelectedElementId,
+          this.State.FormSelectedSectionId,
         ),
-        IsDirty: this.state.HasUnsavedChanges,
-        ActiveTab: this.state.ActiveTab,
-        SelectedElementId: this.state.FormSelectedElementId,
-        SelectedSectionId: this.state.FormSelectedSectionId,
+        IsDirty: this.State.HasUnsavedChanges,
+        ActiveTab: this.State.ActiveTab,
+        SelectedElementId: this.State.FormSelectedElementId,
+        SelectedSectionId: this.State.FormSelectedSectionId,
       },
     };
   }
@@ -621,7 +689,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    */
   private reemitFormAgentContext(): void {
     if (!this.formAgentContextActive) return;
-    const canvas = this.state.FormCanvas;
+    const canvas = this.State.FormCanvas;
     if (!canvas || !this.navigationService) return;
     this.navigationService.SetAgentContext(this, this.buildFormAgentContext(canvas));
   }
@@ -632,11 +700,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    * shouldn't fire in that case anyway).
    */
   private regenerateFormCodeFromCanvas(): void {
-    const canvas = this.state.FormCanvas;
-    const schema = this.state.FormSchema;
+    const canvas = this.State.FormCanvas;
+    const schema = this.State.FormSchema;
     if (!canvas || !schema) return;
     const name = canvas.title?.trim() || schema.displayName;
-    this.state.EditableCode = generateCodeFromCanvas(canvas, schema, name);
+    this.State.EditableCode = GenerateCodeFromCanvas(canvas, schema, name);
   }
 
   /**
@@ -645,8 +713,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    * tool so Sage can mutate the canvas live. Falls back to clipboard if the
    * navigation service isn't available (e.g. embedded host).
    */
-  private async OnOpenFormInChat(): Promise<void> {
-    const canvas = this.state.FormCanvas;
+  private async onOpenFormInChat(): Promise<void> {
+    const canvas = this.State.FormCanvas;
     if (!canvas) {
       this.notificationService.CreateSimpleNotification(
         'No active form to send to chat.', 'warning',
@@ -679,7 +747,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
             return { Success: false, Error: 'Missing or malformed canvas payload.' };
           },
         },
-        ...buildCanvasEditClientTools(this.buildCanvasEditHost()),
+        ...BuildCanvasEditClientTools(this.buildCanvasEditHost()),
       ]);
       // From now on, canvas edits re-publish context so the agent's view of
       // the form stays live (mirrors the Form Builder cockpit's re-emit).
@@ -753,7 +821,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     } as ComponentSpec;
 
     const fileComponent: FileLoadedComponent = {
-      id: this.state.GenerateId(),
+      id: this.State.GenerateId(),
       name: result.name,
       description: result.description,
       specification: newSpec,
@@ -764,9 +832,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       status: 'New'
     };
 
-    this.state.AddFileLoadedComponent(fileComponent);
-    this.state.ExpandedComponent = fileComponent;
-    this.state.RunComponent(fileComponent);
+    this.State.AddFileLoadedComponent(fileComponent);
+    this.State.ExpandedComponent = fileComponent;
+    this.State.RunComponent(fileComponent);
   }
 
   private getTemplateCode(name: string, type: string): string {
@@ -899,19 +967,19 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // ============================================================
 
   ToggleExportDropdown(): void {
-    this.exportDropdownOpen = !this.exportDropdownOpen;
+    this.ExportDropdownOpen = !this.ExportDropdownOpen;
   }
 
   @HostListener('document:click', ['$event'])
   OnDocumentClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     if (!target.closest('.header-dropdown')) {
-      this.exportDropdownOpen = false;
+      this.ExportDropdownOpen = false;
     }
   }
 
   ImportFromFile(): void {
-    this.fileInput?.nativeElement.click();
+    this.FileInput?.nativeElement.click();
   }
 
   ImportFromText(): void {
@@ -943,7 +1011,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     }
 
     const artifactComponent: FileLoadedComponent = {
-      id: this.state.GenerateId(),
+      id: this.State.GenerateId(),
       name: result.spec.name,
       description: result.spec.description,
       specification: result.spec,
@@ -956,9 +1024,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       sourceVersionID: result.versionID
     };
 
-    this.state.AddFileLoadedComponent(artifactComponent);
-    this.state.ExpandedComponent = artifactComponent;
-    this.state.RunComponent(artifactComponent);
+    this.State.AddFileLoadedComponent(artifactComponent);
+    this.State.ExpandedComponent = artifactComponent;
+    this.State.RunComponent(artifactComponent);
 
     this.notificationService.CreateSimpleNotification(
       `Loaded "${result.spec.name}" from artifact`,
@@ -989,7 +1057,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   private handleSpecImport(spec: ComponentSpec, filename: string, status: string): void {
     const component: FileLoadedComponent = {
-      id: this.state.GenerateId(),
+      id: this.State.GenerateId(),
       name: spec.name,
       description: spec.description,
       specification: spec,
@@ -1000,15 +1068,15 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       status
     };
 
-    this.state.AddFileLoadedComponent(component);
-    this.state.ExpandedComponent = component;
-    this.state.RunComponent(component);
+    this.State.AddFileLoadedComponent(component);
+    this.State.ExpandedComponent = component;
+    this.State.RunComponent(component);
   }
 
   ExportToArtifact(): void {
-    this.exportDropdownOpen = false;
-    const currentSpec = this.state.GetCurrentSpec();
-    if (!currentSpec || !this.state.SelectedComponent) return;
+    this.ExportDropdownOpen = false;
+    const currentSpec = this.State.GetCurrentSpec();
+    if (!currentSpec || !this.State.SelectedComponent) return;
 
     this.ShowArtifactSelectionDialog = true;
     this.cdr.detectChanges();
@@ -1021,7 +1089,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       return;
     }
 
-    const currentSpec = this.state.GetCurrentSpec();
+    const currentSpec = this.State.GetCurrentSpec();
     if (!currentSpec) return;
 
     try {
@@ -1075,11 +1143,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   ExportToFile(): void {
-    this.exportDropdownOpen = false;
-    const currentSpec = this.state.GetCurrentSpec();
-    if (!currentSpec || !this.state.SelectedComponent) return;
+    this.ExportDropdownOpen = false;
+    const currentSpec = this.State.GetCurrentSpec();
+    if (!currentSpec || !this.State.SelectedComponent) return;
 
-    const componentName = this.state.GetComponentName(this.state.SelectedComponent);
+    const componentName = this.State.GetComponentName(this.State.SelectedComponent);
     const filename = componentName.replace(/\s+/g, '-').replace(/[^a-z0-9\-]/gi, '-').toLowerCase() + '.json';
     const blob = new Blob([JSON.stringify(currentSpec, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1093,8 +1161,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   async ExportToClipboard(): Promise<void> {
-    this.exportDropdownOpen = false;
-    const currentSpec = this.state.GetCurrentSpec();
+    this.ExportDropdownOpen = false;
+    const currentSpec = this.State.GetCurrentSpec();
     if (!currentSpec) return;
 
     try {
@@ -1106,7 +1174,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   async RefreshData(): Promise<void> {
-    await this.state.LoadComponents();
+    await this.State.LoadComponents();
   }
 
   // ============================================================
@@ -1117,7 +1185,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     event.preventDefault();
     this.resizeType = 'left';
     this.resizeStartX = event.clientX;
-    this.resizeStartValue = this.leftPanelWidth;
+    this.resizeStartValue = this.LeftPanelWidth;
     this.addResizeListeners();
   }
 
@@ -1125,7 +1193,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     event.preventDefault();
     this.resizeType = 'right';
     this.resizeStartX = event.clientX;
-    this.resizeStartValue = this.rightPanelWidth;
+    this.resizeStartValue = this.RightPanelWidth;
     this.addResizeListeners();
   }
 
@@ -1148,10 +1216,10 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   private onResizeMove = (event: MouseEvent): void => {
     if (this.resizeType === 'left') {
       const delta = event.clientX - this.resizeStartX;
-      this.leftPanelWidth = Math.max(280, Math.min(600, this.resizeStartValue + delta));
+      this.LeftPanelWidth = Math.max(280, Math.min(600, this.resizeStartValue + delta));
     } else if (this.resizeType === 'right') {
       const delta = this.resizeStartX - event.clientX;
-      this.rightPanelWidth = Math.max(300, Math.min(600, this.resizeStartValue + delta));
+      this.RightPanelWidth = Math.max(300, Math.min(600, this.resizeStartValue + delta));
     } else if (this.resizeType === 'center') {
       const centerPanel = document.querySelector('.panel-center') as HTMLElement;
       if (centerPanel) {
@@ -1159,8 +1227,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         const relativeX = event.clientX - rect.left;
         const percent = Math.max(20, Math.min(80, (relativeX / rect.width) * 100));
         this.previewFlexPercent = percent;
-        this.previewFlex = `1 1 ${percent}%`;
-        this.editorFlex = `1 1 ${100 - percent}%`;
+        this.PreviewFlex = `1 1 ${percent}%`;
+        this.EditorFlex = `1 1 ${100 - percent}%`;
       }
     }
     this.cdr.detectChanges();

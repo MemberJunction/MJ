@@ -80,8 +80,8 @@ vi.mock('rxjs', async () => {
 // ======================= createDefaultWorkspaceConfiguration =======================
 describe('createDefaultWorkspaceConfiguration', () => {
   it('should return a valid default configuration', async () => {
-    const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-    const config = createDefaultWorkspaceConfiguration();
+    const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+    const config = CreateDefaultWorkspaceConfiguration();
 
     expect(config.version).toBe(1);
     expect(config.activeTabId).toBeNull();
@@ -118,8 +118,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('UpdateConfiguration', () => {
     it('should update configuration', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      const config = createDefaultWorkspaceConfiguration();
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      const config = CreateDefaultWorkspaceConfiguration();
       manager.UpdateConfiguration(config);
       expect(manager.GetConfiguration()).toEqual(config);
     });
@@ -127,8 +127,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('OpenTab', () => {
     it('should create a new tab when config is initialized', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       const tabId = manager.OpenTab(
         { ApplicationId: 'app-1', Title: 'Test Tab', Configuration: { resourceType: 'Records', Entity: 'MJ: Users' } },
@@ -143,8 +143,8 @@ describe('WorkspaceStateManager', () => {
     });
 
     it('should return existing tab ID if matching tab exists', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       const tabId1 = manager.OpenTab(
         { ApplicationId: 'app-1', Title: 'Test', ResourceRecordId: 'rec-1', Configuration: { resourceType: 'Records', Entity: 'MJ: Users' } },
@@ -160,8 +160,8 @@ describe('WorkspaceStateManager', () => {
     });
 
     it('should replace temporary (unpinned) tab', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       manager.OpenTab(
         { ApplicationId: 'app-1', Title: 'Tab 1', Configuration: { resourceType: 'Records', Entity: 'MJ: Users' }, ResourceRecordId: '1' },
@@ -188,8 +188,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('CloseTab', () => {
     it('should remove a tab when multiple tabs exist', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       const tab1Id = manager.OpenTab(
         { ApplicationId: 'app-1', Title: 'Tab 1', IsPinned: true, Configuration: { resourceType: 'Records', Entity: 'MJ: Users' }, ResourceRecordId: '1' },
@@ -207,8 +207,8 @@ describe('WorkspaceStateManager', () => {
     });
 
     it('should keep last tab but mark as unpinned', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       const tabId = manager.OpenTab(
         { ApplicationId: 'app-1', Title: 'Only Tab', IsPinned: true, Configuration: { resourceType: 'Records' }, ResourceRecordId: '1' },
@@ -225,8 +225,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('TogglePin', () => {
     it('should toggle pin state of a tab', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       // OpenTab creates unpinned (temporary) tabs by default
       const tabId = manager.OpenTab(
@@ -246,8 +246,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('SetActiveTab', () => {
     it('should set the active tab', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       const tab1Id = manager.OpenTab(
         { ApplicationId: 'app-1', Title: 'Tab 1', IsPinned: true, Configuration: { resourceType: 'Records', Entity: 'A' }, ResourceRecordId: '1' },
@@ -265,8 +265,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('GetAppTabs', () => {
     it('should return tabs for a specific application', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       // Use OpenTabForced to create separate pinned tabs (OpenTab replaces temp tabs)
       manager.OpenTabForced(
@@ -286,8 +286,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('UpdateTabTitle', () => {
     it('should update the title of a tab', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       const tabId = manager.OpenTab(
         { ApplicationId: 'app-1', Title: 'Original', IsPinned: true, Configuration: { resourceType: 'Records' }, ResourceRecordId: '1' },
@@ -301,8 +301,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('UpdateTabResourceRecordId', () => {
     it('should re-key a new-record tab to its saved record id', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       // Simulate "Create New Record" — empty resourceRecordId, isNew flag in configuration
       const tabId = manager.OpenTab(
@@ -331,8 +331,8 @@ describe('WorkspaceStateManager', () => {
     });
 
     it('should leave OTHER tabs untouched when re-keying one tab', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       // Use OpenTabForced to create separate pinned tabs (OpenTab replaces temp tabs)
       const newRecordTabId = manager.OpenTabForced(
@@ -353,8 +353,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('CloseOtherTabs', () => {
     it('should close all tabs except specified one', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
 
       manager.OpenTab(
         { ApplicationId: 'app-1', Title: 'Tab 1', IsPinned: true, Configuration: { resourceType: 'Records', Entity: 'A' }, ResourceRecordId: '1' },
@@ -378,8 +378,8 @@ describe('WorkspaceStateManager', () => {
 
   describe('ClearLayout', () => {
     it('should clear the layout', async () => {
-      const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-      const config = createDefaultWorkspaceConfiguration();
+      const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+      const config = CreateDefaultWorkspaceConfiguration();
       manager.UpdateConfiguration(config);
 
       manager.ClearLayout();
@@ -489,8 +489,8 @@ describe('WorkspaceStateManager records-style filters (docked records)', () => {
     // The shell's records-style assignments:
     manager.MainLayoutTabFilter = (tab) => !isRegionRecord(tab);
     manager.TempTabConsumptionFilter = (tab) => !isRecord(tab);
-    const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-    manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+    const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+    manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
   });
 
   function openNav(title: string) {
@@ -594,8 +594,8 @@ describe('WorkspaceStateManager records temp-tab pool (TempScope)', () => {
     manager.MainLayoutTabFilter = (tab) => !isRegionRecord(tab);
     manager.TempTabConsumptionFilter = (tab) => !isRecord(tab);
     manager.RecordsRegionTabFilter = (tab) => isRegionRecord(tab);
-    const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
-    manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+    const { CreateDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+    manager.UpdateConfiguration(CreateDefaultWorkspaceConfiguration());
   });
 
   function openNav(title: string) {

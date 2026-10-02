@@ -65,7 +65,7 @@ interface ResearchPlan {
  * Types of sources the agent can use
  */
 type SourceType =
-  | 'web'                  // Google Custom Search
+  | 'web'                  // Web Search
   | 'storage'              // File storage providers
   | 'database'             // SQL queries
   | 'knowledge_base'       // Internal knowledge bases (Betty, etc.)
@@ -473,7 +473,7 @@ interface ContradictionSummary {
           "activityID": "act_001",
           "activityType": "search",
           "description": "Broad web search for quantum computing commercialization",
-          "tool": "Google Custom Search",
+          "tool": "Web Search",
           "parameters": {
             "query": "quantum computing commercialization 2025",
             "maxResults": 10

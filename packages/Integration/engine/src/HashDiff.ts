@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { computeContentHash } from './ContentHash.js';
+import { ComputeContentHash } from './ContentHash.js';
 
 /**
  * Partitioned / Merkle-style hash-diff (§7 "hash-diff / full-table compare to find changed
@@ -30,9 +30,14 @@ import { computeContentHash } from './ContentHash.js';
  * id, first 4 bytes folded modulo `partitionCount`, gives an even, deterministic spread. Default 256
  * buckets is a sane balance (few enough rollups to store, fine-grained enough to skip most work).
  */
-export function partitionKeyForIdentity(identity: string, partitionCount = 256): string {
+export function PartitionKeyForIdentity(identity: string, partitionCount = 256): string {
     const hex = createHash('sha256').update(identity).digest('hex').slice(0, 8);
     return String(parseInt(hex, 16) % Math.max(1, partitionCount));
+}
+
+/** @deprecated Use {@link PartitionKeyForIdentity}. */
+export function partitionKeyForIdentity(identity: string, partitionCount = 256): string {
+    return PartitionKeyForIdentity(identity, partitionCount);
 }
 
 /** Outcome of comparing a local partition→rollup map against a remote one. */
@@ -52,7 +57,7 @@ export type PartitionDiff = {
  * the array of records that fall in that partition. Records arrive in the order encountered — order
  * is preserved within a bucket and never relied upon by the rollup (see `partitionRollupHash`).
  */
-export function partitionRecords<T>(
+export function PartitionRecords<T>(
     records: readonly T[],
     getKey: (record: T) => string,
     getPartition: (record: T) => string,
@@ -73,6 +78,15 @@ export function partitionRecords<T>(
     return buckets;
 }
 
+/** @deprecated Use {@link PartitionRecords}. */
+export function partitionRecords<T>(
+    records: readonly T[],
+    getKey: (record: T) => string,
+    getPartition: (record: T) => string,
+): Map<string, T[]> {
+    return PartitionRecords(records, getKey, getPartition);
+}
+
 /**
  * ORDER-INDEPENDENT rollup of a partition's records into a single hash. Each record's mapped fields
  * are content-hashed via `computeContentHash`, the per-record hashes are SORTED, then the sorted list
@@ -83,16 +97,24 @@ export function partitionRecords<T>(
  * An empty partition rolls up to the SHA-256 of the empty string, a stable sentinel distinct from any
  * non-empty partition.
  */
-export function partitionRollupHash<T>(
+export function PartitionRollupHash<T>(
     records: readonly T[],
     fieldsOf: (record: T) => Record<string, unknown>,
 ): string {
-    const recordHashes = records.map(record => computeContentHash(fieldsOf(record)));
+    const recordHashes = records.map(record => ComputeContentHash(fieldsOf(record)));
     recordHashes.sort();
     // Length-prefix each hash so the concatenation is unambiguous and can't collide across different
     // record counts. SHA-256 hex is fixed-width, but the prefix keeps the combine future-proof.
     const combined = recordHashes.map(hash => `${hash.length}:${hash}`).join('');
     return createHash('sha256').update(combined).digest('hex');
+}
+
+/** @deprecated Use {@link PartitionRollupHash}. */
+export function partitionRollupHash<T>(
+    records: readonly T[],
+    fieldsOf: (record: T) => Record<string, unknown>,
+): string {
+    return PartitionRollupHash(records, fieldsOf);
 }
 
 /**
@@ -104,7 +126,7 @@ export function partitionRollupHash<T>(
  * - `added`   — key in `local` only.
  * - `removed` — key in `remote` only.
  */
-export function diffPartitions(
+export function DiffPartitions(
     local: ReadonlyMap<string, string>,
     remote: ReadonlyMap<string, string>,
 ): PartitionDiff {
@@ -127,4 +149,12 @@ export function diffPartitions(
     added.sort();
     removed.sort();
     return { changed, added, removed };
+}
+
+/** @deprecated Use {@link DiffPartitions}. */
+export function diffPartitions(
+    local: ReadonlyMap<string, string>,
+    remote: ReadonlyMap<string, string>,
+): PartitionDiff {
+    return DiffPartitions(local, remote);
 }

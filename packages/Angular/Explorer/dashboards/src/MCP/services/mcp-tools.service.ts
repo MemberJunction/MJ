@@ -119,23 +119,38 @@ export class MCPToolsService implements OnDestroy {
     /**
      * Gets the sync state observable for a connection
      */
-    public getSyncState(connectionId: string): Observable<MCPSyncState> {
+    public GetSyncState(connectionId: string): Observable<MCPSyncState> {
         return this.getOrCreateSyncState(connectionId).asObservable();
+    }
+
+    /** @deprecated Use {@link GetSyncState}. */
+    public getSyncState(connectionId: string): Observable<MCPSyncState> {
+        return this.GetSyncState(connectionId);
     }
 
     /**
      * Gets the current sync state value for a connection
      */
-    public getSyncStateValue(connectionId: string): MCPSyncState {
+    public GetSyncStateValue(connectionId: string): MCPSyncState {
         return this.getOrCreateSyncState(connectionId).getValue();
+    }
+
+    /** @deprecated Use {@link GetSyncStateValue}. */
+    public getSyncStateValue(connectionId: string): MCPSyncState {
+        return this.GetSyncStateValue(connectionId);
     }
 
     /**
      * Checks if a connection is currently syncing
      */
-    public isSyncing(connectionId: string): boolean {
+    public IsSyncing(connectionId: string): boolean {
         const state = this.syncStates.get(connectionId);
         return state ? state.getValue().isSyncing : false;
+    }
+
+    /** @deprecated Use {@link IsSyncing}. */
+    public isSyncing(connectionId: string): boolean {
+        return this.IsSyncing(connectionId);
     }
 
     /**
@@ -145,7 +160,7 @@ export class MCPToolsService implements OnDestroy {
      * @param forceSync - Optional flag to force sync even if recently synced
      * @returns Promise resolving to the sync result
      */
-    public async syncTools(connectionId: string, forceSync = false): Promise<MCPSyncResult> {
+    public async SyncTools(connectionId: string, forceSync = false): Promise<MCPSyncResult> {
         const state$ = this.getOrCreateSyncState(connectionId);
 
         // Check if already syncing
@@ -217,10 +232,15 @@ export class MCPToolsService implements OnDestroy {
         }
     }
 
+    /** @deprecated Use {@link SyncTools}. */
+    public async syncTools(connectionId: string, forceSync = false): Promise<MCPSyncResult> {
+        return this.SyncTools(connectionId, forceSync);
+    }
+
     /**
      * Clears the sync state for a connection
      */
-    public clearSyncState(connectionId: string): void {
+    public ClearSyncState(connectionId: string): void {
         const state$ = this.syncStates.get(connectionId);
         if (state$) {
             state$.next({
@@ -230,6 +250,11 @@ export class MCPToolsService implements OnDestroy {
                 error: null
             });
         }
+    }
+
+    /** @deprecated Use {@link ClearSyncState}. */
+    public clearSyncState(connectionId: string): void {
+        return this.ClearSyncState(connectionId);
     }
 
     /**
