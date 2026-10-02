@@ -3613,7 +3613,7 @@ export const MJAIAgentStepSchema = z.object({
     *   * Prompt
     *   * Sub-Agent
     *   * While
-        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`),
+        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`),
     StartingStep: z.boolean().describe(`
         * * Field Name: StartingStep
         * * Display Name: Starting Step
@@ -3720,7 +3720,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.`),
+        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -27512,6 +27512,12 @@ export const MJRecordChangeSchema = z.object({
         * * Display Name: Restore Reason
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.`),
+    ChangeContext: z.any().nullable().describe(`
+        * * Field Name: ChangeContext
+        * * Display Name: Change Context
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRecordChangeEntity_IRecordChangeContext
+        * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -27532,11 +27538,6 @@ export const MJRecordChangeSchema = z.object({
         * * Field Name: RestoredFrom
         * * Display Name: Restored From
         * * SQL Data Type: nvarchar(750)`),
-    ChangeContext: z.string().nullable().describe(`
-        * * Field Name: ChangeContext
-        * * Display Name: Change Context
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.`),
 });
 
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
@@ -27697,10 +27698,11 @@ export const MJRecordCloneLogSchema = z.object({
         * * Display Name: Plan Hash
         * * SQL Data Type: nvarchar(64)
         * * Description: SHA-256 hash of the execution plan used for concurrency validation and provenance.`),
-    PlanJSON: z.string().describe(`
+    PlanJSON: z.any().describe(`
         * * Field Name: PlanJSON
         * * Display Name: Plan JSON
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRecordCloneLogEntity_IClonePlan
         * * Description: Serialized JSON execution plan detailing all graph nodes, edges, actions, and options.`),
     OptionsJSON: z.string().nullable().describe(`
         * * Field Name: OptionsJSON
@@ -29152,7 +29154,7 @@ export const MJRubricCriterionSchema = z.object({
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)
         * * Description: Parent group node. NULL = a top-level node of the rubric.`),
     Key: z.string().describe(`
         * * Field Name: Key
@@ -29292,7 +29294,7 @@ export const MJRubricCriterionLevelSchema = z.object({
         * * Field Name: CriterionID
         * * Display Name: Criterion ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)`),
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)`),
     ScaleLevelID: z.string().nullable().describe(`
         * * Field Name: ScaleLevelID
         * * Display Name: Scale Level ID
@@ -29323,6 +29325,10 @@ export const MJRubricCriterionLevelSchema = z.object({
         * * Field Name: Criterion
         * * Display Name: Criterion
         * * SQL Data Type: nvarchar(255)`),
+    ScaleLevel: z.string().nullable().describe(`
+        * * Field Name: ScaleLevel
+        * * Display Name: Scale Level
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJRubricCriterionLevelEntityType = z.infer<typeof MJRubricCriterionLevelSchema>;
@@ -29345,7 +29351,7 @@ export const MJRubricEvaluationScoreSchema = z.object({
         * * Field Name: CriterionID
         * * Display Name: Criterion ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)`),
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)`),
     ScaleLevelID: z.string().nullable().describe(`
         * * Field Name: ScaleLevelID
         * * Display Name: Scale Level ID
@@ -29425,6 +29431,86 @@ export const MJRubricEvaluationScoreSchema = z.object({
         * * Field Name: Criterion
         * * Display Name: Criterion
         * * SQL Data Type: nvarchar(255)`),
+    ScaleLevel: z.string().nullable().describe(`
+        * * Field Name: ScaleLevel
+        * * Display Name: Scale Level
+        * * SQL Data Type: nvarchar(100)`),
+    CriterionKey: z.string().describe(`
+        * * Field Name: CriterionKey
+        * * Display Name: Criterion Key
+        * * SQL Data Type: nvarchar(100)`),
+    CriterionNodeType: z.string().describe(`
+        * * Field Name: CriterionNodeType
+        * * Display Name: Criterion Node Type
+        * * SQL Data Type: nvarchar(20)`),
+    CriterionParentID: z.string().nullable().describe(`
+        * * Field Name: CriterionParentID
+        * * Display Name: Criterion Parent ID
+        * * SQL Data Type: uniqueidentifier`),
+    EvaluationStatus: z.string().describe(`
+        * * Field Name: EvaluationStatus
+        * * Display Name: Evaluation Status
+        * * SQL Data Type: nvarchar(20)`),
+    EvaluatorType: z.string().describe(`
+        * * Field Name: EvaluatorType
+        * * Display Name: Evaluator Type
+        * * SQL Data Type: nvarchar(20)`),
+    EvaluatorUserID: z.string().nullable().describe(`
+        * * Field Name: EvaluatorUserID
+        * * Display Name: Evaluator User ID
+        * * SQL Data Type: uniqueidentifier`),
+    SubjectEntityID: z.string().describe(`
+        * * Field Name: SubjectEntityID
+        * * Display Name: Subject Entity ID
+        * * SQL Data Type: uniqueidentifier`),
+    SubjectRecordID: z.string().describe(`
+        * * Field Name: SubjectRecordID
+        * * Display Name: Subject Record ID
+        * * SQL Data Type: nvarchar(450)`),
+    ContextEntityID: z.string().nullable().describe(`
+        * * Field Name: ContextEntityID
+        * * Display Name: Context Entity ID
+        * * SQL Data Type: uniqueidentifier`),
+    ContextRecordID: z.string().nullable().describe(`
+        * * Field Name: ContextRecordID
+        * * Display Name: Context Record ID
+        * * SQL Data Type: nvarchar(450)`),
+    RubricID: z.string().describe(`
+        * * Field Name: RubricID
+        * * Display Name: Rubric ID
+        * * SQL Data Type: uniqueidentifier`),
+    RubricMajorVersion: z.number().nullable().describe(`
+        * * Field Name: RubricMajorVersion
+        * * Display Name: Rubric Major Version
+        * * SQL Data Type: int`),
+    CriterionCohortCount: z.number().nullable().describe(`
+        * * Field Name: CriterionCohortCount
+        * * Display Name: Criterion Cohort Count
+        * * SQL Data Type: int`),
+    CriterionCohortMeanScore: z.number().nullable().describe(`
+        * * Field Name: CriterionCohortMeanScore
+        * * Display Name: Criterion Cohort Mean Score
+        * * SQL Data Type: decimal(9, 6)`),
+    CriterionCohortMinScore: z.number().nullable().describe(`
+        * * Field Name: CriterionCohortMinScore
+        * * Display Name: Criterion Cohort Min Score
+        * * SQL Data Type: decimal(9, 6)`),
+    CriterionCohortMaxScore: z.number().nullable().describe(`
+        * * Field Name: CriterionCohortMaxScore
+        * * Display Name: Criterion Cohort Max Score
+        * * SQL Data Type: decimal(9, 6)`),
+    CriterionCohortScoreStdDev: z.number().nullable().describe(`
+        * * Field Name: CriterionCohortScoreStdDev
+        * * Display Name: Criterion Cohort Score Std Dev
+        * * SQL Data Type: decimal(9, 6)`),
+    CriterionCohortHumanMeanScore: z.number().nullable().describe(`
+        * * Field Name: CriterionCohortHumanMeanScore
+        * * Display Name: Criterion Cohort Human Mean Score
+        * * SQL Data Type: decimal(9, 6)`),
+    CriterionCohortAIMeanScore: z.number().nullable().describe(`
+        * * Field Name: CriterionCohortAIMeanScore
+        * * Display Name: Criterion Cohort AI Mean Score
+        * * SQL Data Type: decimal(9, 6)`),
 });
 
 export type MJRubricEvaluationScoreEntityType = z.infer<typeof MJRubricEvaluationScoreSchema>;
@@ -29641,6 +29727,10 @@ export const MJRubricEvaluationSchema = z.object({
         * * Field Name: AIAgentRun
         * * Display Name: AI Agent Run
         * * SQL Data Type: nvarchar(255)`),
+    Band: z.string().nullable().describe(`
+        * * Field Name: Band
+        * * Display Name: Band
+        * * SQL Data Type: nvarchar(100)`),
     RubricID: z.string().describe(`
         * * Field Name: RubricID
         * * Display Name: Rubric ID
@@ -34067,7 +34157,7 @@ export const MJTestSuiteRunSchema = z.object({
     Score: z.number().nullable().describe(`
         * * Field Name: Score
         * * Display Name: Score
-        * * SQL Data Type: decimal(5, 4)
+        * * SQL Data Type: decimal(9, 6)
         * * Description: Suite-level score (0..1): the mean score of the suite's executed (non-skipped) test runs.`),
     Suite: z.string().describe(`
         * * Field Name: Suite
@@ -46570,7 +46660,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     *   * Prompt
     *   * Sub-Agent
     *   * While
-    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
+    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).
     */
     get StepType(): 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
         return this.Get('StepType');
@@ -46815,7 +46905,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.
+    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
@@ -89682,6 +89772,12 @@ export interface MJEntityFieldEntity_IEntityFieldConfiguration {
      * Hierarchy and tree structure configuration for self-referencing foreign keys.
      */
     Hierarchy?: MJEntityFieldEntity_IEntityFieldHierarchyConfig;
+
+    /**
+     * Record cloning configuration for this field.
+     * @see plans/record-cloning/README.md §4.3
+     */
+    Clone?: MJEntityFieldEntity_IEntityFieldCloneConfiguration;
 }
 
 /**
@@ -89697,6 +89793,31 @@ export interface MJEntityFieldEntity_IEntityFieldHierarchyConfig {
      * Optional custom maximum recursion depth guard (defaults to 100).
      */
     MaxDepth?: number;
+}
+
+/**
+ * Record cloning configuration for an entity field.
+ * @see plans/record-cloning/README.md §4.3
+ */
+export interface MJEntityFieldEntity_IEntityFieldCloneConfiguration {
+    /** Copy (default) | Reset (column default, or Value) | Suffix (naming template) | Prompt | Ownership | ServerAllocated | Remap (FK inside the set → new key) | RemapJSON | Transform */
+    Policy?: 'Copy' | 'Reset' | 'Suffix' | 'Prompt' | 'Ownership' | 'ServerAllocated' | 'Remap' | 'RemapJSON' | 'Transform';
+    Value?: unknown;
+    JsonRemap?: MJEntityFieldEntity_IJsonRemapSpec[];
+    Transform?: unknown;
+}
+
+export interface MJEntityFieldEntity_IJsonRemapSpec {
+    /** Path selector: dot segments and [*] for arrays, e.g. 'layout.content[*].componentState.config.viewId'. */
+    Path: string;
+    /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
+    Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
+    /** Entity the ID refers to, for remap. */
+    TargetEntityName?: string;
+    /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
+    OnMissing?: 'reuse' | 'drop';
+    /** Remove arrays and objects left empty by a drop. Default true. */
+    CleanEmptyContainers?: boolean;
 }
 
 /**
@@ -111819,6 +111940,50 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
 
 
 /**
+ * Structured provenance context for RecordChange rows.
+ *
+ * Stored as JSON in `MJ: Record Changes.ChangeContext`. CodeGen emits a
+ * typed `ChangeContextObject` accessor on `MJRecordChangeEntity` that
+ * returns `MJRecordChangeEntity_IRecordChangeContext | null`.
+ *
+ * @see plans/record-cloning/README.md §10.2
+ */
+
+export interface MJRecordChangeEntity_IRecordChangeCloneContext {
+    /** ID of the RecordCloneLog row coordinating this clone operation. */
+    CloneLogID: string;
+    /** Entity name of the record being cloned. */
+    SourceEntityName: string;
+    /** Compact URL segment of the source key (bare value for single-column keys). */
+    SourceRecordID: string;
+    /** Entity name of the root record of the clone graph. */
+    RootEntityName: string;
+    /** Source key of the root record. */
+    RootSourceRecordID: string;
+    /** Target key of the root record after insertion. */
+    RootTargetRecordID: string;
+    /** Depth within the record graph (0 for root). */
+    Depth: number;
+    /** Relationship route traversed to reach this record. */
+    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
+    /** Kinds and field names only. Values are already in FullRecordJSON and are subject to FLS projection there. */
+    FieldChangeSummary: Array<{ Kind: string; Fields: string[] }>;
+    /** Optional explanation entered at clone time. */
+    Reason?: string;
+}
+
+export interface MJRecordChangeEntity_IRecordChangeContext {
+    /** Shape version. */
+    Version: 1;
+    /** The process that produced the change. Restore keeps its dedicated columns; it is listed so future writers can carry both. */
+    Kind: 'Clone' | 'Merge' | 'Import' | 'Process' | 'Replay' | 'Other';
+    /** Populated when Kind === 'Clone'. */
+    Clone?: MJRecordChangeEntity_IRecordChangeCloneContext;
+    /** Free-form tags for future kinds; never values. */
+    Tags?: string[];
+}
+
+/**
  * MJ: Record Changes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RecordChange
@@ -112113,6 +112278,41 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     }
 
     /**
+    * * Field Name: ChangeContext
+    * * Display Name: Change Context
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRecordChangeEntity_IRecordChangeContext
+    * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.
+    */
+    get ChangeContext(): string | null {
+        return this.Get('ChangeContext');
+    }
+    set ChangeContext(value: string | null) {
+        this.Set('ChangeContext', value);
+    }
+
+    private _ChangeContextObject_cached: MJRecordChangeEntity_IRecordChangeContext | null | undefined = undefined;
+    private _ChangeContextObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ChangeContext — returns parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ChangeContextObject(): MJRecordChangeEntity_IRecordChangeContext | null {
+        const raw = this.ChangeContext;
+        if (raw !== this._ChangeContextObject_lastRaw) {
+            this._ChangeContextObject_cached = raw ? JSON.parse(raw) : null;
+            this._ChangeContextObject_lastRaw = raw;
+        }
+        return this._ChangeContextObject_cached!;
+    }
+    set ChangeContextObject(value: MJRecordChangeEntity_IRecordChangeContext | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ChangeContext = raw;
+        this._ChangeContextObject_cached = value;
+        this._ChangeContextObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -112155,19 +112355,6 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     */
     get RestoredFrom(): string | null {
         return this.Get('RestoredFrom');
-    }
-
-    /**
-    * * Field Name: ChangeContext
-    * * Display Name: Change Context
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.
-    */
-    get ChangeContext(): string | null {
-        return this.Get('ChangeContext');
-    }
-    set ChangeContext(value: string | null) {
-        this.Set('ChangeContext', value);
     }
 }
 
@@ -112395,6 +112582,112 @@ export class MJRecordCloneLogItemEntity extends BaseEntity<MJRecordCloneLogItemE
 
 
 /**
+ * Serialized execution plan for record cloning.
+ *
+ * Stored as JSON in `MJ: Record Clone Logs.PlanJSON`. CodeGen emits a typed
+ * `PlanJSONObject` accessor on `MJRecordCloneLogEntity` that returns
+ * `MJRecordCloneLogEntity_IClonePlan | null`.
+ *
+ * @see plans/record-cloning/README.md §3.4
+ */
+
+export interface MJRecordCloneLogEntity_ICloneCompositeKeyKVP {
+    FieldName: string;
+    Value: unknown;
+}
+
+export interface MJRecordCloneLogEntity_ICloneCompositeKeyLike {
+    KeyValuePairs: MJRecordCloneLogEntity_ICloneCompositeKeyKVP[];
+}
+
+export type MJRecordCloneLogEntity_CloneEdgePolicy = 'Deep' | 'Reference' | 'Skip';
+export type MJRecordCloneLogEntity_CloneNodeAction = 'Create' | 'Reference' | 'Skip' | 'Blocked';
+export type MJRecordCloneLogEntity_CloneEdgeKind =
+    | 'IsASubtype' | 'Collection' | 'Embedded' | 'Relationship' | 'InboundFK'
+    | 'ForwardFK' | 'SoftLink' | 'Hierarchy' | 'SelfPointer';
+
+export type MJRecordCloneLogEntity_CloneWarningCode =
+    | 'UNMAPPABLE_REFERENCE_DROPPED' | 'PAYLOAD_DROPPED' | 'ROW_DISABLED' | 'UNIQUE_RENAMED' | 'UNIQUE_PROMPT_REQUIRED'
+    | 'CAP_EXCEEDED' | 'NO_CREATE_PERMISSION' | 'NOT_CLONEABLE' | 'WRITE_ONCE_ENTITY' | 'SERVER_HOOK_SIDE_EFFECT'
+    | 'CONSTRAINT_FORCED_DEEP' | 'LOCKED_EDGE_OVERRIDE_IGNORED' | 'EMBEDDING_REGENERATED' | 'SOURCE_ROW_INVISIBLE';
+
+export interface MJRecordCloneLogEntity_ICloneWarning {
+    Code: MJRecordCloneLogEntity_CloneWarningCode;
+    Severity: 'Info' | 'Warning' | 'Error';
+    NodeKey?: string;
+    Field?: string;
+    Message: string;
+}
+
+export interface MJRecordCloneLogEntity_ICloneFieldChange {
+    Field: string;
+    Kind: 'Copy' | 'Reset' | 'Ownership' | 'Rename' | 'Remap' | 'RemapJSON' | 'Rule' | 'Override' | 'Prompt' | 'Excluded' | 'DeniedRead' | 'DeniedCreate' | 'NotWritable';
+    OldValue: unknown;
+    NewValue: unknown;
+    Reason: string;
+}
+
+export interface MJRecordCloneLogEntity_IClonePlanEdge {
+    FromKey: string;
+    ToKey: string;
+    Kind: MJRecordCloneLogEntity_CloneEdgeKind;
+    RelatedEntityName: string;
+    JoinField: string;
+    RelationshipID?: string;
+    CollectionName?: string;
+    IsSoftLink?: boolean;
+    Policy: MJRecordCloneLogEntity_CloneEdgePolicy;
+    Locked: boolean;
+    PolicySource: 'BuiltIn' | 'Constraint' | 'Entity' | 'Relationship' | 'Descendant' | 'Request';
+}
+
+export interface MJRecordCloneLogEntity_IClonePlanNode {
+    Key: string;
+    EntityName: string;
+    SourceKey: MJRecordCloneLogEntity_ICloneCompositeKeyLike;
+    TargetKey: MJRecordCloneLogEntity_ICloneCompositeKeyLike | null;
+    Action: MJRecordCloneLogEntity_CloneNodeAction;
+    Reason: string;
+    Depth: number;
+    ParentKey: string | null;
+    Via: MJRecordCloneLogEntity_IClonePlanEdge | null;
+    DisplayName: string;
+    IsSubtypeRow?: boolean;
+    FieldChanges: MJRecordCloneLogEntity_ICloneFieldChange[];
+    Warnings: MJRecordCloneLogEntity_ICloneWarning[];
+    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
+}
+
+export interface MJRecordCloneLogEntity_IClonePlanCounts {
+    ByEntity: Record<string, { Create: number; Reference: number; Skip: number }>;
+    Create: number;
+    Total: number;
+}
+
+export interface MJRecordCloneLogEntity_ICloneEffectiveOptions {
+    MaxDepth: number;
+    MaxRecords: number;
+    Subtypes: 'include' | 'exclude';
+    Hierarchy: 'subtree' | 'node';
+    SoftLinks: 'skip' | 'include';
+    EntityActions: 'suppress' | 'fire';
+    AIActions: 'suppress' | 'fire';
+    Embeddings: 'copy' | 'regenerate';
+}
+
+export interface MJRecordCloneLogEntity_IClonePlan {
+    PlanVersion: 1;
+    Hash: string;
+    Roots: string[];
+    Nodes: MJRecordCloneLogEntity_IClonePlanNode[];
+    Edges: MJRecordCloneLogEntity_IClonePlanEdge[];
+    Counts: MJRecordCloneLogEntity_IClonePlanCounts;
+    Warnings: MJRecordCloneLogEntity_ICloneWarning[];
+    Blocked: boolean;
+    EffectiveOptions: MJRecordCloneLogEntity_ICloneEffectiveOptions;
+}
+
+/**
  * MJ: Record Clone Logs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RecordCloneLog
@@ -112557,6 +112850,7 @@ export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityTyp
     * * Field Name: PlanJSON
     * * Display Name: Plan JSON
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRecordCloneLogEntity_IClonePlan
     * * Description: Serialized JSON execution plan detailing all graph nodes, edges, actions, and options.
     */
     get PlanJSON(): string {
@@ -112564,6 +112858,27 @@ export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityTyp
     }
     set PlanJSON(value: string) {
         this.Set('PlanJSON', value);
+    }
+
+    private _PlanJSONObject_cached: MJRecordCloneLogEntity_IClonePlan | undefined = undefined;
+    private _PlanJSONObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for PlanJSON — returns parsed JSON as MJRecordCloneLogEntity_IClonePlan.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get PlanJSONObject(): MJRecordCloneLogEntity_IClonePlan {
+        const raw = this.PlanJSON;
+        if (raw !== this._PlanJSONObject_lastRaw) {
+            this._PlanJSONObject_cached = raw ? JSON.parse(raw) : null;
+            this._PlanJSONObject_lastRaw = raw;
+        }
+        return this._PlanJSONObject_cached!;
+    }
+    set PlanJSONObject(value: MJRecordCloneLogEntity_IClonePlan) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.PlanJSON = raw;
+        this._PlanJSONObject_cached = value;
+        this._PlanJSONObject_lastRaw = raw;
     }
 
     /**
@@ -116252,7 +116567,7 @@ export interface MJRubricCriterionEntity_IRubricEvaluatorSelection {
  * MJ: Rubric Criteria - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RubricCriterion
- * * Base View: vwRubricCriterions
+ * * Base View: vwRubricCriteria
  * * @description A node in a rubric version's weighted tree. Groups roll up their children; criteria (leaves) are answered on a scale. Weights are relative among siblings, so a node's share of the total is the product of its and its ancestors' normalized weights.
  * * Primary Key: ID
  * @extends {BaseEntity}
@@ -116308,7 +116623,7 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
     * * Field Name: ParentID
     * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)
     * * Description: Parent group node. NULL = a top-level node of the rubric.
     */
     get ParentID(): string | null {
@@ -116657,7 +116972,7 @@ export class MJRubricCriterionLevelEntity extends BaseEntity<MJRubricCriterionLe
     * * Field Name: CriterionID
     * * Display Name: Criterion ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)
     */
     get CriterionID(): string {
         return this.Get('CriterionID');
@@ -116733,6 +117048,15 @@ export class MJRubricCriterionLevelEntity extends BaseEntity<MJRubricCriterionLe
     */
     get Criterion(): string {
         return this.Get('Criterion');
+    }
+
+    /**
+    * * Field Name: ScaleLevel
+    * * Display Name: Scale Level
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ScaleLevel(): string | null {
+        return this.Get('ScaleLevel');
     }
 }
 
@@ -116917,7 +117241,7 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     * * Field Name: CriterionID
     * * Display Name: Criterion ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)
     */
     get CriterionID(): string {
         return this.Get('CriterionID');
@@ -117136,6 +117460,186 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     get Criterion(): string {
         return this.Get('Criterion');
     }
+
+    /**
+    * * Field Name: ScaleLevel
+    * * Display Name: Scale Level
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ScaleLevel(): string | null {
+        return this.Get('ScaleLevel');
+    }
+
+    /**
+    * * Field Name: CriterionKey
+    * * Display Name: Criterion Key
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CriterionKey(): string {
+        return this.Get('CriterionKey');
+    }
+
+    /**
+    * * Field Name: CriterionNodeType
+    * * Display Name: Criterion Node Type
+    * * SQL Data Type: nvarchar(20)
+    */
+    get CriterionNodeType(): string {
+        return this.Get('CriterionNodeType');
+    }
+
+    /**
+    * * Field Name: CriterionParentID
+    * * Display Name: Criterion Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get CriterionParentID(): string | null {
+        return this.Get('CriterionParentID');
+    }
+
+    /**
+    * * Field Name: EvaluationStatus
+    * * Display Name: Evaluation Status
+    * * SQL Data Type: nvarchar(20)
+    */
+    get EvaluationStatus(): string {
+        return this.Get('EvaluationStatus');
+    }
+
+    /**
+    * * Field Name: EvaluatorType
+    * * Display Name: Evaluator Type
+    * * SQL Data Type: nvarchar(20)
+    */
+    get EvaluatorType(): string {
+        return this.Get('EvaluatorType');
+    }
+
+    /**
+    * * Field Name: EvaluatorUserID
+    * * Display Name: Evaluator User ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get EvaluatorUserID(): string | null {
+        return this.Get('EvaluatorUserID');
+    }
+
+    /**
+    * * Field Name: SubjectEntityID
+    * * Display Name: Subject Entity ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get SubjectEntityID(): string {
+        return this.Get('SubjectEntityID');
+    }
+
+    /**
+    * * Field Name: SubjectRecordID
+    * * Display Name: Subject Record ID
+    * * SQL Data Type: nvarchar(450)
+    */
+    get SubjectRecordID(): string {
+        return this.Get('SubjectRecordID');
+    }
+
+    /**
+    * * Field Name: ContextEntityID
+    * * Display Name: Context Entity ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ContextEntityID(): string | null {
+        return this.Get('ContextEntityID');
+    }
+
+    /**
+    * * Field Name: ContextRecordID
+    * * Display Name: Context Record ID
+    * * SQL Data Type: nvarchar(450)
+    */
+    get ContextRecordID(): string | null {
+        return this.Get('ContextRecordID');
+    }
+
+    /**
+    * * Field Name: RubricID
+    * * Display Name: Rubric ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RubricID(): string {
+        return this.Get('RubricID');
+    }
+
+    /**
+    * * Field Name: RubricMajorVersion
+    * * Display Name: Rubric Major Version
+    * * SQL Data Type: int
+    */
+    get RubricMajorVersion(): number | null {
+        return this.Get('RubricMajorVersion');
+    }
+
+    /**
+    * * Field Name: CriterionCohortCount
+    * * Display Name: Criterion Cohort Count
+    * * SQL Data Type: int
+    */
+    get CriterionCohortCount(): number | null {
+        return this.Get('CriterionCohortCount');
+    }
+
+    /**
+    * * Field Name: CriterionCohortMeanScore
+    * * Display Name: Criterion Cohort Mean Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CriterionCohortMeanScore(): number | null {
+        return this.Get('CriterionCohortMeanScore');
+    }
+
+    /**
+    * * Field Name: CriterionCohortMinScore
+    * * Display Name: Criterion Cohort Min Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CriterionCohortMinScore(): number | null {
+        return this.Get('CriterionCohortMinScore');
+    }
+
+    /**
+    * * Field Name: CriterionCohortMaxScore
+    * * Display Name: Criterion Cohort Max Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CriterionCohortMaxScore(): number | null {
+        return this.Get('CriterionCohortMaxScore');
+    }
+
+    /**
+    * * Field Name: CriterionCohortScoreStdDev
+    * * Display Name: Criterion Cohort Score Std Dev
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CriterionCohortScoreStdDev(): number | null {
+        return this.Get('CriterionCohortScoreStdDev');
+    }
+
+    /**
+    * * Field Name: CriterionCohortHumanMeanScore
+    * * Display Name: Criterion Cohort Human Mean Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CriterionCohortHumanMeanScore(): number | null {
+        return this.Get('CriterionCohortHumanMeanScore');
+    }
+
+    /**
+    * * Field Name: CriterionCohortAIMeanScore
+    * * Display Name: Criterion Cohort AI Mean Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CriterionCohortAIMeanScore(): number | null {
+        return this.Get('CriterionCohortAIMeanScore');
+    }
 }
 
 
@@ -117287,6 +117791,41 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Rubric Evaluations - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJRubricEvaluationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -117783,6 +118322,15 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
     */
     get AIAgentRun(): string | null {
         return this.Get('AIAgentRun');
+    }
+
+    /**
+    * * Field Name: Band
+    * * Display Name: Band
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Band(): string | null {
+        return this.Get('Band');
     }
 
     /**
@@ -129691,7 +130239,7 @@ export class MJTestSuiteRunEntity extends BaseEntity<MJTestSuiteRunEntityType> {
     /**
     * * Field Name: Score
     * * Display Name: Score
-    * * SQL Data Type: decimal(5, 4)
+    * * SQL Data Type: decimal(9, 6)
     * * Description: Suite-level score (0..1): the mean score of the suite's executed (non-skipped) test runs.
     */
     get Score(): number | null {

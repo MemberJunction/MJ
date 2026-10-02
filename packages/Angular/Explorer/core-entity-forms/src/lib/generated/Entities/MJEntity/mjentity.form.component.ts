@@ -106,6 +106,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
             { sectionKey: 'mJRubricEvaluationsSubjectEntityID', sectionName: 'Rubric Evaluations (Subject Entity ID)', isExpanded: false },
             { sectionKey: 'mJRubricEvaluationsContextEntityID', sectionName: 'Rubric Evaluations (Context Entity ID)', isExpanded: false },
+            { sectionKey: 'mJScopedNotificationConfigs', sectionName: 'Scoped Notification Configs', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }

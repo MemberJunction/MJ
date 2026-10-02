@@ -205,7 +205,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (432 classes)
+// @memberjunction/core-entities (433 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -563,6 +563,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1756,6 +1757,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1945,11 +1947,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferGetPendingPostsAction,
     BufferGetSentPostsAction,
     BufferReorderQueueAction,
-    BufferSearchPostsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    BufferSearchPostsAction,
     CreateVideoPostAction,
     FacebookBoostPostAction,
     FacebookCreateAlbumAction,
@@ -2149,11 +2151,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
-    MJAIAgentExampleEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -2353,11 +2355,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
-    VoidSignatureRequestAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
     WriteEntityFieldsAction,
@@ -2388,7 +2390,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1014;
+export const CLASS_REGISTRATIONS_COUNT = 1015;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

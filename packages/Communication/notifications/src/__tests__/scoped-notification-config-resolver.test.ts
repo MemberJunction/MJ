@@ -7,7 +7,7 @@ import {
   ResolveChannel,
   ScopedNotificationConfigResolver,
   type ScopedNotificationConfigRow,
-} from '../scoped-notification-config-resolver';
+ CreateScopedNotificationConfigResolver } from '../scoped-notification-config-resolver';
 
 const TYPE = '11111111-1111-1111-1111-111111111111';
 const OTHER_TYPE = '22222222-2222-2222-2222-222222222222';
@@ -119,5 +119,26 @@ describe('ResolveChannel', () => {
   it('a locked Deny caps everything below it, the recipient included', () => {
     expect(ResolveChannel({ typeDefault: true, scoped: scoped('Deny', true), userPreference: true })).toBe(false);
     expect(ResolveChannel({ typeDefault: true, scoped: scoped('Allow', true), userPreference: true })).toBe(false);
+  });
+});
+
+describe('decide() return values (review nits on #4961)', () => {
+  it('returns a fresh no-decision object each time, so a caller mutating one cannot corrupt another', () => {
+    const resolver = CreateScopedNotificationConfigResolver();
+    const a = resolver.Resolve([], TYPE, undefined, { userId: 'u1', roleIds: [] });
+    const b = resolver.Resolve([], TYPE, undefined, { userId: 'u1', roleIds: [] });
+    expect(a.inApp).toEqual({ value: null, lockedOff: false });
+    expect(a.inApp).not.toBe(b.inApp);
+    (a.inApp as { value: unknown }).value = 'Deny';
+    expect(b.inApp.value).toBeNull();
+  });
+
+  it('never reports lockedOff without a value: a locked Deny is itself an answer at its level', () => {
+    const resolver = CreateScopedNotificationConfigResolver();
+    const rows = [row({ ID: 'g', InApp: 'Deny', IsLocked: true })];
+    const out = resolver.Resolve(rows, TYPE, undefined, { userId: 'u1', roleIds: [] });
+    expect(out.inApp).toEqual({ value: 'Deny', lockedOff: true });
+    const none = resolver.Resolve(rows, TYPE, undefined, { userId: 'u1', roleIds: [] }).email;
+    expect(none.value === null ? none.lockedOff : true).toBe(false);
   });
 });

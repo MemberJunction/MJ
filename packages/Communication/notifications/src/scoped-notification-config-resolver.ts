@@ -65,7 +65,6 @@ export interface ScopedChannelDecisions {
 /** Statuses eligible for resolution, as for scoped prompt configs. Archived rows are excluded. */
 const RESOLVABLE_STATUSES = new Set<string>(['Active', 'Provisional']);
 
-const NO_DECISION: ScopedChannelDecision = { value: null, lockedOff: false };
 
 /**
  * ScopedNotificationConfigResolver: the notification sibling of `ScopedPromptConfigResolver`. Given the configs for a
@@ -137,6 +136,8 @@ export class ScopedNotificationConfigResolver {
 
   /** The most specific non-null answer for one channel, Deny winning a tie, with the lock noted. */
   private decide(sorted: ScopedNotificationConfigRow[], pick: (c: ScopedNotificationConfigRow) => ChannelAccess): ScopedChannelDecision {
+    // A locked Deny anywhere in the rows is a Deny at its own level, so the scan below always returns before running out
+    // when one exists: no-answer therefore always means no lock either. A fresh object each time, never a shared one.
     const lockedOff = sorted.some((c) => pick(c) === 'Deny' && c.IsLocked);
     let i = 0;
     while (i < sorted.length) {
@@ -146,7 +147,7 @@ export class ScopedNotificationConfigResolver {
       if (peers.includes('Deny')) return { value: 'Deny', lockedOff };
       if (peers.includes('Allow')) return { value: 'Allow', lockedOff };
     }
-    return lockedOff ? { value: null, lockedOff } : NO_DECISION;
+    return { value: null, lockedOff: false };
   }
 
   private parseScopes(json: string | null | undefined): Record<string, SecondaryScopeValue> {
