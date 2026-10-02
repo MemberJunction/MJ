@@ -36,6 +36,14 @@ function baseInput(overrides: Partial<HomeAgentContextInput> = {}): HomeAgentCon
         AddPanelOpen: false,
         SidebarOpen: false,
         AddPanelSearchQuery: '',
+        ContinueDashboardName: null,
+        FavoriteDashboardNames: [],
+        DashboardTotal: 0,
+        HomeTabNames: [],
+        ActiveHomeTab: 'Overview',
+        ActiveHomeTabDashboardID: null,
+        DashboardsCollapsed: false,
+        PinnedCollapsed: false,
         ...overrides,
     };
 }
@@ -125,11 +133,72 @@ describe('buildHomeAgentContext', () => {
         expect(ctx['RecentItemNameCount']).toBe(recents.length);
     });
 
+    it('reports whether the Dashboards strip and the Pinned section are collapsed', () => {
+        const dashboardsOnly = BuildHomeAgentContext(baseInput({ DashboardsCollapsed: true, PinnedCollapsed: false }));
+        expect(dashboardsOnly['DashboardsCollapsed']).toBe(true);
+        expect(dashboardsOnly['PinnedCollapsed']).toBe(false);
+
+        const pinnedOnly = BuildHomeAgentContext(baseInput({ DashboardsCollapsed: false, PinnedCollapsed: true }));
+        expect(pinnedOnly['DashboardsCollapsed']).toBe(false);
+        expect(pinnedOnly['PinnedCollapsed']).toBe(true);
+    });
+
     it('reflects edit mode and sidebar/panel toggles', () => {
         const ctx = BuildHomeAgentContext(baseInput({ EditMode: true, SidebarOpen: true, AddPanelOpen: true }));
         expect(ctx['EditMode']).toBe(true);
         expect(ctx['SidebarOpen']).toBe(true);
         expect(ctx['AddPanelOpen']).toBe(true);
+    });
+
+    it('reports the Dashboards strip: the total, the Continue dashboard and the favorite dashboards', () => {
+        const ctx = BuildHomeAgentContext(baseInput({
+            DashboardTotal: 7,
+            ContinueDashboardName: 'Board Pack',
+            FavoriteDashboardNames: ['Partner KPIs', 'Revenue'],
+        }));
+        expect(ctx['DashboardTotal']).toBe(7);
+        expect(ctx['ContinueDashboardName']).toBe('Board Pack');
+        expect(ctx['FavoriteDashboardNames']).toEqual(['Partner KPIs', 'Revenue']);
+        expect('FavoriteDashboardNameCount' in ctx).toBe(false);
+    });
+
+    it('omits the Continue dashboard and the favorite dashboards when there are none', () => {
+        const ctx = BuildHomeAgentContext(baseInput());
+        expect(ctx['DashboardTotal']).toBe(0);
+        expect('ContinueDashboardName' in ctx).toBe(false);
+        expect('FavoriteDashboardNames' in ctx).toBe(false);
+    });
+
+    it('caps the favorite dashboard names and surfaces the true total when truncated', () => {
+        const names = Array.from({ length: HOME_AGENT_CONTEXT_NAME_LIST_CAP + 3 }, (_, i) => `Dashboard ${i}`);
+        const ctx = BuildHomeAgentContext(baseInput({ FavoriteDashboardNames: names }));
+        expect((ctx['FavoriteDashboardNames'] as string[]).length).toBe(HOME_AGENT_CONTEXT_NAME_LIST_CAP);
+        expect(ctx['FavoriteDashboardNameCount']).toBe(names.length);
+    });
+
+    it('reports the Home tabs and the active tab by name and dashboard id', () => {
+        const ctx = BuildHomeAgentContext(baseInput({
+            HomeTabNames: ['Sales pipeline', 'Ops health'],
+            ActiveHomeTab: 'Ops health',
+            ActiveHomeTabDashboardID: 'D1000000-0000-4000-8000-00000000000B',
+        }));
+        expect(ctx['HomeTabNames']).toEqual(['Sales pipeline', 'Ops health']);
+        expect(ctx['ActiveHomeTab']).toBe('Ops health');
+        expect(ctx['ActiveHomeTabDashboardID']).toBe('D1000000-0000-4000-8000-00000000000B');
+    });
+
+    it('reports Overview as the active tab with no dashboard id, and omits an empty tab list', () => {
+        const ctx = BuildHomeAgentContext(baseInput());
+        expect(ctx['ActiveHomeTab']).toBe('Overview');
+        expect('ActiveHomeTabDashboardID' in ctx).toBe(false);
+        expect('HomeTabNames' in ctx).toBe(false);
+    });
+
+    it('caps the Home tab names and surfaces the true total when truncated', () => {
+        const names = Array.from({ length: HOME_AGENT_CONTEXT_NAME_LIST_CAP + 1 }, (_, i) => `Tab ${i}`);
+        const ctx = BuildHomeAgentContext(baseInput({ HomeTabNames: names }));
+        expect((ctx['HomeTabNames'] as string[]).length).toBe(HOME_AGENT_CONTEXT_NAME_LIST_CAP);
+        expect(ctx['HomeTabNameCount']).toBe(names.length);
     });
 });
 

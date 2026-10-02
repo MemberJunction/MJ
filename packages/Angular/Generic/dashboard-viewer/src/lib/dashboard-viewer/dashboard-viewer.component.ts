@@ -55,6 +55,8 @@ export interface DashboardLayoutLifecycleEvent {
 }
 
 const LAYOUT_CONTAINER_SIZE_TIMEOUT_MS = 10_000;
+/** Time a layout build waits after its parts are created, before its final size update. */
+const LAYOUT_SETTLE_DELAY_MS = 100;
 
 /**
  * Main dashboard viewer component.
@@ -404,6 +406,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
       this.HasUnsavedChanges = value;
     }
 
+    /** The saved configuration (UIConfigDetails) the layout was loaded from or last saved as. */
+    private _loadedConfigDetails: string | null = null;
+
     /**
      * Helper to check if layout has any panels (for template use).
      * Panels are stored in componentState within the layout tree.
@@ -427,7 +432,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     private _resolveLayoutReady: (() => void) | null = null;
     private _rejectLayoutReady: ((error: Error) => void) | null = null;
     private _layoutInitGeneration = 0;
-    private _layoutReadyTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Number of the latest layout build. A build that is no longer the latest stops at its next step. */
+    private _layoutBuild = 0;
     private _resolveDeferredLayoutInit: (() => void) | null = null;
     private _rejectDeferredLayoutInit: ((error: Error) => void) | null = null;
     private _deferredLayoutInitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -457,7 +463,6 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         const generation = this._layoutInitGeneration;
         this.resolveLayoutReady(generation);
         this._layoutInitGeneration++;
-        this.clearLayoutReadyTimer();
         this.cancelDeferredLayoutInit();
         this.destroyLayout();
     }
@@ -584,6 +589,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
             if (saved) {
                 this.HasUnsavedChanges = false;
+                this._loadedConfigDetails = this._dashboard.UIConfigDetails ?? null;
                 this.DashboardSaved.emit(this._dashboard);
             }
 
@@ -624,6 +630,45 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     /** @deprecated Use {@link WaitForLayoutReady}. */
     public waitForLayoutReady(): Promise<void> {
       return this.WaitForLayoutReady();
+    }
+
+    /**
+     * True when the dashboard's saved layout differs from the one this viewer last loaded or saved,
+     * for example after another tab saved the dashboard.
+     * @param dashboard A saved copy of the shown dashboard. Defaults to the shown dashboard.
+     */
+    public HasNewerSavedLayout(dashboard: MJDashboardEntity | null = this._dashboard): boolean {
+        return !!dashboard && (dashboard.UIConfigDetails ?? null) !== this._loadedConfigDetails;
+    }
+
+    /**
+     * Shows the dashboard's saved layout again and drops unsaved layout changes. The current layout
+     * is removed at once, so an edit-mode change made right after the call applies to the new
+     * layout. A hidden viewer builds the layout when its container gets a size, with no time limit.
+     * @param dashboard A saved copy of the shown dashboard to show instead. Defaults to the shown dashboard.
+     */
+    public ReloadFromSaved(dashboard: MJDashboardEntity | null = this._dashboard): Promise<void> {
+        if (!dashboard) {
+            return Promise.resolve();
+        }
+        this._dashboard = dashboard;
+        this.HasUnsavedChanges = false;
+        this.destroyLayout();
+        return this.onDashboardChanged(false);
+    }
+
+    /**
+     * Takes another copy of the shown dashboard without rebuilding the layout, for example after
+     * DashboardEngine reloaded its dashboards. Later saves write that copy. Returns false, and changes
+     * nothing, when the copy is of another dashboard or its saved layout differs from the one this
+     * viewer last loaded or saved (use ReloadFromSaved then).
+     */
+    public UseSavedCopy(dashboard: MJDashboardEntity): boolean {
+        if (!this._dashboard || !UUIDsEqual(dashboard.ID, this._dashboard.ID) || this.HasNewerSavedLayout(dashboard)) {
+            return false;
+        }
+        this._dashboard = dashboard;
+        return true;
     }
 
     /**
@@ -758,7 +803,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     }
 
     /**
-     * Handle "Open in Tab" button click - emits event for parent to open dashboard in its own tab
+     * Handle "Open in Tab" button click - emits event for the parent to open the dashboard in a dashboard tab
      */
     public OnOpenInTabClick(): void {
         if (this._dashboard) {
@@ -823,7 +868,12 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         }
     }
 
-    private async onDashboardChanged(): Promise<void> {
+    /**
+     * Builds the layout from the dashboard's saved configuration.
+     * @param limitSizeWait When true, a container that stays at zero size fails the build after
+     * LAYOUT_CONTAINER_SIZE_TIMEOUT_MS. When false, the build waits until the container gets a size.
+     */
+    private async onDashboardChanged(limitSizeWait = true): Promise<void> {
         if (!this._dashboard) return;
 
         const generation = this.startLayoutReadyCycle();
@@ -831,6 +881,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         try {
             // Parse or create config
             this.config = this.parseOrCreateConfig();
+            this._loadedConfigDetails = this._dashboard.UIConfigDetails ?? null;
 
             // Wait for part types to be loaded before initializing layout
             // This ensures partTypes array is populated when createPanelComponent is called
@@ -844,7 +895,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             }
 
             // Initialize layout
-            await this.initializeLayout(generation);
+            await this.initializeLayout(generation, limitSizeWait);
         } catch (err) {
             const error = err instanceof Error ? err : new Error(String(err));
             this.emitLayoutLifecycle('error', undefined, error);
@@ -878,11 +929,12 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     // Private Methods - Layout
     // ========================================
 
-    private async initializeLayout(generation = this._layoutInitGeneration): Promise<void> {
+    private async initializeLayout(generation = this._layoutInitGeneration, limitSizeWait = true): Promise<void> {
         if (!this.config || !this.LayoutContainer?.nativeElement) {
             return;
         }
 
+        const build = ++this._layoutBuild;
         const el = this.LayoutContainer.nativeElement;
         const rect = el.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) {
@@ -895,8 +947,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             const reason = 'layout container has zero size';
             this.emitLayoutLifecycle('waiting-for-size', reason);
             this.LayoutDeferred.emit({ reason });
-            await this.waitForLayoutContainerSize(el, generation);
-            if (generation !== this._layoutInitGeneration) {
+            await this.waitForLayoutContainerSize(el, generation, limitSizeWait);
+            if (!this.isCurrentLayoutBuild(build, generation)) {
                 return;
             }
         }
@@ -909,7 +961,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         this.destroyLayout();
 
         // Create new Golden Layout service
-        this._glService = new GoldenLayoutWrapperService();
+        const glService = new GoldenLayoutWrapperService();
+        this._glService = glService;
 
         // Subscribe to layout events
         this.subscribeToLayoutEvents();
@@ -919,7 +972,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         // Panel factory - called by GL when it binds a component
         // The panel comes directly from GL's componentState (single source of truth)
         const panelFactory = (panel: DashboardPanel, container: HTMLElement) => {
-            const creation = this.createPanelComponent(panel, container);
+            const creation = this.createPanelComponent(panel, container, glService);
             pendingPanelCreations.push(
                 creation.catch(error => {
                     console.error('[DashboardViewer] Failed to create panel component:', error);
@@ -946,15 +999,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         // However, Angular needs time to complete change detection and render
         // the dynamic components. A single delayed updateSize() ensures GL
         // recalculates dimensions after Angular has finished rendering.
-        await new Promise<void>(resolve => {
-            this.clearLayoutReadyTimer();
-            this._layoutReadyTimer = setTimeout(() => {
-                this._layoutReadyTimer = null;
-                resolve();
-            }, 100);
-        });
+        await this.waitForLayoutToSettle();
 
-        if (generation !== this._layoutInitGeneration) {
+        if (!this.isCurrentLayoutBuild(build, generation)) {
             return;
         }
 
@@ -973,8 +1020,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
      * (re)initialize. Used when initializeLayout() is called while the container is
      * still 0×0 — e.g. during a cached-component reattach on browser back/forward —
      * where GoldenLayout would otherwise bind panels that never receive a 'show' event.
+     * With `limitSizeWait`, the wait fails after LAYOUT_CONTAINER_SIZE_TIMEOUT_MS.
      */
-    private waitForLayoutContainerSize(el: HTMLElement, generation: number): Promise<void> {
+    private waitForLayoutContainerSize(el: HTMLElement, generation: number, limitSizeWait = true): Promise<void> {
         this.cancelDeferredLayoutInit();
 
         return new Promise<void>((resolve, reject) => {
@@ -1000,12 +1048,14 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 return;
             }
 
-            this._deferredLayoutInitTimer = setTimeout(() => {
-                const error = new Error(
-                    `Dashboard layout container stayed at zero size for ${LAYOUT_CONTAINER_SIZE_TIMEOUT_MS}ms`
-                );
-                this.failDeferredLayoutInit(error);
-            }, LAYOUT_CONTAINER_SIZE_TIMEOUT_MS);
+            if (limitSizeWait) {
+                this._deferredLayoutInitTimer = setTimeout(() => {
+                    const error = new Error(
+                        `Dashboard layout container stayed at zero size for ${LAYOUT_CONTAINER_SIZE_TIMEOUT_MS}ms`
+                    );
+                    this.failDeferredLayoutInit(error);
+                }, LAYOUT_CONTAINER_SIZE_TIMEOUT_MS);
+            }
             ro.observe(el);
             this._layoutSizeObserver = ro;
         });
@@ -1044,9 +1094,21 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         }
     }
 
+    /** True while the build is the latest layout build and its layout cycle is still current. */
+    private isCurrentLayoutBuild(build: number, generation: number): boolean {
+        return build === this._layoutBuild && generation === this._layoutInitGeneration;
+    }
+
+    /**
+     * Resolves after LAYOUT_SETTLE_DELAY_MS. Each build waits on its own timer; a build that a newer
+     * build replaced stops after the wait.
+     */
+    private waitForLayoutToSettle(): Promise<void> {
+        return new Promise<void>(resolve => setTimeout(resolve, LAYOUT_SETTLE_DELAY_MS));
+    }
+
     private startLayoutReadyCycle(): number {
         const generation = ++this._layoutInitGeneration;
-        this.clearLayoutReadyTimer();
         this.cancelDeferredLayoutInit();
         this._resolveLayoutReady?.();
 
@@ -1078,13 +1140,6 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         this._rejectLayoutReady?.(error);
         this._resolveLayoutReady = null;
         this._rejectLayoutReady = null;
-    }
-
-    private clearLayoutReadyTimer(): void {
-        if (this._layoutReadyTimer) {
-            clearTimeout(this._layoutReadyTimer);
-            this._layoutReadyTimer = null;
-        }
     }
 
     private emitLayoutLifecycle(state: DashboardLayoutReadyState, reason?: string, error?: Error): void {
@@ -1184,8 +1239,10 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     /**
      * Create a panel component from the DashboardPanel data.
      * Panel comes directly from GL's componentState - no lookup needed.
+     * @param glService The layout that asks for the part. When it is no longer the viewer's layout
+     * once the part is created (a newer build replaced it, or it was removed), the part is destroyed.
      */
-    private async createPanelComponent(panel: DashboardPanel, container: HTMLElement): Promise<void> {
+    private async createPanelComponent(panel: DashboardPanel, container: HTMLElement, glService: GoldenLayoutWrapperService): Promise<void> {
         const partType = this.PartTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId));
 
         // Create the panel wrapper with header and content
@@ -1206,6 +1263,13 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
         // Try to create dynamic component via ClassFactory
         const componentRef = await this.createDynamicPartComponent(panel, partType, content);
+
+        if (glService !== this._glService) {
+            if (componentRef) {
+                this.releasePartComponent(componentRef);
+            }
+            return;
+        }
 
         if (!componentRef) {
             // Fallback to static rendering if no DriverClass or component creation failed
@@ -1590,11 +1654,16 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         if (entry) {
             // Destroy the Angular component if present
             if (entry.componentRef) {
-                this.appRef.detachView(entry.componentRef.hostView);
-                entry.componentRef.destroy();
+                this.releasePartComponent(entry.componentRef);
             }
             this._panelComponents.delete(panelId);
         }
+    }
+
+    /** Detaches a part component from change detection and destroys it. */
+    private releasePartComponent(componentRef: ComponentRef<BaseDashboardPart>): void {
+        this.appRef.detachView(componentRef.hostView);
+        componentRef.destroy();
     }
 
     private updatePanelEditModes(): void {

@@ -179,8 +179,9 @@ export class HomeAppPinService {
    * Uses SVG foreignObject so the browser's own CSS engine handles
    * modern features like color-mix() that html2canvas can't parse.
    * Returns a base64 JPEG data URL (~5-15KB) or undefined on failure.
+   * @param timeoutMs How long to wait for the capture before giving up (default 4 seconds).
    */
-  async CaptureThumbnail(element: HTMLElement): Promise<string | undefined> {
+  async CaptureThumbnail(element: HTMLElement, timeoutMs: number = HomeAppPinService.THUMBNAIL_CAPTURE_TIMEOUT_MS): Promise<string | undefined> {
     try {
       if (element.clientWidth === 0 || element.clientHeight === 0) {
         return undefined;
@@ -202,7 +203,7 @@ export class HomeAppPinService {
         quality: 0.6,
         pixelRatio: 0.2,
       });
-      return await this.withTimeout(capture, HomeAppPinService.THUMBNAIL_CAPTURE_TIMEOUT_MS);
+      return await this.withTimeout(capture, timeoutMs);
     } catch {
       return undefined;
     }

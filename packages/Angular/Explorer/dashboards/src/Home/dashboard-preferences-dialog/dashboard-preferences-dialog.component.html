@@ -1,34 +1,35 @@
-<mj-dialog [Visible]="true" Title="Dashboard Preferences"
+<mj-dialog [Visible]="true" [Title]="DialogTitle"
               [Width]="800"
               [Height]="600"
               [MinWidth]="600"
               (Close)="onCancel()">
 <div class="dashboard-preferences-dialog">
   <div class="dialog-header">
-    <h3><i class="fa-solid fa-sliders"></i> Dashboard Preferences</h3>
     <p class="scope-indicator">
-      @if (scope === 'Global') {
-        <i class="fa-solid fa-globe"></i> Global Scope
+      @if (Scope !== 'Global') {
+        <i class="fa-solid fa-layer-group" aria-hidden="true"></i> Application: {{ ApplicationName }}
+      } @else if (PreferenceMode === 'system') {
+        <i class="fa-solid fa-users" aria-hidden="true"></i> Choose the default Home tabs for users who have not chosen their own.
       } @else {
-        <i class="fa-solid fa-layer-group"></i> Application: {{ applicationName }}
+        <i class="fa-solid fa-house" aria-hidden="true"></i> Choose the dashboards that show as tabs on your Home page.
       }
     </p>
-    @if (isSysAdmin && scope === 'Global') {
+    @if (IsSysAdmin && Scope === 'Global') {
       <div class="preference-mode-selector">
         <label>
           <input type="radio"
                  name="preferenceMode"
                  value="personal"
-                 [(ngModel)]="preferenceMode"
-                 (change)="onPreferenceModeChange()">
+                 [(ngModel)]="PreferenceMode"
+                 (change)="OnPreferenceModeChange()">
           Personal Preferences
         </label>
         <label>
           <input type="radio"
                  name="preferenceMode"
                  value="system"
-                 [(ngModel)]="preferenceMode"
-                 (change)="onPreferenceModeChange()">
+                 [(ngModel)]="PreferenceMode"
+                 (change)="OnPreferenceModeChange()">
           System Defaults
         </label>
       </div>
@@ -36,9 +37,9 @@
   </div>
 
   <div class="dialog-content">
-    @if (loading) {
+    @if (Loading) {
       <div class="loading-overlay">
-        <mj-loading text="Loading preferences..." size="large"></mj-loading>
+        <mj-loading Text="Loading preferences..." Size="large"></mj-loading>
       </div>
     }
 
@@ -50,7 +51,7 @@
         [Title]="error" />
     }
 
-    @if (!loading && !error) {
+    @if (!Loading && !error) {
       <div class="preferences-panels">
         <!-- Available Dashboards Panel -->
         <div class="panel available-panel">
@@ -58,11 +59,11 @@
           <div class="dashboard-list"
                cdkDropList
                #availableList="cdkDropList"
-               [cdkDropListData]="availableDashboards"
+               [cdkDropListData]="AvailableDashboards"
                [cdkDropListConnectedTo]="[configuredList]"
-               (cdkDropListDropped)="onDrop($event)">
+               (cdkDropListDropped)="OnDrop($event)">
 
-            @if (availableDashboards.length === 0) {
+            @if (AvailableDashboards.length === 0) {
               <mj-empty-state
                 Variant="success"
                 Size="compact"
@@ -70,7 +71,7 @@
                 Title="All dashboards are configured" />
             }
 
-            @for (dashboard of availableDashboards; track dashboard.ID) {
+            @for (dashboard of AvailableDashboards; track dashboard.ID) {
               <div class="dashboard-item available-item"
                    cdkDrag
                    [cdkDragData]="dashboard">
@@ -84,7 +85,7 @@
                   </div>
                   <button type="button"
                           class="add-button"
-                          (click)="addDashboard(dashboard)"
+                          (click)="AddDashboard(dashboard)"
                           title="Add to configured dashboards">
                     <i class="fa-solid fa-plus"></i>
                   </button>
@@ -100,18 +101,18 @@
           <div class="dashboard-list"
                cdkDropList
                #configuredList="cdkDropList"
-               [cdkDropListData]="configuredDashboards"
+               [cdkDropListData]="ConfiguredDashboards"
                [cdkDropListConnectedTo]="[availableList]"
-               (cdkDropListDropped)="onDrop($event)">
+               (cdkDropListDropped)="OnDrop($event)">
 
-            @if (configuredDashboards.length === 0) {
+            @if (ConfiguredDashboards.length === 0) {
               <mj-empty-state
                 Size="compact"
                 Icon="fa-solid fa-circle-info"
                 Title="No dashboards configured" />
             }
 
-            @for (dashboard of configuredDashboards; track dashboard.ID; let i = $index) {
+            @for (dashboard of ConfiguredDashboards; track dashboard.ID; let i = $index) {
               <div class="dashboard-item configured-item"
                    cdkDrag
                    [cdkDragData]="dashboard">
@@ -126,7 +127,7 @@
                   </div>
                   <button type="button"
                           class="remove-button"
-                          (click)="removeDashboard(dashboard)"
+                          (click)="RemoveDashboard(dashboard)"
                           title="Remove from configured dashboards">
                     <i class="fa-solid fa-times"></i>
                   </button>
@@ -138,24 +139,24 @@
       </div>
     }
   </div>
-
-  <mj-dialog-actions>
-    <button type="button"
-            class="btn btn-secondary"
-            (click)="onCancel()">
-      <i class="fa-solid fa-times"></i> Cancel
-    </button>
-    <button type="button"
-            class="btn btn-primary"
-            [disabled]="!hasChanges || saving"
-            (click)="onSave()">
-      @if (saving) {
-        <mj-loading [showText]="false" size="small"></mj-loading>
-        Saving...
-      } @else {
-        <i class="fa-solid fa-check"></i> Save Changes
-      }
-    </button>
-  </mj-dialog-actions>
 </div>
+
+<mj-dialog-actions>
+  <button type="button"
+          class="btn btn-primary"
+          [disabled]="!HasChanges || saving"
+          (click)="OnSave()">
+    @if (saving) {
+      <mj-loading [ShowText]="false" Size="small"></mj-loading>
+      Saving...
+    } @else {
+      <i class="fa-solid fa-check"></i> Save Changes
+    }
+  </button>
+  <button type="button"
+          class="btn btn-secondary"
+          (click)="onCancel()">
+    <i class="fa-solid fa-times"></i> Cancel
+  </button>
+</mj-dialog-actions>
 </mj-dialog>

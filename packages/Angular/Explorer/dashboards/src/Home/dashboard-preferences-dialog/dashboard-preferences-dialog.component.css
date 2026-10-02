@@ -9,18 +9,6 @@
   border-bottom: 1px solid var(--mj-border-default);
 }
 
-.dialog-header h3 {
-  margin: 0 0 8px 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-}
-
-.dialog-header h3 i {
-  margin-right: 8px;
-  color: var(--mj-text-secondary);
-}
-
 .scope-indicator {
   margin: 0;
   font-size: 14px;
@@ -145,7 +133,7 @@
   width: 24px;
   height: 24px;
   background: var(--mj-brand-primary);
-  color: white;
+  color: var(--mj-text-inverse);
   border-radius: 50%;
   font-size: 12px;
   font-weight: 600;
@@ -250,12 +238,12 @@
 
 .btn-secondary:hover:not(:disabled) {
   background: var(--mj-text-muted);
-  color: white;
+  color: var(--mj-text-inverse);
 }
 
 .btn-primary {
   background: var(--mj-brand-primary);
-  color: white;
+  color: var(--mj-text-inverse);
   border-color: var(--mj-brand-primary);
 }
 

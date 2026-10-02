@@ -26,6 +26,7 @@ export type DashboardBrowserViewMode = 'cards' | 'list';
  */
 export interface DashboardOpenEvent {
     Dashboard: MJDashboardEntity;
+    /** True for a Shift, Ctrl or Cmd click outside selection mode: open the dashboard in a separate tab. */
     OpenInNewTab: boolean;
 }
 
@@ -156,6 +157,26 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         return this._selectedCategoryId;
     }
 
+    private _flatMode = false;
+
+    /**
+     * When true, shows every dashboard in `Dashboards` in one flat list and ignores
+     * `SelectedCategoryId`: no folder scoping, no folder cards, the breadcrumb stays at the
+     * root, and new dashboards and categories are created at the root. Search and the
+     * Config-type rule still apply. When false (the default), shows the sub-folders and
+     * dashboards of the selected folder.
+     */
+    @Input()
+    set FlatMode(value: boolean) {
+        if (value !== this._flatMode) {
+            this._flatMode = value;
+            this.applyFilters();
+        }
+    }
+    get FlatMode(): boolean {
+        return this._flatMode;
+    }
+
     /** Initial view mode */
     private _viewMode: DashboardBrowserViewMode = 'cards';
 
@@ -270,7 +291,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /** Set of selected dashboard IDs */
     public SelectedIds = new Set<string>();
 
-    /** Last clicked dashboard ID (for shift-click range selection) */
+    /** The last dashboard clicked in selection mode: where a Shift-click range starts */
     private lastClickedId: string | null = null;
 
     /** Whether delete confirmation dialog is visible */
@@ -455,35 +476,27 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     // ========================================
 
     /**
-     * Handle dashboard click with multi-select support
+     * Handles a click on a dashboard. Outside selection mode every click opens the dashboard, and a
+     * Shift, Ctrl or Cmd click asks for a separate tab (`OpenInNewTab`). In selection mode a
+     * Shift-click selects the range from the last dashboard clicked in selection mode (just this one
+     * when there is none yet), a Ctrl or Cmd click toggles the dashboard, and a plain click clears
+     * the selection and opens the dashboard.
      */
     public OnDashboardClick(dashboard: MJDashboardEntity, event: MouseEvent): void {
-        if (!this.AllowMultiSelect) {
-            // Single select mode - just open the dashboard
-            this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: event.ctrlKey || event.metaKey });
+        if (!this.AllowMultiSelect || !this.IsSelectionMode) {
+            this.SelectedIds.clear();
+            this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: event.shiftKey || event.ctrlKey || event.metaKey });
+            this.cdr.markForCheck();
             return;
         }
 
         if (event.shiftKey && this.lastClickedId) {
-            // Shift-click: range selection
             this.selectRange(this.lastClickedId, dashboard.ID);
-        } else if (event.ctrlKey || event.metaKey) {
-            // Ctrl/Cmd-click: toggle selection
+        } else if (event.shiftKey || event.ctrlKey || event.metaKey) {
             this.ToggleSelection(dashboard.ID);
         } else {
-            // Normal click: if not selected, open; if selected with others, open
-            if (this.SelectedIds.size <= 1) {
-                this.SelectedIds.clear();
-                this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: false });
-            } else if (this.SelectedIds.has(dashboard.ID)) {
-                // Clicking on one of multiple selected items - open just this one
-                this.SelectedIds.clear();
-                this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: false });
-            } else {
-                // Clicking on unselected item - clear selection and open
-                this.SelectedIds.clear();
-                this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: false });
-            }
+            this.SelectedIds.clear();
+            this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: false });
         }
 
         this.lastClickedId = dashboard.ID;
@@ -593,7 +606,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      */
     public OnCreateDashboard(): void {
         this.CloseNewMenu();
-        this.DashboardCreate.emit({ CategoryId: this.SelectedCategoryId });
+        this.DashboardCreate.emit({ CategoryId: this.folderIdForNewItems });
     }
 
     /**
@@ -624,7 +637,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         if (!this.NewCategoryName.trim()) return;
 
         this.CategoryCreate.emit({
-            ParentCategoryId: this.SelectedCategoryId,
+            ParentCategoryId: this.folderIdForNewItems,
             Name: this.NewCategoryName.trim(),
             Description: this.NewCategoryDescription.trim() || null
         });
@@ -1112,6 +1125,11 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     // Private Methods
     // ========================================
 
+    /** The folder new dashboards and categories go into: the selected one, or the root in flat mode. */
+    private get folderIdForNewItems(): string | null {
+        return this._flatMode ? null : this.SelectedCategoryId;
+    }
+
     private applyFilters(): void {
         let filtered = [...this._dashboards];
 
@@ -1127,15 +1145,17 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             );
         }
 
-        // Filter by current folder (category)
+        // Filter by current folder (category); flat mode skips this and shows every dashboard
         // When at root (null), show only uncategorized dashboards
         // When in a category, show only dashboards directly in that category
         // Uses effective category (from EffectiveCategoryMap) for shared dashboards
-        if (this._selectedCategoryId) {
-            filtered = filtered.filter(d => this.GetEffectiveCategoryId(d) === this._selectedCategoryId);
-        } else {
-            // At root level, show only uncategorized dashboards (effective CategoryID is null or empty)
-            filtered = filtered.filter(d => !this.GetEffectiveCategoryId(d));
+        if (!this._flatMode) {
+            if (this._selectedCategoryId) {
+                filtered = filtered.filter(d => this.GetEffectiveCategoryId(d) === this._selectedCategoryId);
+            } else {
+                // At root level, show only uncategorized dashboards (effective CategoryID is null or empty)
+                filtered = filtered.filter(d => !this.GetEffectiveCategoryId(d));
+            }
         }
 
         this.FilteredDashboards = filtered;
@@ -1148,9 +1168,11 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Update the list of child categories for the current folder
      */
     private updateChildCategories(): void {
-        // Find categories that are children of the current category
+        // Find categories that are children of the current category (none in flat mode)
         // Handle both null and undefined ParentID for root-level categories
-        if (this._selectedCategoryId) {
+        if (this._flatMode) {
+            this.ChildCategories = [];
+        } else if (this._selectedCategoryId) {
             this.ChildCategories = this.Categories.filter(c => UUIDsEqual(c.ParentID, this._selectedCategoryId));
         } else {
             // At root level - show categories with no parent (null or undefined)
@@ -1175,7 +1197,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     private updateBreadcrumbs(): void {
         this.Breadcrumbs = [];
 
-        if (!this._selectedCategoryId) return;
+        if (!this._selectedCategoryId || this._flatMode) return;
 
         // Build the path from current category to root
         const path: MJDashboardCategoryEntity[] = [];

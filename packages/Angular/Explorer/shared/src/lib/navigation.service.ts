@@ -1,6 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
-import { NavigationOptions } from './navigation.interfaces';
+import type { WorkspaceTab } from '@memberjunction/ng-base-application';
+import { DashboardNavigationOptions, NavigationOptions } from './navigation.interfaces';
 import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
 import { CompositeKey, Metadata, IsNewEntityRecordUrlId } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
@@ -66,6 +67,11 @@ export const SYSTEM_APP_ID = '__explorer';
 const NEUTRAL_APP_COLOR = '#9E9E9E'; // Material Design Gray 500
 
 /**
+ * Dashboard tab configuration key that holds an open-in-edit-mode request until the tab takes it
+ */
+const DASHBOARD_EDIT_MODE_REQUEST_KEY = 'openInEditMode';
+
+/**
  * Centralized navigation service that handles all navigation operations
  * with automatic shift-key detection for power user workflows
  */
@@ -79,6 +85,8 @@ export class NavigationService implements OnDestroy {
   private queryParamChanged$ = new Subject<QueryParamChangeEvent>();
   /** Observable that emits when query params change on a tab (back/forward navigation). */
   public QueryParamChanged$ = this.queryParamChanged$.asObservable();
+
+  private dashboardEditModeRequests = new Subject<string>();
 
   /** Cached Home app ID (null means not found, undefined means not checked) */
   private _homeAppId: string | null | undefined = undefined;
@@ -896,16 +904,24 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
-   * Open a dashboard
-   * Uses Home app if available, otherwise falls back to active app or system app
+   * Open a dashboard in a tab of an application: `options.applicationId` when that application is
+   * loaded, otherwise the default application (Home app if available, otherwise the active app or
+   * system app). The workspace matches open tabs per application, so a tab that shows the same
+   * dashboard in another application is not reused. A tab already open for the dashboard is
+   * focused. Otherwise a plain open replaces the preview tab, so Back returns to the page it
+   * showed, and a Shift-click or `options.forceNewTab` opens a separate tab.
+   * `options.openInEditMode` asks the tab to enter edit mode (see
+   * {@link TakeDashboardEditModeRequest}). The tab holds the request in its configuration, and
+   * {@link DashboardEditModeRequested$} tells the component bound to the tab.
    */
   public OpenDashboard(
     dashboardId: string,
     dashboardName: string,
-    options?: NavigationOptions
+    options?: DashboardNavigationOptions
   ): string {
-    const appId = this.getDefaultApplicationId();
-    const appColor = this.getDefaultAppColor();
+    const app = options?.applicationId ? this.appManager.GetAppById(options.applicationId) : undefined;
+    const appId = app ? app.ID : this.getDefaultApplicationId();
+    const appColor = app ? app.GetColor() : this.getDefaultAppColor();
     let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
@@ -914,7 +930,8 @@ export class NavigationService implements OnDestroy {
       Configuration: {
         resourceType: 'Dashboards',
         dashboardId,
-        recordId: dashboardId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+        recordId: dashboardId, // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+        ...(options?.openInEditMode ? { [DASHBOARD_EDIT_MODE_REQUEST_KEY]: true } : {}),
       },
       ResourceRecordId: dashboardId,
       IsPinned: options?.pinTab || false
@@ -923,11 +940,69 @@ export class NavigationService implements OnDestroy {
     // Handle transition from single-resource mode
     forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
-    if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, appColor);
-    } else {
-      return this.workspaceManager.OpenTab(request, appColor);
+    const tabId = forceNew ? this.workspaceManager.OpenTabForced(request, appColor) : this.workspaceManager.OpenTab(request, appColor);
+    if (options?.openInEditMode) {
+      this.requestEditModeInOpenTab(tabId);
     }
+    return tabId;
+  }
+
+  /**
+   * Emits the ID of the tab an {@link OpenDashboard} call with `openInEditMode` opened. The component
+   * bound to the tab takes the request with {@link TakeDashboardEditModeRequest}.
+   */
+  public get DashboardEditModeRequested$(): Observable<string> {
+    return this.dashboardEditModeRequests.asObservable();
+  }
+
+  /**
+   * Returns true when the tab shows the dashboard in the application and has an `openInEditMode`
+   * request (see {@link OpenDashboard}), and removes that request from the tab, so only the first
+   * call returns true. The dashboard tab calls this when its dashboard has loaded, when
+   * {@link DashboardEditModeRequested$} names its tab, and when the tab container reattaches it to a
+   * new tab. A restored or reloaded tab then opens for viewing. OpenTab can replace a preview tab in
+   * place, so a cached component can still be bound to a tab that now shows another dashboard, or
+   * the same dashboard in another application. That tab keeps its request for its own component.
+   * @param dashboardId The dashboard the caller shows.
+   * @param applicationId The application of the caller's tab.
+   */
+  public TakeDashboardEditModeRequest(tabId: string, dashboardId: string, applicationId: string): boolean {
+    const tab = tabId ? this.workspaceManager.GetTab(tabId) : undefined;
+    if (!tab || !this.holdsDashboardEditModeRequest(tab, dashboardId) || !UUIDsEqual(tab.applicationId, applicationId)) {
+      return false;
+    }
+    this.workspaceManager.UpdateTabConfiguration(tabId, { [DASHBOARD_EDIT_MODE_REQUEST_KEY]: undefined });
+    return true;
+  }
+
+  /** The dashboard a dashboard tab shows: its record, else the dashboard ID in its configuration. */
+  private tabDashboardId(tab: WorkspaceTab): string {
+    const configured = tab.configuration?.['dashboardId'];
+    return tab.resourceRecordId || (typeof configured === 'string' ? configured : '');
+  }
+
+  /** True when the tab shows the dashboard and holds an edit-mode request. */
+  private holdsDashboardEditModeRequest(tab: WorkspaceTab, dashboardId: string): boolean {
+    return tab.configuration?.[DASHBOARD_EDIT_MODE_REQUEST_KEY] === true && UUIDsEqual(this.tabDashboardId(tab), dashboardId);
+  }
+
+  /**
+   * Makes sure the tab holds the edit-mode request, and tells the component bound to the tab. A new
+   * tab and a tab that OpenTab replaced or merged into already hold it; OpenTabForced leaves an open
+   * tab's configuration alone. The event reaches a component that is already loaded (the
+   * dashboard's open tab, or a cached component reattached to the replaced tab), which no load
+   * would reach. A component that is still loading ignores it and takes the request when its
+   * dashboard loads, and TakeDashboardEditModeRequest stops a stale component from taking it.
+   */
+  private requestEditModeInOpenTab(tabId: string): void {
+    const tab = this.workspaceManager.GetTab(tabId);
+    if (!tab) {
+      return;
+    }
+    if (tab.configuration?.[DASHBOARD_EDIT_MODE_REQUEST_KEY] !== true) {
+      this.workspaceManager.UpdateTabConfiguration(tabId, { [DASHBOARD_EDIT_MODE_REQUEST_KEY]: true });
+    }
+    this.dashboardEditModeRequests.next(tabId);
   }
 
   /**

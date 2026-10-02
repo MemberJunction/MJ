@@ -48,6 +48,10 @@ import { DashboardBrowserComponent } from './dashboard-browser/dashboard-browser
 // Breadcrumb Component (reusable navigation component)
 import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.component';
 
+// Layout Preview (a miniature of a saved dashboard layout, for dashboard cards)
+import { DashboardLayoutPreviewComponent } from './layout-preview/dashboard-layout-preview.component';
+import { DashboardLayoutPreviewNodeComponent } from './layout-preview/dashboard-layout-preview-node.component';
+
 @NgModule({
     declarations: [
         // Main Component
@@ -58,6 +62,10 @@ import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.
 
         // Breadcrumb Component
         DashboardBreadcrumbComponent,
+
+        // Layout Preview (the node component draws the preview's rows, columns and panels)
+        DashboardLayoutPreviewComponent,
+        DashboardLayoutPreviewNodeComponent,
 
         // Generic Dialogs
         AddPanelDialogComponent,
@@ -98,6 +106,9 @@ import { DashboardBreadcrumbComponent } from './breadcrumb/dashboard-breadcrumb.
 
         // Breadcrumb Component
         DashboardBreadcrumbComponent,
+
+        // Layout Preview
+        DashboardLayoutPreviewComponent,
 
         // Generic Dialogs
         AddPanelDialogComponent,

@@ -189,7 +189,6 @@ Key exports include:
 | `BaseUserMenu` | Class | Extensible user menu base class |
 | `BaseShellChromePolicy` | Class | Host hook narrowing the shell chrome per user/tenant (`ShellChromeFlags`, `ApplyShellChromePolicy`) |
 | `UserMenuItem`, `UserMenuContext` | Interfaces | User menu type definitions |
-| `DashboardPreferencesDialogComponent` | Component | Dashboard preferences editor |
 | `SingleRecordComponent` | Component | Single record viewer/editor |
 | `SingleDashboardComponent` | Component | Single dashboard viewer |
 | `SingleQueryComponent` | Component | Single query viewer |

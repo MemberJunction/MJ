@@ -1,18 +1,53 @@
-import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, inject } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ElementRef, ViewChild, ChangeDetectionStrategy, inject } from '@angular/core';
+import { Subject, merge } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
-import { Metadata, CompositeKey, EntityRecordNameInput, RunView, PermissionConstrainedError } from '@memberjunction/core';
-import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine } from '@memberjunction/core-entities';
+import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration, DashboardFavoritesService, HomeDashboardTabsService, IsDashboardEntity } from '@memberjunction/ng-shared';
+import { ResourceTypeForEntity } from '@memberjunction/ng-shared-generic';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { Metadata, CompositeKey, EntityRecordNameInput, RunView, PermissionConstrainedError, LogError } from '@memberjunction/core';
+import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine, MJDashboardEntity } from '@memberjunction/core-entities';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
+import type { DashboardNavRequestEvent } from '@memberjunction/ng-dashboard-viewer';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ActionPinConfigResult } from './action-pin-config-dialog.component';
 import { ActionPinRunResult } from './action-pin-runner-dialog.component';
 import { BuildHomeAgentContext, BuildHomeNotFoundError, ResolveNamedRecord, NamedRecord, RecentItemSummary } from './home-agent-context';
+import { BuildHomeDashboardStrip } from './home-dashboards-strip.helpers';
+import {
+  EmptyHomeDashboardTileSizes,
+  HomeDashboardTileSizes,
+  ParseHomeDashboardTileSizes,
+  SerializeHomeDashboardTileSizes,
+} from './home-dashboard-tile-layout';
+import { ElementHasSize, ElementSizeWait } from './element-size-wait';
+import {
+  CreateHomeTabView,
+  FindHomeTab,
+  HOME_OVERVIEW_TAB_ID,
+  HOME_OVERVIEW_TAB_NAME,
+  HomeTabView,
+  IsHomeOverviewTab,
+  PlanHomeTabView,
+  ResolveHomeTabReference,
+} from './home-dashboard-tabs.helpers';
 import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
+import { AutoInstallDashboardsApp, CreateBlankDashboard, EnsureDashboardsApp } from '../shared/dashboards-app.helpers';
+import { ObserveDashboardLibraryChanges, ObserveHomeTabsChanges } from '../shared/dashboard-library-changes';
+import { GetRecentDashboardIds, ObserveRecentDashboardChanges } from '../shared/dashboard-recents';
+
+/** The query param that names the open Home tab. The shell reads `tab` as a workspace tab id, so Home uses its own name. */
+const HOME_TAB_QUERY_PARAM = 'homeTab';
+
+/** User setting for the Dashboards strip: 'true' when collapsed, 'false' when open. A missing setting means open. */
+const DASHBOARDS_COLLAPSED_SETTING = 'HomeApp.DashboardsCollapsed';
+
+/** User setting for the Pinned section: 'true' when collapsed, 'false' when open. A missing setting means open. */
+const PINNED_COLLAPSED_SETTING = 'HomeApp.PinnedCollapsed';
+
+/** User setting for the row heights and tile widths of the Dashboards tiles (JSON; see home-dashboard-tile-layout.ts). */
+const DASHBOARD_TILE_SIZES_SETTING = 'HomeApp.DashboardTileSizes';
 
 /**
  * Cached app data with pre-computed values for optimal rendering performance
@@ -47,6 +82,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   protected override destroy$ = new Subject<void>();
   private metadata = this.ProviderToUse;
   private pinService = inject(HomeAppPinService);
+  private favoritesService = inject(DashboardFavoritesService);
 
   @ViewChild('appConfigDialog') AppConfigDialog!: UserAppConfigComponent;
 
@@ -146,6 +182,43 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.RecentsLoading = value;
   }
 
+  // Dashboards strip
+  /** The Config dashboard the user opened most recently, or null. */
+  public ContinueDashboard: MJDashboardEntity | null = null;
+  /** The user's favorite Config dashboards, newest favorite first. */
+  public FavoriteDashboards: MJDashboardEntity[] = [];
+  /** Ids of the user's favorite dashboards. */
+  public FavoriteDashboardIds: string[] = [];
+  /** How many Config dashboards the user can open. */
+  public DashboardTotal = 0;
+  /** How many of those dashboards other people own. */
+  public DashboardSharedCount = 0;
+  private creatingDashboard = false;
+
+  // Home dashboard tabs
+  /** The dashboards Home shows as tabs, in tab order. */
+  public HomeTabs: MJDashboardEntity[] = [];
+  /** The active tab: HOME_OVERVIEW_TAB_ID, or the ID of a dashboard in HomeTabs. */
+  public HomeActiveTab = HOME_OVERVIEW_TAB_ID;
+  /** The dashboard of the active tab, or null on Overview. */
+  public ActiveHomeTabDashboard: MJDashboardEntity | null = null;
+  /** The active tab's dashboard viewer: empty on Overview, else one. A new Key creates a new viewer. */
+  public HomeTabViews: HomeTabView[] = [];
+  /** True while the Manage home dashboards dialog is open. */
+  public ShowHomePrefsDialog = false;
+  /** True while a Remove tab request runs. */
+  public IsRemovingHomeTab = false;
+  private homeTabsService = inject(HomeDashboardTabsService);
+  /** False until Home first reads its tabs. A tab the URL names waits for that read. */
+  private homeTabsLoaded = false;
+  private homeTabViewKey = 0;
+  /** Watches the tab container while a viewer rebuild waits for the container to have a size. */
+  private homeTabSizeWait = new ElementSizeWait(() => {
+    this.syncHomeTabView();
+    this.cdr.markForCheck();
+  });
+  @ViewChild('homeTabContainer') private homeTabContainer?: ElementRef<HTMLElement>;
+
   // Notifications
   public UnreadNotifications: MJUserNotificationEntity[] = [];
 
@@ -182,6 +255,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   // Pin empty-state dismissal preference (persisted in UserSettings via UserInfoEngine)
   public HidePinEmptyState = false;
+
+  /** Whether the Dashboards strip is open. Saved for each user in the HomeApp.DashboardsCollapsed setting. */
+  public DashboardsExpanded = true;
+  /** Whether the Pinned section is open. Saved for each user in the HomeApp.PinnedCollapsed setting. */
+  public PinnedExpanded = true;
+  /** The row heights and tile widths of the Dashboards tiles. Saved for each user in the HomeApp.DashboardTileSizes setting. */
+  public DashboardTileSizes: HomeDashboardTileSizes = EmptyHomeDashboardTileSizes();
 
   // Pin state
   public PinnedItems: HomeAppPinnedItem[] = [];
@@ -221,7 +301,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public PinMenuY = 0;
   public PinMenuPin: HomeAppPinnedItem | null = null;
 
-  // Whether Data Explorer app is available (if so, dashboards/queries/views are accessible via its nav items)
+  // Whether the Add Pin panel found the Data Explorer app. Query pins then open in its Queries nav item.
   public HasDataExplorerApp = false;
 
   // Drag state
@@ -242,6 +322,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   /** @deprecated Use {@link FavoriteDisplayNames}. */
   public set favoriteDisplayNames(value) {
     this.FavoriteDisplayNames = value;
+  }
+
+  /** True when Home shows its Overview sections: the Dashboards strip, Pinned and My Applications. */
+  public get ShowOverview(): boolean {
+    return !this.isLoading && !this.ActiveHomeTabDashboard;
   }
 
   /**
@@ -301,6 +386,18 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       Name: this.metadata.CurrentUser?.Name || 'User',
       Email: this.metadata.CurrentUser?.Email || ''
     };
+    this.loadSectionStates();
+    this.loadDashboardTileSizes();
+
+    // The Home tab in Home's resource data, unless the tab's query-param stream already named one.
+    // It waits for the first read of the tabs (see loadDashboardStrip).
+    const initialTab = this.GetQueryParams()[HOME_TAB_QUERY_PARAM];
+    if (initialTab && IsHomeOverviewTab(this.HomeActiveTab)) {
+      this.activateHomeTab(initialTab);
+    }
+
+    // The Dashboards part of the first load: the automatic app install, the strip and the Home tabs
+    const dashboardsLoad = this.loadDashboards();
 
     // Subscribe to loading state from ApplicationManager
     this.appManager.Loading
@@ -323,6 +420,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
         // Pre-compute display data for all apps
         await this.computeAppsDisplayData();
+
+        // The page shows once the Dashboards part of the first load is done (see loadDashboards)
+        await dashboardsLoad;
 
         this.isLoading = false;
         this.NotifyLoadComplete();
@@ -352,6 +452,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.publishAgentContext();
         this.cdr.markForCheck();
       });
+
+    this.subscribeToDashboardStripSources();
+    this.subscribeToHomeTabSources();
 
     // Favorites and recents load asynchronously in the sidebar
     this.NotifyLoadComplete();
@@ -404,9 +507,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   //
   // 🚨 SAFETY BOUNDARY: the Home dashboard exposes ONLY navigation / discovery /
   // panel-toggle operations to the agent. No pin create, no pin delete, no pin
-  // rename, no group mutation, no reordering — those are user-confirm-driven or
-  // destructive and stay in the UI. Every tool below maps to the exact same
-  // component method a user click would call (OpenApp→onAppClick, OpenPin→OnPinClick,
+  // rename, no group mutation, no reordering, and no Home tab add / remove /
+  // reorder — those are user-confirm-driven or destructive and stay in the UI.
+  // Every tool below maps to the exact same component method a user click would
+  // call (OpenApp→onAppClick, OpenPin→OnPinClick, SwitchHomeTab→SetHomeTab,
   // search→AddPanel search field, panel/sidebar/edit-mode toggles). Handlers are
   // tolerant: they never throw, returning { Success, Data?, ErrorMessage? }.
 
@@ -432,6 +536,14 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       AddPanelOpen: this.AddPanelOpen,
       SidebarOpen: this.SidebarOpen,
       AddPanelSearchQuery: this.AddPanelSearchQuery,
+      ContinueDashboardName: this.ContinueDashboard?.Name ?? null,
+      FavoriteDashboardNames: this.FavoriteDashboards.map(d => d.Name),
+      DashboardTotal: this.DashboardTotal,
+      HomeTabNames: this.HomeTabs.map(d => d.Name),
+      ActiveHomeTab: this.ActiveHomeTabDashboard?.Name ?? HOME_OVERVIEW_TAB_NAME,
+      ActiveHomeTabDashboardID: this.ActiveHomeTabDashboard?.ID ?? null,
+      DashboardsCollapsed: !this.DashboardsExpanded,
+      PinnedCollapsed: !this.PinnedExpanded,
     });
     this.navigationService.SetAgentContext(this, context);
   }
@@ -455,6 +567,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    * - OpenPin: open a pinned item by its display name (exact or partial match).
    * - SearchPins: find pinned items by a name query (read-only — returns matches).
    * - OpenRecent: open a recently-accessed item by display name (read-only navigation).
+   * - SwitchHomeTab: switch Home to Overview or one of its dashboard tabs, by name or id.
    * - SearchAddPinPanel: open the Add Pin panel (if needed) and apply a search query.
    * - ClearAddPinPanelSearch: clear the Add Pin panel search query.
    * - OpenAddPinPanel / CloseAddPinPanel: toggle the Add Pin panel.
@@ -486,6 +599,12 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         Description: 'Open a recently-accessed item from the Home sidebar by its display name (exact or partial match). Read-only navigation.',
         ParameterSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
         Handler: async (params: Record<string, unknown>) => this.toolOpenRecent(params),
+      },
+      {
+        Name: 'SwitchHomeTab',
+        Description: 'Switch the Home screen to one of its tabs: "Overview", or a Home tab dashboard by name (exact or partial match) or id. Navigation only — it does not add or remove Home tabs.',
+        ParameterSchema: { type: 'object', properties: { tab: { type: 'string' } }, required: ['tab'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSwitchHomeTab(params),
       },
       {
         Name: 'SearchAddPinPanel',
@@ -636,6 +755,25 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     return { Success: true, Data: { Name: match.Name, ResourceType: item.resourceType } };
   }
 
+  /** Resolve a Home tab by name or id ("Overview" included) and open it. */
+  private toolSwitchHomeTab(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const parsed = ValidateStringParam(params['tab'], 'tab');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const reference = parsed.value.trim();
+    if (!reference) {
+      return { Success: false, ErrorMessage: 'tab is required.' };
+    }
+    const tab = ResolveHomeTabReference(reference, this.HomeTabs);
+    if (!tab) {
+      const candidates: NamedRecord[] = [{ Name: HOME_OVERVIEW_TAB_NAME }, ...this.HomeTabs.map(d => ({ Name: d.Name }))];
+      return { Success: false, ErrorMessage: BuildHomeNotFoundError(reference, 'Home tab', candidates) };
+    }
+    this.SetHomeTab(tab.ID);
+    return { Success: true, Data: { ActiveHomeTab: tab.Name } };
+  }
+
   /** Open the Add Pin panel (if needed) and apply a search query. */
   private async toolSearchAddPinPanel(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
     const parsed = ValidateStringParam(params['query'], 'query');
@@ -663,6 +801,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
+    this.homeTabSizeWait.Stop();
   }
 
   /**
@@ -890,9 +1029,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     const entityName = favorite.Entity?.toLowerCase();
     const recordId = favorite.RecordID;
 
-    if (entityName === 'dashboards') {
-      this.navigationService.OpenDashboard(recordId, 'Dashboard');
-    } else if (entityName === 'user views') {
+    if (IsDashboardEntity(favorite.Entity)) {
+      this.openDashboard(recordId, 'Dashboard');
+    } else if (ResourceTypeForEntity(favorite.Entity) === 'view') {
       this.navigationService.OpenView(recordId, 'View');
     } else if (entityName?.includes('artifact')) {
       this.navigationService.OpenArtifact(recordId, 'Artifact');
@@ -922,7 +1061,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.navigationService.OpenView(item.recordId, name || 'View');
         break;
       case 'dashboard':
-        this.navigationService.OpenDashboard(item.recordId, name || 'Dashboard');
+        this.openDashboard(item.recordId, name || 'Dashboard');
         break;
       case 'artifact':
         this.navigationService.OpenArtifact(item.recordId, name || 'Artifact');
@@ -1063,6 +1202,330 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   // =============================================
+  // DASHBOARDS STRIP
+  // =============================================
+
+  /**
+   * The Dashboards part of Home's first load: the automatic Dashboards app install (at most once
+   * per user) and the first read of the strip and the Home tabs. Home stays on its loading view
+   * until both finish, so the app-list reload that an install causes does not show a second loading
+   * view. Each install step gives up after DASHBOARDS_APP_INSTALL_STEP_TIMEOUT_MS, so a slow or
+   * silent server holds Home for seconds, not indefinitely. Never rejects.
+   */
+  private async loadDashboards(): Promise<void> {
+    await Promise.allSettled([AutoInstallDashboardsApp(this.appManager), this.loadDashboardStrip()]);
+  }
+
+  /**
+   * Loads the dashboard cache if it is not loaded yet, then fills the strip and the Home tabs. After
+   * this first read, the tab the URL names opens, or Overview shows when that tab is not in the list.
+   * Never rejects.
+   */
+  private async loadDashboardStrip(): Promise<void> {
+    try {
+      await DashboardEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+      this.refreshDashboardStrip();
+    } catch (error) {
+      LogError(`Home: could not load the Dashboards strip: ${errorMessage(error)}`);
+    }
+    this.homeTabsLoaded = true;
+    this.refreshHomeTabs();
+  }
+
+  /**
+   * Favorites, dashboard opens (the record logs reload after an open) and the dashboard cache also
+   * change while Home is a background tab, so these refresh the strip only. They do not report to
+   * the agent.
+   */
+  private subscribeToDashboardStripSources(): void {
+    merge(this.favoritesService.Changed$, ObserveRecentDashboardChanges(), ObserveDashboardLibraryChanges())
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.refreshDashboardStrip());
+  }
+
+  /** Re-reads the strip from the dashboard cache, the dashboard recents and the favorites. */
+  private refreshDashboardStrip(): void {
+    const userId = this.ProviderToUse.CurrentUser.ID;
+    const favoriteIds = this.favoritesService.FavoriteIds();
+    const strip = BuildHomeDashboardStrip(
+      DashboardEngine.Instance.GetAccessibleDashboards(userId),
+      GetRecentDashboardIds(this.ProviderToUse),
+      favoriteIds,
+      userId
+    );
+    this.ContinueDashboard = strip.Continue;
+    this.FavoriteDashboards = strip.Favorites;
+    this.FavoriteDashboardIds = favoriteIds;
+    this.DashboardTotal = strip.TotalCount;
+    this.DashboardSharedCount = strip.SharedCount;
+    this.cdr.markForCheck();
+  }
+
+  /** Opens the dashboard. */
+  public OpenDashboardFromStrip(dashboard: MJDashboardEntity): void {
+    this.openDashboard(dashboard.ID, dashboard.Name);
+  }
+
+  /**
+   * Opens a dashboard in place of the preview tab, which is usually the tab that shows Home, so Back
+   * returns to Home. A Shift-click opens it in a separate tab.
+   */
+  private openDashboard(dashboardId: string, dashboardName: string): void {
+    this.navigationService.OpenDashboard(dashboardId, dashboardName);
+  }
+
+  /** Stars or unstars the dashboard and tells the user. The strip refreshes when the favorites change. */
+  public async ToggleDashboardFavorite(dashboard: MJDashboardEntity): Promise<void> {
+    try {
+      const isFavorite = await this.favoritesService.Toggle(dashboard.ID);
+      const message = isFavorite ? `Added "${dashboard.Name}" to favorites` : `Removed "${dashboard.Name}" from favorites`;
+      MJNotificationService.Instance.CreateSimpleNotification(message, 'success', 2000);
+    } catch (error) {
+      LogError(`Home: could not change the favorite: ${errorMessage(error)}`);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not change the favorite', 'error', 3000);
+    }
+  }
+
+  /** Creates an empty dashboard and opens it in edit mode, like any dashboard open. Clicks while one is being created are ignored. */
+  public async NewDashboardFromStrip(): Promise<void> {
+    if (this.creatingDashboard) {
+      return;
+    }
+    this.creatingDashboard = true;
+    try {
+      const dashboard = await CreateBlankDashboard(this.ProviderToUse);
+      if (!dashboard) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not create the dashboard', 'error', 3000);
+        return;
+      }
+      await this.reloadDashboardCache();
+      this.navigationService.OpenDashboard(dashboard.ID, dashboard.Name, { openInEditMode: true });
+    } catch (error) {
+      LogError(`Home: could not open the new dashboard: ${errorMessage(error)}`);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not open the new dashboard', 'error', 3000);
+    } finally {
+      this.creatingDashboard = false;
+    }
+  }
+
+  /**
+   * Goes to a page of the Dashboards app. First installs or re-enables the app when the user does
+   * not have it. When the app cannot be opened, tells the user to try again or ask for access.
+   */
+  public async GoToDashboardsApp(navItem: 'Overview' | 'Browse'): Promise<void> {
+    const app = await EnsureDashboardsApp(this.appManager);
+    if (!app) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Could not open the Dashboards app. Try again, or ask your administrator for access.',
+        'warning',
+        4000
+      );
+      return;
+    }
+    await this.navigationService.SwitchToApp(app.ID, navItem);
+  }
+
+  /**
+   * Reloads the dashboard cache before a new dashboard's tab opens. The tab reads the dashboard
+   * from this cache, and the cache adds a saved dashboard by itself only after an asynchronous
+   * copy. A failure is only logged.
+   */
+  private async reloadDashboardCache(): Promise<void> {
+    try {
+      await DashboardEngine.Instance.Config(true, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+    } catch (error) {
+      LogError(`Home: could not reload the dashboards: ${errorMessage(error)}`);
+    }
+  }
+
+  // =============================================
+  // HOME DASHBOARD TABS
+  // =============================================
+
+  /**
+   * The Home tabs change when the user edits them here or in another tab, and when the dashboard
+   * cache changes (a dashboard, a permission or a preference row). These refresh the tabs only. They
+   * do not report to the agent and do not change the URL.
+   */
+  private subscribeToHomeTabSources(): void {
+    merge(this.homeTabsService.Changed$, ObserveHomeTabsChanges())
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.refreshHomeTabs());
+  }
+
+  /** Re-reads the Home tabs and keeps the active tab on a dashboard that is still a tab. */
+  private refreshHomeTabs(): void {
+    this.HomeTabs = this.homeTabsService.Tabs();
+    this.syncActiveHomeTab();
+    this.cdr.markForCheck();
+  }
+
+  /** Makes `tabId` the active tab: Overview or a Home tab dashboard. Before the first read of the tabs, the id waits for that read. */
+  private activateHomeTab(tabId: string): void {
+    this.HomeActiveTab = IsHomeOverviewTab(tabId) ? HOME_OVERVIEW_TAB_ID : tabId.trim();
+    this.syncActiveHomeTab();
+  }
+
+  /** Matches the active tab to the tab list: the dashboard it shows, or Overview when the list does not have it. */
+  private syncActiveHomeTab(): void {
+    if (!this.homeTabsLoaded) {
+      return;
+    }
+    const tab = FindHomeTab(this.HomeTabs, this.HomeActiveTab);
+    this.HomeActiveTab = tab ? tab.ID : HOME_OVERVIEW_TAB_ID;
+    this.ActiveHomeTabDashboard = tab;
+    this.syncHomeTabView();
+  }
+
+  /**
+   * Keeps the active tab's viewer in step with its dashboard. The viewer is created again when the
+   * dashboard, its name or its layout differs from what the viewer was built from, also when an edit
+   * changed the same object. While Home is hidden, that rebuild waits until the tab container has a
+   * size again (see PlanHomeTabView).
+   */
+  private syncHomeTabView(): void {
+    const dashboard = this.ActiveHomeTabDashboard;
+    if (!dashboard) {
+      this.HomeTabViews = [];
+      this.homeTabSizeWait.Stop();
+      return;
+    }
+    const container = this.homeTabContainer?.nativeElement ?? null;
+    const plan = PlanHomeTabView(this.HomeTabViews[0] ?? null, dashboard, container ? ElementHasSize(container) : null);
+    if (plan === 'wait' && container) {
+      this.homeTabSizeWait.Watch(container);
+      return;
+    }
+    this.homeTabSizeWait.Stop();
+    if (plan === 'build') {
+      this.HomeTabViews = [CreateHomeTabView(dashboard, ++this.homeTabViewKey)];
+    }
+  }
+
+  /** The active tab as the URL stores it. Overview has no `homeTab` param. */
+  private get homeTabQueryParam(): string | null {
+    return IsHomeOverviewTab(this.HomeActiveTab) ? null : this.HomeActiveTab;
+  }
+
+  /**
+   * Opens a Home tab: 'overview' or a Home tab dashboard's ID. Writes the tab to the URL. When the
+   * tab changes, records the dashboard open and reports the change to the agent.
+   */
+  public SetHomeTab(tabId: string): void {
+    const previous = this.HomeActiveTab;
+    this.activateHomeTab(tabId);
+    this.UpdateQueryParams({ [HOME_TAB_QUERY_PARAM]: this.homeTabQueryParam });
+    if (UUIDsEqual(previous, this.HomeActiveTab)) {
+      return;
+    }
+    if (this.ActiveHomeTabDashboard) {
+      void this.recentAccessService.LogAccess('MJ: Dashboards', this.ActiveHomeTabDashboard.ID, 'dashboard');
+    }
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  /** Applies the tab the URL names, for back and forward, deep links and pins. Reports a change of tab to the agent. */
+  protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    const previous = this.HomeActiveTab;
+    this.activateHomeTab(params[HOME_TAB_QUERY_PARAM] ?? '');
+    if (this.homeTabsLoaded && !UUIDsEqual(previous, this.HomeActiveTab)) {
+      this.publishAgentContext();
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Opens the Manage home dashboards dialog. */
+  public OpenManageHomeDashboards(): void {
+    this.ShowHomePrefsDialog = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Closes the Manage home dashboards dialog and reloads the Home tabs. Reloads after every result,
+   * not only a save: a failed save, or a close during a save, can still have written rows.
+   */
+  public async OnManageHomeDashboardsClosed(): Promise<void> {
+    this.ShowHomePrefsDialog = false;
+    this.cdr.markForCheck();
+    try {
+      await this.homeTabsService.Reload();
+    } catch (error) {
+      LogError(`Home: could not reload the Home tabs: ${errorMessage(error)}`);
+    }
+    this.refreshHomeTabs();
+    this.reportHomeTabsChange();
+  }
+
+  /**
+   * Removes the dashboard from the user's Home tabs and tells the user. Overview shows when the open
+   * tab goes. Clicks while a removal runs are ignored.
+   */
+  public async RemoveHomeTab(dashboard: MJDashboardEntity): Promise<void> {
+    if (this.IsRemovingHomeTab) {
+      return;
+    }
+    this.IsRemovingHomeTab = true;
+    this.cdr.markForCheck();
+    try {
+      await this.homeTabsService.Remove(dashboard.ID);
+      MJNotificationService.Instance.CreateSimpleNotification(`Removed "${dashboard.Name}" from your Home tabs`, 'success', 2000);
+    } catch (error) {
+      LogError(`Home: could not remove the Home tab: ${errorMessage(error)}`);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not remove the Home tab', 'error', 3000);
+    } finally {
+      this.IsRemovingHomeTab = false;
+    }
+    this.refreshHomeTabs();
+    this.reportHomeTabsChange();
+  }
+
+  /** Opens the active Home tab's dashboard in a dashboard tab (Open in Dashboards). */
+  public OpenHomeTabInApp(dashboard: MJDashboardEntity): void {
+    this.openDashboard(dashboard.ID, dashboard.Name);
+  }
+
+  /**
+   * Follows a link from a panel of a dashboard that Home shows, in the open Home tab or in a tile of
+   * the Dashboards section: a record, a dashboard or a query, as the dashboard tab does. Other link
+   * types are only logged.
+   */
+  public OnDashboardNavigationRequested(event: DashboardNavRequestEvent): void {
+    const request = event.request;
+    switch (request.type) {
+      case 'OpenEntityRecord': {
+        const key = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(request.entityName), request.recordId);
+        this.navigationService.OpenEntityRecord(request.entityName, key);
+        break;
+      }
+      case 'OpenDashboard':
+        this.openDashboard(request.dashboardId, this.cachedDashboardName(request.dashboardId));
+        break;
+      case 'OpenQuery':
+        this.navigationService.OpenQuery(request.queryId, 'Query');
+        break;
+      default:
+        console.warn(`[Home] A dashboard panel asked for a link type that Home does not open: ${request.type}`);
+    }
+  }
+
+  /** The dashboard's name from the dashboard cache, or 'Dashboard' when the cache does not have it. */
+  private cachedDashboardName(dashboardId: string): string {
+    const engine = DashboardEngine.Instance;
+    if (engine.IsPermissionConstrained) {
+      return 'Dashboard';
+    }
+    return engine.Dashboards.find(d => UUIDsEqual(d.ID, dashboardId))?.Name ?? 'Dashboard';
+  }
+
+  /** After a user action changed the tabs: writes the active tab to the URL and reports the tabs to the agent. */
+  private reportHomeTabsChange(): void {
+    this.UpdateQueryParams({ [HOME_TAB_QUERY_PARAM]: this.homeTabQueryParam });
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  // =============================================
   // PIN NAME RESOLUTION
   // =============================================
 
@@ -1153,19 +1616,14 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     const config = pin.Configuration;
     const rt = this.resolveStoredResourceType(pin);
 
-    // For Dashboards, Views, Queries — route through Data Explorer if available
-    const deApp = this.HasDataExplorerApp
-      ? this.appManager.GetAllApps().find(a => a.Name === 'Data Explorer')
-      : null;
-
     switch (rt) {
       case 'Dashboards': {
-        const dashboardId = config['dashboardId'] as string;
-        if (!dashboardId) break;
-        if (deApp) {
-          void this.navigationService.SwitchToApp(deApp.ID, 'Dashboards', { dashboard: dashboardId });
+        // A pin of an app's default dashboard tab stores the dashboard id only as recordId
+        const dashboardId = (config['dashboardId'] ?? config['recordId']) as string | undefined;
+        if (dashboardId) {
+          this.openDashboard(dashboardId, pin.DisplayName);
         } else {
-          this.navigationService.OpenDashboard(dashboardId, pin.DisplayName);
+          console.warn('[Pin Click] Dashboards pin missing dashboardId and recordId', config);
         }
         break;
       }
@@ -1185,6 +1643,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       case 'Queries': {
         const queryId = config['queryId'] as string;
         if (!queryId) break;
+        // Opens in Data Explorer's Queries nav item once the Add Pin panel has found that app
+        const deApp = this.HasDataExplorerApp
+          ? this.appManager.GetAllApps().find(a => a.Name === 'Data Explorer')
+          : null;
         if (deApp) {
           void this.navigationService.SwitchToApp(deApp.ID, 'Queries', { queryId: queryId });
         } else {
@@ -1273,11 +1735,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Toggle edit mode for pins
+   * Toggle edit mode for pins. Entering edit mode opens a collapsed Pinned section.
    */
   ToggleEditMode(): void {
     this.EditMode = !this.EditMode;
-    if (!this.EditMode) {
+    if (this.EditMode) {
+      this.openPinnedSection();
+    } else {
       this.EditingPinId = null;
       this.EditingGroupName = null;
     }
@@ -1292,6 +1756,50 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.HidePinEmptyState = true;
     UserInfoEngine.Instance.SetSettingDebounced('HomeApp.HidePinEmptyState', 'true');
     this.cdr.markForCheck();
+  }
+
+  /** Opens or collapses the Dashboards strip, saves the choice for the user and reports it to the agent. */
+  OnDashboardsExpandedChange(expanded: boolean): void {
+    this.DashboardsExpanded = expanded;
+    this.sectionStateChanged(DASHBOARDS_COLLAPSED_SETTING, expanded);
+  }
+
+  /** Opens or collapses the Pinned section, saves the choice for the user and reports it to the agent. */
+  OnPinnedExpandedChange(expanded: boolean): void {
+    this.PinnedExpanded = expanded;
+    this.sectionStateChanged(PINNED_COLLAPSED_SETTING, expanded);
+  }
+
+  /** Takes the tile sizes the user set in the Dashboards strip and saves them for the user. */
+  OnDashboardTileSizesChange(sizes: HomeDashboardTileSizes): void {
+    this.DashboardTileSizes = sizes;
+    UserInfoEngine.Instance.SetSettingDebounced(DASHBOARD_TILE_SIZES_SETTING, SerializeHomeDashboardTileSizes(sizes));
+    this.cdr.markForCheck();
+  }
+
+  /** Reads the user's tile sizes; a missing or bad setting gives the default sizes. */
+  private loadDashboardTileSizes(): void {
+    this.DashboardTileSizes = ParseHomeDashboardTileSizes(UserInfoEngine.Instance.GetSetting(DASHBOARD_TILE_SIZES_SETTING));
+  }
+
+  /** Reads whether each Overview section is open. 'true' means collapsed; a missing setting means open. */
+  private loadSectionStates(): void {
+    this.DashboardsExpanded = UserInfoEngine.Instance.GetSetting(DASHBOARDS_COLLAPSED_SETTING) !== 'true';
+    this.PinnedExpanded = UserInfoEngine.Instance.GetSetting(PINNED_COLLAPSED_SETTING) !== 'true';
+  }
+
+  /** Saves a section's state for the user ('true' when collapsed), reports it to the agent and renders. */
+  private sectionStateChanged(settingKey: string, expanded: boolean): void {
+    UserInfoEngine.Instance.SetSettingDebounced(settingKey, expanded ? 'false' : 'true');
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+  }
+
+  /** Opens the Pinned section when it is collapsed, so edit mode or a new pin shows. */
+  private openPinnedSection(): void {
+    if (!this.PinnedExpanded) {
+      this.OnPinnedExpandedChange(true);
+    }
   }
 
   /**
@@ -1488,12 +1996,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
-   * Edit a pin (enters edit mode focused on this pin)
+   * Edit a pin: enters edit mode focused on this pin, and opens a collapsed Pinned section.
    */
   OnPinMenuEdit(): void {
     if (this.PinMenuPin) {
       this.EditMode = true;
       this.EditingPinId = this.PinMenuPin.Id;
+      this.openPinnedSection();
       this.cdr.markForCheck();
     }
     this.HidePinMenu();
@@ -1673,8 +2182,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     // Load apps with their nav items
     await this.loadAvailableApps();
 
-    // Check if Data Explorer is available — if so, dashboards/queries/views
-    // are accessible through its nav items, no need for standalone sections
+    // Query pins open in Data Explorer when the user has that app (see OnPinClick)
     this.HasDataExplorerApp = this.AvailableApps.some(a => a.appName === 'Data Explorer');
   }
 
@@ -1752,6 +2260,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${navItemLabel}" pinned to Home`, 'success', 3000
       );
+      this.openPinnedSection();
       this.cdr.markForCheck();
     }
   }
@@ -1789,6 +2298,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${name}" pinned to Home`, 'success', 3000
       );
+      this.openPinnedSection();
     }
   }
 
@@ -1839,6 +2349,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${p.DisplayName}" pinned to Home`, 'success', 3000
       );
+      this.openPinnedSection();
     } else {
       MJNotificationService.Instance.CreateSimpleNotification(
         'A pin with the same title and config already exists.', 'warning', 3000
@@ -1897,4 +2408,8 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       }))
       .filter(app => app.appName.toLowerCase().includes(q) || app.navItems.length > 0);
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

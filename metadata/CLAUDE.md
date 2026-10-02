@@ -334,8 +334,8 @@ When creating new applications with custom dashboards:
    - `ResourceType`: Usually `"Custom"` for dashboard resources
    - `DriverClass`: Class name registered with `@RegisterClass(BaseResourceComponent, 'ClassName')`
    - `isDefault`: Set to `true` for the default tab (only one per app)
-4. For new apps, omit `primaryKey` and `sync` (see rule 1)
-5. Include `"relatedEntities": { "Application Entities": [] }` for the sync structure
+4. For new apps, include a `primaryKey` from CLI `uuidgen` and omit `sync` (see rule 1)
+5. Include `"relatedEntities": { "MJ: Application Entities": [] }` for the sync structure
 
 **Resource components for custom dashboards** — each nav item with `ResourceType: "Custom"` requires a corresponding Angular component:
 

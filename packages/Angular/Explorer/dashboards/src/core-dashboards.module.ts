@@ -1,10 +1,13 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 import {
   MJButtonDirective,
   MJClickableDirective,
   MJDatepickerComponent,
+  MJDialogComponent,
+  MJDialogActionsComponent,
   MJWindowComponent,
   MJWindowTitlebarComponent,
   MJDropdownComponent,
@@ -48,8 +51,12 @@ import { SharedPipesModule } from './shared/shared-pipes.module';
 // Core components — eagerly loaded, most-visited pages
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
+import { HomeDashboardsStripComponent } from './Home/home-dashboards-strip.component';
+import { HomeDashboardTileComponent } from './Home/home-dashboard-tile.component';
+import { HomeDashboardTabsComponent } from './Home/home-dashboard-tabs.component';
 import { ActionPinConfigDialogComponent } from './Home/action-pin-config-dialog.component';
 import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.component';
+import { DashboardPreferencesDialogComponent } from './Home/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 // HomeApplication is a non-Angular class registered via @RegisterClass(BaseApplication, 'HomeApplication').
 // It must be imported here so ESBuild includes it in this chunk, making it discoverable
 // via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
@@ -81,6 +88,10 @@ import { AdminMonitoringComponent } from './Admin/admin-monitoring.component';
 import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
 import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
 import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
+import { DashboardsOverviewResourceComponent } from './DashboardBrowser/dashboards-overview-resource.component';
+import { DashboardsSharedResourceComponent } from './DashboardBrowser/dashboards-shared-resource.component';
+import { DashboardsCategoriesResourceComponent } from './DashboardBrowser/dashboards-categories-resource.component';
+import { DashboardCardComponent } from './shared/dashboard-card/dashboard-card.component';
 // API Keys
 import { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
 import { APIKeyCreateDialogComponent } from './APIKeys/api-key-create-dialog.component';
@@ -107,7 +118,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
 
 /**
  * CoreDashboardsModule — eagerly loaded core features: Home, EntityAdmin,
- * SystemDiagnostics, QueryBrowser, DashboardBrowser, APIKeys, VersionHistory.
+ * SystemDiagnostics, QueryBrowser, the Dashboards app pages (Overview, Browse,
+ * Shared with me, Categories), APIKeys, VersionHistory.
  */
 @NgModule({
   declarations: [
@@ -116,12 +128,16 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     BulkOperationsRunHistoryComponent,
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
+    HomeDashboardsStripComponent,
+    HomeDashboardTileComponent,
+    HomeDashboardTabsComponent,
     ThemeStudioDashboardComponent,
     ThemeStudioResourceComponent,
     ThemeManagerDashboardComponent,
     ThemeManagerResourceComponent,
     ActionPinConfigDialogComponent,
     ActionPinRunnerDialogComponent,
+    DashboardPreferencesDialogComponent,
     SystemDiagnosticsComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
@@ -139,6 +155,10 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,
+    DashboardsOverviewResourceComponent,
+    DashboardsSharedResourceComponent,
+    DashboardsCategoriesResourceComponent,
+    DashboardCardComponent,
     // API Keys
     APIKeysResourceComponent,
     APIKeyCreateDialogComponent,
@@ -165,12 +185,15 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
+    DragDropModule,
     EntityViewerModule,
     MJTabStripModule,
     MJWorkspaceTabStripComponent,
     MJButtonDirective,
     MJClickableDirective,
     MJDatepickerComponent,
+    MJDialogComponent,
+    MJDialogActionsComponent,
     MJWindowComponent,
     MJWindowTitlebarComponent,
     MJDropdownComponent,
@@ -221,6 +244,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ThemeStudioResourceComponent,
     ThemeManagerDashboardComponent,
     ThemeManagerResourceComponent,
+    DashboardPreferencesDialogComponent,
     SystemDiagnosticsComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
@@ -238,6 +262,10 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,
+    DashboardsOverviewResourceComponent,
+    DashboardsSharedResourceComponent,
+    DashboardsCategoriesResourceComponent,
+    DashboardCardComponent,
     APIKeysResourceComponent,
     APIKeyCreateDialogComponent,
     APIKeyEditPanelComponent,

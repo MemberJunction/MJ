@@ -9,7 +9,6 @@ import { StartupValidationService } from './lib/services/startup-validation.serv
 
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { MJProgressBarComponent } from '@memberjunction/ng-ui-components';
-import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
 import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
@@ -37,8 +36,8 @@ import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
-import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 import { DashboardResource } from './lib/resource-wrappers/dashboard-resource.component';
+import { DashboardAddToMenuComponent } from './lib/resource-wrappers/dashboard-add-to-menu.component';
 import { QueryResource } from './lib/resource-wrappers/query-resource.component';
 import { EntityRecordResource } from './lib/resource-wrappers/record-resource.component';
 import { SearchResultsResource } from './lib/resource-wrappers/search-results-resource.component';
@@ -76,6 +75,7 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     ClaimRedeemComponent,
     ResourceContainerComponent,
     DashboardResource,
+    DashboardAddToMenuComponent,
     EntityRecordResource,
     SearchResultsResource,
     UserViewResource,
@@ -96,7 +96,6 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     ChatTasksResource,
     ArtifactResource,
     NotificationsResource,
-    DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
     LiveKitRoomResource,
   ],
@@ -123,7 +122,6 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     ResourcePermissionsModule,
     GenericDialogModule,
     MJProgressBarComponent,
-    DragDropModule,
     AITestHarnessModule, // [3.0] TO DO TO-DO Need to verify this works correctly!
     ArtifactsModule,
     SharedGenericModule,
@@ -159,7 +157,6 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     EditDashboardComponent,
     UserNotificationsComponent,
     ListDetailResource,
-    DashboardPreferencesDialogComponent,
     ConversationFeedbackResource
   ],
   providers: [

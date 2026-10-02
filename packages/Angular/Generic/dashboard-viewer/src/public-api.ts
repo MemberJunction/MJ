@@ -14,6 +14,12 @@ export * from './lib/dashboard-browser/dashboard-browser.component';
 // Breadcrumb Component
 export * from './lib/breadcrumb/dashboard-breadcrumb.component';
 
+// Layout Preview (a miniature of a saved dashboard layout). A host that declares the preview
+// component itself (for example a test module) declares the node component with it.
+export * from './lib/layout-preview/dashboard-layout-preview';
+export * from './lib/layout-preview/dashboard-layout-preview.component';
+export * from './lib/layout-preview/dashboard-layout-preview-node.component';
+
 // Generic Dialogs
 export * from './lib/dialogs/add-panel-dialog/add-panel-dialog.component';
 export * from './lib/dialogs/edit-part-dialog/edit-part-dialog.component';

@@ -177,8 +177,8 @@ export class GoldenLayoutWrapperService {
         this._layout.loadLayout(glConfig);
 
         // Set the size of Golden Layout to match the container
-        const rect = container.getBoundingClientRect();
-        this._layout.setSize(rect.width, rect.height);
+        const size = this.containerLayoutSize(container);
+        this._layout.setSize(size.width, size.height);
 
         this._initialized = true;
         this.updatePanelsList();
@@ -299,11 +299,20 @@ export class GoldenLayoutWrapperService {
      */
     public UpdateSize(): void {
         if (this._layout && this._containerElement) {
-            const rect = this._containerElement.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-                this._layout.setSize(rect.width, rect.height);
+            const size = this.containerLayoutSize(this._containerElement);
+            if (size.width > 0 && size.height > 0) {
+                this._layout.setSize(size.width, size.height);
             }
         }
+    }
+
+    /**
+     * The container's layout size (offsetWidth / offsetHeight). Golden Layout lays out in this size
+     * and reads it itself when it resizes with the container. It differs from the on-screen size
+     * (getBoundingClientRect) when a host scales the viewer, for example with a CSS transform.
+     */
+    private containerLayoutSize(container: HTMLElement): { width: number; height: number } {
+        return { width: container.offsetWidth, height: container.offsetHeight };
     }
 
     /** @deprecated Use {@link UpdateSize}. */

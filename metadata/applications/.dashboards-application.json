@@ -1,0 +1,48 @@
+{
+  "fields": {
+    "Name": "Dashboards",
+    "Description": "Every dashboard you own or that is shared with you, in one place",
+    "Icon": "fa-solid fa-gauge-high",
+    "DefaultForNewUser": true,
+    "DefaultSequence": 3,
+    "Color": "#0e7490",
+    "Status": "Active",
+    "NavigationStyle": "App Switcher",
+    "DefaultNavItems": [
+      {
+        "Label": "Overview",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "DashboardsOverviewResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Browse",
+        "Icon": "fa-solid fa-layer-group",
+        "ResourceType": "Custom",
+        "DriverClass": "DashboardBrowserResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Shared with me",
+        "Icon": "fa-solid fa-inbox",
+        "ResourceType": "Custom",
+        "DriverClass": "DashboardsSharedResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Categories",
+        "Icon": "fa-solid fa-folder-tree",
+        "ResourceType": "Custom",
+        "DriverClass": "DashboardsCategoriesResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "4B439111-B492-4936-9E33-A428CB5725B4"
+  }
+}

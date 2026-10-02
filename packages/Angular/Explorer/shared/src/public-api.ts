@@ -19,6 +19,10 @@ export * from './lib/title.service';
 export * from './lib/developer-mode.service';
 export * from './lib/home-pin.types';
 export * from './lib/home-pin.service';
+export * from './lib/dashboard-favorites';
+export * from './lib/dashboard-favorites.service';
+export * from './lib/home-dashboard-tabs';
+export * from './lib/home-dashboard-tabs.service';
 export { SYSTEM_APP_ID } from './lib/navigation.service';
 // Re-export from ng-shared-generic for backwards compatibility
 export * from '@memberjunction/ng-shared-generic';

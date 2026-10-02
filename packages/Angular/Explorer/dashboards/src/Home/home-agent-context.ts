@@ -10,13 +10,17 @@
  *
  * Deep ("hardcore", Data-Explorer depth) enrichment: bounded name lists (cap
  * {@link HOME_AGENT_CONTEXT_NAME_LIST_CAP} with a companion `*Count` flag when
- * truncated) for apps, pins, pin groups, notifications, and recents; structured
- * recent-item summaries; and a tolerant name resolver so the agent can open a
- * pin / app / recent the way the user named it (exact name → partial contains).
+ * truncated) for apps, pins, pin groups, notifications, recents, favorite
+ * dashboards and Home tabs; structured recent-item summaries; the Dashboards
+ * strip and the active Home tab; whether the Dashboards strip and the Pinned
+ * section are collapsed; and a tolerant name resolver so the agent can
+ * open a pin / app / recent / Home tab the way the user named it (exact name →
+ * partial contains).
  *
  * 🔒 SAFETY BOUNDARY: the Home dashboard exposes ONLY navigation / discovery /
  * panel-toggle operations. No helper here describes — and no tool may perform —
- * pin create / delete / rename, group mutation, or reordering.
+ * pin create / delete / rename, group mutation, reordering, or Home tab
+ * add / remove / reorder.
  */
 
 /**
@@ -132,6 +136,53 @@ export interface HomeAgentContextInput {
     SidebarOpen: boolean;
     /** Current search query inside the Add Pin panel (empty when not searching). */
     AddPanelSearchQuery: string;
+    /** Name of the Continue dashboard on the Dashboards strip, or null. */
+    ContinueDashboardName: string | null;
+    /** Names of the user's favorite dashboards, newest favorite first. */
+    FavoriteDashboardNames: string[];
+    /** How many dashboards the user can open. */
+    DashboardTotal: number;
+    /** Names of the Home tab dashboards, in tab order. */
+    HomeTabNames: string[];
+    /** The active Home tab: 'Overview' or the dashboard's name. */
+    ActiveHomeTab: string;
+    /** ID of the dashboard the active Home tab shows, or null on Overview. */
+    ActiveHomeTabDashboardID: string | null;
+    /** Whether the Dashboards strip on Overview is collapsed. */
+    DashboardsCollapsed: boolean;
+    /** Whether the Pinned section on Overview is collapsed. */
+    PinnedCollapsed: boolean;
+}
+
+/**
+ * Add a bounded name list under `key` when it is not empty, plus `countKey` with the true total
+ * when the list is longer than {@link HOME_AGENT_CONTEXT_NAME_LIST_CAP}.
+ */
+function addBoundedNames(context: Record<string, unknown>, key: string, countKey: string, names: readonly string[]): void {
+    if (names.length === 0) {
+        return;
+    }
+    context[key] = capNames(names);
+    if (names.length > HOME_AGENT_CONTEXT_NAME_LIST_CAP) {
+        context[countKey] = names.length;
+    }
+}
+
+/**
+ * Add the Dashboards strip (total, Continue dashboard, favorite dashboards) and the Home tabs (tab
+ * names, the active tab by name and dashboard id) to the context.
+ */
+function addDashboardContext(context: Record<string, unknown>, input: HomeAgentContextInput): void {
+    context['DashboardTotal'] = input.DashboardTotal;
+    if (input.ContinueDashboardName) {
+        context['ContinueDashboardName'] = input.ContinueDashboardName;
+    }
+    addBoundedNames(context, 'FavoriteDashboardNames', 'FavoriteDashboardNameCount', input.FavoriteDashboardNames);
+    addBoundedNames(context, 'HomeTabNames', 'HomeTabNameCount', input.HomeTabNames);
+    context['ActiveHomeTab'] = input.ActiveHomeTab;
+    if (input.ActiveHomeTabDashboardID) {
+        context['ActiveHomeTabDashboardID'] = input.ActiveHomeTabDashboardID;
+    }
 }
 
 /**
@@ -139,10 +190,13 @@ export interface HomeAgentContextInput {
  *
  * Reports the app launcher state (app counts + names), the pin board state (pin
  * counts + names + groups + edit mode), the notifications (count + bounded titles),
- * the recents (count + bounded structured summaries), the Add Pin panel state, and
- * the sidebar state. Each name list is bounded with a companion total-count when
- * truncated. Keeping this a pure function (no `this`) makes the context shape
- * unit-testable and decouples it from change-detection timing.
+ * the recents (count + bounded structured summaries), the Add Pin panel state, the
+ * sidebar state, whether the Dashboards strip and the Pinned section are collapsed,
+ * the Dashboards strip (total, Continue dashboard, favorite dashboards) and the Home
+ * tabs (tab names, the active tab by name and dashboard id). Each name list is
+ * bounded with a companion total-count when truncated. Keeping this a pure function
+ * (no `this`) makes the context shape unit-testable and decouples it from
+ * change-detection timing.
  *
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
@@ -160,6 +214,8 @@ export function BuildHomeAgentContext(input: HomeAgentContextInput): Record<stri
         EditMode: input.EditMode,
         AddPanelOpen: input.AddPanelOpen,
         SidebarOpen: input.SidebarOpen,
+        DashboardsCollapsed: input.DashboardsCollapsed,
+        PinnedCollapsed: input.PinnedCollapsed,
     };
 
     // When the lists are longer than we publish names for, tell the co-agent the
@@ -200,6 +256,8 @@ export function BuildHomeAgentContext(input: HomeAgentContextInput): Record<stri
     if (input.AddPanelOpen && input.AddPanelSearchQuery) {
         context['AddPanelSearchQuery'] = input.AddPanelSearchQuery;
     }
+
+    addDashboardContext(context, input);
 
     return context;
 }

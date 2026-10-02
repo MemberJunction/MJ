@@ -15,7 +15,6 @@ import {
     IsValidBrowserViewMode,
     AGENT_CONTEXT_NAME_LIST_CAP,
     DashboardBrowserAgentContextInput,
-    OpenedDashboardPanelSummary,
 } from '../DashboardBrowser/dashboard-browser-agent-context';
 
 /** Build a list of `count` distinct placeholder names. */
@@ -25,12 +24,10 @@ function names(prefix: string, count: number): string[] {
 
 describe('dashboard-browser-agent-context', () => {
     const base: DashboardBrowserAgentContextInput = {
-        Mode: 'list',
-        SelectedDashboardId: null,
-        SelectedDashboardName: null,
         VisibleDashboardNames: [],
         TotalDashboardCount: 12,
         FilteredDashboardCount: 0,
+        LibraryFilter: 'all',
         SearchText: '',
         AvailableCategoryNames: [],
         SelectedCategoryId: null,
@@ -59,9 +56,6 @@ describe('dashboard-browser-agent-context', () => {
     describe('buildDashboardBrowserAgentContext', () => {
         it('passes through the list-level snapshot fields', () => {
             const ctx = BuildDashboardBrowserAgentContext(base);
-            expect(ctx['Mode']).toBe('list');
-            expect(ctx['SelectedDashboardId']).toBeNull();
-            expect(ctx['SelectedDashboardName']).toBeNull();
             expect(ctx['TotalDashboardCount']).toBe(12);
             expect(ctx['FilteredDashboardCount']).toBe(0);
             expect(ctx['SelectedCategoryId']).toBeNull();
@@ -73,20 +67,14 @@ describe('dashboard-browser-agent-context', () => {
             expect(ctx['AvailableCategories']).toEqual([]);
         });
 
-        it('reflects a selected dashboard in view mode', () => {
+        it('reflects the selected category, view mode and loading state', () => {
             const ctx = BuildDashboardBrowserAgentContext({
                 ...base,
-                Mode: 'view',
-                SelectedDashboardId: 'abc-123',
-                SelectedDashboardName: 'Revenue',
                 SelectedCategoryId: 'cat-9',
                 SelectedCategoryName: 'Finance',
                 ViewMode: 'list',
                 IsLoading: true,
             });
-            expect(ctx['Mode']).toBe('view');
-            expect(ctx['SelectedDashboardId']).toBe('abc-123');
-            expect(ctx['SelectedDashboardName']).toBe('Revenue');
             expect(ctx['SelectedCategoryId']).toBe('cat-9');
             expect(ctx['SelectedCategoryName']).toBe('Finance');
             expect(ctx['ViewMode']).toBe('list');
@@ -101,6 +89,11 @@ describe('dashboard-browser-agent-context', () => {
             });
             expect(ctx['VisibleDashboards']).toEqual(['Revenue', 'Pipeline', 'Churn']);
             expect(ctx['FilteredDashboardCount']).toBe(3);
+        });
+
+        it('publishes the active Library filter', () => {
+            expect(BuildDashboardBrowserAgentContext(base)['LibraryFilter']).toBe('all');
+            expect(BuildDashboardBrowserAgentContext({ ...base, LibraryFilter: 'favorites' })['LibraryFilter']).toBe('favorites');
         });
 
         it('publishes the available category NAMES and the selected category name', () => {
@@ -166,105 +159,31 @@ describe('dashboard-browser-agent-context', () => {
                 'FilteredDashboardCount',
                 'HasSearch',
                 'IsLoading',
-                'Mode',
+                'LibraryFilter',
                 'SearchText',
                 'SelectedCategoryId',
                 'SelectedCategoryName',
-                'SelectedDashboardId',
-                'SelectedDashboardName',
                 'TotalDashboardCount',
                 'ViewMode',
                 'VisibleDashboards',
             ]);
         });
 
-        it('omits ALL opened-dashboard fields in list mode (no leakage at the list level)', () => {
-            const ctx = BuildDashboardBrowserAgentContext({
-                ...base,
-                Mode: 'list',
-                // Even if a caller accidentally supplies opened-dashboard data, list
-                // mode must not publish it.
-                OpenedDashboardName: 'Should Not Appear',
-                OpenedDashboardId: 'nope-1',
-                OpenedDashboardIsEditing: true,
-                OpenedDashboardCanEdit: true,
-                OpenedDashboardPanels: [{ Title: 'X', PartTypeName: 'View' }],
-            });
-            expect(ctx).not.toHaveProperty('OpenedDashboardName');
-            expect(ctx).not.toHaveProperty('OpenedDashboardId');
-            expect(ctx).not.toHaveProperty('OpenedDashboardIsEditing');
-            expect(ctx).not.toHaveProperty('OpenedDashboardCanEdit');
-            expect(ctx).not.toHaveProperty('OpenedDashboardPanels');
-            expect(ctx).not.toHaveProperty('OpenedDashboardPanelCount');
-        });
-    });
-
-    /**
-     * Opened-dashboard awareness: when a dashboard is OPEN (Mode view/edit) the
-     * context must describe the open dashboard + its panels so the agent isn't
-     * blind to what's on screen. These fields are present ONLY in view/edit mode.
-     */
-    describe('opened-dashboard awareness (view / edit modes)', () => {
-        const panels: OpenedDashboardPanelSummary[] = [
-            { Title: 'Active Members', PartTypeName: 'View', Icon: 'fa-solid fa-users' },
-            { Title: 'Renewals Query', PartTypeName: 'Query' },
-        ];
-
-        function openCtx(overrides: Partial<DashboardBrowserAgentContextInput> = {}): Record<string, unknown> {
-            return BuildDashboardBrowserAgentContext({
-                ...base,
-                Mode: 'view',
-                SelectedDashboardId: 'dash-1',
-                SelectedDashboardName: 'Membership',
-                OpenedDashboardName: 'Membership',
-                OpenedDashboardId: 'dash-1',
-                OpenedDashboardIsEditing: false,
-                OpenedDashboardCanEdit: true,
-                OpenedDashboardPanels: panels,
-                ...overrides,
-            });
-        }
-
-        it('publishes the opened-dashboard identity + access in view mode', () => {
-            const ctx = openCtx();
-            expect(ctx['OpenedDashboardName']).toBe('Membership');
-            expect(ctx['OpenedDashboardId']).toBe('dash-1');
-            expect(ctx['OpenedDashboardIsEditing']).toBe(false);
-            expect(ctx['OpenedDashboardCanEdit']).toBe(true);
-        });
-
-        it('publishes the panel list + panel count', () => {
-            const ctx = openCtx();
-            expect(ctx['OpenedDashboardPanelCount']).toBe(2);
-            expect(ctx['OpenedDashboardPanels']).toEqual(panels);
-        });
-
-        it('marks editing in edit mode', () => {
-            const ctx = openCtx({ Mode: 'edit', OpenedDashboardIsEditing: true });
-            expect(ctx['Mode']).toBe('edit');
-            expect(ctx['OpenedDashboardIsEditing']).toBe(true);
-        });
-
-        it('defaults opened-dashboard fields tolerantly when not supplied', () => {
-            const ctx = BuildDashboardBrowserAgentContext({ ...base, Mode: 'view' });
-            // Present (because mode !== 'list') but defaulted.
-            expect(ctx['OpenedDashboardName']).toBeNull();
-            expect(ctx['OpenedDashboardId']).toBeNull();
-            expect(ctx['OpenedDashboardIsEditing']).toBe(false);
-            expect(ctx['OpenedDashboardCanEdit']).toBe(false);
-            expect(ctx['OpenedDashboardPanelCount']).toBe(0);
-            expect(ctx['OpenedDashboardPanels']).toEqual([]);
-        });
-
-        it('caps the opened-dashboard panel list at the name-list cap', () => {
-            const many: OpenedDashboardPanelSummary[] = Array.from(
-                { length: AGENT_CONTEXT_NAME_LIST_CAP + 7 },
-                (_, i) => ({ Title: `Panel ${i + 1}`, PartTypeName: 'View' }),
-            );
-            const ctx = openCtx({ OpenedDashboardPanels: many });
-            expect((ctx['OpenedDashboardPanels'] as unknown[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
-            // The count reports the true (uncapped) total.
-            expect(ctx['OpenedDashboardPanelCount']).toBe(many.length);
+        it('publishes no mode, selected-dashboard or opened-dashboard fields (Browse never shows a dashboard; it opens in a dashboard tab)', () => {
+            const ctx = BuildDashboardBrowserAgentContext({ ...base, VisibleDashboardNames: ['A'] });
+            for (const key of [
+                'Mode',
+                'SelectedDashboardId',
+                'SelectedDashboardName',
+                'OpenedDashboardName',
+                'OpenedDashboardId',
+                'OpenedDashboardIsEditing',
+                'OpenedDashboardCanEdit',
+                'OpenedDashboardPanels',
+                'OpenedDashboardPanelCount',
+            ]) {
+                expect(ctx).not.toHaveProperty(key);
+            }
         });
     });
 

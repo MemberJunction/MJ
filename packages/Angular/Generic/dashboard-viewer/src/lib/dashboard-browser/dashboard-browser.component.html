@@ -5,7 +5,7 @@
     <!-- Breadcrumb Navigation -->
     <mj-dashboard-breadcrumb
       [Categories]="Categories"
-      [CurrentCategoryId]="SelectedCategoryId"
+      [CurrentCategoryId]="FlatMode ? null : SelectedCategoryId"
       [RootIcon]="IconClass"
       [RootLabel]="Title"
       [AllowDragDrop]="AllowDragDrop && (DraggingId !== null || IsSelectionMode)"
@@ -358,55 +358,66 @@
 
   <!-- Empty State -->
   @if (FilteredDashboards.length === 0 && FilteredChildCategories.length === 0 && !IsLoading) {
-    <!-- First-time user experience (no dashboards at all) -->
-    @if (IsAtRoot && Dashboards.length === 0) {
-      <mj-empty-state
-        class="dashboard-empty"
-        Size="large"
-        Icon="fa-solid fa-gauge-high"
-        Title="Welcome to Dashboards"
-        Message="Create custom dashboards to visualize your data, track key metrics, and monitor important information all in one place."
-        [ActionText]="ShowCreateButton ? 'Create Your First Dashboard' : ''"
-        ActionIcon="fa-solid fa-plus"
-        (Action)="OnCreateDashboard()">
-        <div class="empty-features">
-          <div class="feature-item">
-            <i class="fa-solid fa-table-cells"></i>
-            <span>Customizable layouts</span>
+    @if (FlatMode) {
+      <!-- Flat list has nothing to show -->
+      @if (!SearchText) {
+        <mj-empty-state
+          class="dashboard-empty"
+          Icon="fa-solid fa-layer-group"
+          Title="No dashboards to show"
+          Message="There are no dashboards in this list yet." />
+      }
+    } @else {
+      <!-- First-time user experience (no dashboards at all) -->
+      @if (IsAtRoot && Dashboards.length === 0) {
+        <mj-empty-state
+          class="dashboard-empty"
+          Size="large"
+          Icon="fa-solid fa-gauge-high"
+          Title="Welcome to Dashboards"
+          Message="Create custom dashboards to visualize your data, track key metrics, and monitor important information all in one place."
+          [ActionText]="ShowCreateButton ? 'Create Your First Dashboard' : ''"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="OnCreateDashboard()">
+          <div class="empty-features">
+            <div class="feature-item">
+              <i class="fa-solid fa-table-cells"></i>
+              <span>Customizable layouts</span>
+            </div>
+            <div class="feature-item">
+              <i class="fa-solid fa-database"></i>
+              <span>Connect to your data</span>
+            </div>
+            <div class="feature-item">
+              <i class="fa-solid fa-share-nodes"></i>
+              <span>Share with your team</span>
+            </div>
           </div>
-          <div class="feature-item">
-            <i class="fa-solid fa-database"></i>
-            <span>Connect to your data</span>
-          </div>
-          <div class="feature-item">
-            <i class="fa-solid fa-share-nodes"></i>
-            <span>Share with your team</span>
-          </div>
-        </div>
-      </mj-empty-state>
-    }
-    <!-- Folder is empty -->
-    @if (!IsAtRoot && !SearchText) {
-      <mj-empty-state
-        class="dashboard-empty"
-        Variant="warning"
-        Icon="fa-solid fa-folder-open"
-        Title="This folder is empty"
-        Message="Add dashboards or create sub-folders to organize your content."
-        [ActionText]="ShowCreateButton ? 'Create Dashboard' : ''"
-        ActionIcon="fa-solid fa-plus"
-        (Action)="OnCreateDashboard()" />
-    }
-    <!-- Root has dashboards but none uncategorized -->
-    @if (IsAtRoot && Dashboards.length > 0 && !SearchText) {
-      <mj-empty-state
-        class="dashboard-empty"
-        Icon="fa-solid fa-folder-tree"
-        Title="No uncategorized dashboards"
-        Message="All your dashboards are organized into folders. Browse the folders above or create a new dashboard here."
-        [ActionText]="ShowCreateButton ? 'Create Dashboard' : ''"
-        ActionIcon="fa-solid fa-plus"
-        (Action)="OnCreateDashboard()" />
+        </mj-empty-state>
+      }
+      <!-- Folder is empty -->
+      @if (!IsAtRoot && !SearchText) {
+        <mj-empty-state
+          class="dashboard-empty"
+          Variant="warning"
+          Icon="fa-solid fa-folder-open"
+          Title="This folder is empty"
+          Message="Add dashboards or create sub-folders to organize your content."
+          [ActionText]="ShowCreateButton ? 'Create Dashboard' : ''"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="OnCreateDashboard()" />
+      }
+      <!-- Root has dashboards but none uncategorized -->
+      @if (IsAtRoot && Dashboards.length > 0 && !SearchText) {
+        <mj-empty-state
+          class="dashboard-empty"
+          Icon="fa-solid fa-folder-tree"
+          Title="No uncategorized dashboards"
+          Message="All your dashboards are organized into folders. Browse the folders above or create a new dashboard here."
+          [ActionText]="ShowCreateButton ? 'Create Dashboard' : ''"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="OnCreateDashboard()" />
+      }
     }
     <!-- Search returned no results -->
     @if (SearchText) {

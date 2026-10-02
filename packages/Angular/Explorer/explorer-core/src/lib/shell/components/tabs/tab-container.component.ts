@@ -42,6 +42,8 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /** Fallback tab accent when an app has no color (matches pre-existing usage) */
 const DEFAULT_APP_COLOR = '#757575';
+/** A single-field key in URL-segment form ('Field|value'); group 1 is the value. */
+const SINGLE_FIELD_URL_SEGMENT = /^[^|]+\|([^|]+)$/;
 /**
  * Container for Golden Layout tabs with app-colored styling.
  *
@@ -2301,6 +2303,19 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     return normalize(a) === normalize(b);
   }
 
+  /**
+   * Whether two resource record ids name the same record. A component's ResourceRecordSaved
+   * stores a single-field key in the URL-segment form ('ID|<uuid>'), while its tab may keep the
+   * bare value ('<uuid>'). The field name is dropped only when the other id is a bare value, so
+   * two ids that both contain '|' are compared as they are.
+   */
+  public static IsSameRecordId(a: string | null | undefined, b: string | null | undefined): boolean {
+    const left = (a ?? '').trim();
+    const right = (b ?? '').trim();
+    const bareValue = (id: string): string => SINGLE_FIELD_URL_SEGMENT.exec(id)?.[1] ?? id;
+    return left === right || bareValue(left) === right || left === bareValue(right);
+  }
+
   private async getResourceTypeId(resourceType: string): Promise<string> {
     const rt = await this.getResourceTypeEntity(resourceType);
     if (rt) {
@@ -2532,9 +2547,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           const existingEntity = existingResourceData?.Configuration?.Entity as string | undefined;
           const newEntity = tab.configuration['Entity'] as string | undefined;
 
+          // The record id comparison accepts the URL-segment form ResourceRecordSaved writes into
+          // the component's Data ('ID|<uuid>' for a tab that keeps '<uuid>'). An exact comparison
+          // reloads the same cached component on every configuration emission, and each reload
+          // emits a new configuration.
           const needsReload = !TabContainerComponent.IsSameResourceType(existingResourceData?.ResourceType, tab.configuration['resourceType'] as string | undefined) ||
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
-                             existingRecordId !== newRecordId ||
+                             !TabContainerComponent.IsSameRecordId(existingRecordId, newRecordId) ||
                              existingEntity !== newEntity ||
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 

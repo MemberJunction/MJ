@@ -42,6 +42,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AppSwitcherStyle } from './components/header/app-switcher.component';
 import { ApplyShellChromePolicy, BaseShellChromePolicy, ShellChromeFlags } from './shell-chrome-policy';
 import { SetReadinessBeacon } from './readiness-beacon';
+import { FindDashboardTabForUrl, OpenDashboardForUrl, ParseAppDashboardUrl } from './dashboard-tab-for-url';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -1424,11 +1425,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         return;
       }
 
-      // Check for app-scoped dashboard URL: /app/:appName/dashboard/:dashboardId
-      const appDashboardMatch = urlPath.match(/^\/app\/([^\/]+)\/dashboard\/(.+)$/);
-      if (appDashboardMatch) {
-        const dashboardId = appDashboardMatch[2];
-        this.navigationService.OpenDashboard(dashboardId, 'Dashboard');
+      // Check for app-scoped dashboard URL: /app/:appName/dashboard/:dashboardId. The tab goes to
+      // the URL's application, where the ResourceResolver also opens it.
+      const openedDashboard = OpenDashboardForUrl(urlPath, {
+        FindApp: (appPath) => this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath),
+        OpenDashboard: (dashboardId, dashboardName, options) => this.navigationService.OpenDashboard(dashboardId, dashboardName, options),
+      });
+      if (openedDashboard) {
         return;
       }
 
@@ -1634,17 +1637,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Pattern: /app/:appName/:resourceType/:param1/:param2?
 
     // Dashboard: /app/:appName/dashboard/:dashboardId
-    const appDashboardMatch = urlPath.match(/^\/app\/([^\/]+)\/dashboard\/(.+)$/);
-    if (appDashboardMatch) {
-      const dashboardId = appDashboardMatch[2];
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-        const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return resourceType === 'dashboards' && tabDashboardId === dashboardId;
-      }) || null;
+    const appDashboardUrl = ParseAppDashboardUrl(urlPath);
+    if (appDashboardUrl) {
+      const app = this.appManager.GetAppByPath(appDashboardUrl.AppPath) || this.appManager.GetAppByName(appDashboardUrl.AppPath);
+      return FindDashboardTabForUrl(tabs, appDashboardUrl.DashboardId, app?.ID);
     }
 
     // Record: /app/:appName/record/:entityName/:recordId
@@ -1758,15 +1754,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Check for dashboard URL: /resource/dashboard/:dashboardId
     const dashboardMatch = urlPath.match(/^\/resource\/dashboard\/(.+)$/);
     if (dashboardMatch) {
-      const dashboardId = dashboardMatch[1];
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-        const tabDashboardId = (tabConfig['dashboardId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return resourceType === 'dashboards' && tabDashboardId === dashboardId;
-      }) || null;
+      return FindDashboardTabForUrl(tabs, dashboardMatch[1]);
     }
 
     // Check for artifact URL: /resource/artifact/:artifactId

@@ -89,6 +89,17 @@ Browse available dashboards with category filtering:
 </mj-dashboard-browser>
 ```
 
+Set `[FlatMode]="true"` to show every dashboard you pass in one flat list, with no folder scoping and no folder cards (for example, a list of favorites or of dashboards shared with the user). Flat mode ignores `SelectedCategoryId`, so new dashboards and categories are created at the root.
+
+### Dashboard Layout Preview
+
+A miniature of a dashboard's saved panel layout, for dashboard cards: each panel is a box with its icon and title, sized like the saved layout. It fills its container, renders only phrasing elements (so it can sit inside a button), and is `aria-hidden`, so the host must name the dashboard. It draws nothing when `UIConfigDetails` has no panel layout. `BuildDashboardLayoutPreview(uiConfigDetails)` returns the tree it draws, or null, so a host can choose another picture first. A host that already has the tree passes it in `[Preview]`, and the configuration is not parsed again.
+
+```html
+<mj-dashboard-layout-preview [UIConfigDetails]="dashboard.UIConfigDetails"></mj-dashboard-layout-preview>
+<mj-dashboard-layout-preview [Preview]="tree"></mj-dashboard-layout-preview>
+```
+
 ### Dashboard Breadcrumb
 
 Navigation breadcrumb trail:
@@ -154,6 +165,12 @@ export class CustomChartPartComponent extends BaseDashboardPart {
 ### DashboardViewerComponent
 
 Main viewer component that renders a dashboard's panels and parts.
+
+The viewer reads the dashboard's saved layout (`UIConfigDetails`) when it gets the dashboard. Two methods keep a host in step with saves made elsewhere:
+
+- `HasNewerSavedLayout(dashboard?)` returns true when the saved layout differs from the one the viewer last loaded or saved, for example after another tab saved the dashboard. Pass another copy of the dashboard to compare that copy.
+- `ReloadFromSaved(dashboard?)` shows the saved layout again (of the given copy, if any) and drops unsaved layout changes. An edit-mode change made right after the call applies to the new layout. A hidden viewer builds the layout when its container gets a size.
+- `UseSavedCopy(dashboard)` takes another copy of the shown dashboard whose saved layout is the one shown (for example after `DashboardEngine` reloaded its dashboards), without rebuilding the layout. Later saves write that copy. It returns false for a copy of another dashboard or with another saved layout.
 
 ### DashboardBrowserComponent
 
