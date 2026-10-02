@@ -149,7 +149,7 @@ function matchesAtWordStart(normalized: string, wordStarts: ReadonlySet<number>,
  * `authorname`, which contains `auth` — so it is refused. That is the trade accepted above:
  * a visible false refusal the user can work around beats a silent disclosure they cannot.
  */
-export function isSensitiveFieldName(name: string | null | undefined): boolean {
+export function IsSensitiveFieldName(name: string | null | undefined): boolean {
     if (!name) {
         return false;
     }
@@ -162,8 +162,8 @@ export function isSensitiveFieldName(name: string | null | undefined): boolean {
 }
 
 /** Drops every sensitive field from a list, preserving order. */
-export function withoutSensitiveFields<T extends { Name: string }>(fields: ReadonlyArray<T>): T[] {
-    return fields.filter((f) => !isSensitiveFieldName(f.Name));
+export function WithoutSensitiveFields<T extends { Name: string }>(fields: ReadonlyArray<T>): T[] {
+    return fields.filter((f) => !IsSensitiveFieldName(f.Name));
 }
 
 /**
@@ -173,10 +173,10 @@ export function withoutSensitiveFields<T extends { Name: string }>(fields: Reado
  * user can type a field the picker never offered. Returns the offending names so the
  * refusal can say which ones, rather than only that something was wrong.
  */
-export function sensitiveFieldsInTemplate(templateText: string | null | undefined): string[] {
+export function SensitiveFieldsInTemplate(templateText: string | null | undefined): string[] {
     const found = new Set<string>();
-    for (const token of templatePlaceholderNames(templateText)) {
-        if (isSensitiveFieldName(token)) {
+    for (const token of TemplatePlaceholderNames(templateText)) {
+        if (IsSensitiveFieldName(token)) {
             found.add(token);
         }
     }
@@ -191,7 +191,7 @@ export function sensitiveFieldsInTemplate(templateText: string | null | undefine
  * way this refusal does. Two parsers that drift apart would mean a template that satisfies
  * one guard and evades the other.
  */
-export function templatePlaceholderNames(templateText: string | null | undefined): string[] {
+export function TemplatePlaceholderNames(templateText: string | null | undefined): string[] {
     if (!templateText) {
         return [];
     }

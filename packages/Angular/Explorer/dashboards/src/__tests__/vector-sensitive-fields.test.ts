@@ -15,19 +15,19 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-    isSensitiveFieldName,
-    withoutSensitiveFields,
-    sensitiveFieldsInTemplate,
+    IsSensitiveFieldName,
+    WithoutSensitiveFields,
+    SensitiveFieldsInTemplate,
 } from '../AI/components/vectors/sensitive-fields';
 
-describe('isSensitiveFieldName', () => {
+describe('IsSensitiveFieldName', () => {
     it('refuses credentials and secrets however they are spelled', () => {
         for (const name of [
             'Password', 'password_hash', 'PasswordHash', 'PWD', 'user_pwd',
             'Secret', 'ApiKey', 'api_key', 'API-KEY', 'AccessKey', 'PrivateKey',
             'RefreshToken', 'Salt', 'PasswordSalt', 'CredentialJSON',
         ]) {
-            expect(isSensitiveFieldName(name), name).toBe(true);
+            expect(IsSensitiveFieldName(name), name).toBe(true);
         }
     });
 
@@ -40,7 +40,7 @@ describe('isSensitiveFieldName', () => {
             'Ethnicity', 'Religion', 'PoliticalAffiliation', 'Disability', 'Diagnosis',
             'DateOfBirth', 'DOB', 'birth_date',
         ]) {
-            expect(isSensitiveFieldName(name), name).toBe(true);
+            expect(IsSensitiveFieldName(name), name).toBe(true);
         }
     });
 
@@ -50,14 +50,14 @@ describe('isSensitiveFieldName', () => {
             'CompanyName', 'JobTitle', 'Notes', 'Description', 'Status', 'CreatedAt',
             'OrderTotal', 'Quantity', 'ProductCode',
         ]) {
-            expect(isSensitiveFieldName(name), name).toBe(false);
+            expect(IsSensitiveFieldName(name), name).toBe(false);
         }
     });
 
     it('is null-safe rather than throwing on an absent name', () => {
-        expect(isSensitiveFieldName(null)).toBe(false);
-        expect(isSensitiveFieldName(undefined)).toBe(false);
-        expect(isSensitiveFieldName('')).toBe(false);
+        expect(IsSensitiveFieldName(null)).toBe(false);
+        expect(IsSensitiveFieldName(undefined)).toBe(false);
+        expect(IsSensitiveFieldName('')).toBe(false);
     });
 
     it('errs toward refusal on a broad substring, and that is deliberate', () => {
@@ -65,11 +65,11 @@ describe('isSensitiveFieldName', () => {
         // harmless column is visible and correctable; embedding a sensitive one is silent
         // and, once written to the index, not fully reversible. The asymmetry is the whole
         // argument, so it is pinned rather than left to be "fixed" by someone later.
-        expect(isSensitiveFieldName('AuthorName')).toBe(true);
+        expect(IsSensitiveFieldName('AuthorName')).toBe(true);
     });
 });
 
-describe('withoutSensitiveFields — layer 1, the model never sees them', () => {
+describe('WithoutSensitiveFields — layer 1, the model never sees them', () => {
     it('drops sensitive fields and preserves the order of the rest', () => {
         const fields = [
             { Name: 'ID' },
@@ -78,51 +78,51 @@ describe('withoutSensitiveFields — layer 1, the model never sees them', () => 
             { Name: 'SSN' },
             { Name: 'Email' },
         ];
-        expect(withoutSensitiveFields(fields).map(f => f.Name)).toEqual(['ID', 'FirstName', 'Email']);
+        expect(WithoutSensitiveFields(fields).map(f => f.Name)).toEqual(['ID', 'FirstName', 'Email']);
     });
 
     it('returns everything when nothing is sensitive', () => {
         const fields = [{ Name: 'ID' }, { Name: 'Name' }];
-        expect(withoutSensitiveFields(fields)).toHaveLength(2);
+        expect(WithoutSensitiveFields(fields)).toHaveLength(2);
     });
 
     it('can return an empty list rather than falling back to everything', () => {
         // A table that is ALL sensitive columns must yield nothing to embed. Falling back
         // to the full list on an empty result would invert the guard exactly when it
         // matters most.
-        expect(withoutSensitiveFields([{ Name: 'PasswordHash' }, { Name: 'SSN' }])).toEqual([]);
+        expect(WithoutSensitiveFields([{ Name: 'PasswordHash' }, { Name: 'SSN' }])).toEqual([]);
     });
 });
 
-describe('sensitiveFieldsInTemplate — layer 2, the hand-edited template', () => {
+describe('SensitiveFieldsInTemplate — layer 2, the hand-edited template', () => {
     it('finds a sensitive field a user typed into the template', () => {
         const tpl = 'Contact: {{ FirstName }} {{LastName}}, secret: {{ PasswordHash }}';
-        expect(sensitiveFieldsInTemplate(tpl)).toEqual(['PasswordHash']);
+        expect(SensitiveFieldsInTemplate(tpl)).toEqual(['PasswordHash']);
     });
 
     it('reports every offender, sorted and de-duplicated', () => {
         const tpl = '{{SSN}} {{ Salary }} {{SSN}} {{Email}}';
-        expect(sensitiveFieldsInTemplate(tpl)).toEqual(['SSN', 'Salary'].sort());
+        expect(SensitiveFieldsInTemplate(tpl)).toEqual(['SSN', 'Salary'].sort());
     });
 
     it('ignores filters and whitespace after the field name', () => {
-        expect(sensitiveFieldsInTemplate('{{ PasswordHash | upper }}')).toEqual(['PasswordHash']);
+        expect(SensitiveFieldsInTemplate('{{ PasswordHash | upper }}')).toEqual(['PasswordHash']);
     });
 
     it('passes a clean template', () => {
-        expect(sensitiveFieldsInTemplate('{{FirstName}} {{LastName}} {{Email}}')).toEqual([]);
+        expect(SensitiveFieldsInTemplate('{{FirstName}} {{LastName}} {{Email}}')).toEqual([]);
     });
 
     it('is null-safe', () => {
-        expect(sensitiveFieldsInTemplate(null)).toEqual([]);
-        expect(sensitiveFieldsInTemplate(undefined)).toEqual([]);
-        expect(sensitiveFieldsInTemplate('')).toEqual([]);
+        expect(SensitiveFieldsInTemplate(null)).toEqual([]);
+        expect(SensitiveFieldsInTemplate(undefined)).toEqual([]);
+        expect(SensitiveFieldsInTemplate('')).toEqual([]);
     });
 
     it('does not flag a sensitive word that is only prose, not a placeholder', () => {
         // The refusal is about what gets INTERPOLATED. Prose mentioning the word is not a
         // disclosure, and refusing it would make the guard impossible to explain.
-        expect(sensitiveFieldsInTemplate('Never include the password in this summary.')).toEqual([]);
+        expect(SensitiveFieldsInTemplate('Never include the password in this summary.')).toEqual([]);
     });
 });
 
@@ -138,7 +138,7 @@ describe('the component actually uses the guard — wiring, not just the helper'
     const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
 
     it('layer 1: the field list handed to the model is filtered', () => {
-        expect(CODE).toMatch(/withoutSensitiveFields\(entity\.Fields\)/);
+        expect(CODE).toMatch(/WithoutSensitiveFields\(entity\.Fields\)/);
     });
 
     it('layer 1: the raw field list is NOT what reaches the prompt', () => {
@@ -146,12 +146,12 @@ describe('the component actually uses the guard — wiring, not just the helper'
     });
 
     it('layer 2: the save path checks the template and throws', () => {
-        expect(CODE).toMatch(/sensitiveFieldsInTemplate\(templateText\)/);
+        expect(CODE).toMatch(/SensitiveFieldsInTemplate\(templateText\)/);
         expect(CODE).toMatch(/sensitive\.length > 0[\s\S]{0,400}?throw new Error/);
     });
 
     it('layer 2 runs BEFORE anything is written', () => {
-        const check = CODE.indexOf('sensitiveFieldsInTemplate(templateText)');
+        const check = CODE.indexOf('SensitiveFieldsInTemplate(templateText)');
         const firstSave = CODE.indexOf('template.Save()');
         expect(check).toBeGreaterThan(0);
         expect(firstSave).toBeGreaterThan(check);
@@ -242,7 +242,7 @@ describe('calibration against MJ core entity field names', () => {
             'Race', 'EmployeeRace', 'race_ethnicity', 'Ethnicity', 'Religion', 'Disability',
             'Diagnosis', 'MedicalRecordNumber',
         ]) {
-            expect(isSensitiveFieldName(name), `must refuse ${name}`).toBe(true);
+            expect(IsSensitiveFieldName(name), `must refuse ${name}`).toBe(true);
         }
     });
 
@@ -257,7 +257,7 @@ describe('calibration against MJ core entity field names', () => {
             'StackTrace', 'TraceID', 'EmbeddedRecordObject',
             'ContextWindowMaxTokens', 'FirstTokenTime', 'InputTokenLimit', 'MaxOutputTokens',
         ]) {
-            expect(isSensitiveFieldName(name), `must accept ${name}`).toBe(false);
+            expect(IsSensitiveFieldName(name), `must accept ${name}`).toBe(false);
         }
     });
 
@@ -268,7 +268,7 @@ describe('calibration against MJ core entity field names', () => {
         // that goes red if the word boundary is removed from `ssn`.
         const collisions = FIELDS.filter((f) => normalizedForFixture(f).includes('ssn'));
         expect(collisions.length).toBeGreaterThanOrEqual(6);
-        expect(collisions.filter(isSensitiveFieldName)).toEqual([]);
+        expect(collisions.filter(IsSensitiveFieldName)).toEqual([]);
     });
 
     it('drops the whole `tin`-as-substring collision set, derived from the fixture', () => {
@@ -277,7 +277,7 @@ describe('calibration against MJ core entity field names', () => {
         // refused, and it is refused by `routing` on its own merits, not by `tin`.
         const collisions = FIELDS.filter((f) => normalizedForFixture(f).includes('tin'));
         expect(collisions.length).toBeGreaterThanOrEqual(40);
-        expect(collisions.filter(isSensitiveFieldName)).toEqual(['RoutingOrder']);
+        expect(collisions.filter(IsSensitiveFieldName)).toEqual(['RoutingOrder']);
     });
 
     it('accepts every plural `Tokens` field, because a count is not a secret', () => {
@@ -286,7 +286,7 @@ describe('calibration against MJ core entity field names', () => {
         // substring, which would refuse all of them again.
         const counts = FIELDS.filter((f) => normalizedForFixture(f).includes('tokens'));
         expect(counts.length).toBeGreaterThanOrEqual(20);
-        expect(counts.filter(isSensitiveFieldName)).toEqual([]);
+        expect(counts.filter(IsSensitiveFieldName)).toEqual([]);
     });
 
     it('pins the total refusal count as a bracket over the real fixture', () => {
@@ -300,7 +300,7 @@ describe('calibration against MJ core entity field names', () => {
         // or widening `token` back to a bare substring (+35) fails here rather than
         // silently making the guard unusable again. Raise it only with the same kind of
         // evidence that lowered it.
-        const refused = FIELDS.filter(isSensitiveFieldName);
+        const refused = FIELDS.filter(IsSensitiveFieldName);
         expect(refused.length).toBeGreaterThanOrEqual(30);
         expect(refused.length).toBeLessThanOrEqual(55);
         // And as a rate, so the bracket keeps its meaning if the fixture doubles in size.
@@ -315,7 +315,7 @@ describe('calibration against MJ core entity field names', () => {
         for (const name of ['PasswordHash', 'AccessToken', 'RefreshToken', 'ClientSecret',
                             'APIKey', 'TokenHash', 'OAuthClientSecretEncrypted']) {
             expect(FIELDS, `${name} should be in the fixture`).toContain(name);
-            expect(isSensitiveFieldName(name), `must refuse ${name}`).toBe(true);
+            expect(IsSensitiveFieldName(name), `must refuse ${name}`).toBe(true);
         }
     });
 });
@@ -324,10 +324,10 @@ describe('the asymmetry argument has a limit, and the limit is also pinned', () 
     it('over-refuses a near-miss of the concept — deliberate, and kept', () => {
         // `auth` really is the prefix of authentication, so `AuthorName` resembles the
         // concept and the resemblance carries signal. Refusing it is the documented trade.
-        expect(isSensitiveFieldName('AuthorName')).toBe(true);
+        expect(IsSensitiveFieldName('AuthorName')).toBe(true);
         // `password` already catches `PasswordHash`, so `hash` mostly catches checksums —
         // marginal either way, and left alone on review.
-        expect(isSensitiveFieldName('ContentHash')).toBe(true);
+        expect(IsSensitiveFieldName('ContentHash')).toBe(true);
     });
 
     it('does NOT over-refuse a word with no relationship to the concept', () => {
@@ -336,10 +336,10 @@ describe('the asymmetry argument has a limit, and the limit is also pinned', () 
         // that are pure letter coincidence. `Rating` is the canonical case — it is exactly
         // the column someone vectorizing customer records reaches for, and because layer 2
         // throws there is no workaround for refusing it.
-        expect(isSensitiveFieldName('Rating')).toBe(false);
-        expect(isSensitiveFieldName('Marketing')).toBe(false);
-        expect(isSensitiveFieldName('Meeting')).toBe(false);
-        expect(isSensitiveFieldName('StackTrace')).toBe(false);
-        expect(isSensitiveFieldName('EmbeddedRecordObject')).toBe(false);
+        expect(IsSensitiveFieldName('Rating')).toBe(false);
+        expect(IsSensitiveFieldName('Marketing')).toBe(false);
+        expect(IsSensitiveFieldName('Meeting')).toBe(false);
+        expect(IsSensitiveFieldName('StackTrace')).toBe(false);
+        expect(IsSensitiveFieldName('EmbeddedRecordObject')).toBe(false);
     });
 });

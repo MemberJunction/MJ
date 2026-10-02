@@ -38,14 +38,14 @@ import {
     VectorSyncRowCandidate,
 } from './vector-management-agent-context';
 import { ValidateStringParam } from '../../../shared/agent-tool-validation';
-import { withoutSensitiveFields, sensitiveFieldsInTemplate } from './sensitive-fields';
+import { WithoutSensitiveFields, SensitiveFieldsInTemplate } from './sensitive-fields';
 import {
     ENTITY_DOCUMENT_TYPE_BY_USE_CASE,
     MAX_TEMPLATE_FIELDS,
-    capSelectedFields,
-    entityDocumentTypeForUseCase,
-    isVectorizableEntity,
-    templateFieldCapRefusal,
+    CapSelectedFields,
+    EntityDocumentTypeForUseCase,
+    IsVectorizableEntity,
+    TemplateFieldCapRefusal,
 } from './vector-document-rules';
 
 /** Flattened row for the entity sync table */
@@ -1079,7 +1079,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (result) {
                 // The field list is whatever the model returned — no cap, no filter. Bound it
                 // here so an over-wide suggestion is visible immediately rather than at save.
-                const capped = capSelectedFields(result.selectedFields);
+                const capped = CapSelectedFields(result.selectedFields);
                 if (capped.dropped > 0) {
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `The suggestion selected ${capped.fields.length + capped.dropped} fields. ` +
@@ -1461,7 +1461,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // wrong type. A vector pool is typed — Provider.SearchEntity and the Search Entity
         // action read Search-typed documents — so the mislabelled document is also invisible
         // to the feature that asked for it.
-        const wantedTypeName = entityDocumentTypeForUseCase(this.SuggestUseCase);
+        const wantedTypeName = EntityDocumentTypeForUseCase(this.SuggestUseCase);
         if (!wantedTypeName) {
             throw new Error(
                 `No Entity Document Type is defined for the "${this.SuggestUseCase}" use case. ` +
@@ -1527,7 +1527,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // a field the picker never offered. Refuse before anything is written — once values
         // reach the vector index they are retrievable by similarity search, outside the
         // entity permissions that guard the source column, and not fully reversible.
-        const sensitive = sensitiveFieldsInTemplate(templateText);
+        const sensitive = SensitiveFieldsInTemplate(templateText);
         if (sensitive.length > 0) {
             throw new Error(
                 `This template references ${sensitive.length === 1 ? 'a field' : 'fields'} that must not be ` +
@@ -1540,7 +1540,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // The field list is unbounded and comes straight from a prompt, and the template stays
         // hand-editable after the model returns — so the authoritative bound is here, on what
         // actually gets embedded, not on the model's own description of what it picked.
-        const capRefusal = templateFieldCapRefusal(templateText);
+        const capRefusal = TemplateFieldCapRefusal(templateText);
         if (capRefusal) {
             throw new Error(capRefusal);
         }
@@ -1712,7 +1712,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             // The picker used to list every entity in metadata, so MJ's own internal entities
             // were offered as vectorization targets. See vector-document-rules.ts for the rule
             // and the precedent it follows.
-            if (!isVectorizableEntity(entity)) {
+            if (!IsVectorizableEntity(entity)) {
                 continue;
             }
             const schema = entity.SchemaName || '__default';
@@ -1849,7 +1849,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private buildPromptData(entity: EntityInfo, useCase: string): Record<string, unknown> {
         // LAYER 1 of the sensitive-field refusal: the model never sees these columns, so it
         // cannot suggest them. See sensitive-fields.ts for why this cannot live in the prompt.
-        const fields = withoutSensitiveFields(entity.Fields).map(f => ({
+        const fields = WithoutSensitiveFields(entity.Fields).map(f => ({
             Name: f.Name,
             Type: f.Type,
             IsPrimaryKey: f.IsPrimaryKey,

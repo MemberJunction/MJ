@@ -15,7 +15,7 @@
  * TestBed, matching how `sensitive-fields.ts` is structured.
  */
 
-import { templatePlaceholderNames } from './sensitive-fields';
+import { TemplatePlaceholderNames } from './sensitive-fields';
 
 // ─── 1. Entity Document Type per use case ────────────────────────────────────
 
@@ -50,7 +50,7 @@ export const ENTITY_DOCUMENT_TYPE_BY_USE_CASE: Readonly<Record<string, string>> 
  * Returns null rather than falling back to a default: a use case this code does not know
  * about must not quietly become a duplicate-detection document.
  */
-export function entityDocumentTypeForUseCase(useCase: string | null | undefined): string | null {
+export function EntityDocumentTypeForUseCase(useCase: string | null | undefined): string | null {
     if (!useCase) {
         return null;
     }
@@ -79,8 +79,8 @@ export function entityDocumentTypeForUseCase(useCase: string | null | undefined)
 export const MAX_TEMPLATE_FIELDS = 24;
 
 /** Distinct `{{Placeholder}}` field names a template interpolates. */
-export function templateFieldNames(templateText: string | null | undefined): string[] {
-    return [...new Set(templatePlaceholderNames(templateText))];
+export function TemplateFieldNames(templateText: string | null | undefined): string[] {
+    return [...new Set(TemplatePlaceholderNames(templateText))];
 }
 
 /**
@@ -91,7 +91,7 @@ export function templateFieldNames(templateText: string | null | undefined): str
  * discarding the whole suggestion. The authoritative refusal is on the template, below,
  * since the template is what actually gets embedded.
  */
-export function capSelectedFields(
+export function CapSelectedFields(
     fields: ReadonlyArray<string> | null | undefined,
 ): { fields: string[]; dropped: number } {
     if (!fields || fields.length === 0) {
@@ -116,8 +116,8 @@ export function capSelectedFields(
  * count is not actionable. The template is editable in the dialog, so the user can act on it
  * without losing the suggestion.
  */
-export function templateFieldCapRefusal(templateText: string | null | undefined): string | null {
-    const names = templateFieldNames(templateText);
+export function TemplateFieldCapRefusal(templateText: string | null | undefined): string | null {
+    const names = TemplateFieldNames(templateText);
     if (names.length <= MAX_TEMPLATE_FIELDS) {
         return null;
     }
@@ -160,7 +160,7 @@ export const VECTOR_BLOCKED_SCHEMAS: ReadonlySet<string> = new Set(['__mj']);
  * audience; this dialog is where a business user configures vectorization of their own data,
  * and burying their tables under the framework's is the defect being fixed.
  */
-export function isVectorizableEntity(
+export function IsVectorizableEntity(
     entity: { Name: string; SchemaName?: string | null },
 ): boolean {
     if (entity.SchemaName && VECTOR_BLOCKED_SCHEMAS.has(entity.SchemaName)) {

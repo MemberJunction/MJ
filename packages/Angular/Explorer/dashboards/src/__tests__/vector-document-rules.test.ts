@@ -209,11 +209,11 @@ import {
     ENTITY_DOCUMENT_TYPE_BY_USE_CASE,
     MAX_TEMPLATE_FIELDS,
     VECTOR_BLOCKED_SCHEMAS,
-    capSelectedFields,
-    entityDocumentTypeForUseCase,
-    isVectorizableEntity,
-    templateFieldCapRefusal,
-    templateFieldNames,
+    CapSelectedFields,
+    EntityDocumentTypeForUseCase,
+    IsVectorizableEntity,
+    TemplateFieldCapRefusal,
+    TemplateFieldNames,
 } from '../AI/components/vectors/vector-document-rules';
 import { VectorManagementResourceComponent } from '../AI/components/vectors/vector-management-resource.component';
 
@@ -224,18 +224,18 @@ const SEARCH_TYPE_ID = 'type-search';
 // 1. The use case decides the document type
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('entityDocumentTypeForUseCase', () => {
+describe('EntityDocumentTypeForUseCase', () => {
     it('gives each of the three offered use cases its own type', () => {
-        expect(entityDocumentTypeForUseCase('duplicate detection')).toBe('Record Duplicate');
-        expect(entityDocumentTypeForUseCase('search')).toBe('Search');
-        expect(entityDocumentTypeForUseCase('classification')).toBe('Classification');
+        expect(EntityDocumentTypeForUseCase('duplicate detection')).toBe('Record Duplicate');
+        expect(EntityDocumentTypeForUseCase('search')).toBe('Search');
+        expect(EntityDocumentTypeForUseCase('classification')).toBe('Classification');
     });
 
     it('never resolves anything but duplicate detection to Record Duplicate', () => {
         // The whole defect in one assertion: two of three choices used to land here.
         for (const useCase of Object.keys(ENTITY_DOCUMENT_TYPE_BY_USE_CASE)) {
             if (useCase === 'duplicate detection') continue;
-            expect(entityDocumentTypeForUseCase(useCase), useCase).not.toBe('Record Duplicate');
+            expect(EntityDocumentTypeForUseCase(useCase), useCase).not.toBe('Record Duplicate');
         }
     });
 
@@ -247,14 +247,14 @@ describe('entityDocumentTypeForUseCase', () => {
     });
 
     it('tolerates casing and padding the way the server-side name lookup does', () => {
-        expect(entityDocumentTypeForUseCase('  SEARCH  ')).toBe('Search');
+        expect(EntityDocumentTypeForUseCase('  SEARCH  ')).toBe('Search');
     });
 
     it('returns null for an unknown use case rather than defaulting', () => {
-        expect(entityDocumentTypeForUseCase('sentiment')).toBeNull();
-        expect(entityDocumentTypeForUseCase('')).toBeNull();
-        expect(entityDocumentTypeForUseCase(null)).toBeNull();
-        expect(entityDocumentTypeForUseCase(undefined)).toBeNull();
+        expect(EntityDocumentTypeForUseCase('sentiment')).toBeNull();
+        expect(EntityDocumentTypeForUseCase('')).toBeNull();
+        expect(EntityDocumentTypeForUseCase(null)).toBeNull();
+        expect(EntityDocumentTypeForUseCase(undefined)).toBeNull();
     });
 });
 
@@ -262,49 +262,49 @@ describe('entityDocumentTypeForUseCase', () => {
 // 2. The field list is bounded
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('capSelectedFields', () => {
+describe('CapSelectedFields', () => {
     const field = (n: number) => `Field${n}`;
 
     it('passes a list within the cap through untouched', () => {
         const fields = Array.from({ length: MAX_TEMPLATE_FIELDS }, (_, i) => field(i));
-        const result = capSelectedFields(fields);
+        const result = CapSelectedFields(fields);
         expect(result.fields).toEqual(fields);
         expect(result.dropped).toBe(0);
     });
 
     it('truncates beyond the cap and reports how many it dropped', () => {
         const fields = Array.from({ length: MAX_TEMPLATE_FIELDS + 11 }, (_, i) => field(i));
-        const result = capSelectedFields(fields);
+        const result = CapSelectedFields(fields);
         expect(result.fields).toHaveLength(MAX_TEMPLATE_FIELDS);
         expect(result.dropped).toBe(11);
     });
 
     it('de-duplicates before counting, so repeats do not consume the budget', () => {
-        const result = capSelectedFields(['Name', 'Name', 'Email']);
+        const result = CapSelectedFields(['Name', 'Name', 'Email']);
         expect(result.fields).toEqual(['Name', 'Email']);
         expect(result.dropped).toBe(0);
     });
 
     it('is null-safe', () => {
-        expect(capSelectedFields(null)).toEqual({ fields: [], dropped: 0 });
-        expect(capSelectedFields(undefined)).toEqual({ fields: [], dropped: 0 });
-        expect(capSelectedFields([])).toEqual({ fields: [], dropped: 0 });
+        expect(CapSelectedFields(null)).toEqual({ fields: [], dropped: 0 });
+        expect(CapSelectedFields(undefined)).toEqual({ fields: [], dropped: 0 });
+        expect(CapSelectedFields([])).toEqual({ fields: [], dropped: 0 });
     });
 });
 
-describe('templateFieldCapRefusal', () => {
+describe('TemplateFieldCapRefusal', () => {
     const template = (n: number) => Array.from({ length: n }, (_, i) => `{{Field${i}}}`).join(' and ');
 
     it('accepts a template at the cap', () => {
-        expect(templateFieldCapRefusal(template(MAX_TEMPLATE_FIELDS))).toBeNull();
+        expect(TemplateFieldCapRefusal(template(MAX_TEMPLATE_FIELDS))).toBeNull();
     });
 
     it('refuses one field past the cap', () => {
-        expect(templateFieldCapRefusal(template(MAX_TEMPLATE_FIELDS + 1))).not.toBeNull();
+        expect(TemplateFieldCapRefusal(template(MAX_TEMPLATE_FIELDS + 1))).not.toBeNull();
     });
 
     it('puts both counts in the message, because "too many" is not actionable', () => {
-        const msg = templateFieldCapRefusal(template(MAX_TEMPLATE_FIELDS + 7));
+        const msg = TemplateFieldCapRefusal(template(MAX_TEMPLATE_FIELDS + 7));
         expect(msg).toContain(String(MAX_TEMPLATE_FIELDS + 7));
         expect(msg).toContain(String(MAX_TEMPLATE_FIELDS));
         expect(msg).toContain('7');
@@ -312,23 +312,23 @@ describe('templateFieldCapRefusal', () => {
 
     it('counts distinct fields, not placeholder occurrences', () => {
         const repeated = Array.from({ length: MAX_TEMPLATE_FIELDS + 20 }, () => '{{Name}}').join(' ');
-        expect(templateFieldCapRefusal(repeated)).toBeNull();
+        expect(TemplateFieldCapRefusal(repeated)).toBeNull();
     });
 
     it('counts a relationship-qualified placeholder as one field', () => {
-        expect(templateFieldNames('{{ Organization.Name }} {{Organization.City}}')).toEqual([
+        expect(TemplateFieldNames('{{ Organization.Name }} {{Organization.City}}')).toEqual([
             'Organization.Name',
             'Organization.City',
         ]);
     });
 
     it('does not count prose, only placeholders', () => {
-        expect(templateFieldNames('Describe the record fully and at length.')).toEqual([]);
+        expect(TemplateFieldNames('Describe the record fully and at length.')).toEqual([]);
     });
 
     it('is null-safe', () => {
-        expect(templateFieldCapRefusal(null)).toBeNull();
-        expect(templateFieldCapRefusal('')).toBeNull();
+        expect(TemplateFieldCapRefusal(null)).toBeNull();
+        expect(TemplateFieldCapRefusal('')).toBeNull();
     });
 
     // The cap's exact value is a calibration knob, so it is bracketed rather than asserted
@@ -356,29 +356,29 @@ describe('templateFieldCapRefusal', () => {
 // 4. The picker does not offer MJ's own internals
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('isVectorizableEntity', () => {
+describe('IsVectorizableEntity', () => {
     it('refuses entities in the __mj schema', () => {
-        expect(isVectorizableEntity({ Name: 'MJ: AI Prompt Runs', SchemaName: '__mj' })).toBe(false);
-        expect(isVectorizableEntity({ Name: 'Audit Logs', SchemaName: '__mj' })).toBe(false);
+        expect(IsVectorizableEntity({ Name: 'MJ: AI Prompt Runs', SchemaName: '__mj' })).toBe(false);
+        expect(IsVectorizableEntity({ Name: 'Audit Logs', SchemaName: '__mj' })).toBe(false);
     });
 
     it('refuses MJ:-prefixed entities wherever they are registered', () => {
-        expect(isVectorizableEntity({ Name: 'MJ: Entity Documents', SchemaName: 'somewhere_else' })).toBe(false);
+        expect(IsVectorizableEntity({ Name: 'MJ: Entity Documents', SchemaName: 'somewhere_else' })).toBe(false);
     });
 
     it('allows ordinary business entities', () => {
-        expect(isVectorizableEntity({ Name: 'Members', SchemaName: 'dbo' })).toBe(true);
-        expect(isVectorizableEntity({ Name: 'Orders', SchemaName: 'crm' })).toBe(true);
+        expect(IsVectorizableEntity({ Name: 'Members', SchemaName: 'dbo' })).toBe(true);
+        expect(IsVectorizableEntity({ Name: 'Orders', SchemaName: 'crm' })).toBe(true);
     });
 
     it('allows an entity with no schema rather than dropping it', () => {
-        expect(isVectorizableEntity({ Name: 'Members' })).toBe(true);
-        expect(isVectorizableEntity({ Name: 'Members', SchemaName: null })).toBe(true);
+        expect(IsVectorizableEntity({ Name: 'Members' })).toBe(true);
+        expect(IsVectorizableEntity({ Name: 'Members', SchemaName: null })).toBe(true);
     });
 
     it('does not refuse a business entity whose name merely contains MJ', () => {
-        expect(isVectorizableEntity({ Name: 'MJM Widgets', SchemaName: 'dbo' })).toBe(true);
-        expect(isVectorizableEntity({ Name: 'Company MJ: Notes', SchemaName: 'dbo' })).toBe(true);
+        expect(IsVectorizableEntity({ Name: 'MJM Widgets', SchemaName: 'dbo' })).toBe(true);
+        expect(IsVectorizableEntity({ Name: 'Company MJ: Notes', SchemaName: 'dbo' })).toBe(true);
     });
 
     it('blocks __mj and only __mj by schema', () => {
@@ -560,7 +560,7 @@ describe('the component keeps the rules wired', () => {
     });
 
     it('the field cap is checked on the template, before the first write', () => {
-        const check = CODE.indexOf('templateFieldCapRefusal(templateText)');
+        const check = CODE.indexOf('TemplateFieldCapRefusal(templateText)');
         const firstSave = CODE.indexOf('template.Save()');
         expect(check).toBeGreaterThan(0);
         expect(firstSave).toBeGreaterThan(check);
@@ -577,6 +577,6 @@ describe('the component keeps the rules wired', () => {
     });
 
     it('the entity picker filters through the rule', () => {
-        expect(CODE).toMatch(/isVectorizableEntity\(entity\)/);
+        expect(CODE).toMatch(/IsVectorizableEntity\(entity\)/);
     });
 });
