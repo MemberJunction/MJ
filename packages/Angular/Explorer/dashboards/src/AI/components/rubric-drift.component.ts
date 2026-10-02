@@ -1,12 +1,12 @@
 import { Component, Input, OnInit } from '@angular/core';
-import { RunView } from '@memberjunction/core';
+import { RunQuery, type IRunQueryProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJEmptyStateComponent, MJPageBodyComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
-import { driftDeltas, driftSeries, periodMeans } from '@memberjunction/rubrics-base';
-import { DriftSeriesInput } from './rubric-drift-series';
+import { driftDeltas } from '@memberjunction/rubrics-base';
+import { DriftPeriodRows } from './rubric-drift-series';
 
-/** Rolling mean against the previous period. This is not an alert product. */
+/** A criterion whose mean dropped past the threshold between the two periods. */
 @Component({
     standalone: true,
     selector: 'mj-rubric-drift',
@@ -23,7 +23,7 @@ import { DriftSeriesInput } from './rubric-drift-series';
       } @else {
         <ul>
           @for (row of Rows; track row.key) {
-            <li><strong>{{ row.key }}</strong><span>Drop {{ row.drop }}</span></li>
+            <li role="alert"><strong>{{ row.key }}</strong><span>Drop {{ row.drop }}</span></li>
           }
         </ul>
       }
@@ -61,7 +61,7 @@ export class RubricDriftComponent {
         return this.Threshold;
     }
     public get Rows() {
-        return driftDeltas(this.Current, this.Previous, this.Threshold);
+        return driftDeltas(this.Current, this.Previous, this.Threshold).filter(row => row.alert);
     }
 }
 
@@ -148,59 +148,40 @@ export class RubricDriftResourceComponent extends BaseResourceComponent implemen
 
     private async loadPeriods(): Promise<{ current: { key: string; mean: number }[]; previous: { key: string; mean: number }[] }> {
         if (!this.ProviderToUse) return { current: [], previous: [] };
-        const view = RunView.FromMetadataProvider(this.ProviderToUse);
-        const user = this.ProviderToUse.CurrentUser;
-        const scores = await view.RunView({
-            EntityName: 'MJ: Rubric Evaluation Scores',
-            ExtraFilter: 'NormalizedScore IS NOT NULL',
-            ResultType: 'simple',
-            MaxRows: 1000,
-        }, user);
-        if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not read rubric scores.');
-        const scoreRows = (scores.Results ?? []) as Record<string, unknown>[];
-        const evaluationIds = uniqueIds(scoreRows.map(row => row.EvaluationID));
-        const evaluations = await this.readByIds(view, user, 'MJ: Rubric Evaluations', evaluationIds);
-        const runIds = uniqueIds(evaluations.map(row => row.SubjectRecordID));
-        const runs = await this.readByIds(view, user, 'MJ: AI Agent Runs', runIds);
-        const versionIds = uniqueIds(evaluations.map(row => row.RubricVersionID));
-        const versions = await this.readByIds(view, user, 'MJ: Rubric Versions', versionIds);
-        const criterionIds = uniqueIds(scoreRows.map(row => row.CriterionID));
-        const criteria = await this.readByIds(view, user, 'MJ: Rubric Criteria', criterionIds);
-        const series = DriftSeriesInput(scoreRows, criteria);
         const now = new Date();
-        const currentStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-        const previousStart = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
-        const rows = driftSeries({
-            scores: series.scores,
-            criteria: series.criteria,
-            evaluations: evaluations.map(row => ({
-                id: String(row.ID ?? ''),
-                subjectRecordId: String(row.SubjectRecordID ?? ''),
-                rubricVersionId: String(row.RubricVersionID ?? ''),
-                at: String(row.SubmittedAt ?? row.__mj_CreatedAt ?? ''),
-            })),
-            runs: runs.map(row => ({ id: String(row.ID ?? ''), agentId: String(row.AgentID ?? '') })),
-            versions: versions.map(row => ({ id: String(row.ID ?? ''), rubricId: String(row.RubricID ?? '') })),
-        });
-        return {
-            current: periodMeans(rows, currentStart, now.toISOString()),
-            previous: periodMeans(rows, previousStart, currentStart),
-        };
-    }
-
-    private async readByIds(view: RunView, user: unknown, entityName: string, ids: string[]): Promise<Record<string, unknown>[]> {
-        if (ids.length === 0) return [];
-        const result = await view.RunView({
-            EntityName: entityName,
-            ExtraFilter: `ID IN (${ids.map(id => `'${id}'`).join(',')})`,
-            ResultType: 'simple',
-            MaxRows: ids.length,
-        }, user as never);
-        if (!result.Success) throw new Error(result.ErrorMessage || `Could not read ${entityName}.`);
-        return (result.Results ?? []) as Record<string, unknown>[];
+        const currentStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const previousStart = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+        const result = await new RunQuery(queryProvider(this.ProviderToUse)).RunQuery({
+            QueryName: 'RubricDriftPeriodMeans',
+            CategoryPath: '/MJ/AI/Agents/',
+            Parameters: {
+                previousStart: previousStart.toISOString(),
+                currentStart: currentStart.toISOString(),
+                periodEnd: now.toISOString(),
+            },
+        }, this.ProviderToUse.CurrentUser);
+        if (!result.Success) throw new Error(result.ErrorMessage || 'Could not load drift.');
+        return DriftPeriodRows((result.Results ?? []) as Parameters[]);
     }
 }
 
-function uniqueIds(values: unknown[]): string[] {
-    return [...new Set(values.map(value => String(value ?? '')).filter(value => /^[0-9A-Fa-f-]{36}$/.test(value)))];
+function queryProvider(provider: object): IRunQueryProvider {
+    const candidate = provider as {
+        RunQuery?: unknown;
+        RunQueries?: unknown;
+        Config?: unknown;
+        ExecuteQueryFromSpec?: unknown;
+    };
+    if (typeof candidate.RunQuery !== 'function' || typeof candidate.RunQueries !== 'function' || typeof candidate.Config !== 'function' || typeof candidate.ExecuteQueryFromSpec !== 'function') {
+        throw new Error('Could not load drift.');
+    }
+    return candidate as IRunQueryProvider;
 }
+
+type Parameters = {
+    AgentName?: unknown;
+    RubricName?: unknown;
+    CriterionKey?: unknown;
+    CurrentMean?: unknown;
+    PreviousMean?: unknown;
+};

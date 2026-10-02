@@ -18,6 +18,8 @@ describe('rubric load failures', () => {
         expect(analytics).toContain('VersionMetricsError');
         expect(analytics).toContain('runs.Success');
         expect(drift).toContain('LoadError');
-        expect(drift).toContain('scores.Success');
+        expect(drift).toContain("QueryName: 'RubricDriftPeriodMeans'");
+        expect(drift).toContain('result.Success');
+        expect(drift).not.toContain('MaxRows: 1000');
     });
 });
