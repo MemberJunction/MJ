@@ -8,8 +8,12 @@ export default class TestReport extends Command {
   };
 
   async run(): Promise<void> {
-    const { ReportCommand } = await import('@memberjunction/testing-cli');
+    const { CloseMJProvider, ReportCommand } = await import('@memberjunction/testing-cli');
     const { args } = await this.parse(TestReport);
-    await new ReportCommand().execute(args.runId, {}, undefined as never);
+    try {
+      await new ReportCommand().execute(args.runId, {}, undefined as never);
+    } finally {
+      await CloseMJProvider();
+    }
   }
 }

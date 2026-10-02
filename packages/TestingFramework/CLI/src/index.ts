@@ -21,7 +21,7 @@ export { RubricCommands } from './commands/rubric-commands';
 export { OutputFormatter } from './utils/output-formatter';
 export { LoadCLIConfig, loadCLIConfig } from './utils/config-loader';
 export { SpinnerManager } from './utils/spinner-manager';
-export { GetContextUser, getContextUser } from './lib/mj-provider';
+export { CloseMJProvider, GetContextUser, closeMJProvider, getContextUser } from './lib/mj-provider';
 
 // Types
 export * from './types';

@@ -5,8 +5,12 @@ export default class RubricValidate extends Command {
   static args = { file: Args.string({ description: 'JSON snapshot file', required: true }) };
 
   async run(): Promise<void> {
-    const { RubricCommands } = await import('@memberjunction/testing-cli');
+    const { CloseMJProvider, RubricCommands } = await import('@memberjunction/testing-cli');
     const { args } = await this.parse(RubricValidate);
-    new RubricCommands().Validate(args.file);
+    try {
+      new RubricCommands().Validate(args.file);
+    } finally {
+      await CloseMJProvider();
+    }
   }
 }

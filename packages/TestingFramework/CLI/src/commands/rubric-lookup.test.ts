@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const views: { EntityName: string; ExtraFilter?: string }[] = [];
 const responses: { Success: boolean; ErrorMessage?: string; Results?: Record<string, unknown>[] }[] = [];
+const closed: number[] = [];
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -23,6 +24,7 @@ vi.mock('../lib/mj-provider', () => ({
     InitializeMJProvider: async () => undefined,
     GetContextUser: async () => ({ ID: 'user' }),
     GetMJProvider: () => ({}),
+    CloseMJProvider: async () => { closed.push(1); },
 }));
 
 import { LookupRubricOverride } from './rubric-cli.js';
@@ -34,6 +36,7 @@ describe('rubric lookup queries', () => {
     beforeEach(() => {
         views.length = 0;
         responses.length = 0;
+        closed.length = 0;
     });
 
     it('queries a name by Name and refuses a failed view', async () => {
@@ -48,5 +51,6 @@ describe('rubric lookup queries', () => {
         expect(views.at(-2)?.ExtraFilter).toBe(`ID='${rubricId}'`);
         responses.push({ Success: false, ErrorMessage: 'rubrics unread' });
         await expect(new RubricCommands().List()).rejects.toThrow('rubrics unread');
+        expect(closed.length).toBeGreaterThan(0);
     });
 });

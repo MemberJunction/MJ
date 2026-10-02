@@ -10,8 +10,12 @@ export default class RubricEvaluate extends Command {
   };
 
   async run(): Promise<void> {
-    const { RubricCommands } = await import('@memberjunction/testing-cli');
+    const { CloseMJProvider, RubricCommands } = await import('@memberjunction/testing-cli');
     const { flags } = await this.parse(RubricEvaluate);
-    await new RubricCommands().Evaluate(flags.rubric, flags.entity, flags.record, flags.evaluator);
+    try {
+      await new RubricCommands().Evaluate(flags.rubric, flags.entity, flags.record, flags.evaluator);
+    } finally {
+      await CloseMJProvider();
+    }
   }
 }

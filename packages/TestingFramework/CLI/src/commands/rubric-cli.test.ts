@@ -33,6 +33,8 @@ describe('rubric CLI', () => {
         expect(commands).not.toMatch(/new RunView\(\)/);
         expect(report).not.toMatch(/new RunView\(\)/);
         expect(cli).toContain('RunView.FromMetadataProvider');
+        expect(commands).toContain('CloseMJProvider');
+        expect(report).toContain('CloseMJProvider');
     });
 
     it('parses a name, a version label, and a version id', () => {

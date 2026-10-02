@@ -3,35 +3,47 @@ import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core'
 import { UUIDsEqual } from '@memberjunction/global';
 import { RubricVersionDiff, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { providerRubricEngine } from '@memberjunction/rubrics';
-import { InitializeMJProvider, GetContextUser, GetMJProvider } from '../lib/mj-provider';
+import { CloseMJProvider, InitializeMJProvider, GetContextUser, GetMJProvider } from '../lib/mj-provider';
 import { FormatVersionDiff, ParseRubricRef, RequireViewSuccess, RubricIdentityFilter, SnapshotFromRows, ValidateSnapshot } from './rubric-cli';
 
 /** Thin database operations behind `mj rubric`. */
 export class RubricCommands {
     async List(): Promise<void> {
-        const { user } = await this.context();
-        const rows = await this.rows('MJ: Rubrics', undefined, user);
-        if (rows.length === 0) {
-            console.log('No rubrics.');
-            return;
+        try {
+            const { user } = await this.context();
+            const rows = await this.rows('MJ: Rubrics', undefined, user);
+            if (rows.length === 0) {
+                console.log('No rubrics.');
+                return;
+            }
+            for (const row of rows) console.log(`${row.Name}  ${row.Status}  ${row.ID}`);
+        } finally {
+            await CloseMJProvider();
         }
-        for (const row of rows) console.log(`${row.Name}  ${row.Status}  ${row.ID}`);
     }
 
     async Show(ref: string): Promise<void> {
-        const { user } = await this.context();
-        const { rubric, version } = await this.version(ref, user);
-        console.log(`${rubric.Name}  ${version.MajorVersion}.${version.MinorVersion}.${version.PatchVersion}  ${version.Status}`);
-        const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${String(version.ID).replace(/'/g, "''")}'`, user);
-        for (const criterion of criteria) console.log(`${criterion.Key}  ${criterion.Name}  weight ${criterion.Weight}`);
+        try {
+            const { user } = await this.context();
+            const { rubric, version } = await this.version(ref, user);
+            console.log(`${rubric.Name}  ${version.MajorVersion}.${version.MinorVersion}.${version.PatchVersion}  ${version.Status}`);
+            const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${String(version.ID).replace(/'/g, "''")}'`, user);
+            for (const criterion of criteria) console.log(`${criterion.Key}  ${criterion.Name}  weight ${criterion.Weight}`);
+        } finally {
+            await CloseMJProvider();
+        }
     }
 
     async Diff(ref: string, from: string, to: string): Promise<void> {
-        const { user } = await this.context();
-        const parsed = ParseRubricRef(ref);
-        const left = await this.snapshot(parsed.rubric, from, user);
-        const right = await this.snapshot(parsed.rubric, to, user);
-        console.log(FormatVersionDiff(RubricVersionDiff.diff(left, right)));
+        try {
+            const { user } = await this.context();
+            const parsed = ParseRubricRef(ref);
+            const left = await this.snapshot(parsed.rubric, from, user);
+            const right = await this.snapshot(parsed.rubric, to, user);
+            console.log(FormatVersionDiff(RubricVersionDiff.diff(left, right)));
+        } finally {
+            await CloseMJProvider();
+        }
     }
 
     Validate(file: string): void {
@@ -46,18 +58,22 @@ export class RubricCommands {
     }
 
     async Evaluate(ref: string, entity: string, record: string, evaluator: string | undefined): Promise<void> {
-        const { user, provider } = await this.context();
-        const { rubric, version } = await this.version(ref, user);
-        const engine = providerRubricEngine(provider, user);
-        const result = await engine.EvaluateRecord({
-            rubricId: String(rubric.ID),
-            versionId: String(version.ID),
-            subjectEntityName: entity,
-            subjectRecordId: record,
-            evaluator: evaluator === 'Deterministic' ? 'Deterministic' : 'LLM',
-        });
-        console.log(`${result.outcome ?? ''}  ${result.score ?? ''}`);
-        for (const criterion of result.criteria ?? []) console.log(`${criterion.key}  ${criterion.normalizedScore ?? '—'}`);
+        try {
+            const { user, provider } = await this.context();
+            const { rubric, version } = await this.version(ref, user);
+            const engine = providerRubricEngine(provider, user);
+            const result = await engine.EvaluateRecord({
+                rubricId: String(rubric.ID),
+                versionId: String(version.ID),
+                subjectEntityName: entity,
+                subjectRecordId: record,
+                evaluator: evaluator === 'Deterministic' ? 'Deterministic' : 'LLM',
+            });
+            console.log(`${result.outcome ?? ''}  ${result.score ?? ''}`);
+            for (const criterion of result.criteria ?? []) console.log(`${criterion.key}  ${criterion.normalizedScore ?? '—'}`);
+        } finally {
+            await CloseMJProvider();
+        }
     }
 
     private async version(ref: string, user: UserInfo): Promise<{ rubric: Record<string, unknown>; version: Record<string, unknown> }> {

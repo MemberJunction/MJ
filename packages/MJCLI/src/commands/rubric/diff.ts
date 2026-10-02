@@ -9,8 +9,12 @@ export default class RubricDiff extends Command {
   };
 
   async run(): Promise<void> {
-    const { RubricCommands } = await import('@memberjunction/testing-cli');
+    const { CloseMJProvider, RubricCommands } = await import('@memberjunction/testing-cli');
     const { args } = await this.parse(RubricDiff);
-    await new RubricCommands().Diff(args.rubric, args.from, args.to);
+    try {
+      await new RubricCommands().Diff(args.rubric, args.from, args.to);
+    } finally {
+      await CloseMJProvider();
+    }
   }
 }

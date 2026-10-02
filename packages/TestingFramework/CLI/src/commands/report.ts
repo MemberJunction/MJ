@@ -6,7 +6,7 @@
 import { UserInfo, RunView } from '@memberjunction/core';
 import { ReportFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
-import { InitializeMJProvider, GetContextUser, GetMJProvider } from '../lib/mj-provider';
+import { CloseMJProvider, InitializeMJProvider, GetContextUser, GetMJProvider } from '../lib/mj-provider';
 import { FormatCriterionReport } from './rubric-cli';
 
 /**
@@ -28,7 +28,7 @@ export class ReportCommand {
             contextUser = contextUser ?? await GetContextUser();
             if (!runId) {
                 console.error(OutputFormatter.formatError('Pass a test run id. mj test report <run-id> prints each criterion.'));
-                process.exit(1);
+                process.exitCode = 1;
                 return;
             }
             const view = RunView.FromMetadataProvider(GetMJProvider());
@@ -43,14 +43,21 @@ export class ReportCommand {
             const row = (found.Results ?? [])[0] as { ResultDetails?: string | null } | undefined;
             if (!row) {
                 console.error(OutputFormatter.formatError(`Test run "${runId}" was not found.`));
-                process.exit(1);
+                process.exitCode = 1;
                 return;
             }
             const details = row.ResultDetails ? JSON.parse(row.ResultDetails) : [];
             console.log(FormatCriterionReport(Array.isArray(details) ? details : []));
         } catch (error) {
             console.error(OutputFormatter.formatError('Failed to generate report', error as Error));
-            process.exit(1);
+            process.exitCode = 1;
+        } finally {
+            try {
+                await CloseMJProvider();
+            } catch {
+                // The provider may not have opened.
+            }
+            if (process.exitCode === 1) process.exit(1);
         }
     }
 
