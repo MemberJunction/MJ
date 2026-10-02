@@ -95,20 +95,35 @@ export class MJTabComponent extends MJTabBase {
    * Event handler for when this tab is clicked to select it, generally not a great idea to call this directly, but it is possible to call directly to simulate a click. 
    * The preferred approach is to set the SelectedTabIndex property on the TabStrip component directly.
    */
-  public selectTab() {
+  public SelectTab() {
     this.tabstrip.SelectedTabIndex = this.index;
+  }
+
+  /** @deprecated Use {@link SelectTab}. */
+  public selectTab() {
+    return this.SelectTab();
   }
 
   /**
    * Event handler for when the close button is clicked on the tab. This will fire the BeforeTabClosed event on the TabStrip component, and if it is not cancelled, will then fire the AfterTabClosed event.
    */
-  public closeTab($event: MouseEvent) {
+  public CloseTab($event: MouseEvent) {
     $event.stopPropagation(); // prevent click from going to the tab
     this.tabstrip.CloseTab(this.index);
   }
 
-  public handleContextMenu($event: MouseEvent) {
+  /** @deprecated Use {@link CloseTab}. */
+  public closeTab($event: MouseEvent) {
+    return this.CloseTab($event);
+  }
+
+  public HandleContextMenu($event: MouseEvent) {
     $event.preventDefault();
     this.tabstrip.handleTabContextMenu($event, this);
+  }
+
+  /** @deprecated Use {@link HandleContextMenu}. */
+  public handleContextMenu($event: MouseEvent) {
+    return this.HandleContextMenu($event);
   }
 }

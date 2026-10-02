@@ -5,11 +5,11 @@ import { MJComputerUseEngine, MJRunComputerUseParams } from '@memberjunction/com
 import { CdpRemoteBrowserSession, type ComputerUseGoalRun } from '@memberjunction/remote-browser-cdp';
 import type { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import {
-  buildMJGoalParams,
+  BuildMJGoalParams,
   BindRemoteBrowserGoalEngine,
   MJProgressComputerUseEngine,
-  extractCoAgentRunID,
-  finalizeBrowserGoalStep,
+  ExtractCoAgentRunID,
+  FinalizeBrowserGoalStep,
 } from '../agentSessions/remoteBrowserGoalEngine.js';
 
 const USER = { ID: 'u-1', Email: 'amith@bluecypress.io' } as unknown as UserInfo;
@@ -21,7 +21,7 @@ function baseParams(): RunComputerUseParams {
 
 describe('buildMJGoalParams', () => {
   it('produces MJ-aware params that carry over the base goal/step/url fields', () => {
-    const mj = buildMJGoalParams(baseParams(), USER);
+    const mj = BuildMJGoalParams(baseParams(), USER);
     expect(mj).toBeInstanceOf(MJRunComputerUseParams);
     expect(mj.Goal).toBe('log in');
     expect(mj.MaxSteps).toBe(7);
@@ -29,21 +29,21 @@ describe('buildMJGoalParams', () => {
   });
 
   it('injects the acting ContextUser so MJ prompts run as that user', () => {
-    expect(buildMJGoalParams(baseParams(), USER).ContextUser).toBe(USER);
+    expect(BuildMJGoalParams(baseParams(), USER).ContextUser).toBe(USER);
   });
 
   it('leaves ContextUser undefined when none is supplied', () => {
-    expect(buildMJGoalParams(baseParams()).ContextUser).toBeUndefined();
+    expect(BuildMJGoalParams(baseParams()).ContextUser).toBeUndefined();
   });
 
   it('threads the parent run + step ids for observability nesting', () => {
-    const mj = buildMJGoalParams(baseParams(), USER, 'coagent-run-1', 'goal-step-1');
+    const mj = BuildMJGoalParams(baseParams(), USER, 'coagent-run-1', 'goal-step-1');
     expect(mj.AgentRunId).toBe('coagent-run-1');
     expect(mj.AgentRunStepID).toBe('goal-step-1');
   });
 
   it('leaves the run/step ids undefined when not supplied', () => {
-    const mj = buildMJGoalParams(baseParams(), USER);
+    const mj = BuildMJGoalParams(baseParams(), USER);
     expect(mj.AgentRunId).toBeUndefined();
     expect(mj.AgentRunStepID).toBeUndefined();
   });
@@ -51,17 +51,17 @@ describe('buildMJGoalParams', () => {
 
 describe('extractCoAgentRunID', () => {
   it('pulls coAgentRunID out of a session Config_ blob', () => {
-    expect(extractCoAgentRunID(JSON.stringify({ coAgentRunID: 'run-9', promptRunID: 'p' }))).toBe('run-9');
+    expect(ExtractCoAgentRunID(JSON.stringify({ coAgentRunID: 'run-9', promptRunID: 'p' }))).toBe('run-9');
   });
   it('returns undefined for a missing key, null/empty config, or non-string value', () => {
-    expect(extractCoAgentRunID(JSON.stringify({ promptRunID: 'p' }))).toBeUndefined();
-    expect(extractCoAgentRunID(null)).toBeUndefined();
-    expect(extractCoAgentRunID(undefined)).toBeUndefined();
-    expect(extractCoAgentRunID('')).toBeUndefined();
-    expect(extractCoAgentRunID(JSON.stringify({ coAgentRunID: 123 }))).toBeUndefined();
+    expect(ExtractCoAgentRunID(JSON.stringify({ promptRunID: 'p' }))).toBeUndefined();
+    expect(ExtractCoAgentRunID(null)).toBeUndefined();
+    expect(ExtractCoAgentRunID(undefined)).toBeUndefined();
+    expect(ExtractCoAgentRunID('')).toBeUndefined();
+    expect(ExtractCoAgentRunID(JSON.stringify({ coAgentRunID: 123 }))).toBeUndefined();
   });
   it('returns undefined for malformed JSON (best-effort)', () => {
-    expect(extractCoAgentRunID('{not json')).toBeUndefined();
+    expect(ExtractCoAgentRunID('{not json')).toBeUndefined();
   });
 });
 
@@ -76,7 +76,7 @@ describe('finalizeBrowserGoalStep', () => {
 
   it('finalizes the parent step Completed from a successful goal result + saves', async () => {
     const step = fakeStep();
-    await finalizeBrowserGoalStep(step, { Success: true, Strategy: 'ComputerUse', Status: 'Completed', StepCount: 4, CurrentUrl: 'https://done/' });
+    await FinalizeBrowserGoalStep(step, { Success: true, Strategy: 'ComputerUse', Status: 'Completed', StepCount: 4, CurrentUrl: 'https://done/' });
     expect(step.Status).toBe('Completed');
     expect(step.Success).toBe(true);
     expect((step as unknown as { Save: ReturnType<typeof vi.fn> }).Save).toHaveBeenCalledOnce();
@@ -87,13 +87,13 @@ describe('finalizeBrowserGoalStep', () => {
 
   it('finalizes Failed and carries the detail as the error message', async () => {
     const step = fakeStep();
-    await finalizeBrowserGoalStep(step, { Success: false, Status: 'Error', Detail: 'login blocked' });
+    await FinalizeBrowserGoalStep(step, { Success: false, Status: 'Error', Detail: 'login blocked' });
     expect(step.Status).toBe('Failed');
     expect(step.ErrorMessage).toBe('login blocked');
   });
 
   it('is a no-op when the step is null (no co-agent run to nest under)', async () => {
-    await expect(finalizeBrowserGoalStep(null, { Success: true })).resolves.toBeUndefined();
+    await expect(FinalizeBrowserGoalStep(null, { Success: true })).resolves.toBeUndefined();
   });
 });
 

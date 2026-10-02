@@ -1,0 +1,45 @@
+{
+  "entity": "MJ: AI Agents",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+    "ModelSelectionMode": "Agent Type",
+    "ExposeAsAction": false,
+    "Status": "Active"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".agents.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: AI Agent Types",
+        "field": "Name"
+      },
+      "CategoryID": {
+        "entity": "MJ: AI Agent Categories",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": {
+        "entity": "MJ: AI Agent Prompts",
+        "foreignKey": "AgentID"
+      },
+      "MJ: AI Agent Actions": {
+        "entity": "MJ: AI Agent Actions",
+        "foreignKey": "AgentID"
+      },
+      "MJ: AI Agent Steps": {
+        "entity": "MJ: AI Agent Steps",
+        "foreignKey": "AgentID"
+      }
+    }
+  }
+}

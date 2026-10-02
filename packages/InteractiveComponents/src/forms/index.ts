@@ -28,6 +28,11 @@ export * from './form-spec-info';
 import type { ComponentSpec } from '../component-spec';
 
 /** True iff the spec commits to the form-role contract. */
-export function isFormRole(spec: Pick<ComponentSpec, 'componentRole'>): boolean {
+export function IsFormRole(spec: Pick<ComponentSpec, 'componentRole'>): boolean {
     return spec.componentRole === 'form';
+}
+
+/** @deprecated Use {@link IsFormRole}. */
+export function isFormRole(spec: Pick<ComponentSpec, 'componentRole'>): boolean {
+    return IsFormRole(spec);
 }

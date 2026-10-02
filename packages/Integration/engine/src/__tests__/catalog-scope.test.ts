@@ -160,12 +160,13 @@ test('a scope whose connection has NO per-connection catalog reads shared', () =
     });
 });
 
-test('the per-connection datasets are NOT configured when the entities are absent', async () => {
-    // The rollout safety property. A configured dataset whose entity does not exist fails its
-    // RunView, and BaseEngine classifies an unknown entity as a TRANSIENT failure — so the property
-    // stays `loadedSuccessfully: false` and every Config() retries it forever. The integration
-    // engine would sit permanently not-loaded on any workspace that has the code but not the
-    // migration, and the symptom would look like a network fault rather than a missing table.
+test('the per-connection datasets are never configured at boot, with or without the migration', async () => {
+    // Two properties. The rollout one: a configured dataset whose entity does not exist fails its
+    // RunView, BaseEngine classifies an unknown entity as TRANSIENT, and every Config() retries it
+    // forever — the engine would sit permanently not-loaded on a workspace with the code but not
+    // the migration. And the memory one: once the migration HAS run, loading every connection's
+    // rows at boot was a ~3.8 GB idle floor on a NetForum catalog. The rows are supplied per
+    // catalog scope instead (CatalogScope.ts), so they are never a boot-time dataset at all.
     const engine = IntegrationEngineBase.Instance as unknown as {
         Config(f?: boolean, u?: unknown, p?: unknown): Promise<unknown>;
         Configs: Array<{ PropertyName: string; EntityName?: string }>;
@@ -180,10 +181,11 @@ test('the per-connection datasets are NOT configured when the entities are absen
         expect(captured.at(-1)).not.toContain('_companyIntegrationObjects');
         expect(captured.at(-1)).toContain('_integrationObjects');
 
-        // And once the migration has run, both appear.
+        // And once the migration has run, still neither.
         await engine.Config(false, {}, { EntityByName: (n: string) => ({ Name: n }) });
-        expect(captured.at(-1)).toContain('_companyIntegrationObjects');
-        expect(captured.at(-1)).toContain('_companyIntegrationObjectFields');
+        expect(captured.at(-1)).not.toContain('_companyIntegrationObjects');
+        expect(captured.at(-1)).not.toContain('_companyIntegrationObjectFields');
+        expect(captured.at(-1)).toContain('_integrationObjects');
     } finally {
         engine.Load = savedLoad;
     }

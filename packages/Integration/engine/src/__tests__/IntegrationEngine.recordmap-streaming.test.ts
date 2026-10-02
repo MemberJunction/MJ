@@ -38,11 +38,11 @@ function loadStreamed(
     onPage: (rows: ReadonlyArray<RecordMapRow>) => void,
 ): Promise<LoadResult> {
     return (engine as unknown as {
-        LoadAllRecordMaps: (
+        loadAllRecordMaps: (
             ci: string, entity: string, u: UserInfo,
             onPage?: (rows: ReadonlyArray<RecordMapRow>) => void,
         ) => Promise<LoadResult>;
-    }).LoadAllRecordMaps('ci-1', 'entity-1', contextUser, onPage);
+    }).loadAllRecordMaps('ci-1', 'entity-1', contextUser, onPage);
 }
 
 function rows(count: number, offset = 0): RecordMapRow[] {
@@ -84,8 +84,8 @@ describe('IntegrationEngine.LoadAllRecordMaps — streaming', () => {
         mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: rows(3) });
 
         const result = await (engine as unknown as {
-            LoadAllRecordMaps: (ci: string, e: string, u: UserInfo) => Promise<LoadResult>;
-        }).LoadAllRecordMaps('ci-1', 'entity-1', contextUser);
+            loadAllRecordMaps: (ci: string, e: string, u: UserInfo) => Promise<LoadResult>;
+        }).loadAllRecordMaps('ci-1', 'entity-1', contextUser);
 
         expect(result.Rows).toHaveLength(3);
         expect(result.RowsRead).toBe(3);

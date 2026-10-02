@@ -18,9 +18,9 @@ type Emitted = { event: string; data: Record<string, unknown> };
 function loggerWithCapture(): { logger: SyncLogger; emitted: Emitted[] } {
     const logger = new SyncLogger({ ciId: 'ci-1', integration: 'PheedLoop', runId: 'run-1' });
     const emitted: Emitted[] = [];
-    // Spied at `emit` — the single exit both a verbatim warning and a rollup go through, and the
+    // Spied at `Emit` — the single exit both a verbatim warning and a rollup go through, and the
     // shape (event + structured data) that reaches the console line and the durable artifact.
-    vi.spyOn(logger, 'emit').mockImplementation((event, data = {}) => { emitted.push({ event, data }); });
+    vi.spyOn(logger, 'Emit').mockImplementation((event, data = {}) => { emitted.push({ event, data }); });
     return { logger, emitted };
 }
 

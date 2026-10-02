@@ -29,14 +29,19 @@ vi.mock('../Misc/status_logging', () => ({ logError: vi.fn(), logStatus: vi.fn()
 vi.mock('../Config/config', () => ({
   mjCoreSchema: '__mj',
   configInfo: { fileEmit: { perSchema: true, writeIfChanged: false, parallel: false, concurrency: 1 } },
-  resolveEntityPackageName: () => 'pkg',
-  getExternalEntitySchemas: () => [],
+  ResolveEntityPackageName: () => 'pkg',
+    get resolveEntityPackageName() { return this.ResolveEntityPackageName; },
+  GetExternalEntitySchemas: () => [],
+    get getExternalEntitySchemas() { return this.GetExternalEntitySchemas; },
 }));
 
 vi.mock('../Misc/util', () => ({
-  makeDir: vi.fn(),
-  sortBySequenceAndCreatedAt: (items: unknown[]) => [...items],
-  sortRelatedEntities: (items: unknown[]) => [...items],
+  MakeDir: vi.fn(),
+    get makeDir() { return this.MakeDir; },
+  SortBySequenceAndCreatedAt: (items: unknown[]) => [...items],
+    get sortBySequenceAndCreatedAt() { return this.SortBySequenceAndCreatedAt; },
+  SortRelatedEntities: (items: unknown[]) => [...items],
+    get sortRelatedEntities() { return this.SortRelatedEntities; },
 }));
 
 vi.mock('fs', async () => {

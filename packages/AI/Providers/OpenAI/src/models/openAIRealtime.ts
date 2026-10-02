@@ -186,6 +186,11 @@ export interface OpenAIRealtimeProfile {
      * emits anything). Compat endpoints without `create_response` gating set false.
      */
     supportsLiveReconfigure: boolean;
+    /**
+     * Whether this driver/session supports dynamic, multi-tool sets projected into the realtime
+     * session (e.g. per-agent direct action invocation).
+     */
+    supportsDynamicToolSet: boolean;
     /** The fatal-error message surfaced when the socket closes unexpectedly. */
     unexpectedCloseMessage: string;
     /**
@@ -276,6 +281,7 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsMcpTools: true,
     supportsVoiceOutput: true,
     supportsLiveReconfigure: true,
+    supportsDynamicToolSet: true,
     unexpectedCloseMessage: 'OpenAI realtime connection closed unexpectedly',
     supportedTurnModes: ['serverVad', 'semanticVad'],
     // A normalized request (catalog/cascade `turnDetection`) maps first; otherwise OpenAI's default
@@ -567,28 +573,28 @@ export interface IOpenAIRealtimeConnection {
      * SDK's `EventEmitter` returns `this` for chaining. A void-returning method is assignable from a
      * value-returning one, so a real `OpenAIRealtimeWebSocket` still satisfies this interface.
      */
-    on(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    on(event: 'event', listener: (event: RealtimeServerEvent) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /**
      * Registers a listener for connection errors. The SDK routes BOTH transport-level failures
      * (socket error, unparseable frame, failed send — `error.error` is undefined) and provider
      * `error` server frames (`error.error` carries the payload) through this channel; the driver
      * classifies fatality from that distinction.
      */
-    on(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
+    on(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Removes a previously-registered listener. See {@link IOpenAIRealtimeConnection.on} re: return type. */
-    off(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    off(event: 'event', listener: (event: RealtimeServerEvent) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Removes a previously-registered error listener. */
-    off(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
+    off(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Sends a client event to the realtime API. */
-    send(event: RealtimeClientEvent): void;
+    send(event: RealtimeClientEvent): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Closes the underlying socket. */
-    close(props?: { code: number; reason: string }): void;
+    close(props?: { code: number; reason: string }): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /**
      * Optional raw WebSocket surface (present on the real `OpenAIRealtimeWebSocket`, which exposes
      * its underlying `socket`). Used solely to detect UNEXPECTED closure — the SDK emitter has no
      * close event of its own. The driver feature-detects; fakes may omit it.
      */
-    socket?: { addEventListener(type: 'close', listener: () => void): void };
+    socket?: { addEventListener(type: 'close', listener: () => void): void };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -617,6 +623,8 @@ export interface IOpenAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAIRealtime')
 export class OpenAIRealtime extends BaseRealtimeModel {
+    public static override readonly SupportsDynamicToolSet = OPENAI_REALTIME_PROFILE.supportsDynamicToolSet;
+
     private _openAI: OpenAI;
 
     /**
@@ -697,8 +705,10 @@ export class OpenAIRealtime extends BaseRealtimeModel {
             { ID: 'alloy', Name: 'Alloy' },
             { ID: 'ash', Name: 'Ash' },
             { ID: 'ballad', Name: 'Ballad' },
+            { ID: 'cedar', Name: 'Cedar' },
             { ID: 'coral', Name: 'Coral' },
             { ID: 'echo', Name: 'Echo' },
+            { ID: 'marin', Name: 'Marin' },
             { ID: 'sage', Name: 'Sage' },
             { ID: 'shimmer', Name: 'Shimmer' },
             { ID: 'verse', Name: 'Verse' },
@@ -1093,7 +1103,13 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     /** @inheritdoc — profile-gated: only providers whose endpoint honors a live partial `session.update`. */
     public get Capabilities(): RealtimeSessionCapabilities {
-        return { CanReconfigureTurnMode: this.profile.supportsLiveReconfigure };
+        const caps: RealtimeSessionCapabilities = {
+            CanReconfigureTurnMode: this.profile.supportsLiveReconfigure,
+        };
+        if (this.profile.supportsDynamicToolSet) {
+            caps.SupportsDynamicToolSet = true;
+        }
+        return caps;
     }
 
     /**
@@ -1178,6 +1194,22 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.connection.off('event', this.eventListener);
         this.connection.off('error', this.errorListener);
         this.connection.close();
+        this.clearHandlers();
+    }
+
+    /**
+     * Drops all registered callback handlers so a closed session can't keep the caller's
+     * dispatch/UI context reachable through a stale closure. Mirrors the same cleanup in the
+     * Gemini and ElevenLabs realtime sessions.
+     */
+    private clearHandlers(): void {
+        this.outputHandler = undefined;
+        this.transcriptHandler = undefined;
+        this.toolCallHandler = undefined;
+        this.interruptionHandler = undefined;
+        this.usageHandler = undefined;
+        this.errorHandler = undefined;
+        this.closeHandler = undefined;
     }
 
     // ---- Inbound event translation ----

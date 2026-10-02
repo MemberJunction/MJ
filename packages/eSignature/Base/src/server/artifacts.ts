@@ -37,7 +37,7 @@ export interface WriteSignedArtifactResult {
  *   - `File`  — bytes are fetched from the backing storage provider via the File's ProviderKey.
  * Returns null if the version can't be loaded or yields no content.
  */
-export async function loadArtifactVersionBytes(
+export async function LoadArtifactVersionBytes(
     artifactVersionId: string,
     contextUser: UserInfo,
     provider?: IMetadataProvider,
@@ -66,6 +66,15 @@ export async function loadArtifactVersionBytes(
     return bytes ? { bytes, filename, contentType } : null;
 }
 
+/** @deprecated Use {@link LoadArtifactVersionBytes}. */
+export async function loadArtifactVersionBytes(
+    artifactVersionId: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<SignatureDocumentInput | null> {
+    return LoadArtifactVersionBytes(artifactVersionId, contextUser, provider);
+}
+
 /** Read a File row's bytes from its storage provider. Null if the file/account can't be resolved. */
 async function readFileBytes(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<Buffer | null> {
     const md = provider ?? Metadata.Provider;
@@ -90,7 +99,7 @@ async function readFileBytes(fileId: string, contextUser: UserInfo, provider?: I
  * Returns null (and logs) when no File Storage Account is configured — callers treat this as a
  * soft failure so a successful download is never lost just because artifact storage isn't set up.
  */
-export async function writeSignedArtifact(
+export async function WriteSignedArtifact(
     options: {
         filename: string;
         bytes: Buffer;
@@ -133,6 +142,21 @@ export async function writeSignedArtifact(
     }
 
     return { artifactId: artifact.ID, artifactVersionId: version.ID, fileId: upload.FileID };
+}
+
+/** @deprecated Use {@link WriteSignedArtifact}. */
+export async function writeSignedArtifact(
+    options: {
+        filename: string;
+        bytes: Buffer;
+        contentType: string;
+        /** Names the new Artifact; defaults to the filename. */
+        title?: string;
+        contextUser: UserInfo;
+        provider?: IMetadataProvider;
+    },
+): Promise<WriteSignedArtifactResult | null> {
+    return WriteSignedArtifact(options);
 }
 
 /** Create the parent Artifact row, typed from the document MIME (falls back to Generic Binary). */

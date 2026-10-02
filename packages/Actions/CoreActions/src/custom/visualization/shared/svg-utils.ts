@@ -21,7 +21,7 @@ export class SVGUtils {
      * @param idPrefix - Optional ID prefix for the root SVG element
      * @returns JSDOM Document containing the SVG
      */
-    static createSVG(width: number, height: number, idPrefix?: string): Document {
+    static CreateSVG(width: number, height: number, idPrefix?: string): Document {
         const svgId = idPrefix ? ` id="${idPrefix}-root"` : '';
         const dom = new JSDOM(`<svg xmlns="http://www.w3.org/2000/svg"
                                      width="${width}"
@@ -31,19 +31,29 @@ export class SVGUtils {
         return dom.window.document;
     }
 
+    /** @deprecated Use {@link CreateSVG}. */
+    static createSVG(width: number, height: number, idPrefix?: string): Document {
+        return this.CreateSVG(width, height, idPrefix);
+    }
+
     /**
      * Sanitizes text content to prevent XSS attacks
      *
      * @param text - Raw text content
      * @returns HTML-safe text
      */
-    static sanitizeText(text: string): string {
+    static SanitizeText(text: string): string {
         return text
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    /** @deprecated Use {@link SanitizeText}. */
+    static sanitizeText(text: string): string {
+        return this.SanitizeText(text);
     }
 
     /**
@@ -56,7 +66,7 @@ export class SVGUtils {
      * @param svgString - Raw SVG XML string
      * @returns Sanitized SVG string
      */
-    static sanitizeSVG(svgString: string): string {
+    static SanitizeSVG(svgString: string): string {
         let sanitized = svgString;
 
         // Remove event handlers
@@ -75,6 +85,11 @@ export class SVGUtils {
         return sanitized;
     }
 
+    /** @deprecated Use {@link SanitizeSVG}. */
+    static sanitizeSVG(svgString: string): string {
+        return this.SanitizeSVG(svgString);
+    }
+
     /**
      * Generates a unique ID with prefix and timestamp
      *
@@ -82,8 +97,13 @@ export class SVGUtils {
      * @param index - Index or identifier
      * @returns Unique ID string
      */
-    static generateId(prefix: string, index: number | string): string {
+    static GenerateId(prefix: string, index: number | string): string {
         return `${prefix}-${index}-${Date.now()}`;
+    }
+
+    /** @deprecated Use {@link GenerateId}. */
+    static generateId(prefix: string, index: number | string): string {
+        return this.GenerateId(prefix, index);
     }
 
     /**
@@ -92,7 +112,7 @@ export class SVGUtils {
      * @param svg - SVG element to enhance
      * @param a11y - Accessibility configuration
      */
-    static addA11y(svg: SVGElement, a11y: Accessibility): void {
+    static AddA11y(svg: SVGElement, a11y: Accessibility): void {
         if (!a11y) return;
 
         const doc = svg.ownerDocument;
@@ -124,13 +144,18 @@ export class SVGUtils {
         }
     }
 
+    /** @deprecated Use {@link AddA11y}. */
+    static addA11y(svg: SVGElement, a11y: Accessibility): void {
+        return this.AddA11y(svg, a11y);
+    }
+
     /**
      * Injects inline CSS styles into SVG
      *
      * @param svg - SVG element
      * @param css - CSS string to inject
      */
-    static addStyles(svg: SVGElement, css: string): void {
+    static AddStyles(svg: SVGElement, css: string): void {
         const doc = svg.ownerDocument;
         const ns = svg.namespaceURI;
 
@@ -149,13 +174,18 @@ export class SVGUtils {
         }
     }
 
+    /** @deprecated Use {@link AddStyles}. */
+    static addStyles(svg: SVGElement, css: string): void {
+        return this.AddStyles(svg, css);
+    }
+
     /**
      * Calculates viewBox with padding applied
      *
      * @param viewBox - ViewBox configuration
      * @returns Padding-adjusted dimensions and offsets
      */
-    static calculateViewBox(viewBox: ViewBox): {
+    static CalculateViewBox(viewBox: ViewBox): {
         x: number;
         y: number;
         width: number;
@@ -189,19 +219,36 @@ export class SVGUtils {
         };
     }
 
+    /** @deprecated Use {@link CalculateViewBox}. */
+    static calculateViewBox(viewBox: ViewBox): {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        contentWidth: number;
+        contentHeight: number;
+    } {
+        return this.CalculateViewBox(viewBox);
+    }
+
     /**
      * Creates a <defs> element if it doesn't exist in SVG
      *
      * @param svg - SVG element
      * @returns The defs element (existing or newly created)
      */
-    static getOrCreateDefs(svg: SVGElement): SVGDefsElement {
+    static GetOrCreateDefs(svg: SVGElement): SVGDefsElement {
         let defs = svg.querySelector('defs');
         if (!defs) {
             defs = svg.ownerDocument.createElementNS(svg.namespaceURI, 'defs') as SVGDefsElement;
             svg.insertBefore(defs, svg.firstChild);
         }
         return defs;
+    }
+
+    /** @deprecated Use {@link GetOrCreateDefs}. */
+    static getOrCreateDefs(svg: SVGElement): SVGDefsElement {
+        return this.GetOrCreateDefs(svg);
     }
 
     /**
@@ -212,8 +259,8 @@ export class SVGUtils {
      * @param color - Arrow color
      * @returns Marker ID for use in marker-end attribute
      */
-    static addArrowMarker(svg: SVGElement, id: string, color: string = '#000'): string {
-        const defs = this.getOrCreateDefs(svg);
+    static AddArrowMarker(svg: SVGElement, id: string, color: string = '#000'): string {
+        const defs = this.GetOrCreateDefs(svg);
         const doc = svg.ownerDocument;
         const ns = svg.namespaceURI;
 
@@ -241,6 +288,11 @@ export class SVGUtils {
         return `url(#${id})`;
     }
 
+    /** @deprecated Use {@link AddArrowMarker}. */
+    static addArrowMarker(svg: SVGElement, id: string, color: string = '#000'): string {
+        return this.AddArrowMarker(svg, id, color);
+    }
+
     /**
      * Creates a seeded pseudo-random number generator
      * Uses simple Linear Congruential Generator for deterministic output
@@ -248,12 +300,17 @@ export class SVGUtils {
      * @param seed - Random seed
      * @returns Function that returns random numbers between 0 and 1
      */
-    static seededRandom(seed: number): () => number {
+    static SeededRandom(seed: number): () => number {
         let s = seed;
         return function () {
             s = (s * 9301 + 49297) % 233280;
             return s / 233280;
         };
+    }
+
+    /** @deprecated Use {@link SeededRandom}. */
+    static seededRandom(seed: number): () => number {
+        return this.SeededRandom(seed);
     }
 
     /**
@@ -263,7 +320,7 @@ export class SVGUtils {
      * @param maxWidth - Maximum width in characters (approximate)
      * @returns Array of text lines
      */
-    static wrapText(text: string, maxWidth: number): string[] {
+    static WrapText(text: string, maxWidth: number): string[] {
         const words = text.split(/\s+/);
         const lines: string[] = [];
         let currentLine = '';
@@ -282,6 +339,11 @@ export class SVGUtils {
         return lines;
     }
 
+    /** @deprecated Use {@link WrapText}. */
+    static wrapText(text: string, maxWidth: number): string[] {
+        return this.WrapText(text, maxWidth);
+    }
+
     /**
      * Calculates text width (approximate based on character count and font size)
      * More accurate measurement would require actual rendering
@@ -290,9 +352,14 @@ export class SVGUtils {
      * @param fontSize - Font size in pixels
      * @returns Estimated width in pixels
      */
-    static estimateTextWidth(text: string, fontSize: number = 14): number {
+    static EstimateTextWidth(text: string, fontSize: number = 14): number {
         // Average character width is approximately 0.6 of font size
         return text.length * fontSize * 0.6;
+    }
+
+    /** @deprecated Use {@link EstimateTextWidth}. */
+    static estimateTextWidth(text: string, fontSize: number = 14): number {
+        return this.EstimateTextWidth(text, fontSize);
     }
 
     /**
@@ -305,7 +372,7 @@ export class SVGUtils {
      * @param radius - Corner radius
      * @returns SVG path data string
      */
-    static roundedRectPath(
+    static RoundedRectPath(
         x: number,
         y: number,
         width: number,
@@ -327,6 +394,17 @@ export class SVGUtils {
         `.replace(/\s+/g, ' ').trim();
     }
 
+    /** @deprecated Use {@link RoundedRectPath}. */
+    static roundedRectPath(
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        radius: number
+    ): string {
+        return this.RoundedRectPath(x, y, width, height, radius);
+    }
+
     /**
      * Wraps SVG string in a scrollable HTML container
      * Useful for large visualizations that exceed viewport size
@@ -338,7 +416,7 @@ export class SVGUtils {
      * @param borderColor - Border color (default: #ddd)
      * @returns HTML string with SVG wrapped in scrollable div
      */
-    static wrapWithScrollContainer(
+    static WrapWithScrollContainer(
         svgString: string,
         maxWidth: number = 1200,
         maxHeight: number = 800,
@@ -347,6 +425,17 @@ export class SVGUtils {
     ): string {
         const borderStyle = showBorder ? `border: 1px solid ${borderColor};` : '';
         return `<div style="max-width: ${maxWidth}px; max-height: ${maxHeight}px; overflow: auto; ${borderStyle} border-radius: 4px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">${svgString}</div>`;
+    }
+
+    /** @deprecated Use {@link WrapWithScrollContainer}. */
+    static wrapWithScrollContainer(
+        svgString: string,
+        maxWidth: number = 1200,
+        maxHeight: number = 800,
+        showBorder: boolean = true,
+        borderColor: string = '#ddd'
+    ): string {
+        return this.WrapWithScrollContainer(svgString, maxWidth, maxHeight, showBorder, borderColor);
     }
 
     /**
@@ -359,7 +448,7 @@ export class SVGUtils {
      * @param showControls - Show zoom in/out/reset buttons (default: false)
      * @returns Script tag with pan/zoom implementation
      */
-    static generatePanZoomScript(
+    static GeneratePanZoomScript(
         containerId: string = 'pan-zoom-container',
         minScale: number = 0.5,
         maxScale: number = 3,
@@ -463,6 +552,16 @@ export class SVGUtils {
 ]]></script>`;
     }
 
+    /** @deprecated Use {@link GeneratePanZoomScript}. */
+    static generatePanZoomScript(
+        containerId: string = 'pan-zoom-container',
+        minScale: number = 0.5,
+        maxScale: number = 3,
+        showControls: boolean = false
+    ): string {
+        return this.GeneratePanZoomScript(containerId, minScale, maxScale, showControls);
+    }
+
     /**
      * Generates zoom control buttons script
      * @returns Script code for zoom controls (internal use)
@@ -535,7 +634,7 @@ export class SVGUtils {
      * @param doc - Document to create elements in
      * @returns Script tag with tooltip implementation
      */
-    static addTooltipSupport(svg: SVGElement, doc: Document): void {
+    static AddTooltipSupport(svg: SVGElement, doc: Document): void {
         const ns = svg.namespaceURI!;
 
         // Create tooltip text element
@@ -613,5 +712,10 @@ export class SVGUtils {
         `;
 
         svg.appendChild(script);
+    }
+
+    /** @deprecated Use {@link AddTooltipSupport}. */
+    static addTooltipSupport(svg: SVGElement, doc: Document): void {
+        return this.AddTooltipSupport(svg, doc);
     }
 }

@@ -16,17 +16,17 @@ export type AppAccessDialogType =
  * Configuration for the app access dialog
  */
 export interface AppAccessDialogConfig {
-  type: AppAccessDialogType;
-  appName?: string;
-  appId?: string;
+  type: AppAccessDialogType;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  appName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  appId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Result from the dialog
  */
 export interface AppAccessDialogResult {
-  action: 'install' | 'enable' | 'redirect' | 'dismissed';
-  appId?: string;
+  action: 'install' | 'enable' | 'redirect' | 'dismissed';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  appId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -41,16 +41,61 @@ export interface AppAccessDialogResult {
   styleUrls: ['./app-access-dialog.component.css']
 })
 export class AppAccessDialogComponent implements OnDestroy {
-  @Input() visible = false;
-  @Output() visibleChange = new EventEmitter<boolean>();
-  @Output() result = new EventEmitter<AppAccessDialogResult>();
+  @Input() Visible = false;
+
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: AppAccessDialogComponent['Visible']) {
+    this.Visible = value;
+  }
+  /** @deprecated Use {@link Visible}. */
+  get visible(): AppAccessDialogComponent['Visible'] {
+    return this.Visible;
+  }
+  @Output() VisibleChange = new EventEmitter<boolean>();
+
+  /**
+   * @deprecated Use {@link VisibleChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (visibleChange) keeps working. Must stay AFTER VisibleChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() visibleChange = this.VisibleChange;
+  @Output() Result = new EventEmitter<AppAccessDialogResult>();
+
+  /**
+   * @deprecated Use {@link Result}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (result) keeps working. Must stay AFTER Result: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() result = this.Result;
 
   config: AppAccessDialogConfig | null = null;
-  isProcessing = false;
+  IsProcessing = false;
+
+  /** @deprecated Use {@link IsProcessing}. */
+  get isProcessing() {
+    return this.IsProcessing;
+  }
+  /** @deprecated Use {@link IsProcessing}. */
+  set isProcessing(value) {
+    this.IsProcessing = value;
+  }
 
   // Auto-dismiss countdown
   private countdownInterval: ReturnType<typeof setInterval> | null = null;
-  countdownSeconds = 0;
+  CountdownSeconds = 0;
+
+  /** @deprecated Use {@link CountdownSeconds}. */
+  get countdownSeconds() {
+    return this.CountdownSeconds;
+  }
+  /** @deprecated Use {@link CountdownSeconds}. */
+  set countdownSeconds(value) {
+    this.CountdownSeconds = value;
+  }
   private readonly AUTO_DISMISS_SECONDS = 5;
 
   constructor(private cdr: ChangeDetectorRef) {}
@@ -58,11 +103,11 @@ export class AppAccessDialogComponent implements OnDestroy {
   /**
    * Show the dialog with the specified configuration
    */
-  show(config: AppAccessDialogConfig): void {
+  Show(config: AppAccessDialogConfig): void {
     this.config = config;
-    this.visible = true;
-    this.isProcessing = false;
-    this.visibleChange.emit(true);
+    this.Visible = true;
+    this.IsProcessing = false;
+    this.VisibleChange.emit(true);
 
     // Start countdown for types that auto-dismiss
     if (this.shouldAutoDismiss()) {
@@ -72,14 +117,24 @@ export class AppAccessDialogComponent implements OnDestroy {
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link Show}. */
+  show(config: AppAccessDialogConfig): void {
+    return this.Show(config);
+  }
+
   /**
    * Hide the dialog
    */
-  hide(): void {
+  Hide(): void {
     this.stopCountdown();
-    this.visible = false;
-    this.visibleChange.emit(false);
+    this.Visible = false;
+    this.VisibleChange.emit(false);
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link Hide}. */
+  hide(): void {
+    return this.Hide();
   }
 
   ngOnDestroy(): void {
@@ -115,7 +170,7 @@ export class AppAccessDialogComponent implements OnDestroy {
   /**
    * Get the dialog icon based on type
    */
-  get icon(): string {
+  get Icon(): string {
     if (!this.config) return 'fa-circle-info';
 
     switch (this.config.type) {
@@ -137,10 +192,15 @@ export class AppAccessDialogComponent implements OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link Icon}. */
+  get icon(): string {
+    return this.Icon;
+  }
+
   /**
    * Get the dialog icon color based on type
    */
-  get iconColor(): string {
+  get IconColor(): string {
     if (!this.config) return 'var(--mj-text-secondary)';
 
     switch (this.config.type) {
@@ -158,6 +218,11 @@ export class AppAccessDialogComponent implements OnDestroy {
       default:
         return 'var(--mj-text-secondary)';
     }
+  }
+
+  /** @deprecated Use {@link IconColor}. */
+  get iconColor(): string {
+    return this.IconColor;
   }
 
   /**
@@ -190,7 +255,7 @@ export class AppAccessDialogComponent implements OnDestroy {
   /**
    * Get the secondary/help message based on type
    */
-  get helpMessage(): string {
+  get HelpMessage(): string {
     if (!this.config) return '';
 
     switch (this.config.type) {
@@ -210,18 +275,28 @@ export class AppAccessDialogComponent implements OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link HelpMessage}. */
+  get helpMessage(): string {
+    return this.HelpMessage;
+  }
+
   /**
    * Check if the primary action button should be shown
    */
-  get showPrimaryAction(): boolean {
+  get ShowPrimaryAction(): boolean {
     if (!this.config) return false;
     return this.config.type === 'not_installed' || this.config.type === 'disabled';
+  }
+
+  /** @deprecated Use {@link ShowPrimaryAction}. */
+  get showPrimaryAction(): boolean {
+    return this.ShowPrimaryAction;
   }
 
   /**
    * Get the primary action button text
    */
-  get primaryActionText(): string {
+  get PrimaryActionText(): string {
     if (!this.config) return '';
 
     switch (this.config.type) {
@@ -233,22 +308,32 @@ export class AppAccessDialogComponent implements OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link PrimaryActionText}. */
+  get primaryActionText(): string {
+    return this.PrimaryActionText;
+  }
+
   /**
    * Get the secondary/dismiss button text with countdown if applicable
    * For actionable dialogs (install/enable), show "Cancel"
    * For non-actionable dialogs (errors), show "OK" with countdown
    */
-  get dismissButtonText(): string {
+  get DismissButtonText(): string {
     // For actionable dialogs, use "Cancel"
-    if (this.showPrimaryAction) {
+    if (this.ShowPrimaryAction) {
       return 'Cancel';
     }
 
     // For non-actionable dialogs, show countdown if active
-    if (this.countdownSeconds > 0) {
-      return `OK (${this.countdownSeconds})`;
+    if (this.CountdownSeconds > 0) {
+      return `OK (${this.CountdownSeconds})`;
     }
     return 'OK';
+  }
+
+  /** @deprecated Use {@link DismissButtonText}. */
+  get dismissButtonText(): string {
+    return this.DismissButtonText;
   }
 
   /**
@@ -264,14 +349,14 @@ export class AppAccessDialogComponent implements OnDestroy {
    */
   private startCountdown(): void {
     this.stopCountdown();
-    this.countdownSeconds = this.AUTO_DISMISS_SECONDS;
+    this.CountdownSeconds = this.AUTO_DISMISS_SECONDS;
 
     this.countdownInterval = setInterval(() => {
-      this.countdownSeconds--;
+      this.CountdownSeconds--;
       this.cdr.detectChanges();
 
-      if (this.countdownSeconds <= 0) {
-        this.onDismiss();
+      if (this.CountdownSeconds <= 0) {
+        this.OnDismiss();
       }
     }, 1000);
   }
@@ -284,21 +369,21 @@ export class AppAccessDialogComponent implements OnDestroy {
       clearInterval(this.countdownInterval);
       this.countdownInterval = null;
     }
-    this.countdownSeconds = 0;
+    this.CountdownSeconds = 0;
   }
 
   /**
    * Handle primary action (install/enable)
    */
-  async onPrimaryAction(): Promise<void> {
+  async OnPrimaryAction(): Promise<void> {
     if (!this.config) return;
 
-    this.isProcessing = true;
+    this.IsProcessing = true;
     this.cdr.detectChanges();
 
     const action = this.config.type === 'not_installed' ? 'install' : 'enable';
 
-    this.result.emit({
+    this.Result.emit({
       action,
       appId: this.config.appId
     });
@@ -306,21 +391,36 @@ export class AppAccessDialogComponent implements OnDestroy {
     // Don't hide yet - let the parent component handle the result and close when ready
   }
 
+  /** @deprecated Use {@link OnPrimaryAction}. */
+  async onPrimaryAction(): Promise<void> {
+    return this.OnPrimaryAction();
+  }
+
   /**
    * Handle dismiss/redirect action
    */
-  onDismiss(): void {
+  OnDismiss(): void {
     this.stopCountdown();
-    this.result.emit({ action: 'redirect' });
-    this.hide();
+    this.Result.emit({ action: 'redirect' });
+    this.Hide();
+  }
+
+  /** @deprecated Use {@link OnDismiss}. */
+  onDismiss(): void {
+    return this.OnDismiss();
   }
 
   /**
    * Mark processing as complete (called by parent after install/enable)
    */
+  CompleteProcessing(): void {
+    this.IsProcessing = false;
+    this.Hide();
+  }
+
+  /** @deprecated Use {@link CompleteProcessing}. */
   completeProcessing(): void {
-    this.isProcessing = false;
-    this.hide();
+    return this.CompleteProcessing();
   }
 
   /**
@@ -330,20 +430,20 @@ export class AppAccessDialogComponent implements OnDestroy {
    */
   @HostListener('document:keydown', ['$event'])
   handleKeyDown(event: KeyboardEvent): void {
-    if (!this.visible || this.isProcessing) return;
+    if (!this.Visible || this.IsProcessing) return;
 
     if (event.key === 'Enter') {
       // Enter triggers primary action if available
-      if (this.showPrimaryAction) {
+      if (this.ShowPrimaryAction) {
         event.preventDefault();
         event.stopPropagation();
-        this.onPrimaryAction();
+        this.OnPrimaryAction();
       }
     } else if (event.key === 'Escape') {
       // Escape dismisses the dialog
       event.preventDefault();
       event.stopPropagation();
-      this.onDismiss();
+      this.OnDismiss();
     }
   }
 }

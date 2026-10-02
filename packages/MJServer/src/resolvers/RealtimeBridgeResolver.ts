@@ -9,7 +9,7 @@ import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeMode
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
-import { registerMeetingRecordingFile, correlateRecordingStart } from './meetingRecordingRegistration.js';
+import { RegisterMeetingRecordingFile, CorrelateRecordingStart } from './meetingRecordingRegistration.js';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -458,7 +458,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       // Best-effort: correlate the live recording with the room's Meeting-Room Conversation (if it exists
       // yet) by stamping its EgressID. Never fail the start on this — the stop-flow resolves/creates it.
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
-      void correlateRecordingStart(input.RoomName, info.EgressID, user, provider);
+      void CorrelateRecordingStart(input.RoomName, info.EgressID, user, provider);
 
       return { Success: true, EgressID: info.EgressID, Status: info.Status };
     } catch (error) {
@@ -487,7 +487,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       // Register the completed egress MP4 as a Files row on the Meeting-Room Conversation. Best-effort:
       // any failure (e.g. storage provider not configured) leaves RecordingFileID unset but still
       // returns the successful stop result.
-      const registration = await registerMeetingRecordingFile(
+      const registration = await RegisterMeetingRecordingFile(
         { EgressID: info.EgressID, RoomName: info.RoomName, OutputLocation: info.OutputLocation, OutputSizeBytes: info.OutputSizeBytes },
         user,
         provider,

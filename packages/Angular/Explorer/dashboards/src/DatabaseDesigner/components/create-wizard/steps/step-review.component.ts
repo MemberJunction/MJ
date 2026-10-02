@@ -6,7 +6,7 @@
 
 import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import type { EntityTableSpec } from '../../../database-designer.types.js';
-import { generateERDFromTableSpec } from '../../../database-designer-erd.js';
+import { GenerateERDFromTableSpec } from '../../../database-designer-erd.js';
 
 @Component({
     standalone: false,
@@ -63,7 +63,7 @@ export class StepReviewComponent {
     public get ERDMermaidBlock(): string | null {
         const spec = this.AsEntityTableSpec;
         if (!spec) return null;
-        const erd = generateERDFromTableSpec([spec]);
+        const erd = GenerateERDFromTableSpec([spec]);
         if (!erd) return null;
         return `\`\`\`mermaid\n${erd}\n\`\`\``;
     }

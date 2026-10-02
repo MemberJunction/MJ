@@ -81,8 +81,8 @@ function stagePersist(
     opts: ConnectorCreationPipelineOptions,
 ): Promise<unknown> {
     return (pipeline as unknown as {
-        StagePersist: (e: unknown, o: ConnectorCreationPipelineOptions, s: unknown) => Promise<unknown>;
-    }).StagePersist(emitter, opts, sourceSchema);
+        stagePersist: (e: unknown, o: ConnectorCreationPipelineOptions, s: unknown) => Promise<unknown>;
+    }).stagePersist(emitter, opts, sourceSchema);
 }
 
 describe('IntegrationConnectorCreationPipeline — StagePersist re-checks the connection', () => {

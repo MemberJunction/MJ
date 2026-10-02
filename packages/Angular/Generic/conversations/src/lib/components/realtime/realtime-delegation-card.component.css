@@ -19,6 +19,10 @@
   color: var(--mj-color-violet-300, var(--mj-text-primary));
   border: 1px solid var(--sage-border);
 }
+.avatar--action i,
+.avatar--narration i {
+  font-size: 10px;
+}
 
 /* ---------- Working card (compact) ---------- */
 .work-card {

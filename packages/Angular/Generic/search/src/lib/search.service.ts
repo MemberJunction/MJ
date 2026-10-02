@@ -282,23 +282,29 @@ export class SearchService {
     }
 
     private buildEntityNameFilter(results: SearchResultItem[]): SearchFilter {
-        const counts = new Map<string, number>();
+        const counts = new Map<string, { count: number; displayName: string; icon?: string }>();
         let fileCount = 0;
         for (const r of results) {
             if (r.ResultType === 'storage-file') {
                 fileCount++;
             } else {
-                counts.set(r.EntityName, (counts.get(r.EntityName) ?? 0) + 1);
+                const existing = counts.get(r.EntityName);
+                const displayName = r.EntityDisplayName || r.EntityName;
+                if (existing) {
+                    existing.count++;
+                } else {
+                    counts.set(r.EntityName, { count: 1, displayName, icon: r.EntityIcon });
+                }
             }
         }
         const options: SearchFilterOption[] = Array.from(counts.entries())
-            .sort((a, b) => b[1] - a[1])
-            .map(([name, count]) => ({
-                Label: name,
+            .sort((a, b) => b[1].count - a[1].count)
+            .map(([name, data]) => ({
+                Label: data.displayName,
                 Value: name,
-                Count: count,
+                Count: data.count,
                 IsSelected: false,
-                Icon: 'fa-solid fa-table'
+                Icon: data.icon ?? 'fa-solid fa-table'
             }));
 
         // Add a single "Files" entry for all storage file results
@@ -438,11 +444,20 @@ export class SearchService {
                     // name lookup is cosmetic — IDs are an acceptable fallback
                 }
             }
-            return logs.map((log) => ({
-                EntityName: log.Entity,
-                RecordID: log.RecordID,
-                RecordName: this.recentRecordNameCache.get(`${log.Entity}||${log.RecordID}`) ?? log.RecordID,
-            }));
+            return logs.map((log) => {
+                let entityInfo;
+                try {
+                    entityInfo = this.Provider?.EntityByName ? this.Provider.EntityByName(log.Entity) : undefined;
+                } catch {
+                    // Non-fatal if metadata cache is uninitialized
+                }
+                return {
+                    EntityName: log.Entity,
+                    EntityDisplayName: entityInfo?.DisplayName || log.Entity,
+                    RecordID: log.RecordID,
+                    RecordName: this.recentRecordNameCache.get(`${log.Entity}||${log.RecordID}`) ?? log.RecordID,
+                };
+            });
         } catch {
             return [];
         }
@@ -569,19 +584,37 @@ export class SearchService {
 
     /** Map a single SearchClientResultItem to a SearchResultItem */
     private mapClientResultItem(r: SearchClientResultItem): SearchResultItem {
+        let entityDisplayName = r.EntityDisplayName;
+        let entityIcon = r.EntityIcon;
+        try {
+            const entity = this.Provider?.EntityByName?.(r.EntityName);
+            if (!entityDisplayName && entity) {
+                entityDisplayName = entity.DisplayName || entity.Name;
+            }
+            if (!entityIcon && entity?.Icon) {
+                entityIcon = entity.Icon;
+            }
+        } catch {
+            // Non-fatal if metadata cache is uninitialized (e.g. in unit tests)
+        }
+        if (!entityDisplayName) {
+            entityDisplayName = r.EntityName;
+        }
+
         return {
             ID: r.ID,
             Title: r.RecordName || r.Title,
             Snippet: r.Snippet,
             EntityName: r.EntityName,
+            EntityDisplayName: entityDisplayName,
             RecordID: r.RecordID,
             SourceType: (r.SourceType as SearchResultItem['SourceType']) || 'entity',
             ResultType: r.ResultType,
             Score: r.Score,
             ScoreBreakdown: r.ScoreBreakdown ?? {},
             Tags: r.Tags ?? [],
-            SourceIcon: r.EntityIcon || r.ProviderIcon || FALLBACK_SOURCE_ICONS[r.SourceType] || 'fa-solid fa-database',
-            EntityIcon: r.EntityIcon,
+            SourceIcon: entityIcon || r.ProviderIcon || FALLBACK_SOURCE_ICONS[r.SourceType] || 'fa-solid fa-database',
+            EntityIcon: entityIcon,
             RecordName: r.RecordName,
             MatchedAt: new Date(r.MatchedAt),
             RawMetadata: r.RawMetadata,

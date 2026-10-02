@@ -44,7 +44,7 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
     it('only treats the missing-row case as healable, not every sampling failure', () => {
         // A vendor timeout is also a fallback, and re-running Introspect would not fix it — it
         // would just spend the budget twice.
-        const i = PIPELINE.indexOf('private ReportSampleFallback');
+        const i = PIPELINE.indexOf('private reportSampleFallback');
         const body = PIPELINE.slice(i, i + 1200);
         expect(body).toMatch(/if \(\/IntegrationObject not found\/i\.test\(msg\)\)/);
     });
@@ -57,7 +57,7 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
     });
 
     it('resets the set at the start of every Introspect, so the heal cannot loop', () => {
-        const i = PIPELINE.indexOf('private async StageIntrospect(');
+        const i = PIPELINE.indexOf('private async stageIntrospect(');
         expect(PIPELINE.slice(i, i + 400)).toMatch(/this\._firstDiscoveryFallbacks = new Set<string>\(\)/);
     });
 
@@ -65,7 +65,7 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
         const i = PIPELINE.indexOf('const unsampled =');
         const body = PIPELINE.slice(i, i + 1200);
         const refresh = body.indexOf('RefreshCatalog');
-        const reIntrospect = body.indexOf('StageIntrospect(emitter, opts)');
+        const reIntrospect = body.indexOf('stageIntrospect(emitter, opts)');
         expect(refresh).toBeGreaterThan(-1);
         expect(reIntrospect).toBeGreaterThan(-1);
         expect(refresh, 'RefreshCatalog must precede the second Introspect').toBeLessThan(reIntrospect);
@@ -86,7 +86,7 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
 
     it('runs BEFORE key classification, so the classifier sees the sampled evidence', () => {
         const heal = PIPELINE.indexOf('const unsampled =');
-        const pk = PIPELINE.indexOf("StagePKClassify(emitter, opts)", heal);
+        const pk = PIPELINE.indexOf("stagePKClassify(emitter, opts)", heal);
         expect(heal).toBeGreaterThan(-1);
         expect(pk).toBeGreaterThan(heal);
     });
@@ -101,10 +101,11 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
  * WithTimeout does not CANCEL the attempt it abandons, so retrying stacks a second full page on a
  * source already too slow to finish the first.
  *
- * So it is a DIVERGENCE, not a missing fix, and it stays in the patch. Porting it here breaks
+ * So the inversion itself is a DIVERGENCE, not a missing fix. Porting it here breaks
  * GovernedFetch.test.ts and IntegrationEngine.fetch-timeout.test.ts, which is exactly the signal
- * that told us so. The fix that satisfies both sides — suspend the object, resume from its keyset
- * — is owed and belongs upstream.
+ * that told us so. What satisfies both sides IS in source: a keyset scan whose page times out is
+ * suspended and resumes from its persisted key next run, where the page is retried — pinned in
+ * IntegrationEngine.fetch-timeout.test.ts.
  */
 
 describe('MJ-RUN-4 — an abandoned object reaches the run, not just the event stream', () => {
@@ -135,7 +136,7 @@ describe('L4 — the content-hash prefetch must not cache per batch', () => {
         // O(records processed). A ~500k-record drain killed a 3.8 GB box: the KERNEL oom-killed the
         // process at ~2.3 GB RSS BEFORE V8's ceiling, twice — so no --max-old-space-size fixes it.
         // This is the fix, and the deploy-time heap ceiling is NOT a substitute for it.
-        const i = ENGINE.indexOf('async PrefetchContentHashes');
+        const i = ENGINE.indexOf('async prefetchContentHashes');
         expect(i).toBeGreaterThan(-1);
         const body = ENGINE.slice(i, ENGINE.indexOf('\n    }', i));
         expect(body).toMatch(/BypassCache: true/);
@@ -156,6 +157,6 @@ describe('first contact must still sample', () => {
         // PK and no observed widths, for exactly the objects discovery exists to learn.
         expect(REST).toMatch(/let obj[^\n]*= null;/);
         expect(REST).toMatch(/catch \{[\s\S]{0,120}not persisted yet/);
-        expect(REST).toMatch(/if \(!obj \|\| this\.DetectTemplateVars\(obj\.APIPath\)\.length === 0\)/);
+        expect(REST).toMatch(/if \(!obj \|\| this\.detectTemplateVars\(obj\.APIPath\)\.length === 0\)/);
     });
 });

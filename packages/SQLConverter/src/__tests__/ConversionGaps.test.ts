@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { convertFile } from '../rules/BatchConverter.js';
+import { ConvertFile } from '../rules/BatchConverter.js';
 import { DeclareDmlBlockRule } from '../rules/DeclareDmlBlockRule.js';
-import { getRulesForDialects } from '../rules/TSQLToPostgresRules.js';
-import { classifyBatch } from '../rules/StatementClassifier.js';
-import { createConversionContext, CONVERSION_GAP_MARKERS } from '../rules/types.js';
+import { GetRulesForDialects } from '../rules/TSQLToPostgresRules.js';
+import { ClassifyBatch } from '../rules/StatementClassifier.js';
+import { CreateConversionContext, CONVERSION_GAP_MARKERS } from '../rules/types.js';
 
 /**
  * Regression cover for MJ issue #3857: `mj migrate convert` (legacy path) wrote output
@@ -26,10 +26,10 @@ const CLEAN_BLOCK = `CREATE TABLE __mj.Widget (
 );`;
 
 function convertSQL(sql: string) {
-  return convertFile({
+  return ConvertFile({
     Source: sql,
     SourceIsFile: false,
-    Rules: getRulesForDialects('tsql', 'postgres'),
+    Rules: GetRulesForDialects('tsql', 'postgres'),
     Schema: '__mj',
     SourceDialect: 'tsql',
     TargetDialect: 'postgres',
@@ -42,7 +42,7 @@ describe('conversion gaps (issue #3857)', () => {
   it('classifies the unparseable-declare fixture as a DECLARE_DML_BLOCK', () => {
     // Guards the fixture itself: if the classifier stops routing this here, the gap test
     // below would pass vacuously (no rule, no marker, no gap).
-    expect(classifyBatch(UNPARSEABLE_DECLARE_BLOCK)).toBe('DECLARE_DML_BLOCK');
+    expect(ClassifyBatch(UNPARSEABLE_DECLARE_BLOCK)).toBe('DECLARE_DML_BLOCK');
   });
 
   it('counts a DECLARE the rule could not parse as a gap, not a clean conversion', () => {
@@ -78,7 +78,7 @@ describe('conversion gaps (issue #3857)', () => {
     // If the rule's text and CONVERSION_GAP_MARKERS ever diverge, the scan goes blind again
     // and #3857 returns silently. Assert against the rule's real output, not a copy of it.
     const rule = new DeclareDmlBlockRule();
-    const context = createConversionContext('tsql', 'postgres');
+    const context = CreateConversionContext('tsql', 'postgres');
     const emitted = rule.PostProcess!(UNPARSEABLE_DECLARE_BLOCK, UNPARSEABLE_DECLARE_BLOCK, context);
     expect(emitted).toContain(CONVERSION_GAP_MARKERS[0]);
     expect(CONVERSION_GAP_MARKERS[0]).toBe('-- Could not parse');

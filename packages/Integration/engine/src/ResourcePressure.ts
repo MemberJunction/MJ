@@ -10,7 +10,7 @@
  * Everything here is a MEASUREMENT. No thresholds are enforced and nothing is refused; callers
  * decide. The only opinion expressed is which numbers matter.
  */
-import { statfs } from 'node:fs/promises';
+import { readFile, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import v8 from 'node:v8';
 
@@ -23,6 +23,20 @@ export interface ResourcePressureReading {
     HeapUsedFraction: number;
     /** Resident set: what the CONTAINER sees, which is what an OOM killer acts on. */
     ResidentBytes: number;
+    /** Host RAM, total and actually allocatable. Null off Linux or when /proc is unreadable. */
+    HostMemTotalBytes: number | null;
+    HostMemAvailableBytes: number | null;
+    /**
+     * Resident set as a fraction of host RAM — the number the OOM killer effectively acts on.
+     *
+     * This exists because HeapUsedFraction cannot see the memory that actually kills a sync.
+     * `--max-old-space-size` bounds V8's OLD SPACE only; `Buffer`/`ArrayBuffer` — where an HTTP
+     * response body lives before it is parsed — is external and counted in neither. Proven on the
+     * sandbox 2026-09-14: the kernel killed node at 3,478 MB RSS on a 3,830 MB box against a
+     * 1,964 MB heap ceiling (1.8x), while heap usage was unremarkable. A throttle watching only
+     * the heap reads healthy right up to the kill.
+     */
+    ResidentFraction: number | null;
     /** Free bytes on the volume holding run artifacts, or null when it cannot be read. */
     ArtifactDiskFreeBytes: number | null;
     ArtifactDiskTotalBytes: number | null;
@@ -47,6 +61,24 @@ async function volume(path: string): Promise<{ free: number | null; total: numbe
     }
 }
 
+/**
+ * Host RAM from /proc/meminfo. MemAvailable, never MemFree: `os.freemem()` returns MemFree on
+ * Linux, which excludes reclaimable page cache and therefore reads far tighter than what a
+ * process can actually obtain. Returns nulls anywhere /proc is absent — never throws.
+ */
+async function hostMemory(): Promise<{ total: number | null; available: number | null }> {
+    try {
+        const text = await readFile('/proc/meminfo', 'utf8');
+        const kb = (key: string): number | null => {
+            const m = new RegExp(`^${key}:\\s+(\\d+) kB$`, 'm').exec(text);
+            return m ? Number(m[1]) * 1024 : null;
+        };
+        return { total: kb('MemTotal'), available: kb('MemAvailable') };
+    } catch {
+        return { total: null, available: null };
+    }
+}
+
 export async function ReadResourcePressure(opts: {
     artifactDir?: string;
     workDir?: string;
@@ -58,7 +90,7 @@ export async function ReadResourcePressure(opts: {
     const artifactDir = opts.artifactDir ?? join(process.cwd(), 'logs', 'integration-runs');
     const workDir = opts.workDir ?? process.env.RSU_WORK_DIR ?? process.cwd();
 
-    const [art, work] = await Promise.all([volume(artifactDir), volume(workDir)]);
+    const [art, work, host] = await Promise.all([volume(artifactDir), volume(workDir), hostMemory()]);
     const limit = heap.heap_size_limit;
 
     return {
@@ -66,6 +98,9 @@ export async function ReadResourcePressure(opts: {
         HeapLimitBytes: limit,
         HeapUsedFraction: limit > 0 ? heap.used_heap_size / limit : 0,
         ResidentBytes: mem.rss,
+        HostMemTotalBytes: host.total,
+        HostMemAvailableBytes: host.available,
+        ResidentFraction: host.total && host.total > 0 ? mem.rss / host.total : null,
         ArtifactDiskFreeBytes: art.free,
         ArtifactDiskTotalBytes: art.total,
         WorkDirFreeBytes: work.free,
@@ -93,18 +128,38 @@ export interface PressureFinding {
  */
 export const HEAP_WARN_FRACTION = 0.85;
 export const DISK_WARN_FREE_BYTES = 500 * 1024 * 1024;
+/**
+ * Resident set as a fraction of host RAM, above which a sync is heading for an OOM kill.
+ *
+ * Lower than the heap threshold on purpose. The heap ceiling is a wall V8 enforces, so 0.85 of it
+ * still leaves the process alive to checkpoint. The host has no such wall — crossing it is a
+ * SIGKILL with no stack, no run record and no chance to save a watermark, so the warning has to
+ * arrive with enough headroom left to actually shed load. At 0.70 of a 3,830 MB box that is ~1.1 GB
+ * of room, which is several batches' worth of time to halve concurrency and drain.
+ */
+export const RESIDENT_WARN_FRACTION = 0.70;
 
 export function EvaluatePressure(
     r: ResourcePressureReading,
     heapWarnFraction = HEAP_WARN_FRACTION,
     diskWarnFreeBytes = DISK_WARN_FREE_BYTES,
+    residentWarnFraction = RESIDENT_WARN_FRACTION,
 ): PressureFinding[] {
     const out: PressureFinding[] = [];
-    if (r.HeapLimitBytes > 0 && r.HeapUsedFraction >= heapWarnFraction) {
+    // Two independent ways to run out of memory, and the RSS one is the one that kills. Report the
+    // WORSE of the two under a single code so a caller has one number to act on: heap exhaustion is
+    // a V8 abort the process can sometimes survive, while crossing the host's limit is a SIGKILL.
+    const heapFrac = r.HeapLimitBytes > 0 ? r.HeapUsedFraction : 0;
+    const rssFrac = r.ResidentFraction ?? 0;
+    const worst = Math.max(heapFrac >= heapWarnFraction ? heapFrac : 0, rssFrac >= residentWarnFraction ? rssFrac : 0);
+    if (worst > 0) {
+        const hostBound = rssFrac >= residentWarnFraction && rssFrac >= heapFrac;
         out.push({
             Code: 'HOST_MEMORY_PRESSURE',
-            Fraction: r.HeapUsedFraction,
-            Message: `This workspace is using ${Math.round(r.HeapUsedFraction * 100)}% of the memory available to it. A large sync may not finish; running fewer at once, or a smaller batch size, will help.`,
+            Fraction: worst,
+            Message: hostBound
+                ? `This workspace is using ${Math.round(rssFrac * 100)}% of its machine's memory. Syncing fewer tables at once will help; if it keeps happening on a normal sync, this workspace needs a larger size.`
+                : `This workspace is using ${Math.round(heapFrac * 100)}% of the memory available to it. A large sync may not finish; running fewer at once, or a smaller batch size, will help.`,
         });
     }
     // Either volume filling stops a sync: artifacts are the run's own record, and the work dir is

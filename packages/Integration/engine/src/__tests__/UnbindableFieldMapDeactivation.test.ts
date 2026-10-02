@@ -75,13 +75,13 @@ function harness(entityFields: string[] | null) {
     };
     const run = (fieldMaps: ICompanyIntegrationFieldMap[]) =>
         (engine as unknown as {
-            ReconcileUnbindableFieldMaps: (
+            reconcileUnbindableFieldMaps: (
                 em: ICompanyIntegrationEntityMap,
                 fms: ICompanyIntegrationFieldMap[],
                 u: UserInfo,
                 l: unknown,
             ) => Promise<void>;
-        }).ReconcileUnbindableFieldMaps(entityMap, fieldMaps, contextUser, logger);
+        }).reconcileUnbindableFieldMaps(entityMap, fieldMaps, contextUser, logger);
     return { run, warnings };
 }
 

@@ -7,7 +7,7 @@ import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { RunQueryResultType } from './QueryResolver.js';
-import { exactTotalFromPage, resolveAdhocTotalRowCount } from './adhoc-query-helpers.js';
+import { ExactTotalFromPage, ResolveAdhocTotalRowCount } from './adhoc-query-helpers.js';
 import sql from 'mssql';
 
 /**
@@ -200,7 +200,7 @@ export class AdhocQueryResolver extends ResolverBase {
         const recordset = (dataResult.recordset ?? []) as Record<string, unknown>[];
 
         // Total already known from the page alone (unpaged, or a short page)? Skip the count.
-        const exact = exactTotalFromPage(startRow, recordset.length, maxRows);
+        const exact = ExactTotalFromPage(startRow, recordset.length, maxRows);
         if (exact != null || !countSQL) {
             return { recordset, totalRowCount: exact ?? recordset.length };
         }
@@ -209,7 +209,7 @@ export class AdhocQueryResolver extends ResolverBase {
         const lowerBound = startRow + recordset.length;
         try {
             const countResult = await this.runSqlWithDeadline<{ TotalRowCount: number }>(ds, countSQL, deadline);
-            return { recordset, totalRowCount: resolveAdhocTotalRowCount(countResult.recordset, lowerBound) };
+            return { recordset, totalRowCount: ResolveAdhocTotalRowCount(countResult.recordset, lowerBound) };
         } catch (countErr) {
             const msg = countErr instanceof Error ? countErr.message : String(countErr);
             LogError(`Ad-hoc query row-count failed; reporting a lower-bound total (${lowerBound}). ${msg}`);

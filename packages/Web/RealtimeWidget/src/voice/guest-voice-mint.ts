@@ -48,7 +48,7 @@ mutation StartWidgetVoiceSession($targetAgentId: String, $clientToolsJson: Strin
  * start (so it can call e.g. `Whiteboard_*`); `RealtimeToolDefinition` is structurally identical to
  * {@link WidgetChannelToolDefinition} (Name / Description / ParametersSchema), so they serialize as-is.
  */
-export function createGuestVoiceMint(session: WidgetSession): VoiceMintFn {
+export function CreateGuestVoiceMint(session: WidgetSession): VoiceMintFn {
     return async (clientTools: WidgetChannelToolDefinition[]): Promise<VoiceMintResult> => {
         const data = (await GraphQLDataProvider.Instance.ExecuteGQL(START_REALTIME_MUTATION, {
             targetAgentId: session.pinnedAgentId,
@@ -64,6 +64,11 @@ export function createGuestVoiceMint(session: WidgetSession): VoiceMintFn {
         };
         return { provider: r.Provider, sessionConfig, agentSessionId: r.AgentSessionId };
     };
+}
+
+/** @deprecated Use {@link CreateGuestVoiceMint}. */
+export function createGuestVoiceMint(session: WidgetSession): VoiceMintFn {
+  return CreateGuestVoiceMint(session);
 }
 
 /** Parses the server-built session config; an empty object on failure (client applies nothing). */

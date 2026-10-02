@@ -593,7 +593,7 @@ describe('ActionEngineServer', () => {
             // Set up the engine's ActionResultCodes
             // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
             // ActionEngineServer proxies — seed it there, not on the server instance.
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] =[
                 { ActionID: 'action-1', ResultCode: 'SUCCESS' },
             ];
 
@@ -672,7 +672,7 @@ describe('ActionEngineServer', () => {
 
             // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
             // ActionEngineServer proxies — seed it there, not on the server instance.
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[];
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] =[];
 
             const params = {
                 Action: { ID: 'action-1', Name: 'FallbackName', DriverClass: '' },
@@ -695,7 +695,7 @@ describe('ActionEngineServer', () => {
 
             // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
             // ActionEngineServer proxies — seed it there, not on the server instance.
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] =[
                 { ActionID: 'action-1', ResultCode: '  SUCCESS  ' },
             ];
 
@@ -717,7 +717,7 @@ describe('ActionEngineServer', () => {
             mockClassFactory.CreateInstance.mockReturnValue(testAction);
             // Result-code metadata now lives on the composed base (ActionEngineBase.Instance), which
             // ActionEngineServer proxies — seed it there, not on the server instance.
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_ActionResultCodes'] =[];
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] =[];
 
             const startSpy = vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({
                 Save: vi.fn().mockResolvedValue(true),

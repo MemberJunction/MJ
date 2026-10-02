@@ -1,123 +1,268 @@
+/*
+ * A realtime (voice) session, collapsed to one row of the conversation.
+ *
+ * The row mirrors `.message-item` in message-item.component.css: a flex row with a 36px tile in the
+ * avatar column, the same gaps and side padding, and the same small-screen steps. That is what
+ * lines the call up with the messages around it. Keep the two in step if that layout changes.
+ */
 :host {
   display: block;
-  margin: 12px 0;
 }
 
-/* A visually distinct block — clearly NOT a chat bubble: full-row card with a
-   brand-tinted broadcast badge, hover affordance, and an explicit Open button. */
-.session-card {
+.call {
   display: flex;
-  align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
-  border-left: 3px solid var(--mj-brand-primary);
-  border-radius: var(--mj-radius-lg, 12px);
-  background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
-  cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-.session-card:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  padding: 12px 24px;
 }
 
-.session-card__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+/* The avatar-column tile. It is tinted rather than solid, so it reads as something that happened
+   in the thread and not as a message from the agent, whose avatar is the solid brand tile. */
+.call__icon {
+  flex-shrink: 0;
   display: grid;
   place-items: center;
-  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   font-size: 15px;
-  color: var(--mj-text-inverse);
-  background: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
 }
 
-.session-card__body {
+.call--live .call__icon {
+  color: var(--mj-text-inverse);
+  background: var(--mj-status-success);
+  box-shadow: none;
+  animation: call-ring 2s ease-out infinite;
+}
+
+.call--error .call__icon {
+  color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+  box-shadow: inset 0 0 0 1px var(--mj-status-error-border);
+}
+
+.call__content {
   flex: 1;
   min-width: 0;
 }
 
-.session-card__head {
+/* Same type as a message header: a 13px semibold name, then a 12px muted time. */
+.call__header {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   min-width: 0;
+  margin-bottom: 6px;
+  font-size: 13px;
 }
-.session-card__title {
-  font-weight: 700;
-  font-size: 13.5px;
-  color: var(--mj-text-primary);
-  white-space: nowrap;
+
+.call__title {
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.session-card__chip {
-  flex-shrink: 0;
-  font-size: 11px;
   font-weight: 600;
-  line-height: 1;
-  padding: 3px 8px;
-  border-radius: var(--mj-radius-full, 999px);
-  color: var(--mj-text-secondary);
-  background: var(--mj-bg-surface-sunken);
-  border: 1px solid var(--mj-border-subtle);
-}
-.session-card__chip--error {
-  color: var(--mj-status-error-text);
-  background: var(--mj-status-error-bg);
-  border-color: var(--mj-status-error-border);
-}
-.session-card__chip--live {
-  color: var(--mj-status-success-text);
-  background: var(--mj-status-success-bg);
-  border-color: var(--mj-status-success-border);
+  color: var(--mj-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.session-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 3px;
+.call__time {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--mj-text-muted);
 }
-.session-card__range-arrow {
-  font-size: 10px;
-  margin: 0 3px;
+
+/* The bubble sizes to its content between a comfortable minimum and a readable maximum. Its top-left
+   corner is square, like an agent message's, because it hangs off the header. */
+.call__bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  width: fit-content;
+  min-width: min(340px, 100%);
+  max-width: min(560px, 100%);
+  padding: 12px 14px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 4px 12px 12px 12px;
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-shadow-sm);
+  cursor: pointer;
+  transition: border-color var(--mj-transition-fast), box-shadow var(--mj-transition-fast);
 }
 
-.session-card__preview {
-  margin-top: 5px;
-  font-size: 12.5px;
-  color: var(--mj-text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.call__bubble:hover {
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-border-default));
+  box-shadow: var(--mj-shadow-md);
 }
-.session-card__preview-role {
+
+/* The last thing said, clamped to two lines so a long answer cannot grow the row. */
+.call__quote {
+  display: -webkit-box;
+  margin: 0;
+  padding-left: 10px;
+  overflow: hidden;
+  border-left: 2px solid color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-border-default));
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--mj-text-secondary);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.call__speaker {
+  margin-right: 6px;
   font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.call__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.call__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 12px;
   color: var(--mj-text-muted);
 }
 
-.session-card__open {
+.call__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.call__fact i {
+  font-size: 11px;
+}
+
+/* The status pill. Its tone comes from the shared runtime as `data-tone`, never from the label. */
+.call__status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
-  padding: 6px 12px;
-  font-size: 12.5px;
+  padding: 2px 9px 2px 8px;
+  border-radius: var(--mj-radius-full);
+  font-size: 11.5px;
   font-weight: 600;
-  border-radius: var(--mj-radius-md, 8px);
-  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
-  background: var(--mj-bg-surface);
-  color: var(--mj-brand-primary);
-  cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--mj-text-secondary);
+  /* A wash of the text colour rather than the sunken surface, which is near-black in dark mode. */
+  background: color-mix(in srgb, var(--mj-text-primary) 7%, transparent);
 }
-.session-card__open:hover {
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
+
+.call__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.call__status[data-tone='live'] {
+  color: var(--mj-status-success-text);
+  background: var(--mj-status-success-bg);
+}
+
+.call__status[data-tone='live'] .call__status-dot {
+  background: var(--mj-status-success);
+  opacity: 1;
+  animation: call-pulse 1.6s ease-in-out infinite;
+}
+
+.call__status[data-tone='idle'] {
+  color: var(--mj-status-info-text);
+  background: var(--mj-status-info-bg);
+}
+
+.call__status[data-tone='error'] {
+  color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+}
+
+@keyframes call-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes call-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-status-success) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--mj-status-success) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call--live .call__icon,
+  .call__status[data-tone='live'] .call__status-dot {
+    animation: none;
+  }
+}
+
+/* The same steps `.message-item` takes, so the tile stays in the avatar column on small screens. */
+@media (max-width: 768px) {
+  .call {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .call__icon {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .call__title {
+    font-size: 12px;
+  }
+
+  .call__time {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .call {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .call__icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .call__title {
+    font-size: 11px;
+  }
+
+  .call__time {
+    font-size: 10px;
+  }
+
+  .call__bubble {
+    min-width: 0;
+    width: 100%;
+  }
 }

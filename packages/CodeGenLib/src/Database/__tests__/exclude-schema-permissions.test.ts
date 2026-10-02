@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entitiesNotInExcludedSchemas } from '../sql_codegen';
+import { EntitiesNotInExcludedSchemas } from '../sql_codegen';
 
 describe('excludeSchemas permission scope', () => {
     const entities = [
@@ -20,7 +20,7 @@ describe('excludeSchemas permission scope', () => {
     ];
 
     it('keeps only this app schema when sibling and core schemas are excluded', () => {
-        const included = entitiesNotInExcludedSchemas(entities, excludeSchemas);
+        const included = EntitiesNotInExcludedSchemas(entities, excludeSchemas);
         expect(included.map((e) => e.Name)).toEqual([
             'MJ_BizApps_Orders: Products',
             'MJ_BizApps_Orders: Product Types',
@@ -28,7 +28,7 @@ describe('excludeSchemas permission scope', () => {
     });
 
     it('is case-insensitive on schema names', () => {
-        const included = entitiesNotInExcludedSchemas(
+        const included = EntitiesNotInExcludedSchemas(
             [{ Name: 'X', SchemaName: '__MJ_BizAppsOrders' }],
             ['__mj_bizappsorders'],
         );

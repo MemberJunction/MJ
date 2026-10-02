@@ -59,11 +59,12 @@ import type { RunArtifactAuthorizationResult } from "../integration/RunArtifactA
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
-import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, decideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { CollectInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
 import { decidePauseWrite, decideSchedulesToPause, decideSchedulesToResume, describeCancelOutcome, describeCancelScope, describePauseOutcome, readPausedSchedules, writePausedSchedules } from "../integration/ConnectionPause.js";
 import type { CancelScope, ScheduleJobState } from "../integration/ConnectionPause.js";
 import { ReadResourcePressure, EvaluatePressure } from "@memberjunction/integration-engine";
+import { FieldsForBuild, LoadScopedFieldsForBuild, type ScopedBuildFields } from "../integration/ScopedFieldsForBuild.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
@@ -1041,6 +1042,18 @@ class ResourcePressureOutput {
     @Field(() => Float, { nullable: true }) HeapUsedMB?: number;
     @Field(() => Float, { nullable: true }) HeapLimitMB?: number;
     @Field(() => Float, { nullable: true }) ResidentMB?: number;
+    /**
+     * Resident set as a fraction of HOST memory, plus the host totals it is derived from.
+     *
+     * ResidentMB alone is a number with no denominator: a client cannot tell whether 3,478 MB is
+     * comfortable or one step from a SIGKILL without knowing the box. It was the latter on the
+     * sandbox on 2026-09-14 — 3,478 MB of 3,830 MB, killed by the kernel, while HeapUsedFraction
+     * (the only judgeable number this type exposed) sat unremarkable because `--max-old-space-size`
+     * bounds V8's old space and not the response buffers that actually filled the machine.
+     */
+    @Field(() => Float, { nullable: true }) ResidentFraction?: number;
+    @Field(() => Float, { nullable: true }) HostMemTotalMB?: number;
+    @Field(() => Float, { nullable: true }) HostMemAvailableMB?: number;
     @Field(() => Float, { nullable: true }) ArtifactDiskFreeMB?: number;
     @Field(() => Float, { nullable: true }) WorkDirFreeMB?: number;
     @Field(() => Int, { nullable: true }) ActiveSyncCount?: number;
@@ -2775,11 +2788,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      *     `IsPrimaryKey=true`.
      *   - Foreign-key relationships are reconstructed from
      *     `RelatedIntegrationObjectID` lookups against the same cache.
+     *   - Under a per-connection catalog the FIELD rows come from `scopedFields`
+     *     (`LoadScopedFieldsForBuild`), never from the engine: a connection's field rows
+     *     are warmed on demand by the sync loop only, so the engine answers `[]` for them
+     *     during an apply and every object would build with no columns.
      */
     private buildSourceSchemaFromPersistedRows(
         integrationID: string,
         requestedNames?: string[],
         warningsOut?: string[],
+        scopedFields?: ScopedBuildFields | null,
     ): SourceSchemaInfo {
         const engine = IntegrationEngineBase.Instance;
         // ACTIVE-only materialization: an object/field a given tenant doesn't expose is marked
@@ -2801,7 +2819,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         for (const io of ios) {
             if (filter && !filter.has(io.Name.toLowerCase())) continue;
             // Active fields only — an inactive (source-absent / deactivated) field is not materialized.
-            const allFields = engine.GetIntegrationObjectFields(io.ID);
+            const allFields = FieldsForBuild(io.ID, scopedFields, engine);
             const iofs = allFields.filter(iof => iof.Status === 'Active');
 
             const fields = iofs.map(iof => {
@@ -2847,7 +2865,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // Declared-but-inactive rows this rebuild left out. The caller decides what to do with the
         // strings (the apply path puts them on its Warnings); nothing is computed when no collector
         // was passed.
-        if (warningsOut) warningsOut.push(...this.collectInactiveRowWarnings(integrationID, requestedNames));
+        if (warningsOut) warningsOut.push(...this.collectInactiveRowWarnings(integrationID, requestedNames, scopedFields));
         return result;
     }
 
@@ -2885,9 +2903,21 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * `requestedNames` empty/undefined means "everything active", which deliberately does NOT report
      * deactivated objects (a large catalog carries hundreds and announcing them on every apply is
      * noise) — see ComputeInactiveRowWarnings.
+     *
+     * `scopedFields` is the connection's field rows when the apply runs under a per-connection catalog
+     * (`LoadScopedFieldsForBuild`). The FIELD half of the warnings reads through it for the same reason
+     * the rebuild does: the engine answers `[]` for a connection's fields during an apply, so reading
+     * them from the engine would silently drop every field warning. Without it the engine is read, as
+     * for the shared catalog.
      */
-    private collectInactiveRowWarnings(integrationID: string, requestedNames?: string[]): string[] {
-        return CollectInactiveRowWarnings(IntegrationEngineBase.Instance, integrationID, requestedNames);
+    private collectInactiveRowWarnings(integrationID: string, requestedNames?: string[], scopedFields?: ScopedBuildFields | null): string[] {
+        const engine = IntegrationEngineBase.Instance;
+        if (!scopedFields) return CollectInactiveRowWarnings(engine, integrationID, requestedNames);
+        return CollectInactiveRowWarnings({
+            GetActiveIntegrationObjects: id => engine.GetActiveIntegrationObjects(id),
+            GetIntegrationObjectsByIntegrationID: id => engine.GetIntegrationObjectsByIntegrationID(id),
+            GetIntegrationObjectFields: objectID => FieldsForBuild(objectID, scopedFields, engine),
+        }, integrationID, requestedNames);
     }
 
     private async runSchemaRefreshPipeline(
@@ -3976,6 +4006,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 companyIntegration.IntegrationID,
                 Array.from(requestedNames),
                 inactiveWarnings,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[IntegrationApplySchema] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
@@ -4157,7 +4188,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // (already freshened by the Phase 0 v5.39.x MJCompanyIntegrationEntityServer
             // Save hook on IsActive false→true).  Avoids the duplicate vendor-API
             // introspect that used to fire here.
-            let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+            let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(
+                companyIntegration.IntegrationID,
+                undefined,
+                undefined,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+            );
             if (sourceSchema.Objects.length === 0) {
                 // Fallback: the engine cache is empty (Save hook didn't run, or this
                 // is a direct-API caller bypassing the wizard).  Do a one-time live
@@ -4784,6 +4820,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 companyIntegration.IntegrationID,
                 requestedNamesForReuse,
                 inactiveWarnings,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[buildSchemaForConnector] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
@@ -6001,6 +6038,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 HeapUsedMB: mb(reading.HeapUsedBytes),
                 HeapLimitMB: mb(reading.HeapLimitBytes),
                 ResidentMB: mb(reading.ResidentBytes),
+                ResidentFraction: reading.ResidentFraction ?? undefined,
+                HostMemTotalMB: mb(reading.HostMemTotalBytes),
+                HostMemAvailableMB: mb(reading.HostMemAvailableBytes),
                 ArtifactDiskFreeMB: mb(reading.ArtifactDiskFreeBytes),
                 WorkDirFreeMB: mb(reading.WorkDirFreeBytes),
                 ActiveSyncCount: reading.ActiveSyncCount,
@@ -6455,7 +6495,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         // persisted rows instead.
                         //
                         // Persist is also skipped here — the Save hook already did it.
-                        sourceSchema = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+                        sourceSchema = this.buildSourceSchemaFromPersistedRows(
+                            companyIntegration.IntegrationID,
+                            undefined,
+                            undefined,
+                            await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+                        );
                         if (sourceSchema.Objects.length === 0) {
                             // Defensive fallback: if the engine cache is empty (hook
                             // didn't run, or this is a direct-API caller that bypasses
@@ -7223,7 +7268,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // Source of truth for the evolution = the PERSISTED post-resolution rows (the refresh in
             // Phase 1 just wrote them via the overlay) — no duplicate vendor introspect.
-            const sourceSchema = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+            const sourceSchema = this.buildSourceSchemaFromPersistedRows(
+                companyIntegration.IntegrationID,
+                undefined,
+                undefined,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+            );
 
             // Normalize names to match source schema casing
             const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
@@ -7614,7 +7664,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // The CHOICES live in a pure function (decideFieldMapReconcile — unit-tested); this method
         // applies the EFFECTS. Inline, the decision was untestable: this resolver imports
         // schema-builder and schema-engine, so it cannot be loaded in a unit test at all.
-        const plan = decideFieldMapReconcile(
+        const plan = DecideFieldMapReconcile(
             activeFields.map(f => f.Name),
             existingRows.map(fm => ({ SourceFieldName: fm.SourceFieldName, Status: fm.Status })),
             mapEnabled,

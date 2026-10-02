@@ -1,7 +1,13 @@
+import type { Application } from 'express';
+import type { Server as HttpServer } from 'http';
+
 /**
- * @module @memberjunction/server-extensions-core
- * @description Core types for the MJServer extension framework.
+ * Lifecycle phase for a server extension.
+ * - 'pre-auth': Mounted before JWT authentication middleware. Used for webhooks,
+ *   health checks, media stream endpoints, SSO handshakes, etc.
+ * - 'post-auth': Mounted after JWT authentication middleware. Protected by default.
  */
+export type ServerExtensionPhase = 'pre-auth' | 'post-auth';
 
 /**
  * Configuration for a server extension instance.
@@ -23,6 +29,7 @@
  *             Enabled: true,
  *             DriverClass: 'SlackMessagingExtension',
  *             RootPath: '/webhook/slack',
+ *             Phase: 'pre-auth',
  *             Settings: {
  *                 AgentID: '...',
  *                 BotToken: process.env.SLACK_BOT_TOKEN,
@@ -49,11 +56,68 @@ export interface ServerExtensionConfig {
     RootPath: string;
 
     /**
+     * Lifecycle phase for this extension. Defaults to the extension class's `DefaultPhase`
+     * (usually `'pre-auth'`) when not specified.
+     */
+    Phase?: ServerExtensionPhase;
+
+    /**
      * Extension-specific configuration. The shape varies by extension type.
      * For messaging adapters, this contains `AgentID`, `BotToken`, etc.
      * The extension is responsible for parsing and validating its own settings.
      */
     Settings: Record<string, unknown>;
+}
+
+/**
+ * Service registry shared among server extensions, enabling cross-extension
+ * service registration and consumption.
+ */
+export interface ServerExtensionServiceRegistry {
+    /**
+     * Register a service instance under a unique key.
+     * Throws or logs if a service with the same key is already registered.
+     */
+    RegisterService<T extends object>(key: string, service: T): void;
+
+    /**
+     * Retrieve a registered service instance by key.
+     * Returns undefined if no service is registered under that key.
+     */
+    GetService<T extends object>(key: string): T | undefined;
+
+    /**
+     * Check if a service is registered under the given key.
+     */
+    HasService(key: string): boolean;
+
+    /**
+     * Optional accessor returning all registered services as a read-only map.
+     */
+    GetAllServices?(): ReadonlyMap<string, object>;
+}
+
+/**
+ * Context passed to `BaseServerExtension.Initialize()` and `OnAllExtensionsMounted()`.
+ */
+export interface ServerExtensionInitContext {
+    /** Express application instance to mount routes on. */
+    app: Application;
+
+    /** Node HTTP/HTTPS server instance, if available (e.g. for WebSocket attachment). */
+    httpServer?: HttpServer;
+
+    /** Extension configuration from mj.config.cjs or Open App metadata. */
+    config: ServerExtensionConfig;
+
+    /** Canonical public base URL of the MJ server (e.g. 'https://api.example.com'). */
+    publicUrl?: string;
+
+    /** Shared service registry for cross-extension service lookup and registration. */
+    services: ServerExtensionServiceRegistry;
+
+    /** Current lifecycle phase being mounted ('pre-auth' | 'post-auth'). */
+    phase: ServerExtensionPhase;
 }
 
 /**
@@ -81,6 +145,12 @@ export interface ExtensionInitResult {
      * `MJ_VERBOSE` is enabled). Implies `Success: false`.
      */
     Skipped?: boolean;
+
+    /**
+     * Optional service instance provided by this extension to be registered in the shared
+     * service registry (under `config.DriverClass` and/or a custom key).
+     */
+    Service?: object;
 }
 
 /**

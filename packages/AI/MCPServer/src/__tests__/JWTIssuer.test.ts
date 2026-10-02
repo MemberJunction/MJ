@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
-import { createJWTIssuer, validateSigningSecret, type JWTIssuerConfig } from '../auth/JWTIssuer';
+import { CreateJWTIssuer, ValidateSigningSecret, type JWTIssuerConfig } from '../auth/JWTIssuer';
 
 const TEST_SECRET = 'a'.repeat(64); // 64 chars = valid secret
 const DEFAULT_CONFIG: JWTIssuerConfig = {
@@ -17,7 +17,7 @@ const DEFAULT_CONFIG: JWTIssuerConfig = {
 describe('createJWTIssuer', () => {
     describe('sign()', () => {
         it('should produce a valid JWT string', () => {
-            const issuer = createJWTIssuer(DEFAULT_CONFIG);
+            const issuer = CreateJWTIssuer(DEFAULT_CONFIG);
             const result = issuer.sign({
                 email: 'user@example.com',
                 mjUserId: 'user-uuid-1',
@@ -33,7 +33,7 @@ describe('createJWTIssuer', () => {
         });
 
         it('should include correct claims', () => {
-            const issuer = createJWTIssuer(DEFAULT_CONFIG);
+            const issuer = CreateJWTIssuer(DEFAULT_CONFIG);
             const result = issuer.sign({
                 email: 'user@example.com',
                 mjUserId: 'user-uuid-1',
@@ -54,7 +54,7 @@ describe('createJWTIssuer', () => {
         });
 
         it('should set correct expiration', () => {
-            const issuer = createJWTIssuer({ ...DEFAULT_CONFIG, expiresIn: '30m' });
+            const issuer = CreateJWTIssuer({ ...DEFAULT_CONFIG, expiresIn: '30m' });
             const result = issuer.sign({
                 email: 'user@example.com',
                 mjUserId: 'user-uuid-1',
@@ -79,7 +79,7 @@ describe('createJWTIssuer', () => {
             ];
 
             for (const [format, expectedSeconds] of testCases) {
-                const issuer = createJWTIssuer({ ...DEFAULT_CONFIG, expiresIn: format });
+                const issuer = CreateJWTIssuer({ ...DEFAULT_CONFIG, expiresIn: format });
                 const result = issuer.sign({
                     email: 'test@test.com',
                     mjUserId: 'u1',
@@ -92,7 +92,7 @@ describe('createJWTIssuer', () => {
         });
 
         it('should default to 1h for invalid expiration format', () => {
-            const issuer = createJWTIssuer({ ...DEFAULT_CONFIG, expiresIn: 'invalid' });
+            const issuer = CreateJWTIssuer({ ...DEFAULT_CONFIG, expiresIn: 'invalid' });
             const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             const result = issuer.sign({
                 email: 'test@test.com',
@@ -108,7 +108,7 @@ describe('createJWTIssuer', () => {
 
     describe('verify()', () => {
         it('should verify a token signed by the same issuer', () => {
-            const issuer = createJWTIssuer(DEFAULT_CONFIG);
+            const issuer = CreateJWTIssuer(DEFAULT_CONFIG);
             const { token } = issuer.sign({
                 email: 'user@example.com',
                 mjUserId: 'user-uuid-1',
@@ -124,8 +124,8 @@ describe('createJWTIssuer', () => {
         });
 
         it('should throw for token with wrong secret', () => {
-            const issuer1 = createJWTIssuer(DEFAULT_CONFIG);
-            const issuer2 = createJWTIssuer({
+            const issuer1 = CreateJWTIssuer(DEFAULT_CONFIG);
+            const issuer2 = CreateJWTIssuer({
                 ...DEFAULT_CONFIG,
                 signingSecret: 'b'.repeat(64),
             });
@@ -142,7 +142,7 @@ describe('createJWTIssuer', () => {
         });
 
         it('should throw for tampered token', () => {
-            const issuer = createJWTIssuer(DEFAULT_CONFIG);
+            const issuer = CreateJWTIssuer(DEFAULT_CONFIG);
             const { token } = issuer.sign({
                 email: 'test@test.com',
                 mjUserId: 'u1',
@@ -162,7 +162,7 @@ describe('createJWTIssuer', () => {
 
     describe('isProxyToken()', () => {
         it('should return true for tokens from this issuer', () => {
-            const issuer = createJWTIssuer(DEFAULT_CONFIG);
+            const issuer = CreateJWTIssuer(DEFAULT_CONFIG);
             const { token } = issuer.sign({
                 email: 'test@test.com',
                 mjUserId: 'u1',
@@ -175,25 +175,25 @@ describe('createJWTIssuer', () => {
         });
 
         it('should return false for tokens from different issuer', () => {
-            const issuer = createJWTIssuer(DEFAULT_CONFIG);
+            const issuer = CreateJWTIssuer(DEFAULT_CONFIG);
             const otherToken = jwt.sign({ iss: 'other-issuer' }, 'secret');
             expect(issuer.isProxyToken(otherToken)).toBe(false);
         });
 
         it('should return false for invalid token', () => {
-            const issuer = createJWTIssuer(DEFAULT_CONFIG);
+            const issuer = CreateJWTIssuer(DEFAULT_CONFIG);
             expect(issuer.isProxyToken('not-a-jwt')).toBe(false);
         });
 
         it('should return false for empty string', () => {
-            const issuer = createJWTIssuer(DEFAULT_CONFIG);
+            const issuer = CreateJWTIssuer(DEFAULT_CONFIG);
             expect(issuer.isProxyToken('')).toBe(false);
         });
     });
 
     describe('config property', () => {
         it('should expose issuer, audience, and expiresIn', () => {
-            const issuer = createJWTIssuer(DEFAULT_CONFIG);
+            const issuer = CreateJWTIssuer(DEFAULT_CONFIG);
             expect(issuer.config.issuer).toBe('urn:mj:mcp-server');
             expect(issuer.config.audience).toBe('http://localhost:3100');
             expect(issuer.config.expiresIn).toBe('1h');
@@ -203,23 +203,23 @@ describe('createJWTIssuer', () => {
 
 describe('validateSigningSecret()', () => {
     it('should reject a 32-char raw string secret (needs > 32 bytes)', () => {
-        const result = validateSigningSecret('a'.repeat(32));
+        const result = ValidateSigningSecret('a'.repeat(32));
         expect(result.valid).toBe(false);
     });
 
     it('should accept a long string secret', () => {
-        const result = validateSigningSecret('a'.repeat(64));
+        const result = ValidateSigningSecret('a'.repeat(64));
         expect(result.valid).toBe(true);
     });
 
     it('should reject empty string', () => {
-        const result = validateSigningSecret('');
+        const result = ValidateSigningSecret('');
         expect(result.valid).toBe(false);
         expect(result.error).toContain('required');
     });
 
     it('should reject short secrets', () => {
-        const result = validateSigningSecret('short');
+        const result = ValidateSigningSecret('short');
         expect(result.valid).toBe(false);
         expect(result.error).toContain('at least 32 bytes');
     });
@@ -227,7 +227,7 @@ describe('validateSigningSecret()', () => {
     it('should accept a base64-encoded secret that decodes to 32+ bytes', () => {
         // 44 base64 chars encode 33 bytes
         const base64Secret = Buffer.from('x'.repeat(33)).toString('base64');
-        const result = validateSigningSecret(base64Secret);
+        const result = ValidateSigningSecret(base64Secret);
         expect(result.valid).toBe(true);
     });
 });

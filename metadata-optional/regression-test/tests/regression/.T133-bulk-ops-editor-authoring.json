@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T133 - Bulk Ops Editor Authoring",
+    "Description": "Opens the Bulk Operations authoring editor once, then walks its behaviors (editor mounts, save/preview validation gating, rules-builder gated on entity selection, FieldRules add-rule + source switch, scope-type conditional filter input, and cancel-returns-to-list), verifying each via checkpoints. Consolidates old T332-T336, T339.",
+    "InputDefinition": "{\n  \"goal\": \"Assume you are already logged in at http://localhost:4200. Open the application switcher and choose 'Bulk Operations', then in the Operations section click the 'New operation' button (plus icon, top-right of the studio bar). Pages can take 10-30s to load in this resource-constrained environment \u2014 wait, don't navigate away. Then walk these behaviors IN ORDER, and as you arrive at each one set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) create-new-op-editor \u2014 confirm the view switched to the authoring editor showing numbered sections '1 Basics' (Name / Status / Description), '2 What it acts on' (Entity, Default scope, Work type dropdowns), and a toolbar with 'Save', 'Preview changes', 'Cancel'; (2) save-preview-gating \u2014 on the still-blank editor confirm 'Save' and 'Preview changes' are BOTH disabled, then type a Name in Basics and pick an Entity in 'What it acts on' and confirm 'Save' becomes ENABLED while 'Preview changes' stays disabled until a rule exists; (3) scope-conditional-filter \u2014 in section '2 What it acts on' set the 'Default scope' dropdown to 'Filter' and confirm a free-text Filter input appears, switch it to 'A view'/'A list' and confirm the Filter input disappears, then switch back to 'Filter' and confirm it reappears; (4) rules-gated-on-entity \u2014 confirm that before an entity was chosen the '3 Rules' section showed a 'choose an entity first' hint with no builder, and that after the entity is selected the visual field-rules builder now renders (a 'Field rules' heading with an 'Add rule' button and a 'No rules yet' hint); (5) fieldrules-add-rule \u2014 click 'Add rule' so a rule row appears reading 'Set [field] from [source]' with a target-field dropdown and a 'from' source dropdown (options like 'a fixed value', 'another field', 'a formula', 'a lookup', 'an AI prompt'), then change 'from' to 'a formula' (and optionally 'a lookup') and confirm the source input area below re-renders accordingly; (6) editor-cancel-to-list \u2014 click the editor toolbar 'Cancel' (or 'Back') and confirm you return cleanly to the Operations list view (search bar + 'New operation' button + operations table or empty state) with no save occurring. Keep going until every behavior has been verified.\",\n  \"startUrl\": \"http://localhost:4200/app/bulk-operations\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 90,\n  \"checkpoints\": [\n    {\n      \"name\": \"create-new-op-editor\",\n      \"instruction\": \"New operation opens the authoring editor\",\n      \"assertions\": [\n        {\n          \"kind\": \"url\",\n          \"urlPattern\": \"/app/bulk-operations\"\n        }\n      ],\n      \"visualCriteria\": [\n        \"Clicking 'New operation' opens the editor with numbered 'Basics' and 'What it acts on' sections and a Save / Preview changes / Cancel toolbar\"\n      ]\n    },\n    {\n      \"name\": \"save-preview-gating\",\n      \"instruction\": \"Save/Preview disabled until required inputs\",\n      \"visualCriteria\": [\n        \"On a blank new operation 'Save' and 'Preview changes' are both disabled, and after entering a Name and selecting an Entity 'Save' becomes enabled while 'Preview changes' stays disabled until a rule exists\"\n      ]\n    },\n    {\n      \"name\": \"scope-conditional-filter\",\n      \"instruction\": \"Scope-type toggles the Filter input\",\n      \"visualCriteria\": [\n        \"With 'Filter' scope selected a free-text Filter input is shown; switching to 'A view'/'A list' hides it and switching back to 'Filter' restores it\"\n      ]\n    },\n    {\n      \"name\": \"rules-gated-on-entity\",\n      \"instruction\": \"Rules builder appears only after an entity is chosen\",\n      \"visualCriteria\": [\n        \"Before an entity is selected the Rules section shows a 'choose an entity first' style hint with no builder, and after selecting an entity the field-rules builder appears with an 'Add rule' button\"\n      ]\n    },\n    {\n      \"name\": \"fieldrules-add-rule\",\n      \"instruction\": \"Add rule + source-kind switch re-renders inputs\",\n      \"visualCriteria\": [\n        \"Clicking 'Add rule' adds a rule row with a target-field dropdown and a 'from' source-kind dropdown, and changing the source kind (e.g. to 'a formula' or 'a lookup') changes the source input area rendered beneath the rule\"\n      ]\n    },\n    {\n      \"name\": \"editor-cancel-to-list\",\n      \"instruction\": \"Cancel returns to the Operations list\",\n      \"visualCriteria\": [\n        \"Clicking 'Cancel' (or 'Back') from the editor returns to the Operations list view (search bar + 'New operation' button visible again) with the unsaved draft discarded\"\n      ]\n    }\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "url-match": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,bulk-ops",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "1CD1A261-55D1-432B-8A29-CEBAD2E08E41"
+  }
+}

@@ -1,11 +1,20 @@
 import { RegisterClass } from "@memberjunction/global";
-import { BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
+import { BaseAudioGenerator, BaseTextToSpeech, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 // Realtime (Agents Platform) driver — BaseRealtimeModel implementation
 export * from './elevenLabsRealtime';
 
+/**
+ * ElevenLabs text-to-speech, with voice and pronunciation-dictionary listing. It does not implement
+ * speech-to-text.
+ *
+ * Registered against {@link BaseTextToSpeech} under the key model metadata names. It still extends,
+ * and is registered against, `BaseAudioGenerator`, so callers that resolve it through the old base
+ * keep working.
+ */
 @RegisterClass(BaseAudioGenerator, "ElevenLabsAudioGenerator")
+@RegisterClass(BaseTextToSpeech, "ElevenLabsAudioGenerator")
 export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     private _elevenLabs: ElevenLabsClient;
 
@@ -51,6 +60,9 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'ElevenLabs');
             speechResult.success = false;
             speechResult.errorMessage = error?.message || 'Unknown error occurred';
+            // Kept so a caller can tell a rejected request (a 422 for an unknown voice) from an
+            // outage: the message alone loses the SDK error's HTTP status.
+            speechResult.errorInfo = errorInfo;
             console.error('ElevenLabs CreateSpeech error:', error, errorInfo);
         }
         return speechResult;

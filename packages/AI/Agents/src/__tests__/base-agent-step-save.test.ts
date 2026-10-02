@@ -215,6 +215,30 @@ describe('BaseAgent.createStepEntity / finalizeStepEntity — lifecycle', () => 
     expect(created.TargetID).toBeNull();
   });
 
+  // A Flow agent's 327-character failure reason became the step name, the
+  // column is 255, and both the INSERT and the UPDATE were rejected — the step never reached the run.
+  it('trims a StepName longer than the column so the row stays saveable, keeping the start of the message', async () => {
+    const log: string[] = [];
+    const s = new MockStep('s', log);
+    const { agent, pending } = makeAgent([s]);
+    const reason = `Agent failed. Agent type 'Flow' terminated execution: ${'x'.repeat(400)}`;
+    const step = await internals(agent).createStepEntity({ stepType: 'Validation', stepName: reason, contextUser: ctx });
+    await pending();
+    expect(step.StepName.length).toBe(255);
+    expect(step.StepName.startsWith("Agent failed. Agent type 'Flow' terminated execution:")).toBe(true);
+    expect(step.StepName.endsWith('…')).toBe(true);
+    expect(step.Status).toBe('Running'); // still a normal, saved step
+  });
+
+  it('leaves a StepName that fits the column untouched', async () => {
+    const log: string[] = [];
+    const s = new MockStep('s', log);
+    const { agent, pending } = makeAgent([s]);
+    const step = await internals(agent).createStepEntity({ stepType: 'Validation', stepName: 'Agent Validation', contextUser: ctx });
+    await pending();
+    expect(step.StepName).toBe('Agent Validation');
+  });
+
   it('completed option: the single INSERT carries the terminal state — no UPDATE is queued', async () => {
     const log: string[] = [];
     const step = new MockStep('s', log);

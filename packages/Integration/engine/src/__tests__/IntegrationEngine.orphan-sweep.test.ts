@@ -44,8 +44,8 @@ function mockEntity(overrides: Partial<MockEntity> = {}): MockEntity {
  * to either member breaks this file at compile time instead of at run time.
  */
 type OrphanSweepInternals = {
-    LoadAllRecordMaps: unknown;
-    DeleteOrphanedRecords: (
+    loadAllRecordMaps: unknown;
+    deleteOrphanedRecords: (
         companyIntegration: { ID: string },
         entityMap: { ID: string; Entity: string; ExternalObjectName: string; DeleteBehavior: string; EntityID: string },
         fetchedExternalIDs: ReadonlySet<string>,
@@ -81,7 +81,7 @@ function harness(opts: {
     // stub that just resolves rows would hand the sweep nothing to sweep. Feed the page through the
     // callback exactly as the real loader does, and hand back the streaming shape (empty Rows +
     // RowsRead) so this suite cannot pass against a sweep that went back to reading Rows.
-    internals.LoadAllRecordMaps = vi.fn().mockImplementation(async (
+    internals.loadAllRecordMaps = vi.fn().mockImplementation(async (
         _ci: string,
         _entityID: string,
         _user: unknown,
@@ -94,7 +94,7 @@ function harness(opts: {
     const logger = { warning: (_o: string, code: string, _m: string, data?: unknown) => warnings.push({ code, data }) };
     const result = { RecordsDeleted: 0 };
     const run = async () =>
-        internals.DeleteOrphanedRecords(
+        internals.deleteOrphanedRecords(
             { ID: 'ci-1' },
             { ID: 'em-1', Entity: 'Widgets', ExternalObjectName: 'Widget', DeleteBehavior: opts.deleteBehavior, EntityID: 'e-1' },
             new Set(opts.fetched),

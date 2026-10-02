@@ -221,82 +221,153 @@ export class MjKanbanBoardComponent {
     @Output() CardDoubleClicked = new EventEmitter<KanbanCardData>();
 
     /** @internal */
-    dragCardID: string | null = null;
+    DragCardID: string | null = null;
+
+    /** @deprecated Use {@link DragCardID}. */
+    get dragCardID(): string | null {
+        return this.DragCardID;
+    }
+    /** @deprecated Use {@link DragCardID}. */
+    set dragCardID(value: string | null) {
+        this.DragCardID = value;
+    }
     /** @internal */
-    dragCard: KanbanCardData | null = null;
+    DragCard: KanbanCardData | null = null;
+
+    /** @deprecated Use {@link DragCard}. */
+    get dragCard(): KanbanCardData | null {
+        return this.DragCard;
+    }
+    /** @deprecated Use {@link DragCard}. */
+    set dragCard(value: KanbanCardData | null) {
+        this.DragCard = value;
+    }
     /** @internal */
-    dragSourceColumn: string | null = null;
+    DragSourceColumn: string | null = null;
+
+    /** @deprecated Use {@link DragSourceColumn}. */
+    get dragSourceColumn(): string | null {
+        return this.DragSourceColumn;
+    }
+    /** @deprecated Use {@link DragSourceColumn}. */
+    set dragSourceColumn(value: string | null) {
+        this.DragSourceColumn = value;
+    }
     /** @internal */
-    dragOverColumn: string | null = null;
+    DragOverColumn: string | null = null;
+
+    /** @deprecated Use {@link DragOverColumn}. */
+    get dragOverColumn(): string | null {
+        return this.DragOverColumn;
+    }
+    /** @deprecated Use {@link DragOverColumn}. */
+    set dragOverColumn(value: string | null) {
+        this.DragOverColumn = value;
+    }
 
     private cdr = inject(ChangeDetectorRef);
 
     /** @internal Returns true if the given card is currently being dragged. */
+    IsDragging(cardID: string): boolean {
+        return this.DragCardID != null && UUIDsEqual(this.DragCardID, cardID);
+    }
+
+    /** @deprecated Use {@link IsDragging}. */
     isDragging(cardID: string): boolean {
-        return this.dragCardID != null && UUIDsEqual(this.dragCardID, cardID);
+        return this.IsDragging(cardID);
     }
 
     /** Returns cards belonging to a specific column. */
-    getColumnCards(columnKey: string): KanbanCardData[] {
+    GetColumnCards(columnKey: string): KanbanCardData[] {
         return this.Cards.filter(c => c.ColumnKey === columnKey);
     }
 
+    /** @deprecated Use {@link GetColumnCards}. */
+    getColumnCards(columnKey: string): KanbanCardData[] {
+        return this.GetColumnCards(columnKey);
+    }
+
     /** @internal */
-    onDragStart(event: DragEvent, card: KanbanCardData, columnKey: string): void {
-        this.dragCardID = card.ID;
-        this.dragCard = card;
-        this.dragSourceColumn = columnKey;
+    OnDragStart(event: DragEvent, card: KanbanCardData, columnKey: string): void {
+        this.DragCardID = card.ID;
+        this.DragCard = card;
+        this.DragSourceColumn = columnKey;
         event.dataTransfer?.setData('text/plain', card.ID);
         if (event.dataTransfer) {
             event.dataTransfer.effectAllowed = 'move';
         }
     }
 
-    /** @internal */
-    onDragEnd(): void {
-        this.dragCardID = null;
-        this.dragCard = null;
-        this.dragSourceColumn = null;
-        this.dragOverColumn = null;
-        this.cdr.markForCheck();
+    /** @deprecated Use {@link OnDragStart}. */
+    onDragStart(event: DragEvent, card: KanbanCardData, columnKey: string): void {
+        return this.OnDragStart(event, card, columnKey);
     }
 
     /** @internal */
-    onDragOver(event: DragEvent, columnKey: string): void {
+    OnDragEnd(): void {
+        this.DragCardID = null;
+        this.DragCard = null;
+        this.DragSourceColumn = null;
+        this.DragOverColumn = null;
+        this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link OnDragEnd}. */
+    onDragEnd(): void {
+        return this.OnDragEnd();
+    }
+
+    /** @internal */
+    OnDragOver(event: DragEvent, columnKey: string): void {
         event.preventDefault();
         if (event.dataTransfer) {
             event.dataTransfer.dropEffect = 'move';
         }
-        if (this.dragOverColumn !== columnKey) {
-            this.dragOverColumn = columnKey;
+        if (this.DragOverColumn !== columnKey) {
+            this.DragOverColumn = columnKey;
             this.cdr.markForCheck();
         }
     }
 
+    /** @deprecated Use {@link OnDragOver}. */
+    onDragOver(event: DragEvent, columnKey: string): void {
+        return this.OnDragOver(event, columnKey);
+    }
+
     /** @internal */
+    OnDragLeave(columnKey: string): void {
+        if (this.DragOverColumn === columnKey) {
+            this.DragOverColumn = null;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** @deprecated Use {@link OnDragLeave}. */
     onDragLeave(columnKey: string): void {
-        if (this.dragOverColumn === columnKey) {
-            this.dragOverColumn = null;
-            this.cdr.markForCheck();
-        }
+        return this.OnDragLeave(columnKey);
     }
 
     /** @internal */
-    onDrop(event: DragEvent, targetColumn: string): void {
+    OnDrop(event: DragEvent, targetColumn: string): void {
         event.preventDefault();
-        this.dragOverColumn = null;
+        this.DragOverColumn = null;
 
-        if (!this.dragCard || this.dragSourceColumn === targetColumn) {
-            this.onDragEnd();
+        if (!this.DragCard || this.DragSourceColumn === targetColumn) {
+            this.OnDragEnd();
             return;
         }
 
         this.CardMoved.emit({
-            Card: this.dragCard,
-            FromColumn: this.dragSourceColumn!,
+            Card: this.DragCard,
+            FromColumn: this.DragSourceColumn!,
             ToColumn: targetColumn,
         });
 
-        this.onDragEnd();
+        this.OnDragEnd();
+    }
+
+    /** @deprecated Use {@link OnDrop}. */
+    onDrop(event: DragEvent, targetColumn: string): void {
+        return this.OnDrop(event, targetColumn);
     }
 }
