@@ -78,6 +78,13 @@ export class SimpleVectorDatabase extends VectorDBBase {
      */
     constructor(apiKey?: string) { super(apiKey && apiKey.trim().length > 0 ? apiKey : 'in-memory-no-auth'); }
 
+    /** In-memory driver — there is no index object to provision. The `MJ: Vector Indexes` row
+     *  is the whole definition, and `CreateIndex` correctly reports `success: false`. Callers
+     *  must not read that as a failed provisioning attempt. */
+    public override get ManagesIndexes(): boolean {
+        return false;
+    }
+
     /** Look up the MJVectorIndex row by name and return its parsed config. */
     private async loadIndexConfig(indexName: string, contextUser: UserInfo | undefined): Promise<SimpleVectorProviderConfig | null> {
         const rv = new RunView();
