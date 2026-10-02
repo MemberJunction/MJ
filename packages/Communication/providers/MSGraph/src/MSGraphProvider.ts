@@ -202,7 +202,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         return { FilterByReceivedDate: true, FilterByUnread: true };
     }
 
-    private HTMLConverter: compiledFunction;
+    private hTMLConverter: compiledFunction;
 
     /**
      * Cache clients keyed by tenant + clientId. Bounded LRU(100) + 1-hour TTL —
@@ -217,7 +217,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
     constructor() {
         super();
 
-        this.HTMLConverter = compile({
+        this.hTMLConverter = compile({
             wordwrap: 130
         });
     }
@@ -573,7 +573,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 CCRecipients: this.extractRecipientAddresses(msgTyped.ccRecipients),
                 ReplyTo: replyTo,
                 Subject: msgTyped.subject || '',
-                Body: contextData?.ReturnAsPlainText || contextData?.ReturnAsPlainTex ? this.HTMLConverter(msgTyped.body?.content || '') : msgTyped.body?.content || '',
+                Body: contextData?.ReturnAsPlainText || contextData?.ReturnAsPlainTex ? this.hTMLConverter(msgTyped.body?.content || '') : msgTyped.body?.content || '',
                 ExternalSystemRecordID: msgTyped.id || '',
                 ThreadID: msgTyped.conversationId || '',
                 Headers: headers ? headers[index] : null,

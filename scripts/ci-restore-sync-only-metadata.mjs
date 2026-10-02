@@ -30,14 +30,34 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Recursively drop every `sync` key, so two trees compare on real content alone. */
+/**
+ * Recursively drop everything the push writes back, so two trees compare on real content alone.
+ *
+ * Two things qualify, for the same reason:
+ *
+ *  - **`sync` blocks** — lastModified + checksum, rewritten for every record pushed.
+ *  - **`deleteRecord.deletedAt`** — stamped onto a `deleteRecord` directive once the delete has
+ *    actually run. It is per-environment bookkeeping that makes the deletion one-time, so a PR
+ *    must not commit one: the release push would then SKIP the delete, no DELETE statement would
+ *    reach the SQL log, and every other database would keep the rows the directive exists to
+ *    remove. The `delete: true` flag itself is real content and is never stripped.
+ *
+ * Applied to both sides of the comparison, so a `deletedAt` that is legitimately committed
+ * already (the auto-generated integration action files carry many) matches itself rather than
+ * reading as drift.
+ */
 export const stripSync = (node) => {
   if (Array.isArray(node)) return node.map(stripSync);
   if (node && typeof node === 'object') {
     return Object.fromEntries(
       Object.entries(node)
         .filter(([k]) => k !== 'sync')
-        .map(([k, v]) => [k, stripSync(v)]),
+        .map(([k, v]) => [
+          k,
+          k === 'deleteRecord' && v && typeof v === 'object' && !Array.isArray(v)
+            ? stripSync(Object.fromEntries(Object.entries(v).filter(([dk]) => dk !== 'deletedAt')))
+            : stripSync(v),
+        ]),
     );
   }
   return node;

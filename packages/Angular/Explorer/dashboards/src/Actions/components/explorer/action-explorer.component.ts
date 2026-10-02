@@ -23,8 +23,8 @@ import {
   ActionFilters
 } from '../../services/action-explorer-state.service';
 import { ActionTreePanelComponent } from './action-tree-panel.component';
-import { validateEnumParam, boundNameList } from '../../../shared/agent-tool-validation';
-import { findByIdOrNameOrError } from '../../agent-tool-helpers';
+import { ValidateEnumParam, BoundNameList } from '../../../shared/agent-tool-validation';
+import { FindByIdOrNameOrError } from '../../agent-tool-helpers';
 
 interface SortOption {
   field: SortField;
@@ -209,8 +209,8 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       SelectedStatuses: [...this.Filters.statuses],
       SelectedTypes: [...this.Filters.types],
       // What the user is looking at — bounded so the streamed note stays small
-      VisibleActionNames: boundNameList(this.FilteredActions.map(a => a.Name)),
-      AvailableCategoryNames: boundNameList(this.Categories.map(c => c.Name)),
+      VisibleActionNames: BoundNameList(this.FilteredActions.map(a => a.Name)),
+      AvailableCategoryNames: BoundNameList(this.Categories.map(c => c.Name)),
     });
   }
 
@@ -229,9 +229,9 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         Description: 'Switch the explorer view mode. Allowed: card, list, compact.',
         ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: [...this.viewModeValues] } }, required: ['mode'] },
         Handler: async (params) => {
-          const v = validateEnumParam(params['mode'], this.viewModeValues, 'mode');
+          const v = ValidateEnumParam(params['mode'], this.viewModeValues, 'mode');
           if (!v.ok) return v.result;
-          this.setViewMode(v.value);
+          this.SetViewMode(v.value);
           return { Success: true };
         },
       },
@@ -247,12 +247,12 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
           required: ['field'],
         },
         Handler: async (params) => {
-          const f = validateEnumParam(params['field'], this.sortFieldValues, 'field');
+          const f = ValidateEnumParam(params['field'], this.sortFieldValues, 'field');
           if (!f.ok) return f.result;
           // direction is optional; default to ascending when omitted.
           let direction: SortDirection = 'asc';
           if (params['direction'] !== undefined) {
-            const d = validateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
+            const d = ValidateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
             if (!d.ok) return d.result;
             direction = d.value;
           }
@@ -266,7 +266,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
         Handler: async (params) => {
           const term = typeof params['searchTerm'] === 'string' ? params['searchTerm'] : '';
-          this.onSearchInput(term);
+          this.OnSearchInput(term);
           return { Success: true };
         },
       },
@@ -275,7 +275,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         Description: 'Clear the explorer search term.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.clearSearch();
+          this.ClearSearch();
           return { Success: true };
         },
       },
@@ -291,7 +291,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
           if (raw !== 'all' && raw !== 'uncategorized' && !this.CategoriesMap.has(raw)) {
             return { Success: false, ErrorMessage: `No category found with id "${raw}".` };
           }
-          this.onCategorySelect(raw);
+          this.OnCategorySelect(raw);
           return { Success: true };
         },
       },
@@ -306,12 +306,12 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
           }
           const lowered = raw.trim().toLowerCase();
           if (lowered === 'all' || lowered === 'uncategorized') {
-            this.onCategorySelect(lowered);
+            this.OnCategorySelect(lowered);
             return { Success: true };
           }
-          const found = findByIdOrNameOrError(raw, this.Categories, 'category');
+          const found = FindByIdOrNameOrError(raw, this.Categories, 'category');
           if (!found.ok) return found.result;
-          this.onCategorySelect(found.value.ID);
+          this.OnCategorySelect(found.value.ID);
           return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
         },
       },
@@ -320,9 +320,9 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         Description: 'Toggle a status in the status filter. Allowed: Active, Pending, Disabled.',
         ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: [...this.statusValues] } }, required: ['status'] },
         Handler: async (params) => {
-          const v = validateEnumParam(params['status'], this.statusValues, 'status');
+          const v = ValidateEnumParam(params['status'], this.statusValues, 'status');
           if (!v.ok) return v.result;
-          this.toggleStatus(v.value);
+          this.ToggleStatus(v.value);
           return { Success: true };
         },
       },
@@ -331,9 +331,9 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         Description: 'Toggle a type in the type filter. Allowed: Generated (AI-generated), Custom.',
         ParameterSchema: { type: 'object', properties: { type: { type: 'string', enum: [...this.typeValues] } }, required: ['type'] },
         Handler: async (params) => {
-          const v = validateEnumParam(params['type'], this.typeValues, 'type');
+          const v = ValidateEnumParam(params['type'], this.typeValues, 'type');
           if (!v.ok) return v.result;
-          this.toggleType(v.value);
+          this.ToggleType(v.value);
           return { Success: true };
         },
       },
@@ -342,7 +342,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         Description: 'Clear all status / type / search filters in the explorer.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.clearFilters();
+          this.ClearFilters();
           return { Success: true };
         },
       },
@@ -351,7 +351,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         Description: 'Set the sort direction without changing the sort field. Allowed: asc, desc.',
         ParameterSchema: { type: 'object', properties: { direction: { type: 'string', enum: [...this.sortDirectionValues] } }, required: ['direction'] },
         Handler: async (params) => {
-          const d = validateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
+          const d = ValidateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
           if (!d.ok) return d.result;
           this.StateService.setSortConfig({ field: this.SortField, direction: d.value });
           return { Success: true };
@@ -362,9 +362,9 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         Description: 'Open the detail record for an action by its id OR its name (navigation only — does NOT run the action). Name matching is case-insensitive (exact then contains).',
         ParameterSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
         Handler: async (params) => {
-          const found = findByIdOrNameOrError(params['action'], this.Actions, 'action');
+          const found = FindByIdOrNameOrError(params['action'], this.Actions, 'action');
           if (!found.ok) return found.result;
-          this.onActionClick(found.value);
+          this.OnActionClick(found.value);
           return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
         },
       },
@@ -373,14 +373,14 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         Description: 'Open the category record that a given action belongs to (related-record navigation). Pass the action id or name. Fails if the action has no category.',
         ParameterSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
         Handler: async (params) => {
-          const found = findByIdOrNameOrError(params['action'], this.Actions, 'action');
+          const found = FindByIdOrNameOrError(params['action'], this.Actions, 'action');
           if (!found.ok) return found.result;
           const categoryId = found.value.CategoryID;
           if (!categoryId) {
             return { Success: false, ErrorMessage: `Action "${found.value.Name}" has no category to navigate to.` };
           }
           const category = this.CategoriesMap.get(categoryId);
-          this.onEditCategory(category ?? ({ ID: categoryId } as MJActionCategoryEntity));
+          this.OnEditCategory(category ?? ({ ID: categoryId } as MJActionCategoryEntity));
           return { Success: true, Data: { CategoryId: categoryId, CategoryName: category?.Name ?? null } };
         },
       },
@@ -389,7 +389,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         Description: 'Reload the action explorer data (actions + categories).',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          await this.onRefresh();
+          await this.OnRefresh();
           return { Success: true };
         },
       },
@@ -553,26 +553,51 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.cdr.markForCheck();
   }
 
-  public async onRefresh(): Promise<void> {
+  public async OnRefresh(): Promise<void> {
     await ActionEngineBase.Instance.Config(true); // Force refresh
     await this.loadData();
   }
 
-  public onCategorySelect(categoryId: string): void {
+  /** @deprecated Use {@link OnRefresh}. */
+  public async onRefresh(): Promise<void> {
+    return this.OnRefresh();
+  }
+
+  public OnCategorySelect(categoryId: string): void {
     this.StateService.setSelectedCategoryId(categoryId);
   }
 
-  public onNewCategory(parentId: string | null): void {
+  /** @deprecated Use {@link OnCategorySelect}. */
+  public onCategorySelect(categoryId: string): void {
+    return this.OnCategorySelect(categoryId);
+  }
+
+  public OnNewCategory(parentId: string | null): void {
     this.NewCategoryParentId = parentId;
     this.StateService.openNewCategoryPanel();
   }
 
-  public onEditCategory(category: MJActionCategoryEntity): void {
+  /** @deprecated Use {@link OnNewCategory}. */
+  public onNewCategory(parentId: string | null): void {
+    return this.OnNewCategory(parentId);
+  }
+
+  public OnEditCategory(category: MJActionCategoryEntity): void {
     this.navigationService.OpenEntityRecord('MJ: Action Categories', CompositeKey.FromID(category.ID));
   }
 
-  public onNewAction(): void {
+  /** @deprecated Use {@link OnEditCategory}. */
+  public onEditCategory(category: MJActionCategoryEntity): void {
+    return this.OnEditCategory(category);
+  }
+
+  public OnNewAction(): void {
     this.StateService.openNewActionPanel();
+  }
+
+  /** @deprecated Use {@link OnNewAction}. */
+  public onNewAction(): void {
+    return this.OnNewAction();
   }
 
   /** True when search/filters or a category selection narrow the list. */
@@ -581,24 +606,39 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   }
 
   /** Empty-state CTA: reset filters when narrowed, otherwise create. */
-  public onEmptyStateAction(): void {
+  public OnEmptyStateAction(): void {
     if (this.IsListNarrowed) {
       this.StateService.clearFilters();
       this.StateService.setSelectedCategoryId('all');
     } else {
-      this.onNewAction();
+      this.OnNewAction();
     }
   }
 
-  public onActionClick(action: MJActionEntityExtended): void {
+  /** @deprecated Use {@link OnEmptyStateAction}. */
+  public onEmptyStateAction(): void {
+    return this.OnEmptyStateAction();
+  }
+
+  public OnActionClick(action: MJActionEntityExtended): void {
     this.navigationService.OpenEntityRecord('MJ: Actions', CompositeKey.FromID(action.ID));
   }
 
-  public onActionEdit(action: MJActionEntityExtended): void {
-    this.onActionClick(action);
+  /** @deprecated Use {@link OnActionClick}. */
+  public onActionClick(action: MJActionEntityExtended): void {
+    return this.OnActionClick(action);
   }
 
-  public async onActionRun(action: MJActionEntityExtended): Promise<void> {
+  public OnActionEdit(action: MJActionEntityExtended): void {
+    this.OnActionClick(action);
+  }
+
+  /** @deprecated Use {@link OnActionEdit}. */
+  public onActionEdit(action: MJActionEntityExtended): void {
+    return this.OnActionEdit(action);
+  }
+
+  public async OnActionRun(action: MJActionEntityExtended): Promise<void> {
     if (action.Status !== 'Active') {
       return; // Can't run inactive actions
     }
@@ -624,6 +664,11 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     }
   }
 
+  /** @deprecated Use {@link OnActionRun}. */
+  public async onActionRun(action: MJActionEntityExtended): Promise<void> {
+    return this.OnActionRun(action);
+  }
+
   public OnRunDialogClose(): void {
     this.IsRunDialogOpen = false;
     this.SelectedActionForRun = null;
@@ -631,41 +676,76 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.cdr.markForCheck();
   }
 
-  public onCategoryClick(categoryId: string): void {
+  public OnCategoryClick(categoryId: string): void {
     this.StateService.setSelectedCategoryId(categoryId);
   }
 
-  public async onCategoryCreated(category: MJActionCategoryEntity): Promise<void> {
+  /** @deprecated Use {@link OnCategoryClick}. */
+  public onCategoryClick(categoryId: string): void {
+    return this.OnCategoryClick(categoryId);
+  }
+
+  public async OnCategoryCreated(category: MJActionCategoryEntity): Promise<void> {
     // Refresh data to include new category
     await this.loadData();
     // Select the new category
     this.StateService.setSelectedCategoryId(category.ID);
   }
 
-  public async onActionCreated(): Promise<void> {
+  /** @deprecated Use {@link OnCategoryCreated}. */
+  public async onCategoryCreated(category: MJActionCategoryEntity): Promise<void> {
+    return this.OnCategoryCreated(category);
+  }
+
+  public async OnActionCreated(): Promise<void> {
     // Refresh data to include new action
     await this.loadData();
   }
 
+  /** @deprecated Use {@link OnActionCreated}. */
+  public async onActionCreated(): Promise<void> {
+    return this.OnActionCreated();
+  }
+
   // ───── Toolbar handlers (consolidated from former mj-action-toolbar) ─────
 
-  public onSearchInput(term: string): void {
+  public OnSearchInput(term: string): void {
     this.searchInput$.next(term);
   }
 
-  public clearSearch(): void {
+  /** @deprecated Use {@link OnSearchInput}. */
+  public onSearchInput(term: string): void {
+    return this.OnSearchInput(term);
+  }
+
+  public ClearSearch(): void {
     this.StateService.setSearchTerm('');
   }
 
-  public setViewMode(mode: ActionViewMode): void {
+  /** @deprecated Use {@link ClearSearch}. */
+  public clearSearch(): void {
+    return this.ClearSearch();
+  }
+
+  public SetViewMode(mode: ActionViewMode): void {
     this.StateService.setViewMode(mode);
   }
 
-  public setSortField(field: SortField): void {
+  /** @deprecated Use {@link SetViewMode}. */
+  public setViewMode(mode: ActionViewMode): void {
+    return this.SetViewMode(mode);
+  }
+
+  public SetSortField(field: SortField): void {
     this.StateService.setSortField(field);
   }
 
-  public toggleStatus(status: string): void {
+  /** @deprecated Use {@link SetSortField}. */
+  public setSortField(field: SortField): void {
+    return this.SetSortField(field);
+  }
+
+  public ToggleStatus(status: string): void {
     const current = [...this.Filters.statuses];
     const i = current.indexOf(status);
     if (i >= 0) current.splice(i, 1);
@@ -673,7 +753,12 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.StateService.setStatusFilter(current);
   }
 
-  public toggleType(type: string): void {
+  /** @deprecated Use {@link ToggleStatus}. */
+  public toggleStatus(status: string): void {
+    return this.ToggleStatus(status);
+  }
+
+  public ToggleType(type: string): void {
     const current = [...this.Filters.types];
     const i = current.indexOf(type);
     if (i >= 0) current.splice(i, 1);
@@ -681,16 +766,36 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.StateService.setTypeFilter(current);
   }
 
-  public isStatusSelected(status: string): boolean {
+  /** @deprecated Use {@link ToggleType}. */
+  public toggleType(type: string): void {
+    return this.ToggleType(type);
+  }
+
+  public IsStatusSelected(status: string): boolean {
     return this.Filters.statuses.includes(status);
   }
 
-  public isTypeSelected(type: string): boolean {
+  /** @deprecated Use {@link IsStatusSelected}. */
+  public isStatusSelected(status: string): boolean {
+    return this.IsStatusSelected(status);
+  }
+
+  public IsTypeSelected(type: string): boolean {
     return this.Filters.types.includes(type);
   }
 
-  public clearFilters(): void {
+  /** @deprecated Use {@link IsTypeSelected}. */
+  public isTypeSelected(type: string): boolean {
+    return this.IsTypeSelected(type);
+  }
+
+  public ClearFilters(): void {
     this.StateService.clearFilters();
+  }
+
+  /** @deprecated Use {@link ClearFilters}. */
+  public clearFilters(): void {
+    return this.ClearFilters();
   }
 
   /** Active filter count for the popover badge — counts only Status + Type

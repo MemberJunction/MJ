@@ -922,7 +922,11 @@
   font-size: 14px;
 }
 
-.pin-card:hover .pin-name .more-btn {
+/* Also reveal on keyboard focus — the pin's overflow menu is the only route to
+   rename/remove/configure, and at opacity 0 it was pointer-only: invisible to a
+   tabbing keyboard user and unreachable without a hover. */
+.pin-card:hover .pin-name .more-btn,
+.pin-card:focus-within .pin-name .more-btn {
   opacity: 1;
 }
 

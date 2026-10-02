@@ -4,7 +4,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { QueryEngineServer } from "@memberjunction/core-entities-server";
 import { MJQueryEntity } from "@memberjunction/core-entities";
 import { LogError } from "@memberjunction/core";
-import { runSemanticEntitySearch } from "../ai/semantic-entity-search.helper";
+import { RunSemanticEntitySearch } from "../ai/semantic-entity-search.helper";
 
 /**
  * Action that searches the saved query catalog using semantic search.
@@ -61,7 +61,7 @@ export class SearchQueryCatalogAction extends BaseAction {
             }
 
             // Rank via the unified SearchEntity pipeline (over-fetch to allow status/reusable filtering)
-            const search = await runSemanticEntitySearch(
+            const search = await RunSemanticEntitySearch(
                 params,
                 'MJ: Queries',
                 searchText,

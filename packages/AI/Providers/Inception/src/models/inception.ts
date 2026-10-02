@@ -40,6 +40,16 @@ export class InceptionLLM extends OpenAILLM {
     }
 
     /**
+     * Inception does NOT support native tool calling, so this overrides `OpenAILLM`'s `true` back
+     * to false. Mercury Edit is a next-edit-prediction model served from a custom
+     * `/v1/edit/completions` endpoint that takes no `tools` parameter — OpenAI-compatible at the
+     * surface, but not a chat-completions tool host.
+     */
+    public override get SupportsTools(): boolean {
+        return false;
+    }
+
+    /**
      * 4-tier effort mapping. Accepts either a string ('instant'|'low'|'medium'|'high')
      * or a numeric 0-100 string. Numeric thresholds:
      *   0-25  -> instant

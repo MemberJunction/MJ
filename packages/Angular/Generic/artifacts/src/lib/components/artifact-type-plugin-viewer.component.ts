@@ -115,15 +115,51 @@ import { BaseArtifactViewerPluginComponent, NavigationRequest } from './base-art
 })
 export class ArtifactTypePluginViewerComponent extends BaseAngularComponent implements OnInit, OnChanges  {
   @Input() artifactVersion!: MJArtifactVersionEntity;
-  @Input() artifactTypeName!: string;
-  @Input() contentType?: string;
+  @Input() ArtifactTypeName!: string;
+
+  /** @deprecated Use {@link ArtifactTypeName}. */
+  @Input() set artifactTypeName(value: string) {
+    this.ArtifactTypeName = value;
+  }
+  /** @deprecated Use {@link ArtifactTypeName}. */
+  get artifactTypeName(): string {
+    return this.ArtifactTypeName;
+  }
+  @Input() ContentType?: string;
+
+  /** @deprecated Use {@link ContentType}. */
+  @Input() set contentType(value: string | undefined) {
+    this.ContentType = value;
+  }
+  /** @deprecated Use {@link ContentType}. */
+  get contentType(): string | undefined {
+    return this.ContentType;
+  }
   @Input() height?: string;
   @Input() readonly: boolean = true;
   @Input() cssClass?: string;
 
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
-  @Output() pluginLoaded = new EventEmitter<void>();
+  @Output() PluginLoaded = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link PluginLoaded}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pluginLoaded) keeps working. Must stay AFTER PluginLoaded: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pluginLoaded = this.PluginLoaded;
   @Output() tabsChanged = new EventEmitter<void>();
   /**
    * Bubbled up from the component-artifact-viewer's form-aware branch when
@@ -131,23 +167,64 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
    * consumer (chat message card, conversation host) can invoke the
    * Create-or-Modify Interactive Form action behind a confirmation dialog.
    */
-  @Output() applyFormRequested = new EventEmitter<{ spec: unknown; entityName: string }>();
+  @Output() ApplyFormRequested = new EventEmitter<{ spec: unknown; entityName: string }>();
+
+  /**
+   * @deprecated Use {@link ApplyFormRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (applyFormRequested) keeps working. Must stay AFTER ApplyFormRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() applyFormRequested = this.ApplyFormRequested;
 
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
-  viewerContainer!: ViewContainerRef;
+  ViewerContainer!: ViewContainerRef;
+
+  /** @deprecated Use {@link ViewerContainer}. */
+  get viewerContainer(): ViewContainerRef {
+    return this.ViewerContainer;
+  }
+  /** @deprecated Use {@link ViewerContainer}. */
+  set viewerContainer(value: ViewContainerRef) {
+    this.ViewerContainer = value;
+  }
 
   public isLoading = true;
   public error: string | null = null;
-  public errorDetails: string | null = null;
-  public errorTitle: string | null = null;
+  public ErrorDetails: string | null = null;
+
+  /** @deprecated Use {@link ErrorDetails}. */
+  public get errorDetails(): string | null {
+    return this.ErrorDetails;
+  }
+  /** @deprecated Use {@link ErrorDetails}. */
+  public set errorDetails(value: string | null) {
+    this.ErrorDetails = value;
+  }
+  public ErrorTitle: string | null = null;
+
+  /** @deprecated Use {@link ErrorTitle}. */
+  public get errorTitle(): string | null {
+    return this.ErrorTitle;
+  }
+  /** @deprecated Use {@link ErrorTitle}. */
+  public set errorTitle(value: string | null) {
+    this.ErrorTitle = value;
+  }
 
   private componentRef: ComponentRef<any> | null = null;
 
   /**
    * Get the loaded plugin instance (if available)
    */
-  public get pluginInstance(): BaseArtifactViewerPluginComponent | null {
+  public get PluginInstance(): BaseArtifactViewerPluginComponent | null {
     return this.componentRef?.instance as BaseArtifactViewerPluginComponent || null;
+  }
+
+  /** @deprecated Use {@link PluginInstance}. */
+  public get pluginInstance(): BaseArtifactViewerPluginComponent | null {
+    return this.PluginInstance;
   }
 
   /**
@@ -155,7 +232,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
    * Pass-through to the plugin instance for use by the parent panel wrapper.
    */
   public get SupportsFeedback(): boolean {
-    return this.pluginInstance?.SupportsFeedback ?? false;
+    return this.PluginInstance?.SupportsFeedback ?? false;
   }
 
   /**
@@ -163,7 +240,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
    * Pass-through to the plugin instance, called from the parent panel header.
    */
   public AskUserForFeedback(): void {
-    this.pluginInstance?.AskUserForFeedback();
+    this.PluginInstance?.AskUserForFeedback();
   }
 
   async ngOnInit(): Promise<void> {
@@ -188,8 +265,8 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
     try {
       this.isLoading = true;
       this.error = null;
-      this.errorTitle = null;
-      this.errorDetails = null;
+      this.ErrorTitle = null;
+      this.ErrorDetails = null;
 
       if (!this.artifactVersion) {
         this.setError(
@@ -201,7 +278,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
         return;
       }
 
-      if (!this.artifactTypeName) {
+      if (!this.ArtifactTypeName) {
         this.setError(
           'Missing Artifact Type',
           'Unable to display this artifact because the type information is missing.',
@@ -216,8 +293,8 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       if (!artifactType) {
         this.setError(
           'Unknown Artifact Type',
-          `The artifact type "${this.artifactTypeName}" is not recognized. This might be a custom type that hasn't been properly configured.`,
-          `Artifact type "${this.artifactTypeName}" not found in metadata`
+          `The artifact type "${this.ArtifactTypeName}" is not recognized. This might be a custom type that hasn't been properly configured.`,
+          `Artifact type "${this.ArtifactTypeName}" not found in metadata`
         );
         this.isLoading = false;
         return;
@@ -228,21 +305,21 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       if (!driverClass) {
         this.setError(
           'No Viewer Available',
-          `This artifact type (${this.artifactTypeName}) doesn't have a viewer component configured. The artifact content may need to be viewed in the JSON tab.`,
+          `This artifact type (${this.ArtifactTypeName}) doesn't have a viewer component configured. The artifact content may need to be viewed in the JSON tab.`,
           `No DriverClass in hierarchy and content is not valid JSON`
         );
         this.isLoading = false;
         return;
       }
 
-      // Get the component type using MJGlobal ClassFactory
-      // CreateInstance returns the registered component class for the given DriverClass key
-      const tempInstance = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseArtifactViewerPluginComponent>(
+      // Look up the registered component class from ClassFactory WITHOUT instantiating it,
+      // so Angular's createComponent can properly instantiate it within the Angular injection context.
+      const registration = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
         BaseArtifactViewerPluginComponent,
         driverClass
       );
 
-      if (!tempInstance) {
+      if (!registration?.SubClass) {
         this.setError(
           'Viewer Component Not Found',
           `The viewer component "${driverClass}" is not registered in the application. This usually means the required package or module hasn't been loaded.`,
@@ -252,14 +329,14 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
         return;
       }
 
-      // Get the component type from the instance
-      const componentType = tempInstance.constructor as Type<BaseArtifactViewerPluginComponent>;
+      // Get the component type from the registration
+      const componentType = registration.SubClass as Type<BaseArtifactViewerPluginComponent>;
 
       // Destroy previous viewer if exists
       this.destroyCurrentViewer();
 
       // Create and configure the viewer component
-      this.componentRef = this.viewerContainer.createComponent(componentType);
+      this.componentRef = this.ViewerContainer.createComponent(componentType);
 
       // Set inputs using setInput() which properly triggers ngOnChanges
       // This is critical for plugins like ComponentArtifactViewerComponent that
@@ -274,15 +351,15 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       if (this.cssClass !== undefined) {
         this.componentRef.setInput('cssClass', this.cssClass);
       }
-      if (this.contentType !== undefined) {
-        this.componentRef.setInput('contentType', this.contentType);
+      if (this.ContentType !== undefined) {
+        this.componentRef.setInput('contentType', this.ContentType);
       }
 
       // Subscribe to openEntityRecord event if the plugin emits it
       const componentInstance = this.componentRef.instance;
       if (componentInstance.openEntityRecord) {
         componentInstance.openEntityRecord.subscribe((event: {entityName: string; compositeKey: CompositeKey}) => {
-          this.openEntityRecord.emit(event);
+          this.OpenEntityRecord.emit(event);
         });
       }
 
@@ -306,7 +383,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       if (componentInstance.applyFormRequested) {
         componentInstance.applyFormRequested.subscribe(
           (event: { spec: unknown; entityName: string }) => {
-            this.applyFormRequested.emit(event);
+            this.ApplyFormRequested.emit(event);
           }
         );
       }
@@ -317,7 +394,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       this.isLoading = false;
 
       // Notify parent that plugin has loaded (for tab selection timing)
-      this.pluginLoaded.emit();
+      this.PluginLoaded.emit();
     } catch (err) {
       console.error('Error loading artifact viewer:', err);
       LogError(err);
@@ -336,9 +413,9 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
    * Set a structured error message with title, user-friendly description, and technical details
    */
   private setError(title: string, userMessage: string, technicalDetails: string): void {
-    this.errorTitle = title;
+    this.ErrorTitle = title;
     this.error = userMessage;
-    this.errorDetails = technicalDetails;
+    this.ErrorDetails = technicalDetails;
   }
 
   /**
@@ -347,7 +424,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
   private async getArtifactType(): Promise<MJArtifactTypeEntity | null> {
     try {
       // Use the cached metadata engine instead of querying the database
-      const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(this.artifactTypeName);
+      const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(this.ArtifactTypeName);
       return artifactType || null;
     } catch (err) {
       console.error('Error loading artifact type:', err);
@@ -435,6 +512,6 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       this.componentRef.destroy();
       this.componentRef = null;
     }
-    this.viewerContainer.clear();
+    this.ViewerContainer.clear();
   }
 }

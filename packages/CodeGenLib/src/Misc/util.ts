@@ -5,19 +5,29 @@ import fsExtra from 'fs-extra';
 import { globSync } from 'glob';
 import path from 'path';
 
-export function makeDirs(dirPaths: string[]) {
+export function MakeDirs(dirPaths: string[]) {
     for (let i = 0; i < dirPaths.length; i++) {
-        makeDir(dirPaths[i]);
+        MakeDir(dirPaths[i]);
     }
 }
 
-export function makeDir(dirPath: string): void {
+/** @deprecated Use {@link MakeDirs}. */
+export function makeDirs(dirPaths: string[]) {
+  return MakeDirs(dirPaths);
+}
+
+export function MakeDir(dirPath: string): void {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
     }
 }
 
-export function copyDir(sourceDir: string, destDir: string) {
+/** @deprecated Use {@link MakeDir}. */
+export function makeDir(dirPath: string): void {
+  return MakeDir(dirPath);
+}
+
+export function CopyDir(sourceDir: string, destDir: string) {
     // To copy a folder or file, select overwrite accordingly
     try {
       fsExtra.copySync(sourceDir, destDir, { overwrite: true })
@@ -27,7 +37,12 @@ export function copyDir(sourceDir: string, destDir: string) {
 
 }
 
-export async function attemptDeleteFile(filePath: string, maxRetries: number, repeatDelay: number): Promise<void> {
+/** @deprecated Use {@link CopyDir}. */
+export function copyDir(sourceDir: string, destDir: string) {
+  return CopyDir(sourceDir, destDir);
+}
+
+export async function AttemptDeleteFile(filePath: string, maxRetries: number, repeatDelay: number): Promise<void> {
     for (let i = 0; i < maxRetries; i++) {
       try {
         unlinkSync(filePath);
@@ -49,7 +64,12 @@ export async function attemptDeleteFile(filePath: string, maxRetries: number, re
     }
   }
 
-export function combineFiles(directory: string, combinedFileName: string, pattern: string, overwriteExistingFile: boolean): void {
+/** @deprecated Use {@link AttemptDeleteFile}. */
+export async function attemptDeleteFile(filePath: string, maxRetries: number, repeatDelay: number): Promise<void> {
+  return AttemptDeleteFile(filePath, maxRetries, repeatDelay);
+}
+
+export function CombineFiles(directory: string, combinedFileName: string, pattern: string, overwriteExistingFile: boolean): void {
     const combinedFilePath = path.join(directory, combinedFileName);
 
     // Check if the combined file exists and if overwriteExistingFile is false, skip the process
@@ -84,15 +104,25 @@ export function combineFiles(directory: string, combinedFileName: string, patter
     fs.writeFileSync(combinedFilePath, combinedContent);
 }
 
+/** @deprecated Use {@link CombineFiles}. */
+export function combineFiles(directory: string, combinedFileName: string, pattern: string, overwriteExistingFile: boolean): void {
+  return CombineFiles(directory, combinedFileName, pattern, overwriteExistingFile);
+}
+
 
 /**
  * Logs the provided params to the console if the shouldLog parameter is true
  * @param shouldLog 
  */
-export function logIf(shouldLog: boolean, ...args: any[]) {
+export function LogIf(shouldLog: boolean, ...args: any[]) {
     if (shouldLog) {
         console.log(...args);
     }
+}
+
+/** @deprecated Use {@link LogIf}. */
+export function logIf(shouldLog: boolean, ...args: any[]) {
+  return LogIf(shouldLog, ...args);
 }
 
 /**
@@ -117,7 +147,7 @@ export function logIf(shouldLog: boolean, ...args: any[]) {
  * @param items - Array of items that have Sequence and optional name properties
  * @returns A new sorted array
  */
-export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date; Value?: string; Name?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+export function SortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date; Value?: string; Name?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
     return [...items].sort((a, b) => {
         // Primary sort by Sequence
         if (a.Sequence !== b.Sequence) {
@@ -152,6 +182,11 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
     });
 }
 
+/** @deprecated Use {@link SortBySequenceAndCreatedAt}. */
+export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date; Value?: string; Name?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+  return SortBySequenceAndCreatedAt(items);
+}
+
 /**
  * Sorts EntityRelationshipInfo items deterministically and **environment-independently**.
  * Sort order: Sequence → RelatedEntity name → RelatedEntityJoinField → ID.
@@ -162,7 +197,7 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
  * a separate bug), so the alphabetical tiebreakers are doing the real work of stabilizing
  * the order across environments.
  */
-export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt?: Date; RelatedEntity?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+export function SortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt?: Date; RelatedEntity?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
     return [...items].sort((a, b) => {
         // Primary sort by Sequence
         if (a.Sequence !== b.Sequence) {
@@ -189,6 +224,11 @@ export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt
     });
 }
 
+/** @deprecated Use {@link SortRelatedEntities}. */
+export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt?: Date; RelatedEntity?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+  return SortRelatedEntities(items);
+}
+
 /**
  * Serializes a value to JSON with recursively sorted object keys, ensuring deterministic
  * string representations across runs regardless of property insertion order.
@@ -196,8 +236,13 @@ export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt
  * @param value - Value to serialize
  * @param space - Optional indentation (e.g. 2 for pretty-printed JSON)
  */
-export function canonicalJSONStringify(value: unknown, space?: number | string): string {
+export function CanonicalJSONStringify(value: unknown, space?: number | string): string {
     return JSON.stringify(sortKeysRecursively(value), null, space);
+}
+
+/** @deprecated Use {@link CanonicalJSONStringify}. */
+export function canonicalJSONStringify(value: unknown, space?: number | string): string {
+  return CanonicalJSONStringify(value, space);
 }
 
 function sortKeysRecursively(value: unknown): unknown {
@@ -219,7 +264,7 @@ function sortKeysRecursively(value: unknown): unknown {
 /**
  * Deep structural equality comparison for JSON-serializable objects and primitives.
  */
-export function deepEqualJSON(a: unknown, b: unknown): boolean {
+export function DeepEqualJSON(a: unknown, b: unknown): boolean {
     if (a === b) return true;
     if (a == null || b == null) return false;
     if (typeof a !== typeof b) return false;
@@ -229,7 +274,7 @@ export function deepEqualJSON(a: unknown, b: unknown): boolean {
     if (Array.isArray(a) && Array.isArray(b)) {
         if (a.length !== b.length) return false;
         for (let i = 0; i < a.length; i++) {
-            if (!deepEqualJSON(a[i], b[i])) return false;
+            if (!DeepEqualJSON(a[i], b[i])) return false;
         }
         return true;
     }
@@ -241,7 +286,12 @@ export function deepEqualJSON(a: unknown, b: unknown): boolean {
     if (keysA.length !== keysB.length) return false;
     for (const key of keysA) {
         if (!Object.prototype.hasOwnProperty.call(objB, key)) return false;
-        if (!deepEqualJSON(objA[key], objB[key])) return false;
+        if (!DeepEqualJSON(objA[key], objB[key])) return false;
     }
     return true;
+}
+
+/** @deprecated Use {@link DeepEqualJSON}. */
+export function deepEqualJSON(a: unknown, b: unknown): boolean {
+  return DeepEqualJSON(a, b);
 }

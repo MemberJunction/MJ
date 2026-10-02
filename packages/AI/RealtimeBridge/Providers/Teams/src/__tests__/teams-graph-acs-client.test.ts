@@ -2,11 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     RealGraphCallsClient,
     PumpBackedAcsMedia,
-    buildGraphCallBody,
-    readCreateCallResult,
-    readParticipantsCollection,
-    readGraphParticipant,
-    defaultGraphModuleLoader,
+    BuildGraphCallBody,
+    ReadCreateCallResult,
+    ReadParticipantsCollection,
+    ReadGraphParticipant,
+    DefaultGraphModuleLoader,
     type GraphModuleLike,
     type GraphClientLike,
     type GraphRequestLike,
@@ -84,7 +84,7 @@ const JOIN_REQUEST: GraphCreateCallRequest = {
 
 describe('buildGraphCallBody (pure)', () => {
     it('maps the bridge request onto the Graph appHostedMedia call body', () => {
-        const body = buildGraphCallBody(JOIN_REQUEST);
+        const body = BuildGraphCallBody(JOIN_REQUEST);
         expect(body['@odata.type']).toBe('#microsoft.graph.call');
         expect(body.mediaConfig['@odata.type']).toBe('#microsoft.graph.appHostedMediaConfig');
         expect(body.chatInfo.threadId).toBe('19:meeting_X@thread.v2');
@@ -93,25 +93,25 @@ describe('buildGraphCallBody (pure)', () => {
     });
 
     it('omits tenantId when the request carries none', () => {
-        const body = buildGraphCallBody({ ...JOIN_REQUEST, TenantId: undefined });
+        const body = BuildGraphCallBody({ ...JOIN_REQUEST, TenantId: undefined });
         expect('tenantId' in body).toBe(false);
     });
 });
 
 describe('readCreateCallResult (pure)', () => {
     it('reads the call id + bot participant id from a Graph response', () => {
-        const result = readCreateCallResult({ id: 'call-9', myParticipantId: 'bot-9' });
+        const result = ReadCreateCallResult({ id: 'call-9', myParticipantId: 'bot-9' });
         expect(result).toEqual({ CallId: 'call-9', BotParticipantId: 'bot-9' });
     });
 
     it('falls back to the call id when myParticipantId is absent', () => {
-        const result = readCreateCallResult({ id: 'call-9' });
+        const result = ReadCreateCallResult({ id: 'call-9' });
         expect(result.BotParticipantId).toBe('call-9');
     });
 
     it('throws when the response carries no call id', () => {
-        expect(() => readCreateCallResult({})).toThrow(/no call id/i);
-        expect(() => readCreateCallResult(null)).toThrow(/no call id/i);
+        expect(() => ReadCreateCallResult({})).toThrow(/no call id/i);
+        expect(() => ReadCreateCallResult(null)).toThrow(/no call id/i);
     });
 });
 
@@ -123,20 +123,20 @@ describe('readParticipantsCollection / readGraphParticipant (pure)', () => {
                 { id: 'p2', info: { identity: { user: { displayName: 'Bob' } } }, meetingRole: 'attendee' },
             ],
         };
-        const roster = readParticipantsCollection(response);
+        const roster = ReadParticipantsCollection(response);
         expect(roster).toHaveLength(2);
         expect(roster[0]).toMatchObject({ id: 'p1', displayName: 'Alice', role: 'organizer' });
         expect(roster[1]).toMatchObject({ id: 'p2', displayName: 'Bob', role: 'attendee' });
     });
 
     it('returns an empty roster when value is missing or not an array', () => {
-        expect(readParticipantsCollection({})).toEqual([]);
-        expect(readParticipantsCollection({ value: 'nope' })).toEqual([]);
-        expect(readParticipantsCollection(null)).toEqual([]);
+        expect(ReadParticipantsCollection({})).toEqual([]);
+        expect(ReadParticipantsCollection({ value: 'nope' })).toEqual([]);
+        expect(ReadParticipantsCollection(null)).toEqual([]);
     });
 
     it('marks the bot leg as self when the identity is an application with media streams', () => {
-        const bot = readGraphParticipant({
+        const bot = ReadGraphParticipant({
             id: 'bot-1',
             info: { identity: { application: { id: 'app-1' } } },
             mediaStreams: [{ mediaType: 'audio' }],
@@ -228,7 +228,7 @@ describe('defaultGraphModuleLoader', () => {
     // The "SDK absent" path — a clear, actionable throw naming the package — is exercised by the dynamic
     // import rejecting in deployments that omit the optional peer dep.
     it('resolves a module exposing the structural Client.init factory when the SDK is present', async () => {
-        const mod = await defaultGraphModuleLoader();
+        const mod = await DefaultGraphModuleLoader();
         expect(typeof mod.Client.init).toBe('function');
     });
 });

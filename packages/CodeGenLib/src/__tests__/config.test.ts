@@ -104,7 +104,7 @@ describe('Config Schema Shapes', () => {
 });
 
 // Import the functions under test
-import { resolveEntityPackageName, getExternalEntitySchemas, resolveEntityImportPackage, thisEmitEntityPackageName, ConfigInfo, commands } from '../Config/config';
+import { ResolveEntityPackageName, GetExternalEntitySchemas, ResolveEntityImportPackage, ThisEmitEntityPackageName, ConfigInfo, Commands } from '../Config/config';
 
 /**
  * Helper to build a minimal ConfigInfo-like object with just the entityPackageName field.
@@ -120,15 +120,15 @@ function makeConfig(
 describe('resolveEntityPackageName', () => {
     it('should return the string value when entityPackageName is a plain string', () => {
         const config = makeConfig('my-custom-package');
-        expect(resolveEntityPackageName('dbo', config)).toBe('my-custom-package');
-        expect(resolveEntityPackageName('sales', config)).toBe('my-custom-package');
-        expect(resolveEntityPackageName('__mj', config)).toBe('my-custom-package');
+        expect(ResolveEntityPackageName('dbo', config)).toBe('my-custom-package');
+        expect(ResolveEntityPackageName('sales', config)).toBe('my-custom-package');
+        expect(ResolveEntityPackageName('__mj', config)).toBe('my-custom-package');
     });
 
     it('should return "mj_generatedentities" when entityPackageName is an empty string', () => {
         const config = makeConfig('');
-        expect(resolveEntityPackageName('dbo', config)).toBe('mj_generatedentities');
-        expect(resolveEntityPackageName('anything', config)).toBe('mj_generatedentities');
+        expect(ResolveEntityPackageName('dbo', config)).toBe('mj_generatedentities');
+        expect(ResolveEntityPackageName('anything', config)).toBe('mj_generatedentities');
     });
 
     it('should return the matching package when entityPackageName is a Record and schema matches', () => {
@@ -136,30 +136,30 @@ describe('resolveEntityPackageName', () => {
             'sales': '@myorg/sales-entities',
             'hr': '@myorg/hr-entities',
         });
-        expect(resolveEntityPackageName('sales', config)).toBe('@myorg/sales-entities');
-        expect(resolveEntityPackageName('hr', config)).toBe('@myorg/hr-entities');
+        expect(ResolveEntityPackageName('sales', config)).toBe('@myorg/sales-entities');
+        expect(ResolveEntityPackageName('hr', config)).toBe('@myorg/hr-entities');
     });
 
     it('should return "mj_generatedentities" when entityPackageName is a Record and schema is unknown', () => {
         const config = makeConfig({
             'sales': '@myorg/sales-entities',
         });
-        expect(resolveEntityPackageName('dbo', config)).toBe('mj_generatedentities');
-        expect(resolveEntityPackageName('unknown_schema', config)).toBe('mj_generatedentities');
+        expect(ResolveEntityPackageName('dbo', config)).toBe('mj_generatedentities');
+        expect(ResolveEntityPackageName('unknown_schema', config)).toBe('mj_generatedentities');
     });
 
     it('should fall back to module-level configInfo when no config is passed', () => {
         // When no config argument is provided, the function uses the module-level configInfo.
         // The module-level configInfo.entityPackageName defaults to 'mj_generatedentities'
         // (since our mock cosmiconfig returns null, giving us defaults).
-        const result = resolveEntityPackageName('dbo');
+        const result = ResolveEntityPackageName('dbo');
         expect(result).toBe('mj_generatedentities');
     });
 
     it('should handle a Record with a single schema entry', () => {
         const config = makeConfig({ 'only_schema': 'only-package' });
-        expect(resolveEntityPackageName('only_schema', config)).toBe('only-package');
-        expect(resolveEntityPackageName('other', config)).toBe('mj_generatedentities');
+        expect(ResolveEntityPackageName('only_schema', config)).toBe('only-package');
+        expect(ResolveEntityPackageName('other', config)).toBe('mj_generatedentities');
     });
 
     it('should be case-insensitive for schema names in Record mode', () => {
@@ -167,32 +167,32 @@ describe('resolveEntityPackageName', () => {
             'Sales': '@myorg/sales-entities',
         });
         // All case variants should resolve to the same package
-        expect(resolveEntityPackageName('Sales', config)).toBe('@myorg/sales-entities');
-        expect(resolveEntityPackageName('sales', config)).toBe('@myorg/sales-entities');
-        expect(resolveEntityPackageName('SALES', config)).toBe('@myorg/sales-entities');
+        expect(ResolveEntityPackageName('Sales', config)).toBe('@myorg/sales-entities');
+        expect(ResolveEntityPackageName('sales', config)).toBe('@myorg/sales-entities');
+        expect(ResolveEntityPackageName('SALES', config)).toBe('@myorg/sales-entities');
         // Unrelated schema still falls back
-        expect(resolveEntityPackageName('hr', config)).toBe('mj_generatedentities');
+        expect(ResolveEntityPackageName('hr', config)).toBe('mj_generatedentities');
     });
 });
 
 describe('thisEmitEntityPackageName', () => {
     it('returns the string entityPackageName for any owning schema', () => {
         const config = makeConfig('@mj-biz-apps/orders-entities');
-        expect(thisEmitEntityPackageName('__mj_BizAppsOrders', config)).toBe('@mj-biz-apps/orders-entities');
-        expect(thisEmitEntityPackageName('__mj_BizAppsCommon', config)).toBe('@mj-biz-apps/orders-entities');
+        expect(ThisEmitEntityPackageName('__mj_BizAppsOrders', config)).toBe('@mj-biz-apps/orders-entities');
+        expect(ThisEmitEntityPackageName('__mj_BizAppsCommon', config)).toBe('@mj-biz-apps/orders-entities');
     });
 
     it('returns the Record entry for the owning schema, else mj_generatedentities', () => {
         const config = makeConfig({
             sales: '@myorg/sales-entities',
         });
-        expect(thisEmitEntityPackageName('sales', config)).toBe('@myorg/sales-entities');
-        expect(thisEmitEntityPackageName('dbo', config)).toBe('mj_generatedentities');
+        expect(ThisEmitEntityPackageName('sales', config)).toBe('@myorg/sales-entities');
+        expect(ThisEmitEntityPackageName('dbo', config)).toBe('mj_generatedentities');
     });
 
     it('treats an empty string entityPackageName as mj_generatedentities', () => {
-        expect(thisEmitEntityPackageName('dbo', makeConfig(''))).toBe('mj_generatedentities');
-        expect(thisEmitEntityPackageName('dbo', makeConfig('   '))).toBe('mj_generatedentities');
+        expect(ThisEmitEntityPackageName('dbo', makeConfig(''))).toBe('mj_generatedentities');
+        expect(ThisEmitEntityPackageName('dbo', makeConfig('   '))).toBe('mj_generatedentities');
     });
 });
 
@@ -207,25 +207,25 @@ describe('resolveEntityImportPackage', () => {
 
     it('Orders Address embed: Common schema maps to common-entities, not orders-entities', () => {
         expect(
-            resolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', ordersPublisher()),
+            ResolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', ordersPublisher()),
         ).toBe('@mj-biz-apps/common-entities');
     });
 
     it('is case-insensitive on entityImportPackages keys', () => {
         expect(
-            resolveEntityImportPackage('__MJ_BIZAPPSCOMMON', '__mj_BizAppsOrders', ordersPublisher()),
+            ResolveEntityImportPackage('__MJ_BIZAPPSCOMMON', '__mj_BizAppsOrders', ordersPublisher()),
         ).toBe('@mj-biz-apps/common-entities');
     });
 
     it('Orders Address embed without a map throws — the current production failure mode', () => {
         const config = makeConfig('@mj-biz-apps/orders-entities');
-        expect(() => resolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toThrow(
+        expect(() => ResolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toThrow(
             /entityImportPackages/,
         );
-        expect(() => resolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toThrow(
+        expect(() => ResolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toThrow(
             /@mj-biz-apps\/orders-entities/,
         );
-        expect(() => resolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).not.toThrow(
+        expect(() => ResolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).not.toThrow(
             /mj_generatedentities/,
         );
     });
@@ -236,23 +236,23 @@ describe('resolveEntityImportPackage', () => {
                 '__mj_BizAppsCommon': '@mj-biz-apps/orders-entities',
             },
         });
-        expect(() => resolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toThrow(
+        expect(() => ResolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toThrow(
             /this emit's own package/,
         );
     });
 
     it('core schema always resolves to @memberjunction/core-entities', () => {
-        expect(resolveEntityImportPackage('__mj', '__mj_BizAppsOrders', ordersPublisher())).toBe(
+        expect(ResolveEntityImportPackage('__mj', '__mj_BizAppsOrders', ordersPublisher())).toBe(
             '@memberjunction/core-entities',
         );
-        expect(resolveEntityImportPackage('__MJ', '__mj_BizAppsOrders', makeConfig('mj_generatedentities'))).toBe(
+        expect(ResolveEntityImportPackage('__MJ', '__mj_BizAppsOrders', makeConfig('mj_generatedentities'))).toBe(
             '@memberjunction/core-entities',
         );
     });
 
     it('same-schema peers resolve to this emit\'s package', () => {
         expect(
-            resolveEntityImportPackage('__mj_BizAppsOrders', '__mj_BizAppsOrders', ordersPublisher()),
+            ResolveEntityImportPackage('__mj_BizAppsOrders', '__mj_BizAppsOrders', ordersPublisher()),
         ).toBe('@mj-biz-apps/orders-entities');
     });
 
@@ -261,7 +261,7 @@ describe('resolveEntityImportPackage', () => {
             '__mj_BizAppsOrders': '@mj-biz-apps/orders-entities',
             '__mj_BizAppsCommon': '@mj-biz-apps/common-entities',
         });
-        expect(resolveEntityImportPackage('__mj_BizAppsCommon', 'dbo', config)).toBe('@mj-biz-apps/common-entities');
+        expect(ResolveEntityImportPackage('__mj_BizAppsCommon', 'dbo', config)).toBe('@mj-biz-apps/common-entities');
     });
 
     it('entityImportPackages wins over Record entityPackageName when both list the schema', () => {
@@ -275,13 +275,13 @@ describe('resolveEntityImportPackage', () => {
                 },
             },
         );
-        expect(resolveEntityImportPackage('__mj_BizAppsCommon', 'dbo', config)).toBe('@mj-biz-apps/common-entities');
+        expect(ResolveEntityImportPackage('__mj_BizAppsCommon', 'dbo', config)).toBe('@mj-biz-apps/common-entities');
     });
 
     it('throws when related or owning schema is empty', () => {
         const config = ordersPublisher();
-        expect(() => resolveEntityImportPackage('', '__mj_BizAppsOrders', config)).toThrow(/empty SchemaName/);
-        expect(() => resolveEntityImportPackage('__mj_BizAppsCommon', '', config)).toThrow(/empty SchemaName/);
+        expect(() => ResolveEntityImportPackage('', '__mj_BizAppsOrders', config)).toThrow(/empty SchemaName/);
+        expect(() => ResolveEntityImportPackage('__mj_BizAppsCommon', '', config)).toThrow(/empty SchemaName/);
     });
 
     it('treats an empty or whitespace entityImportPackages value as missing and throws', () => {
@@ -290,24 +290,24 @@ describe('resolveEntityImportPackage', () => {
                 '__mj_BizAppsCommon': '   ',
             },
         });
-        expect(() => resolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toThrow(
+        expect(() => ResolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toThrow(
             /not listed in entityImportPackages/,
         );
     });
 
     it('honors a custom mjCoreSchema instead of assuming __mj', () => {
         const config = makeConfig('mj_generatedentities', { mjCoreSchema: 'mj_core' });
-        expect(resolveEntityImportPackage('mj_core', 'dbo', config)).toBe('@memberjunction/core-entities');
-        expect(resolveEntityImportPackage('MJ_CORE', 'dbo', config)).toBe('@memberjunction/core-entities');
-        expect(() => resolveEntityImportPackage('__mj', 'dbo', config)).toThrow(/not listed in entityImportPackages/);
+        expect(ResolveEntityImportPackage('mj_core', 'dbo', config)).toBe('@memberjunction/core-entities');
+        expect(ResolveEntityImportPackage('MJ_CORE', 'dbo', config)).toBe('@memberjunction/core-entities');
+        expect(() => ResolveEntityImportPackage('__mj', 'dbo', config)).toThrow(/not listed in entityImportPackages/);
     });
 
     it('Record entityPackageName with an unmapped foreign schema throws (does not silently resolve)', () => {
         const config = makeConfig({
             sales: '@myorg/sales-entities',
         });
-        expect(() => resolveEntityImportPackage('hr', 'dbo', config)).toThrow(/entityPackageName schema map/);
-        expect(() => resolveEntityImportPackage('hr', 'dbo', config)).toThrow(
+        expect(() => ResolveEntityImportPackage('hr', 'dbo', config)).toThrow(/entityPackageName schema map/);
+        expect(() => ResolveEntityImportPackage('hr', 'dbo', config)).toThrow(
             /cannot import entity classes from schema 'hr'/,
         );
     });
@@ -317,7 +317,7 @@ describe('resolveEntityImportPackage', () => {
             dbo: 'mj_generatedentities',
             sales: 'mj_generatedentities',
         });
-        expect(() => resolveEntityImportPackage('sales', 'dbo', config)).toThrow(/this emit's own package/);
+        expect(() => ResolveEntityImportPackage('sales', 'dbo', config)).toThrow(/this emit's own package/);
     });
 
     it('trims package names from the import map', () => {
@@ -326,7 +326,7 @@ describe('resolveEntityImportPackage', () => {
                 '__mj_BizAppsCommon': '  @mj-biz-apps/common-entities  ',
             },
         });
-        expect(resolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toBe(
+        expect(ResolveEntityImportPackage('__mj_BizAppsCommon', '__mj_BizAppsOrders', config)).toBe(
             '@mj-biz-apps/common-entities',
         );
     });
@@ -335,12 +335,12 @@ describe('resolveEntityImportPackage', () => {
 describe('getExternalEntitySchemas', () => {
     it('should return an empty array when entityPackageName is a plain string', () => {
         const config = makeConfig('my-custom-package');
-        expect(getExternalEntitySchemas(config)).toEqual([]);
+        expect(GetExternalEntitySchemas(config)).toEqual([]);
     });
 
     it('should return an empty array when entityPackageName is an empty string', () => {
         const config = makeConfig('');
-        expect(getExternalEntitySchemas(config)).toEqual([]);
+        expect(GetExternalEntitySchemas(config)).toEqual([]);
     });
 
     it('should return the schema names (keys) when entityPackageName is a Record', () => {
@@ -349,24 +349,24 @@ describe('getExternalEntitySchemas', () => {
             'hr': '@myorg/hr-entities',
             'inventory': '@myorg/inventory-entities',
         });
-        const schemas = getExternalEntitySchemas(config);
+        const schemas = GetExternalEntitySchemas(config);
         expect(schemas).toEqual(['sales', 'hr', 'inventory']);
     });
 
     it('should return a single-element array for a Record with one entry', () => {
         const config = makeConfig({ 'custom': 'custom-pkg' });
-        expect(getExternalEntitySchemas(config)).toEqual(['custom']);
+        expect(GetExternalEntitySchemas(config)).toEqual(['custom']);
     });
 
     it('should return an empty array for an empty Record', () => {
         const config = makeConfig({});
-        expect(getExternalEntitySchemas(config)).toEqual([]);
+        expect(GetExternalEntitySchemas(config)).toEqual([]);
     });
 
     it('should fall back to module-level configInfo when no config is passed', () => {
         // Module-level configInfo has entityPackageName as 'mj_generatedentities' (string default),
         // so this should return an empty array.
-        const result = getExternalEntitySchemas();
+        const result = GetExternalEntitySchemas();
         expect(result).toEqual([]);
     });
 });
@@ -376,11 +376,11 @@ describe('commands', () => {
         const originalEnv = process.env.MJ_CODEGEN_SKIP_COMMANDS;
         try {
             process.env.MJ_CODEGEN_SKIP_COMMANDS = '1';
-            expect(commands('after')).toEqual([]);
-            expect(commands('before')).toEqual([]);
+            expect(Commands('after')).toEqual([]);
+            expect(Commands('before')).toEqual([]);
 
             process.env.MJ_CODEGEN_SKIP_COMMANDS = 'true';
-            expect(commands('after')).toEqual([]);
+            expect(Commands('after')).toEqual([]);
         } finally {
             if (originalEnv !== undefined) {
                 process.env.MJ_CODEGEN_SKIP_COMMANDS = originalEnv;

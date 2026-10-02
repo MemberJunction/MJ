@@ -13,10 +13,10 @@
 
 /** One pnpm packageExtensions value: the sections pnpm merges into the target package's manifest. */
 export interface PackageExtension {
-  dependencies?: Record<string, string>;
-  optionalDependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+  dependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  optionalDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  peerDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /**
@@ -28,22 +28,22 @@ export interface PackageExtension {
  * 14-member workspace ran unpatched type-graphql and lost MJ's 26 pins).
  */
 export interface MemberPnpmBlock {
-  overrides?: Record<string, string>;
+  overrides?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** `pkg@version` -> patch file path RELATIVE TO THE MEMBER REPO ROOT — re-rooted on hoist. */
-  patchedDependencies?: Record<string, string>;
-  packageExtensions?: Record<string, PackageExtension>;
-  peerDependencyRules?: { allowedVersions?: Record<string, string>; ignoreMissing?: string[] };
+  patchedDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  packageExtensions?: Record<string, PackageExtension>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  peerDependencyRules?: { allowedVersions?: Record<string, string>; ignoreMissing?: string[] };  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** The root-level package.json fields the workspace generator reads from member repos. */
 export interface MemberPackageJson {
-  name?: string;
-  version?: string;
-  packageManager?: string;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-  pnpm?: MemberPnpmBlock;
+  name?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  version?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  packageManager?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  dependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  devDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  peerDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  pnpm?: MemberPnpmBlock;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** One package.json found under a member repo's workspace globs. */
@@ -55,14 +55,14 @@ export interface MemberPackageInfo {
 
 /** One `packages.client[]` / `server[]` / `shared[]` entry in a member's committed `mj-app.json`. */
 export interface MjAppPackageEntry {
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /**
    * One of the manifest schema's seven roles (`bootstrap`, `actions`, `engine`, `provider`, `module`,
    * `components`, `library`). Read for reporting only — the host's client emitter applies NO role
    * filter, so role never decides whether a package must be linked. See `readShellImportedEntries`.
    */
-  role?: string;
-  startupExport?: string;
+  role?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  startupExport?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -76,8 +76,8 @@ export interface MjAppPackageEntry {
  * not a host has registered it.
  */
 export interface MjAppJson {
-  name?: string;
-  packages?: {
+  name?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  packages?: {  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
     client?: MjAppPackageEntry[];
     server?: MjAppPackageEntry[];
     shared?: MjAppPackageEntry[];
@@ -240,6 +240,14 @@ export interface CandidateRepo {
   Packages: MemberPackageInfo[];
   /** Positive globs whose shape the expander does not support — reported by the command, never silent. */
   UnsupportedGlobs: string[];
+  /**
+   * App-shell globs admitted for THIS member by `--apps <member>=<glob>[,<glob>]` (e.g. `apps/API`,
+   * `apps/MJAPI`): the runnable hosts of a repo like Skip-Brain, which the packages-rooted rule drops
+   * by default because shell names collide across repos (#3795). Admitted explicitly, per member, and
+   * checked for name collisions against every other workspace package before the yaml is written.
+   * Absent or empty unless the user asked.
+   */
+  AppGlobs?: string[];
   /** The member's committed lockfile data, an unsupported-format marker, or null when the repo commits none. */
   Lockfile: MemberLockfile | UnsupportedLockfile | null;
   /** Raw contents of the repo's root `turbo.json`, or null when absent. */
@@ -289,6 +297,23 @@ export interface DuplicateFamilyPackage {
   Repos: string[];
 }
 
+/**
+ * One consumer-scoped `link:` override that keeps a member's OWN copy of a
+ * duplicated package name in front of that member's own consumers (every
+ * MJ-based app repo ships a `mj_generatedentities` / `mj_generatedactions`, so
+ * two such repos in one workspace always collide on those names).
+ */
+export interface DuplicateProviderLink {
+  /** The consuming package's name (the `parent` of pnpm's `parent>child` override selector). */
+  Consumer: string;
+  /** The duplicated package name (the `child`). */
+  Package: string;
+  /** The override value: `link:<member>/<provider relPath>`, root-relative. */
+  Target: string;
+  /** The member whose copy this link keeps in front of the consumer. */
+  Repo: string;
+}
+
 /** Everything the parent-manifest assembly decided — the command reports ALL of it, never silently. */
 export interface ParentManifestReport {
   /** Lockfile-derived override entries emitted (EXACT versions; per-major `name@^N` keys for multi-major names). */
@@ -309,12 +334,22 @@ export interface ParentManifestReport {
   FamilyOverrideCount: number;
   /** Package names provided by more than one member. */
   DuplicateFamilyPackages: DuplicateFamilyPackage[];
+  /** Consumer-scoped `link:` overrides emitted so each providing member's own consumers get its own copy. */
+  DuplicateProviderLinks: DuplicateProviderLink[];
+  /**
+   * Consumers of a duplicated name that could NOT be given a scoped link: the consumer's own name
+   * is duplicated too (a `parent>child` selector would hit every copy), or the consumer lives in a
+   * member that provides no copy (it gets whichever provider pnpm picks — sort order).
+   */
+  UnlinkedDuplicateConsumers: Array<{ Consumer: string; Package: string; Repo: string; Reason: 'ambiguous-consumer' | 'no-own-copy' }>;
   /** `@types/*` devDependencies excluded from the union (duplicate @types = nominal-type break). */
   SkippedTypesDevDeps: string[];
   /** `workspace:` devDependency specifiers on packages NO member provides — dropped. */
   DroppedWorkspaceDevDeps: Array<{ Package: string; Repo: string }>;
-  /** Lockfile-derived pins displaced by an explicit member override or a family workspace:* override. */
+  /** Entries a stronger layer displaced: a member override, a patched-package pin, or a family workspace:* override. */
   SupersededPins: string[];
+  /** Override keys pinned to the exact version a member's patch is keyed to (a patch applies to that version only). */
+  PatchPins: string[];
   /**
    * Open App client-side packages found in members' `mj-app.json`. Entries with
    * `Provided: false` are NOT registered — the declaration names a package no member ships — and
@@ -327,9 +362,15 @@ export interface ParentManifestReport {
   DuplicateClientPackages: DuplicateClientPackage[];
 }
 
-/** Result of building the parent `package.json`. */
+/** Result of building the parent `package.json` and the pnpm settings that accompany it. */
 export interface RootPackageJsonResult {
   Content: string;
+  /**
+   * The pnpm settings for `pnpm-workspace.yaml` (peer switches, peer rules,
+   * overrides, patches, extensions). Kept OUT of the manifest: pnpm 10 ignores a
+   * `pnpm` block at a workspace root and reads these only from the workspace yaml.
+   */
+  PnpmSettings: Record<string, unknown>;
   Conflicts: DevDepConflict[];
   /** Which member repo (or fallback) supplied the pnpm `packageManager` pin. */
   PinSource: string;
@@ -364,11 +405,11 @@ export interface WriteResult {
  */
 export interface WorkspaceSentinel {
   /** Fixed marker identifying the writer — what `clean` checks before deleting. */
-  generatedBy: string;
+  generatedBy: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Every file name (relative to the parent) the generator wrote, sorted. */
-  files: string[];
+  files: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Member repo directory names the workspace was generated for, sorted. */
-  members: string[];
+  members: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Outcome of reading the sentinel: ours, not there, or there but not ours. */

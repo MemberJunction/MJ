@@ -51,7 +51,7 @@ export interface MixedFreshnessReport {
  * Flags: (a) mixing live + snapshot in one read; (b) any non-Active snapshot (Stale/DriftHold); and
  * reports the refresh-time spread across snapshots so an agent can weigh cross-snapshot skew.
  */
-export function analyzeMixedFreshness(entities: EntityFreshness[]): MixedFreshnessReport {
+export function AnalyzeMixedFreshness(entities: EntityFreshness[]): MixedFreshnessReport {
     const materialized = entities.filter((e) => e.isMaterialized);
     const hasLive = entities.some((e) => !e.isMaterialized);
     const hasMaterialized = materialized.length > 0;
@@ -92,6 +92,11 @@ export function analyzeMixedFreshness(entities: EntityFreshness[]): MixedFreshne
         warning: notes.length ? notes.join('; ') : undefined,
         entities,
     };
+}
+
+/** @deprecated Use {@link AnalyzeMixedFreshness}. */
+export function analyzeMixedFreshness(entities: EntityFreshness[]): MixedFreshnessReport {
+    return AnalyzeMixedFreshness(entities);
 }
 
 /** A planned read of one entity: its name and whether the caller intends to read it live or materialized. */
@@ -183,6 +188,6 @@ export class MaterializationFreshness {
             return { entityName: read.entityName, isMaterialized: false };
         });
 
-        return analyzeMixedFreshness(entities);
+        return AnalyzeMixedFreshness(entities);
     }
 }

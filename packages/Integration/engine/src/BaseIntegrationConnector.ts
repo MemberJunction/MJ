@@ -23,15 +23,15 @@ import type {
 import { ClassifyError } from './types.js';
 import { ExtractRetryAfterFromError } from './RetryAfter.js';
 import {
-    discoverFromStream,
-    pickKeyFromStats,
-    pickPrimaryKeyFromStats,
+    DiscoverFromStream,
+    PickKeyFromStats,
+    PickPrimaryKeyFromStats,
     PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE,
     type StreamDiscoveryOptions,
     type PkPickOptions,
 } from './StreamingDiscovery.js';
 import { AdaptiveConcurrencyController, RunAdaptive, type AdaptiveItemOutcome } from './AdaptiveConcurrency.js';
-import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
+import { FlattenRecord, HasNestedObject } from './RecordFlatten.js';
 import { DiscoveryWatchdog } from './DiscoveryWatchdog.js';
 
 /** Result of testing a connection to an external system */
@@ -665,14 +665,14 @@ export abstract class BaseIntegrationConnector {
         // as the key. Mirrors the sync-intake flatten (FieldMappingEngine) EXACTLY, so the field
         // names discovered here match what sync produces. A flat record passes through unchanged.
         async function* flattenRecords(): AsyncIterable<Record<string, unknown>> {
-            for await (const r of records) yield hasNestedObject(r) ? flattenRecord(r) : r;
+            for await (const r of records) yield HasNestedObject(r) ? FlattenRecord(r) : r;
         }
-        const scan = await discoverFromStream(flattenRecords(), opts.Discovery);
+        const scan = await DiscoverFromStream(flattenRecords(), opts.Discovery);
         // Provable-only identity in ONE pass: best contender per subset size (1,2,3…) → the SMALLEST
         // size whose best contender is a provable key (single OR composite), decided by the Chao1
         // domain-saturation test on the streamed sample. No fabricated keys; a genuinely-keyless object
         // simply gets no PK and is honestly not added downstream.
-        const key = pickKeyFromStats(scan.Columns, scan.RowSamples, opts.Pk);
+        const key = PickKeyFromStats(scan.Columns, scan.RowSamples, opts.Pk);
         let pkFieldNames: string[] = key.Fields ?? [];
         let pkReason = key.Reason;
         if (pkFieldNames.length === 0) {
@@ -685,7 +685,7 @@ export abstract class BaseIntegrationConnector {
             // objects still get no PK (content-hash identity handles dedup).
             // #A4 — tell the PK picker whether the scan saw the WHOLE stream; a time-budget-truncated scan
             // must not yield a confident soft key from a partial prefix.
-            const soft = pickPrimaryKeyFromStats(scan.Columns, { ...opts.Pk, ScanComplete: scan.StoppedReason !== 'time-budget' });
+            const soft = PickPrimaryKeyFromStats(scan.Columns, { ...opts.Pk, ScanComplete: scan.StoppedReason !== 'time-budget' });
             if (soft.Field) { pkFieldNames = [soft.Field]; pkReason = `[soft-fallback] ${soft.Reason}`; }
         }
         const pkFields = new Set<string>(pkFieldNames);

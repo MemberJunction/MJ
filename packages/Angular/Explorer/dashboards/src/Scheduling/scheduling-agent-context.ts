@@ -69,8 +69,13 @@ export const SCHEDULING_CONTEXT_LIST_CAP = 25;
  * @param items - the full list (caller owns ordering / de-duplication)
  * @returns the first N entries, where N is the cap
  */
-export function capSchedulingList<T>(items: readonly T[]): T[] {
+export function CapSchedulingList<T>(items: readonly T[]): T[] {
     return items.slice(0, SCHEDULING_CONTEXT_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapSchedulingList}. */
+export function capSchedulingList<T>(items: readonly T[]): T[] {
+    return CapSchedulingList(items);
 }
 
 /**
@@ -81,13 +86,23 @@ export function capSchedulingList<T>(items: readonly T[]): T[] {
  * @param tab - candidate tab string (may be anything the agent passes)
  * @returns true when `tab` is one of dashboard | jobs | activity
  */
-export function isValidSchedulingTab(tab: unknown): tab is SchedulingTab {
+export function IsValidSchedulingTab(tab: unknown): tab is SchedulingTab {
     return typeof tab === 'string' && (SCHEDULING_TABS as readonly string[]).includes(tab);
 }
 
+/** @deprecated Use {@link IsValidSchedulingTab}. */
+export function isValidSchedulingTab(tab: unknown): tab is SchedulingTab {
+    return IsValidSchedulingTab(tab);
+}
+
 /** Resolve a tab id to its human-readable label, falling back to a default. */
+export function SchedulingTabLabel(tab: string): string {
+    return IsValidSchedulingTab(tab) ? SCHEDULING_TAB_LABELS[tab] : 'Scheduling';
+}
+
+/** @deprecated Use {@link SchedulingTabLabel}. */
 export function schedulingTabLabel(tab: string): string {
-    return isValidSchedulingTab(tab) ? SCHEDULING_TAB_LABELS[tab] : 'Scheduling';
+    return SchedulingTabLabel(tab);
 }
 
 /** A minimal, component-supplied view of a single scheduled job (read-only, no secrets). */
@@ -129,7 +144,7 @@ export interface SchedulingItemCandidate {
  * @param input - whatever the agent passed (an id or the on-screen name)
  * @param candidates - the items currently available on the surface
  */
-export function resolveSchedulingItem<T extends SchedulingItemCandidate>(
+export function ResolveSchedulingItem<T extends SchedulingItemCandidate>(
     input: string,
     candidates: readonly T[],
 ): T | null {
@@ -148,6 +163,14 @@ export function resolveSchedulingItem<T extends SchedulingItemCandidate>(
     return candidates.find(c => c.Name.toLowerCase().includes(needle)) ?? null;
 }
 
+/** @deprecated Use {@link ResolveSchedulingItem}. */
+export function resolveSchedulingItem<T extends SchedulingItemCandidate>(
+    input: string,
+    candidates: readonly T[],
+): T | null {
+    return ResolveSchedulingItem(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error message for a failed name/id resolution. Lists
  * the available names (bounded) so the co-agent can correct itself, with a companion
@@ -157,15 +180,24 @@ export function resolveSchedulingItem<T extends SchedulingItemCandidate>(
  * @param candidates - the candidates that were searched
  * @param noun - what the candidates are ("job"), for the message
  */
+export function BuildSchedulingNotFoundError(
+    input: string,
+    candidates: readonly SchedulingItemCandidate[],
+    noun: string = 'job',
+): string {
+    const names = CapSchedulingList(candidates.map(c => c.Name));
+    const truncated = candidates.length > names.length ? ` (${candidates.length} total)` : '';
+    const available = names.length > 0 ? ` Available ${noun}s${truncated}: ${names.join(', ')}.` : '';
+    return `No ${noun} found matching "${String(input)}".${available}`;
+}
+
+/** @deprecated Use {@link BuildSchedulingNotFoundError}. */
 export function buildSchedulingNotFoundError(
     input: string,
     candidates: readonly SchedulingItemCandidate[],
     noun: string = 'job',
 ): string {
-    const names = capSchedulingList(candidates.map(c => c.Name));
-    const truncated = candidates.length > names.length ? ` (${candidates.length} total)` : '';
-    const available = names.length > 0 ? ` Available ${noun}s${truncated}: ${names.join(', ')}.` : '';
-    return `No ${noun} found matching "${String(input)}".${available}`;
+    return BuildSchedulingNotFoundError(input, candidates, noun);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -233,7 +265,7 @@ function buildKpiSlice(input: SchedulingAgentContextInput): Record<string, unkno
         ? ratedJobs.reduce((sum, j) => sum + j.SuccessRate, 0) / ratedJobs.length
         : 0;
 
-    const typeNames = capSchedulingList(input.JobTypeBreakdown.map(t => t.TypeName));
+    const typeNames = CapSchedulingList(input.JobTypeBreakdown.map(t => t.TypeName));
 
     return {
         TotalJobs: total,
@@ -253,7 +285,7 @@ function buildKpiSlice(input: SchedulingAgentContextInput): Record<string, unkno
 
 /** Shape the Jobs-tab detailed slice (search/filters, visible names, selection). */
 function buildJobsSlice(input: SchedulingAgentContextInput): Record<string, unknown> {
-    const visibleNames = capSchedulingList(input.VisibleJobs.map(j => j.JobName));
+    const visibleNames = CapSchedulingList(input.VisibleJobs.map(j => j.JobName));
     const slice: Record<string, unknown> = {
         JobsSearchTerm: input.JobsSearchTerm,
         StatusFilter: input.StatusFilter,
@@ -271,8 +303,8 @@ function buildJobsSlice(input: SchedulingAgentContextInput): Record<string, unkn
 
 /** Shape the Activity-tab detailed slice (search/filters, visible executions, job names). */
 function buildActivitySlice(input: SchedulingAgentContextInput): Record<string, unknown> {
-    const visibleNames = capSchedulingList(input.VisibleExecutions.map(e => e.JobName));
-    const jobNames = capSchedulingList(input.ActivityJobNames);
+    const visibleNames = CapSchedulingList(input.VisibleExecutions.map(e => e.JobName));
+    const jobNames = CapSchedulingList(input.ActivityJobNames);
     return {
         ActivitySearchTerm: input.ActivitySearchTerm,
         ActivityStatusFilter: input.ActivityStatusFilter,
@@ -299,12 +331,12 @@ function buildActivitySlice(input: SchedulingAgentContextInput): Record<string, 
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildSchedulingAgentContext(input: SchedulingAgentContextInput): Record<string, unknown> {
-    const activeTab: SchedulingTab = isValidSchedulingTab(input.ActiveTab) ? input.ActiveTab : 'dashboard';
+export function BuildSchedulingAgentContext(input: SchedulingAgentContextInput): Record<string, unknown> {
+    const activeTab: SchedulingTab = IsValidSchedulingTab(input.ActiveTab) ? input.ActiveTab : 'dashboard';
 
     const context: Record<string, unknown> = {
         ActiveTab: activeTab,
-        ActiveTabLabel: schedulingTabLabel(activeTab),
+        ActiveTabLabel: SchedulingTabLabel(activeTab),
         ...buildKpiSlice(input),
     };
 
@@ -322,4 +354,9 @@ export function buildSchedulingAgentContext(input: SchedulingAgentContextInput):
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildSchedulingAgentContext}. */
+export function buildSchedulingAgentContext(input: SchedulingAgentContextInput): Record<string, unknown> {
+    return BuildSchedulingAgentContext(input);
 }

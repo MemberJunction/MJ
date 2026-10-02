@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -51,7 +51,7 @@ export class NoisySettingsUpdatesRule extends BaseLintRule {
   Test(ast: t.File, _componentName: string): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         // Check for onSaveUserSettings calls
         if (t.isOptionalCallExpression(path.node) || t.isCallExpression(path.node)) {

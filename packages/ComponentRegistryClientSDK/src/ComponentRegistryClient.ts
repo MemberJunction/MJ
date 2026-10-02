@@ -45,8 +45,8 @@ export class ComponentRegistryClient {
   /**
    * Get a specific component from the registry (backward compatible)
    */
-  async getComponent(params: GetComponentParams): Promise<ComponentSpec> {
-    const response = await this.getComponentWithHash(params);
+  async GetComponent(params: GetComponentParams): Promise<ComponentSpec> {
+    const response = await this.GetComponentWithHash(params);
     
     if (!response.specification) {
       throw new RegistryError(
@@ -58,11 +58,16 @@ export class ComponentRegistryClient {
     return response.specification;
   }
 
+  /** @deprecated Use {@link GetComponent}. */
+  async getComponent(params: GetComponentParams): Promise<ComponentSpec> {
+    return this.GetComponent(params);
+  }
+
   /**
    * Get a specific component from the registry with hash support
    * Returns ComponentResponse which includes hash and notModified flag
    */
-  async getComponentWithHash(params: GetComponentParams): Promise<ComponentResponse> {
+  async GetComponentWithHash(params: GetComponentParams): Promise<ComponentResponse> {
     const { namespace, name, version = 'latest', hash, userEmail } = params;
 
     // Build query parameters
@@ -105,10 +110,15 @@ export class ComponentRegistryClient {
     }
   }
 
+  /** @deprecated Use {@link GetComponentWithHash}. */
+  async getComponentWithHash(params: GetComponentParams): Promise<ComponentResponse> {
+    return this.GetComponentWithHash(params);
+  }
+
   /**
    * Search for components in the registry
    */
-  async searchComponents(params: SearchComponentsParams): Promise<ComponentSearchResult> {
+  async SearchComponents(params: SearchComponentsParams): Promise<ComponentSearchResult> {
     const queryParams = new URLSearchParams();
     
     if (params.registry) queryParams.append('registry', params.registry);
@@ -139,10 +149,15 @@ export class ComponentRegistryClient {
     }
   }
 
+  /** @deprecated Use {@link SearchComponents}. */
+  async searchComponents(params: SearchComponentsParams): Promise<ComponentSearchResult> {
+    return this.SearchComponents(params);
+  }
+
   /**
    * Resolve a version range to a specific version
    */
-  async resolveVersion(params: {
+  async ResolveVersion(params: {
     registry: string;
     namespace: string;
     name: string;
@@ -170,10 +185,20 @@ export class ComponentRegistryClient {
     }
   }
 
+  /** @deprecated Use {@link ResolveVersion}. */
+  async resolveVersion(params: {
+    registry: string;
+    namespace: string;
+    name: string;
+    versionRange: string;
+  }): Promise<ResolvedVersion> {
+    return this.ResolveVersion(params);
+  }
+
   /**
    * Get information about a registry
    */
-  async getRegistryInfo(registry: string): Promise<RegistryInfo> {
+  async GetRegistryInfo(registry: string): Promise<RegistryInfo> {
     const path = `/api/v1/registries/${encodeURIComponent(registry)}`;
     
     try {
@@ -192,10 +217,15 @@ export class ComponentRegistryClient {
     }
   }
 
+  /** @deprecated Use {@link GetRegistryInfo}. */
+  async getRegistryInfo(registry: string): Promise<RegistryInfo> {
+    return this.GetRegistryInfo(registry);
+  }
+
   /**
    * List namespaces in a registry
    */
-  async listNamespaces(registry: string): Promise<Namespace[]> {
+  async ListNamespaces(registry: string): Promise<Namespace[]> {
     const path = `/api/v1/registries/${encodeURIComponent(registry)}/namespaces`;
     
     try {
@@ -214,10 +244,15 @@ export class ComponentRegistryClient {
     }
   }
 
+  /** @deprecated Use {@link ListNamespaces}. */
+  async listNamespaces(registry: string): Promise<Namespace[]> {
+    return this.ListNamespaces(registry);
+  }
+
   /**
    * Resolve dependencies for a component
    */
-  async resolveDependencies(componentId: string): Promise<DependencyTree> {
+  async ResolveDependencies(componentId: string): Promise<DependencyTree> {
     const path = `/api/v1/components/${encodeURIComponent(componentId)}/dependencies`;
     
     try {
@@ -236,10 +271,15 @@ export class ComponentRegistryClient {
     }
   }
 
+  /** @deprecated Use {@link ResolveDependencies}. */
+  async resolveDependencies(componentId: string): Promise<DependencyTree> {
+    return this.ResolveDependencies(componentId);
+  }
+
   /**
    * Health check for the registry server
    */
-  async ping(): Promise<boolean> {
+  async Ping(): Promise<boolean> {
     const path = '/api/v1/health';
 
     try {
@@ -250,10 +290,15 @@ export class ComponentRegistryClient {
     }
   }
 
+  /** @deprecated Use {@link Ping}. */
+  async ping(): Promise<boolean> {
+    return this.Ping();
+  }
+
   /**
    * Submit feedback for a component
    */
-  async submitFeedback(params: ComponentFeedbackParams): Promise<ComponentFeedbackResponse> {
+  async SubmitFeedback(params: ComponentFeedbackParams): Promise<ComponentFeedbackResponse> {
     const path = '/api/v1/feedback';
 
     try {
@@ -273,6 +318,11 @@ export class ComponentRegistryClient {
         error: error instanceof Error ? error.message : 'Failed to submit feedback'
       };
     }
+  }
+
+  /** @deprecated Use {@link SubmitFeedback}. */
+  async submitFeedback(params: ComponentFeedbackParams): Promise<ComponentFeedbackResponse> {
+    return this.SubmitFeedback(params);
   }
 
   /**

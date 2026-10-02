@@ -14,7 +14,7 @@ MJ has **three test worlds** and they must not be conflated:
 |---|---|---|---|
 | **Unit** | Mocked, in-memory, per-function | 1,827 `*.test.ts` / ~295 vitest configs | Yes (affected via turbo) — but **~40 real suites are disabled** (see §7) |
 | **Integration** (THIS PLAN) | Real DB + real providers/engines, no mocks, no browser; deterministic tier = no LLM | `packages/TestingFramework/testing-integration` (~152 checks / 24 bundles) | Deterministic tier only, per-PR |
-| **UI Regression** | AI Computer-Use driving the real browser/Explorer | `metadata/tests/regression/T01–T25` (25 tests) | **No** — Docker-only, manual |
+| **UI Regression** | AI Computer-Use driving the real browser/Explorer | `metadata-optional/regression-test/tests/regression/T001–T155` (155 tests) | **No** — Docker-only, manual |
 
 The integration tier is the **highest-leverage place to add coverage**: it catches the **seams between packages** that unit tests mock away, at a fraction of the cost/latency/flakiness of the UI suite. It's where the real bug classes live (cache invalidation, RLS leakage, transaction rollback, provider SQL generation, permission gating, cost accounting, class resolution).
 

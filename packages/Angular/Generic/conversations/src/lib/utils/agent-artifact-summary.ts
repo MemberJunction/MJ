@@ -31,11 +31,11 @@ export interface AgentArtifactRow {
  * to agent runs, turning a four-table reconstruction into two reads.
  */
 export interface AgentArtifactSummary {
-    artifactId: string;
-    artifactName: string;
-    artifactType: string;
+    artifactId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    artifactName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    ArtifactType: string;
     /** Newest first, so `versions[0]` is the latest. */
-    versions: Array<{ versionId: string; versionNumber: number; versionName: string | null }>;
+    Versions: Array<{ versionId: string; versionNumber: number; versionName: string | null }>;
 }
 
 /**
@@ -69,12 +69,12 @@ export function GroupVersionsByArtifact(
             summary = {
                 artifactId: version.ArtifactID,
                 artifactName: artifact.Name,
-                artifactType: artifact.Type,
-                versions: []
+                ArtifactType: artifact.Type,
+                Versions: []
             };
             byArtifact.set(version.ArtifactID, summary);
         }
-        summary.versions.push({
+        summary.Versions.push({
             versionId: version.ID,
             versionNumber: version.VersionNumber,
             versionName: version.Name

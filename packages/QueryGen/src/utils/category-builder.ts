@@ -15,7 +15,7 @@ import { QueryGenConfig } from '../cli/config';
  * @param entityGroup - Entity group for the query
  * @returns QueryCategoryInfo with full category details
  */
-export function buildQueryCategory(
+export function BuildQueryCategory(
   config: QueryGenConfig,
   entityGroup: EntityGroup
 ): QueryCategoryInfo {
@@ -52,6 +52,14 @@ export function buildQueryCategory(
   }
 }
 
+/** @deprecated Use {@link BuildQueryCategory}. */
+export function buildQueryCategory(
+  config: QueryGenConfig,
+  entityGroup: EntityGroup
+): QueryCategoryInfo {
+  return BuildQueryCategory(config, entityGroup);
+}
+
 /**
  * Extract all unique categories from validated queries
  * Returns categories in hierarchical order (root first, then children)
@@ -62,7 +70,7 @@ export function buildQueryCategory(
  * @param categories - Array of QueryCategoryInfo from validated queries
  * @returns Unique categories sorted hierarchically (includes auto-generated parents)
  */
-export function extractUniqueCategories(categories: QueryCategoryInfo[]): QueryCategoryInfo[] {
+export function ExtractUniqueCategories(categories: QueryCategoryInfo[]): QueryCategoryInfo[] {
   const uniqueMap = new Map<string, QueryCategoryInfo>();
 
   // Collect all unique categories (by path)
@@ -94,4 +102,9 @@ export function extractUniqueCategories(categories: QueryCategoryInfo[]): QueryC
   });
 
   return result;
+}
+
+/** @deprecated Use {@link ExtractUniqueCategories}. */
+export function extractUniqueCategories(categories: QueryCategoryInfo[]): QueryCategoryInfo[] {
+  return ExtractUniqueCategories(categories);
 }

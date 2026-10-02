@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { BaseRealtimeModel, RealtimeProxyRegistry, IRealtimeSession, RealtimeSessionParams } from '@memberjunction/ai';
-import { createRealtimeSdpBrokerRouter, createOpenAILiveBrokerRouter, requireTicket } from '../rest/RealtimeSdpBrokerHandler.js';
+import { CreateRealtimeSdpBrokerRouter, createOpenAILiveBrokerRouter, RequireTicket } from '../rest/RealtimeSdpBrokerHandler.js';
 
 @RegisterClass(BaseRealtimeModel, 'MockOpenAILiveForBrokerTest', 10)
 class MockOpenAILiveForBrokerTest extends BaseRealtimeModel {
@@ -67,20 +67,20 @@ function makeMockReqRes(query: Record<string, string>, body: unknown): {
 }
 
 describe('RealtimeSdpBrokerHandler', () => {
-    let router: ReturnType<typeof createRealtimeSdpBrokerRouter>;
+    let router: ReturnType<typeof CreateRealtimeSdpBrokerRouter>;
 
     beforeEach(() => {
-        router = createRealtimeSdpBrokerRouter();
+        router = CreateRealtimeSdpBrokerRouter();
     });
 
     it('createOpenAILiveBrokerRouter is backwards-compatible alias', () => {
-        expect(createOpenAILiveBrokerRouter).toBe(createRealtimeSdpBrokerRouter);
+        expect(createOpenAILiveBrokerRouter).toBe(CreateRealtimeSdpBrokerRouter);
     });
 
     it('requireTicket middleware rejects missing ticket without calling next()', () => {
         const { req, res, getStatus, getJson } = makeMockReqRes({}, {});
         const next = vi.fn();
-        requireTicket(req, res, next as NextFunction);
+        RequireTicket(req, res, next as NextFunction);
         expect(getStatus()).toBe(401);
         expect(getJson().error).toContain('missing ticket');
         expect(next).not.toHaveBeenCalled();
@@ -89,7 +89,7 @@ describe('RealtimeSdpBrokerHandler', () => {
     it('requireTicket middleware rejects invalid ticket without calling next()', () => {
         const { req, res, getStatus, getJson } = makeMockReqRes({ ticket: 'non-existent-ticket' }, {});
         const next = vi.fn();
-        requireTicket(req, res, next as NextFunction);
+        RequireTicket(req, res, next as NextFunction);
         expect(getStatus()).toBe(401);
         expect(getJson().error).toContain('invalid or expired ticket');
         expect(next).not.toHaveBeenCalled();
