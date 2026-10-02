@@ -580,6 +580,31 @@ export interface ILocalStorageProvider {
     readonly SharesReferences?: boolean;
 
     /**
+     * Whether a value written here can be read back by a DIFFERENT process, or by this one after
+     * a restart — Redis, or a browser's localStorage/IndexedDB surviving a reload.
+     *
+     * - `true` — the store outlives the process that wrote to it.
+     * - `false` — an in-process store whose contents die with the process.
+     *
+     * **Why callers care**: `ProviderBase` persists a snapshot of ALL metadata here on every
+     * metadata reload. On a persistent store that snapshot is a genuine cross-process cache. On an
+     * in-process one the only possible reader is the heap that already holds the live objects, so
+     * the save spends a full `JSON.stringify` of the entire metadata graph (131M characters on a
+     * large tenant), a `Blob` copy, a gzip pass and a base64 encode to produce something nothing
+     * will ever read — and the load spends a `JSON.parse` plus a rebuild of every `EntityInfo` and
+     * `EntityFieldInfo` to read it back. That cost is what made a large tenant's MJAPI run out of
+     * heap: ~1.2GB of transient allocation per refresh against a 2.2GB steady state, with the
+     * final flatten of the JSON string needing one contiguous ~500MB allocation.
+     *
+     * **Optional, but always declare it.** When it is `undefined` the provider is treated as
+     * persistent — the conservative direction, since the cost of a pointless save is wasted work
+     * while the cost of a skipped necessary one is a cache that never populates. It is optional
+     * purely so that adding this contract does not break existing external implementations at
+     * compile time; every in-repo provider declares it.
+     */
+    readonly SupportsCrossProcessPersistence?: boolean;
+
+    /**
      * Retrieves a value from storage. The implementation is responsible for any
      * deserialization required by the underlying medium:
      *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)
