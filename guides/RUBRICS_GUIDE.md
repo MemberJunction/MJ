@@ -1,23 +1,489 @@
-# Rubrics
+# Rubrics Guide
 
-A rubric is a named set of criteria used to score a record. The criteria can nest. Each leaf is answered on a shared scale. A version is published before anyone is scored against it, and a published version does not change. A later draft can, and publishing that draft assigns the next version number from how the scores would change.
+A **rubric** is a named, versioned set of criteria used to score any record in MemberJunction. A person, an
+AI prompt, an agent, or a deterministic rule answers the criteria; one function, `RubricScoring`, turns the
+answers into a stored score. Rubrics are a core primitive: the testing framework judges test runs with them,
+agents check their own output with them, and applications score their own records with them.
 
-Evaluations are separate from the rubric. A person, an agent, or a deterministic rule fills in a draft and submits it. The stored score is the result of `RubricScoring`. Consensus is computed when you read it, from the submitted evaluations of one subject on one major version.
+**Read this guide before** you author a rubric, score a record, publish a version, bind a rubric to an agent
+or a test, or build an application on top of rubrics. It is the map. The package READMEs are the API
+reference:
 
-## Scoring
+| Layer | Package | What it is |
+|---|---|---|
+| Math | [`@memberjunction/rubrics-base`](../packages/Rubrics/Base/README.md) | `RubricScoring`, `RubricVersionDiff`, snapshots. Pure functions, browser-safe |
+| Engine + evaluators | [`@memberjunction/rubrics`](../packages/Rubrics/Engine/README.md) | `RubricEngine`, the LLM / agent / deterministic / human evaluators, actions, `mj rubric` |
+| Server rules | `@memberjunction/core-entities-server` | Publish, submit, supersede, and validation on the entity subclasses |
+| Widgets | [`@memberjunction/ng-rubrics`](../packages/Angular/Generic/rubrics/README.md) | Author, answer, result, publish, diff, and comparison widgets |
+| Testing | [`@memberjunction/testing-engine`](../packages/TestingFramework/Engine/README.md) | `RubricOracle`, rubric resolution, the calibration test type |
 
-Leaves on a levels scale score the level's normalized value, a number from 0 to 1. Numeric leaves map the raw value across the scale's min and max, and invert that when lower is better.
+**Contents**
 
-A group combines its included children by a weighted mean, a minimum, or a maximum. An advisory criterion is shown and is not part of the rollup. A gate that falls short fails the evaluation even when the weighted score is high.
+1. [The model in one picture](#1-the-model-in-one-picture)
+2. [Quick start: five tasks](#2-quick-start-five-tasks)
+3. [Rubrics in tests](#3-rubrics-in-tests)
+4. [Rubrics on agents](#4-rubrics-on-agents)
+5. [Adopting rubrics in an application](#5-adopting-rubrics-in-an-application)
+6. [Scoring reference](#6-scoring-reference)
+7. [Versioning reference](#7-versioning-reference)
+8. [Evaluators](#8-evaluators)
+9. [Consensus and agreement](#9-consensus-and-agreement)
+10. [Who can see what](#10-who-can-see-what)
+11. [Extending](#11-extending)
+12. [CLI and screens](#12-cli-and-screens)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Worked examples](#14-worked-examples)
 
-Not-applicable answers follow the criterion's policy, or the version's policy when the criterion does not set one:
+---
 
-- **Exclude and redistribute** drops the leaf and spreads its weight across its siblings.
-- **Count as zero** keeps the leaf in the rollup at 0.
-- **Fail the evaluation** makes the outcome Not Applicable Failure.
-- **Not allowed** refuses the answer.
+## 1. The model in one picture
 
-A Percentage scale is a Numeric scale named Percentage, or any Numeric scale whose minimum is 0 and maximum is 100. The answer is the raw number, not a level.
+Two halves never mix. The **definition** (rubric → version → criteria) is authored, published once, and then
+frozen. The **evaluations** (evaluation → scores) point at exactly one published version, so a score always
+means what the version said when it was given.
+
+```mermaid
+graph TB
+    subgraph DEF["Definition — authored, then frozen at publish"]
+        direction LR
+        R["Rubric<br/><i>name · category</i>"] --> V["Rubric Version<br/><i>1.2.0 · Draft / Published / Retired<br/>threshold · N/A policy · hashes</i>"]
+        V --> C["Criteria tree<br/><i>groups and leaves<br/>weight · gate · rollup</i>"]
+        C --> A["Level anchors<br/><i>what 'Partial' means here</i>"]
+        V --> B["Bands<br/><i>display labels only</i>"]
+        S["Scale<br/><i>levels or numeric</i>"] -.-> C
+    end
+    subgraph EVAL["Evaluations — immutable once submitted"]
+        direction LR
+        ANY["Any MJ record<br/><i>test run · agent run · application · bid</i>"]
+        E["Evaluation<br/><i>evaluator · score · outcome · passed</i>"] --> ES["Score per criterion<br/><i>level or raw value · rationale · evidence</i>"]
+        E -- "subject" --> ANY
+    end
+    E == "pins exactly one version" ==> V
+    style V fill:#0891b2,color:#fff
+    style E fill:#7c3aed,color:#fff
+```
+
+### The entities
+
+```mermaid
+erDiagram
+    "MJ: Rubric Categories" ||--o{ "MJ: Rubrics" : groups
+    "MJ: Rubrics" ||--o{ "MJ: Rubric Versions" : "has (one Draft at most)"
+    "MJ: Rubric Versions" ||--o{ "MJ: Rubric Criteria" : "tree via ParentID"
+    "MJ: Rubric Versions" ||--o{ "MJ: Rubric Bands" : "display ranges"
+    "MJ: Rubric Scales" ||--o{ "MJ: Rubric Scale Levels" : levels
+    "MJ: Rubric Scales" ||--o{ "MJ: Rubric Criteria" : "answered on"
+    "MJ: Rubric Criteria" ||--o{ "MJ: Rubric Criterion Levels" : "anchor text per level"
+    "MJ: Rubric Versions" ||--o{ "MJ: Rubric Evaluations" : "pinned by"
+    "MJ: Rubric Evaluations" ||--o{ "MJ: Rubric Evaluation Scores" : "one per criterion"
+    "MJ: Rubric Evaluations" |o--o| "MJ: Rubric Evaluations" : supersedes
+    "MJ: Rubrics" ||--o{ "MJ: AI Agent Rubrics" : "bound to agents"
+    "MJ: Rubrics" |o--o{ "MJ: Tests" : "Test.RubricID"
+    "MJ: Rubrics" |o--o{ "MJ: Test Suites" : "TestSuite.RubricID"
+```
+
+| Entity | Holds |
+|---|---|
+| `MJ: Rubrics` | The stable identity. Name is unique across the install. |
+| `MJ: Rubric Versions` | Draft, Published, or Retired. Version numbers, pass threshold, minimum completeness, N/A policy, display range, `ContentHash`, `ScoringHash`, change details. |
+| `MJ: Rubric Criteria` | The tree. `NodeType` Group or Criterion, a permanent `Key`, weight, gate, rollup, N/A policy, `EvaluatorConfig`. |
+| `MJ: Rubric Criterion Levels` | Anchor text: what a given scale level means for this criterion. |
+| `MJ: Rubric Bands` | Display labels over the 0..1 score, for example "Strong" from 0.8. Never part of pass/fail. |
+| `MJ: Rubric Scales` / `Scale Levels` | Reusable answer scales: Meets / Partial / Miss, Binary, 1–5 Likert, Compliance, Percentage. |
+| `MJ: Rubric Evaluations` | One scoring of one subject: who scored it, the stored score, outcome, completeness, and the cohort columns on its view. |
+| `MJ: Rubric Evaluation Scores` | One row per criterion: the answer, rationale, evidence, and the computed contribution. |
+| `MJ: AI Agent Rubrics` | Binds a rubric to an agent with a purpose: Evaluation, SelfCheck, or ProductionSampling. |
+
+### The two lifecycles
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "Rubric Version" as RV {
+        [*] --> Draft
+        Draft --> Published: publish computes the number,<br/>the bump, and both hashes
+        Published --> Retired
+        Retired --> Published
+    }
+```
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "Rubric Evaluation" as EV {
+        [*] --> Draft: answers saved as you go
+        Draft --> Submitted: submit runs RubricScoring
+        Draft --> Failed: evaluator threw
+        Submitted --> Superseded: a newer evaluation replaces it
+        Submitted --> Withdrawn
+    }
+```
+
+Published versions and submitted evaluations are **frozen in the database**. Triggers refuse edits with errors
+51101–51110 ([Troubleshooting](#13-troubleshooting)). To change a published rubric, publish a new version.
+To correct a submitted evaluation, submit a new one that supersedes it.
+
+---
+
+## 2. Quick start: five tasks
+
+### Task 1 — Author and publish a rubric in Explorer
+
+1. Open the **Rubrics** application and create a rubric. It starts with an empty Draft version.
+2. In the builder, add criteria. Each leaf needs a scale. Set weights; the builder shows each node's share of
+   its group. Mark a criterion as a **gate** when falling short must fail the whole evaluation, and give the
+   gate a minimum.
+3. Write the anchors: for each level, what that level means for this criterion. Anchors are what an LLM judge
+   and a human reviewer both read, so they decide how consistent the scores are.
+4. Set the version's pass threshold and, if partial scoring should not count, a minimum completeness.
+5. Try sample answers in the preview. It runs the same `RubricScoring` the server runs on submit.
+6. **Publish.** The dialog shows the computed bump and the reason for each change. The server assigns the
+   number, computes the hashes, and freezes the tree.
+
+To change it later, choose **Start new draft**. The draft is cloned from the latest published version, and
+publishing it assigns the next number from how scores would change ([Versioning](#7-versioning-reference)).
+
+### Task 2 — Ship a rubric as metadata
+
+Rubrics that ship with an application or with MJ core live under `metadata/`. A published version cannot be
+inserted directly, because its criteria would be refused by the immutability triggers. So a shipped rubric is
+authored as a **Draft**, and a separate directory flips it to Published through the server's publish path.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Sync as mj sync push
+    participant DB as Database
+    participant Srv as Version entity server
+    Sync->>DB: rubric-scales/ — scales and levels
+    Sync->>DB: rubrics/ — rubric + Draft version + criteria + anchors
+    Note over DB: Drafts accept child rows
+    Sync->>Srv: rubric-publications/ — { ID, Status: "Published" }
+    Srv->>Srv: load the draft tree, validate, diff, hash, number it 1.0.0
+    Srv->>DB: save as Published (now frozen)
+    Sync->>DB: agents/ — AI Agent Rubrics links by @lookup:MJ: Rubrics.Name
+```
+
+Rules that keep this working:
+
+- **Order.** `rubric-scales`, `rubrics`, and `rubric-publications` are pushed before `agents` and `tests` in
+  `metadata/.mj-sync.json`. Anything that looks up a rubric by name must come after them.
+- **Author Drafts.** Write `"Status": "Draft"` (or omit it) on the version. Never write `MajorVersion`,
+  `MinorVersion`, `PatchVersion`, `AppliedBump`, `ContentHash`, `ScoringHash`, or `PublishedAt`. Publish
+  computes them.
+- **Publish by record.** Each publication record is just `{ "fields": { "Status": "Published" },
+  "primaryKey": { "ID": "<version id>" } }`. Pushing it again is a no-op.
+- **Keys are permanent.** A criterion `Key` is its identity across versions, consensus, and drift. Use short
+  semantic keys (`answers-the-question`), at most 100 characters. Renaming one is a Major change.
+- **Fixed IDs.** Every record gets a `uuidgen` primary key, and no `sync` block (see
+  [`metadata/CLAUDE.md`](../metadata/CLAUDE.md)).
+
+See `metadata/rubrics/.research-answer.json` and `metadata/rubric-publications/` for the shipped pattern.
+
+### Task 3 — Score a record from server code
+
+`ProviderRubricEngine` returns an engine wired to a provider and a user. `EvaluateRecord` resolves the latest
+published version, loads the subject, runs the evaluator, and submits the result in one call.
+
+```typescript
+import { ProviderRubricEngine } from '@memberjunction/rubrics';
+
+const engine = ProviderRubricEngine(provider, contextUser);
+
+const result = await engine.EvaluateRecord({
+    rubricName: 'Vendor proposal',
+    subjectEntityName: 'Vendor Proposals',   // any entity; the record is loaded by ID
+    subjectRecordId: proposalId,
+    contextEntityName: 'Procurement Rounds',  // optional: what the subject was scored for
+    contextRecordId: roundId,
+    evaluator: 'LLM',                          // 'LLM' (default) | 'AI' (agent) | 'Deterministic'
+});
+
+result.score;        // 0..1, or null when nothing could be scored
+result.outcome;      // 'Passed' | 'BelowThreshold' | 'GateFailed' | 'Incomplete' | ...
+result.displayScore; // the score on the version's display range, for example 0..100
+result.criteria;     // [{ key, normalizedScore, rationale }]
+result.evaluationId; // the stored MJ: Rubric Evaluations row
+```
+
+`EvaluateRecord` throws when the rubric has no published version, when the subject is missing or not readable
+by `contextUser`, or when the evaluator fails. A failed run is still stored as a `Failed` evaluation with its
+`ErrorMessage`. Pass `versionId` to score against one specific version, and `content` when the subject is
+already in memory (self-check does this, because the run's payload is not saved yet).
+
+From an agent, a workflow, or a low-code builder, use the **Evaluate Record Against Rubric** action. It takes
+the same inputs and returns `EvaluationID`, `Score`, `Outcome`, and `Criteria`.
+
+### Task 4 — Have a person score it
+
+A person answers the same criteria in the scoring form (`mj-rubric-scoring-form`). Digits pick a level,
+`N` marks a criterion not applicable, required rationale and evidence block submit, and every change is
+emitted so the host can autosave the draft. The test review dialog already hosts it for test runs.
+
+To submit a human score without the UI, call the **Submit Human Rubric** action. It writes the evaluation,
+its scores, and the move to Submitted in one transaction:
+
+| Input | |
+|---|---|
+| `RubricVersionID`, `SubjectEntityID`, `SubjectRecordID` | Required. The version and the record being scored. |
+| `ContextEntityID`, `ContextRecordID` | Optional context. |
+| `SupersedesEvaluationID` | Your earlier evaluation of the same subject, when this one replaces it. |
+| `Answers` | JSON array of `{ CriterionId, ScaleLevelId \| RawValue \| IsNotApplicable, Rationale, Evidence }`. |
+
+### Task 5 — Read the result and the consensus
+
+A single evaluation's numbers are columns on `MJ: Rubric Evaluations`: `NormalizedScore`, `Outcome`,
+`Passed`, `GateFailed`, `Completeness`, `BandID`. Per-criterion numbers are on `MJ: Rubric Evaluation
+Scores`.
+
+Consensus across evaluators is already on the views, so reading it is a plain `RunView`:
+
+```typescript
+import { RunView } from '@memberjunction/core';
+import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
+
+const rv = RunView.FromMetadataProvider(provider);
+const result = await rv.RunView<MJRubricEvaluationEntity>({
+    EntityName: 'MJ: Rubric Evaluations',
+    ExtraFilter: `SubjectRecordID='${EscapeSQLString(proposalId)}' AND Status='Submitted'`,
+    ResultType: 'simple',
+    Fields: ['ID', 'EvaluatorType', 'NormalizedScore', 'CohortMeanScore', 'CohortHumanMeanScore', 'CohortAIMeanScore', 'DeviationFromCohortMean'],
+}, contextUser);
+```
+
+For a mean, median, or trimmed mean with a spread and sample size, use `engine.ConsensusForSubject(...)` or
+the **Get Rubric Consensus** action ([Consensus](#9-consensus-and-agreement)).
+
+---
+
+## 3. Rubrics in tests
+
+A test run can be judged by a rubric. The subject is the test run (`MJ: Test Runs`) and the context is the
+test, so every run of the same test lands in one cohort.
+
+### Which rubric judges a run
+
+The first source that names a rubric wins:
+
+```mermaid
+graph TD
+    A{"--rubric on<br/>mj test run / suite?"} -- yes --> USE["Use it"]
+    A -- no --> B{"rubric oracle has<br/>its own rubricId?"}
+    B -- yes --> USE
+    B -- no --> C{"Test.RubricID?"}
+    C -- yes --> USE
+    C -- no --> D{"TestSuite.RubricID?<br/><i>walking up ParentID</i>"}
+    D -- yes --> USE
+    D -- no --> E{"Agent's default<br/>Evaluation rubric?"}
+    E -- "yes, and the test has<br/>no llm-judge oracle" --> USE
+    E -- no --> NONE["No rubric oracle"]
+    USE --> PIN["Pin the Published version<br/>at suite start"]
+    style USE fill:#16a34a,color:#fff
+    style PIN fill:#0891b2,color:#fff
+```
+
+- The published version is **pinned when the suite run starts**, so a publish in the middle of a run does not
+  split the suite across two versions. A version you name explicitly (`--rubric "Research answer@1.2.0"`) is
+  used as given.
+- When a rubric resolves and the test has no `rubric` oracle, the driver adds one. It always gates the test's
+  status, and it contributes to the score when `scoringWeights` is absent or already names `rubric`.
+- A test that already has an `llm-judge` oracle keeps it, and the agent's default rubric is not added beside
+  it. Rubrics named on the run, the test, or the suite are still added.
+
+### Moving inline criteria to a rubric
+
+```bash
+mj test promote-criteria <test>
+```
+
+copies a test's inline judge criteria onto a new Draft rubric and sets `Test.RubricID`. Review the draft,
+publish it, and remove the `llm-judge` oracle so the criteria are not scored twice.
+
+### Checking the judge: calibration
+
+An AI judge is only useful if it agrees with people. The **Rubric Judge Calibration** test type scores a gold
+set with the AI evaluator and compares it with the submitted human scores on the same rubric major:
+
+```json
+{
+  "rubricId": "<rubric id>",
+  "goldSet": { "subjectEntity": "MJ: Test Runs", "filter": "TestID='...'" },
+  "evaluator": { "type": "LLM" }
+}
+```
+
+The test score is the overall quadratic-weighted kappa, clamped to 0..1. Agreement needs at least 20 subjects
+that both a person and the judge scored; with fewer, the statistic is withheld and the sample size is still
+reported. Run it after changing the judge prompt, the model, or a rubric's anchors.
+
+---
+
+## 4. Rubrics on agents
+
+An `MJ: AI Agent Rubrics` row binds a rubric to an agent with one of three purposes:
+
+| Purpose | When it runs | Effect | Shipped |
+|---|---|---|---|
+| **Evaluation** | When a test or a caller asks for the agent's default rubric | None on the run. It is the agent's default judge in tests | Active on 14 agents |
+| **SelfCheck** | Every time the agent is about to return Success | Can send a Loop agent back for a retry, or fail it | **Disabled** |
+| **ProductionSampling** | Nightly, on a sample of completed runs | Stores evaluations for drift dashboards. Never touches the run | Links Active, **job Disabled** |
+
+### Self-check
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Agent as Loop agent
+    participant Hook as Self-check hook
+    participant Eng as RubricEngine
+    Agent->>Hook: about to return Success
+    Hook->>Hook: Active SelfCheck link for this agent? (cached)
+    alt no link
+        Hook-->>Agent: continue — Success
+    else link
+        Hook->>Eng: EvaluateRecord(content = the answer in memory)
+        Eng-->>Hook: passed?, failed criteria and rationales
+        alt passed
+            Hook-->>Agent: Success
+        else failed and retries remain
+            Hook-->>Agent: Retry, with the failed criteria as feedback
+        else failed, no retries left
+            Hook-->>Agent: Failed
+        end
+    end
+    Note over Hook: Each check is recorded as a Validation step on the run.<br/>A self-check that cannot run (an error, missing permission)<br/>is recorded and the run continues.
+```
+
+- The judge reads the candidate answer **in memory**. The run's `FinalPayload` is not saved until later.
+- `MaxSelfCheckAttempts` is the number of **retries**. 1 means one retry, then fail.
+- Flow agents never retry or fail on a self-check. The result is recorded only.
+- Every agent success exit goes through the hook, including `finishIf`, sub-agent `terminateAfter`, and
+  client-tool `taskComplete`.
+
+**Cost.** Each self-check is one judge LLM call on every successful run, and a retry is another full agent
+turn. That is why the five shipped SelfCheck links (Research Agent, ActionSmith, SkillSmith, Infographic,
+Duplicate Resolution) are `Disabled`. To turn one on, set the link's `Status` to `Active`, and first confirm
+the **Core agent rubrics** test suite passes for that agent.
+
+### Production sampling and drift
+
+The **Evaluate Sampled Agent Runs** scheduled job (daily at 02:00 UTC) walks each Active ProductionSampling
+link, keeps a deterministic sample of that agent's completed runs from the last 7 days at the link's `SampleRate`,
+skips runs already evaluated for that rubric, and evaluates at most 100 runs per job run with the link's
+evaluator. Samples are chosen by hashing the run ID, so the same run is
+always in or out, on any database platform. The drift view in the AI dashboard plots per-criterion period
+means over Submitted, non-Self evaluations, keyed by criterion `Key` so a new version does not reset a series.
+
+The job ships **Disabled**. Enable it in Scheduled Jobs once you have chosen sample rates you are prepared to
+pay for.
+
+### Choosing the evaluator for a link
+
+`EvaluatorConfig` on the link (type `IRubricEvaluatorSelection`) picks how it is scored:
+
+```json
+{ "EvaluatorType": "AIPrompt", "Mode": "PerCriterion" }
+```
+
+`EvaluatorType` is `AIPrompt` (the default, one LLM prompt), `Agent` (the Rubric Evaluation Agent), or
+`Deterministic`. `Mode` is `SinglePass` (one call for the whole rubric, the default) or `PerCriterion` (one
+decision per leaf). The sampling job honors both. Self-check always uses the LLM evaluator in SinglePass.
+`PassThreshold` on the link overrides the version's threshold for that purpose.
+
+---
+
+## 5. Adopting rubrics in an application
+
+Rubrics are built for applications to score their own records: a submissions app scoring abstracts, an ATS
+scoring candidates, a procurement app scoring bids. The pattern:
+
+```mermaid
+graph LR
+    subgraph APP["Your application"]
+        REC["Your record<br/><i>Application, Bid, Submission</i>"]
+        CTX["Your context<br/><i>Job, Round, Program</i>"]
+        UI["Your screens"]
+    end
+    subgraph CORE["MJ core rubrics"]
+        RUB["Published rubric"]
+        EV["Evaluations<br/><i>subject = your record<br/>context = your context</i>"]
+        W["ng-rubrics widgets"]
+    end
+    REC -. "SubjectEntityID + SubjectRecordID" .-> EV
+    CTX -. "ContextEntityID + ContextRecordID" .-> EV
+    EV --> RUB
+    UI --> W
+    W -- "emits answers" --> UI
+    style EV fill:#7c3aed,color:#fff
+```
+
+1. **Point evaluations at your records; don't copy scores into your tables.** The subject is any entity and
+   record. Your table links to the evaluation (for example a nullable `RubricEvaluationID`) or reads it by
+   subject. If you do roll a score up onto your record for list views, copy `NormalizedScore` and `Passed`,
+   and treat the evaluation as the source of truth.
+2. **Use context for "scored for what".** The same applicant can be scored for two jobs. Context keeps those
+   cohorts apart, and consensus compares only evaluations with the same subject, context, rubric, and major.
+3. **Use scales that mean something to your reviewers**, and write anchors per criterion. The score is always
+   normalized to 0..1; `ScoreDisplayMin` and `ScoreDisplayMax` put it back on your users' range (0..100,
+   1..5).
+4. **Pass/fail lives in the rubric**, not your code. Use the pass threshold for "good enough" and gates for
+   knockouts. Bands are labels only.
+5. **App-specific settings go in `EvaluatorConfig.Extensions`** under your app's name, for example
+   `{ "Extensions": { "Caliber": { "AppliesTo": ["Interview"] } } }`. Core stores and hashes them (a change is
+   a Major bump) and never reads them.
+6. **Ship your rubrics as metadata** ([Task 2](#task-2--ship-a-rubric-as-metadata)), with names prefixed by
+   your app. Rubric names are unique across the whole install.
+7. **Give your subject a content provider** if its useful text is not in plain columns
+   ([Extending](#11-extending)). Without one, the judge sees the readable columns of the record.
+
+Things to know:
+
+- The engine loads a subject record by a single-column primary key named `ID`.
+- A deterministic rule needs no LLM and is free; use it for checks a rule can decide (a required document is
+  present, a value is in range).
+- Retiring a version does not invalidate its evaluations. They stay valid for that major; consensus never
+  mixes majors.
+
+---
+
+## 6. Scoring reference
+
+Leaves on a levels scale score the level's normalized value, a number from 0 to 1. Numeric leaves map the raw
+value across the scale's min and max, and invert that when lower is better. A Percentage scale is a Numeric
+scale named Percentage, or any Numeric scale whose minimum is 0 and maximum is 100; the answer is the raw
+number, not a level.
+
+A group combines its included children by a weighted mean, a minimum, or a maximum. An advisory criterion is
+shown and is not part of the rollup. A gate that falls short fails the evaluation even when the weighted score
+is high.
+
+```mermaid
+graph TD
+    O["Overall 0.75<br/><i>weighted mean</i>"]
+    S["Security 0.5<br/><i>group · weight 1 · Minimum</i>"]
+    D["Delivery 1.0<br/><i>group · weight 1</i>"]
+    E1["Encryption: Compliant → 1.0"]
+    E2["Access control: Partial → 0.5<br/><b>gate, minimum 0.5 — met</b>"]
+    T["Schedule: Meets → 1.0"]
+    N["Notes quality<br/><i>advisory — shown, not counted</i>"]
+    O --> S
+    O --> D
+    O -.-> N
+    S --> E1
+    S --> E2
+    D --> T
+```
+
+Not-applicable answers follow the criterion's policy, or the version's policy when the criterion does not set
+one:
+
+| Policy | Effect |
+|---|---|
+| **Exclude and redistribute** | Drops the leaf and spreads its weight across its siblings. The default. |
+| **Count as zero** | Keeps the leaf in the rollup at 0. |
+| **Fail the evaluation** | Makes the outcome NotApplicableFailure. |
+| **Not allowed** | Refuses the answer. |
 
 The outcome is the first match:
 
@@ -25,79 +491,207 @@ The outcome is the first match:
 |---|---|---|
 | 1 | Incomplete | Completeness is below the version's minimum. Both sides are rounded to six places before the comparison. |
 | 2 | NotApplicableFailure | A not-applicable answer used Fail the evaluation. |
-| 3 | Incomplete | The overall score is null. An unanswered applicable leaf was dropped, and nothing included remains to roll up. |
-| 4 | GateFailed | A non-advisory gate is unanswered, or its rounded score is below that criterion's gate minimum. The minimum is 0 when the criterion does not set one. |
-| 5 | Passed or BelowThreshold | A pass threshold is set. Passed when the rounded score is at least the rounded threshold. Otherwise BelowThreshold. |
+| 3 | Incomplete | The overall score is null: an unanswered applicable leaf was dropped and nothing included remains to roll up. |
+| 4 | GateFailed | A non-advisory gate is unanswered, or its rounded score is below that criterion's gate minimum (0 when not set). |
+| 5 | Passed or BelowThreshold | A pass threshold is set. Passed when the rounded score is at least the rounded threshold. |
 | 6 | Scored | No pass threshold, and none of the earlier rows matched. |
 
-`Passed` is true only for the Passed outcome. It is null for Scored, and for Incomplete when the version has no threshold and no gate. Every other outcome sets it false.
+`Passed` is true only for the Passed outcome. It is null for Scored, and for Incomplete when the version has no
+threshold and no gate. Every other outcome sets it false.
 
-Scores are rounded to six decimal places after the arithmetic. Threshold, gate, band, and completeness comparisons use that rounding. The same answers on the same scoring hash produce the same score. The widgets do not implement a second copy of this math. The author preview and the server submit both call `RubricScoring`.
+Scores are rounded to six decimal places after the arithmetic, and threshold, gate, band, and completeness
+comparisons use that rounding. The same answers on the same `ScoringHash` produce the same score. The widgets
+do not implement a second copy of this math: the author preview and the server submit both call
+`RubricScoring`.
 
-## Versions
+---
 
-A rubric has at most one draft. Publishing is what assigns numbers.
+## 7. Versioning reference
 
-| Bump | When |
-|---|---|
-| Initial | The first publish. There is no Published or Retired version to diff against. It becomes 1.0.0. |
-| Major | A non-advisory node was added or removed. Or a non-advisory node's parent, type, weight, scale, gate, gate minimum, not-applicable policy, rollup, or evaluator config changed. Or IsAdvisory flipped. Or the version's not-applicable policy changed. Or a scale used by a non-advisory node changed its type, range, step, or direction, or a level's value or normalized value was added, removed, or changed. Scores from the new major are not comparable with the previous major. A node that is advisory on both sides does not make those scoring-field edits Major. |
-| Minor | The pass threshold or minimum completeness changed. A band was added or removed, or its range or tone changed. An advisory node was added or removed, or an advisory node's parent, type, weight, scale, gate, gate minimum, rollup, or evaluator config changed. Evidence or rationale became required or stopped being required. |
-| Patch | Wording and order only: names, descriptions, guidance, instructions, anchor text, level labels and descriptions, band labels and wording, sequence, and the display range. A band is matched by label. A renamed label on the same band is Patch, not a removed band plus a new one. |
+A rubric has at most one draft. Publishing is what assigns numbers, and the bump says whether scores stay
+comparable:
 
-Parent links are compared by the parent key. A clone's new ids are not a Major bump. The highest change wins. The author may request a higher bump, not a lower one. A draft that is identical to the version it was based on cannot be published. The base is the highest Published or Retired version, not another draft.
+| Bump | When | Scores across the bump |
+|---|---|---|
+| Initial | The first publish. It becomes 1.0.0. | — |
+| **Major** | A non-advisory node was added or removed. Or a non-advisory node's parent, type, weight, scale, gate, gate minimum, N/A policy, rollup, or evaluator config changed. Or `IsAdvisory` flipped. Or the version's N/A policy changed. Or a scale used by a non-advisory node changed its type, range, step, or direction, or a level's value changed. A node that is advisory on both sides does not make those edits Major. | **Not comparable.** Consensus and drift never mix majors. |
+| Minor | The pass threshold or minimum completeness changed. A band was added or removed, or its range or tone changed. An advisory node was added, removed, or had a scoring field changed. Evidence or rationale became required or stopped being required. | Comparable; the verdict rules changed. |
+| Patch | Wording and order only: names, descriptions, guidance, instructions, anchor text, level labels and descriptions, band labels and wording, sequence, and the display range. A band is matched by label, so a renamed label on the same band is Patch. | Identical scoring. |
 
-Published and retired versions are frozen. The database rejects a change with errors 51101 through 51110. The only status move on a published version is between Published and Retired. A submitted evaluation can be superseded by a newer one or withdrawn. It cannot be edited or deleted.
+- Parent links are compared by the parent's key, so a clone's new IDs are not a change.
+- The highest change wins. The author may request a higher bump, never a lower one.
+- A draft identical to its base cannot be published. The base is the highest Published or Retired version.
+- `ScoringHash` covers only what changes a score. Two versions with the same `ScoringHash` produce the same
+  scores for the same answers; a Major bump always changes it.
 
-## Evaluators
+---
 
-`EvaluatorType` is one of Human, AIPrompt, Agent, Deterministic, Self, or External. A Human evaluation requires `EvaluatorUserID`. On the prompt path, an evaluator named AI is stored as Agent, Deterministic is stored as Deterministic, and any other value is stored as AIPrompt. Submit Human Rubric stores Human.
+## 8. Evaluators
 
-Self is the subject's own assertion. It is stored and shown. It is not part of consensus.
+Every evaluation records who scored it in `EvaluatorType`:
 
-## Consensus
+| Type | Who | How it is created |
+|---|---|---|
+| Human | A person. `EvaluatorUserID` is required | Scoring form, or the Submit Human Rubric action |
+| AIPrompt | The Rubric Evaluator prompt | `evaluator: 'LLM'`. `SinglePass`: one call for the whole rubric. `PerCriterion`: one decision per leaf |
+| Agent | The Rubric Evaluation Agent, a Loop agent that can read the rubric and the subject | `evaluator: 'AI'` |
+| Deterministic | A rule on the criterion's `EvaluatorConfig.Deterministic` | `evaluator: 'Deterministic'`. No LLM call |
+| Self | The subject's own assertion, for example a vendor's self-assessment | Stored and shown; **never part of consensus** |
+| External | Another system's score, imported | Stored and shown |
 
-Consensus is computed when you read it. `ConsensusForSubject` loads Submitted evaluations for one subject and one major version, leaves out Self, and leaves out every other major. When the caller does not pass a major, the latest Published major is used. A context on the call matches that context. A call without a context uses evaluations whose context is null.
+The LLM evaluator receives the rubric as the system message and the subject as a separate, delimited user
+message, so subject text cannot rewrite the instructions. A quote cited as evidence that does not appear in
+the subject text is dropped, so stored quotes are always real.
 
-The method is Mean unless the caller asks for Median or TrimmedMean. Mean matches the average on the score view. TrimmedMean drops `floor(trim × n)` scores from each end. The default trim is 0.1. The result also carries the population standard deviation, the range, and the sample size.
+A deterministic rule reads a dotted path in the subject content's `data` and maps the comparison to a level:
 
-The score view already stores `CriterionCohortHumanMeanScore` and `CriterionCohortAIMeanScore` for the same subject, context, rubric, and major version. The human column averages Human scores. The AI column averages AIPrompt and Agent scores. Self is excluded from the cohort. Deterministic and External are not in either column. A second score row in that cohort does not change the means. Review reads those columns. It does not average a sample of score rows.
-
-Agreement is separate. Quadratic-weighted Cohen's kappa is for two raters. Krippendorff's alpha is for two or more. Both are omitted when the number of subjects is below 20. The sample size is still returned.
-
-## Blinding
-
-Core does not hide peer scores. There is no `GetVisibleEvaluations`, and there is no blinding mode of None, UntilSubmitted, or Always. Anyone who can read a score row can read its cohort columns. Keeping a reviewer's draft invisible to the other reviewers is a permission on the evaluation records, not a rule inside scoring.
-
-## Knockout gates
-
-A knockout is a gate. `ImportMatrix` reads a requirements CSV of path, name, weight, and knockout. A path such as 3.2.1 nests under 3.2. The knockout cell sets the gate when it is yes, true, 1, or knockout. A non-advisory gate fails the evaluation when it is unanswered or its rounded score is below `GateMinimumScore`. An advisory node is never a gate. GateFailed is chosen before the pass threshold, so a high weighted score does not save a failed knockout.
-
-## CLI
-
-These commands read or score. None of them publish a version.
-
+```json
+{
+  "Deterministic": {
+    "Path": "SecurityCertification",
+    "Operator": "in",
+    "Values": ["SOC2", "ISO27001"],
+    "LevelWhenTrue": "Compliant",
+    "LevelWhenFalse": "Non-compliant",
+    "NotApplicableWhenMissing": false
+  }
+}
 ```
+
+Operators: `equals`, `notEquals`, `in`, `notIn`, `contains`, `exists`, `between`, `gte`, `lte`, `matches`.
+
+---
+
+## 9. Consensus and agreement
+
+**The cohort** is every Submitted evaluation of the same subject and context, on the same rubric and major
+version, except Self. Withdrawn and Superseded evaluations are out.
+
+| Where | What you get |
+|---|---|
+| `MJ: Rubric Evaluations` view | `CohortMeanScore`, `CohortMinScore`, `CohortMaxScore`, `CohortScoreStdDev`, `CohortEvaluationCount`, `CohortPassedCount`, `CohortHumanMeanScore`, `CohortAIMeanScore`, `SelfAssessmentScore`, and `DeviationFromCohortMean` on every row |
+| `MJ: Rubric Evaluation Scores` view | `CriterionCohortMeanScore`, `CriterionCohortHumanMeanScore`, `CriterionCohortAIMeanScore` per criterion |
+| `ConsensusForSubject` / Get Rubric Consensus | `Mean` (default), `Median`, or `TrimmedMean` (drops `floor(0.1 × n)` from each end), with `StdDev`, `Range`, and `SampleSize` |
+
+The human columns average Human evaluations. The AI columns average AIPrompt and Agent evaluations.
+Deterministic and External are in the overall mean but in neither split. `SelfAssessmentScore` is the
+subject's own Self score, shown beside the cohort. `ConsensusForSubject` uses the latest
+Published major unless you pass one, and a call without a context matches evaluations whose context is null.
+
+**Agreement** is separate from consensus. Quadratic-weighted Cohen's kappa compares two raters; Krippendorff's
+alpha handles two or more. Both are withheld below 20 usable subjects, and the sample size is still returned.
+
+---
+
+## 10. Who can see what
+
+Evaluations are about people's work, so reads are narrow by default:
+
+- **Ordinary users (the UI role)** can create evaluations, and read and update **only their own**: a row-level
+  filter matches `EvaluatorUserID` to the current user, on evaluations and on their scores. Nobody in the UI
+  role can delete one.
+- **The Administer Rubric Evaluations authorization** lifts that filter. Grant it to the roles that run review
+  panels, calibration, or reporting.
+- **Developer and Integration roles** keep unfiltered access, for agents, jobs, and tests.
+- **While a reviewer's own evaluation of a subject is still a Draft**, the evaluation form and the comparison
+  matrix hide the cohort columns and peer scores, so a reviewer cannot anchor on others before submitting.
+
+Core has no separate blinding modes. If your process needs something stricter, for example hiding peer scores
+until a round closes, express it as entity permissions or row-level filters in your application.
+
+---
+
+## 11. Extending
+
+### Give a subject better content
+
+The judge sees what the content provider for the subject's entity returns: `text`, `data`, and `files`.
+Built-in providers cover `MJ: Test Runs`, `MJ: AI Agent Runs`, `MJ: AI Prompt Runs`, and `MJ: Conversations`.
+For anything else, the record's readable columns become `data`. Register a provider when your subject's
+meaning lives elsewhere, for example in an attached document or child rows:
+
+```typescript
+import { RubricContentRegistry } from '@memberjunction/rubrics';
+
+RubricContentRegistry.Instance.Register('Vendor Proposals', record => ({
+    text: String(record.ExecutiveSummary ?? ''),
+    data: { Price: record.Price, DeliveryWeeks: record.DeliveryWeeks },
+}));
+```
+
+Register at server startup. A provider receives the row already loaded under the caller's permissions, so it
+should not widen what the caller can see.
+
+### App settings on a criterion
+
+Put them in `EvaluatorConfig.Extensions.<YourApp>`. Core never interprets them; your code reads them from the
+version snapshot.
+
+### Custom evaluators
+
+Evaluator classes register under `BaseRubricEvaluator` (`Deterministic`, `LLM`, `Agent`, `Human`), but
+`RubricEngine` currently chooses among its built-in evaluators by the `evaluator` argument, not through the
+class factory. To score with your own logic today, compute the answers yourself and submit them through the
+Submit Human Rubric action or an `External` evaluation; `RubricScoring` still produces the score.
+
+---
+
+## 12. CLI and screens
+
+None of these commands publish a version.
+
+```bash
 mj rubric list
 mj rubric show <rubric>[@version]
 mj rubric diff <rubric> <version> <version>
 mj rubric validate <file>
 mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator LLM|Deterministic]
+
+mj test run   --rubric <name-or-id>[@version]     # pin a rubric for this run
+mj test suite --rubric <name-or-id>[@version]
+mj test promote-criteria <test>                   # inline judge criteria → Draft rubric
 ```
 
-The default evaluator is LLM, which is stored as AIPrompt. Deterministic is stored as Deterministic. `mj test run --rubric <rubric>[@version]` and the same flag on `mj test suite` pin that rubric for the run. `mj test promote-criteria <test>` copies the test's inline judge criteria onto a Draft rubric and sets `Test.RubricID`. That draft is not published. A test that already has an `llm-judge` oracle keeps that judge when the rubric choice came from the agent.
+`@memberjunction/ng-rubrics` widgets are presentational: the host loads records and saves what they emit.
 
-## The three screens
+| Widget | For |
+|---|---|
+| `mj-rubric-builder` | Author a draft: criteria, weights and shares, problems that block publish, a live preview |
+| `mj-rubric-scoring-form` | Answer a rubric: levels or raw values, N/A, rationale, evidence |
+| `mj-rubric-result` | Show one evaluation: score on the display range, band, gates, a bar per criterion |
+| `mj-rubric-publish-dialog` | Confirm a publish: the computed bump and each change's reason |
+| `mj-rubric-version-diff` | Compare two versions side by side |
+| `mj-rubric-comparison-matrix` | Evaluators across, criteria down, disagreement marked |
 
-`@memberjunction/ng-rubrics` is presentational. The host loads the records and saves what the widgets emit.
+In Explorer, the **Rubrics** application hosts the catalog, scales, the builder, and the version board. The
+evaluation form shows the result and the comparison matrix. The agent form has a **Rubrics** tab for links,
+and the Testing dashboards show the rubric result for each run.
 
-- **Author** (`mj-rubric-builder`). Add a criterion, set weights, and see each node's share of its group. Advisory nodes are left out of that share. The panel lists problems that would block publish: a duplicate key, a leaf with no scale, a gate with no minimum. Sample answers preview through `RubricScoring`. The widget does not publish.
-- **Answer** (`mj-rubric-scoring-form`). Each leaf shows its levels. A digit selects that level. N marks the leaf not applicable and clears the level. Required rationale and evidence block submit. Every change is emitted so the host can save the draft.
-- **Result** (`mj-rubric-result`). Read only. The normalized score is mapped onto the version's display range, the band is the range that contains the score, and each criterion is a bar. Nothing in the result edits the evaluation.
+---
 
-## Worked examples
+## 13. Troubleshooting
 
-Each example is one published rubric and two evaluations of it. Scores are the `RubricScoring` result for those answers. The levels scale below is Meets = 1, Partial = 0.5, Miss = 0, unless an example names a different scale.
+| Symptom | Cause | What to do |
+|---|---|---|
+| Error 51101 – 51105 | You changed or deleted a Published or Retired version, its criteria, anchors, or bands | Start a new draft and publish it |
+| Error 51106 / 51107 | The scale is used by a published version | Create a new scale. Level descriptions can still be edited |
+| Error 51108 – 51110 | You edited or deleted a submitted evaluation or its scores | Submit a new evaluation that supersedes it, or withdraw it |
+| `No published version of that rubric.` | The rubric has only a Draft | Publish it, or pass `versionId` |
+| `subject not found or not readable` | Wrong ID, or the user cannot read the record | Check the record and the user's permissions |
+| A publish is refused as identical | The draft has no change from its base | Make a change, or discard the draft |
+| `Lookup failed … 'MJ: Rubrics'` during `mj sync push` | A directory that references rubrics ran before `rubrics` | Keep the rubric directories ahead of `agents` and `tests` in `.mj-sync.json` |
+| Outcome `Incomplete` with a high score | Completeness is below the version's minimum | Answer more criteria, or lower the minimum in a new version |
+| A user sees only their own evaluations | The UI row filter | Grant the Administer Rubric Evaluations authorization to their role |
+| Two evaluations don't show up in one cohort | Different major, context, or one is Self, Draft, Withdrawn, or Superseded | Compare on the same major and context |
+| Calibration returns no kappa | Fewer than 20 subjects scored by both a person and the judge | Grow the gold set |
+
+---
+
+## 14. Worked examples
+
+Each example is a small rubric and the evaluations of it. Scores are the `RubricScoring` result for those
+answers. The levels scale is Meets = 1, Partial = 0.5, Miss = 0 unless an example names another. The matching
+records ship as **Draft** rubrics under `metadata/rubrics/` so you can publish and try them.
 
 ### Agent evaluation
 
@@ -114,7 +708,8 @@ Pass threshold 0.6.
 | AI judge | accuracy Partial, sourcing Meets, completeness Meets | 0.833333 | GateFailed |
 | Human reviewer | all three Meets | 1 | Passed |
 
-The AI judge's weighted score is above the pass threshold. Accuracy is 0.5, under the gate, so the outcome is GateFailed. The human review clears the gate and passes.
+The AI judge's weighted score is above the pass threshold, but accuracy is 0.5, under the gate, so the outcome
+is GateFailed. The human review clears the gate and passes.
 
 ### Peer review
 
@@ -129,7 +724,7 @@ The AI judge's weighted score is above the pass threshold. Accuracy is 0.5, unde
 | Reviewer B | Submitted | argument Meets, evidence Partial | 0.75 | Scored |
 | Reviewer C | Withdrawn | both Miss | 0 | Scored, then withdrawn |
 
-The cohort mean is the mean of the submitted scores, `(1 + 0.75) / 2 = 0.875`. Reviewer C's 0 is not in that mean.
+The cohort mean is the mean of the submitted scores, `(1 + 0.75) / 2 = 0.875`. Reviewer C's 0 is not in it.
 
 ### Awards
 
@@ -146,7 +741,8 @@ Pass threshold 0.6.
 | Entry north | eligible Met, craft Meets, originality Partial | 0.875 | Passed |
 | Entry south | eligible Not met, craft Meets, originality Meets | 0.75 | GateFailed |
 
-South's weighted score is high. The eligibility gate is 0, so the entry is out. Ranking inside the category uses the cohort mean of the entries that were scored, not the gated-out row's score as a rank.
+South's weighted score is high, but the eligibility gate is 0, so the entry is out. Ranking inside the
+category uses the entries that were scored, not the gated-out row's score.
 
 ### Procurement
 
@@ -162,7 +758,10 @@ South's weighted score is high. The eligibility gate is 0, so the entry is out. 
 | Vendor packet | Self | encryption Compliant, schedule Meets | 1 | Scored |
 | Buyer | Human | encryption Partial, schedule Meets | 0.75 | Scored |
 
-The vendor cannot mark encryption not applicable. The Self score is reported beside the cohort and is not inside the cohort mean. The buyer's 0.75 is the cohort mean when it is the only non-self submitted score.
+The vendor cannot mark encryption not applicable. The Self score is reported beside the cohort and is not in
+the cohort mean. The buyer's 0.75 is the cohort mean when it is the only non-Self submitted score. To make
+encryption a knockout, mark it a gate with a minimum: a vendor that is Non-compliant then fails outright,
+whatever its weighted score.
 
 ### Accreditation
 
@@ -179,7 +778,8 @@ Scale for both leaves: Met = 1 / Not met = 0.
 | Self-study | Self | both Met, each with a file citation | 1 | Scored |
 | Visiting team | Human | records Met, faculty Not met, each with a citation | 0.5 | Scored |
 
-An answer with no citation cannot be submitted. The team's 0.5 is the cohort mean. The self-study stays visible and is not inside that mean.
+An answer with no citation cannot be submitted. The team's 0.5 is the cohort mean; the self-study stays
+visible and is not in it.
 
 ### Hiring
 
@@ -191,10 +791,15 @@ An answer with no citation cannot be submitted. The team's 0.5 is the cohort mea
 | Evaluation | Evaluator | Answers | Score | Outcome |
 |---|---|---|---|---|
 | Interviewer | Human | structure 4, evidence 4 | 0.75 | Scored |
-| Transcript | AI | structure 5, evidence 3 | 0.75 | Scored |
+| Transcript | AIPrompt | structure 5, evidence 3 | 0.75 | Scored |
 
-Both use the same major, so the comparison is 0.75 against 0.75, not a mix with an older rubric. The anchors are what the interviewer reads while choosing the level.
+Both are on the same major, so the comparison is 0.75 against 0.75, not a mix with an older rubric. The
+anchors are what the interviewer reads while choosing a level, and what the AI judge reads too.
 
-## Shipped agent rubrics
+### Shipped agent rubrics
 
-Seven rubrics ship as Published 1.0.0 on Meets / Partial / Miss, with pass threshold 0.7 and a gate minimum of 0.6. Partial fails that gate. They are Research answer, Query answer, Generated code, Schema proposal, Catalog contract, Picture from the data, and Duplicate decision. The examples in this guide stay Draft and stay unbound. A test that already has an `llm-judge` oracle keeps that judge. The agent's Evaluation rubric is not added beside it.
+Seven rubrics ship as Published 1.0.0 on Meets / Partial / Miss, with pass threshold 0.7 and a gate minimum of
+0.6, so Partial fails the gate: **Research answer, Query answer, Generated code, Schema proposal, Catalog
+contract, Picture from the data, and Duplicate decision.** They are the Evaluation rubrics for the core agents
+([Rubrics on agents](#4-rubrics-on-agents)), and the **Core agent rubrics** test suite runs one test per
+orchestrator against them.
