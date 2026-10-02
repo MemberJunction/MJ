@@ -33,7 +33,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (432 classes)
+// @memberjunction/core-entities (433 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -391,6 +391,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1191,6 +1192,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1224,11 +1226,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTemplateContentEntity,
     MJTemplateContentTypeEntity,
     MJTemplateEntity,
-    MJTemplateEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJTemplateEntityExtended,
     MJTemplateParamEntity,
     MJTestEntity,
     MJTestRubricEntity,
@@ -1428,11 +1430,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
-    AnalyticsResourceComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    AnalyticsResourceComponent,
     AppStateInspectorComponent,
     ApplicationRolesResourceComponent,
     ArchiveConfigResourceComponent,
@@ -1552,7 +1554,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 705;
+export const CLASS_REGISTRATIONS_COUNT = 706;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
