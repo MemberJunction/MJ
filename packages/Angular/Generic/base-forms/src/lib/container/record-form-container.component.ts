@@ -59,6 +59,8 @@ import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-pane
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
+import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
+import type { DuplicateEntryCandidate } from '@memberjunction/graphql-dataprovider';
 import { FormSectionIndicatorCoordinator } from '../section-indicators/form-section-indicator-coordinator.service';
 import {
   DescribeSectionDirty,
@@ -122,7 +124,8 @@ export interface VariantPickerItem {
   // FormSectionIndicatorCoordinator scoped per-container. `providers` (not
   // viewProviders) so projected related-entity grids and slot-mounted panels
   // can inject them.
-  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator, FormSectionIndicatorCoordinator],
+  // FormFieldEditCoordinator likewise, so every mj-form-field in the form reports its edits.
+  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator, FormSectionIndicatorCoordinator, FormFieldEditCoordinator],
 })
 export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, DoCheck, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
@@ -132,6 +135,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private sectionIndicators = inject(FormSectionIndicatorCoordinator);
   private slots = inject(FormSlotCoordinator);
   private recordRefresh = inject(FormRecordRefreshCoordinator);
+  private fieldEdits = inject(FormFieldEditCoordinator);
   private host = inject(ElementRef<HTMLElement>);
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
@@ -142,6 +146,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private lastRailSearchFilter = '';
   private chromeRules: FormChromeRule[] = [];
   private chromeRulesForEntityId: string | null = null;
+  /** The form whose duplicate-check answers this container already re-renders on. */
+  private duplicateNoticeWiredFor: BaseFormComponent | null = null;
 
   // ---- Internal State ----
 
@@ -690,6 +696,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     // Watch for changes to record dirty state
     this.watchRecordChanges();
+
+    this.wireDuplicateEntryCheck();
   }
 
   /**
@@ -1444,6 +1452,48 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     // Cleanup on destroy
     this.destroy$.subscribe(() => clearInterval(checkInterval));
+  }
+
+  /** Forwards field edits to the form component, which runs the entry-time duplicate check for a new record. */
+  private wireDuplicateEntryCheck(): void {
+    this.fieldEdits.Edited$.pipe(takeUntil(this.destroy$)).subscribe(() => this.onFieldEdited());
+  }
+
+  private onFieldEdited(): void {
+    const form = this.Fc;
+    if (!form) return;
+    form.OnFieldEdited();
+    this.watchDuplicateNotice(form);
+  }
+
+  /**
+   * Re-renders the possible-duplicate notice whenever the form's check answers. Wired on the first
+   * edit, since only an edit starts a check.
+   */
+  private watchDuplicateNotice(form: BaseFormComponent): void {
+    if (this.duplicateNoticeWiredFor === form) return;
+    this.duplicateNoticeWiredFor = form;
+    form.DuplicateEntryCheck.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => this.cdr.markForCheck());
+  }
+
+  // ---- Possible-duplicate notice ----
+
+  /**
+   * The existing records to flag as possible duplicates of the new record being entered, or none.
+   * See {@link BaseFormComponent.DuplicateEntryCheck}.
+   */
+  get DuplicateEntryCandidates(): readonly DuplicateEntryCandidate[] {
+    return this.Fc?.ShowDuplicateEntryNotice ? this.Fc.DuplicateEntryCheck.Candidates : [];
+  }
+
+  /** Opens a flagged record through the form's Navigate event. */
+  OnDuplicateCandidateClick(candidate: DuplicateEntryCandidate): void {
+    this.Fc?.OpenDuplicateCandidate(candidate);
+  }
+
+  /** The person dismissed the possible-duplicate notice. */
+  OnDuplicateNoticeDismissed(): void {
+    this.Fc?.DismissDuplicateNotice();
   }
 
   // ---- Badge Count Loading ----

@@ -1,0 +1,19 @@
+{
+  "fields": {
+    "Name": "Compliance (Compliant / Partial / Non-compliant)",
+    "ScaleType": "Levels",
+    "HigherIsBetter": true,
+    "Status": "Active",
+    "Description": "Compliant is 1, Partial is 0.5, and Non-compliant is 0."
+  },
+  "primaryKey": {
+    "ID": "6D9B06ED-EADC-479E-BEE4-0DF9390AA737"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Scale Levels": [
+      { "fields": { "ScaleID": "@parent:ID", "Label": "Non-compliant", "Value": 0, "NormalizedValue": 0, "Sequence": 0 }, "primaryKey": { "ID": "CB1B5212-8881-4304-AFFF-1A8F20AEC49A" } },
+      { "fields": { "ScaleID": "@parent:ID", "Label": "Partial", "Value": 1, "NormalizedValue": 0.5, "Sequence": 1 }, "primaryKey": { "ID": "72C731B0-A910-402F-A49E-2091B2763101" } },
+      { "fields": { "ScaleID": "@parent:ID", "Label": "Compliant", "Value": 2, "NormalizedValue": 1, "Sequence": 2 }, "primaryKey": { "ID": "1E3ACCC1-3E14-4161-B662-EE2FCC4A7E03" } }
+    ]
+  }
+}

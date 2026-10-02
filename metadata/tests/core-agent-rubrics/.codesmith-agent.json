@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Core agent rubrics - Codesmith Agent",
+    "Description": "Answers from the run itself. Scored by the Codesmith Agent Evaluation rubric, not an inline judge.",
+    "InputDefinition": {
+      "userMessage": "Write code that returns the length of the string mj. Do not call the network."
+    },
+    "ExpectedOutcomes": {},
+    "Configuration": {
+      "agentId": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "A59B7E01-737C-47E0-9E45-6618CE55D17D"
+  }
+}

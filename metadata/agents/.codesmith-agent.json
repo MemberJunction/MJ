@@ -50,6 +50,20 @@
             "checksum": "728665075513a2b2b42c677ccfc9512cd6af3dd5a4b4818ef19b620a19bdd98f"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Generated code",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "14F1D3E2-D06B-4726-86E2-3B732B50D623"
+          }
+        }
       ]
     },
     "primaryKey": {

@@ -67,6 +67,15 @@ const FILE_CONFIGS = [
             'Task list is capped at a configurable max (default 50). Completed tasks are auto-pruned when over limit.',
         ].join('\n'),
     },
+    {
+        src: 'agent-decisions.ts',
+        supplementary: [
+            'Decisions are answered inline at no turn cost; the answers arrive on the next turn.',
+            'Use them for small, known answer spaces; never for writing, arithmetic or dates.',
+            'finishIf ends the run after actions or a sub-agent only when every question passes; otherwise you get your normal next turn.',
+            'Use it when the step you are requesting should finish the task.',
+        ].join('\n'),
+    },
 ];
 
 // ---------------------------------------------------------------------------

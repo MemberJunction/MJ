@@ -8,7 +8,7 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, Code
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
@@ -17,6 +17,9 @@ import {
     type IEntityConfiguration,
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
+    type IEntityCloneConfiguration,
+    type ICloneRelationshipPolicy,
+    type IEntityFieldCloneConfiguration,
 } from "./entityConfiguration"
 import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 
@@ -198,6 +201,15 @@ export class EntityRelationshipInfo extends BaseInfo  {
      */
     get ConfigurationObject(): IEntityRelationshipConfiguration | null {
         return this.Configuration;
+    }
+
+    /**
+     * Parsed clone configuration for this relationship.
+     * Specifies the policy (Deep, Reference, Skip), locked status, field rules, etc.
+     * @see plans/record-cloning/README.md §4.2
+     */
+    get CloneConfig(): ICloneRelationshipPolicy | null {
+        return this.ConfigurationObject?.Clone ?? null;
     }
 
     // virtual fields - returned by the database VIEW
@@ -803,10 +815,11 @@ export class EntityFieldValueInfo extends BaseInfo {
      * Returns a plain object suitable for JSON serialization.
      * Called automatically by JSON.stringify().
      */
-    toJSON(): { Value: string; Code: string } {
+    toJSON(): { Value: string; Code: string; Description?: string } {
         return {
             Value: this.Value,
             Code: this.Code,
+            Description: this.Description ?? undefined,
         };
     }
 }
@@ -1001,6 +1014,15 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get ConfigurationObject(): IEntityFieldConfiguration | null {
         return this.Configuration;
+    }
+
+    /**
+     * Parsed clone configuration for this field.
+     * Specifies copy/reset/remap/suffix policy, value transformations, JSON remaps, etc.
+     * @see plans/record-cloning/README.md §4.3
+     */
+    get CloneConfig(): IEntityFieldCloneConfiguration | null {
+        return this.ConfigurationObject?.Clone ?? null;
     }
 
     /**
@@ -1317,6 +1339,8 @@ export class EntityFieldInfo extends BaseInfo {
     private _loggedUnsupportedValueListType: boolean = false;
     /** Memoized yyyy-mm-dd keys for a `date` field's value list; null when it cannot be compared. */
     private _valueListDateKeys: Set<string> | null | undefined = undefined;
+    /** Memoized numeric form of a numeric field's value list; null when it is not entirely numeric. */
+    private _valueListNumericKeys: Set<number> | null | undefined = undefined;
     _EntityFieldValues: EntityFieldValueInfo[];  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     _RelatedEntityNameFieldMap: string  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     /**
@@ -1665,8 +1689,9 @@ export class EntityFieldInfo extends BaseInfo {
      *   * **Stringifying is required.** `EntityFieldValue.Value` is always a string in metadata while
      *     the field's runtime value may be a number, so a strict `===` would reject every legal value
      *     on a numeric list. It is not lossless: `String(1.0)` is `'1'`, so a metadata value written
-     *     as `'1.0'` would fail closed. No numeric value lists exist today (CodeGen cannot produce
-     *     one — see the note in ValueIsPermittedByValueList), so this is recorded rather than solved.
+     *     as `'1.00'` would fail closed here — which is why a NUMERIC column's list is not compared
+     *     through this function at all but by value, in numericValueIsPermittedByValueList (MJ #3978).
+     *     This normalization is what a STRING column's list is compared with.
      *   * **Trimming is cheap insurance, NOT the load-bearing rule it was first documented as.** An
      *     earlier version of this comment claimed an untrimmed comparison would reject 9,301 existing
      *     rows in fixed-width `nchar` columns (`MJ: Action Params`.Type, `MJ: Record Changes`.Status
@@ -1710,10 +1735,10 @@ export class EntityFieldInfo extends BaseInfo {
      *   * Only string and number values are checked, and the gate fails OPEN — an unsupported type
      *     skips validation rather than manufacturing a failure. Nothing in the schema restricts
      *     which columns may carry a value list (`CK_EntityField_ValueListType_New` constrains the
-     *     mode, not the column type), but in practice every one is a string column: measured on a
-     *     current 6.x instance, 455 nvarchar + 7 nchar and nothing else, which follows from
-     *     CodeGen's constraint parser only ever extracting quoted literals. `number` is admitted
-     *     because the generated union type anticipates a non-quoted list via `NeedsQuotes`.
+     *     mode, not the column type). Every list WAS on a string column — measured on a 6.x
+     *     instance, 455 nvarchar + 7 nchar and nothing else — because CodeGen's constraint parser
+     *     only extracted quoted literals; since MJ #3978 it extracts the unquoted numeric form too,
+     *     so a numeric column's list is now a real case and is compared by value (below).
      *     Booleans and Dates are excluded deliberately: a bit column carrying a `'1'`/`'0'` list
      *     would see `String(true) === 'true'` and reject every legal value, and a Date has no sane
      *     string form to compare — so guessing there would break saves rather than guard them.
@@ -1775,9 +1800,9 @@ export class EntityFieldInfo extends BaseInfo {
         if (typeof value !== 'string' && typeof value !== 'number') {
             // The rule cannot be applied to this type at all, and that is a mismatch rather than a
             // state to absorb: either the field should not declare a value list (one on a bit column
-            // — which CodeGen never produces, since SQL Server renders `IN (0,1)` as unquoted
-            // `([B]=(1) OR [B]=(0))`, the same reason no NUMERIC list exists either; see MJ #3978)
-            // or a caller assigned the wrong type. Skipping it silently would
+            // — which CodeGen still never produces: it captures the unquoted numeric form as of MJ
+            // #3978, but excludes `bit` fields, since `IN (0,1)` is vacuous on a bit and `= 1` is a
+            // validator rather than a dropdown) or a caller assigned the wrong type. Skipping it silently would
             // leave the caller believing a guard is on when it is not, which is the exact failure
             // mode this rung was added to fix — so it is reported, once per field.
             this.reportUnsupportedValueListValue(
@@ -1788,7 +1813,65 @@ export class EntityFieldInfo extends BaseInfo {
             return true;
         }
 
+        // A NUMERIC column's list is compared by VALUE, not by string form — see
+        // numericValueIsPermittedByValueList. Falls through to the string comparison when the list is
+        // not entirely numeric, which is the only case where there is nothing to compare against.
+        if (this.TSType === EntityFieldTSType.Number) {
+            const numericKeys = this.valueListNumericKeys();
+            if (numericKeys) {
+                return this.numericValueIsPermittedByValueList(value, numericKeys);
+            }
+        }
+
         return this._normalizedValueListValues.has(EntityFieldInfo.NormalizeValueListValue(value));
+    }
+
+    /**
+     * Value-list membership for a NUMERIC column, compared on the numeric VALUE rather than the
+     * string form (MJ issue #3978).
+     *
+     * Necessary because the two sides are written by different hands: SQL Server stores
+     * `CHECK (Price IN (0.50, 1.00))` as the unquoted literals `([Price]=(1.00) OR [Price]=(0.50))`,
+     * CodeGen captures those literals verbatim, and the runtime value of that column is the number
+     * `1`. `String(1) === '1'` is not `'1.00'`, so a string comparison would refuse a value the
+     * database accepts — the exact failure mode this rung exists to avoid. Comparing as numbers makes
+     * the scale of the literal irrelevant.
+     *
+     * The comparison is gated on the column being numeric, NOT merely on the list looking numeric: on
+     * a string column `CHECK (Code IN ('1','2'))` really is a string list, and comparing `'01'`
+     * numerically would permit a value the database refuses.
+     *
+     * A value that is not a finite number falls back to the string comparison rather than being
+     * refused here, so a value list that happens to hold non-numeric text on a numeric column (which
+     * CodeGen cannot produce, but `applyValueListConfig` could) still behaves as it did before.
+     */
+    private numericValueIsPermittedByValueList(value: string | number, numericKeys: Set<number>): boolean {
+        const candidate = typeof value === 'number' ? value : Number(value.trim());
+        if (!Number.isFinite(candidate)) {
+            return this._normalizedValueListValues.has(EntityFieldInfo.NormalizeValueListValue(value));
+        }
+        return numericKeys.has(candidate);
+    }
+
+    /**
+     * The value list as a set of numbers, or null when any of its values is not a finite number (so
+     * there is nothing to compare numerically). Memoized alongside the normalized string set, and
+     * built from it — lower-casing and trimming cannot change how a numeric literal parses.
+     */
+    private valueListNumericKeys(): Set<number> | null {
+        if (this._valueListNumericKeys === undefined) {
+            const keys = new Set<number>();
+            for (const normalized of this._normalizedValueListValues ?? []) {
+                const parsed = Number(normalized);
+                if (normalized.length === 0 || !Number.isFinite(parsed)) {
+                    this._valueListNumericKeys = null;
+                    return null;
+                }
+                keys.add(parsed);
+            }
+            this._valueListNumericKeys = keys.size > 0 ? keys : null;
+        }
+        return this._valueListNumericKeys;
     }
 
     /**
@@ -2592,7 +2675,10 @@ export class EntityInfo extends BaseInfo {
                 try {
                     const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
                     if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
-                        this._subtypeSelectorConfig = { Path: parsed['Path'].trim() };
+                        this._subtypeSelectorConfig = {
+                            Path: parsed['Path'].trim(),
+                            UseForLoadedRecords: this.parseSubtypeSelectorUseForLoadedRecords(parsed),
+                        };
                     } else {
                         LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
                         this._subtypeSelectorConfig = null;
@@ -2606,6 +2692,20 @@ export class EntityInfo extends BaseInfo {
             }
         }
         return this._subtypeSelectorConfig;
+    }
+
+    /**
+     * Reads the selector's optional `UseForLoadedRecords` flag. Only a JSON `true` turns load hints
+     * on; a value of any other type is logged and leaves them off, so a quoted `"true"` can't look
+     * like an opt-in that silently does nothing.
+     */
+    private parseSubtypeSelectorUseForLoadedRecords(parsed: Record<string, unknown>): boolean {
+        const value = parsed['UseForLoadedRecords'];
+        if (value === undefined || value === null || typeof value === 'boolean') {
+            return value === true;
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'UseForLoadedRecords' must be true or false, but is ${JSON.stringify(value)}. Loads of this entity won't use the selector.`);
+        return false;
     }
     /**
      * Whether to audit when users access records from this entity
@@ -2943,6 +3043,29 @@ export class EntityInfo extends BaseInfo {
     get ConfigurationObject(): IEntityConfiguration | null {
         return this.Configuration;
     }
+
+    /**
+     * Parsed clone configuration for this entity.
+     * Controls clone enablement, not-cloneable status, caps, naming, field rules, etc.
+     * @see plans/record-cloning/README.md §4.1
+     */
+    get CloneConfig(): IEntityCloneConfiguration | null {
+        return this.ConfigurationObject?.Clone ?? null;
+    }
+
+    /**
+     * Returns true if cloning is explicitly enabled for this entity as a ROOT record.
+     */
+    get CloneEnabled(): boolean {
+        return this.CloneConfig?.Enabled === true;
+    }
+
+    /**
+     * Returns true if this entity is strictly not cloneable (neither as root nor child).
+     */
+    get NotCloneable(): boolean {
+        return this.CloneConfig?.NotCloneable === true;
+    }
     /**
      * Date and time when this entity was created
      */
@@ -3122,6 +3245,8 @@ export class EntityInfo extends BaseInfo {
     private _encryptedFieldsCache: EntityFieldInfo[] | null = null;
     private _datetimeFieldsCache: EntityFieldInfo[] | null = null;
     private _nameFieldCache: EntityFieldInfo | null | undefined = undefined;
+    /** Memoized computed plural, keyed by the display name it was derived from (see `DisplayNamePlural`). */
+    private _displayNamePluralCache: { source: string; plural: string } | undefined = undefined;
 
     /**
      * The set of field names this user may NOT READ on this entity — the per-request primitive
@@ -3516,6 +3641,40 @@ export class EntityInfo extends BaseInfo {
      */
     get DisplayNameOrName(): string {
         return this.DisplayName ? this.DisplayName : this.Name;
+    }
+
+    /**
+     * Returns a business-user-friendly PLURAL of the entity's display name, e.g. "Contacts", "Companies",
+     * "Addresses". Derived from `DisplayNameOrName` via `GeneratePluralName`, so a per-deployment
+     * `DisplayName` override flows through (rename the entity's DisplayName to "Member" and this returns
+     * "Members"). Handles irregular plurals and the common English rules (`-y` to `-ies`, `-s/ch/sh/x/z` to `-es`).
+     *
+     * This is the seam for surfacing the user's own domain nouns in place of the platform meta-noun
+     * "entity" on business-user surfaces (empty states, counts, headers). It is display-only: never use it
+     * as a lookup key. If the display name is already plural, `GeneratePluralName` returns it unchanged.
+     *
+     * Memoized per instance: templates read this on every change-detection pass, and the source name
+     * is fixed per metadata load (the same assumption `_nameFieldCache` relies on). The cache is keyed
+     * by the source name so it stays correct if `DisplayName` is ever mutated in place.
+     */
+    get DisplayNamePlural(): string {
+        const source = this.DisplayNameOrName;
+        if (this._displayNamePluralCache?.source !== source) {
+            this._displayNamePluralCache = { source, plural: EntityInfo.matchLeadingCase(source, GeneratePluralName(source)) };
+        }
+        return this._displayNamePluralCache.plural;
+    }
+
+    /**
+     * Gives `plural` the same leading-letter case as `source`. The irregular-plural table stores
+     * lowercase values ('person' → 'people'), so without this an empty state reads "No people to
+     * display". Only the first letter is touched: `capitalizeFirstLetterOnly` would also capitalize a
+     * name that deliberately starts lowercase ("iPhone" → "IPhones").
+     */
+    private static matchLeadingCase(source: string, plural: string): string {
+        const lead = source.charAt(0);
+        const startsUpper = lead !== lead.toLowerCase();
+        return startsUpper && plural.length > 0 ? plural.charAt(0).toUpperCase() + plural.slice(1) : plural;
     }
 
     /**
