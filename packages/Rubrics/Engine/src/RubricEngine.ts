@@ -1,6 +1,6 @@
 import { SnapshotFromRows, type RubricAnswer, type RubricNodeSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { AgentRubricEvaluator, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
-import { LLMRubricEvaluator, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
+import { LLMRubricEvaluator, type RubricEvaluatorMessages, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 import { ShapeContent, type RubricSubjectContent } from './content.js';
 import { DeterministicRubricEvaluator } from './DeterministicRubricEvaluator.js';
 import { HumanRubricEvaluator, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
@@ -44,7 +44,7 @@ export interface RubricRecords {
 
 /** Runs a named prompt. The engine builds the Rubric Evaluator runner from this. */
 export interface RubricPromptRun {
-    Run(promptName: string, rendered: string): Promise<string>;
+    Run(promptName: string, messages: RubricEvaluatorMessages): Promise<string>;
 }
 
 const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
@@ -353,9 +353,9 @@ export class RubricEngine {
     private rubricEvaluatorRunner(): RubricPromptRunner {
         const prompts = this.promptRun;
         return {
-            run(rendered: string) {
+            run(messages) {
                 if (!prompts) throw new Error('The Rubric Evaluator prompt is not configured.');
-                return prompts.Run(RUBRIC_EVALUATOR_PROMPT, rendered);
+                return prompts.Run(RUBRIC_EVALUATOR_PROMPT, messages);
             },
         };
     }

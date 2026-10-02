@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { RubricSubjectContent } from './content.js';
@@ -5,9 +6,15 @@ import { RubricEvaluator, type EvidenceRef, type RubricEvaluatorOutput } from '.
 
 export type RubricPromptMode = 'SinglePass' | 'PerCriterion';
 
-/** A prompt already rendered. Tests return JSON. Production calls the model. */
+/** The rubric, and the subject in a separate user message. */
+export interface RubricEvaluatorMessages {
+    system: string;
+    user: string;
+}
+
+/** A prompt already split. Tests return JSON. Production calls the model. */
 export interface RubricPromptRunner {
-    run(prompt: string): Promise<string>;
+    run(prompt: RubricEvaluatorMessages): Promise<string>;
 }
 
 export interface LLMDecision {
@@ -149,7 +156,7 @@ export class LLMRubricEvaluator extends RubricEvaluator {
     }
 
     private async singlePass(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
-        const raw = await this.runner.run(RenderRubricEvaluatorPrompt(version, content, 'SinglePass'));
+        const raw = await this.runner.run(BuildRubricEvaluatorMessages(version, content, 'SinglePass'));
         const parsed = JSON.parse(raw) as { decisions?: LLMDecision[] } | LLMDecision[];
         return Array.isArray(parsed) ? parsed : parsed.decisions ?? [];
     }
@@ -157,7 +164,7 @@ export class LLMRubricEvaluator extends RubricEvaluator {
     private async perCriterion(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
         const decisions: LLMDecision[] = [];
         for (const node of version.nodes.filter(item => item.nodeType === 'Criterion')) {
-            const raw = await this.runner.run(RenderRubricEvaluatorPrompt(version, content, 'PerCriterion', node));
+            const raw = await this.runner.run(BuildRubricEvaluatorMessages(version, content, 'PerCriterion', node));
             const parsed = JSON.parse(raw) as LLMDecision;
             decisions.push({ ...parsed, key: node.key });
         }
@@ -167,6 +174,25 @@ export class LLMRubricEvaluator extends RubricEvaluator {
 
 /** Shipped next to src and dist, so an installed package does not read the MJ repo. */
 const TEMPLATE_URL = new URL('../templates/rubric-evaluator.md', import.meta.url);
+
+const SUBJECT_HEADING = '## Subject content';
+
+/** System message is the rubric. User message is the subject inside a nonce the subject cannot close. */
+export function BuildRubricEvaluatorMessages(
+    version: RubricVersionSnapshot,
+    content: RubricSubjectContent,
+    mode: RubricPromptMode,
+    only?: RubricNodeSnapshot,
+): RubricEvaluatorMessages {
+    const body = SubjectBody(content);
+    const nonce = UniqueNonce(body);
+    const filled = FillRubricEvaluatorTemplate(readFileSync(TEMPLATE_URL, 'utf8'), version, content, mode, only, nonce);
+    const cut = filled.indexOf(SUBJECT_HEADING);
+    if (cut < 0) {
+        return { system: filled, user: DelimitSubject(body, nonce) };
+    }
+    return { system: filled.slice(0, cut).trimEnd(), user: filled.slice(cut).trim() };
+}
 
 /** The Rubric Evaluator template file, with its three tokens filled. */
 export function RenderRubricEvaluatorPrompt(
@@ -188,28 +214,46 @@ export function renderRubricEvaluatorPrompt(
     return RenderRubricEvaluatorPrompt(version, content, mode, only);
 }
 
-/** Fills {{instructions}}, {{criteria}}, and {{content}} in the template text. */
+/** Fills {{instructions}}, {{criteria}}, and {{content}} in one pass. The subject is inside a nonce delimiter. */
 export function FillRubricEvaluatorTemplate(
     template: string,
     version: RubricVersionSnapshot,
     content: RubricSubjectContent,
     mode: RubricPromptMode,
     only?: RubricNodeSnapshot,
+    nonce?: string,
 ): string {
     const nodes = only ? [only] : version.nodes.filter(node => node.nodeType === 'Criterion');
     const criteria = nodes.map(node => renderCriterion(version, node)).join('\n\n');
-    const text = content.text ?? '';
-    const data = content.data && Object.keys(content.data).length > 0 ? JSON.stringify(content.data) : '';
-    const body = [text, data].filter(part => part.length > 0).join('\n');
+    const body = SubjectBody(content);
+    const token = nonce ?? UniqueNonce(body);
     const ask = mode === 'SinglePass'
         ? 'Return JSON {"decisions":[{"key","level","value","notApplicable","rationale","evidence":[{"quote"}],"confidence"}]} for every criterion.'
         : `Return JSON {"chosen","probabilities","rationale","evidence":[{"quote"}]} for ${only?.key}. confidence is probabilities[chosen].`;
     const values: Record<string, string> = {
         '{{instructions}}': [ask, version.instructions ?? ''].filter(part => part.length > 0).join('\n\n'),
         '{{criteria}}': criteria,
-        '{{content}}': body,
+        '{{content}}': DelimitSubject(body, token),
     };
-    return template.replace(/\{\{(?:instructions|criteria|content)\}\}/g, token => values[token] ?? token);
+    return template.replace(/\{\{(?:instructions|criteria|content)\}\}/g, tokenName => values[tokenName] ?? tokenName);
+}
+
+function SubjectBody(content: RubricSubjectContent): string {
+    const text = content.text ?? '';
+    const data = content.data && Object.keys(content.data).length > 0 ? JSON.stringify(content.data) : '';
+    return [text, data].filter(part => part.length > 0).join('\n');
+}
+
+function DelimitSubject(body: string, nonce: string): string {
+    return `<rubric-subject ${nonce}>\n${body}\n</rubric-subject ${nonce}>`;
+}
+
+function UniqueNonce(body: string): string {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const nonce = randomBytes(16).toString('hex');
+        if (!body.includes(nonce)) return nonce;
+    }
+    throw new Error('Could not delimit the subject.');
 }
 
 /** @deprecated Use {@link FillRubricEvaluatorTemplate}. */

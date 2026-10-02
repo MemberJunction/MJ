@@ -4,7 +4,7 @@ export { DeterministicRubricEvaluator, type DeterministicRule } from './Determin
 export { RubricEngine, type EvaluateParams, type EvaluateRecordInput, type EvaluateRecordResult, type RubricEvaluationRecord, type RubricEvaluationStore, type RubricRecords } from './RubricEngine.js';
 export { ProviderRubricEngine, providerRubricEngine } from './providerRecords.js';
 export { GetAgreement, getAgreement, GetConsensus, getConsensus, GetDiagnostics, getDiagnostics, KrippendorffAlpha, krippendorffAlpha, QuadraticKappa, quadraticKappa } from './statistics.js';
-export { LLMRubricEvaluator, RenderRubricEvaluatorPrompt, renderRubricEvaluatorPrompt, type LLMDecision, type LLMRubricResult, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
+export { BuildRubricEvaluatorMessages, LLMRubricEvaluator, RenderRubricEvaluatorPrompt, renderRubricEvaluatorPrompt, type LLMDecision, type LLMRubricResult, type RubricEvaluatorMessages, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 export { AIRubricEvaluator, type AgentCriterionResult, type AgentScaleView, type RubricAgent, type RubricEvaluatorConfig } from './AIRubricEvaluator.js';
 export { AgentRubricEvaluator, type EvaluationAgentDecision, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 export { RUBRIC_WORLD, DraftWorld, draftWorld, PublishedWorld, publishedWorld, RubricWorldCriteria, rubricWorldCriteria, ScorePublishedMet, scorePublishedMet } from './rubricWorld.js';

@@ -332,7 +332,7 @@ function numberOrNull(value: unknown): number | null {
  */
 export function RubricEvaluatorPromptRun(provider: RubricProvider, user: unknown): RubricPromptRun {
     return {
-        async Run(promptName, rendered) {
+        async Run(promptName, messages) {
             const view = RunView.FromMetadataProvider(provider as never);
             const found = await view.RunView({
                 EntityName: 'MJ: AI Prompts',
@@ -344,7 +344,9 @@ export function RubricEvaluatorPromptRun(provider: RubricProvider, user: unknown
             if (!prompt) throw new Error(`The ${promptName} prompt was not found.`);
             const params = new AIPromptParams();
             params.prompt = prompt as AIPromptParams['prompt'];
-            params.systemPromptOverride = rendered;
+            params.systemPromptOverride = messages.system;
+            params.templateMessageRole = 'system';
+            params.conversationMessages = [{ role: 'user', content: messages.user }];
             params.contextUser = user as AIPromptParams['contextUser'];
             const result = await new AIPromptRunner().ExecutePrompt(params);
             if (!result.success) throw new Error(result.errorMessage || `The ${promptName} prompt failed.`);
