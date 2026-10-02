@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ChangeDetectorRef, ElementRef, NgZone } from '@angular/core';
 import { EntityInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -59,6 +59,8 @@ type Internals = {
     _columns: unknown[];
     effectiveAggregatesConfig: { expressions?: unknown[] } | null | undefined;
     buildCurrentGridState(): { aggregates?: { expressions?: unknown[] } };
+    onGridStateChanged(): void;
+    RefreshAggregates(): Promise<void>;
     gridApi: unknown;
 };
 
@@ -192,5 +194,67 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
         internalsOf(grid)._aggregatesConfig = explicit;
 
         expect(internalsOf(grid).effectiveAggregatesConfig?.expressions).toHaveLength(1);
+    });
+});
+
+
+describe('EntityDataGridComponent — a refusal is reported, once', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    /** `LogStatus` prints through `console.log` outside production, which is where tests run. */
+    function refusalLogs(log: { mock: { calls: unknown[][] } }): string[] {
+        return log.mock.calls
+            .map((args: unknown[]) => String(args[0]))
+            .filter((line: string) => line.includes('[entity-data-grid] Ignored'));
+    }
+
+    it('logs one line naming the entity and the count when foreign aggregates are refused', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+        const grid = withState(makeGrid(CARE_LOGS), ORDERS_COLUMNS, ORDERS_AGGREGATES);
+
+        internalsOf(grid).onGridStateChanged();
+
+        const lines = refusalLogs(log);
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toContain('Ignored 2 aggregate(s)');
+        expect(lines[0]).toContain('"MJ: Care Logs"');
+    });
+
+    it('stays silent when the state describes this entity', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+        // Adopting real aggregates triggers a fetch; nothing here depends on its result.
+        vi.spyOn(EntityDataGridComponent.prototype as unknown as Internals, 'RefreshAggregates')
+            .mockResolvedValue(undefined);
+        const own = {
+            expressions: [{ id: 'a1', expression: 'COUNT(*)', displayType: 'card', label: 'Care Logs', enabled: true }],
+        };
+        const grid = withState(makeGrid(CARE_LOGS), ['CareDate'], own);
+
+        internalsOf(grid).onGridStateChanged();
+
+        expect(refusalLogs(log)).toEqual([]);
+    });
+
+    it('stays silent when the state carries no aggregates to refuse', () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+        const grid = withState(makeGrid(CARE_LOGS), ORDERS_COLUMNS, undefined);
+
+        internalsOf(grid).onGridStateChanged();
+
+        expect(refusalLogs(log)).toEqual([]);
+    });
+
+    it('does not log from the predicate, which runs on every aggregates read', () => {
+        // Reading the effective config repeatedly must never print: only the state CHANGE does.
+        const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+        const grid = withState(makeGrid(CARE_LOGS), ORDERS_COLUMNS, ORDERS_AGGREGATES);
+
+        for (let i = 0; i < 5; i++) {
+            void internalsOf(grid).effectiveAggregatesConfig;
+        }
+
+        expect(refusalLogs(log)).toEqual([]);
     });
 });

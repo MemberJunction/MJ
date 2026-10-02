@@ -16,7 +16,7 @@ import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunctio
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ExportColumnTypeForSQLType } from '../utils/export-column.util';
-import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
+import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
@@ -2387,6 +2387,16 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         this._aggregatesConfig = this._gridState.aggregates;
         // Fetch aggregate values when gridState aggregates change
         this.RefreshAggregates();
+      } else if (this._gridState.aggregates) {
+        // The refusal is otherwise silent — the cards simply do not appear — so say so, once per
+        // grid-state change, to make a "my aggregates vanished" report traceable. Deliberately
+        // here and NOT in `gridStateDescribesCurrentEntity()`, which runs on every aggregates read
+        // and would flood the console (suggested by @rkihm-BC reviewing #4656).
+        const refusedCount = this._gridState.aggregates.expressions?.length ?? 0;
+        LogStatus(
+          `[entity-data-grid] Ignored ${refusedCount} aggregate(s) from a grid state that names none of ` +
+          `"${this._entityInfo.Name}"'s fields; it describes a different entity.`
+        );
       }
 
       // Clear suppression after AG Grid's async events have been processed.
