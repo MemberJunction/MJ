@@ -1303,7 +1303,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (54 classes)
+// @memberjunction/core-entities-server (56 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1343,7 +1343,9 @@ import {
     MJRemoteOperationEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
+    MJRubricBandEntityServer,
     MJRubricCriterionEntityServer,
+    MJRubricCriterionLevelEntityServer,
     MJRubricEvaluationEntityServer,
     MJRubricEvaluationScoreEntityServer,
     MJRubricScaleEntityServer,
@@ -2503,7 +2505,9 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRemoteOperationEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
+    MJRubricBandEntityServer,
     MJRubricCriterionEntityServer,
+    MJRubricCriterionLevelEntityServer,
     MJRubricEvaluationEntityServer,
     MJRubricEvaluationScoreEntityServer,
     MJRubricScaleEntityServer,
@@ -2599,12 +2603,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     FindBestActionAction,
     FindBestAgentAction,
     FindCandidateActionsAction,
-    FindCandidateAgentsAction,
-    GammaGeneratePresentationAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    FindCandidateAgentsAction,
+    GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
     GeocodeAddressAction,
@@ -2718,7 +2722,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1097;
+export const CLASS_REGISTRATIONS_COUNT = 1099;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -23,6 +23,10 @@ export class MJRubricCriterionLevelEntityServer extends MJRubricCriterionLevelEn
         }
         const versions = await provider.RunView({ EntityName: 'MJ: Rubric Versions', ExtraFilter: `ID='${versionId}'` }, this.ContextCurrentUser);
         const status = (versions.Results?.[0] as { Status?: string } | undefined)?.Status;
+        if (!versions.Success || !status) {
+            PushFailure(result, 'CriterionID', 'Could not confirm this level belongs to a draft version.', this.CriterionID);
+            return result;
+        }
         const message = DraftChildError('level', status);
         if (message) PushFailure(result, 'CriterionID', message, this.CriterionID);
         return result;

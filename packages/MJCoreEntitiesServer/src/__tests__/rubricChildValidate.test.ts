@@ -70,6 +70,34 @@ describe('rubric child and evaluation validation', () => {
         expect((await draftBand.ValidateAsync()).Success).toBe(true);
     });
 
+    it('refuses a criterion level when the version lookup fails or returns no row', async () => {
+        const failed = new MJRubricCriterionLevelEntityServer();
+        (failed as unknown as { ProviderToUse: { RunView: (params: { EntityName: string }) => Promise<{ Success: boolean; Results: unknown[] }> } }).ProviderToUse = {
+            async RunView(params) {
+                if (params.EntityName === 'MJ: Rubric Criteria') {
+                    return { Success: true, Results: [{ ID: 'criterion-1', RubricVersionID: 'version-1' }] };
+                }
+                return { Success: false, Results: [] };
+            },
+        };
+        const failedResult = await failed.ValidateAsync();
+        expect(failedResult.Success).toBe(false);
+        expect(failedResult.Errors[0]?.Type).toBe('Failure');
+
+        const empty = new MJRubricCriterionLevelEntityServer();
+        (empty as unknown as { ProviderToUse: { RunView: (params: { EntityName: string }) => Promise<{ Success: boolean; Results: unknown[] }> } }).ProviderToUse = {
+            async RunView(params) {
+                if (params.EntityName === 'MJ: Rubric Criteria') {
+                    return { Success: true, Results: [{ ID: 'criterion-1', RubricVersionID: 'version-1' }] };
+                }
+                return { Success: true, Results: [] };
+            },
+        };
+        const emptyResult = await empty.ValidateAsync();
+        expect(emptyResult.Success).toBe(false);
+        expect(emptyResult.Errors[0]?.Type).toBe('Failure');
+    });
+
     it('allows Draft to Submitted and refuses a new evaluation that is already Submitted', async () => {
         const created = new MJRubricEvaluationEntityServer();
         const createdHost = created as unknown as { IsSaved: boolean; Status: string };
