@@ -99,7 +99,8 @@ export interface ResponseTypeInclusionRules {
     /**
      * Include decisions field in the response interface.
      * Auto-aligns with includeDecisionsDocs unless explicitly set, and so is off unless the agent
-     * opts in with `includeDecisionsDocs: true`.
+     * opts in with `includeDecisionsDocs: true`. Always off unless `decisionsEnabled` is true,
+     * even when set explicitly.
      * @default true
      */
     decisions?: boolean;
@@ -107,7 +108,8 @@ export interface ResponseTypeInclusionRules {
     /**
      * Include finishIf field in the nextStep response interface.
      * Auto-aligns with includeFinishIfDocs unless explicitly set, and so is off whenever
-     * `finishIfMode` is `'off'`, the default.
+     * `finishIfMode` is `'off'`, the default. Always off unless `decisionsEnabled` is true, even
+     * when set explicitly.
      * @default true
      */
     finishIf?: boolean;
@@ -413,10 +415,31 @@ export interface LoopAgentTypePromptParams {
      */
     includePipelineDocs?: boolean;
 
+    // === Decision Models ===
+
+    /**
+     * The master switch for decision-model use by this agent. Unless it is `true`, the agent never
+     * asks a decision model on its own, whatever the settings below say:
+     *
+     * - inline `decisions`: no docs and no response field, and any request the model sends anyway is
+     *   skipped, even with `includeResponseTypeDefinition.decisions: true` set explicitly;
+     * - `finishIf`: treated as `finishIfMode: 'off'`, so no docs, no response field and no gate;
+     * - `decisionDiscovery`, `payloadFeedbackCheck` and catalog narrowing (`maxActionsInPrompt`,
+     *   `maxSubAgentsInPrompt`) do not run, so the prompt describes the whole catalog;
+     * - the Memory Manager's note gate (`enableDecisionGate`) does not run.
+     *
+     * With it `true`, each of those settings works as documented, and each is still off by default.
+     * Explicit uses do not read it: a Flow agent's Decision step, a task graph's Decision step, the
+     * Run Decision action and the other callers of `AgentDecisionService` or `AIDecisionRunner`.
+     * @default false
+     */
+    decisionsEnabled?: boolean;
+
     /**
      * Teach the model to request inline decisions: the `decisions` docs, and the field in the
      * response type. Opt-in: anything but `true` leaves both out. They add about 1,200 tokens to every
      * turn, and on the Prompt Eval corpus no model used them (typed-decision plan, Task 4.7).
+     * Needs `decisionsEnabled: true`.
      * @default false
      */
     includeDecisionsDocs?: boolean;
@@ -459,6 +482,7 @@ export interface LoopAgentTypePromptParams {
      * Task 4.6) found that a gate at the 0.9 threshold would have ended 22% of the rounds where the
      * agent went on to act, and neither a stricter threshold nor calibration fixed that. Use
      * `'shadow'` to measure an agent's own gates on real traffic before turning them `'on'`.
+     * Needs `decisionsEnabled: true`: without it the mode is treated as `'off'`.
      * @default 'off'
      */
     finishIfMode?: FinishIfMode;
@@ -490,7 +514,7 @@ export interface LoopAgentTypePromptParams {
      * step that ends the run (`Success`, `Chat`, or any step that terminates) is not checked, since
      * no turn would read the result.
      *
-     * Off by default: each check costs an extra decision call.
+     * Off by default: each check costs an extra decision call. Needs `decisionsEnabled: true`.
      * @default false
      */
     payloadFeedbackCheck?: boolean;
@@ -527,6 +551,7 @@ export interface LoopAgentTypePromptParams {
      * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
      * tool calling under implicit control flow, every sub-agent is still declared as a
      * `delegate_to_` tool, since a call to an undeclared tool is refused.
+     * Needs `decisionsEnabled: true`: without it the prompt describes every sub-agent.
      * @default -1
      */
     maxSubAgentsInPrompt?: number;
@@ -545,6 +570,7 @@ export interface LoopAgentTypePromptParams {
      * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
      * tool calling, every action is still declared as a tool, since a call to an undeclared tool is
      * refused and that mode has no `Actions` step to fall back on.
+     * Needs `decisionsEnabled: true`: without it the prompt describes every action and skill.
      * @default -1
      */
     maxActionsInPrompt?: number;
@@ -560,7 +586,7 @@ export interface LoopAgentTypePromptParams {
      * agent can delegate in its first turn instead of calling Find Candidate Agents first. Otherwise,
      * and on any error, timeout or cancellation, the prompt is unchanged. A follow-up turn is never
      * asked about, so a suggestion never pulls the agent away from one it has already engaged, and
-     * fewer than three candidate agents ask nothing.
+     * fewer than three candidate agents ask nothing. Needs `decisionsEnabled: true`.
      * @default false
      */
     decisionDiscovery?: boolean;
@@ -622,6 +648,8 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
+    // Off: the master switch for decision-model use. Every automatic use of a decision model needs it.
+    decisionsEnabled: false,
     includeDecisionsDocs: false,
     decisionsMaxItems: 100,
     decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,

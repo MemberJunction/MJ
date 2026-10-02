@@ -26,6 +26,7 @@ import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
 import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
+import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -134,6 +135,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['user-routines', UserRoutinesChecks, 16],
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
+        ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -221,6 +223,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-artifact-tools': 9,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
+        'agent-decisions-switch': 9,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 11,

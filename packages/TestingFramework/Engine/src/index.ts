@@ -24,6 +24,7 @@ export * from './oracles/TraceValidatorOracle';
 export * from './oracles/TraceSubAgentValidatorOracle';
 export * from './oracles/AgentDecisionOracle';
 export * from './oracles/DecisionLabelMatchOracle';
+export * from './oracles/DiscoveryLabelMatchOracle';
 export * from './oracles/LLMJudgeOracle';
 export * from './oracles/DecisionJudgeOracle';
 export * from './oracles/ExactMatchOracle';
