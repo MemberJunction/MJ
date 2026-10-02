@@ -279,8 +279,8 @@ export function providerEvaluationStore(provider: RubricProvider, user: unknown)
 
 function evaluatorType(evaluator: string | undefined): string {
     if (evaluator === 'AI') return 'Agent';
-    if (evaluator === 'LLM') return 'AIPrompt';
-    return 'Deterministic';
+    if (evaluator === 'Deterministic') return 'Deterministic';
+    return 'AIPrompt';
 }
 
 /** Reads the score rows the entity server just wrote and returns them as scored nodes. */

@@ -90,6 +90,16 @@ describe('ProviderEvaluationStore.submit', () => {
         expect(written).toContainEqual({ field: 'AIAgentRunID', value: 'run-1' });
         expect(written).toContainEqual({ field: 'EvaluatorName', value: 'LLM' });
         expect(written).toContainEqual({ field: 'Metadata', value: JSON.stringify({ Evaluator: { Name: 'LLM' } }) });
+        expect(written).toContainEqual({ field: 'EvaluatorType', value: 'AIPrompt' });
+        written.length = 0;
+        await store.createDraft({
+            versionId: 'version',
+            rubricId: 'rubric',
+            subjectEntityId: 'entity',
+            subjectRecordId: 'run-1',
+        });
+        expect(written).toContainEqual({ field: 'EvaluatorType', value: 'AIPrompt' });
+        expect(written.some(row => row.field === 'EvaluatorType' && row.value === 'Deterministic')).toBe(false);
         expect(result.nodes).toEqual([{
             id: 'criterion',
             key: 'accuracy',

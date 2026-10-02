@@ -30,7 +30,13 @@ describe('production sampling', () => {
             async EvaluateRecord(input) { evaluated.push(input); },
         });
         expect((await job.run()).map(row => row.runId)).toEqual(['open']);
-        expect(evaluated).toEqual([{ rubricId: 'rubric', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT }]);
+        expect(evaluated).toEqual([{
+            rubricId: 'rubric',
+            subjectRecordId: 'open',
+            subjectEntityName: AGENT_RUN_SUBJECT,
+            evaluator: 'LLM',
+            promptMode: 'SinglePass',
+        }]);
         expect(new EvaluateSampledAgentRuns({ async Load() { return { links: [], runs: [], evaluated: [] }; } }, { async EvaluateRecord() {} }).plan({
             links: [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active' }],
             runs: [{ id: 'open', agentId: 'agent' }],
@@ -56,7 +62,13 @@ describe('production sampling', () => {
             async EvaluateRecord(input) { evaluated.push(input); },
         });
         expect((await job.run()).map(row => row.rubricId)).toEqual(['sample-rubric']);
-        expect(evaluated).toEqual([{ rubricId: 'sample-rubric', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT }]);
+        expect(evaluated).toEqual([{
+            rubricId: 'sample-rubric',
+            subjectRecordId: 'open',
+            subjectEntityName: AGENT_RUN_SUBJECT,
+            evaluator: 'LLM',
+            promptMode: 'SinglePass',
+        }]);
     });
 
     it('skips a run whose evaluation points at the rubric only through RubricVersionID', async () => {
@@ -78,7 +90,30 @@ describe('production sampling', () => {
             async EvaluateRecord(input) { evaluated.push(input); },
         });
         expect(await job.run()).toEqual([]);
-        expect(evaluated).toEqual([]);
+    });
+
+    it('uses the agent rubric evaluator and defaults a missing one to LLM SinglePass', async () => {
+        const evaluated: { evaluator: string; promptMode: string; rubricId: string }[] = [];
+        const job = ProductionSamplingJob({
+            async links() {
+                return [
+                    { agentId: 'agent', rubricId: 'plain', sampleRate: 1, status: 'Active', purpose: 'ProductionSampling' },
+                    { agentId: 'agent', rubricId: 'rules', sampleRate: 1, status: 'Active', purpose: 'ProductionSampling', evaluatorConfig: { EvaluatorType: 'Deterministic' } },
+                    { agentId: 'agent', rubricId: 'each', sampleRate: 1, status: 'Active', purpose: 'ProductionSampling', evaluatorConfig: '{"EvaluatorType":"AIPrompt","Mode":"PerCriterion"}' },
+                ];
+            },
+            async runs() { return [{ id: 'open', agentId: 'agent', status: 'Completed' }]; },
+            async evaluated() { return []; },
+            async versions() { return []; },
+        }, {
+            async EvaluateRecord(input) { evaluated.push(input); },
+        });
+        await job.run();
+        expect(evaluated).toEqual([
+            { rubricId: 'plain', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluator: 'LLM', promptMode: 'SinglePass' },
+            { rubricId: 'rules', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluator: 'Deterministic', promptMode: 'SinglePass' },
+            { rubricId: 'each', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluator: 'LLM', promptMode: 'PerCriterion' },
+        ]);
     });
 
     it('keeps two agents that scored the same criterion as two series', () => {

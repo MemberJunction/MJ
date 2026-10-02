@@ -10,6 +10,26 @@ export interface SamplingLink {
     rubricId: string;
     sampleRate: number;
     status: string;
+    /** AIAgentRubric.EvaluatorConfig. Absent means LLM SinglePass. */
+    evaluatorConfig?: unknown;
+}
+
+/** The evaluator a sampled run uses. Missing config is LLM SinglePass, not Deterministic. */
+export function SamplingEvaluatorChoice(config: unknown): { evaluator: 'LLM' | 'Deterministic' | 'AI'; promptMode: 'SinglePass' | 'PerCriterion' } {
+    const parsed = typeof config === 'string' ? parseConfig(config) : config;
+    const record = parsed && typeof parsed === 'object' ? parsed as { EvaluatorType?: string; Mode?: string } : {};
+    const promptMode = record.Mode === 'PerCriterion' ? 'PerCriterion' : 'SinglePass';
+    if (record.EvaluatorType === 'Deterministic') return { evaluator: 'Deterministic', promptMode };
+    if (record.EvaluatorType === 'Agent') return { evaluator: 'AI', promptMode };
+    return { evaluator: 'LLM', promptMode };
+}
+
+function parseConfig(value: string): unknown {
+    try {
+        return JSON.parse(value);
+    } catch {
+        return null;
+    }
 }
 
 /** Active production-sampling links, recent runs, skipping runs that already have this rubric's evaluation. */
@@ -25,7 +45,12 @@ export function SelectSampledRuns(input: {
             if (run.agentId !== link.agentId) continue;
             if (input.evaluated.some(row => row.runId === run.id && row.rubricId === link.rubricId)) continue;
             if (!KeepSample(run.id, link.sampleRate)) continue;
-            chosen.push({ runId: run.id, agentId: link.agentId, rubricId: link.rubricId });
+            chosen.push({
+                runId: run.id,
+                agentId: link.agentId,
+                rubricId: link.rubricId,
+                ...SamplingEvaluatorChoice(link.evaluatorConfig),
+            });
         }
     }
     return chosen;
@@ -48,7 +73,13 @@ export interface SamplingLoader {
 export const AGENT_RUN_SUBJECT = 'MJ: AI Agent Runs';
 
 export interface SamplingEvaluator {
-    EvaluateRecord(input: { rubricId: string; subjectRecordId: string; subjectEntityName: string }): Promise<void>;
+    EvaluateRecord(input: {
+        rubricId: string;
+        subjectRecordId: string;
+        subjectEntityName: string;
+        evaluator: 'LLM' | 'Deterministic' | 'AI';
+        promptMode: 'SinglePass' | 'PerCriterion';
+    }): Promise<void>;
 }
 
 /** Scheduled job. Loads links and runs, then evaluates the kept runs off the agent response path. */
@@ -71,6 +102,8 @@ export class EvaluateSampledAgentRuns {
                 rubricId: item.rubricId,
                 subjectRecordId: item.runId,
                 subjectEntityName: AGENT_RUN_SUBJECT,
+                evaluator: item.evaluator,
+                promptMode: item.promptMode,
             });
         }
         return chosen;
@@ -88,6 +121,7 @@ export interface AgentRubricLinkRow {
     sampleRate: number;
     status: string;
     purpose: string;
+    evaluatorConfig?: unknown;
 }
 
 export interface AgentRunRow {
@@ -128,7 +162,13 @@ export function evaluatedRubricRuns(
 export function ProductionSamplingLinks(links: AgentRubricLinkRow[]): SamplingLink[] {
     return links
         .filter(link => link.purpose === 'ProductionSampling' && link.status === 'Active')
-        .map(link => ({ agentId: link.agentId, rubricId: link.rubricId, sampleRate: link.sampleRate, status: link.status }));
+        .map(link => ({
+            agentId: link.agentId,
+            rubricId: link.rubricId,
+            sampleRate: link.sampleRate,
+            status: link.status,
+            evaluatorConfig: link.evaluatorConfig,
+        }));
 }
 
 /** @deprecated Use {@link ProductionSamplingLinks}. */
