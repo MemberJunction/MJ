@@ -510,6 +510,16 @@ export interface IDerived extends IChild { Extra: number }
         expect(rootSchema(m).safeParse({ S: 'anything' }).success).toBe(true);
     });
 
+    it('strings from the definition are emitted as escaped literals that still mean the same value', () => {
+        const def = `/** @mjValidate */\nexport interface IRoot {\n  "a</script>b": number;\n  /** @pattern ^<x>/y$ */\n  P: string;\n  L: 'q</b>\u2028r';\n}`;
+        const m = zodModule(def, 'IRoot');
+        expect(m.Source).not.toMatch(/<\/script>|<x>|<\/b>|\u2028/);
+        expect(typeCheck(m.Module)).toEqual([]);
+        const schema = rootSchema(m);
+        expect(schema.safeParse({ 'a</script>b': 1, P: '<x>/y', L: 'q</b>\u2028r' }).success).toBe(true);
+        expect(schema.safeParse({ 'a</script>b': 1, P: 'nope', L: 'q</b>\u2028r' }).success).toBe(false);
+    });
+
     it('mutually recursive declarations need no ordering', () => {
         const def = `/** @mjValidate */\nexport interface IA { B?: IB }\nexport interface IB { A?: IA; N: number }`;
         const m = zodModule(def, 'IA');

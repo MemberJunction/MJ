@@ -41,6 +41,15 @@ export interface JSONZodResult {
     Warnings: string[];
 }
 
+/**
+ * A string from the JSONType definition (which comes from metadata) as a TypeScript string literal for
+ * generated source. JSON.stringify alone leaves `<`, `>`, `/` and the U+2028/U+2029 line separators
+ * unescaped; they are rewritten as `\uXXXX` escapes, so the literal still evaluates to the same string.
+ */
+export function CodeLiteral(value: string): string {
+    return JSON.stringify(value).replace(/[<>/\u2028\u2029]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
 /** Name of the emitted schema const for a declared type. */
 export function JSONSchemaConstName(prefix: string, declaredName: string): string {
     return `${prefix}_${declaredName}Schema`;
@@ -162,7 +171,7 @@ class ZodConverter {
     }
 
     private objectFromMembers(members: JSONMember[], where: string, host: ts.InterfaceDeclaration | ts.TypeLiteralNode): string {
-        const entries = members.map((m) => `${JSON.stringify(m.Name)}: ${this.memberExpression(m, where)}`);
+        const entries = members.map((m) => `${CodeLiteral(m.Name)}: ${this.memberExpression(m, where)}`);
         const index = host.members.find((m): m is ts.IndexSignatureDeclaration => ts.isIndexSignatureDeclaration(m));
         const shape = entries.length > 0 ? `z.object({ ${entries.join(', ')} })` : 'z.object({})';
         if (!index) {
@@ -272,7 +281,7 @@ class ZodConverter {
     private literalExpression(node: ts.LiteralTypeNode, where: string): string {
         const lit = node.literal;
         if (ts.isStringLiteral(lit) || ts.isNoSubstitutionTemplateLiteral(lit)) {
-            return `z.literal(${JSON.stringify(lit.text)})`;
+            return `z.literal(${CodeLiteral(lit.text)})`;
         }
         if (ts.isNumericLiteral(lit)) {
             return `z.literal(${lit.text})`;
@@ -356,7 +365,7 @@ class ZodConverter {
         }
         const pattern = tags.find((t) => t.Name === 'pattern');
         if (pattern && pattern.Text.length > 0 && this.isValidPattern(pattern.Text, where)) {
-            out += `.regex(new RegExp(${JSON.stringify(pattern.Text)}))`;
+            out += `.regex(new RegExp(${CodeLiteral(pattern.Text)}))`;
         }
         const format = tags.find((t) => t.Name === 'format');
         if (format) {

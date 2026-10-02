@@ -27,6 +27,7 @@ import {
     PrefixedTypeText,
     ResolveLocalTarget,
 } from './json-type-model';
+import { CodeLiteral } from './json-type-zod';
 
 /** A cached / freshly generated translation of a SQL `@CHECK`, as this module needs it. */
 export interface JSONCheckTranslation {
@@ -48,8 +49,8 @@ export interface JSONRuleSetResult {
     SqlRules: JSONCheckRule[];
 }
 
-/** Escapes a value for a double-quoted TS string literal. */
-const str = (s: string): string => JSON.stringify(s);
+/** Escapes a value for a double-quoted TS string literal (see {@link CodeLiteral}). */
+const str = (s: string): string => CodeLiteral(s);
 
 /** Syntax check of `return (<expression>);` inside a function; returns null when fine, else the first diagnostic. */
 export function CheckTSExpressionSyntax(expression: string): string | null {
