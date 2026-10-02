@@ -23,6 +23,23 @@ function version(): RubricVersionSnapshot {
 }
 
 describe('DeterministicRubricEvaluator', () => {
+    it('reads Path, Operator, Values, and the true, false, and missing results', () => {
+        const tree = version();
+        tree.nodes = [
+            { ...tree.nodes[0], id: 'true', key: 'true', evaluatorConfig: { Deterministic: { Path: 'status', Operator: 'equals', Values: ['shipped'], LevelWhenTrue: 'High', LevelWhenFalse: 'Low' } } },
+            { ...tree.nodes[0], id: 'false', key: 'false', evaluatorConfig: { Deterministic: { Path: 'status', Operator: 'equals', Values: ['held'], LevelWhenTrue: 'High', LevelWhenFalse: 'Low' } } },
+            { ...tree.nodes[0], id: 'missing', key: 'missing', evaluatorConfig: { Deterministic: { Path: 'gone', Operator: 'exists', NotApplicableWhenMissing: true, LevelWhenTrue: 'High' } } },
+            { ...tree.nodes[0], id: 'open', key: 'open', evaluatorConfig: { Deterministic: { Path: 'status' } } },
+        ];
+        tree.scales[0].levels.push({ id: 'low', label: 'Low', value: 0, normalizedValue: 0, sequence: 1 });
+        const output = new DeterministicRubricEvaluator().evaluateData(tree, { data: { status: 'shipped' } });
+        const byId = new Map(output.answers.map(answer => [answer.criterionId, answer]));
+        expect(byId.get('true')?.scaleLevelId).toBe('high');
+        expect(byId.get('false')?.scaleLevelId).toBe('low');
+        expect(byId.get('missing')?.isNotApplicable).toBe(true);
+        expect(byId.has('open')).toBe(false);
+    });
+
     it('leaves a leaf with no rule unanswered and does not call a model', () => {
         const output = new DeterministicRubricEvaluator().evaluateData(version(), { data: { score: 1 } });
         expect(output.answers).toHaveLength(1);

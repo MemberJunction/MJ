@@ -5,10 +5,21 @@ import type { RubricSubjectContent } from './content.js';
 
 /**
  * A leaf rule stored at EvaluatorConfig.Deterministic. It reads one path in
- * the subject JSON. A leaf with no rule is left unanswered. There is no model call.
+ * the subject JSON. A leaf with no rule, or a rule with no operator, is left
+ * unanswered. There is no model call.
+ *
+ * The stored shape is Path, Operator, Values, LevelWhenTrue, LevelWhenFalse,
+ * and NotApplicableWhenMissing. The older path/equals/level fields still work.
  */
 export interface DeterministicRule {
-    path: string;
+    Path?: string;
+    path?: string;
+    Operator?: 'equals' | 'notEquals' | 'in' | 'notIn' | 'contains' | 'exists' | 'between' | 'gte' | 'lte' | 'matches';
+    Values?: unknown[];
+    LevelWhenTrue?: string;
+    LevelWhenFalse?: string;
+    NotApplicableWhenMissing?: boolean;
+    /** Older shape. Treated as Operator equals and Values of one entry. */
     equals?: unknown;
     level?: string;
     value?: number;
@@ -32,17 +43,33 @@ export class DeterministicRubricEvaluator extends BaseRubricEvaluator {
         const candidates: RubricCandidate[] = [];
         for (const node of version.nodes) {
             if (node.nodeType !== 'Criterion') continue;
-            const rule = ruleOf(node.evaluatorConfig);
+            const rule = normalizeRule(ruleOf(node.evaluatorConfig));
             if (!rule) continue;
             const actual = readPath(content.data ?? {}, rule.path);
-            if (rule.equals !== undefined && actual !== rule.equals) continue;
+            const missing = actual === undefined;
+            if (missing && rule.notApplicableWhenMissing) {
+                candidates.push({
+                    criterionId: node.id,
+                    scaleLevelId: null,
+                    rawValue: null,
+                    isNotApplicable: true,
+                    rationale: `Deterministic ${rule.path} is missing`,
+                    evidence: [],
+                });
+                continue;
+            }
+            if (!rule.operator) continue;
+            const matched = matches(rule.operator, actual, rule.values);
+            const label = matched ? rule.levelWhenTrue : rule.levelWhenFalse;
+            if (!label && !(matched && rule.rawValue != null)) continue;
             const scale = version.scales.find(item => item.id === node.scaleId);
-            const level = rule.level ? scale?.levels.find(item => item.label === rule.level) : undefined;
+            const level = label ? scale?.levels.find(item => item.label === label) : undefined;
+            const numeric = !level && label != null && label.trim() !== '' && Number.isFinite(Number(label)) ? Number(label) : null;
             candidates.push({
                 criterionId: node.id,
                 scaleLevelId: level?.id ?? null,
-                rawValue: rule.value ?? null,
-                isNotApplicable: rule.notApplicable,
+                rawValue: numeric ?? (matched ? rule.rawValue ?? null : null),
+                isNotApplicable: false,
                 rationale: `Deterministic ${rule.path}`,
                 evidence: [],
             });
@@ -56,11 +83,68 @@ export class DeterministicRubricEvaluator extends BaseRubricEvaluator {
     }
 }
 
+interface NormalizedRule {
+    path: string;
+    operator?: DeterministicRule['Operator'];
+    values: unknown[];
+    levelWhenTrue?: string;
+    levelWhenFalse?: string;
+    notApplicableWhenMissing: boolean;
+    rawValue?: number;
+}
+
 function ruleOf(value: unknown): DeterministicRule | undefined {
     if (!value || typeof value !== 'object') return undefined;
     const rule = (value as { Deterministic?: DeterministicRule }).Deterministic;
-    if (!rule || typeof rule.path !== 'string') return undefined;
+    if (!rule || typeof rule !== 'object') return undefined;
     return rule;
+}
+
+function normalizeRule(rule: DeterministicRule | undefined): NormalizedRule | undefined {
+    if (!rule) return undefined;
+    const path = typeof rule.Path === 'string' ? rule.Path : rule.path;
+    if (typeof path !== 'string' || path.length === 0) return undefined;
+    const operator = rule.Operator ?? (rule.equals !== undefined ? 'equals' : undefined);
+    const values = Array.isArray(rule.Values) ? rule.Values : (rule.equals !== undefined ? [rule.equals] : []);
+    return {
+        path,
+        operator,
+        values,
+        levelWhenTrue: rule.LevelWhenTrue ?? rule.level,
+        levelWhenFalse: rule.LevelWhenFalse,
+        notApplicableWhenMissing: rule.NotApplicableWhenMissing === true,
+        rawValue: typeof rule.value === 'number' ? rule.value : undefined,
+    };
+}
+
+function matches(operator: NonNullable<DeterministicRule['Operator']>, actual: unknown, values: unknown[]): boolean {
+    const first = values[0];
+    const second = values[1];
+    if (operator === 'exists') return actual !== undefined && actual !== null;
+    if (operator === 'equals') return actual === first;
+    if (operator === 'notEquals') return actual !== first;
+    if (operator === 'in') return values.includes(actual);
+    if (operator === 'notIn') return !values.includes(actual);
+    if (operator === 'contains') {
+        if (typeof actual === 'string' && typeof first === 'string') return actual.includes(first);
+        return Array.isArray(actual) && actual.includes(first);
+    }
+    if (operator === 'matches') {
+        if (typeof first !== 'string' || typeof actual !== 'string') return false;
+        try {
+            return new RegExp(first).test(actual);
+        } catch {
+            return false;
+        }
+    }
+    const number = typeof actual === 'number' ? actual : Number(actual);
+    const low = typeof first === 'number' ? first : Number(first);
+    const high = typeof second === 'number' ? second : Number(second);
+    if (!Number.isFinite(number) || !Number.isFinite(low)) return false;
+    if (operator === 'gte') return number >= low;
+    if (operator === 'lte') return number <= low;
+    if (operator === 'between') return Number.isFinite(high) && number >= low && number <= high;
+    return false;
 }
 
 function readPath(data: Record<string, unknown>, path: string): unknown {
