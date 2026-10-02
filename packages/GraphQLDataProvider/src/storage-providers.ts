@@ -30,6 +30,14 @@ export class BrowserStorageProviderBase implements ILocalStorageProvider {
         return true;
     }
 
+    /**
+     * `false` — the base tier is a `Map` on the heap, which dies with the page. Subclasses with a
+     * real backend override this. See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public get SupportsCrossProcessPersistence(): boolean {
+        return false;
+    }
+
     private _storage: Map<string, Map<string, unknown>> = new Map();
 
     /**
@@ -109,6 +117,16 @@ class BrowserLocalStorageProvider extends BrowserStorageProviderBase {
      */
     public override get SharesReferences(): boolean {
         return typeof localStorage === 'undefined';
+    }
+
+    /**
+     * `true` only while localStorage is reachable — what it holds survives a page reload. Without
+     * it every method defers to the in-memory base tier, which does not, so this reports the
+     * inverse of the fallback condition rather than a constant.
+     * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public override get SupportsCrossProcessPersistence(): boolean {
+        return typeof localStorage !== 'undefined';
     }
 
     /**
@@ -339,6 +357,16 @@ export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase 
      */
     public override get SharesReferences(): boolean {
         return false;
+    }
+
+    /**
+     * `true` — IndexedDB outlives the page. Unlike the localStorage provider this class never
+     * defers to the in-memory base tier, so there is no fallback that would make a stored
+     * snapshot unreadable on the next load.
+     * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public override get SupportsCrossProcessPersistence(): boolean {
+        return true;
     }
 
     private dbPromise: Promise<IDBPDatabase<MJ_MetadataDB>>;
