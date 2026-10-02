@@ -153,7 +153,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['cloudflare-clef', CloudflareClefChecks, 6], // CF1-CF6 Clef/Clef-flash metadata, driver registration, runner calls through an HTTP stand-in: envelope failures and failover, a bare response, a JSON credential's account (IT99)
-        ['systemone-kev', SystemOneKevChecks, 9], // KV1-KV9 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter (IT100)
+        ['systemone-kev', SystemOneKevChecks, 10], // KV1-KV10 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter, a binding on the serving row of a two-row model (IT100)
         ['perplexity-decider', PerplexityDeciderChecks, 5], // PX1-PX5 Perplexity Decider metadata, PerplexityDecision registration, runner calls through an HTTP stand-in: the quickstart request and response, a bound credential's token, Default Decision selection and failover (IT101)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
@@ -313,7 +313,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'startup-mode': 3,
         'storage': 6,
         'subscription-isolation': 2,
-        'systemone-kev': 9,
+        'systemone-kev': 10,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
         'templates': 8,
