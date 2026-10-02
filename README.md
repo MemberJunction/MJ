@@ -372,7 +372,7 @@ LLM, embedding, cloud-platform, local-inference, and specialty AI provider imple
 |---------|-----|-------------|
 | [Fireworks](./packages/AI/Providers/Fireworks/README.md) | `@memberjunction/ai-fireworks` | Wrapper for Fireworks.ai AI Models |
 | [OpenRouter](./packages/AI/Providers/OpenRouter/README.md) | `@memberjunction/ai-openrouter` | Wrapper for OpenRouter AI inference services |
-| [SystemOne](./packages/AI/Providers/SystemOne/README.md) | `@memberjunction/ai-systemone` | Decision models on any System One server (`/v1/systemone`): Kev on Modal, llama.cpp `llama-server`, TypeSafe |
+| [SystemOne](./packages/AI/Providers/SystemOne/README.md) | `@memberjunction/ai-systemone` | Decision models on any System One server (`/v1/systemone`): Kev on Modal, llama.cpp `llama-server`, TypeSafe; and Perplexity's Decisions API (`pplx-decider-v1-27b`) |
 
 **Local Inference**
 
