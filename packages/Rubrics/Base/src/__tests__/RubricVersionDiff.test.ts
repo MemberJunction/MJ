@@ -128,6 +128,42 @@ describe('RubricVersionDiff', () => {
         expect(await scoringHash(edited)).not.toBe(await scoringHash(base));
     });
 
+    it('changes ScoringHash when level values swap onto the other level ids', async () => {
+        const levels = [
+            { id: 'low', label: 'Low', value: 0, normalizedValue: 0, sequence: 0 },
+            { id: 'high', label: 'High', value: 1, normalizedValue: 1, sequence: 1 },
+        ];
+        const before = snapshot([node({ key: 'clarity' })]);
+        before.scales = [{ id: 'scale', scaleType: 'Levels', higherIsBetter: true, levels }];
+        const swapped = snapshot([node({ key: 'clarity' })]);
+        swapped.scales = [{
+            id: 'scale',
+            scaleType: 'Levels',
+            higherIsBetter: true,
+            levels: [
+                { id: 'low', label: 'Low', value: 1, normalizedValue: 1, sequence: 1 },
+                { id: 'high', label: 'High', value: 0, normalizedValue: 0, sequence: 0 },
+            ],
+        }];
+        expect(await scoringHash(swapped)).not.toBe(await scoringHash(before));
+    });
+
+    it('calls a band label rename Patch and a sequence-only edit a change', () => {
+        const renamed = snapshot([node({ key: 'clarity' })]);
+        renamed.bands = [{ id: 'band-clone', label: 'Met', description: 'ok', minScore: 0.6, maxScore: 1, displayTone: 'Success', sequence: 0 }];
+        const rename = RubricVersionDiff.diff(base, renamed);
+        expect(rename.computedBump).toBe('Patch');
+        expect(rename.changes.some(change => change.property === 'band added' || change.property === 'band removed')).toBe(false);
+        expect(rename.changes.find(change => change.property === 'band label')).toMatchObject({ bump: 'Patch', from: 'Pass', to: 'Met' });
+
+        const reordered = snapshot([node({ key: 'clarity' })]);
+        reordered.bands = [{ id: 'band', label: 'Pass', description: 'ok', minScore: 0.6, maxScore: 1, displayTone: 'Success', sequence: 4 }];
+        const sequence = RubricVersionDiff.diff(base, reordered);
+        expect(sequence.computedBump).toBe('Patch');
+        expect(sequence.nextVersion).not.toBeNull();
+        expect(sequence.changes.find(change => change.property === 'Sequence')).toMatchObject({ from: 0, to: 4 });
+    });
+
     it('does not bump when a clone keeps the band label and range and assigns a new id', () => {
         const cloned = snapshot([node({ key: 'clarity' })]);
         cloned.bands = [{ id: 'band-clone', label: 'Pass', description: 'ok', minScore: 0.6, maxScore: 1, displayTone: 'Success', sequence: 0 }];

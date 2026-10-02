@@ -42,8 +42,9 @@ export function HighestNonDraftVersion(versions: VersionNumberRow[]): VersionNum
  * changed, an advisory node was added or removed, or an advisory node's parent, type,
  * weight, scale, gate, rollup, or evaluator config changed, or evidence/rationale
  * requirements changed.
- * Bands match by label, which is unique inside a version, so a clone's new band ids
- * are not a bump.
+ * Bands match by label first. A clone's new id with the same label is not a bump.
+ * A label rename of the same band is Patch. Sequence is Patch, so a sequence-only
+ * edit is not identical.
  * Patch: wording, sequence, and display range only.
  *
  * The highest change wins. AppliedBump is the max of that and the author's request;
@@ -174,25 +175,54 @@ export class RubricVersionDiff {
     }
 
     private static diffBands(changes: VersionChange[], base: RubricVersionSnapshot, draft: RubricVersionSnapshot): void {
-        // Label is unique inside a version. A clone assigns new ids, so matching by id
-        // would mark every unchanged band as removed and added.
+        // Label is unique inside a version. Match on it so a clone's new id is not a bump.
+        // A renamed label is the same band when the id survived, or when it is the only
+        // unmatched pair. §5.2 makes that rename Patch, and Sequence Patch as well.
         const before = new Map(base.bands.map(band => [band.label, band]));
         const after = new Map(draft.bands.map(band => [band.label, band]));
+        const unmatchedBefore: RubricVersionSnapshot['bands'] = [];
+        const unmatchedAfter: RubricVersionSnapshot['bands'] = [];
         for (const [label, band] of after) {
             const previous = before.get(label);
             if (!previous) {
-                changes.push({ bump: 'Minor', subject: label, property: 'band added', from: null, to: { minScore: band.minScore, maxScore: band.maxScore, displayTone: band.displayTone } });
+                unmatchedAfter.push(band);
                 continue;
             }
-            if (previous.minScore !== band.minScore || previous.maxScore !== band.maxScore || previous.displayTone !== band.displayTone) {
-                changes.push({ bump: 'Minor', subject: label, property: 'band range', from: { minScore: previous.minScore, maxScore: previous.maxScore, displayTone: previous.displayTone }, to: { minScore: band.minScore, maxScore: band.maxScore, displayTone: band.displayTone } });
-            }
-            if ((previous.description ?? null) !== (band.description ?? null)) {
-                changes.push({ bump: 'Patch', subject: label, property: 'band wording', from: previous.description ?? null, to: band.description ?? null });
-            }
+            RubricVersionDiff.diffOneBand(changes, previous, band);
         }
-        for (const [label] of before) {
-            if (!after.has(label)) changes.push({ bump: 'Minor', subject: label, property: 'band removed', from: label, to: null });
+        for (const [label, band] of before) {
+            if (!after.has(label)) unmatchedBefore.push(band);
+        }
+        const claimed = new Set<string>();
+        for (const previous of unmatchedBefore) {
+            const byId = unmatchedAfter.find(band => band.id === previous.id && !claimed.has(band.id));
+            const onlyPair = unmatchedBefore.length === 1 && unmatchedAfter.length === 1 ? unmatchedAfter[0] : undefined;
+            const partner = byId ?? (onlyPair && !claimed.has(onlyPair.id) ? onlyPair : undefined);
+            if (!partner) {
+                changes.push({ bump: 'Minor', subject: previous.label, property: 'band removed', from: previous.label, to: null });
+                continue;
+            }
+            claimed.add(partner.id);
+            if (previous.label !== partner.label) {
+                changes.push({ bump: 'Patch', subject: previous.label, property: 'band label', from: previous.label, to: partner.label });
+            }
+            RubricVersionDiff.diffOneBand(changes, previous, partner);
+        }
+        for (const band of unmatchedAfter) {
+            if (claimed.has(band.id)) continue;
+            changes.push({ bump: 'Minor', subject: band.label, property: 'band added', from: null, to: { minScore: band.minScore, maxScore: band.maxScore, displayTone: band.displayTone } });
+        }
+    }
+
+    private static diffOneBand(changes: VersionChange[], previous: RubricVersionSnapshot['bands'][number], band: RubricVersionSnapshot['bands'][number]): void {
+        if (previous.minScore !== band.minScore || previous.maxScore !== band.maxScore || previous.displayTone !== band.displayTone) {
+            changes.push({ bump: 'Minor', subject: band.label, property: 'band range', from: { minScore: previous.minScore, maxScore: previous.maxScore, displayTone: previous.displayTone }, to: { minScore: band.minScore, maxScore: band.maxScore, displayTone: band.displayTone } });
+        }
+        if ((previous.description ?? null) !== (band.description ?? null)) {
+            changes.push({ bump: 'Patch', subject: band.label, property: 'band wording', from: previous.description ?? null, to: band.description ?? null });
+        }
+        if (previous.sequence !== band.sequence) {
+            changes.push({ bump: 'Patch', subject: band.label, property: 'Sequence', from: previous.sequence, to: band.sequence });
         }
     }
 

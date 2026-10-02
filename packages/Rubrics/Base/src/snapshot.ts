@@ -1,3 +1,4 @@
+import { CompareCodePoints } from './canonical.js';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from './types.js';
 
 /** One version, its criteria, anchors, bands, and scales, as rows the database returned. */
@@ -16,7 +17,7 @@ export function SnapshotFromRows(rows: SnapshotRows): RubricVersionSnapshot {
     const version = rows.version;
     const anchors = [...rows.anchors].sort((left, right) => {
         const sequence = number(field(left, 'Sequence')) - number(field(right, 'Sequence'));
-        return sequence !== 0 ? sequence : String(field(left, 'ID') ?? '').localeCompare(String(field(right, 'ID') ?? ''));
+        return sequence !== 0 ? sequence : CompareCodePoints(String(field(left, 'ID') ?? ''), String(field(right, 'ID') ?? ''));
     });
     return {
         id: String(field(version, 'ID') ?? ''),

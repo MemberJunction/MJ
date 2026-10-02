@@ -46,6 +46,7 @@ function scaleSignature(scale: RubricScaleSnapshot | undefined): unknown {
         levels: [...scale.levels]
             .sort((a, b) => a.sequence - b.sequence || a.normalizedValue - b.normalizedValue)
             .map(level => ({
+                id: level.id,
                 normalizedValue: CanonicalNumber(level.normalizedValue),
                 value: CanonicalNumber(level.value),
             })),

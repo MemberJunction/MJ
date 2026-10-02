@@ -18,4 +18,20 @@ describe('SnapshotFromRows', () => {
         expect(snapshot.nodes[0].evaluatorConfig).toEqual({ Deterministic: { path: 'output' } });
         expect(snapshot.nodes[0].anchors?.map(anchor => anchor.descriptor)).toEqual(['Meet', 'Miss']);
     });
+
+    it('tie-breaks equal anchor sequences by code point, so z precedes ä', () => {
+        const snapshot = SnapshotFromRows({
+            version: { ID: 'v', NotApplicablePolicy: 'ExcludeAndRedistribute', ScoreDisplayMin: 0, ScoreDisplayMax: 1 },
+            rubricId: 'rubric',
+            criteria: [{ ID: 'a', Key: 'clarity', Name: 'Clarity', NodeType: 'Criterion', Weight: 1 }],
+            anchors: [
+                { ID: 'ä', CriterionID: 'a', ScaleLevelID: 'low', Descriptor: 'A', Sequence: 0 },
+                { ID: 'z', CriterionID: 'a', ScaleLevelID: 'high', Descriptor: 'Z', Sequence: 0 },
+            ],
+            bands: [],
+            scales: [],
+            levels: [],
+        });
+        expect(snapshot.nodes[0].anchors?.map(anchor => anchor.descriptor)).toEqual(['Z', 'A']);
+    });
 });
