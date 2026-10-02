@@ -1671,6 +1671,9 @@ importers:
       '@memberjunction/ai-cerebras':
         specifier: 6.2.0-edge.1
         version: link:../Cerebras
+      '@memberjunction/ai-cloudflare':
+        specifier: 6.2.0-edge.1
+        version: link:../Cloudflare
       '@memberjunction/ai-cohere':
         specifier: 6.2.0-edge.1
         version: link:../Cohere
@@ -1728,6 +1731,9 @@ importers:
       '@memberjunction/ai-siliconflow':
         specifier: 6.2.0-edge.1
         version: link:../SiliconFlow
+      '@memberjunction/ai-systemone':
+        specifier: 6.2.0-edge.1
+        version: link:../SystemOne
       '@memberjunction/ai-vectors-pinecone':
         specifier: 6.2.0-edge.1
         version: link:../../Vectors/Providers/Pinecone
@@ -1760,6 +1766,22 @@ importers:
       '@memberjunction/unit-testing':
         specifier: 6.2.0-edge.1
         version: link:../../../UnitTesting
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/AI/Providers/Cloudflare:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.1
+        version: link:../../Core
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJGlobal
+    devDependencies:
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -2194,6 +2216,22 @@ importers:
       '@memberjunction/unit-testing':
         specifier: 6.2.0-edge.1
         version: link:../../../UnitTesting
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/AI/Providers/SystemOne:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.1
+        version: link:../../Core
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJGlobal
+    devDependencies:
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -14470,6 +14508,9 @@ importers:
       '@memberjunction/ai-cerebras':
         specifier: 6.2.0-edge.1
         version: link:../AI/Providers/Cerebras
+      '@memberjunction/ai-cloudflare':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Providers/Cloudflare
       '@memberjunction/ai-cohere':
         specifier: 6.2.0-edge.1
         version: link:../AI/Providers/Cohere
@@ -14551,6 +14592,9 @@ importers:
       '@memberjunction/ai-siliconflow':
         specifier: 6.2.0-edge.1
         version: link:../AI/Providers/SiliconFlow
+      '@memberjunction/ai-systemone':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Providers/SystemOne
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.1
         version: link:../AI/Vectors/Dupe
@@ -14837,6 +14881,9 @@ importers:
       '@memberjunction/ai-cerebras':
         specifier: 6.2.0-edge.1
         version: link:../AI/Providers/Cerebras
+      '@memberjunction/ai-cloudflare':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Providers/Cloudflare
       '@memberjunction/ai-cohere':
         specifier: 6.2.0-edge.1
         version: link:../AI/Providers/Cohere
@@ -14912,6 +14959,9 @@ importers:
       '@memberjunction/ai-siliconflow':
         specifier: 6.2.0-edge.1
         version: link:../AI/Providers/SiliconFlow
+      '@memberjunction/ai-systemone':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Providers/SystemOne
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.1
         version: link:../AI/Vectors/Dupe
@@ -15432,15 +15482,24 @@ importers:
       '@memberjunction/ai-bridge-server':
         specifier: 6.2.0-edge.1
         version: link:../../AI/RealtimeBridge/Server
+      '@memberjunction/ai-cloudflare':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Providers/Cloudflare
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.1
         version: link:../../AI/CorePlus
       '@memberjunction/ai-engine-base':
         specifier: 6.2.0-edge.1
         version: link:../../AI/BaseAIEngine
+      '@memberjunction/ai-openrouter':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Providers/OpenRouter
       '@memberjunction/ai-prompts':
         specifier: 6.2.0-edge.1
         version: link:../../AI/Prompts
+      '@memberjunction/ai-systemone':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Providers/SystemOne
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.1
         version: link:../../AI/Vectors/Dupe
@@ -15489,6 +15548,12 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.1
+        version: link:../../Credentials/Engine
+      '@memberjunction/encryption':
+        specifier: 6.2.0-edge.1
+        version: link:../../Encryption
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.1
         version: link:../../GenericDatabaseProvider

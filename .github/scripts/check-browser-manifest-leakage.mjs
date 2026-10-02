@@ -125,14 +125,15 @@ const TIER_1 = [
 const TIER_2 = [
     '@memberjunction/ai-anthropic', '@memberjunction/ai-assemblyai', '@memberjunction/ai-azure',
     '@memberjunction/ai-bedrock', '@memberjunction/ai-betty-bot', '@memberjunction/ai-blackforestlabs',
-    '@memberjunction/ai-cerebras', '@memberjunction/ai-cohere', '@memberjunction/ai-deepinfra',
+    '@memberjunction/ai-cerebras', '@memberjunction/ai-cloudflare', '@memberjunction/ai-cohere',
+    '@memberjunction/ai-deepinfra',
     '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-fireworks', '@memberjunction/ai-gemini', '@memberjunction/ai-groq',
     '@memberjunction/ai-heygen', '@memberjunction/ai-inception', '@memberjunction/ai-inworld',
     '@memberjunction/ai-llamacpp', '@memberjunction/ai-lmstudio', '@memberjunction/ai-local-embeddings',
     '@memberjunction/ai-minimax', '@memberjunction/ai-mistral', '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai', '@memberjunction/ai-openrouter', '@memberjunction/ai-recommendations-rex',
-    '@memberjunction/ai-siliconflow',
+    '@memberjunction/ai-siliconflow', '@memberjunction/ai-systemone',
     '@memberjunction/ai-vertex', '@memberjunction/ai-xai', '@memberjunction/ai-zhipu',
 ];
 
