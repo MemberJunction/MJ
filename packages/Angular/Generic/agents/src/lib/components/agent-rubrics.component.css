@@ -36,7 +36,7 @@ h3 i { color: var(--mj-text-link); margin-right: 0.35rem; }
 .add h3 { grid-column: 1 / -1; }
 label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; font-weight: 700; }
 .check { flex-direction: row; align-items: center; }
-select, button {
+select, input, textarea {
   height: 2rem;
   border-radius: var(--mj-radius-sm, 4px);
   border: 1px solid var(--mj-border-default);
@@ -45,12 +45,9 @@ select, button {
   font: inherit;
   color-scheme: inherit;
 }
-button, .enable {
-  padding: 0 0.75rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-button[type='submit'], .enable { background: var(--mj-brand-primary); color: var(--mj-text-inverse); border-color: var(--mj-brand-primary); }
+textarea { height: auto; min-height: 3rem; }
+.wide { grid-column: 1 / -1; }
+.link { flex-wrap: wrap; }
 .empty, .problem { color: var(--mj-text-secondary); }
 .problem { color: var(--mj-status-error-text); }
 @media (max-width: 520px) { .add, .link { grid-template-columns: 1fr; display: flex; flex-direction: column; align-items: stretch; } }

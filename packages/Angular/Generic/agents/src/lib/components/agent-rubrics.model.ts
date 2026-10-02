@@ -7,6 +7,53 @@ export interface AgentRubricLink {
     IsDefault?: boolean | number;
     Sequence?: number;
     Rubric?: string;
+    SampleRate?: number | string | null;
+    PassThreshold?: number | string | null;
+    MaxSelfCheckAttempts?: number | string | null;
+    EvaluatorConfig?: string | null;
+}
+
+export interface AgentRubricDraft {
+    purpose: 'Evaluation' | 'ProductionSampling' | 'SelfCheck';
+    sampleRate: number | null;
+    passThreshold: number | null;
+    maxSelfCheckAttempts: number | null;
+    evaluatorConfig: string | null;
+    isDefault: boolean;
+}
+
+/** Fields for a new or edited link. Production sampling is refused until it has a sample rate. */
+export function LinkDraft(input: {
+    purpose?: string | null;
+    sampleRate?: number | string | null;
+    passThreshold?: number | string | null;
+    maxSelfCheckAttempts?: number | string | null;
+    evaluatorConfig?: string | null;
+    isDefault?: boolean | number | null;
+}): AgentRubricDraft | { error: string } {
+    const purpose = input.purpose === 'ProductionSampling' || input.purpose === 'SelfCheck' ? input.purpose : 'Evaluation';
+    const sampleRate = finiteNumber(input.sampleRate);
+    if (purpose === 'ProductionSampling' && sampleRate == null) return { error: 'Production sampling needs a sample rate.' };
+    const config = input.evaluatorConfig?.trim() ?? '';
+    return {
+        purpose,
+        sampleRate,
+        passThreshold: finiteNumber(input.passThreshold),
+        maxSelfCheckAttempts: wholeNumber(input.maxSelfCheckAttempts),
+        evaluatorConfig: config.length > 0 ? config : null,
+        isDefault: input.isDefault === true || input.isDefault === 1,
+    };
+}
+
+function finiteNumber(value: number | string | null | undefined): number | null {
+    if (value == null || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function wholeNumber(value: number | string | null | undefined): number | null {
+    const parsed = finiteNumber(value);
+    return parsed == null ? null : Math.trunc(parsed);
 }
 
 function isDefault(row: AgentRubricLink): boolean {

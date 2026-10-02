@@ -3,7 +3,7 @@ import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJAIAgentRubricEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { DisableLink, MakeDefaultLink, SortAgentRubrics, type AgentRubricLink } from './agent-rubrics.model';
+import { DisableLink, LinkDraft, MakeDefaultLink, SortAgentRubrics, type AgentRubricLink } from './agent-rubrics.model';
 
 @Component({
     standalone: false,
@@ -21,10 +21,24 @@ import { DisableLink, MakeDefaultLink, SortAgentRubrics, type AgentRubricLink } 
               <strong>{{ link.Rubric }}</strong>
               <span class="state">{{ link.Status }}{{ link.IsDefault && link.Status !== 'Disabled' ? ' · Default' : '' }}</span>
             </div>
+            <label>Sample rate
+              <input type="number" min="0" max="1" step="0.05" [name]="'rate-' + link.ID" [(ngModel)]="link.SampleRate">
+            </label>
+            <label>Pass threshold
+              <input type="number" min="0" max="1" step="0.01" [name]="'pass-' + link.ID" [(ngModel)]="link.PassThreshold">
+            </label>
+            <label>Max self-check attempts
+              <input type="number" min="1" step="1" [name]="'attempts-' + link.ID" [(ngModel)]="link.MaxSelfCheckAttempts">
+            </label>
+            <label class="wide">Evaluator config
+              <textarea [name]="'config-' + link.ID" [(ngModel)]="link.EvaluatorConfig"></textarea>
+            </label>
+            <label class="check"><input type="checkbox" [name]="'default-' + link.ID" [ngModel]="link.IsDefault === true || link.IsDefault === 1" (ngModelChange)="link.IsDefault = $event"> Default</label>
+            <button mjButton variant="primary" size="sm" type="button" (click)="SaveLink(link)">Save</button>
             @if (link.Status !== 'Disabled') {
-              <button type="button" (click)="TurnOff(link)">Turn off</button>
+              <button mjButton variant="outline" size="sm" type="button" (click)="TurnOff(link)">Turn off</button>
             } @else {
-              <button type="button" class="enable" (click)="Enable(link)">Enable</button>
+              <button mjButton variant="outline" size="sm" type="button" (click)="Enable(link)">Enable</button>
             }
           </article>
         }
@@ -45,8 +59,20 @@ import { DisableLink, MakeDefaultLink, SortAgentRubrics, type AgentRubricLink } 
             }
           </select>
         </label>
+        <label>Sample rate
+          <input type="number" min="0" max="1" step="0.05" name="sampleRate" [(ngModel)]="SampleRate">
+        </label>
+        <label>Pass threshold
+          <input type="number" min="0" max="1" step="0.01" name="passThreshold" [(ngModel)]="PassThreshold">
+        </label>
+        <label>Max self-check attempts
+          <input type="number" min="1" step="1" name="attempts" [(ngModel)]="MaxSelfCheckAttempts">
+        </label>
+        <label class="wide">Evaluator config
+          <textarea name="evaluatorConfig" [(ngModel)]="EvaluatorConfig"></textarea>
+        </label>
         <label class="check"><input type="checkbox" [(ngModel)]="IsDefault" name="default"> Default</label>
-        <button type="submit" [disabled]="!RubricID">Add rubric</button>
+        <button mjButton variant="primary" size="sm" type="submit" [disabled]="!RubricID">Add rubric</button>
       </form>
     `,
 })
@@ -73,6 +99,10 @@ export class AgentRubricsComponent extends BaseAngularComponent {
     public Purpose = 'Evaluation';
     public RubricID = '';
     public IsDefault = false;
+    public SampleRate: number | null = 0.1;
+    public PassThreshold: number | null = null;
+    public MaxSelfCheckAttempts: number | null = null;
+    public EvaluatorConfig = '';
     public IsLoading = false;
     public Error = '';
     private loaded = false;
@@ -112,20 +142,60 @@ export class AgentRubricsComponent extends BaseAngularComponent {
     public async Add(event: Event): Promise<void> {
         event.preventDefault();
         if (!this.agentID || !this.RubricID || !this.ProviderToUse) return;
-        if (this.IsDefault) await this.clearOtherDefaults(this.Purpose);
+        const draft = LinkDraft({
+            purpose: this.Purpose,
+            sampleRate: this.SampleRate,
+            passThreshold: this.PassThreshold,
+            maxSelfCheckAttempts: this.MaxSelfCheckAttempts,
+            evaluatorConfig: this.EvaluatorConfig,
+            isDefault: this.IsDefault,
+        });
+        if ('error' in draft) {
+            this.Error = draft.error;
+            return;
+        }
+        if (draft.isDefault) await this.clearOtherDefaults(draft.purpose);
         const row = await this.ProviderToUse.GetEntityObject<MJAIAgentRubricEntity>('MJ: AI Agent Rubrics', this.ProviderToUse.CurrentUser);
         row.NewRecord();
         row.AgentID = this.agentID;
         row.RubricID = this.RubricID;
-        row.Purpose = this.Purpose === 'ProductionSampling' || this.Purpose === 'SelfCheck' ? this.Purpose : 'Evaluation';
+        row.Purpose = draft.purpose;
         row.Status = 'Active';
-        row.IsDefault = this.IsDefault;
+        row.IsDefault = draft.isDefault;
+        row.SampleRate = draft.sampleRate;
+        row.PassThreshold = draft.passThreshold;
+        row.MaxSelfCheckAttempts = draft.maxSelfCheckAttempts;
+        row.EvaluatorConfig = draft.evaluatorConfig;
         if (!await row.Save()) {
             this.Error = row.LatestResult?.Message || 'Could not add the rubric.';
             return;
         }
         this.loaded = false;
         await this.Load();
+    }
+
+    public async SaveLink(link: AgentRubricLink): Promise<void> {
+        if (!link.ID) return;
+        const draft = LinkDraft(linkFields(link));
+        if ('error' in draft) {
+            this.Error = draft.error;
+            return;
+        }
+        try {
+            if (draft.isDefault) await this.clearOtherDefaults(draft.purpose);
+            await this.saveLink(link.ID, {
+                SampleRate: draft.sampleRate,
+                PassThreshold: draft.passThreshold,
+                MaxSelfCheckAttempts: draft.maxSelfCheckAttempts,
+                EvaluatorConfig: draft.evaluatorConfig,
+                IsDefault: draft.isDefault,
+            });
+            this.Error = '';
+            this.loaded = false;
+            await this.Load();
+        } catch (error) {
+            this.Error = error instanceof Error ? error.message : 'Could not update the rubric link.';
+        }
     }
 
     public async Enable(link: AgentRubricLink): Promise<void> {
@@ -154,13 +224,35 @@ export class AgentRubricsComponent extends BaseAngularComponent {
         }
     }
 
-    private async saveLink(id: string, fields: { Status?: string; IsDefault?: boolean | number }): Promise<void> {
+    private async saveLink(id: string, fields: {
+        Status?: string;
+        IsDefault?: boolean | number;
+        SampleRate?: number | null;
+        PassThreshold?: number | null;
+        MaxSelfCheckAttempts?: number | null;
+        EvaluatorConfig?: string | null;
+    }): Promise<void> {
         if (!this.ProviderToUse) return;
         const row = await this.ProviderToUse.GetEntityObject<MJAIAgentRubricEntity>('MJ: AI Agent Rubrics', this.ProviderToUse.CurrentUser);
         if (!await row.InnerLoad(CompositeKey.FromID(id))) throw new Error('The rubric link was not found.');
         if (fields.Status === 'Active' || fields.Status === 'Disabled') row.Status = fields.Status;
         if (fields.IsDefault === true || fields.IsDefault === 1) row.IsDefault = true;
         else if (fields.IsDefault === false || fields.IsDefault === 0) row.IsDefault = false;
+        if ('SampleRate' in fields) row.SampleRate = fields.SampleRate ?? null;
+        if ('PassThreshold' in fields) row.PassThreshold = fields.PassThreshold ?? null;
+        if ('MaxSelfCheckAttempts' in fields) row.MaxSelfCheckAttempts = fields.MaxSelfCheckAttempts ?? null;
+        if ('EvaluatorConfig' in fields) row.EvaluatorConfig = fields.EvaluatorConfig ?? null;
         if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not update the rubric link.');
     }
+}
+
+function linkFields(link: AgentRubricLink) {
+    return {
+        purpose: link.Purpose,
+        sampleRate: link.SampleRate,
+        passThreshold: link.PassThreshold,
+        maxSelfCheckAttempts: link.MaxSelfCheckAttempts,
+        evaluatorConfig: link.EvaluatorConfig,
+        isDefault: link.IsDefault,
+    };
 }

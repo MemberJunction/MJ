@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DisableLink, MakeDefaultLink } from './agent-rubrics.model';
+import { DisableLink, LinkDraft, MakeDefaultLink } from './agent-rubrics.model';
 
 describe('agent rubric links', () => {
     it('leaves only the newly saved Evaluation link as the default', () => {
@@ -11,6 +11,27 @@ describe('agent rubric links', () => {
         expect(next.find(row => row.ID === 'first')?.IsDefault).toBe(false);
         expect(next.find(row => row.ID === 'second')?.IsDefault).toBe(true);
         expect(next.find(row => row.ID === 'check')?.IsDefault).toBe(true);
+    });
+
+    it('requires a sample rate before a production sampling link can be saved', () => {
+        expect(LinkDraft({ purpose: 'ProductionSampling', sampleRate: null })).toEqual({ error: 'Production sampling needs a sample rate.' });
+        const saved = LinkDraft({
+            purpose: 'ProductionSampling',
+            sampleRate: 0.25,
+            passThreshold: 0.8,
+            maxSelfCheckAttempts: 2,
+            evaluatorConfig: ' {"EvaluatorType":"AIPrompt"} ',
+            isDefault: true,
+        });
+        expect(saved).toEqual({
+            purpose: 'ProductionSampling',
+            sampleRate: 0.25,
+            passThreshold: 0.8,
+            maxSelfCheckAttempts: 2,
+            evaluatorConfig: '{"EvaluatorType":"AIPrompt"}',
+            isDefault: true,
+        });
+        expect(LinkDraft({ purpose: 'Evaluation', sampleRate: null, isDefault: false })).toMatchObject({ purpose: 'Evaluation', sampleRate: null });
     });
 
     it('turns a link off without deleting it, and it is no longer the default', () => {
