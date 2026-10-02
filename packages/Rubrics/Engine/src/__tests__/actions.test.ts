@@ -26,6 +26,7 @@ vi.mock('@memberjunction/ai-prompts', () => ({
 import { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction } from '../actions.js';
 import { CreateDraftVersion, SubmitHumanEvaluation } from '../providerRecords.js';
 import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from '../RubricEngine.js';
+import { FakePromptService } from './fakePromptService.js';
 
 /** Property assignment, as on a generated MJRubric*Entity. Set is absent, so the old row type fails. */
 function draftEntity(entity: string, onSave: (values: Map<string, unknown>) => void, fail = false) {
@@ -440,12 +441,10 @@ describe('rubric actions', () => {
         const store = evaluations();
         const prompts: string[] = [];
         const engine = new RubricEngine(store, records, {
-            Prompts: {
-                async Run(input) {
-                    prompts.push(input.Prompt.Name ?? input.Prompt.ID ?? '');
-                    return { Text: '{"decisions":[]}' };
-                },
-            },
+            Prompts: FakePromptService(async input => {
+                prompts.push(input.Prompt.Name ?? input.Prompt.ID ?? '');
+                return { Text: '{"decisions":[]}' };
+            }),
         });
         const action = new EvaluateRecordAgainstRubricAction();
         const llm = await action.InternalRunAction({
@@ -528,7 +527,7 @@ describe('rubric actions', () => {
             async createDraft() { return { id: 'draft', status: 'Draft' }; },
         };
         const engine = new RubricEngine(store, records, {
-            Prompts: { async Run() { throw new Error('the model refused'); } },
+            Prompts: FakePromptService(async () => { throw new Error('the model refused'); }),
         });
         const params = {
             Params: [

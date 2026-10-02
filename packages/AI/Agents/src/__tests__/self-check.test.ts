@@ -108,7 +108,11 @@ describe('agent self-check', () => {
             async createDraft() { return { id: 'eval-fail', status: 'Draft' }; },
             async submit() { return score; },
             async fail() { throw new Error('should not fail the draft'); },
-        }, records, { Prompts: { async Run() { return { Text: JSON.stringify({ decisions: [{ key: 'accuracy', level: 'Miss', rationale: 'The figure is wrong.' }] }) }; } } });
+        }, records, { Prompts: {
+            async Run() { return { Text: JSON.stringify({ decisions: [{ key: 'accuracy', level: 'Miss', rationale: 'The figure is wrong.' }] }) }; },
+            async RenderCriteria(input) { return input.Items.map(item => item.Criterion.Name); },
+            async Preview() { return ''; },
+        } });
         const done = await ExecuteSelfCheck({
             engine,
             link: { ...link, rubricId: 'rubric', passThreshold: null },

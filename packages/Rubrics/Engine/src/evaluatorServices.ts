@@ -3,6 +3,7 @@ import type { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import type { RubricSubjectContent } from './content.js';
+import type { RubricCriterionTemplateData, RubricPromptData } from './promptData.js';
 import type { RubricEvaluatorOutput } from './RubricEvaluator.js';
 
 /** The value stored in `RubricEvaluation.EvaluatorType`. */
@@ -14,22 +15,37 @@ export type RubricJsonValue = string | number | boolean | null | RubricJsonValue
 /** SinglePass asks once for the whole rubric. PerCriterion asks once per leaf. */
 export type RubricPromptMode = 'SinglePass' | 'PerCriterion';
 
-/** The rubric, and the subject in a separate user message. */
-export interface RubricEvaluatorMessages {
-    system: string;
-    user: string;
-}
+/** Which prompt chooses the model for an LLM evaluation: the evaluator prompt, or the judge. */
+export type RubricModelSelection = 'System' | 'Judge';
 
 /**
  * Settings for one evaluation. They come from an agent-rubric link's EvaluatorConfig, a test's
  * evaluator block, or the caller. Each evaluator reads the fields it understands and ignores the rest.
  */
 export interface RubricEvaluatorSettings {
-    /** The `MJ: AI Prompts` row to run. Wins over PromptName. */
+    /**
+     * The swappable prompt, by `MJ: AI Prompts` ID. Wins over PromptName. For LLM it is the
+     * **judge**: the child prompt rendered into the evaluator prompt's `judgePrompt` slot
+     * (default `Rubric Evaluator - Default Judge`). For Decision it is the decision prompt
+     * whose bindings choose the model (default `Default Decision`).
+     */
     PromptID?: string;
-    /** The prompt to run by name, when no PromptID is set. Each evaluator has a default. */
+    /** The swappable prompt by name, when no PromptID is set. */
     PromptName?: string;
-    /** Pins the model. Otherwise the prompt's own model bindings choose. */
+    /**
+     * LLM only. The parent evaluator prompt, which owns the reply contract the engine parses.
+     * Default `Rubric Evaluator`. Replace it only with a prompt that returns the same JSON.
+     */
+    SystemPromptID?: string;
+    /** LLM only. The parent evaluator prompt by name. */
+    SystemPromptName?: string;
+    /** The prompt that renders one criterion as text, for LLM and Decision. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    /** The criterion prompt by name. */
+    CriterionPromptName?: string;
+    /** LLM only. `System` (default): the evaluator prompt's bindings choose the model. `Judge`: the judge's do. */
+    ModelSelection?: RubricModelSelection;
+    /** Pins the model. Otherwise the choosing prompt's model bindings choose. */
     ModelID?: string;
     /** The agent an Agent evaluator runs. Recorded with the evaluation. */
     AgentID?: string;
@@ -51,11 +67,38 @@ export interface RubricPromptRef {
 export interface RubricPromptOutput {
     Text: string;
     PromptRunID?: string | null;
+    /** What the call cost, when the runner reports it. */
+    Cost?: number | null;
 }
 
-/** Runs a chat prompt through the prompt system: model selection, failover, and a prompt run row. */
+/**
+ * One evaluator prompt call: the parent prompt, the judge composed into its `judgePrompt` slot,
+ * the template data both render, and the subject as its own user message.
+ */
+export interface RubricPromptRequest {
+    Prompt: RubricPromptRef;
+    Judge?: RubricPromptRef;
+    Data: RubricPromptData;
+    Subject: string;
+    /** Pins the model. Otherwise the choosing prompt's model bindings choose. */
+    ModelID?: string;
+    /** Which prompt's bindings choose the model: the evaluator prompt (System, the default) or the judge. */
+    ModelSelection?: RubricModelSelection;
+    /** How long to wait for the model, in milliseconds. A call that runs over fails. */
+    TimeoutMS?: number;
+}
+
+/**
+ * The prompt system, as the rubric evaluators use it. Every call goes through AIPromptRunner, so
+ * templates come from the prompt rows in the database: swap a prompt and the next evaluation uses it.
+ */
 export interface RubricPromptService {
-    Run(input: { Prompt: RubricPromptRef; Messages: RubricEvaluatorMessages; ModelID?: string }): Promise<RubricPromptOutput>;
+    /** Renders the parent with the judge in its slot, sends it with the subject, and returns the reply. */
+    Run(input: RubricPromptRequest): Promise<RubricPromptOutput>;
+    /** Renders the criterion prompt once per item, with no model call. Output order matches input order. */
+    RenderCriteria(input: { Prompt: RubricPromptRef; Items: RubricCriterionTemplateData[] }): Promise<string[]>;
+    /** The composed system prompt Run would send, with no model call. For previews and checks. */
+    Preview(input: Omit<RubricPromptRequest, 'Subject' | 'ModelID' | 'ModelSelection' | 'TimeoutMS'>): Promise<string>;
 }
 
 /** The answers to one decision call, by question key. */

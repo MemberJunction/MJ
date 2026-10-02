@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const viewCalls: { EntityName: string; ExtraFilter?: string }[] = [];
 const promptCalls: Record<string, unknown>[] = [];
+const renderCalls: { children: { childPrompt: { prompt: { Name: string }; data: Record<string, unknown> }; parentPlaceholder: string }[] }[] = [];
 const decisionCalls: Record<string, unknown>[] = [];
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -17,7 +18,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
                     async RunView(params: { EntityName: string; ExtraFilter?: string }) {
                         viewCalls.push(params);
                         if (params.EntityName === 'MJ: AI Prompts') {
-                            return { Success: true, Results: params.ExtraFilter?.includes('missing') ? [] : [{ ID: 'prompt-id', Name: 'Found Prompt' }] };
+                            if (params.ExtraFilter?.includes('missing')) return { Success: true, Results: [] };
+                            const key = params.ExtraFilter?.match(/='(.*)'$/)?.[1]?.replace(/''/g, "'") ?? '';
+                            return { Success: true, Results: [{ ID: `${key}-id`, Name: key }] };
                         }
                         if (params.EntityName === 'MJ: Rubric Evaluation Scores') {
                             return {
@@ -47,7 +50,13 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     AIPromptRunner: class AIPromptRunner {
         async ExecutePrompt(params: Record<string, unknown>) {
             promptCalls.push(params);
-            return { success: true, rawResult: '{"decisions":[]}', promptRun: { ID: 'prompt-run' } };
+            return { success: true, rawResult: '{"decisions":[]}', promptRun: { ID: 'prompt-run' }, cost: 0.01 };
+        }
+        async RenderChildPromptTemplates(children: { childPrompt: { prompt: { Name: string }; data: Record<string, unknown> }; parentPlaceholder: string }[]) {
+            renderCalls.push({ children });
+            const renderedTemplates: Record<string, string> = {};
+            for (const child of children) renderedTemplates[child.parentPlaceholder] = `${child.childPrompt.prompt.Name} for ${child.parentPlaceholder}`;
+            return { renderedTemplates };
         }
     },
     AIDecisionParams: class AIDecisionParams {},
@@ -62,7 +71,12 @@ vi.mock('@memberjunction/ai-prompts', () => ({
         }
     },
 }));
-vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class AIPromptParams {} }));
+vi.mock('@memberjunction/ai-core-plus', () => ({
+    AIPromptParams: class AIPromptParams {},
+    ChildPromptParam: class ChildPromptParam {
+        constructor(public childPrompt: unknown, public parentPlaceholder: string) {}
+    },
+}));
 
 import { ProviderDecisionService, ProviderEvaluationStore, ProviderPromptService } from '../providerRecords.js';
 
@@ -70,27 +84,74 @@ describe('provider evaluator services', () => {
     beforeEach(() => {
         viewCalls.length = 0;
         promptCalls.length = 0;
+        renderCalls.length = 0;
         decisionCalls.length = 0;
     });
 
-    it('runs a chat prompt found by id, pins the model, and returns the prompt run', async () => {
-        const service = ProviderPromptService({} as never, { ID: 'user' });
-        const output = await service.Run({ Prompt: { ID: 'prompt-id' }, Messages: { system: 'rubric', user: 'subject' }, ModelID: 'model-1' });
-        expect(viewCalls[0].ExtraFilter).toBe("ID='prompt-id'");
+    const data = {
+        Rubric: { Instructions: null, NotApplicablePolicy: 'NotAllowed' as const, PassThreshold: null },
+        Mode: 'SinglePass' as const,
+        Criteria: [],
+        Subject: { EntityName: 'MJ: Documents', RecordID: '1' },
+    };
+
+    it('runs the evaluator prompt with the judge as its judgePrompt child, the subject as a user message, and a pinned model', async () => {
+        const service = ProviderPromptService({}, { ID: 'user' });
+        const output = await service.Run({
+            Prompt: { ID: 'evaluator' }, Judge: { Name: 'Rubric Judge - Sage' }, Data: data, Subject: 'subject', ModelID: 'model-1', TimeoutMS: 5000,
+        });
+        expect(viewCalls.map(call => call.ExtraFilter)).toEqual(["ID='evaluator'", "Name='Rubric Judge - Sage'"]);
+        const sent = promptCalls[0] as { childPrompts: { parentPlaceholder: string; childPrompt: { prompt: { Name: string }; data: unknown } }[] };
         expect(promptCalls[0]).toMatchObject({
-            systemPromptOverride: 'rubric',
+            templateMessageRole: 'system',
             conversationMessages: [{ role: 'user', content: 'subject' }],
             override: { modelId: 'model-1' },
+            timeoutMS: 5000,
+            data,
         });
-        expect(output).toEqual({ Text: '{"decisions":[]}', PromptRunID: 'prompt-run' });
+        expect(promptCalls[0]).not.toHaveProperty('systemPromptOverride');
+        expect(promptCalls[0]).not.toHaveProperty('modelSelectionPrompt');
+        expect(sent.childPrompts).toHaveLength(1);
+        expect(sent.childPrompts[0].parentPlaceholder).toBe('judgePrompt');
+        expect(sent.childPrompts[0].childPrompt.prompt.Name).toBe('Rubric Judge - Sage');
+        expect(sent.childPrompts[0].childPrompt.data).toEqual(data);
+        expect(output).toEqual({ Text: '{"decisions":[]}', PromptRunID: 'prompt-run', Cost: 0.01 });
     });
 
-    it('finds a prompt by name and refuses a missing one', async () => {
-        const service = ProviderPromptService({} as never, { ID: 'user' });
-        await service.Run({ Prompt: { Name: "Judge's Prompt" }, Messages: { system: 's', user: 'u' } });
+    it('lets the judge choose the model when ModelSelection is Judge, and runs without a judge when none is named', async () => {
+        const service = ProviderPromptService({}, { ID: 'user' });
+        await service.Run({ Prompt: { Name: 'Rubric Evaluator' }, Judge: { Name: 'Judge' }, Data: data, Subject: 's', ModelSelection: 'Judge' });
+        expect((promptCalls[0] as { modelSelectionPrompt?: { Name: string } }).modelSelectionPrompt?.Name).toBe('Judge');
+        await service.Run({ Prompt: { Name: 'Rubric Evaluator' }, Data: data, Subject: 's' });
+        expect(promptCalls[1]).not.toHaveProperty('childPrompts');
+        expect(promptCalls[1]).not.toHaveProperty('override');
+    });
+
+    it('finds a prompt by name, escaping it, and refuses a missing one', async () => {
+        const service = ProviderPromptService({}, { ID: 'user' });
+        await service.Run({ Prompt: { Name: "Judge's Prompt" }, Data: data, Subject: 's' });
         expect(viewCalls[0].ExtraFilter).toBe("Name='Judge''s Prompt'");
-        expect(promptCalls[0]).not.toHaveProperty('override');
-        await expect(service.Run({ Prompt: { Name: 'missing' }, Messages: { system: 's', user: 'u' } })).rejects.toThrow('The missing prompt was not found.');
+        await expect(service.Run({ Prompt: { Name: 'missing' }, Data: data, Subject: 's' })).rejects.toThrow('The missing prompt was not found.');
+    });
+
+    it('renders each criterion through the criterion prompt without a model call, in order', async () => {
+        const service = ProviderPromptService({}, { ID: 'user' });
+        const items = ['clarity', 'accuracy'].map(key => ({ Rubric: data.Rubric, Criterion: { Key: key } as never }));
+        const texts = await service.RenderCriteria({ Prompt: { Name: 'Rubric Criterion' }, Items: items });
+        expect(texts).toEqual(['Rubric Criterion for criterion0', 'Rubric Criterion for criterion1']);
+        expect(renderCalls[0].children.map(child => child.childPrompt.data)).toEqual(items);
+        expect(promptCalls).toHaveLength(0);
+        expect(await service.RenderCriteria({ Prompt: { Name: 'Rubric Criterion' }, Items: [] })).toEqual([]);
+    });
+
+    it('previews the composed evaluator prompt with its judge, without a model call', async () => {
+        const service = ProviderPromptService({}, { ID: 'user' });
+        const preview = await service.Preview({ Prompt: { Name: 'Rubric Evaluator' }, Judge: { Name: 'Rubric Judge - Sage' }, Data: data });
+        expect(preview).toBe('Rubric Evaluator for evaluator');
+        const root = renderCalls[0].children[0] as unknown as { childPrompt: { childPrompts: { parentPlaceholder: string; childPrompt: { prompt: { Name: string } } }[] } };
+        expect(root.childPrompt.childPrompts[0].parentPlaceholder).toBe('judgePrompt');
+        expect(root.childPrompt.childPrompts[0].childPrompt.prompt.Name).toBe('Rubric Judge - Sage');
+        expect(promptCalls).toHaveLength(0);
     });
 
     it('asks the Score questions on the decision prompt and returns the answers and the run', async () => {

@@ -73,6 +73,10 @@ describe('rubric evaluator registry', () => {
         expect(ResolveRubricEvaluatorSelection({ EvaluatorType: 'External', EvaluatorName: 'Test Keyword', Extensions: { 'Test Keyword': 'refund' } }))
             .toEqual({ Name: 'Test Keyword', Settings: { Extensions: { 'Test Keyword': 'refund' } } });
         expect(ResolveRubricEvaluatorSelection({ Mode: 'PerCriterion', Samples: 3 }).Settings).toEqual({ Mode: 'PerCriterion', Samples: 3 });
+        expect(ResolveRubricEvaluatorSelection({
+            EvaluatorType: 'AIPrompt', PromptName: ' Rubric Judge - Sage ', SystemPromptName: 'My Evaluator', CriterionPromptID: 'c-1', ModelSelection: 'Judge',
+        })).toEqual({ Name: 'LLM', Settings: { PromptName: 'Rubric Judge - Sage', SystemPromptName: 'My Evaluator', CriterionPromptID: 'c-1', ModelSelection: 'Judge' } });
+        expect(() => ResolveRubricEvaluatorSelection({ ModelSelection: 'Cheapest' })).toThrow('ModelSelection must be System or Judge, not Cheapest.');
         expect(() => ResolveRubricEvaluatorSelection({ EvaluatorType: 'Human' })).toThrow('A Human evaluation is not run by the engine.');
         expect(() => ResolveRubricEvaluatorSelection({ Mode: 'Twice' })).toThrow('Mode must be SinglePass or PerCriterion, not Twice.');
         expect(() => ResolveRubricEvaluatorSelection('[]')).toThrow('The evaluator config must be a JSON object.');

@@ -4,6 +4,7 @@ import { FallbackContent, ShapeContent, TestRunContent } from '../content.js';
 import { DeterministicRubricEvaluator } from '../DeterministicRubricEvaluator.js';
 import { RubricEngine, type RubricEvaluationStore } from '../RubricEngine.js';
 import { GetAgreement, GetConsensus, GetDiagnostics, KrippendorffAlpha, QuadraticKappa } from '../statistics.js';
+import { FakePromptService } from './fakePromptService.js';
 
 function version(): RubricVersionSnapshot {
     return {
@@ -149,7 +150,7 @@ describe('RubricEngine', () => {
             content: { text: 'Easy to read.' },
             evaluator: 'LLM',
             settings: { Mode: 'SinglePass' },
-            services: { Prompts: { async Run() { calls.push('prompt'); return { Text: JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [{ quote: 'Easy' }] }] }), PromptRunID: 'prompt-run-1' }; } } },
+            services: { Prompts: FakePromptService(async () => { calls.push('prompt'); return { Text: JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [{ quote: 'Easy' }] }] }), PromptRunID: 'prompt-run-1' }; }) },
         });
         expect(calls.filter(call => call === 'prompt')).toHaveLength(1);
         expect(calls).toContain('submit');
@@ -191,12 +192,10 @@ describe('RubricEngine', () => {
             async createDraft() { return { id: 'draft', status: 'Draft' }; },
         };
         const engine = new RubricEngine(store, records, {
-            Prompts: {
-                async Run(input) {
-                    prompts.push(input.Messages.system);
-                    return { Text: JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [] }] }) };
-                },
-            },
+            Prompts: FakePromptService(async input => {
+                prompts.push(input.Prompt.Name ?? '');
+                return { Text: JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [] }] }) };
+            }),
         });
         await engine.EvaluateRecord({
             rubricId: 'rubric',
@@ -205,7 +204,7 @@ describe('RubricEngine', () => {
             content: { text: 'Easy to read.' },
         });
         expect(drafted).toEqual(['LLM:AIPrompt']);
-        expect(prompts).toHaveLength(1);
+        expect(prompts).toEqual(['Rubric Evaluator']);
 
         const agentCalls: string[] = [];
         await engine.EvaluateRecord({

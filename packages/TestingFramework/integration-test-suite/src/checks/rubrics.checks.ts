@@ -23,13 +23,30 @@
  *   R9 — a second submit supersedes the first. Withdrawing the new one is allowed.
  *   R10 — vwRubricEvaluations.CohortMeanScore matches the engine Mean, and a Self
  *        score is counted separately rather than inside that mean.
+ *   R11 — the rubric prompts ship as metadata: Rubric Evaluator, Rubric Criterion and the
+ *        default judge are Active prompts with templates, and every judge an agent's rubric
+ *        link names resolves to an Active prompt.
+ *   R12 — the prompt service composes the stored prompts with no model call: the criterion
+ *        prompt renders each criterion, and the evaluator prompt carries the named judge in its
+ *        judgePrompt slot, the criteria, and the reply contract, and never the subject.
+ *   R13 — an LLM evaluation runs through the stored prompts end to end. A prompt-service double
+ *        answers in place of the model, but renders the real composed prompt first; the
+ *        evaluation is Submitted and records the evaluator, judge and criterion prompts.
+ *   R14 — a Decision evaluation runs end to end through AIDecisionRunner on Default Decision,
+ *        with the scripted decision stand-in in place of Jev or LLM Decision. Each question
+ *        carries the criterion text the Rubric Criterion prompt rendered.
  */
 import type { ConnectionPool, Transaction } from 'mssql';
 import { RunView, type BaseEntity } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentRubricEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricScaleEntity, MJRubricScaleLevelEntity, MJRubricVersionEntity, MJTestEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
 import { RubricScoring, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { GetConsensus } from '@memberjunction/rubrics';
+import {
+    BuildSubjectMessage, DEFAULT_RUBRIC_JUDGE_PROMPT, GetConsensus, PromptData, ProviderPromptService, ProviderRubricEngine, RenderCriteriaText,
+    RUBRIC_CRITERION_PROMPT, RUBRIC_EVALUATOR_PROMPT, type RubricPromptRequest, type RubricPromptService,
+} from '@memberjunction/rubrics';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { DeleteById } from './agent-live-shared';
+import { RegisterScriptedDecision, ScriptedDecision, SCRIPTED_DECISION_DRIVER_CLASSES } from './decision-test-double';
 import { Assert } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -439,6 +456,95 @@ function scoringVersion(ids: { versionId: string; rubricId: string; criterionId:
         }],
         bands: [],
     };
+}
+
+
+/** The judge R12 and R13 compose, one of the per-agent judges the metadata ships. */
+const SAGE_JUDGE = 'Rubric Judge - Sage';
+
+/** A two-criterion Met / Not met rubric with anchors, held in memory. Enough for the prompts to render. */
+function promptVersion(): RubricVersionSnapshot {
+    const leaf = {
+        nodeType: 'Criterion' as const, scaleId: 'met', weight: 1, isAdvisory: false, isGate: false,
+        evidenceRequired: false, rationaleRequired: false,
+    };
+    return {
+        id: 'it-prompt-version', rubricId: 'it-prompt-rubric', instructions: 'Judge the reply only.', notApplicablePolicy: 'NotAllowed', passThreshold: 0.5,
+        scoreDisplayMin: 0, scoreDisplayMax: 100,
+        nodes: [
+            { ...leaf, id: 'accuracy', key: 'accuracy', name: 'Accuracy', isGate: true, sequence: 0,
+                anchors: [{ scaleLevelId: 'met', descriptor: 'The answer matches the source.' }] },
+            { ...leaf, id: 'sourcing', key: 'sourcing', name: 'Sourcing', sequence: 1, anchors: [] },
+        ],
+        scales: [{ id: 'met', scaleType: 'Levels', higherIsBetter: true, levels: [
+            { id: 'not-met', label: 'Not met', value: 0, normalizedValue: 0, sequence: 0 },
+            { id: 'met', label: 'Met', value: 1, normalizedValue: 1, sequence: 1 },
+        ] }],
+        bands: [],
+    };
+}
+
+/** Publishes a Met / Not met rubric with two criteria inside the caller's transaction. Returns the version id. */
+async function publishPromptRubric(ctx: IntegrationCheckContext, tag: string): Promise<string> {
+    const rubric = await rubricRow(ctx, 'MJ: Rubrics');
+    rubric.Name = tag;
+    rubric.Status = 'Active';
+    await saveRow(rubric);
+    const scale = await rubricRow(ctx, 'MJ: Rubric Scales');
+    scale.Name = `${tag}-scale`;
+    scale.ScaleType = 'Levels';
+    await saveRow(scale);
+    const levels: Record<string, string> = {};
+    for (const [label, value] of [['Not met', 0], ['Met', 1]] as const) {
+        const level = await rubricRow(ctx, 'MJ: Rubric Scale Levels');
+        level.ScaleID = scale.ID;
+        level.Label = label;
+        level.Value = value;
+        level.NormalizedValue = value;
+        level.Sequence = value;
+        await saveRow(level);
+        levels[label] = level.ID;
+    }
+    const version = await rubricRow(ctx, 'MJ: Rubric Versions');
+    version.RubricID = rubric.ID;
+    version.Status = 'Draft';
+    version.NotApplicablePolicy = 'NotAllowed';
+    version.PassThreshold = 0.5;
+    await saveRow(version);
+    for (const [index, key] of ['accuracy', 'sourcing'].entries()) {
+        const criterion = await rubricRow(ctx, 'MJ: Rubric Criteria');
+        criterion.RubricVersionID = version.ID;
+        criterion.Key = key;
+        criterion.Name = key === 'accuracy' ? 'Accuracy' : 'Sourcing';
+        criterion.NodeType = 'Criterion';
+        criterion.ScaleID = scale.ID;
+        criterion.Weight = 1;
+        criterion.Sequence = index;
+        await saveRow(criterion);
+        // Written through the provider, never ctx.Pool: a pool read would wait on this uncommitted transaction.
+        const anchor = await ctx.Provider.GetEntityObject<MJRubricCriterionLevelEntity>('MJ: Rubric Criterion Levels', ctx.User);
+        anchor.NewRecord();
+        anchor.CriterionID = criterion.ID;
+        anchor.ScaleLevelID = levels['Met'];
+        anchor.Descriptor = `Meets ${key}.`;
+        await saveEntity(anchor);
+    }
+    version.Status = 'Published';
+    await saveRow(version);
+    return version.ID;
+}
+
+async function anyEntityId(ctx: IntegrationCheckContext): Promise<{ id: string; name: string }> {
+    const entity = await poolOf(ctx).request().query(`SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID, [Name] FROM [${schemaOf(ctx)}].[Entity] WHERE [Name] = N'MJ: Users'`);
+    Assert(entity.recordset.length === 1, 'the MJ: Users entity row exists');
+    return { id: entity.recordset[0].ID as string, name: entity.recordset[0].Name as string };
+}
+
+/** Reads an evaluation's stored evaluator fields after the engine has written it. */
+async function storedEvaluation(ctx: IntegrationCheckContext, id: string): Promise<MJRubricEvaluationEntity> {
+    const evaluation = await rubricRow(ctx, 'MJ: Rubric Evaluations');
+    Assert(await evaluation.Load(id), `evaluation ${id} loads`);
+    return evaluation;
 }
 
 export const RubricsChecks: NamedCheck[] = [
@@ -909,6 +1015,152 @@ export const RubricsChecks: NamedCheck[] = [
                 Assert(engine.Overall !== null && Math.abs(viewMean - engine.Overall) < 0.000001, `view mean ${viewMean}, engine mean ${engine.Overall}`);
                 Assert(Number(view.recordset[0].SelfCount) === 1, `SelfAssessmentCount was ${view.recordset[0].SelfCount}`);
             });
+        },
+    },
+    {
+        Id: 'rubrics.R11',
+        Name: 'R11: the rubric prompts and every agent judge ship as active metadata prompts',
+        Fn: async (ctx): Promise<void> => {
+            const view = RunView.FromMetadataProvider(ctx.Provider);
+            const [prompts, links] = await view.RunViews([
+                { EntityName: 'MJ: AI Prompts', Fields: ['ID', 'Name', 'Status', 'TemplateID'], ExtraFilter: `Name = '${EscapeSQLString(RUBRIC_EVALUATOR_PROMPT)}' OR Name = '${EscapeSQLString(RUBRIC_CRITERION_PROMPT)}' OR Name LIKE 'Rubric Judge - %' OR Name = '${EscapeSQLString(DEFAULT_RUBRIC_JUDGE_PROMPT)}'`, ResultType: 'simple', BypassCache: true },
+                { EntityName: 'MJ: AI Agent Rubrics', Fields: ['ID', 'EvaluatorConfig'], ExtraFilter: 'EvaluatorConfig IS NOT NULL', ResultType: 'simple', BypassCache: true },
+            ], ctx.User);
+            Assert(prompts.Success && links.Success, `could not read prompts or links: ${prompts.ErrorMessage ?? links.ErrorMessage}`);
+            const byName = new Map((prompts.Results as { Name: string; Status: string; TemplateID: string | null }[]).map(row => [row.Name, row]));
+            for (const name of [RUBRIC_EVALUATOR_PROMPT, RUBRIC_CRITERION_PROMPT, DEFAULT_RUBRIC_JUDGE_PROMPT, SAGE_JUDGE]) {
+                const row = byName.get(name);
+                if (!row) throw new Error(`the ${name} prompt is not in this database: sync the metadata (mj sync push --dir=metadata)`);
+                Assert(row.Status === 'Active', `the ${name} prompt is ${row.Status}, not Active`);
+                Assert(!!row.TemplateID, `the ${name} prompt has no template`);
+            }
+            const named = new Set<string>();
+            for (const link of links.Results as { EvaluatorConfig: string }[]) {
+                const config = JSON.parse(link.EvaluatorConfig) as { PromptName?: string };
+                if (config.PromptName?.startsWith('Rubric Judge - ')) named.add(config.PromptName);
+            }
+            Assert(named.size >= 10, `only ${named.size} agent links name a shipped judge`);
+            for (const name of named) {
+                Assert(byName.get(name)?.Status === 'Active', `an agent link names the judge ${name}, which is not an Active prompt`);
+            }
+        },
+    },
+    {
+        Id: 'rubrics.R12',
+        Name: 'R12: the prompt service composes the evaluator, a judge, and the rendered criteria without a model call',
+        Fn: async (ctx): Promise<void> => {
+            const prompts = ProviderPromptService(ctx.Provider, ctx.User);
+            const version = promptVersion();
+            const criteria = await RenderCriteriaText(version, prompts, { Name: RUBRIC_CRITERION_PROMPT });
+            Assert(criteria.length === 2, `rendered ${criteria.length} criteria`);
+            Assert((criteria[0].Text ?? '').includes('Accuracy (`accuracy`)'), `criterion text: ${criteria[0].Text}`);
+            Assert((criteria[0].Text ?? '').includes('The answer matches the source.'), 'the criterion text carries its anchor');
+            Assert((criteria[0].Text ?? '').includes('gate'), 'the gate criterion says so');
+            const subject = 'IT-R12 subject text that must not appear in the system prompt';
+            const composed = await prompts.Preview({
+                Prompt: { Name: RUBRIC_EVALUATOR_PROMPT },
+                Judge: { Name: SAGE_JUDGE },
+                Data: PromptData(version, 'SinglePass', criteria, { entityName: 'MJ: Users', recordId: 'it-r12' }),
+            });
+            Assert(composed.includes('# Judge: Sage'), 'the Sage judge is in the judgePrompt slot');
+            Assert(composed.indexOf('# Judge: Sage') < composed.indexOf('## Criteria'), 'the judge comes before the criteria');
+            Assert(composed.includes('Judge the reply only.'), 'the rubric instructions are in the prompt');
+            Assert(composed.includes('Sourcing (`sourcing`)'), 'every criterion is in the prompt');
+            Assert(composed.includes('"decisions"'), 'the SinglePass reply contract is in the prompt');
+            Assert(!composed.includes(subject) && !/\{\{|\{%/.test(composed), 'the prompt carries no subject and no unrendered template syntax');
+            const perCriterion = await prompts.Preview({
+                Prompt: { Name: RUBRIC_EVALUATOR_PROMPT },
+                Data: PromptData(version, 'PerCriterion', [criteria[1]], { entityName: 'MJ: Users', recordId: 'it-r12' }),
+            });
+            Assert(perCriterion.includes('"chosen"') && !perCriterion.includes('Accuracy (`accuracy`)'), 'PerCriterion asks about one criterion');
+        },
+    },
+    {
+        Id: 'rubrics.R13',
+        Name: 'R13: an LLM evaluation runs through the stored prompts and records them',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            const subjectEntity = await anyEntityId(ctx);
+            const real = ProviderPromptService(ctx.Provider, ctx.User);
+            const requests: RubricPromptRequest[] = [];
+            const composedPrompts: string[] = [];
+            const prompts: RubricPromptService = {
+                RenderCriteria: input => real.RenderCriteria(input),
+                Preview: input => real.Preview(input),
+                async Run(input) {
+                    requests.push(input);
+                    composedPrompts.push(await real.Preview(input));
+                    const decisions = input.Data.Criteria.map(criterion => ({ key: criterion.Key, level: 'Met', rationale: `${criterion.Name} holds.`, evidence: [], confidence: 0.9 }));
+                    return { Text: JSON.stringify({ decisions }), PromptRunID: null };
+                },
+            };
+            await withProviderRollback(ctx, async () => {
+                const tag = `it-rubrics-r13-${Date.now().toString(36)}`;
+                const versionId = await publishPromptRubric(ctx, tag);
+                const engine = ProviderRubricEngine(ctx.Provider, ctx.User);
+                const version = await engine.GetRubric({ versionId });
+                if (!version) throw new Error('the published version did not load');
+                const done = await engine.Evaluate({
+                    version,
+                    subject: { entityName: subjectEntity.name, recordId: tag, entityId: subjectEntity.id },
+                    content: { text: 'The reply cites the source and gets the figure right.' },
+                    evaluator: 'LLM',
+                    settings: { PromptName: SAGE_JUDGE },
+                    services: { Prompts: prompts },
+                });
+                Assert(done.evaluation.status === 'Submitted', `status ${done.evaluation.status}: ${done.evaluation.errorMessage ?? ''}`);
+                Assert(requests.length === 1, `ran ${requests.length} prompt calls`);
+                Assert(requests[0].Prompt.Name === RUBRIC_EVALUATOR_PROMPT && requests[0].Judge?.Name === SAGE_JUDGE, 'the evaluator ran with the named judge');
+                Assert(requests[0].Subject.includes('gets the figure right') && /<rubric-subject [0-9a-f]{32}>/.test(requests[0].Subject), 'the subject is its own delimited message');
+                Assert(composedPrompts[0].includes('# Judge: Sage') && composedPrompts[0].includes('Accuracy (`accuracy`)'), 'the stored prompts composed for the call');
+                const stored = await storedEvaluation(ctx, done.evaluation.id);
+                Assert(stored.EvaluatorType === 'AIPrompt' && stored.EvaluatorName === 'LLM', `stored ${stored.EvaluatorType} ${stored.EvaluatorName}`);
+                Assert(stored.Outcome === 'Passed' && Number(stored.NormalizedScore) === 1, `stored ${stored.Outcome} ${stored.NormalizedScore}`);
+                const metadata = JSON.parse(stored.Metadata ?? '{}') as { Evaluator?: Record<string, unknown> };
+                Assert(metadata.Evaluator?.JudgePrompt === SAGE_JUDGE, `recorded judge ${String(metadata.Evaluator?.JudgePrompt)}`);
+                Assert(metadata.Evaluator?.SystemPrompt === RUBRIC_EVALUATOR_PROMPT && metadata.Evaluator?.CriterionPrompt === RUBRIC_CRITERION_PROMPT, 'recorded the evaluator and criterion prompts');
+            });
+        },
+    },
+    {
+        Id: 'rubrics.R14',
+        Name: 'R14: a Decision evaluation asks the rendered criteria on Default Decision through AIDecisionRunner',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            const subjectEntity = await anyEntityId(ctx);
+            const decider = new ScriptedDecision();
+            decider.Arm();
+            const restore = RegisterScriptedDecision(decider, SCRIPTED_DECISION_DRIVER_CLASSES);
+            let promptRunId: string | null = null;
+            try {
+                await withProviderRollback(ctx, async () => {
+                    const tag = `it-rubrics-r14-${Date.now().toString(36)}`;
+                    const versionId = await publishPromptRubric(ctx, tag);
+                    const engine = ProviderRubricEngine(ctx.Provider, ctx.User);
+                    const version = await engine.GetRubric({ versionId });
+                    if (!version) throw new Error('the published version did not load');
+                    const done = await engine.Evaluate({
+                        version,
+                        subject: { entityName: subjectEntity.name, recordId: tag, entityId: subjectEntity.id },
+                        content: { text: 'The reply guesses a figure and cites nothing.' },
+                        evaluator: 'Decision',
+                    });
+                    promptRunId = done.output?.aiPromptRunId ?? null;
+                    Assert(done.evaluation.status === 'Submitted', `status ${done.evaluation.status}: ${done.evaluation.errorMessage ?? ''}`);
+                    Assert(decider.Calls.length === 1, `the decision model was called ${decider.Calls.length} times`);
+                    const call = decider.Calls[0];
+                    Assert(call.QuestionKeys.join(',') === 'accuracy,sourcing', `asked ${call.QuestionKeys.join(',')}`);
+                    Assert(call.Instructions[0].includes('Accuracy (`accuracy`)') && call.Instructions[0].includes('Meets accuracy.'), `question text: ${call.Instructions[0]}`);
+                    const stored = await storedEvaluation(ctx, done.evaluation.id);
+                    Assert(stored.EvaluatorType === 'AIPrompt' && stored.EvaluatorName === 'Decision', `stored ${stored.EvaluatorType} ${stored.EvaluatorName}`);
+                    Assert(stored.Outcome !== 'Passed', `the stand-in chose the lowest level, so the outcome is not Passed (got ${stored.Outcome})`);
+                    Assert(!!stored.AIPromptRunID, 'the evaluation links the decision prompt run');
+                });
+            } finally {
+                decider.Disarm();
+                restore();
+                if (promptRunId) await DeleteById('MJ: AI Prompt Runs', promptRunId, ctx.Provider, ctx.User);
+            }
         },
     },
     {

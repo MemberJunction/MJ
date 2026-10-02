@@ -4,14 +4,21 @@ export { DeterministicRubricEvaluator, type DeterministicRule } from './Determin
 export { RubricEngine, type EvaluateParams, type EvaluateRecordInput, type EvaluateRecordResult, type RubricEvaluationRecord, type RubricEvaluationStore, type RubricRecords } from './RubricEngine.js';
 export { ProviderDecisionService, ProviderPromptService, ProviderRubricEngine, RegisterRubricAgentRunner } from './providerRecords.js';
 export { GetAgreement, GetConsensus, GetDiagnostics, KrippendorffAlpha, QuadraticKappa } from './statistics.js';
-export { BuildRubricEvaluatorMessages, LLMRubricEvaluator, MAX_RUBRIC_SAMPLES, RUBRIC_EVALUATOR_PROMPT, RenderRubricEvaluatorPrompt, type LLMDecision, type LLMRubricResult, type RubricPromptRunner } from './LLMRubricEvaluator.js';
+export {
+    DEFAULT_RUBRIC_JUDGE_PROMPT, LLMRubricEvaluator, MAX_RUBRIC_SAMPLES, PromptData, PromptRef, RenderCriteriaText, RUBRIC_CRITERION_PROMPT, RUBRIC_EVALUATOR_PROMPT,
+    RUBRIC_JUDGE_PLACEHOLDER, type LLMDecision, type LLMRubricResult, type RubricPromptRunner, type RubricRunnerRequest,
+} from './LLMRubricEvaluator.js';
+export {
+    BuildCriteriaPromptData, BuildCriterionPromptData, BuildRubricVersionPromptData, BuildSubjectMessage, LeafNodes, RUBRIC_SUBJECT_BUDGET, SubjectBody,
+    type RubricCriterionPromptData, type RubricCriterionTemplateData, type RubricLevelPromptData, type RubricPromptData, type RubricScalePromptData, type RubricVersionPromptData,
+} from './promptData.js';
 export { ChosenLevel, DEFAULT_DECISION_PROMPT, DecisionRubricEvaluator, ScoreQuestionForCriterion } from './DecisionRubricEvaluator.js';
 export {
     BUILT_IN_RUBRIC_EVALUATORS, CreateRubricEvaluator, DEFAULT_RUBRIC_EVALUATOR, ListRubricEvaluators, NormalizeRubricEvaluatorName, ResolveRubricEvaluatorSelection,
     type RubricEvaluatorChoice, type RubricEvaluatorInfo,
 } from './evaluatorRegistry.js';
 export type {
-    RubricDecisionOutput, RubricDecisionService, RubricEvaluatorContext, RubricEvaluatorMessages, RubricEvaluatorRun, RubricEvaluatorServices, RubricEvaluatorSettings,
+    RubricDecisionOutput, RubricDecisionService, RubricEvaluatorContext, RubricEvaluatorRun, RubricModelSelection, RubricPromptRequest, RubricEvaluatorServices, RubricEvaluatorSettings,
     RubricEvaluatorType, RubricJsonValue, RubricPromptMode, RubricPromptOutput, RubricPromptRef, RubricPromptService,
 } from './evaluatorServices.js';
 export { AIRubricEvaluator, type AgentCriterionResult, type AgentScaleView, type RubricAgent, type RubricEvaluatorConfig } from './AIRubricEvaluator.js';

@@ -5,7 +5,7 @@ import { DeterministicRubricEvaluator } from './DeterministicRubricEvaluator.js'
 import { HumanRubricEvaluator } from './HumanRubricEvaluator.js';
 import { LLMRubricEvaluator } from './LLMRubricEvaluator.js';
 import { BaseRubricEvaluator } from './RubricEvaluator.js';
-import type { RubricEvaluatorSettings, RubricEvaluatorType, RubricJsonValue, RubricPromptMode } from './evaluatorServices.js';
+import type { RubricEvaluatorSettings, RubricEvaluatorType, RubricJsonValue, RubricModelSelection, RubricPromptMode } from './evaluatorServices.js';
 
 /**
  * The built-in evaluators. Naming the classes keeps their modules, and so their `@RegisterClass`
@@ -114,14 +114,12 @@ function nameForType(type: string | undefined): string {
 
 function settingsFrom(record: Record<string, unknown>): RubricEvaluatorSettings {
     const settings: RubricEvaluatorSettings = {};
-    const promptId = textField(record, 'PromptID');
-    const promptName = textField(record, 'PromptName');
-    const modelId = textField(record, 'ModelID');
-    const agentId = textField(record, 'AgentID');
-    if (promptId) settings.PromptID = promptId;
-    if (promptName) settings.PromptName = promptName;
-    if (modelId) settings.ModelID = modelId;
-    if (agentId) settings.AgentID = agentId;
+    for (const field of TEXT_SETTINGS) {
+        const value = textField(record, field);
+        if (value) settings[field] = value;
+    }
+    const selection = textField(record, 'ModelSelection');
+    if (selection !== undefined) settings.ModelSelection = modelSelection(selection);
     const mode = textField(record, 'Mode');
     if (mode !== undefined) settings.Mode = promptMode(mode);
     if (typeof record.Samples === 'number' && Number.isFinite(record.Samples)) settings.Samples = record.Samples;
@@ -129,6 +127,16 @@ function settingsFrom(record: Record<string, unknown>): RubricEvaluatorSettings 
         settings.Extensions = record.Extensions as Record<string, RubricJsonValue>;
     }
     return settings;
+}
+
+/** The settings copied as trimmed text when present. */
+const TEXT_SETTINGS = [
+    'PromptID', 'PromptName', 'SystemPromptID', 'SystemPromptName', 'CriterionPromptID', 'CriterionPromptName', 'ModelID', 'AgentID',
+] as const;
+
+function modelSelection(value: string): RubricModelSelection {
+    if (value === 'System' || value === 'Judge') return value;
+    throw new Error(`ModelSelection must be System or Judge, not ${value}.`);
 }
 
 function promptMode(value: string): RubricPromptMode {

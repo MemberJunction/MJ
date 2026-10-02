@@ -1,25 +1,25 @@
 import type { ScoreAnswer, ScoreQuestion } from '@memberjunction/ai';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RegisterClass } from '@memberjunction/global';
-import { RenderCriterion, SubjectBody } from './LLMRubricEvaluator.js';
+import { PromptRef, RenderCriteriaText, RUBRIC_CRITERION_PROMPT } from './LLMRubricEvaluator.js';
 import { BaseRubricEvaluator, type RubricCandidate } from './RubricEvaluator.js';
-import type { RubricEvaluatorContext, RubricEvaluatorRun, RubricEvaluatorType, RubricJsonValue, RubricPromptRef } from './evaluatorServices.js';
+import type { RubricEvaluatorContext, RubricEvaluatorRun, RubricEvaluatorType, RubricJsonValue } from './evaluatorServices.js';
+import { LeafNodes, SubjectBody, type RubricCriterionPromptData } from './promptData.js';
 
 /** The decision prompt the Decision evaluator runs when the settings name none. Its bindings choose the model. */
 export const DEFAULT_DECISION_PROMPT = 'Default Decision';
 
 /**
- * One criterion as a typed Score question: its rendered guidance and anchors, and its level labels
- * ordered lowest to highest. Null when the criterion cannot be asked this way: a numeric scale, or
- * fewer than two levels.
+ * One criterion as a typed Score question: the rubric's instructions, when it has any, then the text
+ * the criterion prompt rendered, and the level labels lowest to highest. Each question is asked on
+ * its own, so it carries the rubric instructions itself. Null when the criterion cannot be asked
+ * this way: a numeric scale, or fewer than two levels.
  */
-export function ScoreQuestionForCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapshot): ScoreQuestion | null {
-    const scale = version.scales.find(item => item.id === node.scaleId);
-    if (!scale || scale.scaleType !== 'Levels') return null;
-    const levels = [...scale.levels].sort((left, right) => left.normalizedValue - right.normalizedValue || left.sequence - right.sequence);
-    if (levels.length < 2) return null;
-    const instructions = [version.instructions ?? '', RenderCriterion(version, node)].filter(part => part.length > 0).join('\n\n');
-    return { Kind: 'Score', Instructions: instructions, Levels: levels.map(level => level.label) };
+export function ScoreQuestionForCriterion(criterion: RubricCriterionPromptData, rubricInstructions?: string | null): ScoreQuestion | null {
+    if (criterion.Scale?.Type !== 'Levels' || criterion.Levels.length < 2) return null;
+    const text = criterion.Text ?? criterion.Name;
+    const instructions = rubricInstructions?.trim() ? `${rubricInstructions.trim()}\n\n${text}` : text;
+    return { Kind: 'Score', Instructions: instructions, Levels: criterion.Levels.map(level => level.Label) };
 }
 
 /**
@@ -41,7 +41,9 @@ export function ChosenLevel(question: ScoreQuestion, answer: ScoreAnswer): { lab
  * decision. Every leaf with a level scale becomes a typed Score question, and all of them go in one
  * call, so the model answers with a calibrated probability per level instead of free text.
  *
- * The prompt is the settings' PromptID or PromptName, else Default Decision, and its model
+ * Each question's instructions are the criterion as the criterion prompt (`Rubric Criterion`, or
+ * CriterionPromptID / CriterionPromptName) renders it, the same text the LLM evaluator shows. The
+ * decision prompt is the settings' PromptID or PromptName, else Default Decision, and its model
  * bindings choose the model. ModelID pins one.
  *
  * A decision model returns no rationale and no quotes. Each answer's rationale states the chosen
@@ -62,22 +64,24 @@ export class DecisionRubricEvaluator extends BaseRubricEvaluator {
     public async EvaluateRubric(context: RubricEvaluatorContext): Promise<RubricEvaluatorRun> {
         const decisions = context.Services.Decisions;
         if (!decisions) throw new Error('A Decision evaluation requires a decision service.');
-        const leaves = context.Version.nodes.filter(node => node.nodeType === 'Criterion');
+        const prompts = context.Services.Prompts;
+        if (!prompts) throw new Error('A Decision evaluation requires a prompt service to render its criteria.');
+        const leaves = LeafNodes(context.Version);
         const needsEvidence = leaves.filter(node => node.evidenceRequired);
         if (needsEvidence.length > 0) {
             throw new Error(`A decision model returns no evidence, and ${needsEvidence.map(node => node.key).join(', ')} require it. Use the LLM evaluator for this rubric.`);
         }
+        const criterionPrompt = PromptRef(context.Settings.CriterionPromptID, context.Settings.CriterionPromptName, RUBRIC_CRITERION_PROMPT);
+        const criteria = await RenderCriteriaText(context.Version, prompts, criterionPrompt);
         const questions: Record<string, ScoreQuestion> = {};
         const unasked: string[] = [];
-        for (const leaf of leaves) {
-            const question = ScoreQuestionForCriterion(context.Version, leaf);
-            if (question) questions[leaf.key] = question;
-            else unasked.push(leaf.key);
+        for (const criterion of criteria) {
+            const question = ScoreQuestionForCriterion(criterion, context.Version.instructions);
+            if (question) questions[criterion.Key] = question;
+            else unasked.push(criterion.Key);
         }
         if (Object.keys(questions).length === 0) throw new Error('No criterion in this rubric can be asked as a Score question.');
-        const prompt: RubricPromptRef = context.Settings.PromptID
-            ? { ID: context.Settings.PromptID }
-            : { Name: context.Settings.PromptName ?? DEFAULT_DECISION_PROMPT };
+        const prompt = PromptRef(context.Settings.PromptID, context.Settings.PromptName, DEFAULT_DECISION_PROMPT);
         const output = await decisions.Decide({
             Prompt: prompt,
             State: SubjectBody(context.Content),
@@ -87,6 +91,7 @@ export class DecisionRubricEvaluator extends BaseRubricEvaluator {
         const candidates = this.candidates(context.Version, leaves, questions, output.Answers);
         const metadata: Record<string, RubricJsonValue> = {
             Prompt: prompt.ID ?? prompt.Name ?? null,
+            CriterionPrompt: criterionPrompt.ID ?? criterionPrompt.Name ?? null,
             UnaskedCriteria: unasked,
         };
         if (context.Settings.ModelID) metadata.ModelID = context.Settings.ModelID;

@@ -54,5 +54,13 @@
     "primaryKey": {
       "ID": "662C8F7A-2133-4167-A677-5B3F0B895995"
     }
+  },
+  {
+    "fields": {
+      "Status": "Published"
+    },
+    "primaryKey": {
+      "ID": "0EDF8C3F-5FAC-4E6D-968D-48047D7FD295"
+    }
   }
 ]

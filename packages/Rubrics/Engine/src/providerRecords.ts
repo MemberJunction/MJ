@@ -1,7 +1,9 @@
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ChildPromptParam } from '@memberjunction/ai-core-plus';
 import { AIDecisionParams, AIDecisionRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
-import type { RubricDecisionOutput, RubricDecisionService, RubricPromptRef, RubricPromptService } from './evaluatorServices.js';
+import type { RubricDecisionOutput, RubricDecisionService, RubricPromptRef, RubricPromptRequest, RubricPromptService } from './evaluatorServices.js';
+import { RUBRIC_JUDGE_PLACEHOLDER } from './LLMRubricEvaluator.js';
+import type { RubricCriterionTemplateData, RubricPromptData } from './promptData.js';
 import { RunInEntityTransaction, RunView, type EntityTransactionScope } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { MJAIPromptEntity, MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
@@ -374,27 +376,70 @@ async function LoadPrompt(provider: unknown, user: unknown, ref: RubricPromptRef
 }
 
 /**
- * Runs the already-rendered rubric text through a chat prompt with AIPromptRunner, so the prompt's
- * model bindings, failover, and prompt-run logging apply. ModelID pins the model. Returns the
- * prompt run it wrote.
+ * The prompt service over AIPromptRunner. Every template comes from the prompt rows in the database,
+ * so a prompt edited or swapped in metadata takes effect on the next evaluation.
+ *
+ * - **Run** renders the evaluator prompt with the judge composed into its `judgePrompt` slot (the
+ *   runner's child-prompt composition, as a loop agent's system prompt and agent prompt), sends the
+ *   subject as its own user message, and returns the reply and the prompt run it wrote. ModelID
+ *   pins the model; ModelSelection `Judge` lets the judge's bindings choose it.
+ * - **RenderCriteria** renders the criterion prompt once per criterion, with no model call.
+ * - **Preview** returns the composed system prompt Run would send, with no model call.
  */
-export function ProviderPromptService(provider: RubricProvider, user: unknown): RubricPromptService {
+export function ProviderPromptService(provider: unknown, user: unknown): RubricPromptService {
     return {
         async Run(input) {
-            const prompt = await LoadPrompt(provider, user, input.Prompt);
-            const params = new AIPromptParams();
-            params.prompt = prompt as AIPromptParams['prompt'];
-            params.systemPromptOverride = input.Messages.system;
+            const params = await EvaluatorPromptParams(provider, user, input);
             params.templateMessageRole = 'system';
-            params.conversationMessages = [{ role: 'user', content: input.Messages.user }];
-            params.contextUser = user as AIPromptParams['contextUser'];
+            params.conversationMessages = [{ role: 'user', content: input.Subject }];
             if (input.ModelID) params.override = { modelId: input.ModelID };
+            if (input.TimeoutMS !== undefined) params.timeoutMS = input.TimeoutMS;
+            if (input.ModelSelection === 'Judge' && params.childPrompts?.[0]) params.modelSelectionPrompt = params.childPrompts[0].childPrompt.prompt;
             const result = await new AIPromptRunner().ExecutePrompt(params);
-            if (!result.success) throw new Error(result.errorMessage || `The ${prompt.Name} prompt failed.`);
+            if (!result.success) throw new Error(result.errorMessage || `The ${params.prompt.Name} prompt failed.`);
             const text = typeof result.rawResult === 'string' && result.rawResult.length > 0 ? result.rawResult : JSON.stringify(result.result ?? {});
-            return { Text: text, PromptRunID: result.promptRun?.ID ?? null };
+            return { Text: text, PromptRunID: result.promptRun?.ID ?? null, Cost: typeof result.cost === 'number' ? result.cost : null };
+        },
+        async RenderCriteria(input) {
+            if (input.Items.length === 0) return [];
+            const prompt = await LoadPrompt(provider, user, input.Prompt);
+            const children = input.Items.map((item, index) => new ChildPromptParam(TemplateParams(prompt, user, item), `criterion${index}`));
+            const rendered = (await new AIPromptRunner().RenderChildPromptTemplates(children, TemplateParams(prompt, user, {}))).renderedTemplates;
+            return input.Items.map((_item, index) => RenderedOrThrow(rendered, `criterion${index}`, prompt.Name));
+        },
+        async Preview(input) {
+            const parent = await EvaluatorPromptParams(provider, user, input);
+            const root = new ChildPromptParam(parent, 'evaluator');
+            const rendered = (await new AIPromptRunner().RenderChildPromptTemplates([root], TemplateParams(parent.prompt, user, {}))).renderedTemplates;
+            return RenderedOrThrow(rendered, 'evaluator', parent.prompt.Name);
         },
     };
+}
+
+/** The evaluator prompt, its data, and the judge as its one child prompt, ready to render or run. */
+async function EvaluatorPromptParams(provider: unknown, user: unknown, input: Pick<RubricPromptRequest, 'Prompt' | 'Judge' | 'Data'>): Promise<AIPromptParams> {
+    const [parent, judge] = await Promise.all([
+        LoadPrompt(provider, user, input.Prompt),
+        input.Judge ? LoadPrompt(provider, user, input.Judge) : Promise.resolve(null),
+    ]);
+    const params = TemplateParams(parent, user, input.Data);
+    if (judge) params.childPrompts = [new ChildPromptParam(TemplateParams(judge, user, input.Data), RUBRIC_JUDGE_PLACEHOLDER)];
+    return params;
+}
+
+/** Prompt params that only carry a prompt, its template data, and the user. */
+function TemplateParams(prompt: MJAIPromptEntity, user: unknown, data: RubricPromptData | RubricCriterionTemplateData | Record<string, never>): AIPromptParams {
+    const params = new AIPromptParams();
+    params.prompt = prompt as AIPromptParams['prompt'];
+    params.data = { ...data };
+    params.contextUser = user as AIPromptParams['contextUser'];
+    return params;
+}
+
+function RenderedOrThrow(rendered: Record<string, string>, placeholder: string, promptName: string): string {
+    const text = rendered[placeholder];
+    if (text === undefined) throw new Error(`The ${promptName} prompt rendered nothing for ${placeholder}.`);
+    return text;
 }
 
 /**

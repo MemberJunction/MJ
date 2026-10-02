@@ -7,7 +7,7 @@ export default class RubricEvaluate extends Command {
     entity: Flags.string({ required: true, description: 'Subject entity name' }),
     record: Flags.string({ required: true, description: 'Subject record id' }),
     evaluator: Flags.string({ description: 'A registered evaluator: LLM, Decision, Agent, Deterministic, or a custom one', default: 'LLM' }),
-    prompt: Flags.string({ description: 'Prompt name to run (LLM and Decision). Each evaluator has a default' }),
+    prompt: Flags.string({ description: 'LLM: the judge prompt composed into Rubric Evaluator (default Rubric Evaluator - Default Judge). Decision: the decision prompt (default Default Decision)' }),
     model: Flags.string({ description: 'AI Model ID to pin. Otherwise the prompt\'s bindings choose' }),
     mode: Flags.string({ description: 'LLM only: SinglePass or PerCriterion', options: ['SinglePass', 'PerCriterion'] }),
   };
