@@ -104,9 +104,8 @@ function createMockRedisInstance() {
             };
             return pipe;
         }),
-        // The provider INCRs a fleet-wide epoch before publishing, so a reconnect can tell an
-        // outage during which nothing changed from one during which something did. Modelled
-        // as a real counter so tests can assert on the value the event carries.
+        // A real counter, not a stub: the provider INCRs the shared epoch before publishing, and
+        // tests assert on the value the event carries.
         incr: vi.fn((key: string) => {
             const next = ((store.get(key) as unknown as number) ?? 0) + 1;
             store.set(key, String(next) as unknown as string);
@@ -161,10 +160,8 @@ import { RedisLocalStorageProvider } from '../RedisLocalStorageProvider.js';
 import { LogError } from '@memberjunction/core';
 
 /**
- * Lets the provider's fire-and-forget publish chain settle.
- *
- * `publishChange` performs an INCR and only then PUBLISHes, so the publish happens a tick after the
- * mutation's own promise resolves. Awaiting the mutation alone is no longer enough to observe it.
+ * Lets the provider's fire-and-forget publish chain settle. `publishChange` INCRs before it
+ * publishes, so the publish lands a tick after the mutation's own promise resolves.
  */
 async function flushPublishChain(): Promise<void> {
     await Promise.resolve();

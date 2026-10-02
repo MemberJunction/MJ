@@ -85,34 +85,21 @@ export interface RedisProviderConfig {
     defaultTTLSeconds?: number;
 
     /**
-     * Maximum number of connection retry attempts before giving up **permanently**.
+     * Caps reconnection attempts. Past the cap ioredis stops reconnecting for the life of the
+     * client, leaving the process cache-blind until it restarts.
      *
-     * **Omit this for a long-running process.** Left unset the provider retries forever with a
-     * capped delay, which is the right shape for a server: an outage of any length is survivable and
-     * the process reattaches when Redis returns. Setting it reinstates a hard ceiling — after that
-     * many attempts ioredis abandons reconnection for the life of the client and the process is
-     * cache-blind until it restarts, with no recovery path.
+     * Omit it on a long-running process. Set it only for a short-lived script that should fail
+     * rather than wait out an outage.
      *
-     * It defaulted to `10` with a linear 200ms-per-attempt backoff, which is **~11 seconds** of total
-     * tolerance — shorter than a Redis restart, an ElastiCache failover or a pod reschedule. A
-     * 25-minute Azure Cache outage (2026-09-25) left every running server permanently cache-blind
-     * without saying so.
-     *
-     * Only set this for a short-lived script that genuinely should fail rather than wait.
-     *
-     * @default undefined — retry forever, with the delay capped by {@link maxRetryDelayMs}
+     * @default undefined — retry indefinitely, with each wait capped by {@link maxRetryDelayMs}
      */
     maxRetries?: number;
 
     /**
-     * Ceiling on the delay between reconnection attempts, in milliseconds.
+     * Ceiling on the wait between reconnection attempts, in milliseconds. The backoff doubles from
+     * 200ms up to this value and then holds there, so a long outage costs one attempt per ceiling.
      *
-     * This is where the limit belongs for a server: bound how long you wait between attempts, not
-     * how many attempts you are allowed. The backoff doubles from 200ms until it reaches this value
-     * and then holds there, so a long outage costs one attempt per `maxRetryDelayMs` rather than
-     * giving up.
-     *
-     * @default 30000 (30 seconds)
+     * @default 30000
      */
     maxRetryDelayMs?: number;
 
@@ -148,10 +135,9 @@ const DEFAULT_CATEGORY = 'default';
 /**
  * The categories a reconnect-flush clears.
  *
- * Mirrors `CacheCategory` from `@memberjunction/core`, spelled out as literals rather than imported
- * so the provider does not take a value dependency on that module just for a list of strings — and
- * so a category added there cannot silently change this provider's recovery behaviour without
- * someone looking at it.
+ * Mirrors `CacheCategory` from `@memberjunction/core` as literals rather than importing it, so the
+ * provider takes no value dependency on that module and a category added there cannot change
+ * recovery behaviour here without an edit to this list.
  */
 const RECONCILED_CATEGORIES: readonly string[] = ['RunViewCache', 'RunQueryCache', 'DatasetCache', 'Metadata', 'default'];
 
@@ -218,23 +204,23 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     private _maxRetryDelayMs: number;
 
     /**
-     * Whether this client has ever been connected. Before the first connection a command may
-     * legitimately wait in ioredis's offline queue (startup warm-up); after a connection has been
-     * LOST, waiting is the wrong answer and commands fail fast instead.
+     * Whether this client has ever been connected. Distinguishes a startup that has not reached
+     * Redis yet, where queueing a command is useful, from a connection that was lost, where
+     * {@link shouldFailFast} applies.
      */
     private _hasEverConnected: boolean = false;
 
     /**
-     * The highest epoch this process knows about — bumped both by its own mutations and by events
-     * received from siblings. On reconnect it is compared against the epoch in Redis to decide
-     * whether the gap contained any invalidation at all. See {@link reconcileAfterReconnect}.
+     * The highest shared epoch this process has seen, from its own mutations and from events
+     * received. {@link reconcileAfterReconnect} compares it against the value in Redis to decide
+     * whether anything was invalidated during a connection gap.
      */
     private _lastSeenEpoch: number = 0;
 
     /**
-     * Whether this process mutated shared state while disconnected, so its siblings never heard
-     * about it. Reconciliation is symmetric: the gap hides changes in BOTH directions, and this is
-     * the publish side.
+     * Whether this process mutated shared state while disconnected, meaning other servers never
+     * received those invalidations. Set so {@link reconcileAfterReconnect} can bump the epoch on
+     * recovery and make them flush.
      */
     private _mutatedWhileDisconnected: boolean = false;
 
@@ -330,13 +316,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * @internal
      */
     private retryStrategy(times: number, maxRetries: number | undefined): number | null {
-        // `null` tells ioredis to stop reconnecting FOR THE LIFE OF THE CLIENT — there is no
-        // recovery from it short of a process restart. Only a caller that explicitly asked for a
-        // ceiling gets that.
+        // Returning null stops ioredis reconnecting for the life of the client, recoverable only by
+        // restarting the process, so only an explicit maxRetries gets that.
         if (maxRetries !== undefined && times > maxRetries) {
-            // LogError, not LogStatus: status output is compiled out in production
-            // (logging.ts logToConsole), and a cache client that has permanently given up is the
-            // single most important thing this class can say.
+            // Error channel: status output is suppressed in production, and this is the one message
+            // that must reach a deployed log.
             LogError(
                 `Redis: max retries (${maxRetries}) exceeded after ${times} attempts — giving up permanently. ` +
                 `This process is now cache-blind until it restarts. Omit maxRetries to retry forever with a capped delay.`
@@ -345,10 +329,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             return null;
         }
 
-        // Doubling backoff, held at the ceiling — 200, 400, 800, 1600 … maxRetryDelayMs. The ceiling
-        // is on the WAIT, not the attempt count, so an outage of any length stays survivable.
-        // (This previously read `times * 200`, which is linear: with the old default of 10 attempts
-        // the delay never passed 2s and the documented 30s cap was unreachable.)
+        // 200, 400, 800, 1600 … then held at maxRetryDelayMs.
         const delay = Math.min(200 * Math.pow(2, times - 1), this._maxRetryDelayMs);
         if (this._enableLogging) {
             const ceiling = maxRetries === undefined ? 'no limit' : `${maxRetries}`;
@@ -377,7 +358,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             if (this._enableLogging) {
                 LogStatus('Redis: ready to accept commands');
             }
-            // Only a RECOVERY is an event; the first ready is just startup.
+            // The first ready is startup, not a recovery.
             if (wasDown) {
                 this.emitConnectionRestored();
             }
@@ -408,21 +389,16 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Whether a command should fail immediately rather than be handed to ioredis.
+     * Whether a command should fail immediately instead of being handed to ioredis.
      *
-     * The clients are built with `maxRetriesPerRequest: null` and ioredis's default
-     * `enableOfflineQueue: true`, so while disconnected every command is QUEUED and its promise
-     * never settles. Over a multi-minute outage that is unbounded memory growth plus awaits that
-     * hang for the duration.
+     * True once a connection has been established and then lost. The clients set
+     * `maxRetriesPerRequest: null` and leave ioredis's offline queue enabled, so a command issued
+     * while disconnected is queued and its promise never settles — over a long outage that is
+     * unbounded memory and indefinitely hanging awaits. Callers instead get a miss from a read and
+     * a no-op from a write, both of which are correct and only slower.
      *
-     * Failing fast is the right answer for a cache specifically: a read that returns `null` is a
-     * miss and the caller refetches from the source of truth, and a write that no-ops just leaves
-     * the cache unpopulated. Both are correct, merely slower — which is what a cache outage should
-     * cost.
-     *
-     * Deliberately `false` before the FIRST connection: at startup a brief queue is the difference
-     * between a warm cache and a cold one, and nothing is stale yet because nothing is cached.
-     * Only a connection that was established and then LOST switches to failing fast.
+     * False before the first connection, so a brief queue can still warm the cache at startup.
+     * Nothing is stale at that point because nothing is cached.
      *
      * @internal
      */
@@ -455,25 +431,20 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Reconciles this process's caches after a connection comes back.
+     * Decides whether this process's caches are still trustworthy after a reconnect, and flushes
+     * them if not.
      *
-     * **Reconnecting is not the same as being correct.** ioredis resubscribes automatically, so the
-     * channel works again — but Redis pub/sub has no replay and every invalidation published during
-     * the gap is gone. Without this step a reconnect silently restores a cache that is *wrong*,
-     * which is worse than staying disconnected and knowing it.
+     * ioredis resubscribes on its own, but pub/sub has no replay: invalidations published while this
+     * process was disconnected are gone, so the cache may hold entries other servers have already
+     * invalidated. One read of the shared epoch counter settles it:
      *
-     * The decision is one round trip:
+     * - unchanged — nothing was invalidated anywhere during the gap, so the cache is kept
+     * - advanced — something changed and this process cannot know what, so everything is dropped
+     * - this process mutated while disconnected — the epoch is bumped so siblings flush too, and
+     *   the cache is dropped here as well
      *
-     * - **Epoch unchanged** — nothing was invalidated anywhere while this process was away, so the
-     *   cache it holds is still valid and is KEPT. This is the case a blind flush-on-reconnect gets
-     *   wrong, and the reason the counter is worth having at all.
-     * - **Epoch advanced** — something changed and this process cannot know what, so everything it
-     *   holds is dropped and re-warmed.
-     * - **This process mutated while away** — the epoch is bumped so siblings flush as well, then
-     *   treated as advanced here too.
+     * An epoch that cannot be read is treated as advanced: without evidence of correctness, flush.
      *
-     * A failure to read the epoch flushes, deliberately: if correctness cannot be established, the
-     * safe answer is the expensive one.
      * @internal
      */
     private async reconcileAfterReconnect(): Promise<void> {
@@ -1144,9 +1115,8 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             if (this._enableLogging) {
                 LogStatus('Redis pub/sub subscriber: connected');
             }
-            // The SUBSCRIBER is the connection that misses invalidations, so its recovery is what
-            // reconciliation hangs off. ioredis resubscribes for us; what it cannot do is tell us
-            // what was published while we were away.
+            // Reconciliation hangs off the subscriber because that is the connection which misses
+            // invalidations. ioredis resubscribes, but cannot replay what it missed.
             if (wasDown) {
                 void this.reconcileAfterReconnect();
             }
@@ -1176,10 +1146,8 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         try {
             const event: CacheChangedEvent = JSON.parse(message);
 
-            // Record the epoch BEFORE the self-filter below. Every event that reaches this
-            // subscriber is evidence of how far the fleet-wide counter has advanced, and that is
-            // what a later reconnect compares against — whoever happened to publish it is
-            // irrelevant to that question.
+            // Before the self-filter below: any event reaching this subscriber shows how far the
+            // shared counter has advanced, regardless of who published it.
             this.noteEpochSeen(event.Epoch);
 
             // Skip events from this server instance
@@ -1230,17 +1198,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             Data: data,
         };
 
-        // Bump the fleet-wide epoch, then publish carrying its new value.
-        //
-        // This is the one place every mutation already passes through, which is why the counter
-        // lives here rather than in SetItem/Remove/ClearCategory separately. The INCR precedes the
-        // PUBLISH because the payload has to carry the resulting value — two round trips instead of
-        // one, paid entirely off the caller's path since this whole method is fire-and-forget.
-        //
-        // What the epoch buys: pub/sub has NO REPLAY, so a subscriber that was away receives nothing
-        // published during the gap. Comparing the epoch on reconnect is what distinguishes "an
-        // outage during which nothing changed" (keep the cache) from "an outage during which
-        // something did" (flush it) — see reconcileAfterReconnect.
+        // Bump the shared epoch, then publish carrying its new value. The counter lives here
+        // because every mutation already routes through this method. INCR has to precede PUBLISH so
+        // the payload can carry the result, which costs a second round trip — off the caller's path,
+        // since this method is fire-and-forget.
         this._client.incr(this.buildEpochKey()).then((epoch) => {
             this.noteEpochSeen(epoch);
             event.Epoch = epoch;
@@ -1250,9 +1211,8 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 LogStatus(`Redis pub/sub: published ${action} event for key "${cacheKey}" on channel "${this._pubSubChannel}"`);
             }
         }).catch((err) => {
-            // A failed publish means siblings never heard about this change. Record it so the
-            // reconnect bumps the epoch and makes THEM flush, rather than leaving them confidently
-            // stale with respect to a write they never saw.
+            // Nobody heard this change, so record it for reconcileAfterReconnect to bump the epoch
+            // on recovery and make the other servers flush.
             this.noteMutationWhileDisconnected();
             if (this._enableLogging) {
                 LogError(`Redis pub/sub publish failed: ${(err as Error).message}`);
@@ -1408,23 +1368,18 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Registers a callback invoked when the connection to Redis is **lost**.
+     * Registers a callback for the loss of the Redis connection.
      *
-     * A connection state change is an operational event, not debug chatter, and
-     * {@link IsConnected} only reports the current state — not that it changed. Without this a
-     * consumer cannot degrade deliberately, report health, or trigger its own reconciliation; it has
-     * to poll a getter and infer.
+     * Fires on a transition only — not on the first connect, and not again while a reconnect is
+     * being retried. {@link IsConnected} reports the current state but not that it changed, so a
+     * consumer wanting to degrade or report health needs this rather than a poll.
      *
-     * This is the primary signal, deliberately, because **logging cannot carry it in production**:
-     * `LogStatus` / `LogStatusEx` are both compiled out when `GetProductionStatus()` is true
-     * (`logging.ts` → `logToConsole`), so a cache client that died emitted nothing at all in a
-     * deployed environment.
-     *
-     * Callbacks are invoked on a real transition only — not on the first connect, and not repeatedly
-     * while a reconnect is being retried.
+     * Use this in preference to reading the log: status-level logging is suppressed when
+     * `GetProductionStatus()` is true, so a deployed process says nothing when its cache client
+     * dies.
      *
      * @param callback - Invoked with a short human-readable reason for the loss
-     * @returns A function that, when called, removes this callback registration
+     * @returns A function that removes this registration
      *
      * @example
      * ```typescript
@@ -1440,18 +1395,14 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Registers a callback invoked when the connection to Redis is **restored** after a loss.
+     * Registers a callback for the Redis connection being restored after a loss. Not fired for the
+     * first connection.
      *
-     * Reconnecting is not the same as being correct: Redis pub/sub has no replay, so every
-     * invalidation published during the gap is gone and this process may be holding entries its
-     * siblings invalidated minutes ago. The provider reconciles that itself (see
-     * {@link OnReconciliationRequired}); this callback is for consumers that want to report health
-     * or take their own action.
+     * Cache correctness after the gap is handled by the provider itself; see
+     * {@link OnReconciliationRequired} for the signal that local state had to be dropped.
      *
-     * Not fired for the first connection — only for a genuine recovery.
-     *
-     * @param callback - Invoked with no arguments when the connection comes back
-     * @returns A function that, when called, removes this callback registration
+     * @param callback - Invoked when the connection comes back
+     * @returns A function that removes this registration
      */
     public OnConnectionRestored(callback: () => void): () => void {
         this._eventEmitter.on('connectionRestored', callback);
@@ -1461,20 +1412,17 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Registers a callback invoked when the provider has decided that local caches must be dropped
-     * after a connection gap.
+     * Registers a callback for the provider having concluded, after a connection gap, that local
+     * cache state must be dropped.
      *
-     * The provider already flushes the standard categories itself, by emitting `category_cleared`
-     * through {@link OnCacheChanged}. This is for consumers holding state the cache categories do not
-     * describe — an in-process engine, a derived index, a memoized permission set — which would
-     * otherwise survive a reconnect while being stale.
+     * The standard categories are flushed by the provider itself via {@link OnCacheChanged}. Use
+     * this for state those categories do not describe — an in-process engine, a derived index, a
+     * memoized permission set — which would otherwise survive a reconnect while stale.
      *
-     * Fires only when reconciliation concluded the cache is suspect. An outage during which nothing
-     * was invalidated anywhere does NOT fire it, which is the point of tracking the epoch rather
-     * than flushing blindly on every reconnect.
+     * Does not fire when nothing was invalidated anywhere during the gap.
      *
-     * @param callback - Invoked with no arguments when a flush is required
-     * @returns A function that, when called, removes this callback registration
+     * @param callback - Invoked when a flush is required
+     * @returns A function that removes this registration
      */
     public OnReconciliationRequired(callback: () => void): () => void {
         this._eventEmitter.on('reconciliationRequired', callback);
@@ -1492,12 +1440,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Announces a lost connection on both channels: the public event, and the log.
+     * Raises the public lost-connection event and logs it.
      *
-     * Logged through `LogError` rather than `LogStatus` **on purpose** — status output does not
-     * survive production, and a silently dead cache client is the failure this exists to prevent.
-     * It is also not gated behind `enableLogging`: that flag is for per-operation chatter, and
-     * consumers commonly turn it off, which is exactly how an outage became invisible.
+     * Uses the error channel, and is not gated behind `enableLogging`: status-level output is
+     * suppressed in production and that flag is routinely turned off, either of which would leave a
+     * dead cache client silent.
      *
      * @internal
      */
@@ -1507,9 +1454,8 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Announces a restored connection. Also on the error channel, for the same reason the loss is:
-     * a recovery that is invisible while the failure was visible leaves an operator reading logs
-     * that show an outage which never ended.
+     * Raises the public restored-connection event and logs it, on the error channel for the same
+     * reason as the loss — otherwise the logs show an outage that never ends.
      *
      * @internal
      */
@@ -1519,8 +1465,8 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Emits to consumer callbacks without letting one bad listener break the lifecycle handling that
-     * triggered it — the same posture `LocalCacheManager.DispatchCacheChange` takes.
+     * Emits to consumer callbacks, containing any listener error so it cannot break the connection
+     * handling that triggered the event.
      *
      * @internal
      */

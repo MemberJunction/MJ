@@ -339,17 +339,14 @@ export interface CacheChangedEvent {
     Data?: string;
 
     /**
-     * Monotonic fleet-wide counter, incremented once per shared-cache mutation by the provider that
-     * published this event.
+     * Monotonic counter shared by every server, incremented once per shared-cache mutation.
      *
-     * Its purpose is **recovery, not ordering**. Pub/sub has no replay, so a subscriber that was
-     * disconnected receives nothing published during the gap and cannot otherwise tell whether it
-     * missed anything. Recording the highest epoch seen lets a reconnecting process compare against
-     * the current value and distinguish an outage in which nothing changed — keep the cache — from
-     * one in which something did — drop it.
+     * For recovery rather than ordering: a subscriber that was disconnected cannot see what pub/sub
+     * did not replay, so it records the highest epoch it has seen and compares that with the current
+     * value on reconnect to learn whether anything was invalidated meanwhile.
      *
-     * Optional: transports that do not implement the counter omit it, and a consumer that does not
-     * care about recovery can ignore it.
+     * Optional — transports without the counter omit it, and consumers that do not reconcile can
+     * ignore it.
      */
     Epoch?: number;
 }
