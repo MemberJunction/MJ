@@ -21,7 +21,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { BuildPkString, buildUsablePkString, CanonicalizeColumnFields, ComputeFieldsList } from '../utils/record.util';
+import { BuildPkString, BuildUsablePkString, CanonicalizeColumnFields, ComputeFieldsList } from '../utils/record.util';
 import { AggregateField } from '../utils/aggregate-field.util';
 import {
   MJUserViewEntityExtended,
@@ -4012,7 +4012,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   private getRowKey(entity: Record<string, unknown>): string {
     // Build key from EntityInfo PK fields when available
     if (this._entityInfo) {
-      const pk = buildUsablePkString(entity, this._entityInfo);
+      const pk = BuildUsablePkString(entity, this._entityInfo);
       if (pk !== null) {
         return pk;
       }

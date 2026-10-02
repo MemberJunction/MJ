@@ -8,7 +8,7 @@ import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 import { ValidateEnumParam, BoundNameList } from '../../shared/agent-tool-validation';
 import { FindByIdOrError, FindByIdOrNameOrError } from '../agent-tool-helpers';
-import { actionSuccessRate, isActionResultSuccess } from '../action-result-code';
+import { ActionSuccessRate, IsActionResultSuccess } from '../action-result-code';
 interface ActionMetrics {
   totalActions: number;
   activeActions: number;
@@ -433,7 +433,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
    */
   private calculateSuccessRate(executions: MJActionExecutionLogEntity[]): number {
     if (!executions || executions.length === 0) return 0;
-    return actionSuccessRate(executions.map(e => e.ResultCode));
+    return ActionSuccessRate(executions.map(e => e.ResultCode));
   }
 
   private calculateCategoryStats(
@@ -639,7 +639,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   }
 
   public IsExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
-    return isActionResultSuccess(execution.ResultCode);
+    return IsActionResultSuccess(execution.ResultCode);
   }
 
   /** @deprecated Use {@link IsExecutionSuccess}. */

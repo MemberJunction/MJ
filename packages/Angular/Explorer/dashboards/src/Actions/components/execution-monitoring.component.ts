@@ -10,10 +10,10 @@ import { ValidateEnumParam, BoundNameList } from '../../shared/agent-tool-valida
 import { FindByIdOrError, FindByIdOrNameOrError } from '../agent-tool-helpers';
 import {
   ActionResultClass,
-  actionResultColor,
-  actionResultIcon,
-  actionSuccessRate,
-  classifyActionResultCode,
+  ActionResultColor,
+  ActionResultIcon,
+  ActionSuccessRate,
+  ClassifyActionResultCode,
 } from '../action-result-code';
 
 /** The two agent-tool modes for the execution monitor: the log list, or a single
@@ -569,8 +569,8 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       // `RUNTIME_ERROR`, …) while these comparisons looked for Title Case, so a database of
       // successful runs reported 0 successes and 0 failures — beside rows that rendered
       // green, because the colour helpers lowercased and these did not.
-      successfulExecutions: this.Executions.filter(e => classifyActionResultCode(e.ResultCode) === 'success').length,
-      failedExecutions: this.Executions.filter(e => classifyActionResultCode(e.ResultCode) === 'failure').length,
+      successfulExecutions: this.Executions.filter(e => ClassifyActionResultCode(e.ResultCode) === 'success').length,
+      failedExecutions: this.Executions.filter(e => ClassifyActionResultCode(e.ResultCode) === 'failure').length,
       averageDuration: this.calculateAverageDuration(),
       executionsToday: this.Executions.filter(e => 
         new Date(e.StartedAt!) >= today
@@ -579,7 +579,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
         new Date(e.StartedAt!) >= weekAgo
       ).length,
       currentlyRunning: this.Executions.filter(e =>
-        classifyActionResultCode(e.ResultCode) === 'running' || !e.EndedAt
+        ClassifyActionResultCode(e.ResultCode) === 'running' || !e.EndedAt
       ).length
     };
   }
@@ -627,7 +627,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       
       if (trend) {
         trend.total++;
-        const klass = classifyActionResultCode(execution.ResultCode);
+        const klass = ClassifyActionResultCode(execution.ResultCode);
         if (klass === 'success') {
           trend.successful++;
         } else if (klass === 'failure') {
@@ -656,12 +656,12 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     if (result !== 'all') {
       const wanted = ActionExecutionMonitoringComponent.RESULT_FILTER_CLASSES[result];
       if (wanted === 'running') {
-        filtered = filtered.filter(e => !e.EndedAt || classifyActionResultCode(e.ResultCode) === 'running');
+        filtered = filtered.filter(e => !e.EndedAt || ClassifyActionResultCode(e.ResultCode) === 'running');
       } else if (wanted) {
         // Compared by CLASS, not by literal equality. The old `e.ResultCode === result`
         // matched the chip label against the stored code, so every chip returned an empty
         // list on a database written by the Runtime executor.
-        filtered = filtered.filter(e => classifyActionResultCode(e.ResultCode) === wanted);
+        filtered = filtered.filter(e => ClassifyActionResultCode(e.ResultCode) === wanted);
       }
     }
 
@@ -839,7 +839,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   }
 
   public GetResultColor(resultCode: string | null): 'success' | 'warning' | 'error' | 'info' {
-    return actionResultColor(resultCode);
+    return ActionResultColor(resultCode);
   }
 
   /** @deprecated Use {@link GetResultColor}. */
@@ -848,7 +848,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   }
 
   public GetResultIcon(resultCode: string | null): string {
-    return actionResultIcon(resultCode);
+    return ActionResultIcon(resultCode);
   }
 
   /** @deprecated Use {@link GetResultIcon}. */
@@ -876,12 +876,12 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   }
 
   /**
-   * Successes as a share of SETTLED runs — see {@link actionSuccessRate}. Dividing by
+   * Successes as a share of SETTLED runs — see {@link ActionSuccessRate}. Dividing by
    * `totalExecutions` put still-running and unrecognised-code rows in the denominator, which
    * drags the rate down for reasons that are not failures.
    */
   public GetSuccessRate(): number {
-    return actionSuccessRate(this.Executions.map(e => e.ResultCode));
+    return ActionSuccessRate(this.Executions.map(e => e.ResultCode));
   }
 
   /** @deprecated Use {@link GetSuccessRate}. */

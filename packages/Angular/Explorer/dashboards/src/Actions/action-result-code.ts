@@ -94,7 +94,7 @@ const FAILURE_MARKERS: readonly string[] = [
  * genuine `NOT_SUCCESSFUL` is not dragged into `'success'` by a substring. Null, undefined
  * and blank all classify as `'unknown'` — a row with no code recorded says nothing.
  */
-export function classifyActionResultCode(code: string | null | undefined): ActionResultClass {
+export function ClassifyActionResultCode(code: string | null | undefined): ActionResultClass {
     if (code == null) {
         return 'unknown';
     }
@@ -123,14 +123,14 @@ export function classifyActionResultCode(code: string | null | undefined): Actio
     return 'unknown';
 }
 
-/** Convenience predicate — `classifyActionResultCode(code) === 'success'`. */
-export function isActionResultSuccess(code: string | null | undefined): boolean {
-    return classifyActionResultCode(code) === 'success';
+/** Convenience predicate — `ClassifyActionResultCode(code) === 'success'`. */
+export function IsActionResultSuccess(code: string | null | undefined): boolean {
+    return ClassifyActionResultCode(code) === 'success';
 }
 
-/** Convenience predicate — `classifyActionResultCode(code) === 'failure'`. */
-export function isActionResultFailure(code: string | null | undefined): boolean {
-    return classifyActionResultCode(code) === 'failure';
+/** Convenience predicate — `ClassifyActionResultCode(code) === 'failure'`. */
+export function IsActionResultFailure(code: string | null | undefined): boolean {
+    return ClassifyActionResultCode(code) === 'failure';
 }
 
 /**
@@ -144,11 +144,11 @@ export function isActionResultFailure(code: string | null | undefined): boolean 
  * Returns 0 when nothing in the set has settled — there is no rate to report, and 0 with an
  * accompanying `0/0` detail is the honest rendering of that.
  */
-export function actionSuccessRate(codes: readonly (string | null | undefined)[]): number {
+export function ActionSuccessRate(codes: readonly (string | null | undefined)[]): number {
     let succeeded = 0;
     let settled = 0;
     for (const code of codes) {
-        const klass = classifyActionResultCode(code);
+        const klass = ClassifyActionResultCode(code);
         if (klass === 'success') {
             succeeded++;
             settled++;
@@ -166,8 +166,8 @@ export function actionSuccessRate(codes: readonly (string | null | undefined)[])
  * The colour token a code should render with. Shared by the status chips and the row icons so
  * a chip can never disagree with the tile that counted it.
  */
-export function actionResultColor(code: string | null | undefined): 'success' | 'warning' | 'error' | 'info' {
-    switch (classifyActionResultCode(code)) {
+export function ActionResultColor(code: string | null | undefined): 'success' | 'warning' | 'error' | 'info' {
+    switch (ClassifyActionResultCode(code)) {
         case 'success': return 'success';
         case 'failure': return 'error';
         case 'running': return 'warning';
@@ -175,9 +175,9 @@ export function actionResultColor(code: string | null | undefined): 'success' | 
     }
 }
 
-/** The Font Awesome class a code should render with. Paired with {@link actionResultColor}. */
-export function actionResultIcon(code: string | null | undefined): string {
-    switch (classifyActionResultCode(code)) {
+/** The Font Awesome class a code should render with. Paired with {@link ActionResultColor}. */
+export function ActionResultIcon(code: string | null | undefined): string {
+    switch (ClassifyActionResultCode(code)) {
         case 'success': return 'fa-solid fa-check-circle';
         case 'failure': return 'fa-solid fa-exclamation-circle';
         case 'running': return 'fa-solid fa-spinner fa-spin';

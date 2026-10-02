@@ -20,7 +20,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { buildPkString, buildUsablePkString } from '../lib/utils/record.util';
+import { buildPkString, BuildUsablePkString } from '../lib/utils/record.util';
 import { EntityDataGridComponent } from '../lib/entity-data-grid/entity-data-grid.component';
 
 function field(name: string, isPrimaryKey: boolean): EntityFieldInfo {
@@ -55,37 +55,37 @@ function compositeKeyEntity(): EntityInfo {
     } as unknown as EntityInfo;
 }
 
-describe('buildUsablePkString — a formatter is not a validator', () => {
+describe('BuildUsablePkString — a formatter is not a validator', () => {
     it('returns the key for a row that carries it', () => {
-        expect(buildUsablePkString({ ID: 'abc', Name: 'Ada' }, singleKeyEntity())).toBe('ID|abc');
+        expect(BuildUsablePkString({ ID: 'abc', Name: 'Ada' }, singleKeyEntity())).toBe('ID|abc');
     });
 
     it('returns null — not "ID|undefined" — when the PK column was not selected', () => {
         // This is the exact string buildPkString produces, and it is identical for every row.
         expect(buildPkString({ Name: 'Ada' }, singleKeyEntity())).toBe('ID|undefined');
-        expect(buildUsablePkString({ Name: 'Ada' }, singleKeyEntity())).toBeNull();
+        expect(BuildUsablePkString({ Name: 'Ada' }, singleKeyEntity())).toBeNull();
     });
 
     it('returns null when the PK value is present but null or empty', () => {
-        expect(buildUsablePkString({ ID: null }, singleKeyEntity())).toBeNull();
-        expect(buildUsablePkString({ ID: '' }, singleKeyEntity())).toBeNull();
+        expect(BuildUsablePkString({ ID: null }, singleKeyEntity())).toBeNull();
+        expect(BuildUsablePkString({ ID: '' }, singleKeyEntity())).toBeNull();
     });
 
     it('accepts falsy-but-real key values — 0 and false are usable keys', () => {
-        expect(buildUsablePkString({ ID: 0 }, singleKeyEntity())).toBe('ID|0');
-        expect(buildUsablePkString({ ID: false }, singleKeyEntity())).toBe('ID|false');
+        expect(BuildUsablePkString({ ID: 0 }, singleKeyEntity())).toBe('ID|0');
+        expect(BuildUsablePkString({ ID: false }, singleKeyEntity())).toBe('ID|false');
     });
 
     it('accepts the literal string "undefined" as a value, because it IS one', () => {
         // Sniffing the formatted string for the text "undefined" would reject this row; the
         // check is on the VALUES, so it does not.
-        expect(buildUsablePkString({ ID: 'undefined' }, singleKeyEntity())).toBe('ID|undefined');
+        expect(BuildUsablePkString({ ID: 'undefined' }, singleKeyEntity())).toBe('ID|undefined');
     });
 
     it('rejects a composite key with only one half present', () => {
         const entity = compositeKeyEntity();
-        expect(buildUsablePkString({ OrderID: '11055', LineNo: 3 }, entity)).toBe('OrderID|11055||LineNo|3');
-        expect(buildUsablePkString({ OrderID: '11055' }, entity)).toBeNull();
+        expect(BuildUsablePkString({ OrderID: '11055', LineNo: 3 }, entity)).toBe('OrderID|11055||LineNo|3');
+        expect(BuildUsablePkString({ OrderID: '11055' }, entity)).toBeNull();
     });
 });
 

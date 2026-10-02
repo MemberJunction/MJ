@@ -182,9 +182,9 @@ export class WorkspaceInitializerService {
       };
     }
 
-    // Network / transport errors — see isTransportError for why this is not a
+    // Network / transport errors — see IsTransportError for why this is not a
     // two-word substring test any more.
-    if (WorkspaceInitializerService.isTransportError(err)) {
+    if (WorkspaceInitializerService.IsTransportError(err)) {
       return {
         type: 'network',
         message: err.message || WorkspaceInitializerService.describeTransportError(err),
@@ -256,7 +256,7 @@ export class WorkspaceInitializerService {
    * Static and public so the classification can be tested directly and reused without
    * standing up the service's four injected dependencies.
    */
-  public static isTransportError(err: unknown): boolean {
+  public static IsTransportError(err: unknown): boolean {
     if (!err || typeof err !== 'object') {
       return false;
     }

@@ -10,7 +10,7 @@ import { MJActionCategoryEntity, MJActionExecutionLogEntity } from '@memberjunct
 import { MJActionEntityExtended } from '@memberjunction/actions-base';
 import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { isActionResultSuccess } from '../../action-result-code';
+import { IsActionResultSuccess } from '../../action-result-code';
 
 export interface ActionExecutionStats {
   totalExecutions: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -149,7 +149,7 @@ export class ActionCardComponent extends BaseAngularComponent {
           }
           // No `MJ: Action Result Codes` row declares this code — fall back to the shared
           // classifier rather than a third private vocabulary.
-          return isActionResultSuccess(e.ResultCode);
+          return IsActionResultSuccess(e.ResultCode);
         }).length;
 
         this.ExecutionStats = {

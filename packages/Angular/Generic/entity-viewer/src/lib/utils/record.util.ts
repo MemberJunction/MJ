@@ -18,7 +18,7 @@ export function buildCompositeKey(record: Record<string, unknown>, entityInfo: E
  * Build a PK concatenated string matching CompositeKey.ToConcatenatedString() format.
  * Used as a stable row identifier for selection, tracking, and map keys.
  *
- * **Not safe to use as a row IDENTITY on its own** — see {@link buildUsablePkString}. When the
+ * **Not safe to use as a row IDENTITY on its own** — see {@link BuildUsablePkString}. When the
  * record does not carry the primary-key column(s), `ToConcatenatedString` renders the missing
  * value as the literal text and returns the constant `"ID|undefined"` for every row.
  */
@@ -49,7 +49,7 @@ export function buildPkString(record: Record<string, unknown>, entityInfo: Entit
  * @returns the concatenated key, or `null` when the key has no pairs or any pair's value is
  * absent (null/undefined/empty string).
  */
-export function buildUsablePkString(record: Record<string, unknown>, entityInfo: EntityInfo): string | null {
+export function BuildUsablePkString(record: Record<string, unknown>, entityInfo: EntityInfo): string | null {
     const key = buildCompositeKey(record, entityInfo);
     if (key.KeyValuePairs.length === 0) {
         return null;
