@@ -337,6 +337,21 @@ export interface CacheChangedEvent {
      * For `'removed'` and `'category_cleared'` actions, this is `undefined`.
      */
     Data?: string;
+
+    /**
+     * Monotonic fleet-wide counter, incremented once per shared-cache mutation by the provider that
+     * published this event.
+     *
+     * Its purpose is **recovery, not ordering**. Pub/sub has no replay, so a subscriber that was
+     * disconnected receives nothing published during the gap and cannot otherwise tell whether it
+     * missed anything. Recording the highest epoch seen lets a reconnecting process compare against
+     * the current value and distinguish an outage in which nothing changed — keep the cache — from
+     * one in which something did — drop it. See issue #4759.
+     *
+     * Optional: transports that do not implement the counter omit it, and a consumer that does not
+     * care about recovery can ignore it.
+     */
+    Epoch?: number;
 }
 
 // ============================================================================
