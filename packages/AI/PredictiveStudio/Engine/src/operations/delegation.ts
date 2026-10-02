@@ -31,7 +31,7 @@ import { BuildProductionExperimentDeps } from '../actions/run-experiment.deps';
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
-import { LocalArtifactLoader } from '../scoring/artifact-loader';
+import { MJStorageArtifactLoader } from '../scoring/artifact-loader';
 import type { MLInferenceDeps } from '../scoring/types';
 import type {
   IScoreRecordSetRunner,
@@ -55,12 +55,11 @@ import type {
 
 /**
  * Build the {@link TrainingEngine}'s production dependency bundle from a per-call
- * `provider` + `user`. Resolves the active File Storage Provider once and chooses
- * the artifact-store family accordingly (MJ-Files when a provider is active, local
- * disk when none is — see {@link resolveActiveFileStorageProviderId}). Async so the
- * provider lookup is part of the wiring; the scoring side keys off the SAME
- * decision (the composite loader routes by whether the artifact exists on local
- * disk) so a model never gets trained to one family and scored from another.
+ * `provider` + `user`. Resolves the preferred active File Storage Provider once
+ * (see {@link ResolveActiveFileStorageProviderId}); the artifact store uploads the
+ * model bytes to an account for it through MJStorage, and the scoring side
+ * downloads them back from the File row's provider. Async so the provider lookup
+ * is part of the wiring.
  *
  * @param provider the owning provider for data access / multi-provider correctness
  * @param user the acting user threaded through every entity op for isolation/audit
@@ -72,7 +71,7 @@ export async function BuildTrainingDeps(provider: IMetadataProvider, user: UserI
     entityFactory,
     recordLoader: new RunViewRecordLoader(),
     sidecar: new MJSidecarTrainer(),
-    artifactStore: BuildArtifactStore(providerId, entityFactory),
+    artifactStore: BuildArtifactStore(providerId, entityFactory, provider),
     contextUser: user,
     provider,
   };
@@ -132,16 +131,15 @@ export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
  * The production {@link MLInferenceDeps} bundle the scorer runs with — the
  * {@link RunViewMLModelLoader} (loads the `MJ: ML Models` row), the
  * {@link MJSidecarPredictor} (runs `/predict` against the Python sidecar) and the
- * {@link LocalArtifactLoader} (reads the model bytes back by their `MJ: Files` row id,
- * the read-side inverse of `MJFilesArtifactStore`). Shared by {@link buildScoreRecordSetRunner}
- * (the Score action / Remote Op path) AND the startup work-type registration so a model
- * trained one way is always scored the same way — one source of truth (CLAUDE.md DRY).
- *
- * **Production follow-up**: swap `LocalArtifactLoader` for a provider `GetObject`
- * loader; the id contract (read by File id) is unchanged.
+ * {@link MJStorageArtifactLoader} (downloads the model bytes from the storage provider
+ * named on their `MJ: Files` row on first use, then reads this server's local copy —
+ * the read-side inverse of `MJFilesArtifactStore`).
+ * Shared by {@link buildScoreRecordSetRunner} (the Score action / Remote Op path) AND the
+ * startup work-type registration so a model trained one way is always scored the same
+ * way — one source of truth (CLAUDE.md DRY).
  */
 export function BuildProductionMLInferenceDeps(): MLInferenceDeps {
-  return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new LocalArtifactLoader() };
+  return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new MJStorageArtifactLoader() };
 }
 
 /** @deprecated Use {@link BuildProductionMLInferenceDeps}. */
@@ -166,8 +164,8 @@ export function buildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
 /**
  * Score a record set, delegating to the SAME production runner the Score action
  * uses ({@link ProductionScoreRecordSetRunner} → `MLModelInferenceProcessor`). The
- * default runner is wired with the {@link LocalArtifactLoader} so the artifact is
- * read back by its `MJ: Files` row id. The `runner` is injectable for tests.
+ * default runner is wired with the {@link MJStorageArtifactLoader} so the artifact is
+ * read from this server's local copy, downloaded from storage on first use. The `runner` is injectable for tests.
  *
  * @param request the model id + resolved scope + write-back directive + user/provider
  * @param runner optional runner override (defaults to {@link buildScoreRecordSetRunner})

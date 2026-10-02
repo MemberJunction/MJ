@@ -10,7 +10,7 @@ import {
 
 /**
  * Tests for the artifact-store wiring in `operations/delegation` / `training/artifact-store`:
- * the active-provider lookup that stamps every artifact's `MJ: Files` row, and that
+ * the active-provider lookup that picks the preferred storage provider, and that
  * `buildArtifactStore` always produces an FK-valid `MJFilesArtifactStore`. NO live DB
  * / sidecar — the provider lookup runs through a spy provider whose `RunView` returns
  * canned rows.
@@ -58,12 +58,12 @@ describe('resolveActiveFileStorageProviderId', () => {
 });
 
 describe('buildArtifactStore', () => {
-  it('builds an MJFilesArtifactStore (real File row + local bytes) when a provider id is present', () => {
+  it('builds an MJFilesArtifactStore (uploads to storage + records the File row) when a provider id is present', () => {
     const store = BuildArtifactStore('PROVIDER-1', new MetadataEntityFactory());
     expect(store).toBeInstanceOf(MJFilesArtifactStore);
   });
 
-  it('still builds an MJFilesArtifactStore when no provider id is present (save will fail loudly without one)', () => {
+  it('still builds an MJFilesArtifactStore when no provider id is present (it uploads to the default account)', () => {
     const store = BuildArtifactStore(null, new MetadataEntityFactory());
     expect(store).toBeInstanceOf(MJFilesArtifactStore);
   });

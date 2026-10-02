@@ -1403,6 +1403,9 @@ importers:
       '@memberjunction/record-set-processor-base':
         specifier: 6.2.0-edge.1
         version: link:../../../RecordSetProcessor/base
+      '@memberjunction/storage':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJStorage
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2

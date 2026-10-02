@@ -1,154 +1,31 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, rm, readdir, stat } from 'node:fs/promises';
+import { describe, it, expect } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
 
-import type { BaseEntity, UserInfo } from '@memberjunction/core';
-import type { MJFileEntity } from '@memberjunction/core-entities';
-
-import {
-  MJFilesArtifactStore,
-  LocalArtifactPath,
-  ResolveLocalArtifactBaseDir,
-} from '../artifact-store';
+import { LocalArtifactPath, ResolveLocalArtifactBaseDir } from '../artifact-store';
 import { LocalArtifactLoader } from '../../scoring/artifact-loader';
-import type { IEntityFactory } from '../types';
 
 /**
- * Round-trip tests for the single coherent artifact store + loader (dev / on-prem
- * local-bytes mode). NO DB, NO sidecar — a fake entity factory hands back an
- * in-memory `MJ: Files` stand-in with a stable id, and bytes are written to a
- * scratch directory. These prove the store creates a real File ROW and persists the
- * bytes locally keyed by `file.ID`, and that the loader reads them back by that same
- * (real File) id — so `MLModel.ArtifactFileID` stays FK-valid.
+ * Tests for the local-disk reader that keeps models trained before #4991 scoring.
+ * Those models' bytes were written to `<baseDir>/<file.ID>.bin` on the training
+ * host; new artifacts go to the storage provider (see `storage-artifact.test.ts`).
+ * NO DB, NO sidecar — bytes live in a scratch directory.
  */
 
-/** A minimal in-memory `MJ: Files` stand-in with a stable id and a no-op Save(). */
-class FakeFile {
-  public ID: string;
-  public Name = '';
-  public ContentType = '';
-  public ProviderID: string | null = null;
-  public Description = '';
-  public LatestResult: { CompleteMessage: string } | null = null;
-  private readonly saveOk: boolean;
+describe('LocalArtifactLoader — reads pre-#4991 artifacts', () => {
+  it('returns the exact bytes stored at <baseDir>/<fileId>.bin', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'mj-ps-artifact-legacy-'));
+    try {
+      const fileId = 'A1B2C3D4-0000-0000-0000-000000000001';
+      const bytes = new Uint8Array([0, 1, 2, 250, 251, 255, 42, 7]);
+      await writeFile(LocalArtifactPath(baseDir, fileId), bytes);
 
-  constructor(id: string, saveOk = true) {
-    this.ID = id;
-    this.saveOk = saveOk;
-  }
-
-  public async Save(): Promise<boolean> {
-    this.LatestResult = { CompleteMessage: this.saveOk ? '' : 'forced save failure' };
-    return this.saveOk;
-  }
-}
-
-/** Entity-factory fake — hands back a File stand-in with the configured id. */
-class FakeFileFactory implements IEntityFactory {
-  public readonly Created: FakeFile[] = [];
-
-  constructor(private readonly makeFile: () => FakeFile = () => new FakeFile(randomUUID())) {}
-
-  async getEntityObject<T extends BaseEntity>(entityName: string, _contextUser?: UserInfo): Promise<T> {
-    if (entityName !== 'MJ: Files') {
-      throw new Error(`FakeFileFactory: unexpected entity ${entityName}`);
+      const loaded = await new LocalArtifactLoader(baseDir).load(fileId);
+      expect(Array.from(loaded ?? [])).toEqual(Array.from(bytes));
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
     }
-    const f = this.makeFile();
-    this.Created.push(f);
-    return f as unknown as T;
-  }
-}
-
-/** Cast a FakeFile to the typed entity the store expects (single test-boundary cast). */
-function asFileEntity(f: FakeFile): MJFileEntity {
-  return f as unknown as MJFileEntity;
-}
-
-describe('MJFilesArtifactStore + LocalArtifactLoader — round-trip', () => {
-  const scratchDirs: string[] = [];
-
-  afterEach(async () => {
-    for (const dir of scratchDirs.splice(0)) {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
-  async function makeScratchDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'mj-ps-artifact-test-'));
-    scratchDirs.push(dir);
-    return dir;
-  }
-
-  it('save() returns the real File row id and load() round-trips the exact bytes', async () => {
-    const baseDir = await makeScratchDir();
-    const fileId = randomUUID();
-    const factory = new FakeFileFactory(() => new FakeFile(fileId));
-    const store = new MJFilesArtifactStore(factory, { providerId: 'prov-1', baseDir });
-    const loader = new LocalArtifactLoader(baseDir);
-
-    const bytes = new Uint8Array([0, 1, 2, 250, 251, 255, 42, 7]);
-    const returnedId = await store.save(bytes, 'model-v1.bin');
-
-    // The returned id IS the File row id (FK-valid ArtifactFileID).
-    expect(returnedId).toBe(fileId);
-    const created = factory.Created[0];
-    expect(created.ProviderID).toBe('prov-1');
-    expect(created.ContentType).toBe('application/octet-stream');
-
-    const loaded = await loader.load(returnedId);
-    expect(loaded).not.toBeNull();
-    expect(Array.from(loaded as Uint8Array)).toEqual(Array.from(bytes));
-  });
-
-  it('writes the bytes to <baseDir>/<file.ID>.bin', async () => {
-    const baseDir = await makeScratchDir();
-    const fileId = randomUUID();
-    const store = new MJFilesArtifactStore(new FakeFileFactory(() => new FakeFile(fileId)), {
-      providerId: 'prov-1',
-      baseDir,
-    });
-
-    await store.save(new Uint8Array([9]), 'm.bin');
-
-    const onDisk = await stat(LocalArtifactPath(baseDir, fileId));
-    expect(onDisk.isFile()).toBe(true);
-    const files = await readdir(baseDir);
-    expect(files).toEqual([`${fileId}.bin`]);
-  });
-
-  it('creates the base directory when missing', async () => {
-    const parent = await makeScratchDir();
-    const baseDir = join(parent, 'nested', 'does-not-exist-yet');
-    const fileId = randomUUID();
-    const store = new MJFilesArtifactStore(new FakeFileFactory(() => new FakeFile(fileId)), {
-      providerId: 'prov-1',
-      baseDir,
-    });
-
-    const returnedId = await store.save(new Uint8Array([1, 2, 3]), 'm.bin');
-
-    const loaded = await new LocalArtifactLoader(baseDir).load(returnedId);
-    expect(Array.from(loaded as Uint8Array)).toEqual([1, 2, 3]);
-  });
-
-  it('throws when the File row fails to save (no bytes written)', async () => {
-    const baseDir = await makeScratchDir();
-    const fileId = randomUUID();
-    const store = new MJFilesArtifactStore(new FakeFileFactory(() => new FakeFile(fileId, false)), {
-      providerId: 'prov-1',
-      baseDir,
-    });
-
-    await expect(store.save(new Uint8Array([1]), 'm.bin')).rejects.toThrow(/persist model artifact file/i);
-    const files = await readdir(baseDir).catch(() => [] as string[]);
-    expect(files).toEqual([]);
-  });
-
-  it('keeps the fake-file cast honest (the stand-in satisfies the store contract)', () => {
-    const f = new FakeFile('x');
-    expect(asFileEntity(f).ID).toBe('x');
   });
 });
 
