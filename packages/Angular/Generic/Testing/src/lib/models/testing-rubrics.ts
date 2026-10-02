@@ -146,10 +146,10 @@ export function RubricRunView(oracleResults: { oracleType?: string; type?: strin
         return {
             id: key,
             key,
-            name: String(item.Name ?? item.name ?? key),
+            name: text(item.Name ?? item.name) ?? key,
             normalizedScore: numberOrNull(item.NormalizedScore ?? item.normalizedScore),
             weight: numberOrNull(item.Weight ?? item.weight) ?? 1,
-            gateFailed: item.GateFailed === true || item.gateFailed === true,
+            gateFailed: flag(item.GateFailed ?? item.gateFailed),
             rationale: text(item.Rationale ?? item.rationale),
             evidence: text(item.Evidence ?? item.evidence),
         };
@@ -171,14 +171,86 @@ export function RubricRunView(oracleResults: { oracleType?: string; type?: strin
         },
         result: {
             normalizedScore,
-            completeness: numberOrNull(details?.Completeness) ?? 1,
+            completeness: numberOrNull(details?.Completeness),
             outcome: (details?.Outcome as RubricScoreResult['outcome']) ?? 'Scored',
             passed: details?.Passed === true ? true : details?.Passed === false ? false : null,
-            gateFailed: details?.GateFailed === true || nodes.some(node => node.gateFailed),
+            gateFailed: flag(details?.GateFailed) || nodes.some(node => node.gateFailed),
             passThresholdApplied: null,
-            bandId: null,
+            bandId: text(details?.BandID ?? details?.bandId) ?? null,
             confidence: null,
             scoringEngineVersion: '1.0',
+            nodes: nodes.map(node => ({
+                id: node.id, key: node.key, normalizedScore: node.normalizedScore, effectiveWeight: node.weight,
+                overallContribution: node.normalizedScore, gateFailed: node.gateFailed, isNotApplicable: false, isAdvisory: false,
+            })),
+        },
+        answers: nodes.map(node => ({ criterionId: node.id, rationale: node.rationale, evidence: node.evidence })),
+    };
+}
+
+/** The id of the evaluation this run stored, when the oracle recorded one. */
+export function RubricEvaluationId(oracleResults: { details?: unknown; Details?: unknown }[] | null | undefined): string | null {
+    for (const item of oracleResults ?? []) {
+        const id = text(detailsOf(item)?.RubricEvaluationID ?? detailsOf(item)?.rubricEvaluationId);
+        if (id) return id;
+    }
+    return null;
+}
+
+/** The stored evaluation, its scores, and the criterion names. Completeness stays null when the row has none. */
+export function StoredRubricView(
+    evaluation: Record<string, unknown>,
+    scores: Record<string, unknown>[],
+    criteria: Record<string, unknown>[],
+    bands: Record<string, unknown>[] = [],
+): RubricRunView {
+    const byId = new Map(criteria.map(row => [String(row.ID ?? ''), row]));
+    const leaves = scores.filter(row => !flag(row.IsComputed));
+    const nodes = leaves.map(score => {
+        const criterion = byId.get(String(score.CriterionID ?? ''));
+        const key = String(criterion?.Key ?? '');
+        return {
+            id: String(score.CriterionID ?? ''),
+            key,
+            name: String(criterion?.Name ?? ''),
+            normalizedScore: numberOrNull(score.NormalizedScore),
+            weight: numberOrNull(criterion?.Weight) ?? 1,
+            gateFailed: flag(score.GateFailed),
+            rationale: text(score.Rationale),
+            evidence: evidenceText(score.Evidence),
+        };
+    });
+    return {
+        version: {
+            id: String(evaluation.RubricVersionID ?? 'stored'),
+            rubricId: String(evaluation.RubricID ?? ''),
+            notApplicablePolicy: 'ExcludeAndRedistribute',
+            scoreDisplayMin: numberOrNull(evaluation.ScoreDisplayMin) ?? 0,
+            scoreDisplayMax: numberOrNull(evaluation.ScoreDisplayMax) ?? 100,
+            nodes: nodes.map(node => ({
+                id: node.id, key: node.key, name: node.name, nodeType: 'Criterion' as const, weight: node.weight,
+                isAdvisory: false, isGate: node.gateFailed, evidenceRequired: false, rationaleRequired: false, sequence: 0,
+            })),
+            scales: [],
+            bands: bands.map(band => ({
+                id: String(band.ID ?? ''),
+                label: String(band.Label ?? ''),
+                minScore: numberOrNull(band.MinScore) ?? 0,
+                maxScore: numberOrNull(band.MaxScore) ?? 1,
+                displayTone: String(band.DisplayTone ?? 'Neutral'),
+                sequence: numberOrNull(band.Sequence) ?? 0,
+            })),
+        },
+        result: {
+            normalizedScore: numberOrNull(evaluation.NormalizedScore),
+            completeness: numberOrNull(evaluation.Completeness),
+            outcome: (evaluation.Outcome as RubricScoreResult['outcome']) ?? 'Scored',
+            passed: evaluation.Passed === true ? true : evaluation.Passed === false ? false : null,
+            gateFailed: flag(evaluation.GateFailed) || nodes.some(node => node.gateFailed),
+            passThresholdApplied: numberOrNull(evaluation.PassThresholdApplied),
+            bandId: text(evaluation.BandID) ?? null,
+            confidence: numberOrNull(evaluation.Confidence),
+            scoringEngineVersion: String(evaluation.ScoringEngineVersion ?? ''),
             nodes: nodes.map(node => ({
                 id: node.id, key: node.key, normalizedScore: node.normalizedScore, effectiveWeight: node.weight,
                 overallContribution: node.normalizedScore, gateFailed: node.gateFailed, isNotApplicable: false, isAdvisory: false,
@@ -215,4 +287,28 @@ function numberOrNull(value: unknown): number | null {
 
 function text(value: unknown): string | undefined {
     return value == null || value === '' ? undefined : String(value);
+}
+
+function flag(value: unknown): boolean {
+    return value === true || value === 1;
+}
+
+function evidenceText(value: unknown): string | undefined {
+    const raw = text(value);
+    if (!raw) return undefined;
+    if (raw.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(raw) as unknown;
+            if (Array.isArray(parsed)) {
+                const quotes = parsed.map(item => {
+                    const record = item as { Text?: unknown; Quote?: unknown; Note?: unknown };
+                    return text(record.Text ?? record.Quote ?? record.Note);
+                }).filter((item): item is string => !!item);
+                if (quotes.length > 0) return quotes.join(' ');
+            }
+        } catch {
+            return raw;
+        }
+    }
+    return raw;
 }

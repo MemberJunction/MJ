@@ -23,6 +23,10 @@ export class RubricResultComponent {
     }
 
     public get BandLabel(): string | null {
+        const id = this.Result?.bandId;
+        const named = id ? this.Version?.bands.find(band => band.id === id) : undefined;
+        if (named?.label) return named.label;
+        if (id) return id;
         return BandFor(this.Result?.normalizedScore ?? null, this.Version?.bands ?? [])?.label ?? null;
     }
 
@@ -37,7 +41,7 @@ export class RubricResultComponent {
 
     public NodeName(id: string): string {
         const node = this.Version?.nodes.find(item => item.id === id || item.key === id);
-        return node?.name || id;
+        return node?.name || node?.key || id;
     }
 
     public Weight(id: string): string {

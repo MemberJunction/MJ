@@ -11,7 +11,7 @@
       </div>
       <div class="fact-row">
         <span class="fact fact-scale">Band {{ BandLabel ?? '—' }}</span>
-        <span class="fact">Completeness {{ Result.completeness }}</span>
+        <span class="fact">Completeness {{ Result.completeness ?? '—' }}</span>
         <span class="fact" [class.fact-gate]="Result.gateFailed">Gate {{ Result.gateFailed ? 'not met' : 'met' }}</span>
       </div>
     </div>
@@ -38,6 +38,12 @@
                 <div class="anchor-box">
                   <div class="box-title">Rationale</div>
                   <p>{{ Note(node.id, 'rationale') }}</p>
+                </div>
+              }
+              @if (Note(node.id, 'evidence')) {
+                <div class="anchor-box">
+                  <div class="box-title">Evidence</div>
+                  <p>{{ Note(node.id, 'evidence') }}</p>
                 </div>
               }
             </div>
