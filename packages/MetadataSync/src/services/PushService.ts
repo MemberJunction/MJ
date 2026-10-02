@@ -2907,21 +2907,19 @@ export class PushService {
   }
 
   /**
-   * Builds the payload used for calculating record checksums, including composition axes (§5, §6)
+   * Builds the payload used for calculating record checksums, including composition axes (§5, §6).
+   * Shares its shape with pull via {@link SyncEngine.BuildRecordChecksumPayload}.
    */
   private buildRecordChecksumPayload(
     record: RecordData,
     fieldsOverride?: Record<string, unknown>
   ): Record<string, unknown> {
-    const fields = fieldsOverride ?? record.fields;
-    if (!record.collections && !record.embeds && !record.extension) {
-      return fields as Record<string, unknown>;
-    }
-    const payload: Record<string, unknown> = { fields };
-    if (record.collections) payload.collections = record.collections;
-    if (record.embeds) payload.embeds = record.embeds;
-    if (record.extension) payload.extension = record.extension;
-    return payload;
+    return SyncEngine.BuildRecordChecksumPayload(
+      fieldsOverride ?? record.fields,
+      record.collections,
+      record.embeds,
+      record.extension
+    );
   }
 
   /**
