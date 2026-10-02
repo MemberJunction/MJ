@@ -97,6 +97,13 @@ export interface DuplicateReasoningCandidateVerdict {
     Confidence: number | null;
     /** Short rationale specific to THIS candidate. */
     Reasoning: string;
+    /**
+     * The AI Prompt Run that produced THIS verdict, when it is not the set's
+     * {@link DuplicateReasoningOutput.AIPromptRunID}. `DecisionThenPrompt` sets it on each candidate
+     * its decision dropped, so that candidate's match row points at the decision run rather than at
+     * a prompt run that never saw it. Omit it when the set's run produced the verdict.
+     */
+    AIPromptRunID?: string | null;
 }
 
 /**
@@ -123,7 +130,8 @@ export interface DuplicateReasoningOutput {
     /**
      * The overall verdict for the set, **derived** from the per-candidate verdicts (Merge if any
      * candidate is a Merge, else Uncertain if any is Uncertain, else NotDuplicate). Used for the
-     * group's dominant display and the auto-merge gate — NOT stamped on individual candidate rows.
+     * group's dominant display and, together with each candidate's own verdict, the auto-merge
+     * gate — NOT stamped on individual candidate rows.
      */
     Recommendation: DuplicateReasoningRecommendation;
     /**
@@ -137,7 +145,8 @@ export interface DuplicateReasoningOutput {
     /**
      * Per-candidate verdicts — the authoritative, row-level result. Each entry is judged
      * independently against the source so a false-positive candidate reads NotDuplicate even when
-     * another candidate in the same set is a confident Merge.
+     * another candidate in the same set is a confident Merge. Auto-merge requires the candidate's
+     * own verdict to be Merge, so a candidate with no entry here is never auto-merged.
      */
     CandidateVerdicts: DuplicateReasoningCandidateVerdict[];
     /** The record id the reasoner proposes should survive (null when NotDuplicate). */
@@ -166,4 +175,14 @@ export interface DuplicateReasoningContext {
     Provider?: IMetadataProvider;
     /** The context user for the run. */
     ContextUser?: UserInfo;
+    /**
+     * Aborts the reasoning call when the caller stops waiting for it. The `Decision` mode passes it
+     * to the decision call as `AIDecisionParams.cancellationToken`; the other modes ignore it.
+     */
+    CancellationToken?: AbortSignal;
+    /**
+     * A bound on the model call, in milliseconds. The `Decision` mode passes it to the decision call
+     * as `AIDecisionParams.timeoutMS`; the other modes ignore it.
+     */
+    TimeoutMS?: number;
 }

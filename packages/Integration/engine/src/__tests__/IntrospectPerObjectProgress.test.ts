@@ -16,7 +16,7 @@ import type { ConnectorCreationPipelineOptions } from '../IntegrationConnectorCr
 import type { SourceObjectInfo } from '../types.js';
 
 type IntrospectHost = {
-    StageIntrospect: (
+    stageIntrospect: (
         emitter: unknown,
         opts: ConnectorCreationPipelineOptions
     ) => Promise<{ Objects: SourceObjectInfo[] }>;
@@ -86,7 +86,7 @@ describe('StageIntrospect — per-object progress', () => {
         const declared = Array.from({ length: 5 }, (_v, i) => declaredObject(`Obj${i}`));
         const emitter = makeEmitter();
 
-        await host().StageIntrospect(emitter, makeOpts({ declared }));
+        await host().stageIntrospect(emitter, makeOpts({ declared }));
 
         const beats = emitter.samples();
         expect(beats).toHaveLength(5);
@@ -109,7 +109,7 @@ describe('StageIntrospect — per-object progress', () => {
             ],
         });
 
-        await host().StageIntrospect(emitter, opts);
+        await host().stageIntrospect(emitter, opts);
 
         const beats = emitter.samples();
         expect(beats).toHaveLength(4);                                        // 2 runtime + 2 declared
@@ -125,7 +125,7 @@ describe('StageIntrospect — per-object progress', () => {
             discoverObjects: async () => [{ Name: 'Invoice', Label: 'Invoice', Description: '' }],
         });
 
-        await host().StageIntrospect(emitter, opts);
+        await host().stageIntrospect(emitter, opts);
 
         expect(emitter.samples()).toHaveLength(1);
         expect(emitter.samples()[0].counts.totalKnown).toBe(1);
@@ -144,7 +144,7 @@ describe('StageIntrospect — per-object progress', () => {
             ],
         });
 
-        await host().StageIntrospect(emitter, opts);
+        await host().stageIntrospect(emitter, opts);
 
         const beats = emitter.samples();
         expect(beats.every((b) => (b.counts.processed ?? 0) <= (b.counts.totalKnown ?? 0))).toBe(true);
@@ -160,7 +160,7 @@ describe('StageIntrospect — per-object progress', () => {
             objectNames: ['Invoice'],
         });
 
-        await host().StageIntrospect(emitter, opts);
+        await host().stageIntrospect(emitter, opts);
 
         const beats = emitter.samples();
         expect(beats).toHaveLength(1);
@@ -178,7 +178,7 @@ describe('StageIntrospect — per-object progress', () => {
         const declared = Array.from({ length: 12 }, (_v, i) => declaredObject(`Obj${i}`));
         const emitter = makeEmitter();
 
-        await host().StageIntrospect(emitter, makeOpts({ declared, discoverFieldsViaFetch: fetchFields, runDeadlineMs: 60 }));
+        await host().stageIntrospect(emitter, makeOpts({ declared, discoverFieldsViaFetch: fetchFields, runDeadlineMs: 60 }));
 
         const beats = emitter.samples();
         expect(fetchFields.mock.calls.length).toBeLessThan(12);   // sampling really did stop early
@@ -191,7 +191,7 @@ describe('StageIntrospect — per-object progress', () => {
         const emitter = makeEmitter();
         const opts = makeOpts({ declared: [declaredObject('Invoice')], objectNames: ['NotHere'] });
 
-        await host().StageIntrospect(emitter, opts);
+        await host().stageIntrospect(emitter, opts);
 
         expect(emitter.samples()).toHaveLength(0);
     });

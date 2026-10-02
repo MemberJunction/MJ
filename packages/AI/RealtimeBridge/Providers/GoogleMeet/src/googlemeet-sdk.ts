@@ -110,17 +110,17 @@ export interface IGoogleMeetSdk {
      * @param args Join parameters (meeting code, bot name, auth).
      * @returns The bot participant + meeting handles.
      */
-    join(args: GoogleMeetJoinArgs): Promise<GoogleMeetJoinResult>;
+    join(args: GoogleMeetJoinArgs): Promise<GoogleMeetJoinResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** Leaves the conference and releases Media API resources. */
-    leave(): Promise<void>;
+    leave(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends one raw PCM audio frame as the bot's outbound audio (the agent's voice into the meeting).
      *
      * @param pcm The PCM audio bytes to send.
      */
-    sendAudioFrame(pcm: ArrayBuffer): void;
+    sendAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound raw per-participant audio frames (what the agent hears, carrying
@@ -128,28 +128,28 @@ export interface IGoogleMeetSdk {
      *
      * @param cb Invoked with each inbound audio frame.
      */
-    onAudioFrame(cb: (frame: GoogleMeetAudioFrame) => void): void;
+    onAudioFrame(cb: (frame: GoogleMeetAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant joins. "Latest handler wins."
      *
      * @param cb Invoked with the participant who joined.
      */
-    onParticipantJoin(cb: (participant: GoogleMeetParticipant) => void): void;
+    onParticipantJoin(cb: (participant: GoogleMeetParticipant) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant leaves. "Latest handler wins."
      *
      * @param cb Invoked with the participant id that left.
      */
-    onParticipantLeave(cb: (participantId: string) => void): void;
+    onParticipantLeave(cb: (participantId: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Returns the current participant roster (including the bot).
      *
      * @returns The current participants.
      */
-    getParticipants(): Promise<GoogleMeetParticipant[]>;
+    getParticipants(): Promise<GoogleMeetParticipant[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Mutes a participant, **where the tenant's Meet tier / allowlist grants the action** (the
@@ -158,14 +158,14 @@ export interface IGoogleMeetSdk {
      *
      * @param participantId The participant to mute.
      */
-    muteParticipant(participantId: string): Promise<void>;
+    muteParticipant(participantId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the conference ends (host ended / timed out). "Latest handler wins."
      *
      * @param cb Invoked when the meeting has ended.
      */
-    onMeetingEnded(cb: () => void): void;
+    onMeetingEnded(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

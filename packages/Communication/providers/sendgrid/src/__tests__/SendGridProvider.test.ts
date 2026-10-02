@@ -56,7 +56,8 @@ vi.mock('dotenv', () => ({
 
 // The config.ts module reads from process.env, let's mock it
 vi.mock('../config', () => ({
-  __API_KEY: 'env-sendgrid-key',
+  API_KEY: 'env-sendgrid-key',
+    get __API_KEY() { return this.API_KEY; },
 }));
 
 const drainResponseBodyMock = vi.fn();

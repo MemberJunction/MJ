@@ -77,7 +77,7 @@ export interface ArtifactMetadata {
  * The component receives the artifact version as an input.
  */
 export interface IArtifactViewerComponent {
-  artifactVersion: MJArtifactVersionEntity;
+  artifactVersion: MJArtifactVersionEntity;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -89,5 +89,5 @@ export interface IArtifactViewerComponent {
  * previews have NO toolbar, feedback, tabs, or download chrome.
  */
 export interface IArtifactPreviewComponent {
-  artifactVersion: MJArtifactVersionEntity;
+  artifactVersion: MJArtifactVersionEntity;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }

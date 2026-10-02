@@ -65,6 +65,8 @@ if (result.success) {
 }
 ```
 
+`CreateAvatarVideo` submits a render job and returns its ID as soon as HeyGen accepts it; the video renders afterward and is fetched from HeyGen by that ID. To run it with model selection, failover and an `MJ: AI Prompt Runs` row, use `AIVideoRunner.RunAvatarVideo` from `@memberjunction/ai-prompts`, which resolves this driver as `HeyGenVideoGenerator` for `Video` models.
+
 ### List Avatars
 
 ```typescript

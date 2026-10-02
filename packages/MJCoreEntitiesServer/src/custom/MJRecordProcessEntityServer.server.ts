@@ -23,7 +23,8 @@ import {
     RunView,
     UserInfo,
 } from '@memberjunction/core';
-import { MJRecordProcessEntity, MJScheduledJobEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { MJRecordProcessEntityExtended } from '@memberjunction/feature-pipelines';
 import { ReconcileRecordProcessOnChange } from './RecordProcessOnChangeReconciler';
 
 /** The `MJ: Scheduled Job Types.Name` seeded for record-process recurrence (metadata-driven). */
@@ -49,12 +50,17 @@ export type ScheduleAction = 'upsert' | 'disable';
  * `Active`, has `ScheduleEnabled`, and carries a non-empty `CronExpression`; otherwise the owned
  * job (if any) is disabled.
  */
-export function decideScheduleAction(p: { status: string; scheduleEnabled: boolean; cronExpression: string | null }): ScheduleAction {
+export function DecideScheduleAction(p: { status: string; scheduleEnabled: boolean; cronExpression: string | null }): ScheduleAction {
     return p.status === 'Active' && p.scheduleEnabled && !!p.cronExpression ? 'upsert' : 'disable';
 }
 
+/** @deprecated Use {@link DecideScheduleAction}. */
+export function decideScheduleAction(p: { status: string; scheduleEnabled: boolean; cronExpression: string | null }): ScheduleAction {
+    return DecideScheduleAction(p);
+}
+
 /** PURE mapping (exported for tests): the Scheduled Job field values for an active recurrence. */
-export function buildScheduledJobFields(p: {
+export function BuildScheduledJobFields(p: {
     jobTypeID: string;
     recordProcessName: string;
     cronExpression: string;
@@ -71,8 +77,23 @@ export function buildScheduledJobFields(p: {
     };
 }
 
+/** @deprecated Use {@link BuildScheduledJobFields}. */
+export function buildScheduledJobFields(p: {
+    jobTypeID: string;
+    recordProcessName: string;
+    cronExpression: string;
+    timezone: string | null;
+    recordProcessID: string;
+}): { JobTypeID: string; Name: string; CronExpression: string; Timezone: string; Configuration: string; Status: 'Active' } {
+    return BuildScheduledJobFields(p);
+}
+
+/**
+ * Extends the shared {@link MJRecordProcessEntityExtended}, so the Feature Pipeline save check in its
+ * `Validate()` runs on the server too, ahead of the reconciliation here.
+ */
 @RegisterClass(BaseEntity, 'MJ: Record Processes')
-export class MJRecordProcessEntityServer extends MJRecordProcessEntity {
+export class MJRecordProcessEntityServer extends MJRecordProcessEntityExtended {
     /**
      * Persists the record, then (best-effort) reconciles the owned Scheduled Job. Reconciliation
      * runs only when a schedule-relevant field changed (or on first save), and never fails the
@@ -136,7 +157,7 @@ export class MJRecordProcessEntityServer extends MJRecordProcessEntity {
         const typeID = await this.resolveJobTypeID(user);
         const existing = await this.findOwnedJob(typeID, user);
 
-        const action = decideScheduleAction({ status: this.Status, scheduleEnabled: this.ScheduleEnabled, cronExpression: this.CronExpression });
+        const action = DecideScheduleAction({ status: this.Status, scheduleEnabled: this.ScheduleEnabled, cronExpression: this.CronExpression });
         if (action === 'disable') {
             await this.disableJobIfPresent(existing);
             return;
@@ -184,7 +205,7 @@ export class MJRecordProcessEntityServer extends MJRecordProcessEntity {
                 job.OwnerUserID = this.ContextCurrentUser.ID;
             }
         }
-        const fields = buildScheduledJobFields({
+        const fields = BuildScheduledJobFields({
             jobTypeID: typeID,
             recordProcessName: this.Name,
             cronExpression: this.CronExpression as string,

@@ -298,6 +298,35 @@ export function SelectPackagesGlobs(declaredGlobs: readonly string[]): SelectedP
   return { Globs: [...DEFAULT_WORKSPACE_GLOBS, ...selected], UsedFallback: true };
 }
 
+/**
+ * Validates the app-shell globs a user admits for one member via `--apps`. Only positive,
+ * repo-relative, non-packages-rooted entries of a supported shape pass: a fixed dir (`apps/API`)
+ * or one level (`apps/*`). Negations are refused (they belong in the member's own workspace file),
+ * packages-rooted entries are refused (those are already covered by the packages rule), and any
+ * `..` segment is refused. Leading `./` is stripped and duplicates collapse. Pure; throws on misuse.
+ */
+export function SelectAppGlobs(declaredGlobs: readonly string[]): string[] {
+  const selected: string[] = [];
+  for (const raw of declaredGlobs) {
+    const glob = raw.trim().replace(/^\.\//, '');
+    if (glob.length === 0) continue;
+    if (glob.startsWith('!')) throw new Error(`--apps glob '${raw}' is a negation — negations belong in the member's own pnpm-workspace.yaml`);
+    if (glob.startsWith('packages/')) throw new Error(`--apps glob '${raw}' is packages-rooted — packages/ globs are admitted by default; --apps is for app shells`);
+    if (glob.split('/').includes('..') || path.isAbsolute(glob)) throw new Error(`--apps glob '${raw}' must be a repo-relative path without '..'`);
+    if (glob.includes('*') && !(glob.endsWith('/*') && !glob.slice(0, -2).includes('*'))) {
+      throw new Error(`--apps glob '${raw}' has an unsupported shape — use a fixed dir (apps/API) or one level (apps/*)`);
+    }
+    if (!selected.includes(glob)) selected.push(glob);
+  }
+  return selected;
+}
+
+/** Options for {@link LoadRepo}. */
+export interface LoadRepoOptions {
+  /** App-shell globs admitted for this member (see {@link SelectAppGlobs}); validated here. */
+  AppGlobs?: readonly string[];
+}
+
 /** Loads a repo's workspace globs, with their provenance, from its pnpm-workspace.yaml (bounded read). */
 function loadWorkspaceGlobs(repoPath: string): { Globs: string[]; Source: WorkspaceGlobsSource } {
   const yamlPath = path.join(repoPath, 'pnpm-workspace.yaml');
@@ -330,20 +359,27 @@ function detectReasons(repoPath: string, rootPkg: MemberPackageJson, packages: M
  * Loads one sibling directory as a repo, with detection reasons.
  * Returns null when the directory has no root package.json (not a repo at all).
  */
-export function LoadRepo(parentDir: string, dirName: string): CandidateRepo | null {
+export function LoadRepo(parentDir: string, dirName: string, options?: LoadRepoOptions): CandidateRepo | null {
   const repoPath = path.join(parentDir, dirName);
   const rootPkg = readJsonFile<MemberPackageJson>(path.join(repoPath, 'package.json'));
   if (rootPkg === null) return null;
   const workspaceGlobs = loadWorkspaceGlobs(repoPath);
   const enumerated = loadRepoPackages(repoPath, workspaceGlobs.Globs);
+  // App shells admitted explicitly for this member ride along as ordinary packages: they get the
+  // same workspace:* overrides and their names join the collision check the command runs.
+  const appGlobs = SelectAppGlobs(options?.AppGlobs ?? []);
+  const apps = appGlobs.length > 0 ? loadRepoPackages(repoPath, appGlobs) : { Packages: [], UnsupportedGlobs: [] };
+  const seen = new Set(enumerated.Packages.map((p) => p.RelPath));
+  const packages = [...enumerated.Packages, ...apps.Packages.filter((p) => !seen.has(p.RelPath))];
   const turboPath = path.join(repoPath, 'turbo.json');
   return {
     Name: dirName,
     Path: repoPath,
     Reasons: detectReasons(repoPath, rootPkg, enumerated.Packages),
     RootPackageJson: rootPkg,
-    Packages: enumerated.Packages,
-    UnsupportedGlobs: enumerated.UnsupportedGlobs,
+    Packages: packages,
+    UnsupportedGlobs: [...enumerated.UnsupportedGlobs, ...apps.UnsupportedGlobs],
+    ...(appGlobs.length > 0 ? { AppGlobs: appGlobs } : {}),
     Lockfile: ReadMemberLockfile(repoPath),
     TurboJson: existsSync(turboPath) ? readFileSync(turboPath, 'utf8') : null,
     ...readMjApp(repoPath),

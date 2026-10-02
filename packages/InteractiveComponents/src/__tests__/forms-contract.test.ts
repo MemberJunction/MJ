@@ -4,7 +4,7 @@ import { ComponentSpec, ComponentRole } from '../index';
 import {
     FormEventNames,
     FormMethodNames,
-    isFormRole,
+    IsFormRole,
     type FormHostProps,
 } from '../forms';
 
@@ -23,10 +23,10 @@ describe('forms subpath — contract sanity', () => {
 
     describe('isFormRole', () => {
         it('returns true only when componentRole === "form"', () => {
-            expect(isFormRole({ componentRole: 'form' })).toBe(true);
-            expect(isFormRole({ componentRole: 'dashboard' })).toBe(false);
-            expect(isFormRole({ componentRole: undefined })).toBe(false);
-            expect(isFormRole({})).toBe(false);
+            expect(IsFormRole({ componentRole: 'form' })).toBe(true);
+            expect(IsFormRole({ componentRole: 'dashboard' })).toBe(false);
+            expect(IsFormRole({ componentRole: undefined })).toBe(false);
+            expect(IsFormRole({})).toBe(false);
         });
     });
 

@@ -80,9 +80,14 @@ export class ListsSharedWithMeResource extends BaseResourceComponent {
     super.ngOnDestroy();
   }
 
-  public onOpenList(payload: { ListID: string; ListName: string }): void {
+  public OnOpenList(payload: { ListID: string; ListName: string }): void {
     const appId = this.Data?.Configuration?.applicationId || '';
     this.tabService.OpenList(payload.ListID, payload.ListName, appId);
+  }
+
+  /** @deprecated Use {@link OnOpenList}. */
+  public onOpenList(payload: { ListID: string; ListName: string }): void {
+    return this.OnOpenList(payload);
   }
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {

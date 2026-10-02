@@ -62,32 +62,104 @@ export class SaveViewAsListDialogComponent extends BaseAngularComponent implemen
   @Output() Save = new EventEmitter<SaveViewAsListResult>();
   @Output() Cancel = new EventEmitter<void>();
 
-  public listName = '';
-  public description = '';
-  public categoryId: string | null = null;
-  public rememberLineage = true;
-  public useSnapshot = true;
-  public refreshMode: 'Additive' | 'Sync' = 'Additive';
+  public ListName = '';
 
-  public categories: MJListCategoryEntity[] = [];
-  public loadingCategories = false;
-  public submitting = false;
+  /** @deprecated Use {@link ListName}. */
+  public get listName() {
+    return this.ListName;
+  }
+  /** @deprecated Use {@link ListName}. */
+  public set listName(value) {
+    this.ListName = value;
+  }
+  public description = '';
+  public CategoryId: string | null = null;
+
+  /** @deprecated Use {@link CategoryId}. */
+  public get categoryId(): string | null {
+    return this.CategoryId;
+  }
+  /** @deprecated Use {@link CategoryId}. */
+  public set categoryId(value: string | null) {
+    this.CategoryId = value;
+  }
+  public RememberLineage = true;
+
+  /** @deprecated Use {@link RememberLineage}. */
+  public get rememberLineage() {
+    return this.RememberLineage;
+  }
+  /** @deprecated Use {@link RememberLineage}. */
+  public set rememberLineage(value) {
+    this.RememberLineage = value;
+  }
+  public UseSnapshot = true;
+
+  /** @deprecated Use {@link UseSnapshot}. */
+  public get useSnapshot() {
+    return this.UseSnapshot;
+  }
+  /** @deprecated Use {@link UseSnapshot}. */
+  public set useSnapshot(value) {
+    this.UseSnapshot = value;
+  }
+  public RefreshMode: 'Additive' | 'Sync' = 'Additive';
+
+  /** @deprecated Use {@link RefreshMode}. */
+  public get refreshMode(): 'Additive' | 'Sync' {
+    return this.RefreshMode;
+  }
+  /** @deprecated Use {@link RefreshMode}. */
+  public set refreshMode(value: 'Additive' | 'Sync') {
+    this.RefreshMode = value;
+  }
+
+  public Categories: MJListCategoryEntity[] = [];
+
+  /** @deprecated Use {@link Categories}. */
+  public get categories(): MJListCategoryEntity[] {
+    return this.Categories;
+  }
+  /** @deprecated Use {@link Categories}. */
+  public set categories(value: MJListCategoryEntity[]) {
+    this.Categories = value;
+  }
+  public LoadingCategories = false;
+
+  /** @deprecated Use {@link LoadingCategories}. */
+  public get loadingCategories() {
+    return this.LoadingCategories;
+  }
+  /** @deprecated Use {@link LoadingCategories}. */
+  public set loadingCategories(value) {
+    this.LoadingCategories = value;
+  }
+  public Submitting = false;
+
+  /** @deprecated Use {@link Submitting}. */
+  public get submitting() {
+    return this.Submitting;
+  }
+  /** @deprecated Use {@link Submitting}. */
+  public set submitting(value) {
+    this.Submitting = value;
+  }
 
   async ngOnInit(): Promise<void> {
     await this.loadCategories();
   }
 
   public OnSave(): void {
-    if (!this.canSave) return;
-    this.submitting = true;
+    if (!this.CanSave) return;
+    this.Submitting = true;
     const payload: SaveViewAsListResult = {
-      ListName: this.listName.trim(),
+      ListName: this.ListName.trim(),
       Description: this.description.trim() || undefined,
-      CategoryId: this.categoryId ?? undefined,
-      RememberLineage: this.rememberLineage,
+      CategoryId: this.CategoryId ?? undefined,
+      RememberLineage: this.RememberLineage,
       // UseSnapshot only meaningful when lineage is remembered.
-      UseSnapshot: this.rememberLineage && this.useSnapshot,
-      RefreshMode: this.refreshMode,
+      UseSnapshot: this.RememberLineage && this.UseSnapshot,
+      RefreshMode: this.RefreshMode,
     };
     this.Save.emit(payload);
   }
@@ -97,20 +169,30 @@ export class SaveViewAsListDialogComponent extends BaseAngularComponent implemen
   }
 
   public OnLineageChange(remember: boolean): void {
-    this.rememberLineage = remember;
+    this.RememberLineage = remember;
     // If lineage is off, snapshot has no meaning — keep the checkbox state
     // intact so re-enabling lineage restores it, but the emitted payload
     // forces UseSnapshot=false (see `OnSave`).
   }
 
-  public get canSave(): boolean {
-    return !!this.ViewId && this.listName.trim().length > 0 && !this.submitting;
+  public get CanSave(): boolean {
+    return !!this.ViewId && this.ListName.trim().length > 0 && !this.Submitting;
   }
 
-  public get confirmButtonLabel(): string {
-    if (this.submitting) return 'Saving...';
+  /** @deprecated Use {@link CanSave}. */
+  public get canSave(): boolean {
+    return this.CanSave;
+  }
+
+  public get ConfirmButtonLabel(): string {
+    if (this.Submitting) return 'Saving...';
     if (this.RecordCount != null) return `Save List (${this.RecordCount} records)`;
     return 'Save List';
+  }
+
+  /** @deprecated Use {@link ConfirmButtonLabel}. */
+  public get confirmButtonLabel(): string {
+    return this.ConfirmButtonLabel;
   }
 
   /**
@@ -119,7 +201,7 @@ export class SaveViewAsListDialogComponent extends BaseAngularComponent implemen
    * and we log so the user can troubleshoot.
    */
   private async loadCategories(): Promise<void> {
-    this.loadingCategories = true;
+    this.LoadingCategories = true;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJListCategoryEntity>({
@@ -128,21 +210,21 @@ export class SaveViewAsListDialogComponent extends BaseAngularComponent implemen
         ResultType: 'entity_object',
       });
       if (result.Success) {
-        this.categories = result.Results ?? [];
+        this.Categories = result.Results ?? [];
       }
     } finally {
-      this.loadingCategories = false;
+      this.LoadingCategories = false;
       this.cdr.markForCheck();
     }
   }
 
   private resetForm(): void {
-    this.listName = this.ViewName ? `${this.ViewName} — Snapshot ${new Date().toISOString().slice(0, 10)}` : '';
+    this.ListName = this.ViewName ? `${this.ViewName} — Snapshot ${new Date().toISOString().slice(0, 10)}` : '';
     this.description = '';
-    this.categoryId = null;
-    this.rememberLineage = true;
-    this.useSnapshot = true;
-    this.refreshMode = 'Additive';
-    this.submitting = false;
+    this.CategoryId = null;
+    this.RememberLineage = true;
+    this.UseSnapshot = true;
+    this.RefreshMode = 'Additive';
+    this.Submitting = false;
   }
 }

@@ -31,6 +31,12 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 // Mock @memberjunction/ai
+// Imported by PATH rather than through the package barrel: the barrel pulls in the whole AI
+// surface (and @memberjunction/global, which is mocked here), while this module depends only
+// on chat.types. The helpers are pure functions, so the real ones are what the driver should
+// be tested against — a mocked copy would be the second implementation the shared module exists to prevent.
+import * as actualToolMapping from '../../../../Core/src/generic/openAICompatibleTools';
+
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
@@ -108,8 +114,10 @@ vi.mock('@memberjunction/ai', () => {
     const ChatMessageRole = {
         system: 'system' as const,
         user: 'user' as const,
-        assistant: 'assistant' as const
+        assistant: 'assistant' as const,
+        tool: 'tool' as const
     };
+    const toClassicChatMessageRole = (role: string): string => (role === 'tool' ? 'user' : role);
     class ChatParams {
         messages: Array<{ role: string; content: unknown }> = [];
         streaming?: boolean = false;
@@ -117,10 +125,19 @@ vi.mock('@memberjunction/ai', () => {
         model: string = '';
     }
     return {
+        // The OpenAI-shaped tool mapping is pure functions over plain data, and it lives in
+        // @memberjunction/ai precisely so there is ONE implementation. Re-mocking it here would
+        // recreate the drift the shared module exists to prevent, so use the real thing.
+        buildOpenAICompatibleTools: actualToolMapping.buildOpenAICompatibleTools,
+        buildOpenAICompatibleToolChoice: actualToolMapping.buildOpenAICompatibleToolChoice,
+        buildOpenAICompatibleToolCalls: actualToolMapping.buildOpenAICompatibleToolCalls,
+        buildOpenAICompatibleToolResults: actualToolMapping.buildOpenAICompatibleToolResults,
+        extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
         BaseLLM,
         ModelUsage,
         ChatResult,
         ChatMessageRole,
+        toClassicChatMessageRole,
         ChatParams,
         ChatResultChoice: {} as unknown,
         SummarizeParams: ChatParams,
@@ -372,6 +389,88 @@ describe('CerebrasLLM', () => {
                 data: { choices: Array<{ finish_reason: string }> };
             };
             expect(result.data.choices[0].finish_reason).toBe('length');
+        });
+    });
+
+    /**
+     * The `tools` × `response_format` conflict: Cerebras answers
+     * 400 `"tools" is incompatible with "response_format"`.
+     * Native tool calling on GPT-OSS-120B/Cerebras is unusable without this, and the failure is
+     * silent in unit terms — the request looks perfectly well formed right up to the API.
+     */
+    describe('response_format vs tools', () => {
+        const callNonStreaming = (params: Record<string, unknown>): Promise<unknown> => {
+            return (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']
+                .bind(instance)(params) as Promise<unknown>;
+        };
+        const callCreateStream = (params: Record<string, unknown>): Promise<unknown> => {
+            return (instance as ReturnType<typeof Object.create>)['createStreamingRequest']
+                .bind(instance)(params) as Promise<unknown>;
+        };
+        const sentBody = (): Record<string, unknown> => mockCreate.mock.calls[0][0] as Record<string, unknown>;
+
+        const tool = {
+            name: 'get_weather',
+            description: 'Look up the weather',
+            parametersSchema: { type: 'object', properties: {} }
+        };
+
+        beforeEach(() => {
+            mockCreate.mockResolvedValue({
+                choices: [{ message: { role: 'assistant', content: '{}' }, finish_reason: 'stop', index: 0 }],
+                usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+            });
+        });
+
+        it('sends response_format when no tools are declared', async () => {
+            await callNonStreaming({ model: 'gpt-oss-120b', messages: [], responseFormat: 'JSON' });
+            expect(sentBody().response_format).toEqual({ type: 'json_object' });
+        });
+
+        it('drops response_format when tools are declared', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+            await callNonStreaming({ model: 'gpt-oss-120b', messages: [], responseFormat: 'JSON', tools: [tool] });
+
+            expect(sentBody().response_format).toBeUndefined();
+            expect(sentBody().tools).toBeDefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('response_format'));
+            warn.mockRestore();
+        });
+
+        it('drops a ModelSpecific response_format too', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+            await callNonStreaming({
+                model: 'gpt-oss-120b',
+                messages: [],
+                responseFormat: 'ModelSpecific',
+                modelSpecificResponseFormat: { type: 'json_schema' },
+                tools: [tool]
+            });
+
+            expect(sentBody().response_format).toBeUndefined();
+            warn.mockRestore();
+        });
+
+        it('applies the same rule on the streaming path', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+            await callCreateStream({ model: 'gpt-oss-120b', messages: [], responseFormat: 'JSON', tools: [tool] });
+
+            expect(sentBody().response_format).toBeUndefined();
+            expect(sentBody().tools).toBeDefined();
+            warn.mockRestore();
+        });
+
+        it('stays silent for a format that was never going to be sent', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+            await callNonStreaming({ model: 'gpt-oss-120b', messages: [], responseFormat: 'Text', tools: [tool] });
+
+            expect(sentBody().response_format).toBeUndefined();
+            expect(warn).not.toHaveBeenCalled();
+            warn.mockRestore();
         });
     });
 

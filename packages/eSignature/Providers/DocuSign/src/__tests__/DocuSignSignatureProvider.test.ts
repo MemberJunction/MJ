@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { DocuSignSignatureProvider, mapDocuSignStatus } from '../DocuSignSignatureProvider';
+import { DocuSignSignatureProvider, MapDocuSignStatus } from '../DocuSignSignatureProvider';
 import type { SignatureProviderConfig } from '@memberjunction/esignature';
 
 // Stub the JWT signer so no real RSA key is needed. The mock MUST expose `sign` on a `default`
@@ -52,7 +52,7 @@ describe('mapDocuSignStatus', () => {
         ['nonsense', 'Unknown'],
         ['', 'Unknown'],
     ] as const)('maps %s -> %s', (input, expected) => {
-        expect(mapDocuSignStatus(input)).toBe(expected);
+        expect(MapDocuSignStatus(input)).toBe(expected);
     });
 });
 

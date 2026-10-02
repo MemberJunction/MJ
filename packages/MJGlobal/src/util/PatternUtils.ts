@@ -25,7 +25,7 @@
  * parsePattern("*Run") // Returns: /Run$/i
  * parsePattern("exact") // Returns: /^exact$/i
  */
-export function parsePattern(pattern: string): RegExp {
+export function ParsePattern(pattern: string): RegExp {
   // Check if it's already a regex pattern (starts with /)
   if (pattern.startsWith('/')) {
     // Extract pattern and flags from regex string like "/pattern/flags"
@@ -65,14 +65,24 @@ export function parsePattern(pattern: string): RegExp {
   return new RegExp(regexPattern, 'i');
 }
 
+/** @deprecated Use {@link ParsePattern}. */
+export function parsePattern(pattern: string): RegExp {
+  return ParsePattern(pattern);
+}
+
 /**
  * Converts an array of string patterns to RegExp objects
  * 
  * @param patterns - Array of pattern strings
  * @returns Array of RegExp objects
  */
+export function ParsePatterns(patterns: string[]): RegExp[] {
+  return patterns.map(ParsePattern);
+}
+
+/** @deprecated Use {@link ParsePatterns}. */
 export function parsePatterns(patterns: string[]): RegExp[] {
-  return patterns.map(parsePattern);
+  return ParsePatterns(patterns);
 }
 
 /**
@@ -81,8 +91,13 @@ export function parsePatterns(patterns: string[]): RegExp[] {
  * @param pattern - String pattern or RegExp object
  * @returns RegExp object
  */
+export function EnsureRegExp(pattern: string | RegExp): RegExp {
+  return pattern instanceof RegExp ? pattern : ParsePattern(pattern);
+}
+
+/** @deprecated Use {@link EnsureRegExp}. */
 export function ensureRegExp(pattern: string | RegExp): RegExp {
-  return pattern instanceof RegExp ? pattern : parsePattern(pattern);
+  return EnsureRegExp(pattern);
 }
 
 /**
@@ -91,8 +106,13 @@ export function ensureRegExp(pattern: string | RegExp): RegExp {
  * @param patterns - Array of string patterns or RegExp objects
  * @returns Array of RegExp objects
  */
+export function EnsureRegExps(patterns: (string | RegExp)[]): RegExp[] {
+  return patterns.map(EnsureRegExp);
+}
+
+/** @deprecated Use {@link EnsureRegExps}. */
 export function ensureRegExps(patterns: (string | RegExp)[]): RegExp[] {
-  return patterns.map(ensureRegExp);
+  return EnsureRegExps(patterns);
 }
 
 /**
@@ -102,9 +122,14 @@ export function ensureRegExps(patterns: (string | RegExp)[]): RegExp[] {
  * @param patterns - Array of patterns (strings or RegExps)
  * @returns true if any pattern matches
  */
-export function matchesAnyPattern(text: string, patterns: (string | RegExp)[]): boolean {
-  const regexps = ensureRegExps(patterns);
+export function MatchesAnyPattern(text: string, patterns: (string | RegExp)[]): boolean {
+  const regexps = EnsureRegExps(patterns);
   return regexps.some(pattern => pattern.test(text));
+}
+
+/** @deprecated Use {@link MatchesAnyPattern}. */
+export function matchesAnyPattern(text: string, patterns: (string | RegExp)[]): boolean {
+  return MatchesAnyPattern(text, patterns);
 }
 
 /**
@@ -114,7 +139,12 @@ export function matchesAnyPattern(text: string, patterns: (string | RegExp)[]): 
  * @param patterns - Array of patterns (strings or RegExps)
  * @returns true if all patterns match
  */
-export function matchesAllPatterns(text: string, patterns: (string | RegExp)[]): boolean {
-  const regexps = ensureRegExps(patterns);
+export function MatchesAllPatterns(text: string, patterns: (string | RegExp)[]): boolean {
+  const regexps = EnsureRegExps(patterns);
   return regexps.every(pattern => pattern.test(text));
+}
+
+/** @deprecated Use {@link MatchesAllPatterns}. */
+export function matchesAllPatterns(text: string, patterns: (string | RegExp)[]): boolean {
+  return MatchesAllPatterns(text, patterns);
 }

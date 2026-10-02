@@ -66,6 +66,147 @@
   color: var(--mj-text-inverse, #fff);
   border-top-right-radius: 4px;
 }
+
+/* ---------- Bubble content clamping and expansion ---------- */
+.bubble-content {
+  position: relative;
+  word-break: break-word;
+}
+
+.bubble-content--clamped {
+  max-height: 120px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 60%, rgba(0, 0, 0, 0) 100%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 60%, rgba(0, 0, 0, 0) 100%);
+}
+
+.bubble-content--expanded {
+  max-height: 440px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
+}
+.turn--agent .bubble-content--expanded {
+  scrollbar-color: var(--mj-border-strong) transparent;
+}
+.bubble-content--expanded::-webkit-scrollbar {
+  width: 5px;
+}
+.bubble-content--expanded::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+}
+.turn--agent .bubble-content--expanded::-webkit-scrollbar-thumb {
+  background: var(--mj-border-strong);
+}
+
+.bubble-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 6px;
+  padding-top: 2px;
+}
+.turn--user .bubble-actions {
+  justify-content: flex-end;
+}
+
+.bubble-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  transition: background-color 140ms ease, color 140ms ease;
+  user-select: none;
+}
+
+.bubble-expand-btn i {
+  font-size: 10px;
+}
+
+.turn--agent .bubble-expand-btn {
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+.turn--agent .bubble-expand-btn:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent);
+}
+
+.turn--user .bubble-expand-btn {
+  color: var(--mj-text-inverse, #fff);
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+.turn--user .bubble-expand-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* ---------- Markdown styling within realtime bubbles ---------- */
+.bubble ::ng-deep .mj-markdown-container {
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.bubble ::ng-deep .mj-markdown-container h1 { font-size: 1.35em; font-weight: 700; margin-top: 0.6em; margin-bottom: 0.3em; }
+.bubble ::ng-deep .mj-markdown-container h2 { font-size: 1.2em; font-weight: 650; margin-top: 0.5em; margin-bottom: 0.25em; }
+.bubble ::ng-deep .mj-markdown-container h3 { font-size: 1.1em; font-weight: 600; margin-top: 0.4em; margin-bottom: 0.2em; }
+.bubble ::ng-deep .mj-markdown-container h4,
+.bubble ::ng-deep .mj-markdown-container h5,
+.bubble ::ng-deep .mj-markdown-container h6 { font-size: 1em; font-weight: 600; margin-top: 0.4em; margin-bottom: 0.2em; }
+.bubble ::ng-deep .mj-markdown-container p { margin: 0 0 0.6em 0; }
+.bubble ::ng-deep .mj-markdown-container p:last-child { margin-bottom: 0; }
+.bubble ::ng-deep .mj-markdown-container ul,
+.bubble ::ng-deep .mj-markdown-container ol { margin: 0.25em 0 0.6em 1.25em; padding: 0; }
+.bubble ::ng-deep .mj-markdown-container li { margin-bottom: 0.25em; line-height: 1.45; }
+
+/* User turn contrast: markdown on brand-primary background */
+.turn--user .bubble ::ng-deep .mj-markdown-container,
+.turn--user .bubble ::ng-deep .mj-markdown-container p,
+.turn--user .bubble ::ng-deep .mj-markdown-container h1,
+.turn--user .bubble ::ng-deep .mj-markdown-container h2,
+.turn--user .bubble ::ng-deep .mj-markdown-container h3,
+.turn--user .bubble ::ng-deep .mj-markdown-container h4,
+.turn--user .bubble ::ng-deep .mj-markdown-container h5,
+.turn--user .bubble ::ng-deep .mj-markdown-container h6,
+.turn--user .bubble ::ng-deep .mj-markdown-container strong,
+.turn--user .bubble ::ng-deep .mj-markdown-container b,
+.turn--user .bubble ::ng-deep .mj-markdown-container li {
+  color: var(--mj-text-inverse, #fff);
+}
+
+.turn--user .bubble ::ng-deep .mj-markdown-container li::marker {
+  color: var(--mj-text-inverse, #fff);
+}
+
+.turn--user .bubble ::ng-deep .mj-markdown-container a {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.turn--user .bubble ::ng-deep .mj-markdown-container code {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.turn--user .bubble ::ng-deep .mj-markdown-container pre {
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+}
+
+.turn--user .bubble ::ng-deep .mj-markdown-container blockquote {
+  border-left-color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.turn--user .bubble ::ng-deep .mj-markdown-container hr {
+  border-color: rgba(255, 255, 255, 0.25);
+  margin: 0.6em 0;
+}
 .turn-meta {
   font-size: 10.5px;
   color: var(--mj-text-muted);

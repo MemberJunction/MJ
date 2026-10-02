@@ -21,7 +21,7 @@ import type { CuratedFormField, CuratedFormSchema } from './curated-form-schema'
 import type { FormHostProps, FormMode } from './form-host-props';
 import type { SimpleEntityFieldInfo } from '../data-requirements';
 
-export function buildFixtureFormHostProps(
+export function BuildFixtureFormHostProps(
     schema: CuratedFormSchema,
     mode: FormMode = 'view',
 ): FormHostProps {
@@ -49,6 +49,14 @@ export function buildFixtureFormHostProps(
         canDelete: true,
         canCreate: true,
     };
+}
+
+/** @deprecated Use {@link BuildFixtureFormHostProps}. */
+export function buildFixtureFormHostProps(
+    schema: CuratedFormSchema,
+    mode: FormMode = 'view',
+): FormHostProps {
+    return BuildFixtureFormHostProps(schema, mode);
 }
 
 /** Convert curated fields to the minimal SimpleEntityFieldInfo shape FormHostProps needs. */

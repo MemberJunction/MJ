@@ -186,9 +186,9 @@ describe('initializeDriverWithAccountCredentials', () => {
   describe('driver creation', () => {
     it('should create a driver instance using the provider ServerDriverKey', async () => {
       // Import the function we're testing
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
-      await initializeDriverWithAccountCredentials({
+      await InitializeDriverWithAccountCredentials({
         accountEntity: mockAccountEntity as any,
         providerEntity: mockProviderEntity as any,
         contextUser: mockContextUser as any,
@@ -209,10 +209,10 @@ describe('initializeDriverWithAccountCredentials', () => {
         Reason: 'no registration found',
       });
 
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
       await expect(
-        initializeDriverWithAccountCredentials({
+        InitializeDriverWithAccountCredentials({
           accountEntity: mockAccountEntity as any,
           providerEntity: mockProviderEntity as any,
           contextUser: mockContextUser as any,
@@ -228,10 +228,10 @@ describe('initializeDriverWithAccountCredentials', () => {
         Reason: 'fell back to FileStorageBase',
       });
 
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
       await expect(
-        initializeDriverWithAccountCredentials({
+        InitializeDriverWithAccountCredentials({
           accountEntity: mockAccountEntity as any,
           providerEntity: mockProviderEntity as any,
           contextUser: mockContextUser as any,
@@ -250,12 +250,12 @@ describe('initializeDriverWithAccountCredentials', () => {
         { Key: null },
       ]);
 
-      const { resolveStorageDriver } = await import('../util');
+      const { ResolveStorageDriver } = await import('../util');
 
-      expect(() => resolveStorageDriver({ ...mockProviderEntity, ID: 'provider-999' } as any)).toThrow(
+      expect(() => ResolveStorageDriver({ ...mockProviderEntity, ID: 'provider-999' } as any)).toThrow(
         /provider "Test Provider", ID provider-999/,
       );
-      expect(() => resolveStorageDriver({ ...mockProviderEntity, ID: 'provider-999' } as any)).toThrow(
+      expect(() => ResolveStorageDriver({ ...mockProviderEntity, ID: 'provider-999' } as any)).toThrow(
         /Registered driver keys: 'AWS S3 Storage', 'Azure Blob Storage'/,
       );
     });
@@ -267,17 +267,17 @@ describe('initializeDriverWithAccountCredentials', () => {
       });
       (MJGlobal.Instance.ClassFactory.GetAllRegistrations as ReturnType<typeof vi.fn>).mockReturnValue([]);
 
-      const { resolveStorageDriver } = await import('../util');
+      const { ResolveStorageDriver } = await import('../util');
 
-      expect(() => resolveStorageDriver(mockProviderEntity as any)).toThrow(/Registered driver keys: \(none\)/);
+      expect(() => ResolveStorageDriver(mockProviderEntity as any)).toThrow(/Registered driver keys: \(none\)/);
     });
   });
 
   describe('account information', () => {
     it('should pass accountId from the account entity to the driver', async () => {
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
-      await initializeDriverWithAccountCredentials({
+      await InitializeDriverWithAccountCredentials({
         accountEntity: mockAccountEntity as any,
         providerEntity: mockProviderEntity as any,
         contextUser: mockContextUser as any,
@@ -288,9 +288,9 @@ describe('initializeDriverWithAccountCredentials', () => {
     });
 
     it('should pass accountName from the account entity to the driver', async () => {
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
-      await initializeDriverWithAccountCredentials({
+      await InitializeDriverWithAccountCredentials({
         accountEntity: mockAccountEntity as any,
         providerEntity: mockProviderEntity as any,
         contextUser: mockContextUser as any,
@@ -321,9 +321,9 @@ describe('initializeDriverWithAccountCredentials', () => {
         },
       });
 
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
-      await initializeDriverWithAccountCredentials({
+      await InitializeDriverWithAccountCredentials({
         accountEntity: mockAccountEntity as any,
         providerEntity: mockProviderEntity as any,
         contextUser: mockContextUser as any,
@@ -364,9 +364,9 @@ describe('initializeDriverWithAccountCredentials', () => {
         },
       });
 
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
-      await initializeDriverWithAccountCredentials({
+      await InitializeDriverWithAccountCredentials({
         accountEntity: mockAccountEntity as any,
         providerEntity: mockProviderEntity as any,
         contextUser: mockContextUser as any,
@@ -394,10 +394,10 @@ describe('initializeDriverWithAccountCredentials', () => {
       // Return null to simulate credential not found
       (CredentialEngine.Instance.getCredentialById as ReturnType<typeof vi.fn>).mockReturnValue(null);
 
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
       await expect(
-        initializeDriverWithAccountCredentials({
+        InitializeDriverWithAccountCredentials({
           accountEntity: mockAccountEntity as any,
           providerEntity: mockProviderEntity as any,
           contextUser: mockContextUser as any,
@@ -414,9 +414,9 @@ describe('initializeDriverWithAccountCredentials', () => {
         defaultRegion: 'us-east-1',
       });
 
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
-      await initializeDriverWithAccountCredentials({
+      await InitializeDriverWithAccountCredentials({
         accountEntity: mockAccountEntity as any,
         providerEntity: mockProviderEntity as any,
         contextUser: mockContextUser as any,
@@ -435,9 +435,9 @@ describe('initializeDriverWithAccountCredentials', () => {
       mockAccountEntity.CredentialID = null;
       mockProviderEntity.Configuration = null;
 
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
-      await initializeDriverWithAccountCredentials({
+      await InitializeDriverWithAccountCredentials({
         accountEntity: mockAccountEntity as any,
         providerEntity: mockProviderEntity as any,
         contextUser: mockContextUser as any,
@@ -453,9 +453,9 @@ describe('initializeDriverWithAccountCredentials', () => {
 
   describe('return value', () => {
     it('should return the initialized driver', async () => {
-      const { initializeDriverWithAccountCredentials } = await import('../util');
+      const { InitializeDriverWithAccountCredentials } = await import('../util');
 
-      const result = await initializeDriverWithAccountCredentials({
+      const result = await InitializeDriverWithAccountCredentials({
         accountEntity: mockAccountEntity as any,
         providerEntity: mockProviderEntity as any,
         contextUser: mockContextUser as any,
