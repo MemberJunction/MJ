@@ -111,6 +111,10 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
             row.Set('EvaluatorType', evaluatorType(input.evaluator));
             row.Set('Status', 'Draft');
             if (input.passThreshold !== undefined && input.passThreshold !== null) row.Set('PassThresholdApplied', input.passThreshold);
+            if (input.aiAgentRunId) row.Set('AIAgentRunID', input.aiAgentRunId);
+            if (input.aiPromptRunId) row.Set('AIPromptRunID', input.aiPromptRunId);
+            if (input.evaluatorName) row.Set('EvaluatorName', input.evaluatorName);
+            if (input.metadata !== undefined) row.Set('Metadata', typeof input.metadata === 'string' ? input.metadata : JSON.stringify(input.metadata));
             if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not create the evaluation draft.');
             return { id: String(row.Get('ID') ?? ''), status: 'Draft' };
         },

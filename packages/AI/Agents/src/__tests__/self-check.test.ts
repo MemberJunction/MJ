@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { RubricEngine, type RubricRecords } from '@memberjunction/rubrics';
 import type { RubricScoreResult } from '@memberjunction/rubrics-base';
-import { DecideSelfCheck, ExecuteSelfCheck, type SelfCheckEngine, type SelfCheckValidation } from '../self-check.js';
+import { DecideSelfCheck, ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckEngine, type SelfCheckValidation } from '../self-check.js';
 
 const link = { Purpose: 'SelfCheck', Status: 'Active', MaxAttempts: 2 };
+
+describe('PickSelfCheckLink', () => {
+    it('picks the Active SelfCheck link with the lowest id', () => {
+        const picked = PickSelfCheckLink([
+            { ID: 'bbbbbbbb-0000-0000-0000-000000000002', Purpose: 'SelfCheck', Status: 'Active', RubricID: 'second' },
+            { ID: 'aaaaaaaa-0000-0000-0000-000000000001', Purpose: 'SelfCheck', Status: 'Active', RubricID: 'first' },
+            { ID: '00000000-0000-0000-0000-000000000000', Purpose: 'Evaluation', Status: 'Active', RubricID: 'other' },
+        ]);
+        expect(picked?.RubricID).toBe('first');
+    });
+});
 
 describe('agent self-check', () => {
     it('skips when there is no Active SelfCheck link', () => {

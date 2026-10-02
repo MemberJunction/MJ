@@ -52,7 +52,7 @@ describe('ProviderEvaluationStore.submit', () => {
                     NewRecord() { /* filled by the store */ },
                     Set(field: string, value: unknown) {
                         fields[field] = value;
-                        if (name === 'MJ: Rubric Evaluation Scores') written.push({ field, value });
+                        written.push({ field, value });
                     },
                     Get(field: string) {
                         if (field === 'ID') return 'eval-1';
@@ -75,6 +75,21 @@ describe('ProviderEvaluationStore.submit', () => {
         }]);
         expect(written).toContainEqual({ field: 'Rationale', value: 'The figure is wrong.' });
         expect(written).toContainEqual({ field: 'Evidence', value: JSON.stringify([{ quote: 'cited' }]) });
+        written.length = 0;
+        const draft = await store.createDraft({
+            versionId: 'version',
+            rubricId: 'rubric',
+            subjectEntityId: 'entity',
+            subjectRecordId: 'run-1',
+            evaluator: 'LLM',
+            aiAgentRunId: 'run-1',
+            evaluatorName: 'LLM',
+            metadata: { Evaluator: { Name: 'LLM' } },
+        });
+        expect(draft.status).toBe('Draft');
+        expect(written).toContainEqual({ field: 'AIAgentRunID', value: 'run-1' });
+        expect(written).toContainEqual({ field: 'EvaluatorName', value: 'LLM' });
+        expect(written).toContainEqual({ field: 'Metadata', value: JSON.stringify({ Evaluator: { Name: 'LLM' } }) });
         expect(result.nodes).toEqual([{
             id: 'criterion',
             key: 'accuracy',

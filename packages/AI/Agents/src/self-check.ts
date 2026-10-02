@@ -5,6 +5,26 @@ export interface SelfCheckLink {
     MaxAttempts?: number | null;
 }
 
+/** One agent-rubric row the self-check lookup can see. */
+export interface SelfCheckLinkRow {
+    ID?: string;
+    Purpose?: string;
+    Status?: string;
+    RubricID?: string;
+    MaxSelfCheckAttempts?: number | null;
+    PassThreshold?: number | null;
+}
+
+/**
+ * Picks one Active SelfCheck link. The lowest id wins, so two Active links
+ * do not depend on which row the database returned first.
+ */
+export function PickSelfCheckLink(rows: SelfCheckLinkRow[]): SelfCheckLinkRow | undefined {
+    return [...rows]
+        .filter(row => row.Status === 'Active' && row.Purpose === 'SelfCheck' && !!row.RubricID)
+        .sort((left, right) => String(left.ID ?? '').localeCompare(String(right.ID ?? '')))[0];
+}
+
 export interface SelfCheckFailure {
     Key: string;
     Rationale?: string;

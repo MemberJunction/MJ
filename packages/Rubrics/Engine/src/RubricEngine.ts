@@ -27,6 +27,10 @@ export interface RubricEvaluationStore {
         contextRecordId?: string | null;
         passThreshold?: number | null;
         evaluator?: EvaluateParams['evaluator'];
+        aiAgentRunId?: string | null;
+        aiPromptRunId?: string | null;
+        evaluatorName?: string | null;
+        metadata?: unknown;
     }): Promise<RubricEvaluationRecord>;
     submit(evaluationId: string, answers: RubricAnswer[]): Promise<RubricScoreResult>;
     fail(evaluationId: string, errorMessage: string): Promise<RubricEvaluationRecord>;
@@ -366,6 +370,10 @@ export class RubricEngine {
             contextRecordId: params.context?.recordId ?? null,
             passThreshold: params.passThreshold ?? null,
             evaluator: params.evaluator,
+            aiAgentRunId: params.subject.entityName === 'MJ: AI Agent Runs' ? params.subject.recordId : null,
+            aiPromptRunId: params.subject.entityName === 'MJ: AI Prompt Runs' ? params.subject.recordId : null,
+            evaluatorName: params.evaluator ?? 'Deterministic',
+            metadata: { Evaluator: { Name: params.evaluator ?? 'Deterministic' } },
         };
     }
 
