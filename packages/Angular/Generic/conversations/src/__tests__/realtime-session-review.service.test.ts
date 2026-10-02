@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Subject } from 'rxjs';
 import { IMetadataProvider, RunView, RunViewParams } from '@memberjunction/core';
-import type {
-  RealtimeCaption,
-  RealtimeDelegationNarration,
-  RealtimeDelegationProgress,
-  RealtimeDelegationResult
-} from '../lib/services/realtime-session.service';
+import type { RealtimeCaption, RealtimeDelegationNarration, RealtimeDelegationProgress, RealtimeDelegationResult } from '@memberjunction/realtime-runtime';
 import {
   BuildReviewActionCard,
   BuildReviewDelegationCard,

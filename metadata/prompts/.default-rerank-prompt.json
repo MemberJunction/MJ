@@ -1,0 +1,75 @@
+[
+  {
+    "fields": {
+      "Name": "Default Rerank",
+      "Description": "The rerank prompt used when no other is named, by AIRerankerRunner and so by RerankerService.RerankNotes. It makes no chat call: its bindings choose the reranker model and its failover settings apply across them. Callers pass the query and documents directly, so the template only renders a query passed as template data.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/default-rerank.template.md",
+      "Status": "Active",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "SelectionStrategy": "Specific",
+      "RequireSpecificModels": true,
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "ResponseFormat": "Any",
+      "OutputType": "string",
+      "ValidationBehavior": "None",
+      "MaxRetries": 0,
+      "FailoverStrategy": "NextBestModel",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-v4-fast",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 40
+          },
+          "primaryKey": {
+            "ID": "66952A8C-9A4A-46A1-8139-C2E943767C13"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-v4-pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 30
+          },
+          "primaryKey": {
+            "ID": "6A4BDC64-0D7D-42EF-A6A5-2B33E896741D"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-multilingual-v3.0",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 20
+          },
+          "primaryKey": {
+            "ID": "35A5A67B-7929-4485-AC65-73D067E13D13"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-v3.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "D86FA0E8-428D-40C5-A77F-C52143145D7E"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "802CD323-C811-4105-8717-0FCAA99301E0"
+    }
+  }
+]

@@ -25,13 +25,18 @@ function buildHarness(messageStatus = 'In-Progress'): CallbackHarness {
     const message = { ID: 'detail-1', Status: messageStatus, Message: '' };
     const emitted: unknown[] = [];
     const taskStatuses: string[] = [];
+    const messageSentStub = { emit: (m: unknown) => emitted.push(m) };
 
     const component = Object.create(MessageInputComponent.prototype) as MessageInputComponent;
     Object.assign(component as unknown as Record<string, unknown>, {
         dataCache: { getConversationDetail: vi.fn(async () => message) },
         currentUser: undefined,
         completionTimestamps: new Map<string, number>(),
-        messageSent: { emit: (m: unknown) => emitted.push(m) },
+        // One emitter under both names, as the component itself declares it: the deprecated
+        // `messageSent` @Output IS the `MessageSent` EventEmitter, and only the canonical name is
+        // ever emitted on. Object.create skips the field initialisers, so both are wired here.
+        MessageSent: messageSentStub,
+        messageSent: messageSentStub,
         activeTasks: {
             updateStatusByConversationDetailId: (_id: string, status: string) => taskStatuses.push(status),
         },

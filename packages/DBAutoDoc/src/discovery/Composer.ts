@@ -17,28 +17,28 @@ import { OrganicKeyCluster, OrganicKeyClusterMember, memberColumns } from '../ty
 import {
     DetectedOrganicKeysOutput,
     TransitiveSpokeInput,
-    translateClusters,
-    countOutputEntries,
+    TranslateClusters,
+    CountOutputEntries,
 } from './OrganicKeyTranslator.js';
 import { TransitiveBridgeFinding } from './TransitiveBridgeDetector.js';
 import { JoinProbeResult, KeyVerifier } from './JoinProbe.js';
 
 /** Output of the compose step: the PR #2193 JSON, the FK-redundancy-annotated clusters, and emit counts. */
 export interface ComposerResult {
-    output: DetectedOrganicKeysOutput;
+    output: DetectedOrganicKeysOutput;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Per-cluster record of what the value-overlap probe concluded, for reporting. */
     verification: ClusterVerification[];
     /** Clusters with isFKRedundant filled in — callers that persist the cluster list
      *  (e.g. detector → state.json → dashboard) should use THIS, not the pre-compose
      *  input, otherwise the flag is silently lost. */
-    annotatedClusters: OrganicKeyCluster[];
-    emitted: number;
-    flaggedFKRedundant: number;
+    AnnotatedClusters: OrganicKeyCluster[];
+    Emitted: number;
+    FlaggedFKRedundant: number;
     /** Clusters dropped because the probe refuted the shared value space. */
     droppedUnverified: number;
     /** Individual members dropped for not sharing the anchor's value space. */
     droppedMembers: number;
-    summary: { outputSchemas: number; outputTables: number; outputKeys: number; outputSpokes: number };
+    Summary: { outputSchemas: number; outputTables: number; outputKeys: number; outputSpokes: number };
 }
 
 /** What the probe concluded about one cluster. */
@@ -62,7 +62,7 @@ export interface ClusterVerification {
  * declared foreign key — kept but flagged, not dropped). Matching transitive bridges are
  * attached as spokes. Returns the JSON plus the annotated clusters and emit counts.
  */
-export async function compose(
+export async function Compose(
     clusters: OrganicKeyCluster[],
     bridges: TransitiveBridgeFinding[],
     verifier: KeyVerifier | null = null,
@@ -98,34 +98,34 @@ export async function compose(
         for (const m of c.members) hubKeys.add(`${m.schema}.${m.table}.${m.column}`);
     }
     const spokes: TransitiveSpokeInput[] = bridges
-        .filter((b) => hubKeys.has(`${b.hubSchema}.${b.hubTable}.${b.hubKeyFields[0]}`))
+        .filter((b) => hubKeys.has(`${b.HubSchema}.${b.HubTable}.${b.HubKeyFields[0]}`))
         .map((b) => ({
-            hubSchema: b.hubSchema,
-            hubTable: b.hubTable,
-            hubKeyFields: b.hubKeyFields,
-            spokeSchema: b.spokeSchema,
-            spokeTable: b.spokeTable,
-            transitiveView: { Name: b.view.viewName, SchemaName: b.view.schemaName, SQL: b.view.sql },
-            transitiveMatchFieldNames: [b.view.hubKeyField],
-            transitiveOutputFieldName: b.view.spokeOutputField,
-            relatedEntityJoinFieldName: b.view.spokeJoinField,
-            hubConcept: b.hubConcept,
+            hubSchema: b.HubSchema,
+            hubTable: b.HubTable,
+            hubKeyFields: b.HubKeyFields,
+            spokeSchema: b.SpokeSchema,
+            spokeTable: b.SpokeTable,
+            transitiveView: { Name: b.View.ViewName, SchemaName: b.View.schemaName, SQL: b.View.Sql },
+            transitiveMatchFieldNames: [b.View.HubKeyField],
+            transitiveOutputFieldName: b.View.SpokeOutputField,
+            relatedEntityJoinFieldName: b.View.SpokeJoinField,
+            hubConcept: b.HubConcept,
         }));
 
-    const output = translateClusters(annotated, spokes, {
+    const output = TranslateClusters(annotated, spokes, {
         autoCreateRelatedViewOnForm: options.autoCreateRelatedViewOnForm,
     });
-    const counts = countOutputEntries(output);
+    const counts = CountOutputEntries(output);
 
     return {
         output,
-        annotatedClusters: annotated,
+        AnnotatedClusters: annotated,
         verification,
-        emitted: annotated.length,
-        flaggedFKRedundant: flaggedCount,
+        Emitted: annotated.length,
+        FlaggedFKRedundant: flaggedCount,
         droppedUnverified,
         droppedMembers,
-        summary: {
+        Summary: {
             outputSchemas: counts.schemas,
             outputTables: counts.tables,
             outputKeys: counts.keys,
@@ -234,6 +234,16 @@ async function verifyClusters(
     return { clusters: out, verification, droppedMembers };
 }
 
+/** @deprecated Use {@link Compose}. */
+export function compose(
+    clusters: OrganicKeyCluster[],
+    bridges: TransitiveBridgeFinding[],
+    verifier: KeyVerifier | null = null,
+    options: ComposeOptions = {},
+): Promise<ComposerResult> {
+    return Compose(clusters, bridges, verifier, options);
+}
+
 /**
  * A cluster is FK-redundant when ALL non-PK members are declared FKs pointing
  * at the same target column (typically the PK member of the cluster). PR #2193
@@ -265,5 +275,11 @@ function isFKRedundant(cluster: OrganicKeyCluster): boolean {
 }
 
 /** Re-export for tests / observability. */
-export const __test__ = { isFKRedundant };
+export const TestHooks = { isFKRedundant };
+
+/** @deprecated Use {@link TestHooks}. */
+export const Test__ = TestHooks;
+
+/** @deprecated Use {@link TestHooks}. */
+export const __test__ = TestHooks;
 export type { OrganicKeyClusterMember };

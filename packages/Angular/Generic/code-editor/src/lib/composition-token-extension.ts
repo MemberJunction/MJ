@@ -223,10 +223,15 @@ const compositionTokenPlugin = ViewPlugin.fromClass(
             this.Decorations = buildDecorations(view);
         }
 
-        update(update: ViewUpdate) {
+        Update(update: ViewUpdate) {
             if (update.docChanged || update.viewportChanged) {
                 this.Decorations = buildDecorations(update.view);
             }
+        }
+
+        /** @deprecated Use {@link Update}. */
+        update(update: ViewUpdate) {
+            return this.Update(update);
         }
     },
     {
@@ -473,7 +478,7 @@ function buildTooltipDOM(
  *   - OnTokenHover: Resolver that returns query info for hover tooltip display.
  * @returns A CodeMirror Extension array
  */
-export function compositionTokenExtension(config: CompositionTokenConfig | ((event: CompositionTokenClickEvent) => void)): Extension[] {
+export function CompositionTokenExtension(config: CompositionTokenConfig | ((event: CompositionTokenClickEvent) => void)): Extension[] {
     // Support legacy signature: single click callback function
     const resolvedConfig: CompositionTokenConfig = typeof config === 'function'
         ? { OnTokenClick: config }
@@ -564,4 +569,9 @@ export function compositionTokenExtension(config: CompositionTokenConfig | ((eve
     }
 
     return extensions;
+}
+
+/** @deprecated Use {@link CompositionTokenExtension}. */
+export function compositionTokenExtension(config: CompositionTokenConfig | ((event: CompositionTokenClickEvent) => void)): Extension[] {
+    return CompositionTokenExtension(config);
 }

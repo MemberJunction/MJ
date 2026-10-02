@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T016 - Create New Dashboard",
+    "Description": "Verifies the dashboard creation flow: clicking New Dashboard, naming it, saving, and confirming the new dashboard is created and appears in the Data Explorer Dashboards browser.",
+    "InputDefinition": "{\n  \"goal\": \"Use the application switcher dropdown next to the logo (NOT the Ctrl+K search box) to open the Data Explorer app, then go to its Dashboards section (route /app/data-explorer/Dashboards). Click the 'New Dashboard' button, set the dashboard name to 'Regression Test Dashboard', and save it. The success state is the new dashboard created: it either opens directly after saving, or it appears as 'Regression Test Dashboard' in the dashboards list/card view. Pages and save operations can take 10-30s in this resource-constrained environment - wait for the save to complete, do not navigate away early.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"judgeValidationCriteria\": [\n    \"A new dashboard creation flow was completed with the name 'Regression Test Dashboard' entered\",\n    \"After saving, the dashboard named 'Regression Test Dashboard' is shown - either opened in its own view/tab or listed in the Dashboards browser\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "B5FF9AF6-44BF-45D2-B87B-52A6DCAA5E28"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.055Z",
+    "checksum": "3535338bcc2e1fe1834327445dc451b634a1ace1078b4e1f729a1ded9d769a4e"
+  }
+}

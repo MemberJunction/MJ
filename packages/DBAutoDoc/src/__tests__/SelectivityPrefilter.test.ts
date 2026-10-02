@@ -54,7 +54,7 @@ function stateWith(tables: Array<{ schema: string; table: string; columns: ColSp
 const cfg: OrganicKeyDetectionConfig = { enabled: true };
 
 function keptColumns(state: DatabaseDocumentation): string[] {
-    return prefilter(state, cfg).map((c) => c.column);
+    return prefilter(state, cfg).map((c) => c.Column);
 }
 
 describe('selectivity prefilter — the conjunction bug (MJC-74)', () => {

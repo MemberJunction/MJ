@@ -7,11 +7,11 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
-  createTenantPreRunViewHook,
-  createTenantPreSaveHook,
-  createTenantMiddleware,
+  CreateTenantPreRunViewHook,
+  CreateTenantPreSaveHook,
+  CreateTenantMiddleware,
   IsValidTenantId,
-  attachTenantContext,
+  AttachTenantContext,
 } from '../multiTenancy/index.js';
 import type { MultiTenancyConfig } from '../config.js';
 import { Metadata } from '@memberjunction/core';
@@ -76,7 +76,7 @@ function makeConfig(overrides: Partial<MultiTenancyConfig> = {}): MultiTenancyCo
   };
 }
 
-type MockUser = Parameters<ReturnType<typeof createTenantPreRunViewHook>>[1];
+type MockUser = Parameters<ReturnType<typeof CreateTenantPreRunViewHook>>[1];
 
 function makeUser(tenantId?: string, roles: string[] = []): MockUser {
   return {
@@ -91,7 +91,7 @@ function makeUser(tenantId?: string, roles: string[] = []): MockUser {
 describe('Multi-Tenancy Security Edge Cases', () => {
   describe('SQL injection in tenant ID', () => {
     it('should escape quotes so an injection attempt stays INSIDE the string literal', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser("' OR 1=1 --");
 
@@ -105,7 +105,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should escape quotes in a UNION attack payload', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser("' UNION SELECT * FROM Users --");
 
@@ -115,7 +115,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should escape quotes in a stacked-statement payload', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser("abc'; DROP TABLE Customers; --");
 
@@ -177,19 +177,19 @@ describe('Multi-Tenancy Security Edge Cases', () => {
 
     it('throws on an invalid tenant id instead of attaching it', () => {
       const user = makePlainUser();
-      expect(() => attachTenantContext(user, "x' OR '1'='1", 'header')).toThrow(/Invalid tenant identifier/);
+      expect(() => AttachTenantContext(user, "x' OR '1'='1", 'header')).toThrow(/Invalid tenant identifier/);
       expect(user.TenantContext).toBeUndefined();
     });
 
     it('throws on empty and oversized tenant ids', () => {
       const user = makePlainUser();
-      expect(() => attachTenantContext(user, '', 'custom')).toThrow(/Invalid tenant identifier/);
-      expect(() => attachTenantContext(user, 'a'.repeat(129), 'custom')).toThrow(/Invalid tenant identifier/);
+      expect(() => AttachTenantContext(user, '', 'custom')).toThrow(/Invalid tenant identifier/);
+      expect(() => AttachTenantContext(user, 'a'.repeat(129), 'custom')).toThrow(/Invalid tenant identifier/);
     });
 
     it('attaches a valid tenant id with the given source', () => {
       const user = makePlainUser();
-      attachTenantContext(user, 'tenant_1.a-b', 'linkedEntity');
+      AttachTenantContext(user, 'tenant_1.a-b', 'linkedEntity');
       expect(user.TenantContext).toEqual<TenantContext>({ TenantID: 'tenant_1.a-b', Source: 'linkedEntity' });
     });
   });
@@ -198,7 +198,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
 
   describe('tenant column must resolve to a stored field', () => {
     it('produces an escaped-value predicate with a quoted identifier for a valid setup', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser("t'1"); // legal only via non-header sources; must still be escaped
 
@@ -207,7 +207,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('throws when the configured tenant column does not exist on the entity', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({ defaultTenantColumn: 'NoSuchColumn' }));
+      const hook = CreateTenantPreRunViewHook(makeConfig({ defaultTenantColumn: 'NoSuchColumn' }));
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser('tenant-1');
 
@@ -215,7 +215,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('throws when the tenant column resolves only to a VIRTUAL field', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({ defaultTenantColumn: 'OrganizationName' }));
+      const hook = CreateTenantPreRunViewHook(makeConfig({ defaultTenantColumn: 'OrganizationName' }));
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser('tenant-1');
 
@@ -223,7 +223,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('throws when an entityColumnMappings override points at a nonexistent column', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({
+      const hook = CreateTenantPreRunViewHook(makeConfig({
         entityColumnMappings: { 'Customers': "Bad]Column" },
       }));
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
@@ -237,7 +237,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
       // @ts-expect-error — simulating the no-provider-available case
       Metadata.Provider = undefined;
       try {
-        const hook = createTenantPreRunViewHook(makeConfig());
+        const hook = CreateTenantPreRunViewHook(makeConfig());
         const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
         const user = makeUser('tenant-1');
 
@@ -255,7 +255,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
 
   describe('Tenant ID boundary values', () => {
     it('should not filter when tenant ID is empty string (falsy)', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       // Empty string is falsy → makeUser sets TenantContext = undefined
       // This matches createTenantMiddleware behavior: `if (tenantId)` skips empty strings
@@ -267,7 +267,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
 
     it('should handle very long tenant ID', () => {
       const longId = 'a'.repeat(1000);
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser(longId);
 
@@ -277,7 +277,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
 
     it('should handle UUID tenant ID (standard format)', () => {
       const uuid = '550e8400-e29b-41d4-a716-446655440000';
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser(uuid);
 
@@ -286,7 +286,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should handle tenant ID with special characters', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser('tenant<script>alert(1)</script>');
 
@@ -299,7 +299,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
 
   describe('Admin role matching', () => {
     it('should be case-insensitive for admin role matching', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({ adminRoles: ['Admin'] }));
+      const hook = CreateTenantPreRunViewHook(makeConfig({ adminRoles: ['Admin'] }));
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
 
       // User role is 'admin' (lowercase), config has 'Admin'
@@ -309,7 +309,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should handle whitespace in role names', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({ adminRoles: [' Admin '] }));
+      const hook = CreateTenantPreRunViewHook(makeConfig({ adminRoles: [' Admin '] }));
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
 
       const user = makeUser('tenant-1', ['Admin']);
@@ -318,7 +318,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should not bypass for non-admin roles', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({ adminRoles: ['Admin'] }));
+      const hook = CreateTenantPreRunViewHook(makeConfig({ adminRoles: ['Admin'] }));
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
 
       const user = makeUser('tenant-1', ['User', 'Editor']);
@@ -327,7 +327,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should handle user with empty roles array', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
 
       const user = makeUser('tenant-1', []);
@@ -340,7 +340,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
 
   describe('Entity name matching', () => {
     it('should be case-insensitive for entity names in allowlist', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({
+      const hook = CreateTenantPreRunViewHook(makeConfig({
         scopingStrategy: 'allowlist',
         scopedEntities: ['customers'],
       }));
@@ -352,7 +352,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should handle whitespace in entity names', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({
+      const hook = CreateTenantPreRunViewHook(makeConfig({
         scopingStrategy: 'allowlist',
         scopedEntities: [' Customers '],
       }));
@@ -364,7 +364,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should not filter when EntityName is missing from params', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { ExtraFilter: '' } as RunViewParams;
       const user = makeUser('tenant-1');
 
@@ -377,7 +377,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
 
   describe('createTenantMiddleware', () => {
     it('should skip tenant resolution when no userPayload on request', () => {
-      const middleware = createTenantMiddleware(makeConfig());
+      const middleware = CreateTenantMiddleware(makeConfig());
       const req = { headers: { 'x-tenant-id': 'tenant-1' } } as unknown as Parameters<typeof middleware>[0];
       const res = {} as Parameters<typeof middleware>[1];
       const next = vi.fn();
@@ -388,7 +388,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should attach TenantContext to a CLONED userRecord when userPayload and header are present', () => {
-      const middleware = createTenantMiddleware(makeConfig());
+      const middleware = CreateTenantMiddleware(makeConfig());
       const userRecord = { ID: 'u1' } as Record<string, unknown>;
       const userPayload = { userRecord, email: 'test@test.com', sessionId: 's1' };
       const req = {
@@ -414,7 +414,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should reject an invalid tenant header with 400 and never attach or continue', () => {
-      const middleware = createTenantMiddleware(makeConfig());
+      const middleware = CreateTenantMiddleware(makeConfig());
       const userRecord = { ID: 'u1' } as Record<string, unknown>;
       const userPayload = { userRecord, email: 'test@test.com', sessionId: 's1' };
       const req = {
@@ -437,7 +437,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should handle case-insensitive header name', () => {
-      const middleware = createTenantMiddleware(makeConfig({ tenantHeader: 'X-Tenant-ID' }));
+      const middleware = CreateTenantMiddleware(makeConfig({ tenantHeader: 'X-Tenant-ID' }));
       const userRecord = { ID: 'u1' } as Record<string, unknown>;
       const userPayload = { userRecord, email: 'test@test.com', sessionId: 's1' };
       const req = {
@@ -457,7 +457,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should not set TenantContext when header is missing', () => {
-      const middleware = createTenantMiddleware(makeConfig());
+      const middleware = CreateTenantMiddleware(makeConfig());
       const userRecord = { ID: 'u1' } as Record<string, unknown>;
       const req = {
         headers: {},
@@ -472,7 +472,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should reject a repeated header (array value) with 400 rather than guessing which value applies', () => {
-      const middleware = createTenantMiddleware(makeConfig());
+      const middleware = CreateTenantMiddleware(makeConfig());
       const userRecord = { ID: 'u1' } as Record<string, unknown>;
       const userPayload = { userRecord, email: 'test@test.com', sessionId: 's1' };
       const req = {
@@ -494,7 +494,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('two concurrent requests for the same shared user with different headers do not cross-contaminate', () => {
-      const middleware = createTenantMiddleware(makeConfig());
+      const middleware = CreateTenantMiddleware(makeConfig());
       const sharedUserRecord = { ID: 'u1', UserRoles: [] } as unknown as Record<string, unknown>;
 
       const reqA = {
@@ -527,11 +527,11 @@ describe('Multi-Tenancy Security Edge Cases', () => {
         IsSaved: isSaved,
         Get: vi.fn((col: string) => col === 'OrganizationID' ? tenantValue : null),
         Set: vi.fn(),
-      } as unknown as Parameters<ReturnType<typeof createTenantPreSaveHook>>[0];
+      } as unknown as Parameters<ReturnType<typeof CreateTenantPreSaveHook>>[0];
     }
 
     it('should reject save with SQL injection in entity tenant column', () => {
-      const hook = createTenantPreSaveHook(makeConfig());
+      const hook = CreateTenantPreSaveHook(makeConfig());
       const entity = makeEntity('Customers', "' OR 1=1 --", true);
       const user = makeUser('tenant-abc');
 
@@ -541,13 +541,13 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should auto-assign tenant for new record even when entity has no EntityInfo', () => {
-      const hook = createTenantPreSaveHook(makeConfig());
+      const hook = CreateTenantPreSaveHook(makeConfig());
       const entity = {
         EntityInfo: undefined,
         IsSaved: false,
         Get: vi.fn(() => null),
         Set: vi.fn(),
-      } as unknown as Parameters<ReturnType<typeof createTenantPreSaveHook>>[0];
+      } as unknown as Parameters<ReturnType<typeof CreateTenantPreSaveHook>>[0];
       const user = makeUser('tenant-abc');
 
       // No EntityInfo → no entity name → not scoped → allow
@@ -556,7 +556,7 @@ describe('Multi-Tenancy Security Edge Cases', () => {
     });
 
     it('should handle null contextUser gracefully', () => {
-      const hook = createTenantPreSaveHook(makeConfig());
+      const hook = CreateTenantPreSaveHook(makeConfig());
       const entity = makeEntity('Customers', 'tenant-abc', true);
 
       const result = hook(entity, undefined);

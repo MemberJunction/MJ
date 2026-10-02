@@ -106,12 +106,17 @@ export class WorkerPool {
     /**
      * Initialize the worker pool
      */
-    async initialize(): Promise<void> {
+    async Initialize(): Promise<void> {
         LogStatus('Initializing code execution worker pool with ' + this.poolSize + ' workers');
 
         for (let i = 0; i < this.poolSize; i++) {
             await this.createWorker(i);
         }
+    }
+
+    /** @deprecated Use {@link Initialize}. */
+    async initialize(): Promise<void> {
+        return this.Initialize();
     }
 
     /**
@@ -377,7 +382,7 @@ export class WorkerPool {
     /**
      * Execute code in an available worker
      */
-    async execute(params: CodeExecutionParams): Promise<CodeExecutionResult> {
+    async Execute(params: CodeExecutionParams): Promise<CodeExecutionResult> {
         if (this.isShuttingDown) {
             return {
                 success: false,
@@ -443,6 +448,11 @@ export class WorkerPool {
             // Try to process immediately
             this.processQueue();
         });
+    }
+
+    /** @deprecated Use {@link Execute}. */
+    async execute(params: CodeExecutionParams): Promise<CodeExecutionResult> {
+        return this.Execute(params);
     }
 
     /**
@@ -565,7 +575,7 @@ export class WorkerPool {
     /**
      * Get pool statistics
      */
-    getStats(): {
+    GetStats(): {
         totalWorkers: number;
         activeWorkers: number;
         busyWorkers: number;
@@ -582,10 +592,20 @@ export class WorkerPool {
         };
     }
 
+    /** @deprecated Use {@link GetStats}. */
+    getStats(): {
+        totalWorkers: number;
+        activeWorkers: number;
+        busyWorkers: number;
+        queueLength: number;
+    } {
+        return this.GetStats();
+    }
+
     /**
      * Shutdown the worker pool gracefully
      */
-    async shutdown(): Promise<void> {
+    async Shutdown(): Promise<void> {
         this.isShuttingDown = true;
         LogStatus('Shutting down code execution worker pool...');
 
@@ -611,21 +631,41 @@ export class WorkerPool {
                         return;
                     }
 
-                    worker.process.once('exit', () => resolve());
-                    worker.process.kill('SIGTERM');
-
-                    // Force kill after 5 seconds
-                    setTimeout(() => {
-                        if (!worker.process.killed) {
-                            worker.process.kill('SIGKILL');
+                    let forceKillTimer: NodeJS.Timeout | undefined;
+                    worker.process.once('exit', () => {
+                        if (forceKillTimer) {
+                            clearTimeout(forceKillTimer);
                         }
                         resolve();
+                    });
+                    worker.process.kill('SIGTERM');
+
+                    // Force kill after 5 seconds if the process is still running.
+                    // `worker.process.killed` becomes `true` synchronously as soon as `kill()`
+                    // successfully SENDS a signal (set inside Node's `kill()` itself, immediately) —
+                    // NOT once the process has actually exited — so it can't be used here to detect
+                    // "still running": the previous check, `!worker.process.killed`, was always
+                    // false by the time this timer fired (killed was already true from the SIGTERM
+                    // call above) and the SIGKILL escalation never actually ran. The `once('exit', ...)`
+                    // listener above is what tells us the process is truly gone, by clearing this
+                    // timer before it fires — so if this callback DOES run, the worker is still
+                    // alive and SIGKILL is unconditionally correct. The extra `resolve()` here is a
+                    // defensive fallback in case 'exit' never arrives.
+                    forceKillTimer = setTimeout(() => {
+                        worker.process.kill('SIGKILL');
+                        resolve();
                     }, 5000);
+                    forceKillTimer.unref();
                 });
             });
 
         await Promise.all(killPromises);
         LogStatus('Worker pool shutdown complete');
+    }
+
+    /** @deprecated Use {@link Shutdown}. */
+    async shutdown(): Promise<void> {
+        return this.Shutdown();
     }
 }
 

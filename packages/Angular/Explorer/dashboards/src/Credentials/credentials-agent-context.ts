@@ -22,7 +22,7 @@
  * values never enter this helper's input, so they cannot leak through its output.
  */
 
-import { boundNameList } from '../shared/agent-tool-validation';
+import { BoundNameList } from '../shared/agent-tool-validation';
 
 /** Standard tolerant result shape for the Credentials client-tool resolvers. */
 export interface CredentialsResolveResult<T> {
@@ -45,8 +45,13 @@ export type CredentialsTab = (typeof VALID_CREDENTIALS_TABS)[number];
  * @param tab - candidate tab string (may be anything the agent passes)
  * @returns true when `tab` is one of overview | credentials | types | categories | audit
  */
-export function isValidCredentialsTab(tab: unknown): tab is CredentialsTab {
+export function IsValidCredentialsTab(tab: unknown): tab is CredentialsTab {
     return typeof tab === 'string' && (VALID_CREDENTIALS_TABS as readonly string[]).includes(tab);
+}
+
+/** @deprecated Use {@link IsValidCredentialsTab}. */
+export function isValidCredentialsTab(tab: unknown): tab is CredentialsTab {
+    return IsValidCredentialsTab(tab);
 }
 
 /**
@@ -92,9 +97,9 @@ export interface CredentialsAgentContextInput {
  * @param input - the component's current non-sensitive state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildCredentialsAgentContext(input: CredentialsAgentContextInput): Record<string, unknown> {
-    const typeNames = boundNameList(input.TypeNames);
-    const categoryNames = boundNameList(input.CategoryNames);
+export function BuildCredentialsAgentContext(input: CredentialsAgentContextInput): Record<string, unknown> {
+    const typeNames = BoundNameList(input.TypeNames);
+    const categoryNames = BoundNameList(input.CategoryNames);
 
     return {
         ActiveTab: input.ActiveTab,
@@ -109,4 +114,9 @@ export function buildCredentialsAgentContext(input: CredentialsAgentContextInput
         CategoryNames: categoryNames,
         CategoryNamesTruncated: categoryNames.length < input.CategoryNames.length,
     };
+}
+
+/** @deprecated Use {@link BuildCredentialsAgentContext}. */
+export function buildCredentialsAgentContext(input: CredentialsAgentContextInput): Record<string, unknown> {
+    return BuildCredentialsAgentContext(input);
 }

@@ -12,9 +12,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildAPIKeysAgentContext,
-    isValidAPIKeysTab,
-    isValidAPIKeysFilter,
+    BuildAPIKeysAgentContext,
+    IsValidAPIKeysTab,
+    IsValidAPIKeysFilter,
     VALID_API_KEYS_TABS,
     VALID_API_KEYS_FILTERS,
     APIKeysAgentContextInput,
@@ -49,32 +49,32 @@ function makeInput(overrides: Partial<APIKeysAgentContextInput> = {}): APIKeysAg
 describe('isValidAPIKeysTab', () => {
     it('accepts the four known tabs', () => {
         for (const t of VALID_API_KEYS_TABS) {
-            expect(isValidAPIKeysTab(t)).toBe(true);
+            expect(IsValidAPIKeysTab(t)).toBe(true);
         }
     });
     it('rejects unknown / non-string values', () => {
-        expect(isValidAPIKeysTab('secrets')).toBe(false);
-        expect(isValidAPIKeysTab('Keys')).toBe(false); // case-sensitive
-        expect(isValidAPIKeysTab(null)).toBe(false);
-        expect(isValidAPIKeysTab(42)).toBe(false);
+        expect(IsValidAPIKeysTab('secrets')).toBe(false);
+        expect(IsValidAPIKeysTab('Keys')).toBe(false); // case-sensitive
+        expect(IsValidAPIKeysTab(null)).toBe(false);
+        expect(IsValidAPIKeysTab(42)).toBe(false);
     });
 });
 
 describe('isValidAPIKeysFilter', () => {
     it('accepts the six known filters', () => {
         for (const f of VALID_API_KEYS_FILTERS) {
-            expect(isValidAPIKeysFilter(f)).toBe(true);
+            expect(IsValidAPIKeysFilter(f)).toBe(true);
         }
     });
     it('rejects unknown values', () => {
-        expect(isValidAPIKeysFilter('leaked')).toBe(false);
-        expect(isValidAPIKeysFilter(undefined)).toBe(false);
+        expect(IsValidAPIKeysFilter('leaked')).toBe(false);
+        expect(IsValidAPIKeysFilter(undefined)).toBe(false);
     });
 });
 
 describe('buildAPIKeysAgentContext', () => {
     it('reports navigation, counts, and bounded names', () => {
-        const ctx = buildAPIKeysAgentContext(makeInput());
+        const ctx = BuildAPIKeysAgentContext(makeInput());
         expect(ctx['MainTab']).toBe('keys');
         expect(ctx['ListFilter']).toBe('all');
         expect(ctx['TotalKeys']).toBe(10);
@@ -85,20 +85,20 @@ describe('buildAPIKeysAgentContext', () => {
     });
 
     it('carries selection by id + friendly label only', () => {
-        const ctx = buildAPIKeysAgentContext(makeInput({ SelectedKeyId: 'abc-123', SelectedKeyLabel: 'CI pipeline' }));
+        const ctx = BuildAPIKeysAgentContext(makeInput({ SelectedKeyId: 'abc-123', SelectedKeyLabel: 'CI pipeline' }));
         expect(ctx['SelectedKeyId']).toBe('abc-123');
         expect(ctx['SelectedKeyLabel']).toBe('CI pipeline');
     });
 
     it('bounds key-label and app-name lists with a truncation flag', () => {
         const many = Array.from({ length: AGENT_CONTEXT_NAME_LIST_CAP + 8 }, (_, i) => `key-${i}`);
-        const ctx = buildAPIKeysAgentContext(makeInput({ KeyLabels: many }));
+        const ctx = BuildAPIKeysAgentContext(makeInput({ KeyLabels: many }));
         expect((ctx['VisibleKeyLabels'] as string[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
         expect(ctx['VisibleKeyLabelsTruncated']).toBe(true);
     });
 
     it('does not flag truncation when within the cap', () => {
-        const ctx = buildAPIKeysAgentContext(makeInput());
+        const ctx = BuildAPIKeysAgentContext(makeInput());
         expect(ctx['VisibleKeyLabelsTruncated']).toBe(false);
         expect(ctx['ApplicationNamesTruncated']).toBe(false);
     });
@@ -114,7 +114,7 @@ describe('buildAPIKeysAgentContext', () => {
             'secretvalue', 'hash', 'prefix', 'cleartext', 'plaintext', 'bearer',
         ];
 
-        const ctx = buildAPIKeysAgentContext(makeInput({
+        const ctx = BuildAPIKeysAgentContext(makeInput({
             KeyLabels: ['Hash injection attempt', 'token=abc'],
             SelectedKeyLabel: 'secret-looking-label',
         }));

@@ -1,11 +1,11 @@
 import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, FieldCategoryInfo } from '@memberjunction/core';
-import { logError, logStatus, logWarning } from '../Misc/status_logging';
+import { logError, logStatus, LogWarning } from '../Misc/status_logging';
 import { UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import fs from 'fs';
 import path from 'path';
 
 /** FNV-1a 32-bit over UTF-16 code units — stable across Node versions and machines. */
-export function stableHash32(s: string): number {
+export function StableHash32(s: string): number {
     let h = 0x811c9dc5;
     for (let i = 0; i < s.length; i++) {
         h ^= s.charCodeAt(i);
@@ -14,12 +14,22 @@ export function stableHash32(s: string): number {
     return h >>> 0;
 }
 
-export function assignSubModule(componentClassName: string, submoduleCount: number): number {
-    return stableHash32(componentClassName) % submoduleCount;
+/** @deprecated Use {@link StableHash32}. */
+export function stableHash32(s: string): number {
+    return StableHash32(s);
 }
-import { mjCoreSchema, outputOptionValue, configInfo, resolveEntityPackageName } from '../Config/config';
+
+export function AssignSubModule(componentClassName: string, submoduleCount: number): number {
+    return StableHash32(componentClassName) % submoduleCount;
+}
+
+/** @deprecated Use {@link AssignSubModule}. */
+export function assignSubModule(componentClassName: string, submoduleCount: number): number {
+    return AssignSubModule(componentClassName, submoduleCount);
+}
+import { mjCoreSchema, OutputOptionValue, configInfo, ResolveEntityPackageName } from '../Config/config';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
-import { sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
+import { SortBySequenceAndCreatedAt, SortRelatedEntities } from '../Misc/util';
 
 /**
  * Schemas whose entities should not appear as related-entity form tabs.
@@ -193,7 +203,7 @@ export class AngularClientGeneratorBase {
      * @param contextUser The user context for permission checking and personalization
      * @returns Promise<boolean> True if generation was successful, false otherwise
      */
-    public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo, outputType: 'Angular' | 'AngularCoreEntities' = 'Angular'): Promise<boolean> {
+    public async GenerateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo, outputType: 'Angular' | 'AngularCoreEntities' = 'Angular'): Promise<boolean> {
         try {
           const entityPath = path.join(directory, 'Entities');
 
@@ -267,8 +277,8 @@ export class AngularClientGeneratorBase {
               }
           }
       
-          const maxComponentsPerModule = outputOptionValue(outputType, 'maxComponentsPerModule', 25);
-          const submoduleCount = outputOptionValue(outputType, 'submoduleCount', 32);
+          const maxComponentsPerModule = OutputOptionValue(outputType, 'maxComponentsPerModule', 25);
+          const submoduleCount = OutputOptionValue(outputType, 'submoduleCount', 32);
       
           const moduleCode = this.generateAngularModule(componentImports, componentNames, relatedEntityModuleImports, sections, modulePrefix, maxComponentsPerModule, submoduleCount);
           fs.writeFileSync(path.join(directory, 'generated-forms.module.ts'), moduleCode);
@@ -280,6 +290,11 @@ export class AngularClientGeneratorBase {
           return false;
         }
       }
+
+    /** @deprecated Use {@link GenerateAngularCode}. */
+    public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo, outputType: 'Angular' | 'AngularCoreEntities' = 'Angular'): Promise<boolean> {
+        return this.GenerateAngularCode(entities, directory, modulePrefix, contextUser, outputType);
+    }
        
       
       /**
@@ -365,7 +380,7 @@ ${moduleCode}
           }[]>();
 
           for (const item of componentNames) {
-              const bucketIndex = assignSubModule(item.componentName, submoduleCount);
+              const bucketIndex = AssignSubModule(item.componentName, submoduleCount);
               let bucket = buckets.get(bucketIndex);
               if (!bucket) {
                    bucket = [];
@@ -385,7 +400,7 @@ ${moduleCode}
 
               // Soft limit warning if a bucket exceeds maxComponentsPerModule
               if (itemsInBucket.length > maxComponentsPerModule) {
-                   logWarning(
+                   LogWarning(
                        `Angular submodule ${this.SubModuleBaseName}${bucketIndex} has ${itemsInBucket.length} components, ` +
                        `exceeding maxComponentsPerModule (${maxComponentsPerModule}). Consider increasing submoduleCount.`
                    );
@@ -566,7 +581,7 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
 
         const entityPkg = entity.SchemaName === mjCoreSchema
             ? '@memberjunction/core-entities'
-            : resolveEntityPackageName(entity.SchemaName);
+            : ResolveEntityPackageName(entity.SchemaName);
         return `import { Component } from '@angular/core';
 import { ${entityObjectClass}Entity } from '${entityPkg}';
 import { RegisterClass } from '@memberjunction/global';
@@ -644,7 +659,7 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
       protected generateAngularAdditionalSections(entity: EntityInfo, startIndex: number, fieldCategories?: Record<string, FieldCategoryInfo> | null): AngularFormSectionInfo[] {
           const sections: AngularFormSectionInfo[] = [];
           let index = startIndex;
-          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
           for (const field of sortedFields) {
               if (field.IncludeInGeneratedForm) {
                   if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== ''  && field.IncludeInGeneratedForm)
@@ -752,7 +767,7 @@ ${indentedFormHTML}
       
           // figure out which fields will be in this section first
           section.Fields = [];
-          const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+          const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
           for (const field of sortedFields) {
               if (field.IncludeInGeneratedForm) {
                   let bMatch: boolean = false;
@@ -922,7 +937,7 @@ ${indentedFormHTML}
         const excludedSchemas = schemasExcludedFromGeneratedForms();
 
         // Sort related entities deterministically using the shared sort with cascading tiebreakers
-        const sortedRelatedEntities = sortRelatedEntities(
+        const sortedRelatedEntities = SortRelatedEntities(
             entity.RelatedEntities.filter(re => {
                 if (!re.DisplayInForm || isaChildIDs.has(re.RelatedEntityID)) {
                     return false;

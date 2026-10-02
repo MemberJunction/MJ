@@ -39,7 +39,7 @@ export type CRUDSprocType = 'create' | 'update' | 'delete';
  * - For CREATE: PKs only when not auto-incrementing (otherwise the database
  *   supplies the value); non-PKs only if the field allows update via API.
  */
-export function shouldIncludeFieldInParams(field: EntityFieldInfo, sprocType: CRUDSprocType): boolean {
+export function ShouldIncludeFieldInParams(field: EntityFieldInfo, sprocType: CRUDSprocType): boolean {
     if (field.IsVirtual) return false;
     if (field.IsSpecialDateField) return false;
 
@@ -55,6 +55,11 @@ export function shouldIncludeFieldInParams(field: EntityFieldInfo, sprocType: CR
 
     // Non-PK on create or update: must be writable via API.
     return field.AllowUpdateAPI;
+}
+
+/** @deprecated Use {@link ShouldIncludeFieldInParams}. */
+export function shouldIncludeFieldInParams(field: EntityFieldInfo, sprocType: CRUDSprocType): boolean {
+    return ShouldIncludeFieldInParams(field, sprocType);
 }
 
 /**
@@ -73,8 +78,13 @@ export function shouldIncludeFieldInParams(field: EntityFieldInfo, sprocType: CR
  * narrowing is being phased out as the JSON-arg branch takes over for wide
  * entities (see issue #2552).
  */
-export function needsClearCompanionBroadRule(field: EntityFieldInfo): boolean {
+export function NeedsClearCompanionBroadRule(field: EntityFieldInfo): boolean {
     return field.AllowsNull;
+}
+
+/** @deprecated Use {@link NeedsClearCompanionBroadRule}. */
+export function needsClearCompanionBroadRule(field: EntityFieldInfo): boolean {
+    return NeedsClearCompanionBroadRule(field);
 }
 
 /**
@@ -86,12 +96,17 @@ export function needsClearCompanionBroadRule(field: EntityFieldInfo): boolean {
  * `_Clear` companions because DELETE only takes PK params, and PKs aren't
  * nullable.
  */
-export function projectedParamCount(entity: EntityInfo, sprocType: CRUDSprocType): number {
-    const includedFields = entity.Fields.filter((f) => shouldIncludeFieldInParams(f, sprocType));
+export function ProjectedParamCount(entity: EntityInfo, sprocType: CRUDSprocType): number {
+    const includedFields = entity.Fields.filter((f) => ShouldIncludeFieldInParams(f, sprocType));
     const baseCount = includedFields.length;
     const clearCompanionCount =
-        sprocType === 'delete' ? 0 : includedFields.filter((f) => !f.IsPrimaryKey && needsClearCompanionBroadRule(f)).length;
+        sprocType === 'delete' ? 0 : includedFields.filter((f) => !f.IsPrimaryKey && NeedsClearCompanionBroadRule(f)).length;
     return baseCount + clearCompanionCount;
+}
+
+/** @deprecated Use {@link ProjectedParamCount}. */
+export function projectedParamCount(entity: EntityInfo, sprocType: CRUDSprocType): number {
+    return ProjectedParamCount(entity, sprocType);
 }
 
 /**
@@ -111,7 +126,12 @@ export function projectedParamCount(entity: EntityInfo, sprocType: CRUDSprocType
  * at runtime and by CodeGen at generation time, guaranteeing the two stay
  * in lockstep.
  */
-export function useJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType, paramLimit: number): boolean {
+export function UseJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType, paramLimit: number): boolean {
     if (!isFinite(paramLimit)) return false;
-    return projectedParamCount(entity, sprocType) >= paramLimit;
+    return ProjectedParamCount(entity, sprocType) >= paramLimit;
+}
+
+/** @deprecated Use {@link UseJsonArgShape}. */
+export function useJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType, paramLimit: number): boolean {
+    return UseJsonArgShape(entity, sprocType, paramLimit);
 }

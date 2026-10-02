@@ -8,7 +8,7 @@
 import { EntityInfo, IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { IRecordSetSource, SourceDescriptor } from '../interfaces';
 import { ProcessCursor, RecordBatch, RecordRef } from '../types';
-import { serializeRecordId } from './sourceUtil';
+import { SerializeRecordId } from './sourceUtil';
 
 /** A source backed by a saved User View. */
 export class ViewSource implements IRecordSetSource {
@@ -55,7 +55,7 @@ export class ViewSource implements IRecordSetSource {
         const rows = (result.Results ?? []) as Record<string, unknown>[];
         const records: RecordRef[] = rows.map((row) => ({
             EntityID: entity.ID,
-            RecordID: serializeRecordId(entity, row),
+            RecordID: SerializeRecordId(entity, row),
             Record: row,
         }));
         return {

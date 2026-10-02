@@ -59,9 +59,9 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         const { driver } = driverFor({ 'acgi.demographic.postal_code': MATCHES_NOTHING });
         const r = await compose([c], [], new KeyVerifier(driver));
 
-        expect(r.emitted).toBe(1);
+        expect(r.Emitted).toBe(1);
         expect(r.droppedMembers).toBe(1);
-        const kept = r.annotatedClusters[0].members.map((m) => m.column);
+        const kept = r.AnnotatedClusters[0].members.map((m) => m.column);
         expect(kept).toEqual(['cust_id', 'cust_id']);
         expect(kept).not.toContain('postal_code');
     });
@@ -74,7 +74,7 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         const { driver } = driverFor({ 'acgi.demographic.postal_code': MATCHES_NOTHING });
         const r = await compose([c], [], new KeyVerifier(driver));
 
-        expect(r.emitted).toBe(0);
+        expect(r.Emitted).toBe(0);
         expect(r.droppedUnverified).toBe(1);
         expect(r.output).toEqual({});
         expect(r.verification[0].dropped).toBe(true);
@@ -91,7 +91,7 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
 
         // code_alt survives the probe, but everything left is on s.t1 — there is no
         // cross-table organic key to emit.
-        expect(r.emitted).toBe(0);
+        expect(r.Emitted).toBe(0);
         expect(r.droppedUnverified).toBe(1);
     });
 
@@ -106,7 +106,7 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         const { driver } = driverFor({ 'elevate.app_user.remote_user_id': CANNOT_COMPARE });
         const r = await compose([c], [], new KeyVerifier(driver));
 
-        expect(r.emitted).toBe(1);
+        expect(r.Emitted).toBe(1);
         expect(r.droppedMembers).toBe(0);
         expect(r.verification[0].results[0].status).toBe('Unprobed');
         expect(r.verification[0].results[0].reason).toContain('not comparable');
@@ -132,7 +132,7 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         const c = cluster('cluster_5', 'x', [member('s', 't1', 'x'), member('s', 't2', 'x')]);
         const r = await compose([c], [], null);
 
-        expect(r.emitted).toBe(1);
+        expect(r.Emitted).toBe(1);
         expect(r.droppedUnverified).toBe(0);
         expect(r.verification[0].results).toEqual([]);
     });
@@ -150,7 +150,7 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         expect(probed.length).toBe(2);
         expect(verifier.budget.exhausted).toBe(true);
         // The third cluster's member is Unprobed, so it is KEPT, not dropped.
-        expect(r.emitted).toBe(3);
+        expect(r.Emitted).toBe(3);
         expect(r.verification[2].results[0].status).toBe('Unprobed');
         expect(r.verification[2].results[0].reason).toContain('budget exhausted');
     });

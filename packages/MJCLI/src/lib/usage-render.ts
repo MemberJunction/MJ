@@ -8,7 +8,7 @@ type LogFn = (message: string) => void;
  * {@link SerializeResult} the runtime host uses (single source of truth). For
  * `text`, the caller supplies pre-rendered human lines.
  */
-export function emitUsage(log: LogFn, format: OutputFormat, result: MJCLIResult, textLines: string[]): void {
+export function EmitUsage(log: LogFn, format: OutputFormat, result: MJCLIResult, textLines: string[]): void {
   if (format === 'json' || format === 'md') {
     // Pretty only when a human is watching; a pipe gets one compact line.
     log(SerializeResult(result, format, { pretty: process.stdout.isTTY === true }));
@@ -17,8 +17,13 @@ export function emitUsage(log: LogFn, format: OutputFormat, result: MJCLIResult,
   }
 }
 
+/** @deprecated Use {@link EmitUsage}. */
+export function emitUsage(log: LogFn, format: OutputFormat, result: MJCLIResult, textLines: string[]): void {
+  return EmitUsage(log, format, result, textLines);
+}
+
 /** Human-readable tier-1 domain map. */
-export function renderDomainMap(map: UsageDomainMap): string[] {
+export function RenderDomainMap(map: UsageDomainMap): string[] {
   const lines: string[] = [];
   lines.push(chalk.bold('\nmj — command domains'));
   lines.push(chalk.gray(map.guidance) + '\n');
@@ -33,8 +38,13 @@ export function renderDomainMap(map: UsageDomainMap): string[] {
   return lines;
 }
 
+/** @deprecated Use {@link RenderDomainMap}. */
+export function renderDomainMap(map: UsageDomainMap): string[] {
+  return RenderDomainMap(map);
+}
+
 /** Human-readable tier-2 domain detail. */
-export function renderDomainDetail(detail: UsageDomainDetail): string[] {
+export function RenderDomainDetail(detail: UsageDomainDetail): string[] {
   const lines: string[] = [];
   lines.push(chalk.bold(`\nmj ${detail.domain} — commands`));
   if (detail.commands.length === 0) {
@@ -56,6 +66,11 @@ export function renderDomainDetail(detail: UsageDomainDetail): string[] {
     }
   }
   return lines;
+}
+
+/** @deprecated Use {@link RenderDomainDetail}. */
+export function renderDomainDetail(detail: UsageDomainDetail): string[] {
+  return RenderDomainDetail(detail);
 }
 
 function formatRuntime(cmd: PluginUsage): string {
