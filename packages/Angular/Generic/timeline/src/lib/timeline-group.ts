@@ -8,12 +8,30 @@
  * @module @memberjunction/ng-timeline/timeline-group
  */
 
-import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, IsDateOnlySQLType, Metadata, RunView } from '@memberjunction/core';
 import {
   TimelineCardConfig,
   TimelineEventConfig,
   DEFAULT_CARD_CONFIG
 } from './types';
+
+// ============================================================================
+// HELPER FUNCTION - CALENDAR DAYS
+// ============================================================================
+
+/**
+ * A SQL `date` value re-anchored on LOCAL midnight of the day it stores.
+ *
+ * A calendar day arrives as UTC midnight. The timeline groups and labels every event with local
+ * getters (day, week, month, quarter, year segments and its own date formatter), which read that as
+ * the previous day west of Greenwich: an event dated Oct 1 fell into a "September 30" day segment
+ * and, on the 1st of a month, into the prior month. Carrying the day as local midnight makes every
+ * one of those local readings return the stored day.
+ */
+function calendarDayAsLocalDate(date: Date): Date {
+  if (isNaN(date.getTime())) return date;
+  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
 
 // ============================================================================
 // HELPER FUNCTION - FIELD VALUE ACCESS
@@ -440,13 +458,37 @@ export class TimelineGroup<T = any> {
    */
   GetDate(record: T): Date {
     const value = this.GetValue(record, this.DateFieldName);
+    let date: Date;
     if (value instanceof Date) {
-      return value;
+      date = value;
+    } else if (typeof value === 'string' || typeof value === 'number') {
+      date = new Date(value);
+    } else {
+      return new Date();
     }
-    if (typeof value === 'string' || typeof value === 'number') {
-      return new Date(value);
+    return this.isDateOnlyDateField(record) ? calendarDayAsLocalDate(date) : date;
+  }
+
+  /**
+   * Whether `DateFieldName` is a SQL `date` column (a calendar day), from the record's own entity
+   * metadata or, for plain objects, the group's `EntityName`. Unknown metadata means "an instant".
+   */
+  private isDateOnlyDateField(record: T): boolean {
+    const fieldName = this.DateFieldName?.trim().toLowerCase();
+    if (!fieldName) return false;
+    const entityInfo = (record as { EntityInfo?: EntityInfo } | null)?.EntityInfo ?? this.groupEntityInfo();
+    const field = entityInfo?.Fields?.find(f => f.Name.trim().toLowerCase() === fieldName);
+    return IsDateOnlySQLType(field?.Type);
+  }
+
+  private groupEntityInfo(): EntityInfo | undefined {
+    if (!this.EntityName) return undefined;
+    const entityName = this.EntityName.trim().toLowerCase();
+    try {
+      return Metadata.Provider?.Entities?.find(e => e.Name.trim().toLowerCase() === entityName);
+    } catch {
+      return undefined;
     }
-    return new Date();
   }
 
   /** @deprecated Use {@link GetDate}. */

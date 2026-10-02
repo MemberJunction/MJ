@@ -5049,6 +5049,10 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     if (type.includes('int') || type.includes('decimal') || type.includes('float') || type.includes('numeric')) {
       return 'number';
     }
+    // A SQL `date` is a calendar day: exported as its stored day, never as an instant.
+    if (IsDateOnlySQLType(type)) {
+      return 'dateonly';
+    }
     if (type.includes('date') || type.includes('time')) {
       return 'date';
     }

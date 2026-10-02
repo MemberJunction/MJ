@@ -239,3 +239,21 @@ describe('ViewConfigPanelComponent.FormatPreviewValue', () => {
         });
     });
 });
+
+describe('EntityDataGridComponent export column types', () => {
+    // A `date` column exports as a calendar day (YYYY-MM-DD in CSV/JSON, a date cell in Excel); a
+    // timestamp keeps exporting as an instant.
+    const exportType = (sqlType: string): string | undefined => {
+        const grid = new EntityDataGridComponent(cdr, elementRef, {} as never, ngZone);
+        return (grid as unknown as { mapFieldTypeToExportType(t?: string): string | undefined }).mapFieldTypeToExportType(sqlType);
+    };
+
+    it('types a date column as dateonly', () => {
+        expect(exportType('date')).toBe('dateonly');
+    });
+
+    it('keeps timestamp columns as date', () => {
+        expect(exportType('datetimeoffset')).toBe('date');
+        expect(exportType('datetime2')).toBe('date');
+    });
+});
