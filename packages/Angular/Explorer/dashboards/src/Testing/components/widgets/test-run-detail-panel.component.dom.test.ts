@@ -24,6 +24,8 @@ class ScoreStub { @Input() score = 0; @Input() showBar = false; @Input() showIco
 class CostStub { @Input() cost = 0; @Input() showIcon = false; }
 @Component({ standalone: true, selector: 'app-oracle-breakdown-table', template: '<div class="stub-oracle"></div>' })
 class OracleStub { @Input() results: unknown[] = []; }
+@Component({ standalone: true, selector: 'mj-testing-rubric-result', template: '<div class="stub-rubric"></div>' })
+class RubricStub { @Input() OracleResults: unknown[] | null = null; @Input() Provider: unknown = null; }
 
 function testRun(over: Partial<TestRunSummary> = {}): TestRunSummary {
   return {
@@ -35,7 +37,7 @@ function testRun(over: Partial<TestRunSummary> = {}): TestRunSummary {
 
 const render = (inputs: Record<string, unknown>) =>
   renderComponentFixture(TestRunDetailPanelComponent, {
-    imports: [CommonModule, FormsModule, StatusBadgeStub, ScoreStub, CostStub, OracleStub],
+    imports: [CommonModule, FormsModule, StatusBadgeStub, ScoreStub, CostStub, OracleStub, RubricStub],
     declarations: [TestRunDetailPanelComponent],
     inputs,
   });
@@ -70,6 +72,15 @@ describe('TestRunDetailPanelComponent (DOM)', () => {
   it('renders the oracle breakdown when oracleResults is non-empty', () => {
     const fixture = render({ testRun: testRun(), oracleResults: [{ name: 'x' }], resultDetails: null });
     expect(query(fixture, '.stub-oracle')).not.toBeNull();
+  });
+
+  it('shows the per-criterion rubric result when the run was judged with a rubric', () => {
+    const fixture = render({
+      testRun: testRun(),
+      resultDetails: null,
+      oracleResults: [{ Name: 'rubric', Details: { Criteria: [{ Key: 'facts', NormalizedScore: 1, Rationale: 'Cited.' }] } }],
+    });
+    expect(query(fixture, '.stub-rubric')).not.toBeNull();
   });
 
   it('emits viewTarget with type/id when the target link is clicked', () => {
