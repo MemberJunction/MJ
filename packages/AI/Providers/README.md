@@ -38,7 +38,7 @@ Services that provide access to multiple models through a single API.
 |---------|-----|-------------|
 | [Fireworks](./Fireworks/README.md) | `@memberjunction/ai-fireworks` | Wrapper for Fireworks.ai AI Models |
 | [OpenRouter](./OpenRouter/README.md) | `@memberjunction/ai-openrouter` | Wrapper for OpenRouter AI inference services |
-| [SystemOne](./SystemOne/README.md) | `@memberjunction/ai-systemone` | Decision models on any System One server (`/v1/systemone`): Kev on Modal, llama.cpp `llama-server`, TypeSafe |
+| [SystemOne](./SystemOne/README.md) | `@memberjunction/ai-systemone` | Decision models on any System One server (`/v1/systemone`): Kev on Modal, llama.cpp `llama-server`, TypeSafe; and Perplexity's Decisions API (`pplx-decider-v1-27b`) |
 
 ### Local Inference
 
