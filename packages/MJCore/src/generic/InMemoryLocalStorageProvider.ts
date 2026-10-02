@@ -25,6 +25,12 @@ export class InMemoryLocalStorageProvider implements ILocalStorageProvider {
     public readonly SharesReferences = true;
 
     /**
+     * `false` — this store dies with the process, so nothing written here is ever read back by
+     * another process. See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public readonly SupportsCrossProcessPersistence = false;
+
+    /**
      * Gets or creates a category map
      */
     private getCategoryMap(category: string): Map<string, unknown> {
