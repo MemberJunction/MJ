@@ -125,7 +125,8 @@ const TIER_1 = [
 const TIER_2 = [
     '@memberjunction/ai-anthropic', '@memberjunction/ai-assemblyai', '@memberjunction/ai-azure',
     '@memberjunction/ai-bedrock', '@memberjunction/ai-betty-bot', '@memberjunction/ai-blackforestlabs',
-    '@memberjunction/ai-cerebras', '@memberjunction/ai-cohere', '@memberjunction/ai-deepinfra',
+    '@memberjunction/ai-cerebras', '@memberjunction/ai-cloudflare', '@memberjunction/ai-cohere',
+    '@memberjunction/ai-deepinfra',
     '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-fireworks', '@memberjunction/ai-gemini', '@memberjunction/ai-groq',
     '@memberjunction/ai-heygen', '@memberjunction/ai-inception', '@memberjunction/ai-inworld',

@@ -91,6 +91,12 @@ AI_VENDOR_API_KEY__OPENROUTERDECISION=sk-or-...   # the same OpenRouter key as A
 Without a key the runner skips Jev and falls back to the next decision model (`LLM Decision`), and
 logs that once per process.
 
+**The wire format.** Jev speaks the System One decisions format. `OpenRouterDecision` extends
+`BaseSystemOneDecision` (`@memberjunction/ai`), which owns the request and answer mapping; this class
+supplies only the endpoint and the default model. Cloudflare's Clef models speak the same format on
+Workers AI, through `CloudflareDecision` in
+[`@memberjunction/ai-cloudflare`](../Cloudflare/README.md).
+
 ## How It Works
 
 `OpenRouterLLM` is a thin subclass of `OpenAILLM` that redirects all API calls to OpenRouter's endpoint at `https://openrouter.ai/api/v1`. Since OpenRouter implements an OpenAI-compatible API, all chat, streaming, and parameter handling logic is inherited from the OpenAI provider.

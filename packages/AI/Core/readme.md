@@ -27,6 +27,7 @@ Every AI capability is represented by an abstract base class. Provider packages 
 | `BaseVideoGenerator` | Avatar video generation (`Video` models) | `CreateAvatarVideo()`, `GetAvatars()` |
 | `BaseReranker` | Document reranking for retrieval | `Rerank()` |
 | `BaseDecision` | Typed decisions (Likelihood, Choice, Score) with a probability per answer | `Decide()` |
+| `BaseSystemOneDecision` | A `BaseDecision` for APIs that speak the System One decisions format (`noul` / `choice` / `score`): it builds the request, maps the answers, renormalises the distributions and records usage. A subclass supplies the endpoint, headers, model name and response unwrapping through protected hooks, and `SendRequest` is its one network call. Extended by `OpenRouterDecision` (Jev) and `CloudflareDecision` (Clef) | `Decide()` |
 | `BaseRealtimeModel` | Live, full-duplex, tool-calling realtime sessions (voice) | `StartSession()`, `CreateClientSession()` |
 
 All inherit from `BaseModel`, which manages API key storage and provides the `@RegisterClass` integration point.

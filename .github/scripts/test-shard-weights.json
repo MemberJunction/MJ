@@ -42,6 +42,7 @@
     "@memberjunction/ai-bridge-zoom": 3.6,
     "@memberjunction/ai-cerebras": 2.2,
     "@memberjunction/ai-cli": 1.2,
+    "@memberjunction/ai-cloudflare": 0.7,
     "@memberjunction/ai-cohere": 1.8,
     "@memberjunction/ai-core-plus": 14.6,
     "@memberjunction/ai-elevenlabs": 3.5,

@@ -52,6 +52,7 @@
     "@memberjunction/ai-betty-bot": "6.2.0-edge.1",
     "@memberjunction/ai-blackforestlabs": "6.2.0-edge.1",
     "@memberjunction/ai-cerebras": "6.2.0-edge.1",
+    "@memberjunction/ai-cloudflare": "6.2.0-edge.1",
     "@memberjunction/ai-cohere": "6.2.0-edge.1",
     "@memberjunction/ai-core-plus": "6.2.0-edge.1",
     "@memberjunction/ai-deepinfra": "6.2.0-edge.1",

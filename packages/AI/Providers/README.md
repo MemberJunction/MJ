@@ -27,6 +27,7 @@ Managed AI services offered through major cloud platforms.
 |---------|-----|-------------|
 | [Azure](./Azure/README.md) | `@memberjunction/ai-azure` | Azure AI Provider for MemberJunction |
 | [Bedrock](./Bedrock/readme.md) | `@memberjunction/ai-bedrock` | Wrapper for Amazon Bedrock AI Models |
+| [Cloudflare](./Cloudflare/README.md) | `@memberjunction/ai-cloudflare` | Cloudflare Workers AI decision models (Clef, Clef-flash) |
 | [Vertex](./Vertex/README.md) | `@memberjunction/ai-vertex` | Wrapper for Google Vertex AI Models |
 
 ### Inference Routers and Aggregators

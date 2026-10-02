@@ -363,6 +363,7 @@ LLM, embedding, cloud-platform, local-inference, and specialty AI provider imple
 |---------|-----|-------------|
 | [Azure](./packages/AI/Providers/Azure/README.md) | `@memberjunction/ai-azure` | Azure AI Provider for MemberJunction |
 | [Bedrock](./packages/AI/Providers/Bedrock/readme.md) | `@memberjunction/ai-bedrock` | Wrapper for Amazon Bedrock AI Models |
+| [Cloudflare](./packages/AI/Providers/Cloudflare/README.md) | `@memberjunction/ai-cloudflare` | Cloudflare Workers AI decision models (Clef, Clef-flash) |
 | [Vertex](./packages/AI/Providers/Vertex/README.md) | `@memberjunction/ai-vertex` | Wrapper for Google Vertex AI Models |
 
 **Inference Routers and Aggregators**
