@@ -281,7 +281,38 @@ if (session) {
 | Property | Type | Description |
 |----------|------|-------------|
 | `IsConnected` | `boolean` | Whether the client has an active connection (transient — auto-reconnects). |
-| `Client` | `Redis` | The underlying `ioredis` client for advanced operations (pub/sub, streams, etc.). |
+| `IsPubSubEnabled` | `boolean` | Whether the provider was created with `enablePubSub`. When `false`, the channel methods below do nothing. |
+| `Client` | `Redis` | The underlying `ioredis` client, for commands the provider does not wrap (streams, etc.). Use the channel methods below for pub/sub. |
+
+#### Named Channels (Application Pub/Sub)
+
+Besides cache invalidation, the provider carries messages on channels you name. They use the provider's existing publisher and subscriber connections, so an application needs no Redis clients of its own.
+
+| Method | Description |
+|--------|-------------|
+| `PublishMessage(channel, payload)` | Fire-and-forget. A failure is logged, never raised. |
+| `PublishMessageAndWait(channel, payload)` | Resolves to the number of subscribers that received the message (`0` = nobody listening). Rejects if pub/sub is disabled or Redis rejects the publish. While disconnected it waits for the connection, so race it against a timeout if you need a deadline. |
+| `SubscribeToChannel(channel, handler)` | Registers a handler (sync or async) and returns an unsubscribe function. Removing a channel's last handler unsubscribes it in Redis. |
+
+```typescript
+const redis = new RedisLocalStorageProvider({ url: process.env.REDIS_URL, keyPrefix: 'myapp', enablePubSub: true });
+await redis.StartListening();
+
+// Every replica listens; the one that owns the request acts on it.
+const stop = await redis.SubscribeToChannel('abort', (raw) => {
+    const { requestId, origin } = JSON.parse(raw) as { requestId: string; origin: string };
+    if (origin !== replicaId) abortLocally(requestId);
+});
+
+// Any replica can ask, and learns whether anyone heard it.
+const receivers = await redis.PublishMessageAndWait('abort', JSON.stringify({ requestId, origin: replicaId }));
+```
+
+Things to know:
+
+- **Channels are prefixed.** `'abort'` becomes `myapp:abort`, so applications sharing one Redis under different key prefixes do not hear each other. The name `__pubsub__` is reserved for cache invalidation and is refused.
+- **No echo suppression.** A process subscribed to a channel receives its own messages. Stamp an origin on the payload and check it, as above.
+- **No replay.** Messages published while a subscriber is disconnected are never delivered to it.
 
 ## Testing
 

@@ -19,7 +19,7 @@
  * });
  * ```
  */
-export { RedisLocalStorageProvider, RedisProviderConfig, CachePublishMode, KeyLockTimeoutError, KeyLockLostError } from './RedisLocalStorageProvider.js';
+export { RedisLocalStorageProvider, RedisProviderConfig, CachePublishMode, ChannelMessageHandler, KeyLockTimeoutError, KeyLockLostError } from './RedisLocalStorageProvider.js';
 export {
     ClearSharedCacheCategories,
     SHARED_CACHE_WRITE_CATEGORIES,
