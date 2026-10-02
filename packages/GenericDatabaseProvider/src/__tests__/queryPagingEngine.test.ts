@@ -832,7 +832,7 @@ ORDER BY ts.Revenue DESC`;
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// stripOuterLimitOffset — PostgreSQL's counterpart to the SQL Server TOP strip
+// StripOuterLimitOffset — PostgreSQL's counterpart to the SQL Server TOP strip
 //
 // buildDataSQL appends `LIMIT n OFFSET m` unconditionally, so a query that already ends in its
 // own `LIMIT` was handed a SECOND one: `… LIMIT 20 LIMIT 100 OFFSET 0`, a parse error. Agent and
@@ -842,54 +842,54 @@ ORDER BY ts.Revenue DESC`;
 // CTE body or a subquery is part of that subquery's meaning and must survive untouched.
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('QueryPagingEngine.stripOuterLimitOffset', () => {
+describe('QueryPagingEngine.StripOuterLimitOffset', () => {
     it('strips a statement-closing LIMIT and reports the number removed', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.stripOuterLimitOffset('SELECT * FROM Users LIMIT 20');
+        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset('SELECT * FROM Users LIMIT 20');
         expect(sql).toBe('SELECT * FROM Users');
         expect(limitRemoved).toBe(20);
     });
 
     it('strips LIMIT with its trailing OFFSET', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.stripOuterLimitOffset('SELECT * FROM Users LIMIT 20 OFFSET 5');
+        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset('SELECT * FROM Users LIMIT 20 OFFSET 5');
         expect(sql).toBe('SELECT * FROM Users');
         expect(limitRemoved).toBe(20);
     });
 
     it('strips LIMIT ALL but reports no numeric ceiling', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.stripOuterLimitOffset('SELECT * FROM Users LIMIT ALL');
+        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset('SELECT * FROM Users LIMIT ALL');
         expect(sql).toBe('SELECT * FROM Users');
         expect(limitRemoved).toBeNull();
     });
 
     it('is case-insensitive and tolerates trailing whitespace/newlines', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.stripOuterLimitOffset('SELECT * FROM Users\n  limit 7  \n');
+        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset('SELECT * FROM Users\n  limit 7  \n');
         expect(sql).toBe('SELECT * FROM Users');
         expect(limitRemoved).toBe(7);
     });
 
     it('leaves SQL with no LIMIT untouched', () => {
         const original = 'SELECT * FROM Users ORDER BY Name';
-        const { sql, limitRemoved } = QueryPagingEngine.stripOuterLimitOffset(original);
+        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset(original);
         expect(sql).toBe(original);
         expect(limitRemoved).toBeNull();
     });
 
     it('leaves a SUBQUERY LIMIT untouched — it is not at end of statement', () => {
         const original = 'SELECT * FROM (SELECT * FROM Users ORDER BY ID LIMIT 5) sub ORDER BY Name';
-        const { sql, limitRemoved } = QueryPagingEngine.stripOuterLimitOffset(original);
+        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset(original);
         expect(sql).toBe(original);
         expect(limitRemoved).toBeNull();
     });
 
     it('leaves a CTE-body LIMIT untouched', () => {
         const original = 'WITH top5 AS (SELECT * FROM Users ORDER BY ID LIMIT 5)\nSELECT * FROM top5';
-        const { sql, limitRemoved } = QueryPagingEngine.stripOuterLimitOffset(original);
+        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset(original);
         expect(sql).toBe(original);
         expect(limitRemoved).toBeNull();
     });
 
     it('strips ONLY the outer LIMIT when a subquery also has one', () => {
-        const { sql, limitRemoved } = QueryPagingEngine.stripOuterLimitOffset(
+        const { sql, limitRemoved } = QueryPagingEngine.StripOuterLimitOffset(
             'SELECT * FROM (SELECT * FROM Users ORDER BY ID LIMIT 5) sub ORDER BY Name LIMIT 100',
         );
         expect(sql).toBe('SELECT * FROM (SELECT * FROM Users ORDER BY ID LIMIT 5) sub ORDER BY Name');

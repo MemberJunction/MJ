@@ -318,7 +318,7 @@ export class QueryPagingEngine {
             // `… LIMIT 20 LIMIT 100 OFFSET 0`, which PostgreSQL rejects as a parse error. Agent
             // and Skip queries routinely ship with their own `LIMIT`, so those queries could not
             // be paged at all.
-            const stripped = QueryPagingEngine.stripOuterLimitOffset(dataSQL);
+            const stripped = QueryPagingEngine.StripOuterLimitOffset(dataSQL);
             dataSQL = stripped.sql;
             // Keep the TIGHTER of the two caps. The query's own LIMIT is an author-stated ceiling
             // on the result set, so a page size larger than it must not widen it. `LIMIT ALL`
@@ -369,7 +369,7 @@ export class QueryPagingEngine {
      * a paging request states the window it wants, and the same is already true of the SQL Server
      * `TOP` strip above and of `stripCountBody`'s `ClearOuterCap`.
      */
-    static stripOuterLimitOffset(sql: string): { sql: string; limitRemoved: number | null } {
+    static StripOuterLimitOffset(sql: string): { sql: string; limitRemoved: number | null } {
         // NO LEADING `\s+`, AND ANCHORED AT BOTH ENDS. The previous pattern opened with `\s+` and
         // closed with `\s*$`, so the engine could start a match at every index inside a run of
         // whitespace and give the run back one character at a time — quadratic in that run, which
