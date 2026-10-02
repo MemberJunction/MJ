@@ -385,34 +385,17 @@ create (Draft) ──▶ answer / N/A / rationale / evidence ──▶ submit �
 
 ### 8.2 The evaluator seam
 
-```ts
-export abstract class BaseRubricEvaluator {
-    /** Produce answers for every leaf of the version; the engine persists and submits them. */
-    public abstract Evaluate(request: RubricEvaluatorRequest): Promise<RubricEvaluatorOutput>;
-}
-// Registered: @RegisterClass(BaseRubricEvaluator, '<EvaluatorType>' or '<EvaluatorType>:<Name>')
+`RubricEvaluator.Evaluate(version, candidates)` scores those leaf candidates with `RubricScoring`
+and returns `{ normalizedScore, rationale, evidence, result, answers }`. It is not abstract, and
+the arguments are not a request object with PascalCase `Version`, `Settings`, or `Answers`.
 
-export interface RubricEvaluatorRequest {
-    Version: RubricTree;                   // resolved, cached, immutable
-    Subject: { EntityName: string; RecordID: string };
-    Context?: { EntityName: string; RecordID: string };
-    Content: RubricSubjectContent;         // from a content provider or supplied by the caller
-    Settings: IRubricEvaluatorSelection;   // prompt/agent/model/samples/mode
-    ContextUser: UserInfo;
-}
-export interface RubricEvaluatorOutput {
-    Answers: RubricAnswer[];               // per leaf Key: level label | value | NotApplicable,
-                                           // rationale, evidence, confidence
-    Narrative?: string;
-    AIPromptRunID?: string; AIAgentRunID?: string;
-    Metadata?: IRubricEvaluationMetadata;
-}
-```
-
-`RubricEngine.Evaluate(params)` resolves the version (§10.2 for tests), the evaluator (ClassFactory)
-and the content (§8.4), runs it, maps answers to score rows, saves a Draft, submits it, and returns
-the computed result. An evaluator that throws produces a `Failed` evaluation with `ErrorMessage` —
-never a silent skip.
+`BaseRubricEvaluator` extends `RubricEvaluator`. Concrete classes register on it as Deterministic,
+LLM, Agent, and Human. `RubricEngine.Evaluate` does not resolve a version and does not look an
+evaluator up in ClassFactory. The caller passes the version. `runEvaluator` constructs the class
+directly: `evaluator === 'AI'` builds `AgentRubricEvaluator`, `'LLM'` builds `LLMRubricEvaluator`,
+and anything else builds `DeterministicRubricEvaluator`. It saves a Draft, submits it, and returns
+the computed result. A throw produces a Failed evaluation with `ErrorMessage`. It does not skip
+silently.
 
 ### 8.3 Built-in evaluators
 
@@ -436,14 +419,15 @@ never a silent skip.
 - **`DeterministicRubricEvaluator`** (`Deterministic`) — applies each leaf's
   `EvaluatorConfig.Deterministic` rule to the subject content's JSON. A leaf without a rule is left
   unanswered. No model call.
-- **Human** — no evaluator class. `StartHumanEvaluation()` creates the Draft; the scoring-form widget
-  saves answers; the user submits.
+- **`HumanRubricEvaluator`** (`Human`) — registered on `BaseRubricEvaluator`. `Start` creates a
+  Draft evaluation and a task titled `Score <rubric>`. It does not score and it does not call an
+  agent. `StartHumanEvaluation` constructs that class. The person answers in the form, and submit
+  runs `RubricScoring` later.
 
 ### 8.4 Subject content providers
 
-`BaseRubricSubjectContentProvider.GetContent(subject, contextUser): Promise<RubricSubjectContent>`
-returns `{ Text?: string; Data?: Record<string, unknown>; Files?: {FileID, Name}[] }`. Registered by
-entity name. Built-ins:
+`ShapeContent` returns `RubricSubjectContent`: `{ text?: string; data?: Record<string, unknown>; files?: { fileId, name }[] }`.
+There is no `BaseRubricSubjectContentProvider`. A caller may pass `content` on `Evaluate` and skip the lookup. Built-ins:
 
 | Entity | Content |
 |---|---|
@@ -452,8 +436,6 @@ entity name. Built-ins:
 | `MJ: AI Prompt Runs` | the rendered messages and the result, as data |
 | `MJ: Conversations` | name, description, and details when present. There is no `Transcript` column. |
 | *(fallback)* | the fields the caller can read. An empty readable record throws "subject not found or not readable". |
-
-Callers may pass `Content` directly to skip the provider.
 
 ### 8.5 Consensus, agreement and diagnostics (engine)
 
