@@ -56,13 +56,19 @@ export class RubricVersionSummaryPanel extends BaseFormPanel<MJRubricVersionEnti
 @Component({
     standalone: false,
     selector: 'mj-rubric-criterion-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-criterion-host [CriterionId]="record.ID" [VersionId]="record.RubricVersionID" [ParentId]="record.ParentID" [Weight]="record.Weight" [ScaleId]="record.ScaleID" [IsGate]="record.IsGate" [GateMinimumScore]="record.GateMinimumScore" [NotApplicablePolicy]="record.NotApplicablePolicy" [Provider]="ProviderToUse" (ParentIdChange)="record.ParentID = $event" (WeightChange)="record.Weight = $event" (ScaleIdChange)="record.ScaleID = $event" (IsGateChange)="record.IsGate = $event" (GateMinimumScoreChange)="record.GateMinimumScore = $event" (NotApplicablePolicyChange)="SetPolicy($event)"></mj-rubric-criterion-host></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-criterion-host [CriterionId]="record.ID" [VersionId]="record.RubricVersionID" [Name]="record.Name" [Key]="record.Key" [NodeType]="record.NodeType" [Description]="record.Description" [Guidance]="record.Guidance" [IsAdvisory]="record.IsAdvisory" [RollupMethod]="record.RollupMethod" [EvidenceRequired]="record.EvidenceRequired" [RationaleRequired]="record.RationaleRequired" [ParentId]="record.ParentID" [Weight]="record.Weight" [ScaleId]="record.ScaleID" [IsGate]="record.IsGate" [GateMinimumScore]="record.GateMinimumScore" [NotApplicablePolicy]="record.NotApplicablePolicy" [Provider]="ProviderToUse" (NameChange)="record.Name = $event" (KeyChange)="record.Key = $event" (NodeTypeChange)="SetNodeType($event)" (DescriptionChange)="record.Description = $event" (GuidanceChange)="record.Guidance = $event" (IsAdvisoryChange)="record.IsAdvisory = $event" (RollupMethodChange)="SetRollup($event)" (EvidenceRequiredChange)="record.EvidenceRequired = $event" (RationaleRequiredChange)="record.RationaleRequired = $event" (ParentIdChange)="record.ParentID = $event" (WeightChange)="record.Weight = $event" (ScaleIdChange)="record.ScaleID = $event" (IsGateChange)="record.IsGate = $event" (GateMinimumScoreChange)="record.GateMinimumScore = $event" (NotApplicablePolicyChange)="SetPolicy($event)"></mj-rubric-criterion-host></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Criteria')
 export class MJRubricCriterionFormComponentExtended extends MJRubricCriterionFormComponent {
     public override record!: MJRubricCriterionEntity;
     public SetPolicy(value: string | null): void {
         this.record.NotApplicablePolicy = (value || null) as typeof this.record.NotApplicablePolicy;
+    }
+    public SetNodeType(value: string): void {
+        this.record.NodeType = value === 'Group' ? 'Group' : 'Criterion';
+    }
+    public SetRollup(value: string | null): void {
+        this.record.RollupMethod = (value || null) as typeof this.record.RollupMethod;
     }
 }
 
@@ -113,11 +119,14 @@ export class MJRubricScaleLevelFormComponentExtended extends MJRubricScaleLevelF
 @Component({
     standalone: false,
     selector: 'mj-rubric-band-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-band-editor [Label]="record.Label" [MinScore]="record.MinScore" [MaxScore]="record.MaxScore" [Description]="record.Description" (LabelChange)="record.Label = $event" (MinScoreChange)="record.MinScore = $event" (MaxScoreChange)="record.MaxScore = $event" (DescriptionChange)="record.Description = $event"></mj-rubric-band-editor></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-band-editor [Label]="record.Label" [MinScore]="record.MinScore" [MaxScore]="record.MaxScore" [Description]="record.Description" [DisplayTone]="record.DisplayTone" [Sequence]="record.Sequence" (LabelChange)="record.Label = $event" (MinScoreChange)="record.MinScore = $event" (MaxScoreChange)="record.MaxScore = $event" (DescriptionChange)="record.Description = $event" (DisplayToneChange)="SetTone($event)" (SequenceChange)="record.Sequence = $event"></mj-rubric-band-editor></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Bands')
 export class MJRubricBandFormComponentExtended extends MJRubricBandFormComponent {
     public override record!: MJRubricBandEntity;
+    public SetTone(value: string): void {
+        this.record.DisplayTone = value as typeof this.record.DisplayTone;
+    }
 }
 
 @Component({
@@ -133,7 +142,7 @@ export class MJRubricCategoryFormComponentExtended extends MJRubricCategoryFormC
 @Component({
     standalone: false,
     selector: 'mj-ai-agent-rubric-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><p>{{ record.Purpose }}{{ record.IsDefault ? ' (default)' : '' }} — {{ record.Status }}</p><button type="button" (click)="TurnOff()">Turn off</button></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><label>Purpose <select [value]="record.Purpose" (change)="record.Purpose = $any($event.target).value"><option>Evaluation</option><option>SelfCheck</option><option>ProductionSampling</option></select></label><label>Status <select [value]="record.Status" (change)="record.Status = $any($event.target).value"><option>Active</option><option>Disabled</option></select></label><label><input type="checkbox" [checked]="record.IsDefault" (change)="record.IsDefault = $any($event.target).checked"> Default</label><label>Sample rate <input type="number" min="0" max="1" step="0.01" [value]="record.SampleRate ?? ''" (change)="record.SampleRate = optionalNumber($event)"></label><label>Pass threshold <input type="number" min="0" max="1" step="0.01" [value]="record.PassThreshold ?? ''" (change)="record.PassThreshold = optionalNumber($event)"></label><label>Max self-check attempts <input type="number" min="0" step="1" [value]="record.MaxSelfCheckAttempts ?? ''" (change)="record.MaxSelfCheckAttempts = optionalNumber($event)"></label><label>Evaluator config <textarea [value]="record.EvaluatorConfig ?? ''" (change)="record.EvaluatorConfig = textOrNull($event)"></textarea></label><button type="button" (click)="TurnOff()">Turn off</button></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Rubrics')
 export class MJAIAgentRubricFormComponentExtended extends MJAIAgentRubricFormComponent {
@@ -141,5 +150,13 @@ export class MJAIAgentRubricFormComponentExtended extends MJAIAgentRubricFormCom
     public TurnOff(): void {
         this.record.Status = 'Disabled';
         this.record.IsDefault = false;
+    }
+    public optionalNumber(event: Event): number | null {
+        const value = (event.target as HTMLInputElement).value;
+        return value === '' ? null : Number(value);
+    }
+    public textOrNull(event: Event): string | null {
+        const value = (event.target as HTMLTextAreaElement).value;
+        return value === '' ? null : value;
     }
 }

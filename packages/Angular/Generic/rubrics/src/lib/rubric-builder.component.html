@@ -50,6 +50,14 @@
           @if (!ReadOnly) {
             <div class="criterion-body">
               <div class="editor-grid">
+                <label>Name <input type="text" [value]="node.name" (change)="OnText(node, 'name', $event)" /></label>
+                <label>Key <input type="text" [value]="node.key" (change)="OnText(node, 'key', $event)" /></label>
+                <label>Type
+                  <select [value]="node.nodeType" (change)="OnNodeType(node, $event)">
+                    <option value="Criterion">Criterion</option>
+                    <option value="Group">Group</option>
+                  </select>
+                </label>
                 <label>Parent
                   <select [value]="node.parentId ?? ''" (change)="OnParent(node, $event)">
                     <option value="">Top</option>
@@ -99,6 +107,20 @@
                   </div>
                 </div>
               }
+              <label class="stack-field">Description <textarea [value]="node.description ?? ''" (change)="OnText(node, 'description', $event)"></textarea></label>
+              <label class="stack-field">Guidance <textarea [value]="node.guidance ?? ''" (change)="OnText(node, 'guidance', $event)"></textarea></label>
+              <label>Rollup
+                <select [value]="node.rollupMethod ?? ''" (change)="OnRollup(node, $event)">
+                  <option value="">Default</option>
+                  <option value="WeightedMean">Weighted mean</option>
+                  <option value="Minimum">Minimum</option>
+                  <option value="Maximum">Maximum</option>
+                </select>
+              </label>
+              <label class="gate-check"><input type="checkbox" [checked]="node.isAdvisory" (change)="OnFlag(node, 'isAdvisory', $event)" /> Advisory</label>
+              <label class="gate-check"><input type="checkbox" [checked]="node.evidenceRequired" (change)="OnFlag(node, 'evidenceRequired', $event)" /> Evidence required</label>
+              <label class="gate-check"><input type="checkbox" [checked]="node.rationaleRequired" (change)="OnFlag(node, 'rationaleRequired', $event)" /> Rationale required</label>
+              <button mjButton variant="outline" size="sm" type="button" (click)="OnDeleteNode(node)">Delete</button>
               <label class="stack-field">Not applicable
                 <select [value]="node.notApplicablePolicy ?? ''" (change)="OnPolicy(node, $event)">
                   <option value="">Version default</option>
@@ -134,6 +156,17 @@
             <label>Label <input type="text" [value]="band.label" (input)="OnBand(band.id, 'label', $event)" /></label>
             <label>Min <input type="number" min="0" max="1" step="0.1" [value]="band.minScore" (change)="OnBand(band.id, 'minScore', $event)" /></label>
             <label>Max <input type="number" min="0" max="1" step="0.1" [value]="band.maxScore" (change)="OnBand(band.id, 'maxScore', $event)" /></label>
+            <label>Tone
+              <select [value]="band.displayTone" (change)="OnBand(band.id, 'displayTone', $event)">
+                <option>Neutral</option>
+                <option>Success</option>
+                <option>Info</option>
+                <option>Warning</option>
+                <option>Error</option>
+              </select>
+            </label>
+            <label>Sequence <input type="number" [value]="band.sequence" (change)="OnBand(band.id, 'sequence', $event)" /></label>
+            <button mjButton variant="outline" size="sm" type="button" (click)="OnDeleteBand(band.id)">Delete</button>
           }
         </li>
       }

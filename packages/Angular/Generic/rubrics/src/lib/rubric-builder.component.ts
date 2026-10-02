@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy, RubricBandSnapshot } from '@memberjunction/rubrics-base';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { AddBand, AddNode, DraftProblems, MoveNode, MoveProblem, PreviewScore, SampleMatchesTree, SetAnchor, SetGate, SetPolicy, SetScale, SetWeight, UpdateBand, WeightShares, type RubricFormAnswer } from './model.js';
+import { AddBand, AddNode, DraftProblems, MoveNode, MoveProblem, PatchNode, PreviewScore, RemoveBand, RemoveNode, SampleMatchesTree, SetAnchor, SetGate, SetPolicy, SetScale, SetWeight, UpdateBand, WeightShares, type RubricFormAnswer } from './model.js';
 
 /**
  * Draft author. Edits the tree the host passes in and emits the new tree.
@@ -141,13 +141,40 @@ export class RubricBuilderComponent implements OnChanges {
         this.NodesChange.emit(SetPolicy(this.Nodes, node.id, value === '' ? null : value as NotApplicablePolicy));
     }
 
+    public OnText(node: RubricNodeSnapshot, field: 'name' | 'key' | 'description' | 'guidance', event: Event): void {
+        const value = (event.target as HTMLInputElement | HTMLTextAreaElement).value;
+        this.NodesChange.emit(PatchNode(this.Nodes, node.id, { [field]: value }));
+    }
+
+    public OnNodeType(node: RubricNodeSnapshot, event: Event): void {
+        const nodeType = (event.target as HTMLSelectElement).value === 'Group' ? 'Group' : 'Criterion';
+        this.NodesChange.emit(PatchNode(this.Nodes, node.id, { nodeType }));
+    }
+
+    public OnRollup(node: RubricNodeSnapshot, event: Event): void {
+        const value = (event.target as HTMLSelectElement).value;
+        this.NodesChange.emit(PatchNode(this.Nodes, node.id, { rollupMethod: value === '' ? null : value as RubricNodeSnapshot['rollupMethod'] }));
+    }
+
+    public OnFlag(node: RubricNodeSnapshot, field: 'isAdvisory' | 'evidenceRequired' | 'rationaleRequired', event: Event): void {
+        this.NodesChange.emit(PatchNode(this.Nodes, node.id, { [field]: (event.target as HTMLInputElement).checked }));
+    }
+
+    public OnDeleteNode(node: RubricNodeSnapshot): void {
+        this.NodesChange.emit(RemoveNode(this.Nodes, node.id));
+    }
+
+    public OnDeleteBand(id: string): void {
+        this.BandsChange.emit(RemoveBand(this.Bands, id));
+    }
+
     public OnAddBand(): void {
         this.BandsChange.emit(AddBand(this.Bands, 'New band'));
     }
 
-    public OnBand(id: string, field: 'label' | 'minScore' | 'maxScore', event: Event): void {
-        const raw = (event.target as HTMLInputElement).value;
-        const patch = field === 'label' ? { label: raw } : { [field]: Number(raw) };
+    public OnBand(id: string, field: 'label' | 'minScore' | 'maxScore' | 'displayTone' | 'sequence', event: Event): void {
+        const raw = (event.target as HTMLInputElement | HTMLSelectElement).value;
+        const patch = field === 'label' || field === 'displayTone' ? { [field]: raw } : { [field]: Number(raw) };
         this.BandsChange.emit(UpdateBand(this.Bands, id, patch));
     }
 }

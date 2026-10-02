@@ -167,6 +167,25 @@ export function SetPolicy(nodes: RubricNodeSnapshot[], id: string, notApplicable
     return nodes.map(node => node.id === id ? { ...node, notApplicablePolicy } : node);
 }
 
+export function PatchNode(nodes: RubricNodeSnapshot[], id: string, patch: Partial<RubricNodeSnapshot>): RubricNodeSnapshot[] {
+    return nodes.map(node => node.id === id ? { ...node, ...patch } : node);
+}
+
+/** Drops the node and every node under it. */
+export function RemoveNode(nodes: RubricNodeSnapshot[], id: string): RubricNodeSnapshot[] {
+    const drop = new Set<string>();
+    const visit = (nodeId: string): void => {
+        drop.add(nodeId);
+        for (const child of nodes) if ((child.parentId ?? null) === nodeId) visit(child.id);
+    };
+    visit(id);
+    return nodes.filter(node => !drop.has(node.id));
+}
+
+export function RemoveBand(bands: RubricBandSnapshot[], id: string): RubricBandSnapshot[] {
+    return bands.filter(band => band.id !== id);
+}
+
 /** @deprecated Use {@link SetPolicy}. */
 export function setPolicy(nodes: RubricNodeSnapshot[], id: string, notApplicablePolicy: NotApplicablePolicy | null): RubricNodeSnapshot[] {
     return SetPolicy(nodes, id, notApplicablePolicy);
@@ -181,7 +200,7 @@ export function addBand(bands: RubricBandSnapshot[], label: string): RubricBandS
     return AddBand(bands, label);
 }
 
-export function UpdateBand(bands: RubricBandSnapshot[], id: string, patch: Partial<Pick<RubricBandSnapshot, 'label' | 'minScore' | 'maxScore'>>): RubricBandSnapshot[] {
+export function UpdateBand(bands: RubricBandSnapshot[], id: string, patch: Partial<Pick<RubricBandSnapshot, 'label' | 'minScore' | 'maxScore' | 'displayTone' | 'sequence' | 'description'>>): RubricBandSnapshot[] {
     return bands.map(band => band.id === id ? { ...band, ...patch } : band);
 }
 
@@ -636,6 +655,7 @@ export function NodeFields(node: RubricNodeSnapshot): Record<string, unknown> {
     return {
         Key: node.key,
         Name: node.name,
+        Description: node.description ?? null,
         ParentID: node.parentId ?? null,
         NodeType: node.nodeType,
         ScaleID: node.scaleId ?? null,
@@ -644,6 +664,7 @@ export function NodeFields(node: RubricNodeSnapshot): Record<string, unknown> {
         IsGate: node.isGate,
         GateMinimumScore: node.gateMinimumScore ?? null,
         NotApplicablePolicy: node.notApplicablePolicy ?? null,
+        RollupMethod: node.rollupMethod ?? null,
         Guidance: node.guidance ?? null,
         EvidenceRequired: node.evidenceRequired,
         RationaleRequired: node.rationaleRequired,

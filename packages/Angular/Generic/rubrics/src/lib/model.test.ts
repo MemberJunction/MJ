@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
+import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -228,6 +228,11 @@ describe('explorer row mapping', () => {
         expect(node.parentId).toBe('group');
         expect(node.isGate).toBe(true);
         expect(NodeFields(node)).toMatchObject({ Key: 'clarity', ParentID: 'group', Weight: 2, IsGate: true, GateMinimumScore: 0.6 });
+        const patched = PatchNode([node], 'c1', { name: 'Clear', guidance: 'Read it.', isAdvisory: true, rollupMethod: 'Minimum', evidenceRequired: true, rationaleRequired: true, description: 'A leaf', nodeType: 'Criterion' });
+        expect(NodeFields(patched[0])).toMatchObject({ Name: 'Clear', Guidance: 'Read it.', Description: 'A leaf', IsAdvisory: true, RollupMethod: 'Minimum', EvidenceRequired: true, RationaleRequired: true, NodeType: 'Criterion' });
+        const child = { ...node, id: 'child', parentId: 'c1', key: 'child' };
+        expect(RemoveNode([patched[0], child], 'c1').map(item => item.id)).toEqual([]);
+        expect(RemoveBand([{ id: 'band', label: 'Met', minScore: 0.8, maxScore: 1, displayTone: 'Success', sequence: 1 }], 'band')).toEqual([]);
     });
 
     it('saves a new criterion under its client id and deletes a removed child first', () => {

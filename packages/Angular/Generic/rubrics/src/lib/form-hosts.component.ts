@@ -126,8 +126,14 @@ export class RubricCategoryHostComponent implements OnChanges {
     imports: [RubricCriterionEditorComponent],
     template: `
       <mj-rubric-criterion-editor
+        [Name]="Name" [Key]="Key" [NodeType]="NodeType" [Description]="Description" [Guidance]="Guidance"
+        [IsAdvisory]="IsAdvisory" [RollupMethod]="RollupMethod" [EvidenceRequired]="EvidenceRequired" [RationaleRequired]="RationaleRequired"
         [ParentId]="ParentId" [Parents]="Parents" [Weight]="Weight" [Share]="Share" [ScaleId]="ScaleId" [Scales]="Scales" [Anchors]="Anchors"
         [IsGate]="IsGate" [GateMinimumScore]="GateMinimumScore" [NotApplicablePolicy]="NotApplicablePolicy"
+        (NameChange)="NameChange.emit($event)" (KeyChange)="KeyChange.emit($event)" (NodeTypeChange)="NodeTypeChange.emit($event)"
+        (DescriptionChange)="DescriptionChange.emit($event)" (GuidanceChange)="GuidanceChange.emit($event)"
+        (IsAdvisoryChange)="IsAdvisoryChange.emit($event)" (RollupMethodChange)="RollupMethodChange.emit($event)"
+        (EvidenceRequiredChange)="EvidenceRequiredChange.emit($event)" (RationaleRequiredChange)="RationaleRequiredChange.emit($event)"
         (ParentIdChange)="ParentIdChange.emit($event)" (WeightChange)="WeightChange.emit($event)" (ScaleIdChange)="ScaleIdChange.emit($event)"
         (AnchorsChange)="SaveAnchors($event)" (IsGateChange)="IsGateChange.emit($event)" (GateMinimumScoreChange)="GateMinimumScoreChange.emit($event)"
         (NotApplicablePolicyChange)="NotApplicablePolicyChange.emit($event)">
@@ -143,7 +149,25 @@ export class RubricCriterionHostComponent implements OnChanges {
     @Input() IsGate = false;
     @Input() GateMinimumScore: number | null = null;
     @Input() NotApplicablePolicy: string | null = null;
+    @Input() Name = '';
+    @Input() Key = '';
+    @Input() NodeType = 'Criterion';
+    @Input() Description: string | null = null;
+    @Input() Guidance: string | null = null;
+    @Input() IsAdvisory = false;
+    @Input() RollupMethod: string | null = null;
+    @Input() EvidenceRequired = false;
+    @Input() RationaleRequired = false;
     @Input() Provider: IMetadataProvider | null = null;
+    @Output() NameChange = new EventEmitter<string>();
+    @Output() KeyChange = new EventEmitter<string>();
+    @Output() NodeTypeChange = new EventEmitter<string>();
+    @Output() DescriptionChange = new EventEmitter<string>();
+    @Output() GuidanceChange = new EventEmitter<string>();
+    @Output() IsAdvisoryChange = new EventEmitter<boolean>();
+    @Output() RollupMethodChange = new EventEmitter<string | null>();
+    @Output() EvidenceRequiredChange = new EventEmitter<boolean>();
+    @Output() RationaleRequiredChange = new EventEmitter<boolean>();
     @Output() ParentIdChange = new EventEmitter<string | null>();
     @Output() IsGateChange = new EventEmitter<boolean>();
     @Output() WeightChange = new EventEmitter<number>();

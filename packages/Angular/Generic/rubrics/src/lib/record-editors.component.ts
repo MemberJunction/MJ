@@ -44,6 +44,29 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
             <label class="gate-min">Minimum <input type="number" min="0" max="1" step="0.1" [value]="GateMinimumScore ?? ''" (change)="GateMinimumScoreChange.emit(valueOf($event) === '' ? null : numberOf($event))"></label>
           }
         </div>
+        <div class="editor-grid">
+          <label>Name <input [value]="Name" (change)="NameChange.emit(valueOf($event))"></label>
+          <label>Key <input [value]="Key" (change)="KeyChange.emit(valueOf($event))"></label>
+          <label>Type
+            <select [value]="NodeType" (change)="NodeTypeChange.emit(valueOf($event))">
+              <option value="Criterion">Criterion</option>
+              <option value="Group">Group</option>
+            </select>
+          </label>
+          <label>Rollup
+            <select [value]="RollupMethod ?? ''" (change)="RollupMethodChange.emit(valueOf($event) || null)">
+              <option value="">Default</option>
+              <option value="WeightedMean">Weighted mean</option>
+              <option value="Minimum">Minimum</option>
+              <option value="Maximum">Maximum</option>
+            </select>
+          </label>
+        </div>
+        <label class="stack-field">Description <textarea [value]="Description ?? ''" (change)="DescriptionChange.emit(valueOf($event))"></textarea></label>
+        <label class="stack-field">Guidance <textarea [value]="Guidance ?? ''" (change)="GuidanceChange.emit(valueOf($event))"></textarea></label>
+        <label class="gate-check"><input type="checkbox" [checked]="IsAdvisory" (change)="IsAdvisoryChange.emit(checked($event))"> Advisory</label>
+        <label class="gate-check"><input type="checkbox" [checked]="EvidenceRequired" (change)="EvidenceRequiredChange.emit(checked($event))"> Evidence required</label>
+        <label class="gate-check"><input type="checkbox" [checked]="RationaleRequired" (change)="RationaleRequiredChange.emit(checked($event))"> Rationale required</label>
         <label class="stack-field">Not applicable
           <select [value]="NotApplicablePolicy ?? ''" (change)="NotApplicablePolicyChange.emit(valueOf($event) || null)">
             <option value="">Version default</option>
@@ -67,6 +90,24 @@ export class RubricCriterionEditorComponent implements OnChanges {
     @Input() IsGate = false;
     @Input() GateMinimumScore: number | null = null;
     @Input() NotApplicablePolicy: string | null = null;
+    @Input() Name = '';
+    @Input() Key = '';
+    @Input() NodeType = 'Criterion';
+    @Input() Description: string | null = null;
+    @Input() Guidance: string | null = null;
+    @Input() IsAdvisory = false;
+    @Input() RollupMethod: string | null = null;
+    @Input() EvidenceRequired = false;
+    @Input() RationaleRequired = false;
+    @Output() NameChange = new EventEmitter<string>();
+    @Output() KeyChange = new EventEmitter<string>();
+    @Output() NodeTypeChange = new EventEmitter<string>();
+    @Output() DescriptionChange = new EventEmitter<string>();
+    @Output() GuidanceChange = new EventEmitter<string>();
+    @Output() IsAdvisoryChange = new EventEmitter<boolean>();
+    @Output() RollupMethodChange = new EventEmitter<string | null>();
+    @Output() EvidenceRequiredChange = new EventEmitter<boolean>();
+    @Output() RationaleRequiredChange = new EventEmitter<boolean>();
     @Output() ParentIdChange = new EventEmitter<string | null>();
     @Output() IsGateChange = new EventEmitter<boolean>();
     @Output() WeightChange = new EventEmitter<number>();
@@ -217,6 +258,16 @@ export class RubricScaleLevelEditorComponent {
         <div class="editor-grid">
           <label>From <input type="number" [value]="MinScore" (change)="MinScoreChange.emit(asNumber($event))"></label>
           <label>To <input type="number" [value]="MaxScore" (change)="MaxScoreChange.emit(asNumber($event))"></label>
+          <label>Tone
+            <select [value]="DisplayTone" (change)="DisplayToneChange.emit(text($event))">
+              <option>Neutral</option>
+              <option>Success</option>
+              <option>Info</option>
+              <option>Warning</option>
+              <option>Error</option>
+            </select>
+          </label>
+          <label>Sequence <input type="number" [value]="Sequence" (change)="SequenceChange.emit(asNumber($event))"></label>
           <p class="fact">Span {{ MinScore }}–{{ MaxScore }}</p>
         </div>
         <span class="rubric-track"><span class="rubric-bar" [style.width.%]="SpanWidth()"></span></span>
@@ -229,10 +280,14 @@ export class RubricBandEditorComponent {
     @Input() MinScore = 0;
     @Input() MaxScore = 1;
     @Input() Description: string | null = null;
+    @Input() DisplayTone = 'Neutral';
+    @Input() Sequence = 0;
     @Output() LabelChange = new EventEmitter<string>();
     @Output() MinScoreChange = new EventEmitter<number>();
     @Output() MaxScoreChange = new EventEmitter<number>();
     @Output() DescriptionChange = new EventEmitter<string>();
+    @Output() DisplayToneChange = new EventEmitter<string>();
+    @Output() SequenceChange = new EventEmitter<number>();
     protected text(event: Event): string { return (event.target as HTMLInputElement | HTMLTextAreaElement).value; }
     protected asNumber(event: Event): number { return Number(this.text(event)); }
     protected SpanWidth(): number { return Math.min(100, Math.max(0, (Number(this.MaxScore) - Number(this.MinScore)) * 100)); }
