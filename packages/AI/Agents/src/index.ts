@@ -9,10 +9,15 @@
  * @since 2.49.0
  */
 
+import './rubric-evaluation-agent-runner.js';
+
 export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
+export * from './decision-discovery';
+// The opening request, as discovery and catalog narrowing read it: the Decision Eval harness builds its state the same way.
+export { OpeningRequestText, CATALOG_NARROWING_REQUEST_MAX_CHARS } from './catalog-narrowing';
 export * from './prior-turn-tool-result-cache';
 export * from './tool-result-format';
 export * from './prompt-component-resolver';
@@ -30,6 +35,7 @@ export * from './ArtifactToolManager';
 export * from './ConversationCompactionManager';
 export * from './ConversationToolManager';
 export * from './AgentDecisionService';
+export * from './finish-if-state';
 export * from './MemoryWriteManager';
 export * from './SkillMarkdownConverter';
 export * from './SkillImportExportService';
@@ -53,6 +59,7 @@ export * from './agent-context-injector';
 export * from './agent-memory-context-builder';
 export * from './agent-pre-execution-rag';
 export * from './memory-manager-agent';
+export * from './memory-note-gate';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';

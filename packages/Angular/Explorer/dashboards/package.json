@@ -29,6 +29,10 @@
       "types": "./dist/scheduling-dashboards.module.d.ts",
       "default": "./dist/scheduling-dashboards.module.js"
     },
+    "./rubrics-dashboards.module": {
+      "types": "./dist/rubrics-dashboards.module.d.ts",
+      "default": "./dist/rubrics-dashboards.module.js"
+    },
     "./archiving-dashboards.module": {
       "types": "./dist/archiving-dashboards.module.d.ts",
       "default": "./dist/archiving-dashboards.module.js"
@@ -129,6 +133,8 @@
     "@memberjunction/ng-actions": "6.2.0-edge.1",
     "@memberjunction/ng-agent-requests": "6.2.0-edge.1",
     "@memberjunction/ng-agents": "6.2.0-edge.1",
+    "@memberjunction/ng-rubrics": "6.2.0-edge.1",
+    "@memberjunction/rubrics-base": "6.2.0-edge.1",
     "@memberjunction/ng-ai-test-harness": "6.2.0-edge.1",
     "@memberjunction/ng-archive-manager": "6.2.0-edge.1",
     "@memberjunction/ng-artifacts": "6.2.0-edge.1",

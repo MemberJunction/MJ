@@ -213,6 +213,11 @@ standalone save.
 The root additionally raises `graph_save_started` and `graph_save`, so a UI can refresh once per unit
 of work rather than once per line.
 
+If a node fails, the graph rolls back, and every record in it (IS-A parents included) goes back in
+memory to how it was before `Save()`, so the same call can be retried. A delete works the same way,
+whether it's a graph or an IS-A chain: each record it deletes is reset with `NewRecord()` only once
+the unit of work commits, so a rollback leaves every record saved, under the same key.
+
 ### Loading children
 
 | Mode | Behaviour |

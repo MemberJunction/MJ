@@ -534,6 +534,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../../MJGlobal
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Engine
       '@memberjunction/search-engine':
         specifier: 6.2.0-edge.1
         version: link:../../SearchEngine
@@ -4212,6 +4215,9 @@ importers:
       '@memberjunction/ng-shared':
         specifier: 6.2.0-edge.1
         version: link:../Explorer/shared
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Base
       '@memberjunction/tag-engine-base':
         specifier: 6.2.0-edge.1
         version: link:../../AI/Knowledge/TagEngineBase
@@ -4316,6 +4322,9 @@ importers:
       '@memberjunction/ng-shared':
         specifier: 6.2.0-edge.1
         version: link:../Explorer/shared
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Base
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -4535,6 +4544,9 @@ importers:
       '@memberjunction/ng-resource-permissions':
         specifier: 6.2.0-edge.1
         version: link:../../Generic/resource-permissions
+      '@memberjunction/ng-rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Generic/rubrics
       '@memberjunction/ng-search':
         specifier: 6.2.0-edge.1
         version: link:../../Generic/search
@@ -4571,6 +4583,9 @@ importers:
       '@memberjunction/record-cloning-base':
         specifier: 6.2.0-edge.1
         version: link:../../../RecordCloning/base
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../../Rubrics/Base
       '@memberjunction/templates-base-types':
         specifier: 6.2.0-edge.1
         version: link:../../../Templates/base-types
@@ -4794,6 +4809,9 @@ importers:
       '@memberjunction/ng-resource-permissions':
         specifier: 6.2.0-edge.1
         version: link:../../Generic/resource-permissions
+      '@memberjunction/ng-rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Generic/rubrics
       '@memberjunction/ng-scheduling':
         specifier: 6.2.0-edge.1
         version: link:../../Generic/scheduling
@@ -4833,6 +4851,9 @@ importers:
       '@memberjunction/predictive-studio-core':
         specifier: 6.2.0-edge.1
         version: link:../../../AI/PredictiveStudio/Core
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../../Rubrics/Base
       '@memberjunction/tag-engine-base':
         specifier: 6.2.0-edge.1
         version: link:../../../AI/Knowledge/TagEngineBase
@@ -5698,9 +5719,15 @@ importers:
       '@memberjunction/ng-notifications':
         specifier: 6.2.0-edge.1
         version: link:../notifications
+      '@memberjunction/ng-rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../rubrics
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.1
         version: link:../ui-components
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../../Rubrics/Base
       '@memberjunction/testing-engine-base':
         specifier: 6.2.0-edge.1
         version: link:../../../TestingFramework/EngineBase
@@ -6259,6 +6286,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.2.0-edge.1
+        version: link:../../../GraphQLDataProvider
       '@memberjunction/interactive-component-types':
         specifier: 6.2.0-edge.1
         version: link:../../../InteractiveComponents
@@ -8703,6 +8733,46 @@ importers:
       '@memberjunction/ng-test-utils':
         specifier: 6.2.0-edge.1
         version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/rubrics:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-ui-components':
+        specifier: 6.2.0-edge.1
+        version: link:../ui-components
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../../Rubrics/Base
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
@@ -11767,6 +11837,9 @@ importers:
       '@memberjunction/predictive-studio-core':
         specifier: 6.2.0-edge.1
         version: link:../AI/PredictiveStudio/Core
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../Rubrics/Base
       '@memberjunction/scheduling-engine':
         specifier: 6.2.0-edge.1
         version: link:../Scheduling/engine
@@ -12442,6 +12515,9 @@ importers:
       '@memberjunction/ai-provider-bundle':
         specifier: 6.2.0-edge.1
         version: link:../AI/Providers/Bundle
+      '@memberjunction/ai-vector-dupe':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Vectors/Dupe
       '@memberjunction/ai-vector-sync':
         specifier: 6.2.0-edge.1
         version: link:../AI/Vectors/Sync
@@ -13900,6 +13976,65 @@ importers:
         specifier: ^3.1.1
         version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/Rubrics/Base:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJGlobal
+    devDependencies:
+      tsc-alias:
+        specifier: ^1.8.16
+        version: 1.8.16
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Rubrics/Engine:
+    dependencies:
+      '@memberjunction/actions':
+        specifier: 6.2.0-edge.1
+        version: link:../../Actions/Engine
+      '@memberjunction/actions-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../Actions/Base
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/CorePlus
+      '@memberjunction/ai-prompts':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Prompts
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJGlobal
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../Base
+    devDependencies:
+      tsc-alias:
+        specifier: ^1.8.16
+        version: 1.8.16
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/SQLConverter:
     dependencies:
       '@memberjunction/sql-dialect':
@@ -14139,6 +14274,9 @@ importers:
       '@memberjunction/record-set-processor':
         specifier: 6.2.0-edge.1
         version: link:../../RecordSetProcessor/engine
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Engine
       '@memberjunction/scheduling-base-types':
         specifier: 6.2.0-edge.1
         version: link:../base-types
@@ -14584,6 +14722,12 @@ importers:
       '@memberjunction/remote-browser-server':
         specifier: 6.2.0-edge.1
         version: link:../AI/RemoteBrowser/Server
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../Rubrics/Engine
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../Rubrics/Base
       '@memberjunction/scheduling-actions':
         specifier: 6.2.0-edge.1
         version: link:../Scheduling/actions
@@ -14852,6 +14996,12 @@ importers:
       '@memberjunction/record-set-processor':
         specifier: 6.2.0-edge.1
         version: link:../RecordSetProcessor/engine
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../Rubrics/Engine
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../Rubrics/Base
       '@memberjunction/scheduling-actions':
         specifier: 6.2.0-edge.1
         version: link:../Scheduling/actions
@@ -15095,6 +15245,9 @@ importers:
 
   packages/TestingFramework/CLI:
     dependencies:
+      '@memberjunction/ai-agents':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Agents
       '@memberjunction/core':
         specifier: 6.2.0-edge.1
         version: link:../../MJCore
@@ -15110,6 +15263,12 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../../MJGlobal
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Engine
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Base
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.2.0-edge.1
         version: link:../../SQLServerDataProvider
@@ -15190,6 +15349,12 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../../MJGlobal
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Engine
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Base
       '@memberjunction/testing-engine-base':
         specifier: 6.2.0-edge.1
         version: link:../EngineBase
@@ -15279,6 +15444,9 @@ importers:
       '@memberjunction/ai-prompts':
         specifier: 6.2.0-edge.1
         version: link:../../AI/Prompts
+      '@memberjunction/ai-vector-dupe':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Vectors/Dupe
       '@memberjunction/aiengine':
         specifier: 6.2.0-edge.1
         version: link:../../AI/Engine
@@ -15363,6 +15531,12 @@ importers:
       '@memberjunction/redis-provider':
         specifier: 6.2.0-edge.1
         version: link:../../RedisProvider
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Engine
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Base
       '@memberjunction/scheduling-engine':
         specifier: 6.2.0-edge.1
         version: link:../../Scheduling/engine

@@ -1,0 +1,225 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Decisions Default Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Loop agent with no agent-type prompt params, so the decisionsEnabled master switch is at the Loop type's default (off). The agent-decisions-switch bundle scripts its replies to request inline decisions and a finishIf gate anyway. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 6
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Decisions Switch Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0001CF3B-0A1C-4982-A4F8-615BFA34E788"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Calculate Expression",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "020451DD-39ED-464D-867B-D73052691723"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "ACA68F42-2E9B-411F-9CB7-B16F4A416DB4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Decisions Sub-Flags Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Loop agent that turns on every setting the decisionsEnabled master switch governs (inline decisions docs, both decision response fields set explicitly, finishIfMode on, decision discovery, the payload change check, and catalog narrowing at one item) but not the switch itself. It has more actions than its narrowing limit, including Find Candidate Actions, so narrowing would ask. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 6,
+      "AgentTypePromptParams": {
+        "includeDecisionsDocs": true,
+        "finishIfMode": "on",
+        "decisionDiscovery": true,
+        "payloadFeedbackCheck": true,
+        "maxActionsInPrompt": 1,
+        "maxSubAgentsInPrompt": 1,
+        "includeResponseTypeDefinition": {
+          "decisions": true,
+          "finishIf": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Decisions Switch Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "127E2531-2BB2-4B62-806A-2136ED526B08"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Calculate Expression",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "22433B95-A0C8-40D1-AE66-C3C6F14196F4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Weather",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "87771A2B-94B3-4989-921C-4D7A07C3D157"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Actions",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F03DEE54-402F-4371-9692-F241F86CD2EF"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F78A8CA4-2008-4FB4-B063-53F4B14E6638"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Decisions Enabled Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Loop agent whose own agent-type prompt params turn the decisionsEnabled master switch on, with inline decisions docs and finishIfMode on. Every other setting the switch governs stays at its default (off). (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 6,
+      "AgentTypePromptParams": {
+        "decisionsEnabled": true,
+        "includeDecisionsDocs": true,
+        "finishIfMode": "on"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Decisions Switch Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "98B1CF92-96CD-43EC-82FE-7EDEC0B39388"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Calculate Expression",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AAD7E960-BD0F-46CD-AE7F-CDE3E30D6164"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "762F941F-D657-4F79-AEDB-28B10025642E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Decisions Switch Flow Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Flow agent whose only step is a Decision step: one Likelihood about the payload, answered by the Default Decision prompt. A Decision step is an explicit use of a decision model, so the decisionsEnabled master switch does not gate it. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Is the order ready",
+            "Description": "Asks one Likelihood about the whole payload with the Default Decision prompt (PromptID is empty).",
+            "StartingStep": 1,
+            "StepType": "Decision",
+            "Configuration": {
+              "key": "ready_check",
+              "state": "payload",
+              "questions": {
+                "ready": {
+                  "kind": "Likelihood",
+                  "instructions": "The order described in this payload is ready to ship."
+                }
+              }
+            },
+            "Status": "Active",
+            "PositionX": 80,
+            "PositionY": 80,
+            "Width": 220,
+            "Height": 80
+          },
+          "primaryKey": {
+            "ID": "D632195B-D537-44D5-AC2B-9FEB945E8553"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C22A4F2E-822C-497B-AB54-52F2DA50597D"
+    }
+  }
+]

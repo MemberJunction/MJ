@@ -92,6 +92,10 @@ vi.mock('@memberjunction/ai', () => ({
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
 
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: { Instance: { Config: vi.fn(), GetVectorIndexByID: vi.fn(), GetProviderIndexName: vi.fn() } },
+}));
+
 vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: vi.fn(),
     BaseResponse: vi.fn(),

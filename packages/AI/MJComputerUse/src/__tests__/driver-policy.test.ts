@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
     DEFAULT_CONSOLE_LOG_LEVEL,
@@ -5,6 +8,7 @@ import {
     ClassifyFailure,
     ComputeDivergence,
     FormatConsoleLine,
+    InlineVerdictIsAdvisory,
     IsOracleAdvisory,
     IsSevereBrowserFault,
     MergeComputerUseConfig,
@@ -29,6 +33,16 @@ function res(oracleType: string, passed: boolean, advisory?: boolean): OracleRes
 
 describe('oracle-scoring', () => {
     describe('isOracleAdvisory', () => {
+        it('keeps the inline verdict advisory unless the test opts in', () => {
+            expect(InlineVerdictIsAdvisory({})).toBe(true);
+            expect(InlineVerdictIsAdvisory({ gateInlineVerdicts: false })).toBe(true);
+            expect(InlineVerdictIsAdvisory({ gateInlineVerdicts: true })).toBe(false);
+            const driver = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../test-driver/ComputerUseTestDriver.ts'), 'utf8');
+            expect(driver).toMatch(/inline\.advisory = InlineVerdictIsAdvisory\(config\)/);
+            const policy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../test-driver/driver-policy.ts'), 'utf8');
+            expect(policy).not.toContain('export function inlineVerdictIsAdvisory');
+        });
+
         it('defaults step-count to advisory', () => {
             expect(IsOracleAdvisory('step-count')).toBe(true);
         });

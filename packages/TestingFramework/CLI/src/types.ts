@@ -63,6 +63,8 @@ export interface RunFlags extends CommonFlags {
      * Can be specified multiple times for multiple variables
      */
     var?: string[];
+    /** `name|id` or `name|id@version`. Overrides the rubric for this run. */
+    rubric?: string;
 }
 
 /**
@@ -93,6 +95,8 @@ export interface SuiteFlags extends CommonFlags {
      * Recommended: 3 (statistical minimum), 5 (more reliable detection).
      */
     flakyCheck?: number;
+    /** `name|id` or `name|id@version`. Overrides the rubric for every test in the suite. */
+    rubric?: string;
 }
 
 /**
