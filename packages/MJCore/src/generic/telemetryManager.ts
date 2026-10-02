@@ -1805,20 +1805,18 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             this._events = this._events.slice(-maxEvents);
         }
 
-        // Only `_events` was ever trimmed. Three collections derived from it grew for the life of
-        // the process: `_insights` by one entry per emitted warning, `_patterns` by one per distinct
-        // fingerprint (every new filter combination is a new fingerprint), and `_insightDedupeWindow`
-        // by one per dedupe key. On a long-lived server that is unbounded retention — a measurable
-        // share of the heap drift seen in #4882. Bound them on the same schedule as the events they
-        // come from.
+        // Three collections derived from `_events` need bounding on the same schedule: `_insights`
+        // gains an entry per emitted warning, `_patterns` one per distinct fingerprint — and every
+        // new filter combination is a distinct fingerprint — and `_insightDedupeWindow` one per
+        // dedupe key. Unbounded, they retain for the life of the process.
         const maxInsights = this._settings.autoTrim.maxInsights ?? 1000;
         if (maxInsights && this._insights.length > maxInsights) {
             this._insights = this._insights.slice(-maxInsights);
         }
 
-        // The two sweeps below walk whole maps, so they run at most once a minute rather than on
-        // every recorded event. Both collections are bounded by time, not count: a fingerprint or a
-        // dedupe key that stops recurring should age out, and one that keeps recurring is live data.
+        // The sweeps below walk whole maps, so they are throttled rather than run per event. Both
+        // collections are bounded by time rather than count: an entry that stops recurring should age
+        // out, while one that keeps recurring is live data a count cap would evict for nothing.
         if (now - this._lastDeepTrimAt > DEEP_TRIM_INTERVAL_MS) {
             this._lastDeepTrimAt = now;
             if (maxAgeMs) {

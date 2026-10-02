@@ -1,21 +1,19 @@
 /**
- * Telemetry's derived collections have to be bounded too (#4882, "Secondary").
+ * Bounding the three collections `TelemetryManager` derives from its event list.
  *
- * `trimIfNeeded()` only ever trimmed `_events`. Three collections derived from those events were
- * never released for the life of the process:
+ * `trimIfNeeded()` trims `_events`; these grow alongside it and must be bounded on the same
+ * schedule, or a long-lived server retains them for the life of the process:
  *
  * - `_insights` — one entry per emitted warning
- * - `_patterns` — one entry per distinct fingerprint, and every new filter combination is a new
- *   fingerprint, so this grows with query *variety* rather than with volume
+ * - `_patterns` — one entry per distinct fingerprint, so it grows with query *variety* rather than
+ *   volume, since every new filter combination is a new fingerprint
  * - `_insightDedupeWindow` — one entry per dedupe key
  *
- * On a long-lived server that is unbounded retention, and it was a measurable share of the heap
- * drift observed before the OOM: a fresh 2204MB baseline against a 2763MB live heap at crash time.
- *
- * The two map sweeps are O(n) over their maps while `trimIfNeeded` runs on *every recorded event*,
- * so they are throttled to once a minute. That throttle is itself pinned below — without it,
- * telemetry's own cost would scale with the size of its history, which is the shape of the problem
- * being fixed rather than a fix for it.
+ * `_insights` is capped by count because it is append-only and the newest entries are the useful
+ * ones. The two maps are bounded by age instead: an entry that stops recurring should expire, while
+ * one that keeps recurring is live data a count cap would evict for nothing. Their sweeps walk the
+ * whole map, so they are throttled rather than run on every recorded event — which the cases below
+ * also cover, since a throttle that never opens would silently stop bounding anything.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -98,10 +96,6 @@ describe('TelemetryManager — bounded derived collections', () => {
     });
 
     describe('_insights', () => {
-        /**
-         * REGRESSION PIN. Against the un-fixed code `_insights` is never touched by `trimIfNeeded`,
-         * so this fails with 10 retained instead of the cap.
-         */
         it('is capped at maxInsights, keeping the most recent', () => {
             i._settings.autoTrim.maxInsights = 5;
             i._insights = Array.from({ length: 10 }, (_, n) => insight(`i${n}`));
@@ -134,10 +128,6 @@ describe('TelemetryManager — bounded derived collections', () => {
     });
 
     describe('_patterns', () => {
-        /**
-         * REGRESSION PIN. Against the un-fixed code nothing ever deletes a fingerprint, so the stale
-         * one survives and this fails with 2 retained.
-         */
         it('drops fingerprints not seen within maxAgeMs and keeps live ones', () => {
             i._settings.autoTrim.maxAgeMs = 1000;
             i._patterns.set('stale', pattern('stale', now - 5000));
@@ -162,10 +152,6 @@ describe('TelemetryManager — bounded derived collections', () => {
     });
 
     describe('_insightDedupeWindow', () => {
-        /**
-         * REGRESSION PIN. One entry per dedupe key, never released. Against the un-fixed code the
-         * expired key is still present.
-         */
         it('drops keys older than the dedupe window and keeps recent ones', () => {
             i._settings.analyzers.dedupeWindowMs = 1000;
             i._insightDedupeWindow.set('expired', now - 5000);
