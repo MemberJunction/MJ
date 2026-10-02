@@ -37,16 +37,16 @@ export type DisplayNameOpacityReason =
 
 export interface DisplayNameOpacityResult {
     /** True when the mechanical display name still looks like schema jargon. */
-    isOpaque: boolean;
+    IsOpaque: boolean;
 
     /** What triggered the verdict. */
-    reason: DisplayNameOpacityReason;
+    Reason: DisplayNameOpacityReason;
 
     /** The mechanical display name that was judged. */
-    mechanicalDisplayName: string;
+    MechanicalDisplayName: string;
 
     /** The specific token that looked opaque, when one did. */
-    offendingToken?: string;
+    OffendingToken?: string;
 }
 
 /**
@@ -85,7 +85,7 @@ export interface DisplayNameOpacityResult {
  * @param entityName - The entity's `Name` (typically derived from the table name).
  * @returns The verdict, the mechanical name it judged, and the reason.
  */
-export function assessDisplayNameOpacity(entityName: string): DisplayNameOpacityResult {
+export function AssessDisplayNameOpacity(entityName: string): DisplayNameOpacityResult {
     const mechanicalDisplayName = createDisplayName(entityName ?? '').trim();
 
     // Split on whitespace; punctuation from prefixed names ("CRM: Accounts") is
@@ -104,24 +104,24 @@ export function assessDisplayNameOpacity(entityName: string): DisplayNameOpacity
         }
 
         if (!VOWELS.test(token)) {
-            return { isOpaque: true, reason: 'no-vowel-token', mechanicalDisplayName, offendingToken: token };
+            return { IsOpaque: true, Reason: 'no-vowel-token', MechanicalDisplayName: mechanicalDisplayName, OffendingToken: token };
         }
 
         if (/\d/.test(token)) {
-            return { isOpaque: true, reason: 'digit-in-token', mechanicalDisplayName, offendingToken: token };
+            return { IsOpaque: true, Reason: 'digit-in-token', MechanicalDisplayName: mechanicalDisplayName, OffendingToken: token };
         }
 
         if (token.length <= 3 && !COMMON_SHORT_WORDS.has(token.toLowerCase())) {
-            return { isOpaque: true, reason: 'short-unknown-token', mechanicalDisplayName, offendingToken: token };
+            return { IsOpaque: true, Reason: 'short-unknown-token', MechanicalDisplayName: mechanicalDisplayName, OffendingToken: token };
         }
     }
 
-    return { isOpaque: false, reason: 'clean', mechanicalDisplayName };
+    return { IsOpaque: false, Reason: 'clean', MechanicalDisplayName: mechanicalDisplayName };
 }
 
 /**
- * Convenience predicate over {@link assessDisplayNameOpacity}.
+ * Convenience predicate over {@link AssessDisplayNameOpacity}.
  */
-export function isLikelyOpaqueEntityName(entityName: string): boolean {
-    return assessDisplayNameOpacity(entityName).isOpaque;
+export function IsLikelyOpaqueEntityName(entityName: string): boolean {
+    return AssessDisplayNameOpacity(entityName).IsOpaque;
 }

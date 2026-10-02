@@ -21,23 +21,23 @@ export type EntityDescriptionResult = { entityDescription: string, tableName: st
  */
 export type EntityDisplayNameResult = {
     /** The proposed human-readable display name. */
-    displayName: string;
+    DisplayName: string;
     /** The entity name this was generated for, echoed back for correlation. */
-    entityName: string;
+    EntityName: string;
     /**
      * Which abbreviations the model expanded, and to what. Recorded so a
      * reviewer can audit a questionable expansion rather than only seeing the
      * result — `STAT` to `Status` and `STAT` to `Statistic` are both plausible,
      * and only the schema's context distinguishes them.
      */
-    expansions?: Array<{ from: string; to: string }>;
+    Expansions?: Array<{ From: string; To: string }>;
     /**
      * The model's own confidence. `low` results are discarded by CodeGen rather
      * than written, since a bad display name is worse than an ugly one.
      */
-    confidence: 'high' | 'medium' | 'low';
+    Confidence: 'high' | 'medium' | 'low';
     /** Why the model chose this rendering. */
-    reasoning?: string;
+    Reasoning?: string;
 }
 export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
 
@@ -290,7 +290,7 @@ export class AdvancedGeneration {
      * boolean, or the strings "true"/"false" — rather than truthy-testing, under
      * which the string "false" would enable the option.
      */
-    public featureOptionBool(featureName: string, optionName: string, defaultValue: boolean): boolean {
+    public FeatureOptionBool(featureName: string, optionName: string, defaultValue: boolean): boolean {
         const raw = this.GetFeature(featureName)?.options?.find(o => o.name === optionName)?.value;
         if (raw === undefined || raw === null) {
             return defaultValue;
@@ -782,7 +782,7 @@ export class AdvancedGeneration {
      *
      * Only meaningful for entities whose names remain opaque after the
      * deterministic `createDisplayName()` conversion — see
-     * `assessDisplayNameOpacity()`. The caller is expected to have applied that
+     * `AssessDisplayNameOpacity()`. The caller is expected to have applied that
      * filter; this method does not re-derive it, so an explicit request for a
      * clean name is honoured rather than silently skipped.
      *
@@ -791,7 +791,7 @@ export class AdvancedGeneration {
      *                 for what an abbreviated table name means.
      * @param contextUser - User context for the prompt run.
      */
-    public async generateEntityDisplayName(
+    public async GenerateEntityDisplayName(
         entity: {
             Name: string;
             SchemaName?: string;
@@ -821,15 +821,15 @@ export class AdvancedGeneration {
 
             const result = await this.executePrompt<EntityDisplayNameResult>(params);
 
-            if (result.success && result.result?.displayName) {
-                LogStatus(`Entity display name generated for ${entity.Name}: ${result.result.displayName}`);
+            if (result.success && result.result?.DisplayName) {
+                LogStatus(`Entity display name generated for ${entity.Name}: ${result.result.DisplayName}`);
                 return result.result;
             } else {
                 LogError(`AdvancedGeneration:Entity display name generation failed: ${result.errorMessage}`);
                 return null;
             }
         } catch (error) {
-            LogError(`AdvancedGeneration:Error in generateEntityDisplayName: ${error}`);
+            LogError(`AdvancedGeneration:Error in GenerateEntityDisplayName: ${error}`);
             return null;
         }
     }

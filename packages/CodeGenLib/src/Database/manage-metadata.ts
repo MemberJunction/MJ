@@ -18,7 +18,7 @@ import { SQLUtilityBase } from "./sql";
 import { ApplyIncludeSchemaScope } from "./schema-scope";
 import { BuildHealSchemaRoutineParams, GetAuthoredExcludeSchemas, SnapshotAuthoredExcludeSchemas } from "./heal-schema-params";
 import { AdvancedGeneration, EntityDescriptionResult, EntityDisplayNameResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, IsPlausibleEntityName } from "../Misc/advanced_generation";
-import { assessDisplayNameOpacity } from "../Misc/display-name-heuristics";
+import { AssessDisplayNameOpacity } from "../Misc/display-name-heuristics";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
    ApplySearchableFieldsCap,
@@ -7755,7 +7755,7 @@ export class ManageMetadataBase {
          // opaque after the deterministic conversion — so clean names never
          // reach the model.
          if (this.needsEntityDisplayNameGeneration(ag, entityRecord)) {
-            const displayNameResult = await ag.generateEntityDisplayName({
+            const displayNameResult = await ag.GenerateEntityDisplayName({
                Name: entity.Name,
                SchemaName: entityRecord.SchemaName as string | undefined,
                BaseTable: entityRecord.BaseTable as string | undefined,
@@ -7779,7 +7779,7 @@ export class ManageMetadataBase {
     * Three independent gates, cheapest first:
     *
     * 1. `Entity.AutoUpdateDisplayName` — an administrator has locked this name.
-    * 2. The feature flag itself (checked inside `generateEntityDisplayName` too,
+    * 2. The feature flag itself (checked inside `GenerateEntityDisplayName` too,
     *    but checked here so the opacity assessment is skipped when it is off).
     * 3. Opacity — whether the deterministic `createDisplayName()` conversion
     *    already produces something readable. This is a COST filter and can be
@@ -7799,17 +7799,17 @@ export class ManageMetadataBase {
          return false;
       }
 
-      if (ag.featureOptionBool('EntityDisplayNames', 'alwaysGenerate', false)) {
+      if (ag.FeatureOptionBool('EntityDisplayNames', 'alwaysGenerate', false)) {
          return true;
       }
 
       const entityName = String(entityRecord.Name ?? '');
-      const opacity = assessDisplayNameOpacity(entityName);
-      if (!opacity.isOpaque) {
+      const opacity = AssessDisplayNameOpacity(entityName);
+      if (!opacity.IsOpaque) {
          return false;
       }
 
-      logStatus(`         Display name for ${entityName} looks opaque (${opacity.reason}${opacity.offendingToken ? `: "${opacity.offendingToken}"` : ''}), requesting LLM rewrite`);
+      logStatus(`         Display name for ${entityName} looks opaque (${opacity.Reason}${opacity.OffendingToken ? `: "${opacity.OffendingToken}"` : ''}), requesting LLM rewrite`);
       return true;
    }
 
@@ -7831,9 +7831,9 @@ export class ManageMetadataBase {
       result: EntityDisplayNameResult
    ): Promise<void> {
       const entityName = String(entityRecord.Name ?? '');
-      const proposed = (result.displayName ?? '').trim();
+      const proposed = (result.DisplayName ?? '').trim();
 
-      if (result.confidence === 'low') {
+      if (result.Confidence === 'low') {
          logStatus(`         Skipped display name for ${entityName}: low confidence ("${proposed}")`);
          return;
       }
@@ -7851,8 +7851,8 @@ export class ManageMetadataBase {
       const sql = `UPDATE ${this.qs(MjCoreSchema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()}, ${this.qi('DisplayName')} = '${proposed.replace(/'/g, "''")}' WHERE ID = '${String(entityRecord.ID)}' AND ${this.qi('AutoUpdateDisplayName')} = ${this.boolLit(true)}`;
       await this.runQuery(pool, sql);
 
-      const expansions = result.expansions?.length
-         ? ` [${result.expansions.map(e => `${e.from}->${e.to}`).join(', ')}]`
+      const expansions = result.Expansions?.length
+         ? ` [${result.Expansions.map(e => `${e.From}->${e.To}`).join(', ')}]`
          : '';
       logStatus(`         Display name for ${entityName}: "${current || '(none)'}" -> "${proposed}"${expansions}`);
    }

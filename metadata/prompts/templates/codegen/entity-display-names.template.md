@@ -85,15 +85,15 @@ Return a JSON object with this exact structure:
 
 ```json
 {
-  "displayName": "Account Status Codes",
-  "entityName": "ACCT_STAT_CD",
-  "expansions": [
-    { "from": "ACCT", "to": "Account" },
-    { "from": "STAT", "to": "Status" },
-    { "from": "CD", "to": "Code" }
+  "DisplayName": "Account Status Codes",
+  "EntityName": "ACCT_STAT_CD",
+  "Expansions": [
+    { "From": "ACCT", "To": "Account" },
+    { "From": "STAT", "To": "Status" },
+    { "From": "CD", "To": "Code" }
   ],
-  "confidence": "high",
-  "reasoning": "Fields StatusName/IsActive/SortOrder identify this as a status lookup table, not accounting statistics."
+  "Confidence": "high",
+  "Reasoning": "Fields StatusName/IsActive/SortOrder identify this as a status lookup table, not accounting statistics."
 }
 ```
 
@@ -101,6 +101,6 @@ Return a JSON object with this exact structure:
 
 - Return **ONLY** the JSON object — no markdown fences, no text before or after
 - The output must be valid JSON that parses directly
-- `entityName` must echo the input entity name exactly
-- `expansions` must list every abbreviation you expanded, so a reviewer can audit them
-- `confidence` must be exactly one of `high`, `medium`, `low`
+- `EntityName` must echo the input entity name exactly
+- `Expansions` must list every abbreviation you expanded, so a reviewer can audit them
+- `Confidence` must be exactly one of `high`, `medium`, `low`
