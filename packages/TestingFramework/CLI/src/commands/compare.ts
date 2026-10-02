@@ -9,7 +9,7 @@ import { RunView, Metadata, UserInfo } from '@memberjunction/core';
 import { MJTestSuiteRunEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { CompareFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
-import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
+import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj-provider';
 
 /** Result of comparing a single test across two suite runs */
 interface TestComparison {
@@ -62,7 +62,7 @@ interface TestRunSummary {
  * Compare command — Compare two test suite runs to detect regressions
  */
 export class CompareCommand {
-    async execute(
+    async Execute(
         runId1: string | undefined,
         runId2: string | undefined,
         flags: CompareFlags,
@@ -88,9 +88,9 @@ export class CompareCommand {
         }
 
         try {
-            await initializeMJProvider();
+            await InitializeMJProvider();
             if (!contextUser) {
-                contextUser = await getContextUser();
+                contextUser = await GetContextUser();
             }
 
             const rv = new RunView();
@@ -241,16 +241,26 @@ export class CompareCommand {
                 OutputFormatter.writeToFile(output, flags.output);
             }
 
-            await closeMJProvider();
+            await CloseMJProvider();
 
             // Exit codes: 0 = no regressions, 1 = regressions detected, 2 = data error
             process.exit(result.Regressions > 0 ? 1 : 0);
 
         } catch (error) {
             console.error(OutputFormatter.formatError('Failed to compare test runs', error as Error));
-            try { await closeMJProvider(); } catch { /* ignore */ }
+            try { await CloseMJProvider(); } catch { /* ignore */ }
             process.exit(2);
         }
+    }
+
+    /** @deprecated Use {@link Execute}. */
+    async execute(
+        runId1: string | undefined,
+        runId2: string | undefined,
+        flags: CompareFlags,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        return this.Execute(runId1, runId2, flags, contextUser);
     }
 
     /**

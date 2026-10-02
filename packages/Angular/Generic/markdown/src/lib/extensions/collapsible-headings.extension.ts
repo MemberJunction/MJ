@@ -10,7 +10,7 @@
 /**
  * Helper function to toggle a collapsible section programmatically
  */
-export function toggleCollapsibleSection(sectionElement: HTMLElement): void {
+export function ToggleCollapsibleSection(sectionElement: HTMLElement): void {
   const isCollapsed = sectionElement.classList.contains('collapsed');
   const toggle = sectionElement.querySelector('.collapsible-toggle');
 
@@ -21,10 +21,15 @@ export function toggleCollapsibleSection(sectionElement: HTMLElement): void {
   }
 }
 
+/** @deprecated Use {@link ToggleCollapsibleSection}. */
+export function toggleCollapsibleSection(sectionElement: HTMLElement): void {
+  return ToggleCollapsibleSection(sectionElement);
+}
+
 /**
  * Expand all collapsible sections in a container
  */
-export function expandAllSections(container: HTMLElement): void {
+export function ExpandAllSections(container: HTMLElement): void {
   const sections = container.querySelectorAll('.collapsible-section.collapsed');
   sections.forEach((section) => {
     section.classList.remove('collapsed');
@@ -35,10 +40,15 @@ export function expandAllSections(container: HTMLElement): void {
   });
 }
 
+/** @deprecated Use {@link ExpandAllSections}. */
+export function expandAllSections(container: HTMLElement): void {
+  return ExpandAllSections(container);
+}
+
 /**
  * Collapse all collapsible sections in a container
  */
-export function collapseAllSections(container: HTMLElement): void {
+export function CollapseAllSections(container: HTMLElement): void {
   const sections = container.querySelectorAll('.collapsible-section:not(.collapsed)');
   sections.forEach((section) => {
     section.classList.add('collapsed');
@@ -49,10 +59,15 @@ export function collapseAllSections(container: HTMLElement): void {
   });
 }
 
+/** @deprecated Use {@link CollapseAllSections}. */
+export function collapseAllSections(container: HTMLElement): void {
+  return CollapseAllSections(container);
+}
+
 /**
  * Expand sections to reveal a specific heading by ID
  */
-export function expandToHeading(container: HTMLElement, headingId: string): void {
+export function ExpandToHeading(container: HTMLElement, headingId: string): void {
   const heading = container.querySelector(`#${headingId}`);
   if (!heading) return;
 
@@ -68,4 +83,9 @@ export function expandToHeading(container: HTMLElement, headingId: string): void
     }
     current = current.parentElement?.closest('.collapsible-section') || null;
   }
+}
+
+/** @deprecated Use {@link ExpandToHeading}. */
+export function expandToHeading(container: HTMLElement, headingId: string): void {
+  return ExpandToHeading(container, headingId);
 }

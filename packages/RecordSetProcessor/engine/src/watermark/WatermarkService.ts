@@ -141,7 +141,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
                 const record = queue.shift();
                 if (!record) break;
                 try {
-                    const hash = await this.computeRecordBasisHash(record, params.processor, recordContext, { excludeFields: params.excludeFields });
+                    const hash = await this.ComputeRecordBasisHash(record, params.processor, recordContext, { excludeFields: params.excludeFields });
                     if (hash) {
                         computedHashes.set(record.RecordID, hash);
                     }
@@ -188,7 +188,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
      * Computes the basis hash for a record. Delegates to processor.ComputeBasisHash if available,
      * otherwise falls back to BaseEntity.ComputeContentHash() or ComputeContentHashAsync on record data.
      */
-    public async computeRecordBasisHash(
+    public async ComputeRecordBasisHash(
         record: RecordRef,
         processor: IRecordProcessor | undefined,
         context: RecordProcessorContext,
@@ -216,6 +216,16 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         }
 
         return undefined;
+    }
+
+    /** @deprecated Use {@link ComputeRecordBasisHash}. */
+    public async computeRecordBasisHash(
+        record: RecordRef,
+        processor: IRecordProcessor | undefined,
+        context: RecordProcessorContext,
+        options?: { excludeFields?: string[] }
+    ): Promise<string | undefined> {
+        return this.ComputeRecordBasisHash(record, processor, context, options);
     }
 
     /**

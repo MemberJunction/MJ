@@ -23,7 +23,7 @@ import {
  * @param allEntities - All available entities for relationship lookups
  * @returns Formatted entity metadata ready for AI prompts
  */
-export function formatEntityMetadataForPrompt(entity: EntityInfo, allEntities: EntityInfo[]): EntityMetadataForPrompt {
+export function FormatEntityMetadataForPrompt(entity: EntityInfo, allEntities: EntityInfo[]): EntityMetadataForPrompt {
   return {
     entityName: entity.Name,
     description: entity.Description || '',
@@ -33,6 +33,11 @@ export function formatEntityMetadataForPrompt(entity: EntityInfo, allEntities: E
     fields: formatEntityFields(entity),
     relationships: formatEntityRelationships(entity, allEntities),
   };
+}
+
+/** @deprecated Use {@link FormatEntityMetadataForPrompt}. */
+export function formatEntityMetadataForPrompt(entity: EntityInfo, allEntities: EntityInfo[]): EntityMetadataForPrompt {
+  return FormatEntityMetadataForPrompt(entity, allEntities);
 }
 
 /**
@@ -91,7 +96,7 @@ function formatEntityRelationships(entity: EntityInfo, allEntities: EntityInfo[]
   return entity.RelatedEntities
     .filter(rel => entityNamesInGroup.has(rel.RelatedEntity))  // Only include relationships within the group
     .map(rel => {
-      const relatedEntity = findEntityById(rel.RelatedEntityID, allEntities);
+      const relatedEntity = FindEntityById(rel.RelatedEntityID, allEntities);
 
       // Determine the foreign key field based on relationship type and available fields
       let foreignKeyField: string;
@@ -156,38 +161,63 @@ function findEntityByName(name: string, entities: EntityInfo[]): EntityInfo | un
 /**
  * Find entity by ID in array
  */
-export function findEntityById(id: string, entities: EntityInfo[]): EntityInfo | undefined {
+export function FindEntityById(id: string, entities: EntityInfo[]): EntityInfo | undefined {
   return entities.find((e) => UUIDsEqual(e.ID, id));
+}
+
+/** @deprecated Use {@link FindEntityById}. */
+export function findEntityById(id: string, entities: EntityInfo[]): EntityInfo | undefined {
+  return FindEntityById(id, entities);
 }
 
 /**
  * Get primary key field(s) for an entity
  */
-export function getPrimaryKeyFields(entity: EntityInfo): EntityFieldInfo[] {
+export function GetPrimaryKeyFields(entity: EntityInfo): EntityFieldInfo[] {
   return entity.Fields.filter((f) => f.IsPrimaryKey);
+}
+
+/** @deprecated Use {@link GetPrimaryKeyFields}. */
+export function getPrimaryKeyFields(entity: EntityInfo): EntityFieldInfo[] {
+  return GetPrimaryKeyFields(entity);
 }
 
 /**
  * Get foreign key fields for an entity
  */
-export function getForeignKeyFields(entity: EntityInfo): EntityFieldInfo[] {
+export function GetForeignKeyFields(entity: EntityInfo): EntityFieldInfo[] {
   return entity.Fields.filter((f) => isForeignKeyField(f));
+}
+
+/** @deprecated Use {@link GetForeignKeyFields}. */
+export function getForeignKeyFields(entity: EntityInfo): EntityFieldInfo[] {
+  return GetForeignKeyFields(entity);
 }
 
 /**
  * Check if an entity has any relationships
  * Uses EntityInfo.RelatedEntities getter
  */
-export function hasRelationships(entity: EntityInfo, allEntities: EntityInfo[]): boolean {
+export function HasRelationships(entity: EntityInfo, allEntities: EntityInfo[]): boolean {
   return entity.RelatedEntities.length > 0;
+}
+
+/** @deprecated Use {@link HasRelationships}. */
+export function hasRelationships(entity: EntityInfo, allEntities: EntityInfo[]): boolean {
+  return HasRelationships(entity, allEntities);
 }
 
 /**
  * Get count of relationships for an entity
  * Uses EntityInfo.RelatedEntities getter
  */
-export function getRelationshipCount(entity: EntityInfo, allEntities: EntityInfo[]): number {
+export function GetRelationshipCount(entity: EntityInfo, allEntities: EntityInfo[]): number {
   return entity.RelatedEntities.length;
+}
+
+/** @deprecated Use {@link GetRelationshipCount}. */
+export function getRelationshipCount(entity: EntityInfo, allEntities: EntityInfo[]): number {
+  return GetRelationshipCount(entity, allEntities);
 }
 
 /**
@@ -197,8 +227,13 @@ export function getRelationshipCount(entity: EntityInfo, allEntities: EntityInfo
  * @param entityGroup - Entity group to format
  * @returns Array of formatted entity metadata for Nunjucks template
  */
-export function formatEntityGroupForPrompt(entityGroup: EntityGroup): EntityMetadataForPrompt[] {
+export function FormatEntityGroupForPrompt(entityGroup: EntityGroup): EntityMetadataForPrompt[] {
   return entityGroup.entities.map((entity) =>
-    formatEntityMetadataForPrompt(entity, entityGroup.entities)
+    FormatEntityMetadataForPrompt(entity, entityGroup.entities)
   );
+}
+
+/** @deprecated Use {@link FormatEntityGroupForPrompt}. */
+export function formatEntityGroupForPrompt(entityGroup: EntityGroup): EntityMetadataForPrompt[] {
+  return FormatEntityGroupForPrompt(entityGroup);
 }

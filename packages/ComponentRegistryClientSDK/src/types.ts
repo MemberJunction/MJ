@@ -364,7 +364,7 @@ export class RegistryError extends Error {
   constructor(
     message: string,
     public code: RegistryErrorCode,
-    public statusCode?: number,
+    public statusCode?: number,  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     public details?: any
   ) {
     super(message);

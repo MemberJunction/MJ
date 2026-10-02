@@ -9,8 +9,8 @@ import type { MJFileEntity } from '@memberjunction/core-entities';
 
 import {
   MJFilesArtifactStore,
-  localArtifactPath,
-  resolveLocalArtifactBaseDir,
+  LocalArtifactPath,
+  ResolveLocalArtifactBaseDir,
 } from '../artifact-store';
 import { LocalArtifactLoader } from '../../scoring/artifact-loader';
 import type { IEntityFactory } from '../types';
@@ -112,7 +112,7 @@ describe('MJFilesArtifactStore + LocalArtifactLoader — round-trip', () => {
 
     await store.save(new Uint8Array([9]), 'm.bin');
 
-    const onDisk = await stat(localArtifactPath(baseDir, fileId));
+    const onDisk = await stat(LocalArtifactPath(baseDir, fileId));
     expect(onDisk.isFile()).toBe(true);
     const files = await readdir(baseDir);
     expect(files).toEqual([`${fileId}.bin`]);
@@ -172,17 +172,17 @@ describe('LocalArtifactLoader — missing files return null', () => {
 
 describe('local artifact path + base dir resolution', () => {
   it('localArtifactPath builds <baseDir>/<fileId>.bin', () => {
-    expect(localArtifactPath('/base', 'abc-123')).toBe(join('/base', 'abc-123.bin'));
+    expect(LocalArtifactPath('/base', 'abc-123')).toBe(join('/base', 'abc-123.bin'));
   });
 
   it('resolveLocalArtifactBaseDir honors PS_ARTIFACT_DIR, else os tmpdir', () => {
     const prev = process.env.PS_ARTIFACT_DIR;
     try {
       process.env.PS_ARTIFACT_DIR = '/custom/ps/artifacts';
-      expect(resolveLocalArtifactBaseDir()).toBe('/custom/ps/artifacts');
+      expect(ResolveLocalArtifactBaseDir()).toBe('/custom/ps/artifacts');
 
       delete process.env.PS_ARTIFACT_DIR;
-      expect(resolveLocalArtifactBaseDir()).toBe(join(tmpdir(), 'mj-ps-artifacts'));
+      expect(ResolveLocalArtifactBaseDir()).toBe(join(tmpdir(), 'mj-ps-artifacts'));
     } finally {
       if (prev === undefined) {
         delete process.env.PS_ARTIFACT_DIR;

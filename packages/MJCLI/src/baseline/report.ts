@@ -2,10 +2,10 @@
  * Diff report rendering: JSON (machine-readable) + Markdown (human-readable).
  */
 
-import { ellipsize } from './util';
+import { Ellipsize } from './util';
 import type { DiffReport, ObjectDiff, RowDiff, TableRowDiff } from './types';
 
-export function renderJson(report: DiffReport): string {
+export function RenderJson(report: DiffReport): string {
   return JSON.stringify(
     report,
     (_k, v) => {
@@ -19,7 +19,12 @@ export function renderJson(report: DiffReport): string {
   );
 }
 
-export function renderMarkdown(report: DiffReport): string {
+/** @deprecated Use {@link RenderJson}. */
+export function renderJson(report: DiffReport): string {
+  return RenderJson(report);
+}
+
+export function RenderMarkdown(report: DiffReport): string {
   const lines: string[] = [];
   lines.push(`# Baseline Comparison Report`);
   lines.push('');
@@ -75,35 +80,40 @@ export function renderMarkdown(report: DiffReport): string {
   return lines.join('\n') + '\n';
 }
 
+/** @deprecated Use {@link RenderMarkdown}. */
+export function renderMarkdown(report: DiffReport): string {
+  return RenderMarkdown(report);
+}
+
 function formatObjectDiffRow(diff: ObjectDiff): string {
-  const details = diff.details ? ellipsize(diff.details, 120) : '';
-  return `| ${diff.kind} | \`${diff.qualifiedName}\` | ${diff.diffKind} | ${details} |`;
+  const details = diff.Details ? Ellipsize(diff.Details, 120) : '';
+  return `| ${diff.Kind} | \`${diff.QualifiedName}\` | ${diff.DiffKind} | ${details} |`;
 }
 
 function formatRowDiffsForTable(t: TableRowDiff): string {
   const lines: string[] = [];
-  lines.push(`### \`${t.schema}.${t.table}\``);
-  lines.push(`Rows — left: ${t.leftRowCount}, right: ${t.rightRowCount}, diffs: ${t.diffCount}${t.truncated ? ' (sample truncated)' : ''}`);
-  if (t.sampleDiffs.length === 0) return lines.join('\n');
+  lines.push(`### \`${t.Schema}.${t.Table}\``);
+  lines.push(`Rows — left: ${t.LeftRowCount}, right: ${t.RightRowCount}, diffs: ${t.DiffCount}${t.Truncated ? ' (sample truncated)' : ''}`);
+  if (t.SampleDiffs.length === 0) return lines.join('\n');
   lines.push('');
-  for (const r of t.sampleDiffs) lines.push(formatRowDiff(r));
+  for (const r of t.SampleDiffs) lines.push(formatRowDiff(r));
   return lines.join('\n');
 }
 
 function formatRowDiff(r: RowDiff): string {
-  if (r.diffKind !== 'changed' || !r.columnDiffs?.length) {
-    return `- ${r.diffKind}: \`${ellipsize(r.key, 80)}\``;
+  if (r.DiffKind !== 'changed' || !r.ColumnDiffs?.length) {
+    return `- ${r.DiffKind}: \`${Ellipsize(r.Key, 80)}\``;
   }
-  const cols = r.columnDiffs
-    .map((c) => `\`${c.column}\`: ${formatVal(c.leftValue)} → ${formatVal(c.rightValue)}`)
+  const cols = r.ColumnDiffs
+    .map((c) => `\`${c.Column}\`: ${formatVal(c.LeftValue)} → ${formatVal(c.RightValue)}`)
     .join('; ');
-  return `- changed \`${ellipsize(r.key, 60)}\`: ${cols}`;
+  return `- changed \`${Ellipsize(r.Key, 60)}\`: ${cols}`;
 }
 
 function formatVal(v: unknown): string {
   if (v === null || v === undefined) return '`null`';
-  if (typeof v === 'string') return `\`"${ellipsize(v, 40)}"\``;
+  if (typeof v === 'string') return `\`"${Ellipsize(v, 40)}"\``;
   if (v instanceof Date) return `\`${v.toISOString()}\``;
-  if (Buffer.isBuffer(v)) return `\`0x${ellipsize(v.toString('hex'), 20)}\``;
-  return `\`${ellipsize(String(v), 40)}\``;
+  if (Buffer.isBuffer(v)) return `\`0x${Ellipsize(v.toString('hex'), 20)}\``;
+  return `\`${Ellipsize(String(v), 40)}\``;
 }

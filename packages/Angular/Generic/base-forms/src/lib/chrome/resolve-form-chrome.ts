@@ -15,7 +15,7 @@ import {
     type RelatedFormRoleResolution,
 } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { RelatedEntitySectionKey } from '../panel-slot/form-contribution';
+import { CreateRelatedEntitySectionKeyResolver } from '../panel-slot/form-contribution';
 import { BaseFormPolicy, type FormChromeContext } from './base-form-policy';
 import {
     DETAILS_SECTION_KEY,
@@ -214,10 +214,11 @@ export function ApplyFormChromeRuleTitles(
 
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const keysByRelatedId = new Map<string, string[]>();
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const id = (rel.RelatedEntityID ?? '').trim().toLowerCase();
         if (!id) continue;
-        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const key = sectionKeyOf(rel);
         const list = keysByRelatedId.get(id) ?? [];
         list.push(key);
         keysByRelatedId.set(id, list);
@@ -243,7 +244,8 @@ export function ApplyFormChromeRuleTitles(
         if (group.IsMore) continue;
         const override = group.SectionKeys
             .map((key) => titleByKey.get(key))
-            .find((value): value is string => !!value);
+            .find((value): value is string => !!value)
+            ?? titleByKey.get(group.Key);
         if (override) group.Title = override;
     }
 }
@@ -462,7 +464,7 @@ export function StabilizeFirstClassGroupOrder(
     if (!previous || previous.Groups.length === 0) return next;
     const details = next.Groups.filter((g) => g.Key === DETAILS_SECTION_KEY);
     const more = next.Groups.filter((g) => g.IsMore);
-    const leads = next.Groups.filter((g) => !!g.IsLead);
+    const leads = next.Groups.filter((g) => !g.IsMore && !!g.IsLead && g.Key !== DETAILS_SECTION_KEY);
     const related = next.Groups.filter((g) => !g.IsMore && !g.IsLead && g.Key !== DETAILS_SECTION_KEY);
     if (leads.length === 0 && related.length === 0) return next;
 
@@ -638,10 +640,11 @@ export function RebuildChromeSpecMembership(
 /** Prefer EntityRelationship.DisplayName on single-key related groups. */
 function applyRelatedDisplayNames(spec: FormChromeSpec, entity: EntityInfo): void {
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const name = rel.DisplayName?.trim();
         if (!name) continue;
-        const sectionKey = RelatedEntitySectionKey(rel, displayInForm);
+        const sectionKey = sectionKeyOf(rel);
         const group = spec.Groups.find((g) => !g.IsMore && g.SectionKeys.length === 1 && g.SectionKeys[0] === sectionKey);
         if (group) group.Title = name;
     }
@@ -670,10 +673,11 @@ function mapRelatedRoles(
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const byId = new Map(assignments.map((a) => [a.RelationshipID.toLowerCase(), a]));
     const roles = new Map<string, FormRole>();
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const assignment = byId.get((rel.ID ?? '').toLowerCase());
         if (!assignment) continue;
-        const sectionKey = RelatedEntitySectionKey(rel, displayInForm);
+        const sectionKey = sectionKeyOf(rel);
         roles.set(sectionKey, assignment.Role);
     }
     return roles;
@@ -723,10 +727,11 @@ function sortFirstClassRelatedGroups(
     const explicitPrimary = new Set<string>();
     const contrib = new Set(contributionSectionKeys);
     const leadSet = new Set(leadKeys);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const assignment = byId.get((rel.ID ?? '').toLowerCase());
         if (!assignment) continue;
-        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const key = sectionKeyOf(rel);
         const current = scoreByKey.get(key);
         scoreByKey.set(key, current == null ? assignment.Score : Math.max(current, assignment.Score));
         if (assignment.Reason === 'explicit-primary') explicitPrimary.add(key);
@@ -768,10 +773,11 @@ function mergeRelatedSortKeys(
     contributionSortKeyByKey: ReadonlyMap<string, number>,
 ): Map<string, number> {
     const merged = new Map(contributionSortKeyByKey);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const sort = ReadRelationshipSortKey(rel.Configuration);
         if (sort == null) continue;
-        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const key = sectionKeyOf(rel);
         const current = merged.get(key);
         merged.set(key, current == null ? sort : Math.max(current, sort));
     }
@@ -795,16 +801,18 @@ function noneInclusionSectionKeys(
     const noneIds = new Set(
         assignments.filter((a) => a.Inclusion === 'None').map((a) => a.RelationshipID.toLowerCase()),
     );
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     return displayInForm
         .filter((rel) => noneIds.has((rel.ID ?? '').toLowerCase()))
-        .map((rel) => RelatedEntitySectionKey(rel, displayInForm));
+        .map((rel) => sectionKeyOf(rel));
 }
 
 function displayInFormFalseSectionKeys(entity: EntityInfo): string[] {
     const all = entity.RelatedEntities ?? [];
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(all);
     return all
         .filter((rel) => !rel.DisplayInForm)
-        .map((rel) => RelatedEntitySectionKey(rel, all));
+        .map((rel) => sectionKeyOf(rel));
 }
 
 /**
@@ -815,8 +823,9 @@ function mergeRelatedGroupsByEntity(spec: FormChromeSpec, entity: EntityInfo): v
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const entityIdByKey = new Map<string, string>();
     const titleByEntityId = new Map<string, string>();
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
-        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const key = sectionKeyOf(rel);
         const id = (rel.RelatedEntityID ?? '').toLowerCase();
         if (!id) continue;
         entityIdByKey.set(key, id);
@@ -884,8 +893,9 @@ function addMissingRelatedGroups(
         ...hiddenSectionKeys,
     ]);
 
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
-        const sectionKey = RelatedEntitySectionKey(rel, displayInForm);
+        const sectionKey = sectionKeyOf(rel);
         if (known.has(sectionKey) || hiddenSectionKeys.has(sectionKey)) continue;
         const role = relatedRoles.get(sectionKey);
         if (role === 'Detail') {

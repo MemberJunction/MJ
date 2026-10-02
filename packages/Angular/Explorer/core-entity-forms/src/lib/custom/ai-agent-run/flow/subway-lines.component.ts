@@ -1,8 +1,8 @@
 import { Component, ElementRef, Input, Output, EventEmitter, ViewChild, OnDestroy, ChangeDetectionStrategy, ViewEncapsulation } from '@angular/core';
 import {
-  FlowModel, FlowNode, FLOW_COLORS, agentOf, agentShortName, shortLabel, activeLeaf, formatDuration
+  FlowModel, FlowNode, FLOW_COLORS, AgentOf, AgentShortName, ShortLabel, ActiveLeaf, FormatDuration
 } from './agent-run-flow.model';
-import { svgEl, clip, appendIcon, appendTitle } from './flow-svg.util';
+import { SvgEl, Clip, AppendIcon, AppendTitle } from './flow-svg.util';
 import { PanZoomController } from './pan-zoom';
 
 interface Station { ring: SVGElement; lab?: SVGElement; leaf: FlowNode; r: number; sx: number; sy: number; }
@@ -23,8 +23,26 @@ interface Connector { path: SVGGraphicsElement; to: FlowNode; len: number; }
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class SubwayLinesComponent implements OnDestroy {
-  @ViewChild('svg', { static: true }) svgRef!: ElementRef<SVGSVGElement>;
-  @Output() nodeSelected = new EventEmitter<FlowNode>();
+  @ViewChild('svg', { static: true }) SvgRef!: ElementRef<SVGSVGElement>;
+
+  /** @deprecated Use {@link SvgRef}. */
+  get svgRef(): ElementRef<SVGSVGElement> {
+    return this.SvgRef;
+  }
+  /** @deprecated Use {@link SvgRef}. */
+  set svgRef(value: ElementRef<SVGSVGElement>) {
+    this.SvgRef = value;
+  }
+  @Output() NodeSelected = new EventEmitter<FlowNode>();
+
+  /**
+   * @deprecated Use {@link NodeSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (nodeSelected) keeps working. Must stay AFTER NodeSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() nodeSelected = this.NodeSelected;
 
   private _model: FlowModel | null = null;
   private built = false;
@@ -61,83 +79,83 @@ export class SubwayLinesComponent implements OnDestroy {
 
   private clear(): void {
     this.pz?.Detach(); this.pz = undefined;
-    const svg = this.svgRef?.nativeElement;
+    const svg = this.SvgRef?.nativeElement;
     if (svg) while (svg.firstChild) svg.removeChild(svg.firstChild);
     this.stations.clear(); this.connectors = [];
   }
 
   private build(): void {
-    const svg = this.svgRef.nativeElement;
+    const svg = this.SvgRef.nativeElement;
     const m = this._model!;
-    const agents = m.nodes.filter(n => n.type === 'agent' || n.type === 'subagent');
+    const agents = m.Nodes.filter(n => n.Type === 'agent' || n.Type === 'subagent');
     const lineY = new Map<number, number>();
-    agents.forEach((a, i) => lineY.set(a.id, this.TOP + i * this.LINE_GAP));
+    agents.forEach((a, i) => lineY.set(a.Id, this.TOP + i * this.LINE_GAP));
     const VH = this.TOP + Math.max(1, agents.length) * this.LINE_GAP + 30;
     svg.setAttribute('viewBox', `0 0 ${this.VW} ${VH}`);
 
-    const main = svgEl('g', {}, svg);
-    const lineG = svgEl('g', {}, main);
-    const connG = svgEl('g', {}, main);
-    const stationG = svgEl('g', {}, main);
-    const trainG = svgEl('g', {}, main);
+    const main = SvgEl('g', {}, svg);
+    const lineG = SvgEl('g', {}, main);
+    const connG = SvgEl('g', {}, main);
+    const stationG = SvgEl('g', {}, main);
+    const trainG = SvgEl('g', {}, main);
 
-    const sx = (l: FlowNode) => this.PAD + l.tmid * this.IW;
-    const sy = (l: FlowNode) => lineY.get(agentOf(l).id) ?? this.TOP;
-    const radius = (l: FlowNode) => Math.min(17, 8 + Math.sqrt(l.realDur) * 1.4);
+    const sx = (l: FlowNode) => this.PAD + l.Tmid * this.IW;
+    const sy = (l: FlowNode) => lineY.get(AgentOf(l).Id) ?? this.TOP;
+    const radius = (l: FlowNode) => Math.min(17, 8 + Math.sqrt(l.RealDur) * 1.4);
 
     // line backbones + agent labels (left gutter, with the agent's icon)
     for (const a of agents) {
-      const kids = m.leaves.filter(l => agentOf(l) === a);
-      const y = lineY.get(a.id)!;
-      const col = FLOW_COLORS[a.type];
+      const kids = m.Leaves.filter(l => AgentOf(l) === a);
+      const y = lineY.get(a.Id)!;
+      const col = FLOW_COLORS[a.Type];
       if (kids.length) {
         const x0 = Math.min(...kids.map(sx)) - 32, x1 = Math.max(...kids.map(sx)) + 32;
-        svgEl('line', { x1: x0, y1: y, x2: x1, y2: y, stroke: col, 'stroke-width': 7, opacity: 0.32, 'stroke-linecap': 'round' }, lineG);
+        SvgEl('line', { x1: x0, y1: y, x2: x1, y2: y, stroke: col, 'stroke-width': 7, opacity: 0.32, 'stroke-linecap': 'round' }, lineG);
       }
-      appendIcon(lineG, 14, y - 11, 22, a.iconClass, a.logoUrl, col);
-      svgEl('text', { x: 44, y: y - 6, 'font-size': 13, 'font-weight': 700, fill: col, 'dominant-baseline': 'middle', text: clip(agentShortName(a), 18) }, lineG);
-      svgEl('text', { x: 44, y: y + 10, 'font-size': 9.5, 'dominant-baseline': 'middle', class: 'ftxt-muted', text: `${kids.length} step${kids.length === 1 ? '' : 's'} · ${formatDuration(a.realDur)}` }, lineG);
+      AppendIcon(lineG, 14, y - 11, 22, a.IconClass, a.LogoUrl, col);
+      SvgEl('text', { x: 44, y: y - 6, 'font-size': 13, 'font-weight': 700, fill: col, 'dominant-baseline': 'middle', text: Clip(AgentShortName(a), 18) }, lineG);
+      SvgEl('text', { x: 44, y: y + 10, 'font-size': 9.5, 'dominant-baseline': 'middle', class: 'ftxt-muted', text: `${kids.length} step${kids.length === 1 ? '' : 's'} · ${FormatDuration(a.RealDur)}` }, lineG);
     }
 
     // connectors carry the destination line's (agent's) colour
-    for (let i = 0; i < m.leaves.length - 1; i++) {
-      const a = m.leaves[i], b = m.leaves[i + 1];
+    for (let i = 0; i < m.Leaves.length - 1; i++) {
+      const a = m.Leaves[i], b = m.Leaves[i + 1];
       const ax = sx(a), ay = sy(a), bx = sx(b), by = sy(b);
       const mx = (ax + bx) / 2;
       const d = ay === by ? `M${ax},${ay} L${bx},${by}` : `M${ax},${ay} L${mx},${ay} L${mx},${by} L${bx},${by}`;
-      const path = svgEl('path', { d, fill: 'none', stroke: FLOW_COLORS[agentOf(b).type], 'stroke-width': 3, opacity: 0.14, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, connG) as SVGGraphicsElement;
+      const path = SvgEl('path', { d, fill: 'none', stroke: FLOW_COLORS[AgentOf(b).Type], 'stroke-width': 3, opacity: 0.14, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, connG) as SVGGraphicsElement;
       this.connectors.push({ path, to: b, len: (path as unknown as SVGPathElement).getTotalLength() });
     }
 
     // stations: ring + step icon; angled abbreviated label (thinned when dense)
     let lastLabelX = -1e9;
-    m.leaves.forEach((l) => {
+    m.Leaves.forEach((l) => {
       const x = sx(l), y = sy(l), r = radius(l);
-      const col = FLOW_COLORS[l.type];
-      const grp = svgEl('g', {}, stationG);
+      const col = FLOW_COLORS[l.Type];
+      const grp = SvgEl('g', {}, stationG);
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.color = col;
       (grp as SVGElement & { style: CSSStyleDeclaration }).style.cursor = 'pointer';
-      appendTitle(grp, `${l.name} · ${formatDuration(l.realDur)}`);
-      const ring = svgEl('circle', { cx: x, cy: y, r, fill: 'var(--mj-bg-surface)', stroke: col, 'stroke-width': 3.2 }, grp);
-      appendIcon(grp, x - r * 0.62, y - r * 0.62, r * 1.24, l.iconClass, l.logoUrl, col);
+      AppendTitle(grp, `${l.Name} · ${FormatDuration(l.RealDur)}`);
+      const ring = SvgEl('circle', { cx: x, cy: y, r, fill: 'var(--mj-bg-surface)', stroke: col, 'stroke-width': 3.2 }, grp);
+      AppendIcon(grp, x - r * 0.62, y - r * 0.62, r * 1.24, l.IconClass, l.LogoUrl, col);
 
-      const show = (x - lastLabelX >= this.MIN_LABEL_GAP) || l.heat >= 2;
+      const show = (x - lastLabelX >= this.MIN_LABEL_GAP) || l.Heat >= 2;
       let lab: SVGElement | undefined;
       if (show) {
         lastLabelX = x;
         const lx = x, ly = y - r - 8;
-        lab = svgEl('text', {
+        lab = SvgEl('text', {
           x: lx, y: ly, 'font-size': 10.5, 'font-weight': 600, 'text-anchor': 'start',
           transform: `rotate(-30 ${lx} ${ly})`, class: 'ftxt-secondary', opacity: 0.7,
-          text: `${clip(shortLabel(l), 22)}  ·  ${formatDuration(l.realDur)}`
+          text: `${Clip(ShortLabel(l), 22)}  ·  ${FormatDuration(l.RealDur)}`
         }, grp);
       }
-      grp.addEventListener('click', () => { if (!this.pz?.moved) this.nodeSelected.emit(l); });
-      this.stations.set(l.id, { ring, lab, leaf: l, r, sx: x, sy: y });
+      grp.addEventListener('click', () => { if (!this.pz?.moved) this.NodeSelected.emit(l); });
+      this.stations.set(l.Id, { ring, lab, leaf: l, r, sx: x, sy: y });
     });
 
-    this.trainHalo = svgEl('circle', { r: 17, opacity: 0, class: 'fhand-dot' }, trainG);
-    this.train = svgEl('circle', { r: 9, opacity: 0, stroke: 'var(--mj-bg-surface)', 'stroke-width': 2.5 }, trainG);
+    this.trainHalo = SvgEl('circle', { r: 17, opacity: 0, class: 'fhand-dot' }, trainG);
+    this.train = SvgEl('circle', { r: 9, opacity: 0, stroke: 'var(--mj-bg-surface)', 'stroke-width': 2.5 }, trainG);
 
     this.pz = new PanZoomController(svg, main, 'mj.agentRunFlow.view.subway.v1');
     this.pz.Load(); this.pz.Attach();
@@ -146,25 +164,25 @@ export class SubwayLinesComponent implements OnDestroy {
   private update(p: number, ts: number): void {
     const m = this._model!;
     this.stations.forEach(({ ring, lab, leaf, r }) => {
-      const started = p >= leaf.t0;
-      const active = started && p < leaf.t1;
-      const selected = leaf.id === this.selectedId;
-      ring.setAttribute('class', selected ? 'glow2' : active ? 'glow' + Math.max(1, leaf.heat) : '');
+      const started = p >= leaf.T0;
+      const active = started && p < leaf.T1;
+      const selected = leaf.Id === this.selectedId;
+      ring.setAttribute('class', selected ? 'glow2' : active ? 'glow' + Math.max(1, leaf.Heat) : '');
       ring.setAttribute('stroke-width', selected ? '4.5' : '3.2');
       ring.setAttribute('r', String(active ? r + 2 * Math.abs(Math.sin(ts / 220)) : r));
       ring.setAttribute('fill-opacity', started ? '1' : '0.55');
       lab?.setAttribute('opacity', active || selected ? '1' : started ? '0.85' : '0.6');
     });
     this.connectors.forEach(({ path, to }) => {
-      const done = p >= to.t1, lit = p >= to.t0;
+      const done = p >= to.T1, lit = p >= to.T0;
       path.setAttribute('opacity', done ? '0.7' : lit ? '0.45' : '0.14');
       path.setAttribute('stroke-width', lit ? '3.6' : '3');
     });
 
-    const leaf = activeLeaf(m, p);
-    const idx = m.leaves.indexOf(leaf);
-    const frac = p >= leaf.t1 ? 1 : Math.max(0, (p - leaf.t0) / (leaf.t1 - leaf.t0));
-    const here = this.stations.get(leaf.id);
+    const leaf = ActiveLeaf(m, p);
+    const idx = m.Leaves.indexOf(leaf);
+    const frac = p >= leaf.T1 ? 1 : Math.max(0, (p - leaf.T0) / (leaf.T1 - leaf.T0));
+    const here = this.stations.get(leaf.Id);
     let tx = here?.sx ?? 0, ty = here?.sy ?? 0;
     if (here && idx >= 0 && idx < this.connectors.length && frac >= this.DWELL) {
       const conn = this.connectors[idx];
@@ -173,7 +191,7 @@ export class SubwayLinesComponent implements OnDestroy {
       tx = pt.x; ty = pt.y;
     }
     const live = p > 0 && p < 1;
-    const lineCol = FLOW_COLORS[agentOf(leaf).type];
+    const lineCol = FLOW_COLORS[AgentOf(leaf).Type];
     if (this.train) {
       this.train.setAttribute('cx', String(tx)); this.train.setAttribute('cy', String(ty));
       this.train.setAttribute('opacity', live ? '1' : '0');

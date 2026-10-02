@@ -49,7 +49,7 @@ export class SimilaritySearch extends SimpleVectorService {
    * @param topK - Number of most similar queries to return (default: 5)
    * @returns Array of top-K most similar golden queries with scores
    */
-  async findSimilarQueries(
+  async FindSimilarQueries(
     queryEmbeddings: QueryEmbeddings,
     goldenEmbeddings: EmbeddedGoldenQuery[],
     topK: number = 5
@@ -68,6 +68,15 @@ export class SimilaritySearch extends SimpleVectorService {
 
     // Sort by similarity (highest first) and return top K
     return this.selectTopK(similarities, topK);
+  }
+
+  /** @deprecated Use {@link FindSimilarQueries}. */
+  async findSimilarQueries(
+    queryEmbeddings: QueryEmbeddings,
+    goldenEmbeddings: EmbeddedGoldenQuery[],
+    topK: number = 5
+  ): Promise<SimilarQuery[]> {
+    return this.FindSimilarQueries(queryEmbeddings, goldenEmbeddings, topK);
   }
 
   /**

@@ -18,10 +18,10 @@ export interface ExportDialogConfig {
  * Column information for export
  */
 export interface ExportColumnInfo {
-  name: string;
-  displayName: string;
-  dataType?: 'string' | 'number' | 'date' | 'boolean' | 'currency';
-  selected?: boolean;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  displayName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dataType?: 'string' | 'number' | 'date' | 'boolean' | 'currency';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  selected?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -51,19 +51,19 @@ export interface ExportDialogResult {
  */
 export interface ExportServiceOptions {
   /** Data to export */
-  data: Record<string, unknown>[];
+  Data: Record<string, unknown>[];
   /** Export format */
-  format: 'excel' | 'csv' | 'json';
+  Format: 'excel' | 'csv' | 'json';
   /** File name without extension */
-  fileName?: string;
+  FileName?: string;
   /** Include column headers */
-  includeHeaders?: boolean;
+  IncludeHeaders?: boolean;
   /** Row sampling options */
-  sampling?: {
+  Sampling?: {
     mode: 'all' | 'top' | 'bottom' | 'every-nth' | 'random';
     count?: number;
     interval?: number;
   };
   /** Columns to export */
-  columns?: ExportColumnInfo[];
+  Columns?: ExportColumnInfo[];
 }

@@ -56,14 +56,32 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
      * was clicked. Same shape as the chat area's openEntityRecord — the host (Explorer
      * wrapper or workspace) routes it to navigation; this package never navigates itself.
      */
-    @Output() openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+    @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+
+    /**
+     * @deprecated Use {@link OpenEntityRecord}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() openEntityRecord = this.OpenEntityRecord;
 
     /**
      * The user asked to open a routine's dedicated conversation (the hidden,
      * Application-scoped thread its runs append to). Emits the conversation ID;
      * the host selects it in chat — this component closes the slide-in first.
      */
-    @Output() openConversation = new EventEmitter<string>();
+    @Output() OpenConversation = new EventEmitter<string>();
+
+    /**
+     * @deprecated Use {@link OpenConversation}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (openConversation) keeps working. Must stay AFTER OpenConversation: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() openConversation = this.OpenConversation;
 
     /** Slide-in open state. */
     public SlideInVisible = false;
@@ -118,12 +136,12 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
     /** Opens the routine's conversation in the host chat surface (closing the slide-in). */
     public OnConversationOpened(args: ConversationOpenedEventArgs): void {
         this.OnSlideInClosed();
-        this.openConversation.emit(args.ConversationID);
+        this.OpenConversation.emit(args.ConversationID);
     }
 
     /** Bridges the slide-in's HistoryRecordOpened to the standard openEntityRecord chain. */
     public OnHistoryRecordOpened(args: HistoryRecordOpenedEventArgs): void {
-        this.openEntityRecord.emit({ entityName: args.EntityName, compositeKey: CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(args.EntityName), args.RecordID) });
+        this.OpenEntityRecord.emit({ entityName: args.EntityName, compositeKey: CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(args.EntityName), args.RecordID) });
     }
 
     public OnSlideInClosed(): void {

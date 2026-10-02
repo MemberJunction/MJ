@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTSQLToPostgresRules } from '../rules/TSQLToPostgresRules.js';
+import { GetTSQLToPostgresRules } from '../rules/TSQLToPostgresRules.js';
 import { CreateTableRule } from '../rules/CreateTableRule.js';
 import { CatalogViewRule } from '../rules/CatalogViewRule.js';
 import { ViewRule } from '../rules/ViewRule.js';
@@ -15,7 +15,7 @@ import { ExtendedPropertyRule } from '../rules/ExtendedPropertyRule.js';
 import { ExecBlockRule } from '../rules/ExecBlockRule.js';
 
 describe('getTSQLToPostgresRules', () => {
-  const rules = getTSQLToPostgresRules();
+  const rules = GetTSQLToPostgresRules();
 
   describe('rule count', () => {
     it('should return exactly 14 rules', () => {

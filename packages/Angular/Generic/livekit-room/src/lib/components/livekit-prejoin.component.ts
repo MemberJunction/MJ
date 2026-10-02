@@ -232,30 +232,98 @@ export class LiveKitPreJoinComponent implements AfterViewInit, OnDestroy {
   /** Current display-name draft. */
   public displayName = '';
   /** Whether the mic will be enabled on join. */
-  public micEnabled = true;
+  public MicEnabled = true;
+
+  /** @deprecated Use {@link MicEnabled}. */
+  public get micEnabled() {
+    return this.MicEnabled;
+  }
+  /** @deprecated Use {@link MicEnabled}. */
+  public set micEnabled(value) {
+    this.MicEnabled = value;
+  }
   /** Whether the camera will be enabled on join (also drives the preview). */
-  public cameraEnabled = false;
+  public CameraEnabled = false;
+
+  /** @deprecated Use {@link CameraEnabled}. */
+  public get cameraEnabled() {
+    return this.CameraEnabled;
+  }
+  /** @deprecated Use {@link CameraEnabled}. */
+  public set cameraEnabled(value) {
+    this.CameraEnabled = value;
+  }
   /** Live mic level percentage for the preview meter. */
-  public micLevelPct = 0;
+  public MicLevelPct = 0;
+
+  /** @deprecated Use {@link MicLevelPct}. */
+  public get micLevelPct() {
+    return this.MicLevelPct;
+  }
+  /** @deprecated Use {@link MicLevelPct}. */
+  public set micLevelPct(value) {
+    this.MicLevelPct = value;
+  }
   /** Available microphones. */
-  public microphones: LiveKitDevice[] = [];
+  public Microphones: LiveKitDevice[] = [];
+
+  /** @deprecated Use {@link Microphones}. */
+  public get microphones(): LiveKitDevice[] {
+    return this.Microphones;
+  }
+  /** @deprecated Use {@link Microphones}. */
+  public set microphones(value: LiveKitDevice[]) {
+    this.Microphones = value;
+  }
   /** Available cameras. */
-  public cameras: LiveKitDevice[] = [];
+  public Cameras: LiveKitDevice[] = [];
+
+  /** @deprecated Use {@link Cameras}. */
+  public get cameras(): LiveKitDevice[] {
+    return this.Cameras;
+  }
+  /** @deprecated Use {@link Cameras}. */
+  public set cameras(value: LiveKitDevice[]) {
+    this.Cameras = value;
+  }
   /** Selected microphone device id. */
-  public selectedMic: string | null = null;
+  public SelectedMic: string | null = null;
+
+  /** @deprecated Use {@link SelectedMic}. */
+  public get selectedMic(): string | null {
+    return this.SelectedMic;
+  }
+  /** @deprecated Use {@link SelectedMic}. */
+  public set selectedMic(value: string | null) {
+    this.SelectedMic = value;
+  }
   /** Selected camera device id. */
-  public selectedCam: string | null = null;
+  public SelectedCam: string | null = null;
+
+  /** @deprecated Use {@link SelectedCam}. */
+  public get selectedCam(): string | null {
+    return this.SelectedCam;
+  }
+  /** @deprecated Use {@link SelectedCam}. */
+  public set selectedCam(value: string | null) {
+    this.SelectedCam = value;
+  }
 
   /** Whether the join button is enabled. */
-  public get canJoin(): boolean {
+  public get CanJoin(): boolean {
     return !this.RequireDisplayName || this.displayName.trim().length > 0;
+  }
+
+  /** @deprecated Use {@link CanJoin}. */
+  public get canJoin(): boolean {
+    return this.CanJoin;
   }
 
   public async ngAfterViewInit(): Promise<void> {
     this.displayName = this.InitialDisplayName ?? '';
-    this.cameraEnabled = this.StartWithCamera;
+    this.CameraEnabled = this.StartWithCamera;
     await this.preview.StartAudio();
-    if (this.cameraEnabled) {
+    if (this.CameraEnabled) {
       await this.startVideoPreview();
     }
     await this.enumerateDevices();
@@ -269,19 +337,24 @@ export class LiveKitPreJoinComponent implements AfterViewInit, OnDestroy {
   }
 
   /** Toggles the microphone intent (and starts/stops the preview audio). */
-  public async toggleMic(): Promise<void> {
-    this.micEnabled = !this.micEnabled;
-    if (this.micEnabled) {
-      await this.preview.StartAudio(this.selectedMic ?? undefined);
+  public async ToggleMic(): Promise<void> {
+    this.MicEnabled = !this.MicEnabled;
+    if (this.MicEnabled) {
+      await this.preview.StartAudio(this.SelectedMic ?? undefined);
     } else {
       await this.preview.StopAudio();
     }
   }
 
+  /** @deprecated Use {@link ToggleMic}. */
+  public async toggleMic(): Promise<void> {
+    return this.ToggleMic();
+  }
+
   /** Toggles the camera intent (and starts/stops the preview video). */
-  public async toggleCamera(): Promise<void> {
-    this.cameraEnabled = !this.cameraEnabled;
-    if (this.cameraEnabled) {
+  public async ToggleCamera(): Promise<void> {
+    this.CameraEnabled = !this.CameraEnabled;
+    if (this.CameraEnabled) {
       await this.startVideoPreview();
     } else {
       await this.preview.StopVideo();
@@ -289,37 +362,52 @@ export class LiveKitPreJoinComponent implements AfterViewInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link ToggleCamera}. */
+  public async toggleCamera(): Promise<void> {
+    return this.ToggleCamera();
+  }
+
   /** Restarts the preview audio on the newly selected microphone. */
-  public async onMicDeviceChange(): Promise<void> {
-    if (this.micEnabled) {
-      await this.preview.StartAudio(this.selectedMic ?? undefined);
+  public async OnMicDeviceChange(): Promise<void> {
+    if (this.MicEnabled) {
+      await this.preview.StartAudio(this.SelectedMic ?? undefined);
     }
   }
 
+  /** @deprecated Use {@link OnMicDeviceChange}. */
+  public async onMicDeviceChange(): Promise<void> {
+    return this.OnMicDeviceChange();
+  }
+
   /** Restarts the preview video on the newly selected camera. */
-  public async onCamDeviceChange(): Promise<void> {
-    if (this.cameraEnabled) {
+  public async OnCamDeviceChange(): Promise<void> {
+    if (this.CameraEnabled) {
       await this.startVideoPreview();
     }
   }
 
+  /** @deprecated Use {@link OnCamDeviceChange}. */
+  public async onCamDeviceChange(): Promise<void> {
+    return this.OnCamDeviceChange();
+  }
+
   /** Emits the confirmed choices. */
   public join(): void {
-    if (!this.canJoin) {
+    if (!this.CanJoin) {
       return;
     }
     this.Join.emit({
       DisplayName: this.displayName.trim(),
-      MicrophoneEnabled: this.micEnabled,
-      CameraEnabled: this.cameraEnabled,
-      MicrophoneDeviceId: this.selectedMic ?? undefined,
-      CameraDeviceId: this.selectedCam ?? undefined,
+      MicrophoneEnabled: this.MicEnabled,
+      CameraEnabled: this.CameraEnabled,
+      MicrophoneDeviceId: this.SelectedMic ?? undefined,
+      CameraDeviceId: this.SelectedCam ?? undefined,
     });
   }
 
   /** Starts (or restarts) the preview video and attaches it to the element. */
   private async startVideoPreview(): Promise<void> {
-    const track = await this.preview.StartVideo(this.selectedCam ?? undefined);
+    const track = await this.preview.StartVideo(this.SelectedCam ?? undefined);
     const el = this.videoRef?.nativeElement;
     if (el) {
       track.attach(el);
@@ -332,10 +420,10 @@ export class LiveKitPreJoinComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const devices = await navigator.mediaDevices.enumerateDevices();
-    this.microphones = devices.filter((d) => d.kind === 'audioinput').map((d) => ({ DeviceId: d.deviceId, Label: d.label, Kind: 'audioinput' }));
-    this.cameras = devices.filter((d) => d.kind === 'videoinput').map((d) => ({ DeviceId: d.deviceId, Label: d.label, Kind: 'videoinput' }));
-    this.selectedMic ??= this.microphones[0]?.DeviceId ?? null;
-    this.selectedCam ??= this.cameras[0]?.DeviceId ?? null;
+    this.Microphones = devices.filter((d) => d.kind === 'audioinput').map((d) => ({ DeviceId: d.deviceId, Label: d.label, Kind: 'audioinput' }));
+    this.Cameras = devices.filter((d) => d.kind === 'videoinput').map((d) => ({ DeviceId: d.deviceId, Label: d.label, Kind: 'videoinput' }));
+    this.SelectedMic ??= this.Microphones[0]?.DeviceId ?? null;
+    this.SelectedCam ??= this.Cameras[0]?.DeviceId ?? null;
   }
 
   /** Runs the mic-level meter loop outside Angular and writes the percentage. */
@@ -343,8 +431,8 @@ export class LiveKitPreJoinComponent implements AfterViewInit, OnDestroy {
     this.zone.runOutsideAngular(() => {
       const tick = (): void => {
         const next = Math.round(this.preview.ReadMicLevel() * 100);
-        if (next !== this.micLevelPct) {
-          this.micLevelPct = next;
+        if (next !== this.MicLevelPct) {
+          this.MicLevelPct = next;
           this.cdr.detectChanges();
         }
         this.rafId = requestAnimationFrame(tick);
