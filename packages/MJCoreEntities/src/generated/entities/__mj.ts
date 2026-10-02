@@ -13312,6 +13312,15 @@ export const MJContentItemChunkSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Item Chunks (vwContentItemChunks.ID)
         * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`),
+    FieldConfidence: z.string().nullable().describe(`
+        * * Field Name: FieldConfidence
+        * * Display Name: Field Confidence
+        * * SQL Data Type: nvarchar(MAX)`),
+    Decorator: z.string().nullable().describe(`
+        * * Field Name: Decorator
+        * * Display Name: Decorator
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
         * * Display Name: Content Item Name
@@ -13574,7 +13583,7 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
         * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.`),
-    EmbeddingStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+    EmbeddingStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('MetadataOnly'), z.literal('Pending'), z.literal('Processing'), z.literal('Skipped')]).describe(`
         * * Field Name: EmbeddingStatus
         * * Display Name: Embedding Status
         * * SQL Data Type: nvarchar(20)
@@ -13583,6 +13592,7 @@ export const MJContentItemSchema = z.object({
     * * Possible Values 
     *   * Complete
     *   * Failed
+    *   * MetadataOnly
     *   * Pending
     *   * Processing
     *   * Skipped
@@ -13632,6 +13642,75 @@ export const MJContentItemSchema = z.object({
         * * Display Name: Display Link
         * * SQL Data Type: nvarchar(2000)
         * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`),
+    FieldConfidence: z.string().nullable().describe(`
+        * * Field Name: FieldConfidence
+        * * Display Name: Field Confidence
+        * * SQL Data Type: nvarchar(MAX)`),
+    ExtractionStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+        * * Field Name: ExtractionStatus
+        * * Display Name: Extraction Status
+        * * SQL Data Type: nvarchar(40)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped`),
+    SegmentationStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+        * * Field Name: SegmentationStatus
+        * * Display Name: Segmentation Status
+        * * SQL Data Type: nvarchar(40)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped`),
+    DeleteStatus: z.union([z.literal('Deleted'), z.literal('Pending')]).nullable().describe(`
+        * * Field Name: DeleteStatus
+        * * Display Name: Delete Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deleted
+    *   * Pending`),
+    ExtractorKey: z.string().nullable().describe(`
+        * * Field Name: ExtractorKey
+        * * Display Name: Extractor Key
+        * * SQL Data Type: nvarchar(100)`),
+    ExtractorKeyOverride: z.string().nullable().describe(`
+        * * Field Name: ExtractorKeyOverride
+        * * Display Name: Extractor Key Override
+        * * SQL Data Type: nvarchar(100)`),
+    Modality: z.union([z.literal('audio'), z.literal('image'), z.literal('multimodal'), z.literal('text'), z.literal('video')]).describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio
+    *   * image
+    *   * multimodal
+    *   * text
+    *   * video`),
+    Date: z.date().nullable().describe(`
+        * * Field Name: Date
+        * * Display Name: Content Date
+        * * SQL Data Type: datetimeoffset`),
+    Decorator: z.string().nullable().describe(`
+        * * Field Name: Decorator
+        * * Display Name: Decorator
+        * * SQL Data Type: nvarchar(MAX)`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source Name
@@ -13660,6 +13739,10 @@ export const MJContentItemSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent Content Name
         * * SQL Data Type: nvarchar(250)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File Record
+        * * SQL Data Type: nvarchar(500)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent Content
@@ -14070,6 +14153,11 @@ export const MJContentSourceTypeSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJContentSourceTypeEntity_IContentSourceTypeConfiguration
         * * Description: JSON configuration blob for type-level settings. Conforms to the IContentSourceTypeConfiguration interface. Reserved for future type-wide settings shared by all sources of this type.`),
+    SupportsMultiModal: z.boolean().describe(`
+        * * Field Name: SupportsMultiModal
+        * * Display Name: Supports Multi-Modal
+        * * SQL Data Type: bit
+        * * Default Value: 0`),
 });
 
 export type MJContentSourceTypeEntityType = z.infer<typeof MJContentSourceTypeSchema>;
@@ -14163,6 +14251,37 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
         * * Description: Optional link to the Scheduled Job that runs this content source on a recurring basis. Replaces the retired ScheduledActionID link; the job is of type Action and carries its action + parameters in ScheduledJob.Configuration.`),
+    FieldConfidence: z.string().nullable().describe(`
+        * * Field Name: FieldConfidence
+        * * Display Name: Field Confidence
+        * * SQL Data Type: nvarchar(MAX)`),
+    ExtractorKey: z.string().nullable().describe(`
+        * * Field Name: ExtractorKey
+        * * Display Name: Extractor Strategy
+        * * SQL Data Type: nvarchar(100)`),
+    MultiModalEnabled: z.boolean().describe(`
+        * * Field Name: MultiModalEnabled
+        * * Display Name: Enable Multi-Modal
+        * * SQL Data Type: bit
+        * * Default Value: 0`),
+    DiscoveryStatus: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+        * * Field Name: DiscoveryStatus
+        * * Display Name: Discovery Status
+        * * SQL Data Type: nvarchar(40)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped
+        * * Description: Status of the Discover stage for this source: Pending, Processing, Complete, Failed or Skipped. What makes a source ready to walk is its schedule; this records how the last walk ended.`),
+    LastDiscoveredAt: z.date().nullable().describe(`
+        * * Field Name: LastDiscoveredAt
+        * * Display Name: Last Discovered At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this source was last walked by the Discover stage.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -14310,6 +14429,10 @@ export const MJContentTypeSchema = z.object({
         * * Display Name: Cleaner Strategy
         * * SQL Data Type: nvarchar(100)
         * * Description: Default content-cleaning strategy for content of this type, used when a Content Source does not specify its own CleanerKey. See ContentSource.CleanerKey.`),
+    ExtractorKey: z.string().nullable().describe(`
+        * * Field Name: ExtractorKey
+        * * Display Name: Extractor Key
+        * * SQL Data Type: nvarchar(100)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
@@ -28188,7 +28311,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Disabled
     *   * Draft
         * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
-    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Clone'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model')]).describe(`
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Clone'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model'), z.literal('Pipeline Stage')]).describe(`
         * * Field Name: WorkType
         * * Display Name: Work Type
         * * SQL Data Type: nvarchar(20)
@@ -28200,6 +28323,7 @@ export const MJRecordProcessSchema = z.object({
     *   * FieldRules
     *   * Infer
     *   * ML Model
+    *   * Pipeline Stage
         * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`),
     ActionID: z.string().nullable().describe(`
         * * Field Name: ActionID
@@ -72821,6 +72945,31 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     }
 
     /**
+    * * Field Name: FieldConfidence
+    * * Display Name: Field Confidence
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get FieldConfidence(): string | null {
+        return this.Get('FieldConfidence');
+    }
+    set FieldConfidence(value: string | null) {
+        this.Set('FieldConfidence', value);
+    }
+
+    /**
+    * * Field Name: Decorator
+    * * Display Name: Decorator
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Text that accompanies this chunk so it still makes sense retrieved on its own — normally inherited from its parent item. Kept as its own field rather than prefixed into Text so it stays separately searchable and can be revised without rewriting the chunk.
+    */
+    get Decorator(): string | null {
+        return this.Get('Decorator');
+    }
+    set Decorator(value: string | null) {
+        this.Set('Decorator', value);
+    }
+
+    /**
     * * Field Name: ContentItem
     * * Display Name: Content Item Name
     * * SQL Data Type: nvarchar(250)
@@ -73474,15 +73623,16 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     * * Possible Values 
     *   * Complete
     *   * Failed
+    *   * MetadataOnly
     *   * Pending
     *   * Processing
     *   * Skipped
     * * Description: Vectorization status: Pending (not yet embedded), Processing (currently being embedded), Complete (vector stored), Failed (embedding error), Skipped (excluded from vectorization).
     */
-    get EmbeddingStatus(): 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped' {
+    get EmbeddingStatus(): 'Complete' | 'Failed' | 'MetadataOnly' | 'Pending' | 'Processing' | 'Skipped' {
         return this.Get('EmbeddingStatus');
     }
-    set EmbeddingStatus(value: 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped') {
+    set EmbeddingStatus(value: 'Complete' | 'Failed' | 'MetadataOnly' | 'Pending' | 'Processing' | 'Skipped') {
         this.Set('EmbeddingStatus', value);
     }
 
@@ -73588,6 +73738,155 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
 
     /**
+    * * Field Name: FieldConfidence
+    * * Display Name: Field Confidence
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get FieldConfidence(): string | null {
+        return this.Get('FieldConfidence');
+    }
+    set FieldConfidence(value: string | null) {
+        this.Set('FieldConfidence', value);
+    }
+
+    /**
+    * * Field Name: ExtractionStatus
+    * * Display Name: Extraction Status
+    * * SQL Data Type: nvarchar(40)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped
+    */
+    get ExtractionStatus(): 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped' {
+        return this.Get('ExtractionStatus');
+    }
+    set ExtractionStatus(value: 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped') {
+        this.Set('ExtractionStatus', value);
+    }
+
+    /**
+    * * Field Name: SegmentationStatus
+    * * Display Name: Segmentation Status
+    * * SQL Data Type: nvarchar(40)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped
+    */
+    get SegmentationStatus(): 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped' {
+        return this.Get('SegmentationStatus');
+    }
+    set SegmentationStatus(value: 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped') {
+        this.Set('SegmentationStatus', value);
+    }
+
+    /**
+    * * Field Name: DeleteStatus
+    * * Display Name: Delete Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deleted
+    *   * Pending
+    */
+    get DeleteStatus(): 'Deleted' | 'Pending' | null {
+        return this.Get('DeleteStatus');
+    }
+    set DeleteStatus(value: 'Deleted' | 'Pending' | null) {
+        this.Set('DeleteStatus', value);
+    }
+
+    /**
+    * * Field Name: ExtractorKey
+    * * Display Name: Extractor Key
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ExtractorKey(): string | null {
+        return this.Get('ExtractorKey');
+    }
+    set ExtractorKey(value: string | null) {
+        this.Set('ExtractorKey', value);
+    }
+
+    /**
+    * * Field Name: ExtractorKeyOverride
+    * * Display Name: Extractor Key Override
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ExtractorKeyOverride(): string | null {
+        return this.Get('ExtractorKeyOverride');
+    }
+    set ExtractorKeyOverride(value: string | null) {
+        this.Set('ExtractorKeyOverride', value);
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio
+    *   * image
+    *   * multimodal
+    *   * text
+    *   * video
+    */
+    get Modality(): 'audio' | 'image' | 'multimodal' | 'text' | 'video' {
+        return this.Get('Modality');
+    }
+    set Modality(value: 'audio' | 'image' | 'multimodal' | 'text' | 'video') {
+        this.Set('Modality', value);
+    }
+
+    /**
+    * * Field Name: Date
+    * * Display Name: Content Date
+    * * SQL Data Type: datetimeoffset
+    */
+    get Date(): Date | null {
+        return this.Get('Date');
+    }
+    set Date(value: Date | null) {
+        this.Set('Date', value);
+    }
+
+    /**
+    * * Field Name: Decorator
+    * * Display Name: Decorator
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Decorator(): string | null {
+        return this.Get('Decorator');
+    }
+    set Decorator(value: string | null) {
+        this.Set('Decorator', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
     * * Field Name: ContentSource
     * * Display Name: Content Source Name
     * * SQL Data Type: nvarchar(255)
@@ -73648,6 +73947,15 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File Record
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
     }
 
     /**
@@ -74847,6 +75155,19 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
     }
+
+    /**
+    * * Field Name: SupportsMultiModal
+    * * Display Name: Supports Multi-Modal
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get SupportsMultiModal(): boolean {
+        return this.Get('SupportsMultiModal');
+    }
+    set SupportsMultiModal(value: boolean) {
+        this.Set('SupportsMultiModal', value);
+    }
 }
 
 
@@ -75429,6 +75750,77 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: FieldConfidence
+    * * Display Name: Field Confidence
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get FieldConfidence(): string | null {
+        return this.Get('FieldConfidence');
+    }
+    set FieldConfidence(value: string | null) {
+        this.Set('FieldConfidence', value);
+    }
+
+    /**
+    * * Field Name: ExtractorKey
+    * * Display Name: Extractor Strategy
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ExtractorKey(): string | null {
+        return this.Get('ExtractorKey');
+    }
+    set ExtractorKey(value: string | null) {
+        this.Set('ExtractorKey', value);
+    }
+
+    /**
+    * * Field Name: MultiModalEnabled
+    * * Display Name: Enable Multi-Modal
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get MultiModalEnabled(): boolean {
+        return this.Get('MultiModalEnabled');
+    }
+    set MultiModalEnabled(value: boolean) {
+        this.Set('MultiModalEnabled', value);
+    }
+
+    /**
+    * * Field Name: DiscoveryStatus
+    * * Display Name: Discovery Status
+    * * SQL Data Type: nvarchar(40)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processing
+    *   * Skipped
+    * * Description: Status of the Discover stage for this source: Pending, Processing, Complete, Failed or Skipped. What makes a source ready to walk is its schedule; this records how the last walk ended.
+    */
+    get DiscoveryStatus(): 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped' {
+        return this.Get('DiscoveryStatus');
+    }
+    set DiscoveryStatus(value: 'Complete' | 'Failed' | 'Pending' | 'Processing' | 'Skipped') {
+        this.Set('DiscoveryStatus', value);
+    }
+
+    /**
+    * * Field Name: LastDiscoveredAt
+    * * Display Name: Last Discovered At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this source was last walked by the Discover stage.
+    */
+    get LastDiscoveredAt(): Date | null {
+        return this.Get('LastDiscoveredAt');
+    }
+    set LastDiscoveredAt(value: Date | null) {
+        this.Set('LastDiscoveredAt', value);
+    }
+
+    /**
     * * Field Name: ContentType
     * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
@@ -75973,6 +76365,18 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
     }
     set CleanerKey(value: string | null) {
         this.Set('CleanerKey', value);
+    }
+
+    /**
+    * * Field Name: ExtractorKey
+    * * Display Name: Extractor Key
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ExtractorKey(): string | null {
+        return this.Get('ExtractorKey');
+    }
+    set ExtractorKey(value: string | null) {
+        this.Set('ExtractorKey', value);
     }
 
     /**
@@ -112576,12 +112980,13 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     *   * FieldRules
     *   * Infer
     *   * ML Model
+    *   * Pipeline Stage
     * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
     */
-    get WorkType(): 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model' {
+    get WorkType(): 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model' | 'Pipeline Stage' {
         return this.Get('WorkType');
     }
-    set WorkType(value: 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model') {
+    set WorkType(value: 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model' | 'Pipeline Stage') {
         this.Set('WorkType', value);
     }
 

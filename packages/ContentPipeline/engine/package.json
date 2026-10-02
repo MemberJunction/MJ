@@ -1,0 +1,40 @@
+{
+  "name": "@memberjunction/content-pipeline",
+  "type": "module",
+  "version": "6.2.0-edge.1",
+  "description": "MemberJunction: Content Pipeline - the generic processor, working-record hydrate/commit, run tracking and built-in stages for content ingestion.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/content-pipeline-base": "6.2.0-edge.1",
+    "@memberjunction/core": "6.2.0-edge.1",
+    "@memberjunction/core-entities": "6.2.0-edge.1",
+    "@memberjunction/global": "6.2.0-edge.1",
+    "@memberjunction/record-set-processor": "6.2.0-edge.1",
+    "@memberjunction/record-set-processor-base": "6.2.0-edge.1",
+    "@memberjunction/ai-segmentation": "6.2.0-edge.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1",
+    "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.1",
+    "mssql": "^11.0.1",
+    "@memberjunction/generic-database-provider": "6.2.0-edge.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

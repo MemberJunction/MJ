@@ -10233,6 +10233,68 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/ContentPipeline/base:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJGlobal
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/ContentPipeline/engine:
+    dependencies:
+      '@memberjunction/ai-segmentation':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Segmentation
+      '@memberjunction/content-pipeline-base':
+        specifier: 6.2.0-edge.1
+        version: link:../base
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJGlobal
+      '@memberjunction/record-set-processor':
+        specifier: 6.2.0-edge.1
+        version: link:../../RecordSetProcessor/engine
+      '@memberjunction/record-set-processor-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../RecordSetProcessor/base
+    devDependencies:
+      '@memberjunction/generic-database-provider':
+        specifier: 6.2.0-edge.1
+        version: link:../../GenericDatabaseProvider
+      '@memberjunction/sqlserver-dataprovider':
+        specifier: 6.2.0-edge.1
+        version: link:../../SQLServerDataProvider
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      mssql:
+        specifier: ^11.0.1
+        version: 11.0.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/ConversationsRuntime:
     dependencies:
       '@memberjunction/ai-agent-client':
@@ -14473,6 +14535,9 @@ importers:
       '@memberjunction/content-autotagging':
         specifier: 6.2.0-edge.1
         version: link:../ContentAutotagging
+      '@memberjunction/content-pipeline':
+        specifier: 6.2.0-edge.1
+        version: link:../ContentPipeline/engine
       '@memberjunction/core':
         specifier: 6.2.0-edge.1
         version: link:../MJCore
