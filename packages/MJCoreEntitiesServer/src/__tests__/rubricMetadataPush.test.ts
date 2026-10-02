@@ -54,6 +54,13 @@ describe('shipped rubric metadata', () => {
         for (const row of publications) expect(row.fields).toEqual({ Status: 'Published' });
     });
 
+    it('tombstones the Test Rubrics application entity so a push deletes it', () => {
+        const app = JSON.parse(readFileSync(join(root, 'applications/.testing-application.json'), 'utf8'));
+        const row = app.relatedEntities['MJ: Application Entities'].find((item: { primaryKey: { ID: string } }) => item.primaryKey.ID === 'F3DC86D9-5698-4492-A5D9-FC6EA8C65024');
+        expect(row?.fields.EntityID).toBe('@lookup:MJ: Entities.Name=MJ: Test Rubrics');
+        expect(row?.deleteRecord).toEqual({ delete: true });
+    });
+
     it('does not give the Rubric Evaluation Agent Get Rubric Consensus', () => {
         const agent = JSON.parse(readFileSync(join(root, 'agents/.rubric-evaluation-agent.json'), 'utf8'));
         const actions = agent.relatedEntities['MJ: AI Agent Actions'].map((row: { fields: { ActionID: string } }) => row.fields.ActionID);

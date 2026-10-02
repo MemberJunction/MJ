@@ -150,6 +150,20 @@
           "lastModified": "2026-02-13T21:09:36.851Z",
           "checksum": "5cff8a1c0de66dc65405492e1c8631bb759984bb49b56318a852fa9582f0d6c0"
         }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Rubrics",
+          "Sequence": 8,
+          "DefaultForNewUser": true
+        },
+        "primaryKey": {
+          "ID": "F3DC86D9-5698-4492-A5D9-FC6EA8C65024"
+        },
+        "deleteRecord": {
+          "delete": true
+        }
       }
     ]
   },
