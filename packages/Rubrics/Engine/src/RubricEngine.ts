@@ -1,4 +1,4 @@
-import type { RubricAnswer, RubricNodeSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { SnapshotFromRows, type RubricAnswer, type RubricNodeSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { AgentRubricEvaluator, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import { LLMRubricEvaluator, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 import { ShapeContent, type RubricSubjectContent } from './content.js';
@@ -409,70 +409,8 @@ export class RubricEngine {
         const scales = scaleIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Scales', `ID IN (${scaleIds.map(sqlLiteral).join(', ')})`);
         const levels = scaleIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.map(sqlLiteral).join(', ')})`);
         const criterionIds = criteria.map(row => text(row.ID)).filter(id => id.length > 0);
-        const anchors = criterionIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${criterionIds.map(sqlLiteral).join(', ')})`);
-        return {
-            id: versionId,
-            rubricId: text(version.RubricID),
-            majorVersion: numberOrNull(version.MajorVersion),
-            minorVersion: numberOrNull(version.MinorVersion),
-            patchVersion: numberOrNull(version.PatchVersion),
-            instructions: textOrNull(version.Instructions),
-            passThreshold: numberOrNull(version.PassThreshold),
-            minimumCompleteness: numberOrNull(version.MinimumCompleteness),
-            notApplicablePolicy: (text(version.NotApplicablePolicy) || 'ExcludeAndRedistribute') as RubricVersionSnapshot['notApplicablePolicy'],
-            scoreDisplayMin: numberOrNull(version.ScoreDisplayMin) ?? 0,
-            scoreDisplayMax: numberOrNull(version.ScoreDisplayMax) ?? 100,
-            nodes: criteria.map(row => ({
-                id: text(row.ID),
-                key: text(row.Key),
-                parentId: textOrNull(row.ParentID),
-                name: text(row.Name),
-                description: textOrNull(row.Description),
-                guidance: textOrNull(row.Guidance),
-                nodeType: (text(row.NodeType) || 'Criterion') as RubricNodeSnapshot['nodeType'],
-                scaleId: textOrNull(row.ScaleID),
-                weight: numberOrNull(row.Weight) ?? 1,
-                isAdvisory: bit(row.IsAdvisory),
-                isGate: bit(row.IsGate),
-                gateMinimumScore: numberOrNull(row.GateMinimumScore),
-                notApplicablePolicy: (textOrNull(row.NotApplicablePolicy) as RubricNodeSnapshot['notApplicablePolicy']) ?? null,
-                rollupMethod: (textOrNull(row.RollupMethod) as RubricNodeSnapshot['rollupMethod']) ?? null,
-                evidenceRequired: bit(row.EvidenceRequired),
-                rationaleRequired: bit(row.RationaleRequired),
-                sequence: numberOrNull(row.Sequence) ?? 0,
-                evaluatorConfig: parseConfig(row.EvaluatorConfig),
-                anchors: anchors.filter(anchor => text(anchor.CriterionID) === text(row.ID)).map(anchor => ({
-                    scaleLevelId: textOrNull(anchor.ScaleLevelID),
-                    anchorValue: numberOrNull(anchor.AnchorValue),
-                    descriptor: text(anchor.Descriptor),
-                })),
-            })),
-            scales: scales.map(row => ({
-                id: text(row.ID),
-                scaleType: (text(row.ScaleType) || 'Levels') as 'Levels' | 'Numeric',
-                minValue: numberOrNull(row.MinValue),
-                maxValue: numberOrNull(row.MaxValue),
-                step: numberOrNull(row.Step),
-                higherIsBetter: bit(row.HigherIsBetter),
-                levels: levels.filter(level => text(level.ScaleID) === text(row.ID)).map(level => ({
-                    id: text(level.ID),
-                    label: text(level.Label),
-                    value: numberOrNull(level.Value) ?? 0,
-                    normalizedValue: numberOrNull(level.NormalizedValue) ?? 0,
-                    description: textOrNull(level.Description),
-                    sequence: numberOrNull(level.Sequence) ?? 0,
-                })),
-            })),
-            bands: bands.map(row => ({
-                id: text(row.ID),
-                label: text(row.Label),
-                description: textOrNull(row.Description),
-                minScore: numberOrNull(row.MinScore) ?? 0,
-                maxScore: numberOrNull(row.MaxScore) ?? 0,
-                displayTone: text(row.DisplayTone) || 'Neutral',
-                sequence: numberOrNull(row.Sequence) ?? 0,
-            })),
-        };
+        const anchors = criterionIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${criterionIds.map(sqlLiteral).join(', ')}) ORDER BY Sequence, ID`);
+        return SnapshotFromRows({ version, rubricId: text(version.RubricID), criteria, anchors, bands, scales, levels });
     }
 
     /**
@@ -481,7 +419,14 @@ export class RubricEngine {
      */
     public async SubjectContent(input: { subjectEntityName: string; subjectRecordId: string }): Promise<RubricSubjectContent> {
         const rows = await this.records.rows(input.subjectEntityName, `ID=${sqlLiteral(input.subjectRecordId)}`);
-        return ShapeContent(input.subjectEntityName, rows[0] ?? {});
+        const record = { ...(rows[0] ?? {}) };
+        if (input.subjectEntityName === 'MJ: AI Agent Runs') {
+            record.Steps = await this.records.rows('MJ: AI Agent Run Steps', `AgentRunID=${sqlLiteral(input.subjectRecordId)} ORDER BY StepNumber`);
+        }
+        if (input.subjectEntityName === 'MJ: Conversations') {
+            record.Details = await this.records.rows('MJ: Conversation Details', `ConversationID=${sqlLiteral(input.subjectRecordId)} ORDER BY __mj_CreatedAt`);
+        }
+        return ShapeContent(input.subjectEntityName, record);
     }
 
     /** @deprecated Use {@link SubjectContent}. */
@@ -523,11 +468,6 @@ function numberOrNull(value: unknown): number | null {
 
 function bit(value: unknown): boolean {
     return value === true || value === 1 || value === '1';
-}
-
-function parseConfig(value: unknown): unknown {
-    if (typeof value !== 'string' || value.trim() === '') return value ?? undefined;
-    try { return JSON.parse(value); } catch { return value; }
 }
 
 export { RubricEvaluator };

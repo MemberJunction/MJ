@@ -32,9 +32,10 @@ export function testRunContent(record: {
 }
 
 /** MJ: AI Agent Runs. The final payload, and the in-memory message when the run has not stored it yet. There is no Turns column. */
-export function AgentRunContent(record: { finalPayload?: unknown; message?: unknown }): RubricSubjectContent {
+export function AgentRunContent(record: { finalPayload?: unknown; message?: unknown; steps?: unknown }): RubricSubjectContent {
     const data: Record<string, unknown> = { finalPayload: record.finalPayload };
     if (record.message !== undefined) data.message = record.message;
+    if (record.steps !== undefined) data.steps = record.steps;
     return { text: typeof record.message === 'string' ? record.message : undefined, data };
 }
 
@@ -54,12 +55,14 @@ export function promptRunContent(record: { messages?: unknown; result?: unknown 
 }
 
 /** MJ: Conversations. Name and Description. There is no Transcript column. */
-export function ConversationContent(record: { name?: unknown; description?: unknown }): RubricSubjectContent {
+export function ConversationContent(record: { name?: unknown; description?: unknown; details?: unknown }): RubricSubjectContent {
     const name = record.name == null ? '' : String(record.name);
     const description = record.description == null ? '' : String(record.description);
+    const data: Record<string, unknown> = { name: record.name, description: record.description };
+    if (record.details !== undefined) data.details = record.details;
     return {
         text: [name, description].filter(part => part.length > 0).join('\n'),
-        data: { name: record.name, description: record.description },
+        data,
     };
 }
 
@@ -87,6 +90,7 @@ export function ShapeContent(entityName: string, record: Record<string, unknown>
         return AgentRunContent({
             finalPayload: record.FinalPayload ?? record.finalPayload,
             message: record.Message ?? record.message,
+            steps: record.Steps ?? record.steps,
         });
     }
     if (entityName === 'MJ: AI Prompt Runs') return PromptRunContent({ messages: record.Messages ?? record.messages, result: record.Result ?? record.result });
@@ -94,6 +98,7 @@ export function ShapeContent(entityName: string, record: Record<string, unknown>
         return ConversationContent({
             name: record.Name ?? record.name,
             description: record.Description ?? record.description,
+            details: record.Details ?? record.details,
         });
     }
     return FallbackContent(record, canRead ?? (() => true));

@@ -60,6 +60,9 @@ describe('Rubric Evaluator prompt', () => {
         const filled = FillRubricEvaluatorTemplate('BODY[{{content}}]\n{{criteria}}', tree, { text: "a$`b" }, 'SinglePass');
         expect(filled.startsWith('BODY[a$`b]')).toBe(true);
         expect(filled).toContain('price must be $$5 not $& more');
+        const withData = FillRubricEvaluatorTemplate('BODY[{{content}}]', version(), { text: 'said', data: { actualOutput: 'shipped' } }, 'SinglePass');
+        expect(withData).toContain('said');
+        expect(withData).toContain('shipped');
     });
 });
 

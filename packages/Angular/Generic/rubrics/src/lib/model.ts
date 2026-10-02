@@ -1,4 +1,4 @@
-import { RubricScoring, RubricVersionDiff, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type VersionChange } from '@memberjunction/rubrics-base';
+import { NodeSnapshotFromRecord, RubricScoring, RubricVersionDiff, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type VersionChange } from '@memberjunction/rubrics-base';
 
 /** One answer on the scoring form. Groups are not answered. */
 export interface RubricFormAnswer {
@@ -485,24 +485,7 @@ function meanOf(columns: MatrixColumn[]): number | null {
 
 /** A criterion row from MJ: Rubric Criteria, as the author widget expects it. */
 export function NodeFromRow(row: Record<string, unknown>, anchors: RubricNodeSnapshot['anchors'] = []): RubricNodeSnapshot {
-    return {
-        id: String(row.ID ?? ''),
-        key: String(row.Key ?? ''),
-        name: String(row.Name ?? ''),
-        parentId: row.ParentID == null || row.ParentID === '' ? null : String(row.ParentID),
-        nodeType: row.NodeType === 'Group' ? 'Group' : 'Criterion',
-        scaleId: row.ScaleID == null || row.ScaleID === '' ? null : String(row.ScaleID),
-        weight: Number(row.Weight ?? 1),
-        isAdvisory: row.IsAdvisory === true || row.IsAdvisory === 1,
-        isGate: row.IsGate === true || row.IsGate === 1,
-        gateMinimumScore: row.GateMinimumScore == null || row.GateMinimumScore === '' ? null : Number(row.GateMinimumScore),
-        notApplicablePolicy: (row.NotApplicablePolicy as NotApplicablePolicy | null) ?? null,
-        evidenceRequired: row.EvidenceRequired === true || row.EvidenceRequired === 1,
-        rationaleRequired: row.RationaleRequired === true || row.RationaleRequired === 1,
-        sequence: Number(row.Sequence ?? 0),
-        guidance: row.Guidance == null || row.Guidance === '' ? null : String(row.Guidance),
-        anchors,
-    };
+    return { ...NodeSnapshotFromRecord(row), anchors };
 }
 
 /** @deprecated Use {@link NodeFromRow}. */

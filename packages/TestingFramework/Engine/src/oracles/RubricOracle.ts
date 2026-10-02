@@ -13,6 +13,7 @@ export interface RubricOracleEngine {
         contextRecordId?: string;
         passThreshold?: number | null;
         evaluator?: 'LLM' | 'Deterministic' | 'AI';
+        content?: { text?: string; data?: Record<string, unknown> };
     }): Promise<{
         evaluationId: string;
         score: number | null;
@@ -47,6 +48,7 @@ export class RubricOracle implements IOracle {
             contextRecordId: input.test?.ID,
             passThreshold: settings.passThreshold ?? null,
             evaluator: 'LLM',
+            content: RubricOracleContent(input),
         });
         const passed = result.outcome === 'Passed' || result.outcome === 'Scored';
         const label = settings.versionLabel ?? settings.rubricVersionId ?? 'published';
@@ -69,4 +71,16 @@ export class RubricOracle implements IOracle {
             },
         };
     }
+}
+
+/** The output the driver already has. The test-run row is not saved until later. */
+export function RubricOracleContent(input: { test?: { InputDefinition?: unknown }; expectedOutput?: unknown; actualOutput?: unknown }): { text?: string; data: Record<string, unknown> } {
+    return {
+        text: typeof input.actualOutput === 'string' ? input.actualOutput : undefined,
+        data: {
+            input: input.test?.InputDefinition,
+            expectedOutput: input.expectedOutput,
+            actualOutput: input.actualOutput,
+        },
+    };
 }

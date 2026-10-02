@@ -1,4 +1,4 @@
-import { RubricVersionDiff, sha256Hex, type RubricNodeSnapshot, type RubricVersionSnapshot, type VersionBump } from '@memberjunction/rubrics-base';
+import { RubricVersionDiff, SnapshotFromRows, sha256Hex, type RubricNodeSnapshot, type RubricVersionSnapshot, type VersionBump } from '@memberjunction/rubrics-base';
 
 export class RubricPublishError extends Error {
     public readonly details: string[];
@@ -144,17 +144,6 @@ function read(row: unknown, name: string): unknown {
     return record?.[name];
 }
 
-/** EvaluatorConfig is stored as JSON text. A parsed object is kept as-is. */
-function readConfig(row: unknown): unknown {
-    const value = read(row, 'EvaluatorConfig');
-    if (typeof value !== 'string' || value.length === 0) return value ?? null;
-    try {
-        return JSON.parse(value);
-    } catch {
-        return value;
-    }
-}
-
 /** Loads the draft tree and the base version so Save can publish without a separate call. */
 export async function LoadDraftForPublish(run: RowRun, versionId: string, rubricId: string, basedOnVersionId: string | null): Promise<{ base: RubricVersionSnapshot | null; draft: RubricVersionSnapshot }> {
     const draft = await loadSnapshot(run, versionId, rubricId);
@@ -179,78 +168,16 @@ async function loadSnapshot(run: RowRun, versionId: string, rubricId: string): P
     const bands = await rows(run, 'MJ: Rubric Bands', `RubricVersionID='${versionId}'`);
     const scaleIds = [...new Set(criteria.map(row => read(row, 'ScaleID')).filter((id): id is string => typeof id === 'string'))];
     const scales = [];
+    const levels = [];
     for (const scaleId of scaleIds) {
         const scaleRows = await rows(run, 'MJ: Rubric Scales', `ID='${scaleId}'`);
         const levelRows = await rows(run, 'MJ: Rubric Scale Levels', `ScaleID='${scaleId}'`);
         const scale = scaleRows[0];
         if (!scale) continue;
-        scales.push({
-            id: scaleId,
-            scaleType: read(scale, 'ScaleType') as 'Levels' | 'Numeric',
-            minValue: read(scale, 'MinValue') as number | null,
-            maxValue: read(scale, 'MaxValue') as number | null,
-            step: read(scale, 'Step') as number | null,
-            higherIsBetter: Boolean(read(scale, 'HigherIsBetter')),
-            levels: levelRows.map(level => ({
-                id: String(read(level, 'ID')),
-                label: String(read(level, 'Label') ?? ''),
-                value: Number(read(level, 'Value')),
-                normalizedValue: Number(read(level, 'NormalizedValue')),
-                description: read(level, 'Description') as string | null,
-                sequence: Number(read(level, 'Sequence') ?? 0),
-            })),
-        });
+        scales.push(scale);
+        levels.push(...levelRows);
     }
-    return {
-        id: versionId,
-        rubricId,
-        majorVersion: read(version, 'MajorVersion') as number | null,
-        minorVersion: read(version, 'MinorVersion') as number | null,
-        patchVersion: read(version, 'PatchVersion') as number | null,
-        notApplicablePolicy: read(version, 'NotApplicablePolicy') as RubricVersionSnapshot['notApplicablePolicy'],
-        passThreshold: read(version, 'PassThreshold') as number | null,
-        minimumCompleteness: read(version, 'MinimumCompleteness') as number | null,
-        instructions: read(version, 'Instructions') as string | null,
-        scoreDisplayMin: Number(read(version, 'ScoreDisplayMin') ?? 0),
-        scoreDisplayMax: Number(read(version, 'ScoreDisplayMax') ?? 100),
-        nodes: criteria.map(row => ({
-            id: String(read(row, 'ID')),
-            key: String(read(row, 'Key')),
-            parentId: read(row, 'ParentID') as string | null,
-            name: String(read(row, 'Name') ?? read(row, 'Key')),
-            description: (read(row, 'Description') ?? null) as string | null,
-            guidance: (read(row, 'Guidance') ?? null) as string | null,
-            nodeType: read(row, 'NodeType') as 'Group' | 'Criterion',
-            scaleId: read(row, 'ScaleID') as string | null,
-            rollupMethod: (read(row, 'RollupMethod') ?? null) as RubricNodeSnapshot['rollupMethod'],
-            evaluatorConfig: readConfig(row),
-            weight: Number(read(row, 'Weight') ?? 0),
-            isAdvisory: Boolean(read(row, 'IsAdvisory')),
-            isGate: Boolean(read(row, 'IsGate')),
-            gateMinimumScore: read(row, 'GateMinimumScore') as number | null,
-            notApplicablePolicy: read(row, 'NotApplicablePolicy') as RubricVersionSnapshot['notApplicablePolicy'] | null,
-            evidenceRequired: Boolean(read(row, 'EvidenceRequired')),
-            rationaleRequired: Boolean(read(row, 'RationaleRequired')),
-            sequence: Number(read(row, 'Sequence') ?? 0),
-            anchors: anchorRows
-                .filter(anchor => String(read(anchor, 'CriterionID')) === String(read(row, 'ID')))
-                .map(anchor => ({
-                    scaleLevelId: read(anchor, 'ScaleLevelID') as string | null,
-                    anchorValue: read(anchor, 'AnchorValue') as number | null,
-                    descriptor: String(read(anchor, 'Descriptor') ?? ''),
-                })),
-        })),
-        scales,
-        bands: bands.map(row => ({
-            id: String(read(row, 'ID')),
-            label: String(read(row, 'Label')),
-            description: read(row, 'Description') as string | null,
-            minScore: Number(read(row, 'MinScore')),
-            maxScore: Number(read(row, 'MaxScore')),
-            displayTone: String(read(row, 'DisplayTone') ?? ''),
-            sequence: Number(read(row, 'Sequence') ?? 0),
-        })),
-    };
+    return SnapshotFromRows({ version, rubricId, criteria, anchors: anchorRows, bands, scales, levels });
 }
 
 async function rows(run: RowRun, entityName: string, filter: string): Promise<unknown[]> {

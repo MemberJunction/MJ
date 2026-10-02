@@ -51,6 +51,8 @@ describe('content providers', () => {
         expect(FallbackContent({ name: 'Ada', secret: 'x' }, field => field !== 'secret').data).toEqual({ name: 'Ada' });
         expect(ShapeContent('MJ: Widgets', { name: 'Ada', secret: 'x' }).data).toEqual({ name: 'Ada', secret: 'x' });
         expect(ShapeContent('MJ: Widgets', { name: 'Ada', secret: 'x' }, field => field !== 'secret').data).toEqual({ name: 'Ada' });
+        expect(ShapeContent('MJ: AI Agent Runs', { FinalPayload: { rows: 1 }, Steps: [{ StepNumber: 1 }] }).data).toEqual({ finalPayload: { rows: 1 }, steps: [{ StepNumber: 1 }] });
+        expect(ShapeContent('MJ: Conversations', { Name: 'Standup', Description: 'Shipped', Details: [{ Text: 'hello' }] }).data.details).toEqual([{ Text: 'hello' }]);
     });
 });
 

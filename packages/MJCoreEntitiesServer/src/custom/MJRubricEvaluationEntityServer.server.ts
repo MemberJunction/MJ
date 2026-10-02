@@ -1,4 +1,5 @@
 import { BaseEntity, RunInEntityTransaction, type EntitySaveOptions } from '@memberjunction/core';
+import { IsValidUUID } from '@memberjunction/global';
 import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { LoadDraftForPublish } from './rubrics/versionPublish.js';
@@ -62,16 +63,20 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
             const provider = this.ProviderToUse as { RunView?: (params: { EntityName: string; ExtraFilter: string; ResultType?: 'simple' | 'entity_object' }, user?: unknown) => Promise<{ Success: boolean; Results?: unknown[] }> };
             if (!provider?.RunView) throw new Error('Submitting an evaluation requires a provider that can load the version and scores.');
             const run = (entityName: string, filter: string) => provider.RunView!({ EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object' }, this.ContextCurrentUser);
-            const versionRows = await run('MJ: Rubric Versions', `ID='${this.RubricVersionID}'`);
+            const versionId = requireId(this.RubricVersionID, 'rubric version');
+            const evaluationId = requireId(this.ID, 'evaluation');
+            const versionRows = await run('MJ: Rubric Versions', `ID='${versionId}'`);
             const versionRow = versionRows.Results?.[0] as { Status?: string; RubricID?: string } | undefined;
-            if (!versionRow) throw new Error('The pinned rubric version was not found.');
-            const loaded = await LoadDraftForPublish(run, this.RubricVersionID, String(versionRow.RubricID ?? this.RubricID), null);
-            const scoreRows = await run('MJ: Rubric Evaluation Scores', `EvaluationID='${this.ID}'`);
+            if (!versionRows.Success || !versionRow) throw new Error('The pinned rubric version was not found.');
+            const loaded = await LoadDraftForPublish(run, versionId, String(versionRow.RubricID ?? this.RubricID), null);
+            const scoreRows = await run('MJ: Rubric Evaluation Scores', `EvaluationID='${evaluationId}'`);
+            if (!scoreRows.Success) throw new Error('Could not read the scores.');
+            const clientScores = (scoreRows.Results ?? []).filter(row => !readScore(row).isComputed);
             const input: SubmitEvaluationInput = {
                 version: loaded.draft,
                 versionStatus: versionRow.Status as SubmitEvaluationInput['versionStatus'],
-                supersedesEvaluationId: this.SupersedesEvaluationID,
-                scores: (scoreRows.Results ?? []).map(row => readScore(row)),
+                supersedesEvaluationId: this.SupersedesEvaluationID ? requireId(this.SupersedesEvaluationID, 'prior evaluation') : null,
+                scores: clientScores.map(row => readScore(row)),
                 passThresholdOverride: this.PassThresholdApplied == null ? null : Number(this.PassThresholdApplied),
             };
             const prior = this.SupersedesEvaluationID ? await loadPrior(run, this.SupersedesEvaluationID) : null;
@@ -89,7 +94,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
             }
             const result = SubmitEvaluation(input);
             const writtenIds = new Set<string>();
-            for (const row of scoreRows.Results ?? []) {
+            for (const row of clientScores) {
                 const record = row as Record<string, unknown> & { Save?: () => Promise<boolean>; Get?: (name: string) => unknown };
                 const criterionId = String(record.CriterionID ?? record.Get?.('CriterionID'));
                 const computed = result.scores.find(score => score.criterionId === criterionId);
@@ -165,6 +170,11 @@ async function loadPrior(run: (entityName: string, filter: string) => Promise<{ 
         },
         row: prior as { Status?: string; Save: () => Promise<boolean> },
     };
+}
+
+function requireId(value: string | null | undefined, label: string): string {
+    if (!value || !IsValidUUID(value)) throw new Error(`The ${label} id is not valid.`);
+    return value;
 }
 
 function readScore(row: unknown): SubmitEvaluationInput['scores'][number] {

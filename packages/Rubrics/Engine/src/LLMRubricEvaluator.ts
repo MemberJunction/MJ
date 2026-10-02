@@ -198,7 +198,9 @@ export function FillRubricEvaluatorTemplate(
 ): string {
     const nodes = only ? [only] : version.nodes.filter(node => node.nodeType === 'Criterion');
     const criteria = nodes.map(node => renderCriterion(version, node)).join('\n\n');
-    const body = content.text ?? JSON.stringify(content.data ?? {});
+    const text = content.text ?? '';
+    const data = content.data && Object.keys(content.data).length > 0 ? JSON.stringify(content.data) : '';
+    const body = [text, data].filter(part => part.length > 0).join('\n');
     const ask = mode === 'SinglePass'
         ? 'Return JSON {"decisions":[{"key","level","value","notApplicable","rationale","evidence":[{"quote"}],"confidence"}]} for every criterion.'
         : `Return JSON {"chosen","probabilities","rationale","evidence":[{"quote"}]} for ${only?.key}. confidence is probabilities[chosen].`;

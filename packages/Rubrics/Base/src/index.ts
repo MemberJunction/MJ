@@ -17,6 +17,7 @@ export {
     type DriftEvaluationRow, type DriftRunRow, type DriftScoreRow,
 } from './sampling.js';
 export { CanonicalJson, canonicalJson, ContentProjection, contentProjection, ScoringProjection, scoringProjection, Sha256Hex, sha256Hex } from './canonical.js';
+export { NodeSnapshotFromRecord, SnapshotFromRows, type SnapshotRows } from './snapshot.js';
 export type {
     NotApplicablePolicy,
     RollupMethod,
