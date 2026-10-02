@@ -26,6 +26,7 @@ import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
 import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
+import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -51,6 +52,7 @@ import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.check
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
+import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
 import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
@@ -132,6 +134,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['user-routines', UserRoutinesChecks, 16],
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
         ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
+        ['agent-decisions-switch', AgentDecisionsSwitchChecks, 9], // DS1-DS9 the decisionsEnabled master switch, scripted chat and decision drivers (IT97)
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -147,7 +150,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
-        ['content-vectorization', ContentVectorizationChecks, 8], // CV1-CV8 content vectorization pipeline (IT67)
+        ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 6], // SA1-SA6 scoped-anonymous elevation permission contract (IT68)
@@ -166,6 +169,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
+        ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -217,6 +221,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-artifact-tools': 9,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
+        'agent-decisions-switch': 9,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 11,
@@ -246,7 +251,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
-        'content-vectorization': 8,
+        'content-vectorization': 10,
         'conversation-compaction': 18,
         'trailing-runtime-state': 6,
         'dataset-cache': 3,
@@ -274,6 +279,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'prompt-runner': 1,
         'queue': 7,
         'realtime-deterministic': 9,
+        'record-cloning': 13,
         'record-process': 12,
         'record-process-facade': 2,
         'remote-op-ai-authoring': 3,
@@ -331,7 +337,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(95);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(97);
     });
 });
 
@@ -383,6 +389,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-immutability.F12',
         'client-cache.C10',
         'content-vectorization.CV1',
+        'content-vectorization.CV10',
         'content-vectorization.CV2',
         'content-vectorization.CV3',
         'content-vectorization.CV4',
@@ -390,6 +397,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-vectorization.CV6',
         'content-vectorization.CV7',
         'content-vectorization.CV8',
+        'content-vectorization.CV9',
         'entity-actions.EA1',
         'entity-actions.EA2',
         'entity-actions.EA3',
@@ -463,6 +471,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'record-cloning.RC1',
+        'record-cloning.RC2',
+        'record-cloning.RC4',
+        'record-cloning.RC5',
+        'record-cloning.RC6',
+        'record-cloning.RC7',
+        'record-cloning.RC8',
+        'record-cloning.RC9',
         'role-elevation.RE6',
         'server-cache.S17',
         'server-cache.S23',
