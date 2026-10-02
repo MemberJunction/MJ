@@ -36,7 +36,12 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     AIDecisionParams: class { Questions = {}; },
     AIPromptRunner: class { ExecutePrompt = mockExecutePrompt; },
 }));
-vi.mock('@memberjunction/ai-core-plus', () => ({
+// The real decision-calibration helpers, loaded on their own: the package index extends entity
+// classes these specs mock.
+vi.mock('@memberjunction/ai-core-plus', async () => ({
+    ...(await vi.importActual<typeof import('@memberjunction/ai-core-plus/dist/decision-calibration.js')>(
+        '@memberjunction/ai-core-plus/dist/decision-calibration.js'
+    )),
     AIPromptParams: class {},
 }));
 
@@ -51,10 +56,14 @@ import {
     DuplicateReasoningOutput,
     DuplicateReasoningContext,
 } from '../reasoning/DuplicateReasoningTypes';
+import { AnsweredBy, RawFor } from './helpers/decisionCalibration';
 
 // ─────────────────────────────────────────────
 // Fixtures
 // ─────────────────────────────────────────────
+
+/** The decision stage's survival threshold, on calibrated probabilities. */
+const PRE_FILTER = DecisionReasoningProvider.PRE_FILTER_UNCERTAIN_ABOVE;
 
 const DECISION_PROMPT = { ID: 'prompt-decision', Name: 'Default Decision' };
 const REASONING_PROMPT = { ID: 'prompt-reasoning', Name: 'Duplicate Resolution' };
@@ -108,17 +117,20 @@ function promptRunResult(result: Record<string, unknown>, runID: string): AIProm
     return { success: true, result, promptRun: runRow(runID), chatResult: {} as ChatResult };
 }
 
-/** Answers each question with the probability of the candidate its instructions name. */
+/**
+ * Answers each question, as the calibrated Jev ({@link AnsweredBy}), so that the candidate its instructions name
+ * gets the **calibrated** probability given here.
+ */
 function answerByRecord(probabilities: Record<string, number>): void {
     mockExecuteDecision.mockImplementation(async (params: AIDecisionParams) => {
         const answers: Record<string, DecisionAnswer> = {};
         for (const [key, question] of Object.entries(params.Questions)) {
             const recordID = Object.keys(probabilities).find(id => question.Instructions.includes(`(recordId ${id})`));
             if (recordID !== undefined) {
-                answers[key] = { Kind: 'Likelihood', Probability: probabilities[recordID] };
+                answers[key] = { Kind: 'Likelihood', Probability: RawFor(probabilities[recordID]) };
             }
         }
-        return { success: true, Answers: answers, promptRun: runRow('decision-run-1') };
+        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), ...AnsweredBy() };
     });
 }
 
@@ -139,8 +151,9 @@ function promptMergesC1(): DuplicateReasoningOutput {
     };
 }
 
+/** The shipped decision stage, at the pre-filter threshold, chained to a prompt stage the test controls. */
 function chainedWithStub(): DecisionThenPromptReasoningProvider {
-    return new DecisionThenPromptReasoningProvider(new DecisionReasoningProvider(), new StubPromptStage());
+    return new DecisionThenPromptReasoningProvider(undefined, new StubPromptStage());
 }
 
 function promptStageInput(): DuplicateReasoningInput {
@@ -156,7 +169,8 @@ describe('DecisionThenPromptReasoningProvider', () => {
     });
 
     describe('survivors', () => {
-        it('passes only the candidates at or above the threshold to the prompt provider', async () => {
+        it('passes only the candidates at or above the pre-filter threshold to the prompt provider', async () => {
+            // c3 is below the Decision mode's flagging threshold, but the pre-filter keeps it.
             answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.2, 'ID|c3': 0.5 });
             await chainedWithStub().Reason(input(), CONTEXT);
 
@@ -199,7 +213,7 @@ describe('DecisionThenPromptReasoningProvider', () => {
             expect(output.CandidateVerdicts.map(v => v.RecordID)).toEqual(['ID|c1', 'ID|c3', 'ID|c2']);
             const dropped = output.CandidateVerdicts.find(v => v.RecordID === 'ID|c2');
             expect(dropped?.Recommendation).toBe('NotDuplicate');
-            expect(dropped?.Confidence).toBe(0.2);
+            expect(dropped?.Confidence).toBeCloseTo(0.2, 10);
         });
 
         it('points each dropped candidate\'s verdict at the decision run, and leaves the survivors\' on the set\'s prompt run', async () => {
@@ -214,7 +228,7 @@ describe('DecisionThenPromptReasoningProvider', () => {
 
     describe('no survivors', () => {
         it('is NotDuplicate, from the decision alone, without calling the prompt provider', async () => {
-            answerByRecord({ 'ID|c1': 0.3, 'ID|c2': 0.2, 'ID|c3': 0.1 });
+            answerByRecord({ 'ID|c1': PRE_FILTER - 0.05, 'ID|c2': 0.2, 'ID|c3': 0.1 });
             const output = await chainedWithStub().Reason(input(), CONTEXT);
 
             expect(mockPromptStageReason).not.toHaveBeenCalled();
@@ -227,12 +241,30 @@ describe('DecisionThenPromptReasoningProvider', () => {
         });
 
         it('makes no LLM prompt call with the default prompt stage', async () => {
-            answerByRecord({ 'ID|c1': 0.3, 'ID|c2': 0.2, 'ID|c3': 0.1 });
+            answerByRecord({ 'ID|c1': PRE_FILTER - 0.05, 'ID|c2': 0.2, 'ID|c3': 0.1 });
             const output = await new DecisionThenPromptReasoningProvider().Reason(input(), CONTEXT);
 
             expect(mockExecuteDecision).toHaveBeenCalledTimes(1);
             expect(mockExecutePrompt).not.toHaveBeenCalled();
             expect(output.Recommendation).toBe('NotDuplicate');
+        });
+    });
+
+    describe('a decision model with no calibration', () => {
+        it('passes every candidate to the prompt provider, which reasons over them as in Prompt mode', async () => {
+            // Raw answers that would drop two candidates, from a model whose answers can't be banded
+            mockExecuteDecision.mockResolvedValue({
+                success: true,
+                Answers: {
+                    candidate_1: { Kind: 'Likelihood', Probability: 0.95 },
+                    candidate_2: { Kind: 'Likelihood', Probability: 0.01 },
+                    candidate_3: { Kind: 'Likelihood', Probability: 0.01 },
+                },
+                ...AnsweredBy({ modelId: 'model-new', modelName: 'Some New Decision Model' }, 'some-vendor/new-model'),
+            });
+            await chainedWithStub().Reason(input(), CONTEXT);
+
+            expect(promptStageInput().Candidates.map(c => c.RecordID)).toEqual(['ID|c1', 'ID|c2', 'ID|c3']);
         });
     });
 

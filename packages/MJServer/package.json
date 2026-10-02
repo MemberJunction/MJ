@@ -51,6 +51,7 @@
     "@memberjunction/ai-mcp-client": "6.2.0-edge.1",
     "@memberjunction/ai-prompts": "6.2.0-edge.1",
     "@memberjunction/ai-provider-bundle": "6.2.0-edge.1",
+    "@memberjunction/ai-vector-dupe": "6.2.0-edge.1",
     "@memberjunction/ai-vector-sync": "6.2.0-edge.1",
     "@memberjunction/ai-vectordb": "6.2.0-edge.1",
     "@memberjunction/ai-vectors-pinecone": "6.2.0-edge.1",
