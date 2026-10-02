@@ -137,7 +137,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
 
     /** Keeps the open draft in memory and writes dirty criteria once typing pauses. */
     public OnNodes(nodes: RubricNodeSnapshot[]): void {
-        if (this.Viewing === 'published') return;
+        if (!this.EditMode || this.Viewing === 'published') return;
         this.Nodes = nodes;
         if (this.DraftVersion) this.DraftVersion = { ...this.DraftVersion, nodes };
         if (!this.DraftId) return;
@@ -177,7 +177,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     }
 
     public async OnBands(bands: RubricBandSnapshot[]): Promise<void> {
-        if (this.Viewing === 'published') return;
+        if (!this.EditMode || this.Viewing === 'published') return;
         this.Bands = bands;
         if (!this.DraftId) return;
         const saved = await this.rows('MJ: Rubric Bands', `RubricVersionID='${this.DraftId}'`);
@@ -189,6 +189,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
 
     /** Clones the highest published or retired version through Create Rubric Draft. */
     public async StartDraft(): Promise<void> {
+        if (!this.EditMode) return;
         const found = await this.rows('MJ: Actions', `Name='Create Rubric Draft'`);
         const actionId = String(found[0]?.ID ?? '');
         if (!actionId) {
@@ -202,12 +203,13 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     }
 
     public OnCancel(): void {
+        if (!this.EditMode) return;
         this.RequestedBump = null;
         this.Summary = '';
     }
 
     public async OnPublish(event: { bump: string | null; summary: string }): Promise<void> {
-        if (!this.DraftId) return;
+        if (!this.EditMode || !this.DraftId) return;
         const version = await this.ProviderToUse.GetEntityObject<MJRubricVersionEntity>('MJ: Rubric Versions', this.ProviderToUse.CurrentUser);
         const loaded = await version.InnerLoad(CompositeKey.FromID(this.DraftId));
         if (!loaded) {

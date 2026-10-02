@@ -59,7 +59,7 @@ export class RubricVersionHostComponent implements OnChanges {
     imports: [RubricScaleLevelEditorComponent],
     template: `
       <mj-rubric-scale-level-editor
-        [Label]="Label" [Description]="Description" [Value]="Value" [NormalizedValue]="NormalizedValue" [Frozen]="Frozen"
+        [ReadOnly]="ReadOnly" [Label]="Label" [Description]="Description" [Value]="Value" [NormalizedValue]="NormalizedValue" [Frozen]="Frozen"
         (LabelChange)="LabelChange.emit($event)" (DescriptionChange)="DescriptionChange.emit($event)"
         (ValueChange)="ValueChange.emit($event)" (NormalizedValueChange)="NormalizedValueChange.emit($event)">
       </mj-rubric-scale-level-editor>
@@ -72,6 +72,7 @@ export class RubricScaleLevelHostComponent implements OnChanges {
     @Input() Value = 0;
     @Input() NormalizedValue = 0;
     @Input() Provider: IMetadataProvider | null = null;
+    @Input() ReadOnly = false;
     @Output() LabelChange = new EventEmitter<string>();
     @Output() DescriptionChange = new EventEmitter<string>();
     @Output() ValueChange = new EventEmitter<number>();
@@ -94,7 +95,7 @@ export class RubricScaleLevelHostComponent implements OnChanges {
     selector: 'mj-rubric-category-host',
     imports: [RubricCategoryEditorComponent],
     template: `
-      <mj-rubric-category-editor [Name]="Name" [Description]="Description" [ParentId]="ParentId" [Parents]="Parents"
+      <mj-rubric-category-editor [ReadOnly]="ReadOnly" [Name]="Name" [Description]="Description" [ParentId]="ParentId" [Parents]="Parents"
         (NameChange)="NameChange.emit($event)" (DescriptionChange)="DescriptionChange.emit($event)" (ParentIdChange)="ParentIdChange.emit($event)">
       </mj-rubric-category-editor>
     `,
@@ -104,6 +105,7 @@ export class RubricCategoryHostComponent implements OnChanges {
     @Input() Name = '';
     @Input() Description = '';
     @Input() ParentId: string | null = null;
+    @Input() ReadOnly = false;
     @Input() Provider: IMetadataProvider | null = null;
     @Output() NameChange = new EventEmitter<string>();
     @Output() DescriptionChange = new EventEmitter<string>();
@@ -128,7 +130,7 @@ export class RubricCategoryHostComponent implements OnChanges {
     imports: [RubricCriterionEditorComponent],
     template: `
       <mj-rubric-criterion-editor
-        [Name]="Name" [Key]="Key" [NodeType]="NodeType" [Description]="Description" [Guidance]="Guidance"
+        [ReadOnly]="ReadOnly" [Name]="Name" [Key]="Key" [NodeType]="NodeType" [Description]="Description" [Guidance]="Guidance"
         [IsAdvisory]="IsAdvisory" [RollupMethod]="RollupMethod" [EvidenceRequired]="EvidenceRequired" [RationaleRequired]="RationaleRequired"
         [ParentId]="ParentId" [Parents]="Parents" [Weight]="Weight" [Share]="Share" [ScaleId]="ScaleId" [Scales]="Scales" [Anchors]="Anchors"
         [IsGate]="IsGate" [GateMinimumScore]="GateMinimumScore" [NotApplicablePolicy]="NotApplicablePolicy"
@@ -160,6 +162,7 @@ export class RubricCriterionHostComponent implements OnChanges {
     @Input() RollupMethod: string | null = null;
     @Input() EvidenceRequired = false;
     @Input() RationaleRequired = false;
+    @Input() ReadOnly = false;
     @Input() Provider: IMetadataProvider | null = null;
     @Output() NameChange = new EventEmitter<string>();
     @Output() KeyChange = new EventEmitter<string>();

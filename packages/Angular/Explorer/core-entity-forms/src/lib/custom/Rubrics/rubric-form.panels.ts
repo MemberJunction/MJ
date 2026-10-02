@@ -32,10 +32,10 @@ function host(panel: BaseFormPanel<MJRubricEntity>): MJRubricFormComponentExtend
         @if (Form.Loading) {
           <mj-loading text="Loading the rubric..."></mj-loading>
         } @else {
-          @if (!Form.DraftId) {
+          @if (!Form.DraftId && Form.EditMode) {
             <button mjButton variant="outline" size="sm" type="button" (click)="Form.StartDraft()">Start new draft</button>
           }
-          <mj-rubric-builder [Name]="Record.Name" [PublishedLabel]="Form.PublishedLabel" [NextVersion]="Form.NextVersion" [ComputedBump]="Form.ComputedBump" [Viewing]="Form.Viewing" (ViewingChange)="Form.Viewing = $event" [Nodes]="Form.Viewing === 'published' ? (Form.BaseVersion?.nodes ?? []) : Form.Nodes" [Scales]="Form.Scales" [Bands]="Form.Viewing === 'published' ? (Form.BaseVersion?.bands ?? []) : Form.Bands" [BaseBands]="Form.BaseVersion?.bands ?? []" [Version]="Form.Viewing === 'published' ? Form.BaseVersion : Form.DraftVersion" [ReadOnly]="!Form.DraftId || Form.Viewing === 'published'" (NodesChange)="Form.OnNodes($event)" (BandsChange)="Form.OnBands($event)"></mj-rubric-builder>
+          <mj-rubric-builder [Name]="Record.Name" [PublishedLabel]="Form.PublishedLabel" [NextVersion]="Form.NextVersion" [ComputedBump]="Form.ComputedBump" [Viewing]="Form.Viewing" (ViewingChange)="Form.Viewing = $event" [Nodes]="Form.Viewing === 'published' ? (Form.BaseVersion?.nodes ?? []) : Form.Nodes" [Scales]="Form.Scales" [Bands]="Form.Viewing === 'published' ? (Form.BaseVersion?.bands ?? []) : Form.Bands" [BaseBands]="Form.BaseVersion?.bands ?? []" [Version]="Form.Viewing === 'published' ? Form.BaseVersion : Form.DraftVersion" [ReadOnly]="!Form.EditMode || !Form.DraftId || Form.Viewing === 'published'" (NodesChange)="Form.OnNodes($event)" (BandsChange)="Form.OnBands($event)"></mj-rubric-builder>
         }
       </mj-collapsible-panel>
     `,
@@ -89,13 +89,17 @@ export class RubricDiffPanel extends BaseFormPanel<MJRubricEntity> {
     template: `
       <mj-collapsible-panel SectionKey="rubric-publish" SectionName="Publish" Icon="fa-solid fa-cloud-arrow-up" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
         @if (Form.DraftVersion) {
-          <mj-rubric-publish-dialog [Base]="Form.BaseVersion" [Draft]="Form.DraftVersion" [RequestedBump]="Form.RequestedBump" [Summary]="Form.Summary" (RequestedBumpChange)="Form.RequestedBump = $event" (SummaryChange)="Form.Summary = $event" (Confirm)="Form.OnPublish($event)">
-            <button mjButton variant="outline" size="sm" type="button" (click)="Form.OnCancel()">Cancel</button>
+          <mj-rubric-publish-dialog [Base]="Form.BaseVersion" [Draft]="Form.DraftVersion" [RequestedBump]="Form.RequestedBump" [Summary]="Form.Summary" [ReadOnly]="!Form.EditMode" (RequestedBumpChange)="Form.RequestedBump = $event" (SummaryChange)="Form.Summary = $event" (Confirm)="Form.OnPublish($event)">
+            @if (Form.EditMode) {
+              <button mjButton variant="outline" size="sm" type="button" (click)="Form.OnCancel()">Cancel</button>
+            }
           </mj-rubric-publish-dialog>
           @if (Form.Message) { <p>{{ Form.Message }}</p> }
         } @else {
           <p>This rubric has no draft to publish.</p>
-          <button mjButton variant="outline" size="sm" type="button" (click)="Form.StartDraft()">Start new draft</button>
+          @if (Form.EditMode) {
+            <button mjButton variant="outline" size="sm" type="button" (click)="Form.StartDraft()">Start new draft</button>
+          }
           @if (Form.Message) { <p>{{ Form.Message }}</p> }
         }
       </mj-collapsible-panel>

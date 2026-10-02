@@ -131,6 +131,35 @@
                 </select>
               </label>
             </div>
+          } @else {
+            <div class="criterion-body">
+              <div class="editor-grid">
+                <p><span class="eyebrow">Name</span> {{ node.name }}</p>
+                <p><span class="eyebrow">Key</span> {{ node.key }}</p>
+                <p><span class="eyebrow">Type</span> {{ node.nodeType }}</p>
+                <p><span class="eyebrow">Parent</span> {{ ParentName(node) }}</p>
+                <p><span class="eyebrow">Weight</span> {{ node.weight }}</p>
+                @if (node.nodeType === 'Criterion') {
+                  <p><span class="eyebrow">Scale</span> {{ ScaleLabel(node) }}</p>
+                }
+              </div>
+              @if (node.nodeType === 'Criterion') {
+                <p><span class="eyebrow">Quality gate</span> {{ node.isGate ? 'On, minimum ' + node.gateMinimumScore : 'Off' }}</p>
+                <div class="anchor-box">
+                  <div class="box-title">Scale anchors</div>
+                  @for (level of Levels(node); track level.id) {
+                    <p><span class="eyebrow">{{ level.label }}</span> {{ Anchor(node, level.id) || '—' }}</p>
+                  }
+                </div>
+              }
+              <p><span class="eyebrow">Description</span> {{ node.description || '—' }}</p>
+              <p><span class="eyebrow">Guidance</span> {{ node.guidance || '—' }}</p>
+              <p><span class="eyebrow">Rollup</span> {{ node.rollupMethod || 'Default' }}</p>
+              <p><span class="eyebrow">Advisory</span> {{ node.isAdvisory ? 'Yes' : 'No' }}</p>
+              <p><span class="eyebrow">Evidence required</span> {{ node.evidenceRequired ? 'Yes' : 'No' }}</p>
+              <p><span class="eyebrow">Rationale required</span> {{ node.rationaleRequired ? 'Yes' : 'No' }}</p>
+              <p><span class="eyebrow">Not applicable</span> {{ PolicyLabel(node.notApplicablePolicy) }}</p>
+            </div>
           }
         </li>
       }

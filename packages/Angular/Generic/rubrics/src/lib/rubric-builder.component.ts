@@ -75,6 +75,18 @@ export class RubricBuilderComponent implements OnChanges {
         return this.Scales.find(scale => scale.id.toLowerCase() === (node.scaleId ?? '').toLowerCase())?.name || 'No scale';
     }
 
+    public ParentName(node: RubricNodeSnapshot): string {
+        return this.Nodes.find(item => item.id === node.parentId)?.name || 'Top';
+    }
+
+    public PolicyLabel(policy: string | null | undefined): string {
+        if (policy === 'ExcludeAndRedistribute') return 'Exclude and redistribute';
+        if (policy === 'CountAsZero') return 'Count as zero';
+        if (policy === 'FailEvaluation') return 'Fail the evaluation';
+        if (policy === 'NotAllowed') return 'Not allowed';
+        return 'Version default';
+    }
+
     public Simulate(meets: boolean): void {
         this.previewAnswers = this.sample(meets);
         this.Preview = this.Version ? PreviewScore({ ...this.Version, nodes: this.Nodes, scales: this.Scales }, this.previewAnswers) : null;

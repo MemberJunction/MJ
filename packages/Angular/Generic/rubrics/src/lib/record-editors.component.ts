@@ -9,6 +9,24 @@ import { MJButtonDirective } from '@memberjunction/ng-ui-components';
     template: `
       <section class="card" aria-label="Criterion">
         <h3><i class="fa-solid fa-scale-balanced"></i> Criterion</h3>
+        @if (ReadOnly) {
+          <div class="editor-grid">
+            <p><span class="eyebrow">Name</span> {{ Name }}</p>
+            <p><span class="eyebrow">Key</span> {{ Key }}</p>
+            <p><span class="eyebrow">Type</span> {{ NodeType }}</p>
+            <p><span class="eyebrow">Parent</span> {{ ParentLabel }}</p>
+            <p><span class="eyebrow">Weight</span> {{ Weight }}</p>
+            <p><span class="eyebrow">Scale</span> {{ ScaleLabel }}</p>
+          </div>
+          <p><span class="eyebrow">Quality gate</span> {{ IsGate ? 'On, minimum ' + GateMinimumScore : 'Off' }}</p>
+          <p><span class="eyebrow">Description</span> {{ Description || '—' }}</p>
+          <p><span class="eyebrow">Guidance</span> {{ Guidance || '—' }}</p>
+          <p><span class="eyebrow">Rollup</span> {{ RollupMethod || 'Default' }}</p>
+          <p><span class="eyebrow">Advisory</span> {{ IsAdvisory ? 'Yes' : 'No' }}</p>
+          <p><span class="eyebrow">Evidence required</span> {{ EvidenceRequired ? 'Yes' : 'No' }}</p>
+          <p><span class="eyebrow">Rationale required</span> {{ RationaleRequired ? 'Yes' : 'No' }}</p>
+          <p><span class="eyebrow">Not applicable</span> {{ NotApplicablePolicy || 'Version default' }}</p>
+        } @else {
         <div class="editor-grid">
           <label>Parent
             <select [value]="ParentId ?? ''" (change)="ParentIdChange.emit(valueOf($event) || null)">
@@ -77,6 +95,7 @@ import { MJButtonDirective } from '@memberjunction/ng-ui-components';
             <option value="NotAllowed">Not allowed</option>
           </select>
         </label>
+        }
       </section>
     `,
 })
@@ -100,6 +119,7 @@ export class RubricCriterionEditorComponent {
     @Input() RollupMethod: string | null = null;
     @Input() EvidenceRequired = false;
     @Input() RationaleRequired = false;
+    @Input() ReadOnly = false;
     @Output() NameChange = new EventEmitter<string>();
     @Output() KeyChange = new EventEmitter<string>();
     @Output() NodeTypeChange = new EventEmitter<string>();
@@ -116,6 +136,12 @@ export class RubricCriterionEditorComponent {
     @Output() AnchorsChange = new EventEmitter<{ scaleLevelId: string | null; descriptor: string }[]>();
     @Output() GateMinimumScoreChange = new EventEmitter<number | null>();
     @Output() NotApplicablePolicyChange = new EventEmitter<string | null>();
+    protected get ParentLabel(): string {
+        return this.Parents.find(parent => parent.id === this.ParentId)?.name || 'Top';
+    }
+    protected get ScaleLabel(): string {
+        return this.Scales.find(scale => scale.id.toLowerCase() === (this.ScaleId ?? '').toLowerCase())?.name || 'None';
+    }
     protected get MatchedScaleId(): string {
         const id = (this.ScaleId ?? '').toLowerCase();
         return this.Scales.find(scale => scale.id.toLowerCase() === id)?.id ?? '';
@@ -144,6 +170,12 @@ export class RubricCriterionEditorComponent {
     styleUrls: ['./rubric-builder.component.css'],
     template: `<section class="card" aria-label="Score">
       <h3><i class="fa-solid fa-list-check"></i> Score</h3>
+      @if (ReadOnly) {
+        <p><span class="eyebrow">Level</span> {{ LevelLabel }}</p>
+        <p><span class="eyebrow">Not applicable</span> {{ IsNotApplicable ? 'Yes' : 'No' }}</p>
+        <p><span class="eyebrow">Rationale</span> {{ Rationale || '—' }}</p>
+        <p><span class="eyebrow">Evidence</span> {{ Evidence || '—' }}</p>
+      } @else {
       <div class="anchor-box">
         <div class="box-title">Choose a level</div>
         <div class="rubric-split">
@@ -164,6 +196,7 @@ export class RubricCriterionEditorComponent {
       </div>
       <label class="stack-field">Rationale <textarea required [value]="Rationale ?? ''" (change)="RationaleChange.emit(valueOf($event))"></textarea></label>
       <label class="stack-field">Evidence <textarea [value]="Evidence ?? ''" (change)="EvidenceChange.emit(valueOf($event))"></textarea></label>
+      }
     </section>`,
 })
 export class RubricScoreEditorComponent {
@@ -174,11 +207,15 @@ export class RubricScoreEditorComponent {
     @Input() Evidence: string | null = null;
     @Input() NotApplicablePolicy: string | null = null;
     @Input() Levels: { id: string; label: string; normalizedValue: number; anchor: string }[] = [];
+    @Input() ReadOnly = false;
     @Output() ScaleLevelIdChange = new EventEmitter<string | null>();
     @Output() RawValueChange = new EventEmitter<number | null>();
     @Output() IsNotApplicableChange = new EventEmitter<boolean>();
     @Output() RationaleChange = new EventEmitter<string>();
     @Output() EvidenceChange = new EventEmitter<string>();
+    protected get LevelLabel(): string {
+        return this.Levels.find(level => level.id === this.ScaleLevelId)?.label || '—';
+    }
     protected valueOf(event: Event): string { return (event.target as HTMLInputElement | HTMLTextAreaElement).value; }
     protected checked(event: Event): boolean { return (event.target as HTMLInputElement).checked; }
 }
@@ -220,12 +257,19 @@ export class RubricScaleFieldsComponent {
     template: `
       <section class="card" aria-label="Scale level">
         <h3><i class="fa-solid fa-tag"></i> Level</h3>
+        @if (ReadOnly) {
+          <p><span class="eyebrow">Label</span> {{ Label }}</p>
+          <p><span class="eyebrow">Value</span> {{ Value }}@if (Frozen) { <span class="pill-major">Locked</span> }</p>
+          <p><span class="eyebrow">Normalized</span> {{ NormalizedValue }}</p>
+          <p><span class="eyebrow">Description</span> {{ Description || '—' }}</p>
+        } @else {
         <div class="editor-grid">
           <label>Label <input [value]="Label" (change)="LabelChange.emit(text($event))"></label>
           <label>Value <input type="number" [value]="Value" [disabled]="Frozen" (change)="ValueChange.emit(asNumber($event))">@if (Frozen) { <span class="pill-major">Locked</span> }</label>
           <label>Normalized <input type="number" [value]="NormalizedValue" [disabled]="Frozen" (change)="NormalizedValueChange.emit(asNumber($event))"></label>
         </div>
         <label class="stack-field">Description <textarea [value]="Description ?? ''" (change)="DescriptionChange.emit(text($event))"></textarea></label>
+        }
       </section>
     `,
 })
@@ -235,6 +279,7 @@ export class RubricScaleLevelEditorComponent {
     @Input() Value = 0;
     @Input() NormalizedValue = 0;
     @Input() Frozen = false;
+    @Input() ReadOnly = false;
     @Output() LabelChange = new EventEmitter<string>();
     @Output() DescriptionChange = new EventEmitter<string>();
     @Output() ValueChange = new EventEmitter<number>();
@@ -251,6 +296,14 @@ export class RubricScaleLevelEditorComponent {
     template: `
       <section class="card" aria-label="Band">
         <h3><i class="fa-solid fa-award"></i> Band</h3>
+        @if (ReadOnly) {
+          <p><span class="eyebrow">Label</span> {{ Label }}</p>
+          <p><span class="eyebrow">From</span> {{ MinScore }}</p>
+          <p><span class="eyebrow">To</span> {{ MaxScore }}</p>
+          <p><span class="eyebrow">Tone</span> {{ DisplayTone }}</p>
+          <p><span class="eyebrow">Sequence</span> {{ Sequence }}</p>
+          <p><span class="eyebrow">Description</span> {{ Description || '—' }}</p>
+        } @else {
         <label class="stack-field">Label <input [value]="Label" (change)="LabelChange.emit(text($event))"></label>
         <div class="editor-grid">
           <label>From <input type="number" [value]="MinScore" (change)="MinScoreChange.emit(asNumber($event))"></label>
@@ -269,6 +322,7 @@ export class RubricScaleLevelEditorComponent {
         </div>
         <span class="rubric-track"><span class="rubric-bar" [style.width.%]="SpanWidth()"></span></span>
         <label class="stack-field">Description <textarea [value]="Description ?? ''" (change)="DescriptionChange.emit(text($event))"></textarea></label>
+        }
       </section>
     `,
 })
@@ -279,6 +333,7 @@ export class RubricBandEditorComponent {
     @Input() Description: string | null = null;
     @Input() DisplayTone = 'Neutral';
     @Input() Sequence = 0;
+    @Input() ReadOnly = false;
     @Output() LabelChange = new EventEmitter<string>();
     @Output() MinScoreChange = new EventEmitter<number>();
     @Output() MaxScoreChange = new EventEmitter<number>();
@@ -298,6 +353,11 @@ export class RubricBandEditorComponent {
     template: `
       <section class="card" aria-label="Category">
         <h3><i class="fa-solid fa-folder"></i> Category definition</h3>
+        @if (ReadOnly) {
+          <p><span class="eyebrow">Name</span> {{ Name }}</p>
+          <p><span class="eyebrow">Parent</span> {{ ParentLabel }}</p>
+          <p><span class="eyebrow">Description</span> {{ Description || '—' }}</p>
+        } @else {
         <div class="editor-grid">
           <label class="stack-field">Name <input [value]="Name" (change)="NameChange.emit(text($event))"></label>
           <label class="stack-field">Parent
@@ -310,6 +370,7 @@ export class RubricBandEditorComponent {
           </label>
         </div>
         <label class="stack-field">Description <textarea [value]="Description" (change)="DescriptionChange.emit(text($event))"></textarea></label>
+        }
       </section>
     `,
 })
@@ -318,8 +379,12 @@ export class RubricCategoryEditorComponent {
     @Input() Description = '';
     @Input() ParentId: string | null = null;
     @Input() Parents: { id: string; name: string }[] = [];
+    @Input() ReadOnly = false;
     @Output() NameChange = new EventEmitter<string>();
     @Output() DescriptionChange = new EventEmitter<string>();
     @Output() ParentIdChange = new EventEmitter<string | null>();
+    protected get ParentLabel(): string {
+        return this.Parents.find(parent => parent.id === this.ParentId)?.name || 'None';
+    }
     protected text(event: Event): string { return (event.target as HTMLInputElement | HTMLSelectElement).value; }
 }

@@ -6,7 +6,7 @@
       @if (Form.Message) {
         <p class="callout" role="alert">{{ Form.Message }}</p>
       }
-      @if (Form.Frozen) {
+      @if (Form.EditMode && Form.Frozen) {
         <p class="callout">This scale is used by a published rubric. Level values stay locked. Labels and descriptions stay editable.</p>
       }
       <div class="scale-card">
@@ -21,18 +21,24 @@
       <ul class="level-list">
         @for (level of Form.Levels; track level.ID) {
           <li class="level-row">
-            <label>Value
-              <span class="value-lock">
-                <input type="text" [value]="level.Value" [disabled]="Form.Frozen" />
-                @if (Form.Frozen) { <span class="pill">Locked</span> }
-              </span>
-            </label>
-            <label>Label
-              <input type="text" [value]="level.Label" (change)="Form.OnLabel(level, $event)" />
-            </label>
-            <label>Description
-              <input type="text" [value]="level.Description" (change)="Form.OnDescription(level, $event)" />
-            </label>
+            @if (Form.EditMode) {
+              <label>Value
+                <span class="value-lock">
+                  <input type="text" [value]="level.Value" [disabled]="Form.Frozen" />
+                  @if (Form.Frozen) { <span class="pill">Locked</span> }
+                </span>
+              </label>
+              <label>Label
+                <input type="text" [value]="level.Label" (change)="Form.OnLabel(level, $event)" />
+              </label>
+              <label>Description
+                <input type="text" [value]="level.Description" (change)="Form.OnDescription(level, $event)" />
+              </label>
+            } @else {
+              <p><span>Value</span> {{ level.Value }}@if (Form.Frozen) { <span class="pill">Locked</span> }</p>
+              <p><span>Label</span> {{ level.Label }}</p>
+              <p><span>Description</span> {{ level.Description }}</p>
+            }
           </li>
         }
       </ul>

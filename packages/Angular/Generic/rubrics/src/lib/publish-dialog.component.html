@@ -17,24 +17,29 @@
         </div>
       </div>
     }
-    <label class="publish-field">
-      Request higher bump (optional)
-      <select [value]="RequestedBump ?? ''" (change)="OnBump($event)">
-        <option value="">Computed ({{ BumpLabel }})</option>
-        @for (bump of Preview.higherBumps; track bump) {
-          <option [value]="bump">{{ bump }}</option>
-        }
-      </select>
-    </label>
-    <label class="publish-field">
-      Release notes and change summary
-      <textarea [value]="Summary" (input)="OnSummary($event)" placeholder="Summarize the changes for the people who will be scored."></textarea>
-    </label>
-    <div class="rubric-actions">
-      <button mjButton variant="primary" type="button" [disabled]="Preview.identical" (click)="OnConfirm()">
-        <i class="fa-solid fa-cloud-arrow-up"></i> Publish {{ Preview.nextVersion || 'version' }}
-      </button>
-      <ng-content></ng-content>
-    </div>
+    @if (ReadOnly) {
+      <p><span class="eyebrow">Requested bump</span> {{ RequestedBump || 'Computed (' + BumpLabel + ')' }}</p>
+      <p><span class="eyebrow">Release notes and change summary</span> {{ Summary || '—' }}</p>
+    } @else {
+      <label class="publish-field">
+        Request higher bump (optional)
+        <select [value]="RequestedBump ?? ''" (change)="OnBump($event)">
+          <option value="">Computed ({{ BumpLabel }})</option>
+          @for (bump of Preview.higherBumps; track bump) {
+            <option [value]="bump">{{ bump }}</option>
+          }
+        </select>
+      </label>
+      <label class="publish-field">
+        Release notes and change summary
+        <textarea [value]="Summary" (input)="OnSummary($event)" placeholder="Summarize the changes for the people who will be scored."></textarea>
+      </label>
+      <div class="rubric-actions">
+        <button mjButton variant="primary" type="button" [disabled]="Preview.identical" (click)="OnConfirm()">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Publish {{ Preview.nextVersion || 'version' }}
+        </button>
+        <ng-content></ng-content>
+      </div>
+    }
   }
 </section>

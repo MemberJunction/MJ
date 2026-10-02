@@ -17,6 +17,7 @@ export class RubricPublishDialogComponent {
     @Input() Draft: RubricVersionSnapshot | null = null;
     @Input() RequestedBump: 'Major' | 'Minor' | 'Patch' | null = null;
     @Input() Summary = '';
+    @Input() ReadOnly = false;
     @Output() RequestedBumpChange = new EventEmitter<'Major' | 'Minor' | 'Patch' | null>();
     @Output() SummaryChange = new EventEmitter<string>();
     @Output() Confirm = new EventEmitter<{ bump: string | null; summary: string }>();
