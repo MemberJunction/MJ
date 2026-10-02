@@ -121,15 +121,37 @@ describe('rubric evaluation submit', () => {
         expect(scored.evaluation.submittedAt).toBeInstanceOf(Date);
     });
 
-    it('allows Retired only when superseding', () => {
-        expect(() => SubmitEvaluation({ version: draft, versionStatus: 'Retired', scores: [] })).toThrow(/Published/);
-        const scored = SubmitEvaluation({
+    it('allows Retired only when the superseded evaluation used that same version', () => {
+        expect(() => SubmitEvaluation({ version: draft, versionStatus: 'Draft', scores: [] })).toThrow(/Published/);
+        expect(() => SubmitEvaluation({ version: draft, versionStatus: 'Retired', scores: [] })).toThrow(/same version/);
+        expect(() => SubmitEvaluation({
             version: draft,
             versionStatus: 'Retired',
             supersedesEvaluationId: 'old',
             scores: [{ criterionId: 'a', scaleLevelId: 'high' }],
+        })).toThrow(/same version/);
+        expect(() => SubmitEvaluation({
+            version: draft,
+            versionStatus: 'Retired',
+            supersedesEvaluationId: 'old',
+            priorVersionId: 'other-version',
+            scores: [{ criterionId: 'a', scaleLevelId: 'high' }],
+        })).toThrow(/same version/);
+        const scored = SubmitEvaluation({
+            version: draft,
+            versionStatus: 'Retired',
+            supersedesEvaluationId: 'old',
+            priorVersionId: draft.id,
+            scores: [{ criterionId: 'a', scaleLevelId: 'high' }],
         });
         expect(scored.evaluation.status).toBe('Submitted');
+    });
+
+    it('refuses to create an evaluation pinned to anything but a Published version', async () => {
+        const { AssertPinnedVersionForCreate } = await import('../custom/rubrics/evaluationSubmit.js');
+        expect(() => AssertPinnedVersionForCreate('Draft')).toThrow(/Published/);
+        expect(() => AssertPinnedVersionForCreate('Retired')).toThrow(/Published/);
+        expect(() => AssertPinnedVersionForCreate('Published')).not.toThrow();
     });
 });
 

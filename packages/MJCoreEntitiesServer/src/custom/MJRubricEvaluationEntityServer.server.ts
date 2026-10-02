@@ -3,7 +3,7 @@ import { IsValidUUID } from '@memberjunction/global';
 import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { LoadDraftForPublish } from './rubrics/versionPublish.js';
-import { AssertCanSupersede, SubmitEvaluation, type PersistedEvaluation, type PersistedScore, type SubmitEvaluationInput } from './rubrics/evaluationSubmit.js';
+import { AssertCanSupersede, AssertPinnedVersionForCreate, SubmitEvaluation, type PersistedEvaluation, type PersistedScore, type SubmitEvaluationInput } from './rubrics/evaluationSubmit.js';
 
 /**
  * Creates and submits an evaluation.
@@ -55,6 +55,9 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
      * with the status. The three writes share one entity transaction.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        if (this.IsSaved === false) {
+            await this.assertNewPinPublished();
+        }
         const status = this.GetFieldByName('Status');
         if (!(status?.Dirty && status.OldValue === 'Draft' && this.Status === 'Submitted')) {
             return super.Save(options);
@@ -72,14 +75,15 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
             const scoreRows = await run('MJ: Rubric Evaluation Scores', `EvaluationID='${evaluationId}'`);
             if (!scoreRows.Success) throw new Error('Could not read the scores.');
             const clientScores = (scoreRows.Results ?? []).filter(row => !readScore(row).isComputed);
+            const prior = this.SupersedesEvaluationID ? await loadPrior(run, this.SupersedesEvaluationID) : null;
             const input: SubmitEvaluationInput = {
                 version: loaded.draft,
                 versionStatus: versionRow.Status as SubmitEvaluationInput['versionStatus'],
                 supersedesEvaluationId: this.SupersedesEvaluationID ? requireId(this.SupersedesEvaluationID, 'prior evaluation') : null,
+                priorVersionId: prior?.versionId ?? null,
                 scores: clientScores.map(row => readScore(row)),
                 passThresholdOverride: this.PassThresholdApplied == null ? null : Number(this.PassThresholdApplied),
             };
-            const prior = this.SupersedesEvaluationID ? await loadPrior(run, this.SupersedesEvaluationID) : null;
             if (prior) {
                 // RubricID on an evaluation is a view column. A record created in this
                 // session has the pinned version, not that column, until it is reloaded.
@@ -143,13 +147,24 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
             return true;
         });
     }
+
+    /** A row that does not exist yet can pin only a Published version. */
+    private async assertNewPinPublished(): Promise<void> {
+        const provider = this.ProviderToUse as { RunView?: (params: { EntityName: string; ExtraFilter: string; ResultType?: 'simple' | 'entity_object' }, user?: unknown) => Promise<{ Success: boolean; Results?: unknown[] }> };
+        if (!provider?.RunView) throw new Error('Creating an evaluation requires a provider that can load the pinned version.');
+        const versionId = requireId(this.RubricVersionID, 'rubric version');
+        const versionRows = await provider.RunView({ EntityName: 'MJ: Rubric Versions', ExtraFilter: `ID='${versionId}'`, ResultType: 'entity_object' }, this.ContextCurrentUser);
+        const versionRow = versionRows.Results?.[0] as { Status?: string } | undefined;
+        if (!versionRows.Success || !versionRow) throw new Error('The pinned rubric version was not found.');
+        AssertPinnedVersionForCreate(String(versionRow.Status ?? ''));
+    }
 }
 
 async function saveOrThrow(record: { Save?: () => Promise<boolean> }, label: string): Promise<void> {
     if (!record.Save || !await record.Save()) throw new Error(`Could not save ${label}.`);
 }
 
-async function loadPrior(run: (entityName: string, filter: string) => Promise<{ Success: boolean; Results?: unknown[] }>, id: string): Promise<{ target: { status: string; subjectEntityId: string; subjectRecordId: string; contextEntityId: string | null; contextRecordId: string | null; rubricId: string }; row: { Status?: string; Save: () => Promise<boolean> } }> {
+async function loadPrior(run: (entityName: string, filter: string) => Promise<{ Success: boolean; Results?: unknown[] }>, id: string): Promise<{ versionId: string | null; target: { status: string; subjectEntityId: string; subjectRecordId: string; contextEntityId: string | null; contextRecordId: string | null; rubricId: string }; row: { Status?: string; Save: () => Promise<boolean> } }> {
     const priorRows = await run('MJ: Rubric Evaluations', `ID='${id}'`);
     const prior = priorRows.Results?.[0] as { Status?: string; SubjectEntityID?: string; SubjectRecordID?: string; ContextEntityID?: string | null; ContextRecordID?: string | null; RubricID?: string; RubricVersionID?: string; Save?: () => Promise<boolean> } | undefined;
     if (!prior?.Save) throw new Error('The evaluation being superseded was not found.');
@@ -160,6 +175,7 @@ async function loadPrior(run: (entityName: string, filter: string) => Promise<{ 
         rubricId = version?.RubricID ? String(version.RubricID) : '';
     }
     return {
+        versionId: prior.RubricVersionID ? String(prior.RubricVersionID) : null,
         target: {
             status: String(prior.Status),
             subjectEntityId: String(prior.SubjectEntityID),

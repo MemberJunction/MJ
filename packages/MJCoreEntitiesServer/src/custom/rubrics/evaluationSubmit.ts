@@ -58,6 +58,8 @@ export interface SubmitEvaluationInput {
     /** Published, or Retired only when this evaluation supersedes one pinned to this same version. */
     versionStatus: 'Published' | 'Retired' | 'Draft';
     supersedesEvaluationId?: string | null;
+    /** RubricVersionID of the evaluation being superseded. Required when the pin is Retired. */
+    priorVersionId?: string | null;
     scores: EvaluationScoreInput[];
     passThresholdOverride?: number | null;
 }
@@ -86,6 +88,22 @@ export interface PersistedEvaluation {
 }
 
 /**
+ * A new evaluation pins a Published version. Creating one against a Draft or
+ * Retired version is refused here as well as at submit. A Retired version is
+ * accepted only when this evaluation supersedes one pinned to that same version.
+ * Naming a supersede target is not enough.
+ *
+ * Score rows must name criteria of this version. A levels answer must use that
+ * criterion's scale. A numeric answer is the only place RawValue is accepted.
+ * IsComputed rows are refused from the client.
+ */
+export function AssertPinnedVersionForCreate(versionStatus: string): void {
+    if (versionStatus !== 'Published') {
+        throw new RubricEvaluationError('A new evaluation must pin a Published version.');
+    }
+}
+
+/**
  * Refuses an evaluation that is not pinned to a Published version, unless it
  * supersedes an evaluation and the pinned version is the Retired one that
  * evaluation used. Score rows must name criteria of this version. A levels
@@ -93,8 +111,15 @@ export interface PersistedEvaluation {
  * RawValue is accepted. IsComputed rows are refused from the client.
  */
 export function ValidateEvaluationScores(input: SubmitEvaluationInput): void {
-    if (input.versionStatus === 'Draft' || (input.versionStatus === 'Retired' && !input.supersedesEvaluationId)) {
-        throw new RubricEvaluationError('A new evaluation must pin a Published version. Retired is only allowed when superseding an evaluation pinned to that version.');
+    if (input.versionStatus === 'Draft') {
+        throw new RubricEvaluationError('A new evaluation must pin a Published version.');
+    }
+    if (input.versionStatus === 'Retired') {
+        if (!input.supersedesEvaluationId || !input.priorVersionId || input.priorVersionId !== input.version.id) {
+            throw new RubricEvaluationError('A Retired version can only be pinned when superseding an evaluation of that same version.');
+        }
+    } else if (input.versionStatus !== 'Published') {
+        throw new RubricEvaluationError('A new evaluation must pin a Published version.');
     }
     const nodes = new Map(input.version.nodes.map(node => [node.id, node]));
     const scales = new Map(input.version.scales.map(scale => [scale.id, scale]));

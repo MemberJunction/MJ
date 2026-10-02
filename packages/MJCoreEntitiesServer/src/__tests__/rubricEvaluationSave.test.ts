@@ -30,6 +30,7 @@ vi.mock('@memberjunction/core-entities', () => {
         public Confidence: number | null = null;
         public ScoringEngineVersion: string | null = null;
         public SubmittedAt: Date | null = null;
+        public IsSaved = true;
         public SaveReturns = true;
         public GetFieldByName(name: string): { Dirty: boolean; OldValue: string; Value: string } | null {
             if (name !== 'Status') return null;
@@ -106,6 +107,30 @@ describe('MJRubricEvaluationEntityServer.Save', () => {
         expect(host.Outcome).toBe('Passed');
         expect(host.SubmittedAt).toBeInstanceOf(Date);
         expect(events).toEqual(['score', 'evaluation']);
+    });
+
+    it('refuses to create an evaluation when the pinned version is not Published', async () => {
+        const evaluation = new MJRubricEvaluationEntityServer();
+        const host = evaluation as unknown as {
+            IsSaved: boolean;
+            Status: string;
+            ProviderToUse: ReturnType<typeof provider>;
+            SuperSaveCalled: boolean;
+        };
+        const data = provider();
+        const original = data.RunView.bind(data);
+        data.RunView = async (params: { EntityName: string }) => {
+            if (params.EntityName === 'MJ: Rubric Versions') {
+                return { Success: true, Results: [{ ID: '11111111-1111-4111-8111-111111111111', Status: 'Retired', RubricID: 'rubric-1' }] };
+            }
+            return original(params);
+        };
+        host.IsSaved = false;
+        host.ProviderToUse = data;
+        host.Status = 'Draft';
+        await expect(evaluation.Save()).rejects.toThrow(/Published/);
+        expect(host.SuperSaveCalled).toBe(false);
+        expect(events).toEqual([]);
     });
 
     it('throws before reading when the version id is not a UUID', async () => {
