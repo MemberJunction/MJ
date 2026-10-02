@@ -15,6 +15,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ProviderConfigDataBase } from '../generic/interfaces';
+import { ProviderBase } from '../generic/providerBase';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 import type { ILocalStorageProvider, IMetadataProvider, DatasetItemFilterType, DatasetStatusResultType, DatasetStatusEntityUpdateDateType } from '../generic/interfaces';
@@ -103,7 +104,12 @@ describe('a stored freshness claim with no payload behind it', () => {
 });
 
 describe('a dataset date key that outlived its blob', () => {
-    /** Caches a dataset and returns the key of the blob (not the `_date` key that vouches for it). */
+    /**
+     * Caches a dataset and returns the key of the blob (not the `_date` key that vouches for it).
+     * Datasets live in `ProviderBase.DatasetCacheCategory`, so both the lookup and the eviction
+     * below have to name it — a category-less `Remove` would delete nothing and leave the blob in
+     * place, which is the whole condition these cases simulate.
+     */
     async function cacheProbe(provider: StoredMetadataProvider, store: MockCacheStorageProvider): Promise<string> {
         const dataset = {
             DatasetID: 'd1', DatasetName: 'Probe', Success: true, Status: 'Ready',
@@ -111,7 +117,7 @@ describe('a dataset date key that outlived its blob', () => {
             Results: [{ EntityID: 'E1', EntityName: 'Probes', Results: [{ ID: '1' }] }],
         };
         await provider.CacheDataset('Probe', null as unknown as DatasetItemFilterType[], dataset as never);
-        const dataKey = (await store.GetCategoryKeys('default')).find(k => k.includes('Probe') && !k.endsWith('_date'));
+        const dataKey = (await store.GetCategoryKeys(ProviderBase.DatasetCacheCategory)).find(k => k.includes('Probe') && !k.endsWith('_date'));
         expect(dataKey).toBeDefined();
         return dataKey as string;
     }
@@ -132,7 +138,7 @@ describe('a dataset date key that outlived its blob', () => {
         expect(await provider.IsDatasetCacheUpToDate('Probe')).toBe(true);
 
         // The blob's TTL elapsed; its `_date` key, written after it, is still there.
-        await store.Remove(dataKey);
+        await store.Remove(dataKey, ProviderBase.DatasetCacheCategory);
 
         await expect(provider.IsDatasetCacheUpToDate('Probe')).resolves.toBe(false);
     });
@@ -146,7 +152,7 @@ describe('a dataset date key that outlived its blob', () => {
         const provider = await newProvider(store);
         provider.DatabaseEntityUpdateDates = [];
         const dataKey = await cacheProbe(provider, store);
-        await store.Remove(dataKey);
+        await store.Remove(dataKey, ProviderBase.DatasetCacheCategory);
 
         await expect(provider.IsDatasetCacheUpToDate('Probe')).resolves.toBe(true);
     });
