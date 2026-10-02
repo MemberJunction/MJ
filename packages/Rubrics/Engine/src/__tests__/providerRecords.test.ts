@@ -143,6 +143,8 @@ describe('ProviderEvaluationStore.submit', () => {
             gateFailed: true,
             isNotApplicable: false,
             isAdvisory: false,
+            completeness: null,
+            confidence: null,
         }]);
     });
 });

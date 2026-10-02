@@ -26,11 +26,7 @@ export function SamplingEvaluatorChoice(config: unknown): { evaluator: 'LLM' | '
 }
 
 function parseConfig(value: string): unknown {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return null;
-    }
+    return JSON.parse(value);
 }
 
 export interface SampledRun {

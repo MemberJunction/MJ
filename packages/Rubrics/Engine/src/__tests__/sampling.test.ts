@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { AGENT_RUN_SUBJECT, EvaluateSampledAgentRuns, DriftDeltas, DriftSeries, KeepSample, PeriodMeans, ProductionSamplingJob, SampleBucket, SelectSampledRuns } from '../sampling.js';
+import { AGENT_RUN_SUBJECT, EvaluateSampledAgentRuns, DriftDeltas, DriftSeries, KeepSample, PeriodMeans, ProductionSamplingJob, SampleBucket, SamplingEvaluatorChoice, SelectSampledRuns } from '../sampling.js';
 
 describe('production sampling', () => {
+    it('does not treat a broken evaluator config as missing', () => {
+        expect(() => SamplingEvaluatorChoice('{')).toThrow(SyntaxError);
+        expect(SamplingEvaluatorChoice('{"EvaluatorType":"Deterministic"}').evaluator).toBe('Deterministic');
+    });
+
     it('keeps the same run for the same rate', () => {
         const bucket = SampleBucket('run-1');
         expect(KeepSample('run-1', 0)).toBe(false);
@@ -29,7 +34,7 @@ describe('production sampling', () => {
         }, {
             async EvaluateRecord(input) { evaluated.push(input); },
         });
-        expect((await job.run()).map(row => row.runId)).toEqual(['open']);
+        expect((await job.Run()).map(row => row.runId)).toEqual(['open']);
         expect(evaluated).toEqual([{
             rubricId: 'rubric',
             subjectRecordId: 'open',
@@ -37,7 +42,7 @@ describe('production sampling', () => {
             evaluator: 'LLM',
             promptMode: 'SinglePass',
         }]);
-        expect(new EvaluateSampledAgentRuns({ async Load() { return { links: [], runs: [], evaluated: [] }; } }, { async EvaluateRecord() {} }).plan({
+        expect(new EvaluateSampledAgentRuns({ async Load() { return { links: [], runs: [], evaluated: [] }; } }, { async EvaluateRecord() {} }).Plan({
             links: [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active' }],
             runs: [{ id: 'open', agentId: 'agent' }],
             evaluated: [],
@@ -61,7 +66,7 @@ describe('production sampling', () => {
         }, {
             async EvaluateRecord(input) { evaluated.push(input); },
         });
-        expect((await job.run()).map(row => row.rubricId)).toEqual(['sample-rubric']);
+        expect((await job.Run()).map(row => row.rubricId)).toEqual(['sample-rubric']);
         expect(evaluated).toEqual([{
             rubricId: 'sample-rubric',
             subjectRecordId: 'open',
@@ -89,7 +94,7 @@ describe('production sampling', () => {
         }, {
             async EvaluateRecord(input) { evaluated.push(input); },
         });
-        expect(await job.run()).toEqual([]);
+        expect(await job.Run()).toEqual([]);
     });
 
     it('uses the agent rubric evaluator and defaults a missing one to LLM SinglePass', async () => {
@@ -108,7 +113,7 @@ describe('production sampling', () => {
         }, {
             async EvaluateRecord(input) { evaluated.push(input); },
         });
-        await job.run();
+        await job.Run();
         expect(evaluated).toEqual([
             { rubricId: 'plain', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluator: 'LLM', promptMode: 'SinglePass' },
             { rubricId: 'rules', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT, evaluator: 'Deterministic', promptMode: 'SinglePass' },
@@ -176,7 +181,7 @@ describe('production sampling', () => {
             volumeCap: 1,
             evaluatedBatchSize: 1,
         });
-        expect((await job.run()).map(row => row.runId)).toEqual(['a']);
+        expect((await job.Run()).map(row => row.runId)).toEqual(['a']);
         expect(evaluated).toEqual(['a']);
         expect(job.failures).toEqual([{ runId: 'a', message: 'boom' }]);
         expect(batches).toEqual([['a'], ['b']]);
@@ -195,7 +200,7 @@ describe('production sampling', () => {
         }, {
             async EvaluateRecord(input) { seen.push(input.agent); },
         }, { agent });
-        await job.run();
+        await job.Run();
         expect(seen).toEqual([agent]);
     });
 

@@ -58,7 +58,7 @@ export async function CreateDraftVersion(provider: RubricProvider, user: unknown
         version.RubricID = rubricId;
         version.Status = 'Draft';
         if (base) version.BasedOnVersionID = base.id;
-        if (!await version.Save()) throw new Error(version.LatestResult?.Message || 'Could not create the draft version.');
+        if (!await version.Save()) throw new Error(version.LatestResult?.CompleteMessage || version.LatestResult?.Message || 'Could not create the draft version.');
         const versionId = String(version.ID ?? '');
         const nodes = input.nodes.length > 0 ? input.nodes : await clonedBaseNodes(provider, user, base?.id ?? null);
         assertParentsPresent(nodes);
@@ -88,7 +88,7 @@ export async function CreateDraftVersion(provider: RubricProvider, user: unknown
             row.RationaleRequired = node.rationaleRequired;
             row.Sequence = node.sequence;
             row.EvaluatorConfig = node.evaluatorConfig === undefined || node.evaluatorConfig === null ? null : JSON.stringify(node.evaluatorConfig);
-            if (!await row.Save()) throw new Error(row.LatestResult?.Message || `Could not save criterion ${node.key}.`);
+            if (!await row.Save()) throw new Error(row.LatestResult?.CompleteMessage || row.LatestResult?.Message || `Could not save criterion ${node.key}.`);
             const storedId = String(row.ID ?? '');
             if (!storedId) throw new Error(`Could not save criterion ${node.key}.`);
             if (storedId === node.id) throw new Error(`Create Rubric Draft does not reuse the id supplied for ${node.key}.`);
@@ -111,7 +111,7 @@ async function createRubric(provider: RubricProvider, user: unknown, rubricName:
     rubric.NewRecord();
     rubric.Name = name;
     rubric.Status = 'Active';
-    if (!await rubric.Save()) throw new Error(rubric.LatestResult?.Message || 'Could not create the rubric.');
+    if (!await rubric.Save()) throw new Error(rubric.LatestResult?.CompleteMessage || rubric.LatestResult?.Message || 'Could not create the rubric.');
     const id = String(rubric.ID ?? '');
     if (!id) throw new Error('Could not create the rubric.');
     return id;
@@ -207,7 +207,7 @@ async function copyAnchorsAndBands(
             level.ScaleLevelID = anchor.ScaleLevelID == null ? null : String(anchor.ScaleLevelID);
             if (anchor.AnchorValue != null && anchor.AnchorValue !== '') level.AnchorValue = Number(anchor.AnchorValue);
             level.Descriptor = anchor.Descriptor == null ? '' : String(anchor.Descriptor);
-            if (!await level.Save()) throw new Error(level.LatestResult?.Message || `Could not copy an anchor for ${node.key}.`);
+            if (!await level.Save()) throw new Error(level.LatestResult?.CompleteMessage || level.LatestResult?.Message || `Could not copy an anchor for ${node.key}.`);
         }
     }
     const bands = await listRows(provider, user, 'MJ: Rubric Bands', `RubricVersionID='${baseId}'`);
@@ -221,7 +221,7 @@ async function copyAnchorsAndBands(
         row.DisplayTone = (band.DisplayTone == null ? 'Neutral' : String(band.DisplayTone)) as MJRubricBandEntity['DisplayTone'];
         row.Sequence = band.Sequence == null ? 0 : Number(band.Sequence);
         if (band.Description !== undefined) row.Description = band.Description == null ? null : String(band.Description);
-        if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not copy a band.');
+        if (!await row.Save()) throw new Error(row.LatestResult?.CompleteMessage || row.LatestResult?.Message || 'Could not copy a band.');
     }
 }
 
@@ -260,7 +260,7 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
             if (input.aiPromptRunId) row.AIPromptRunID = input.aiPromptRunId;
             if (input.evaluatorName) row.EvaluatorName = input.evaluatorName;
             if (input.metadata !== undefined) row.Metadata = typeof input.metadata === 'string' ? input.metadata : JSON.stringify(input.metadata);
-            if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not create the evaluation draft.');
+            if (!await row.Save()) throw new Error(row.LatestResult?.CompleteMessage || row.LatestResult?.Message || 'Could not create the evaluation draft.');
             return { id: String(row.ID ?? ''), status: 'Draft' };
         },
         async submit(evaluationId, answers) {
@@ -278,12 +278,12 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
                 if (answer.evidence !== undefined && answer.evidence !== null) {
                     score.Evidence = typeof answer.evidence === 'string' ? answer.evidence : JSON.stringify(answer.evidence);
                 }
-                if (!await score.Save()) throw new Error(score.LatestResult?.Message || 'Could not save an answer.');
+                if (!await score.Save()) throw new Error(score.LatestResult?.CompleteMessage || score.LatestResult?.Message || 'Could not save an answer.');
             }
             const evaluation = await provider.GetEntityObject('MJ: Rubric Evaluations', user);
             await evaluation.Load(evaluationId);
             evaluation.Status = 'Submitted';
-            if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.Message || 'Could not submit the evaluation.');
+            if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.CompleteMessage || evaluation.LatestResult?.Message || 'Could not submit the evaluation.');
             return {
                 normalizedScore: numberOrNull(evaluation.NormalizedScore),
                 completeness: numberOrNull(evaluation.Completeness),
@@ -305,7 +305,7 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
             await evaluation.Load(evaluationId);
             evaluation.Status = 'Failed';
             evaluation.ErrorMessage = errorMessage;
-            if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.Message || 'Could not record the failure.');
+            if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.CompleteMessage || evaluation.LatestResult?.Message || 'Could not record the failure.');
             return { id: evaluationId, status: 'Failed', errorMessage };
         },
     };
@@ -469,7 +469,7 @@ export async function SubmitHumanEvaluation(provider: RubricProvider, user: unkn
         evaluation.EvaluatorUserID = input.evaluatorUserId;
         evaluation.Status = 'Draft';
         evaluation.SupersedesEvaluationID = input.supersedesEvaluationId ?? null;
-        if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.Message || 'Could not start the human score.');
+        if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.CompleteMessage || evaluation.LatestResult?.Message || 'Could not start the human score.');
         const evaluationId = String(evaluation.ID ?? '');
         if (!evaluationId) throw new Error('Could not start the human score.');
         for (const answer of input.answers) {
@@ -482,10 +482,10 @@ export async function SubmitHumanEvaluation(provider: RubricProvider, user: unkn
             score.IsNotApplicable = answer.isNotApplicable === true;
             score.Rationale = answer.rationale ?? null;
             score.Evidence = EvidenceJson(answer.evidence);
-            if (!await score.Save()) throw new Error(score.LatestResult?.Message || 'Could not save a criterion answer.');
+            if (!await score.Save()) throw new Error(score.LatestResult?.CompleteMessage || score.LatestResult?.Message || 'Could not save a criterion answer.');
         }
         evaluation.Status = 'Submitted';
-        if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.Message || 'Could not submit the human score.');
+        if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.CompleteMessage || evaluation.LatestResult?.Message || 'Could not submit the human score.');
         return { id: evaluationId, status: 'Submitted' };
     });
 }

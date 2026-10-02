@@ -100,7 +100,11 @@ function field(row: unknown, name: string): unknown {
 
 function parseConfig(value: unknown): unknown {
     if (typeof value !== 'string' || value.length === 0) return value ?? null;
-    return JSON.parse(value);
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        throw new Error(`EvaluatorConfig is not valid JSON. ${error instanceof Error ? error.message : String(error)}`);
+    }
 }
 
 function text(value: unknown): string {

@@ -16,6 +16,15 @@ describe('SnapshotFromRows', () => {
             levels: [],
         });
         expect(snapshot.nodes[0].evaluatorConfig).toEqual({ Deterministic: { path: 'output' } });
+        expect(() => SnapshotFromRows({
+            version: { ID: 'v', NotApplicablePolicy: 'ExcludeAndRedistribute', ScoreDisplayMin: 0, ScoreDisplayMax: 1 },
+            rubricId: 'rubric',
+            criteria: [{ ID: 'a', Key: 'clarity', Name: 'Clarity', NodeType: 'Criterion', Weight: 1, EvaluatorConfig: '{not json' }],
+            anchors: [],
+            bands: [],
+            scales: [],
+            levels: [],
+        })).toThrow(/EvaluatorConfig is not valid JSON/);
         expect(snapshot.nodes[0].anchors?.map(anchor => anchor.descriptor)).toEqual(['Meet', 'Miss']);
     });
 

@@ -37,16 +37,34 @@ function textValue(params: RunActionParams, name: string): string | undefined {
 
 function nodeInput(params: RunActionParams): RubricNodeSnapshot[] {
     const value = inputValue(params, 'Nodes');
+    if (value === undefined || value === null || value === '') return [];
     if (Array.isArray(value)) return value as RubricNodeSnapshot[];
-    if (typeof value === 'string' && value.trim().startsWith('[')) {
-        try {
-            const parsed = JSON.parse(value) as unknown;
-            return Array.isArray(parsed) ? parsed as RubricNodeSnapshot[] : [];
-        } catch {
-            return [];
-        }
+    if (typeof value !== 'string') throw new Error('Nodes must be a JSON array.');
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(value) as unknown;
+    } catch (error) {
+        throw new Error(`Nodes is not valid JSON. ${error instanceof Error ? error.message : String(error)}`);
     }
-    return [];
+    if (!Array.isArray(parsed)) throw new Error('Nodes must be a JSON array.');
+    return parsed as RubricNodeSnapshot[];
+}
+
+const EVALUATORS = new Set(['LLM', 'Deterministic']);
+
+function evaluatorInput(params: RunActionParams): 'LLM' | 'Deterministic' | undefined {
+    const value = textValue(params, 'Evaluator');
+    if (value === undefined) return undefined;
+    if (!EVALUATORS.has(value)) throw new Error(`Evaluator ${value} is not accepted.`);
+    return value as 'LLM' | 'Deterministic';
+}
+
+function passThresholdInput(params: RunActionParams): number | null {
+    const value = inputValue(params, 'PassThreshold');
+    if (value === undefined || value === null || value === '') return null;
+    const parsed = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) throw new Error('PassThreshold must be between 0 and 1.');
+    return parsed;
 }
 
 function output(params: RunActionParams, name: string, value: unknown): void {
@@ -69,9 +87,6 @@ export class EvaluateRecordAgainstRubricAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            if (textValue(params, 'Evaluator') === 'AI') {
-                return { Success: false, ResultCode: 'FAILED', Message: 'Evaluator AI is not accepted.' };
-            }
             const result = await this.Invoke(EngineForAction(params), {
                 rubricId: textValue(params, 'RubricID'),
                 rubricName: textValue(params, 'RubricName'),
@@ -79,10 +94,8 @@ export class EvaluateRecordAgainstRubricAction extends BaseAction {
                 subjectRecordId: textValue(params, 'SubjectRecordID') ?? '',
                 contextEntityName: textValue(params, 'ContextEntityName'),
                 contextRecordId: textValue(params, 'ContextRecordID'),
-                evaluator: textValue(params, 'Evaluator') as EvaluateRecordInput['evaluator'],
-                passThreshold: inputValue(params, 'PassThreshold') === undefined || inputValue(params, 'PassThreshold') === null
-                    ? null
-                    : Number(inputValue(params, 'PassThreshold')),
+                evaluator: evaluatorInput(params),
+                passThreshold: passThresholdInput(params),
             });
             output(params, 'EvaluationID', result.evaluationId);
             output(params, 'Score', result.score);

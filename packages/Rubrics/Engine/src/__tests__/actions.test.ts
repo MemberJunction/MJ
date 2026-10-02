@@ -217,6 +217,18 @@ describe('rubric actions', () => {
         expect(records.lastDraft?.rubricName).toBe('Score a vendor packet');
         records.draftStatus = 'Published';
         await expect(new CreateRubricDraftAction().Invoke(engine, { rubricId: 'rubric', nodes: [] })).rejects.toThrow(/never publishes/);
+        records.draftStatus = 'Draft';
+        const before = records.draftCalls;
+        const bad = await new CreateRubricDraftAction().InternalRunAction({
+            Params: [
+                { Name: 'RubricID', Type: 'Input', Value: 'rubric' },
+                { Name: 'Nodes', Type: 'Input', Value: '{not json' },
+            ],
+            Context: { rubricEngine: engine },
+        } as never);
+        expect(bad.Success).toBe(false);
+        expect(bad.Message).toMatch(/Nodes is not valid JSON/);
+        expect(records.draftCalls).toBe(before);
     });
 
     it('submits a percentage answer and its quote list in one transaction', async () => {
@@ -412,6 +424,18 @@ describe('rubric actions', () => {
         const before = order.length;
         await expect(CreateDraftVersion(failing, { id: 'user' }, { rubricId: 'rubric', nodes: [leaf] })).rejects.toThrow(/Could not save criterion/);
         expect(order.slice(before)).toEqual(['begin', 'save:MJ: Rubric Versions', 'rollback']);
+        const explained = {
+            ...provider,
+            async GetEntityObject(entity: string) {
+                if (entity !== 'MJ: Rubric Criteria') return draftEntity(entity, () => undefined);
+                return {
+                    NewRecord() { /* empty */ },
+                    async Save() { return false; },
+                    LatestResult: { Message: 'short', CompleteMessage: 'the criterion key is already used' },
+                };
+            },
+        };
+        await expect(CreateDraftVersion(explained, { id: 'user' }, { rubricId: 'rubric', nodes: [leaf] })).rejects.toThrow('the criterion key is already used');
     });
 
     it('runs LLM through the Rubric Evaluator prompt and does not accept AI', async () => {
@@ -448,6 +472,39 @@ describe('rubric actions', () => {
         } as never);
         expect(ai.Success).toBe(false);
         expect(ai.Message).toBe('Evaluator AI is not accepted.');
+        const unknown = await action.InternalRunAction({
+            Params: [
+                { Name: 'RubricID', Type: 'Input', Value: 'rubric' },
+                { Name: 'SubjectEntityName', Type: 'Input', Value: 'MJ: Documents' },
+                { Name: 'SubjectRecordID', Type: 'Input', Value: 'record-1' },
+                { Name: 'Evaluator', Type: 'Input', Value: 'Human' },
+            ],
+            Context: { rubricEngine: engine },
+        } as never);
+        expect(unknown.Success).toBe(false);
+        expect(unknown.Message).toBe('Evaluator Human is not accepted.');
+        const high = await action.InternalRunAction({
+            Params: [
+                { Name: 'RubricID', Type: 'Input', Value: 'rubric' },
+                { Name: 'SubjectEntityName', Type: 'Input', Value: 'MJ: Documents' },
+                { Name: 'SubjectRecordID', Type: 'Input', Value: 'record-1' },
+                { Name: 'PassThreshold', Type: 'Input', Value: 2 },
+            ],
+            Context: { rubricEngine: engine },
+        } as never);
+        expect(high.Success).toBe(false);
+        expect(high.Message).toBe('PassThreshold must be between 0 and 1.');
+        const nan = await action.InternalRunAction({
+            Params: [
+                { Name: 'RubricID', Type: 'Input', Value: 'rubric' },
+                { Name: 'SubjectEntityName', Type: 'Input', Value: 'MJ: Documents' },
+                { Name: 'SubjectRecordID', Type: 'Input', Value: 'record-1' },
+                { Name: 'PassThreshold', Type: 'Input', Value: 'nope' },
+            ],
+            Context: { rubricEngine: engine },
+        } as never);
+        expect(nan.Success).toBe(false);
+        expect(nan.Message).toBe('PassThreshold must be between 0 and 1.');
         expect(ai.Message ?? '').not.toMatch(/prompt runner/i);
     });
 
