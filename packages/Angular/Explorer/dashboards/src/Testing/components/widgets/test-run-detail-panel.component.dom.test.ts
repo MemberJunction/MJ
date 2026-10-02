@@ -25,7 +25,7 @@ class CostStub { @Input() cost = 0; @Input() showIcon = false; }
 @Component({ standalone: true, selector: 'app-oracle-breakdown-table', template: '<div class="stub-oracle"></div>' })
 class OracleStub { @Input() results: unknown[] = []; }
 @Component({ standalone: true, selector: 'mj-testing-rubric-result', template: '<div class="stub-rubric"></div>' })
-class RubricStub { @Input() OracleResults: unknown[] | null = null; }
+class RubricStub { @Input() OracleResults: unknown[] | null = null; @Input() Provider: unknown = null; }
 
 function testRun(over: Partial<TestRunSummary> = {}): TestRunSummary {
   return {

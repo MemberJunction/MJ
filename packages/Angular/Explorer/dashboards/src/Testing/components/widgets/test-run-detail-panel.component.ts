@@ -1,5 +1,6 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { TestRunSummary } from '../../services/testing-instrumentation.service';
+import { Component, Input, Output, EventEmitter, inject } from '@angular/core';
+import type { IMetadataProvider } from '@memberjunction/core';
+import { TestRunSummary, TestingInstrumentationService } from '../../services/testing-instrumentation.service';
 import { OracleResult } from './oracle-breakdown-table.component';
 import { rubricRunView } from '@memberjunction/ng-testing';
 
@@ -64,7 +65,7 @@ import { rubricRunView } from '@memberjunction/ng-testing';
             </div>
           }
           @if (rubricView) {
-            <mj-testing-rubric-result [OracleResults]="oracleResults"></mj-testing-rubric-result>
+            <mj-testing-rubric-result [OracleResults]="oracleResults" [Provider]="SessionProvider"></mj-testing-rubric-result>
           }
           <!-- Result Details -->
           @if (resultDetails) {
@@ -380,6 +381,15 @@ import { rubricRunView } from '@memberjunction/ng-testing';
   `]
 })
 export class TestRunDetailPanelComponent {
+  private readonly session = inject(TestingInstrumentationService, { optional: true });
+
+  /** The signed-in session provider. An input wins; otherwise the testing service's provider is used. */
+  @Input() Provider: IMetadataProvider | null = null;
+
+  public get SessionProvider(): IMetadataProvider | null {
+    return this.Provider ?? this.session?.Provider ?? null;
+  }
+
   @Input() TestRun!: TestRunSummary;
 
   /** @deprecated Use {@link TestRun}. */

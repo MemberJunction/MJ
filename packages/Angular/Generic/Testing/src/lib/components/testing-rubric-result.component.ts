@@ -1,5 +1,5 @@
 import { Component, Input, OnChanges } from '@angular/core';
-import { Metadata, RunView, type IMetadataProvider } from '@memberjunction/core';
+import { RunView, type IMetadataProvider } from '@memberjunction/core';
 import { RubricResultComponent } from '@memberjunction/ng-rubrics';
 import { RubricEvaluationId, RubricRunView, StoredRubricView, type RubricRunView as RubricRun } from '../models/testing-rubrics';
 
@@ -39,7 +39,7 @@ export class TestingRubricResultComponent implements OnChanges {
             this.LoadError = '';
             return;
         }
-        const provider = this.Provider ?? Metadata.Provider;
+        const provider = this.Provider;
         if (!provider) {
             this.LoadError = 'Could not load the stored evaluation.';
             return;
