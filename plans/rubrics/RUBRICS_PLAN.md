@@ -208,8 +208,9 @@ Add interfaces under `metadata/entities/JSONType-interfaces/` with bridge record
                                     └─ delete (only while Draft)
 ```
 
-- **At most one Draft per rubric** (filtered unique index). A new draft is always a deep clone of the
-  **latest published version** (`BasedOnVersionID`), so drafts never branch.
+- **At most one Draft per rubric** (filtered unique index). A new draft is a deep clone of the
+  **highest Published or Retired version** (`BasedOnVersionID`). A Draft is not a base. A rubric
+  with only drafts publishes as 1.0.0. Drafts do not branch.
 - Publishing is the only way numbers are assigned. `Published ↔ Retired` is the only change a frozen
   version allows. Retired versions stay valid for evaluations already pinned to them and for
   superseding those evaluations; new evaluations pin the latest `Published` version.
@@ -222,16 +223,17 @@ The bump describes **whether scores stay comparable**, not what happened to rows
 
 | Bump | Meaning | Triggered by (any one) |
 |---|---|---|
-| **Major** | Scores from the new version are **not comparable** with the previous version | Add or remove a non-advisory node; change a node's `Key`, `ParentID`, `NodeType`, `Weight`, `ScaleID`, `IsAdvisory`, `IsGate`, `GateMinimumScore`, `NotApplicablePolicy`, `RollupMethod` or `EvaluatorConfig`; change the version's `NotApplicablePolicy` |
-| **Minor** | Scores comparable; **verdicts or interpretation** may differ | Change `PassThreshold` or `MinimumCompleteness`; add, remove or change a band's range or tone; add or remove an **advisory** criterion; change `EvidenceRequired` / `RationaleRequired` |
-| **Patch** | **Wording only** | `Name`, `Description`, `Guidance`, `Instructions`, level `Descriptor`s, band `Label`/`Description`, `Sequence`, `ScoreDisplayMin/Max` |
+| **Major** | Scores from the new version are **not comparable** with the previous version | Add or remove a non-advisory node. Change a non-advisory node's parent key, type, weight, scale, gate, gate minimum, not-applicable policy, rollup, or evaluator config. Flip `IsAdvisory`. Change the version's not-applicable policy. Change the type, range, step, or direction of a scale a non-advisory node uses, or add, remove, or change a level's value or normalized value. A key change is an add plus a remove. A node that is advisory on both sides does not make those scoring-field edits Major. |
+| **Minor** | Scores comparable; **verdicts or interpretation** may differ | Change `PassThreshold` or `MinimumCompleteness`. Add or remove a band, or change its range or tone. Add or remove an advisory node, or change an advisory node's parent, type, weight, scale, gate, gate minimum, rollup, or evaluator config. Change `EvidenceRequired` or `RationaleRequired`. |
+| **Patch** | **Wording and order** | Names, descriptions, guidance, instructions, anchor text, level labels and descriptions, a band label rename, band wording, `Sequence`, and the display range. Bands match by label, so a renamed label on the same band is Patch. |
 
-- The first published version is `1.0.0` (`ComputedBump = 'Initial'`).
-- `AppliedBump = max(ComputedBump, RequestedBump)`; an author may bump **higher**, never lower.
-  `Major` → `M+1.0.0`, `Minor` → `M.m+1.0`, `Patch` → `M.m.p+1`.
-- A draft identical to its base cannot be published ("no changes").
-- `ChangeDetails` records every change with the bump it required, so the publish dialog can say
-  *why* a change is major.
+Parent links are compared by the parent key. A clone's new ids are not a Major bump.
+
+- The first publish, with no Published or Retired base, is `1.0.0` (`AppliedBump = 'Initial'`).
+- `AppliedBump` is the higher of the computed bump and the author's request. The author may go
+  higher and may not go lower. `Major` → `M+1.0.0`, `Minor` → `M.m+1.0`, `Patch` → `M.m.p+1`.
+- A draft identical to its base cannot be published.
+- `ChangeDetails` stores `BaseVersionID` and each change as `{Path, Property, From, To, Bump}`.
 - **Caveat worth knowing:** wording is what an AI judge reads, so a patch can shift AI scores.
   "Patch" means comparable by intent; judge calibration (§10.8) is what detects drift.
 
@@ -252,7 +254,9 @@ bump always changes it"* by generating random diffs.
 Two layers:
 
 1. **Primary — entity server subclasses** (`MJCoreEntitiesServer`) refuse the change in
-   `ValidateAsync` with a clear message ("Create a new draft version to change it").
+   `ValidateAsync`. The result is a `ValidationErrorInfo` whose `Type` is `Failure`. A new version
+   must be Draft. The only publish transition is Draft → Published, and it stamps
+   `PublishedByUserID`. Published and Retired may switch, and retirement stamps `RetiredAt`.
 2. **Backstop — database triggers**, committed in the migration: `trgRubricVersion_Immutable`,
    `trgRubricCriterion_Immutable`, `trgRubricCriterionLevel_Immutable`, `trgRubricBand_Immutable`,
    `trgRubricScale_Immutable`, `trgRubricScaleLevel_Immutable`, `trgRubricEvaluation_Immutable`,
@@ -260,9 +264,10 @@ Two layers:
    migration declares — never `__mj_UpdatedAt` — so CodeGen's timestamp trigger still works on
    frozen rows, and they compare with `EXCEPT` so `NULL → value` changes are caught.
 
-**Delete behavior.** Draft versions and Draft evaluations must be deletable with their children.
-Set `CascadeDeletes = 1` on `MJ: Rubric Versions` and `MJ: Rubric Evaluations` via
-`metadata/entities` (task R1); the triggers still refuse deleting anything frozen.
+**Delete behavior.** A draft evaluation's score rows follow `CascadeDeletes` on
+`MJ: Rubric Evaluations`. Deleting a draft version is `trgRubricVersion_Delete`, an
+`INSTEAD OF DELETE` trigger: it clears anchors, parent links, criteria, and bands before the
+version row. The triggers still refuse deleting a frozen version or a submitted evaluation.
 
 ---
 
@@ -371,7 +376,7 @@ create (Draft) ──▶ answer / N/A / rationale / evidence ──▶ submit �
 | Package | Path | Tier | Contents |
 |---|---|---|---|
 | `@memberjunction/rubrics-base` | `packages/Rubrics/Base` | UI-safe | `RubricEngineBase` (a `BaseEngine` caching categories, scales + levels, rubrics, **published** versions with their criteria/levels/bands, agent rubrics); `RubricScoring` (pure §6 math); `RubricVersionDiff` (pure §5.2 classifier); shared types (`RubricTree`, `RubricAnswer`, `RubricComputedResult`, `RubricConsensusStats`) |
-| `@memberjunction/rubrics` | `packages/Rubrics/Engine` | server | `RubricEngine` (`BaseSingleton`, composes the base): `Evaluate()`, `StartHumanEvaluation()`, `GetConsensus()`, `GetAgreement()`, `GetDiagnostics()`, `ResolveVersion()`; `BaseRubricEvaluator` + the built-in evaluators; `BaseRubricSubjectContentProvider` + built-in providers; hashing (`ContentHash`/`ScoringHash`) |
+| `@memberjunction/rubrics` | `packages/Rubrics/Engine` | server | `RubricEngine` (its own `Instance`; it does not extend `BaseSingleton`): `Evaluate()`, `EvaluateRecord()`, `StartHumanEvaluation()`, `ConsensusForSubject()`, `GetRubric()`, `CreateDraft()`; `BaseRubricEvaluator` and the built-in evaluators; content shaping for the built-in entities |
 | entity server subclasses | `packages/MJCoreEntitiesServer` | server | `RubricVersionEntityServer` (clone, validate, publish, hashes, bump), `RubricCriterionEntityServer`, `RubricEvaluationEntityServer` (creation rules, submit), `RubricEvaluationScoreEntityServer`, `RubricScaleEntityServer` (frozen-when-used) |
 | `@memberjunction/ng-rubrics` | `packages/Angular/Generic/rubrics` | client | L1/L2 widgets (§12) |
 
@@ -423,10 +428,11 @@ never a silent skip.
   - `PerCriterion` — one `ScoreQuestion` per leaf via `AIDecisionRunner`, giving per-level
     probabilities; `Confidence` = probability of the chosen level. Costlier, better calibrated.
   - `Samples: n` — n runs; the median level per criterion is kept and the spread recorded.
-- **`AgentRubricEvaluator`** (`Agent`) — runs a configured agent (default: the core **"Rubric
-  Evaluation Agent"**, a Loop agent that can use read-only tools such as querying data or fetching a
-  document) and expects the same output payload. For subjects that need investigation, not just
-  reading.
+- **`AgentRubricEvaluator`** (`Agent`) — one run of the **"Rubric Evaluation Agent"**. That agent
+  is a Loop agent. Its tools are Get Rubric and Get Rubric Subject. Get Rubric Consensus is removed.
+  It does not publish, create a draft, or call Evaluate Record Against Rubric. Unknown keys are
+  dropped, levels map by label, and a quote that is not in the subject text is dropped.
+  `AIRubricEvaluator` is a separate per-leaf helper. `Evaluate()` does not construct it.
 - **`DeterministicRubricEvaluator`** (`Deterministic`) — applies each leaf's
   `EvaluatorConfig.Deterministic` rule to the subject content's JSON. A leaf without a rule is left
   unanswered. No model call.
@@ -441,11 +447,11 @@ entity name. Built-ins:
 
 | Entity | Content |
 |---|---|
-| `MJ: Test Runs` | the test's input, expected outcomes and actual output; for agent tests a compact trace summary; outputs as files |
-| `MJ: AI Agent Runs` | the conversation turns and final payload |
-| `MJ: AI Prompt Runs` | rendered messages and result |
-| `MJ: Conversations` | the transcript |
-| *(fallback)* | the record's fields via `GetAll()`, **respecting field-level permissions for the context user** |
+| `MJ: Test Runs` | `InputData`, `ExpectedOutputData`, `ActualOutputData`, `ResultDetails`, and output files. There is no turns column. |
+| `MJ: AI Agent Runs` | the final payload, and the in-memory message when the run has not stored it yet. There is no `Turns` column. |
+| `MJ: AI Prompt Runs` | the rendered messages and the result, as data |
+| `MJ: Conversations` | name, description, and details when present. There is no `Transcript` column. |
+| *(fallback)* | the fields the caller can read. An empty readable record throws "subject not found or not readable". |
 
 Callers may pass `Content` directly to skip the provider.
 
@@ -470,11 +476,18 @@ Thin wrappers over `RubricEngine` (never an action calling an action):
 
 - **Evaluate Record Against Rubric** — rubric (name or ID), subject entity + record, optional
   context, evaluator selection, threshold → evaluation ID, score, outcome, per-criterion summary.
-- **Get Rubric Consensus** — subject (+ context), rubric, method → statistics.
+  A missing or unreadable subject fails. It does not score `{}`.
+- **Get Rubric Consensus** — subject (+ context), rubric, method → statistics. The Rubric
+  Evaluation Agent does not call this action.
+- **Get Rubric Subject** — loads the subject content. It does not score and it does not publish.
 - **Get Rubric** — rubric name/ID (+ version) → the tree, for agents that need to read criteria.
-- **Create Rubric Draft** — a rubric tree payload → a Draft version (never publishes).
+- **Create Rubric Draft** — a rubric tree payload → a Draft version. Caller-supplied ids are not
+  primary keys. The write keeps anchors and bands. It never publishes.
+- **Submit Human Rubric** — one transaction for the Draft evaluation, its score rows, and the
+  move to Submitted. The evaluator is the signed-in user.
 
-Publishing stays a human action in the UI or CLI.
+Publishing a version is the publish path, or the publication metadata for the seven shipped
+rubrics. Create Rubric Draft, the architect import, and `mj rubric evaluate` do not publish.
 
 ---
 
@@ -504,7 +517,7 @@ view is generated.
 | File | Hand-written section | CodeGen section (appended) | Why it is its own file |
 |---|---|---|---|
 | `V202609302342__v6.2.x__Rubrics.sql` | tables, constraints, triggers, descriptions | entity registration (public views, procs, fields) | — |
-| `V202609302343__v6.2.x__Rubrics_Layered_Base_View_Flags.sql` | none — no Entity or EntityField DML | the two **inner** views | The inner views cannot be created until 2204's capture has registered the entities, and they cannot live below that capture because it is replaced wholesale. |
+| `V202609302343__v6.2.x__Rubrics_Generated_Inner_Views.sql` | none — the layering flags stay in metadata | the two **inner** views and the EntityField rows that register them | The inner views cannot be created until 2342's capture has registered the entities, and they cannot live below that capture because it is replaced wholesale. |
 | `V202609302344__v6.2.x__Rubrics_Consensus_Views.sql` | `CREATE OR ALTER VIEW` for the two public wrappers | virtual EntityFields for the wrapper columns, and CRUD that returns them | A view cannot be created before the view it selects from, and hand-written SQL cannot live below a CodeGen section that is replaced wholesale. |
 
 `BaseViewGenerated` is set to false in the same metadata record as `GeneratedBaseViewName`.
@@ -513,15 +526,15 @@ name while CodeGen still owns the public view.
 
 ### 9.2 Procedure (task R0) — on a private database at the last released version
 
-The three files in §9.1 are the capture targets. Inner views go in **2205**, not in 2204.
-2204's CodeGen section is entity registration only.
+The three files in §9.1 are the capture targets. Inner views go in **2343**, not in 2342.
+2342's CodeGen section is entity registration only.
 
 ```bash
 # Private DB only: one database per agent (migrations/CLAUDE.md).
-# Park 2205 and 2206 until the entities exist and the inner views exist, respectively.
-mj migrate                                   # 2204 hand DDL only.
+# Park 2343 and 2344 until the entities exist and the inner views exist, respectively.
+mj migrate                                   # 2342 hand DDL only.
 mj codegen --skipfiles --no-ai               # PASS 1 — entity rows, public views, procs.
-#   → append to 2204, below 50 blank lines and the banner.
+#   → append to 2342, below 50 blank lines and the banner.
 mj sync push --dir=metadata --include=entities
 # PASS 2 — flipping the flags is not an entity modification, so a plain run CREATEs the
 # inner views in the database but OMITS them from the SQL log. Temporarily, in mj.config.cjs:
@@ -529,11 +542,11 @@ mj sync push --dir=metadata --include=entities
 #     entityWhereClause: "Name IN ('MJ: Rubric Evaluations','MJ: Rubric Evaluation Scores')" }
 mj codegen --skipfiles --no-ai
 #   → confirm vwRubricEvaluationsGenerated and vwRubricEvaluationScoresGenerated are both
-#     in this capture, and the score view LEFT OUTER JOINs RubricScaleLevel. Append to 2205.
+#     in this capture, and the score view LEFT OUTER JOINs RubricScaleLevel. Append to 2343.
 #     Revert mj.config.cjs.
-# Apply 2206's hand wrapper views.
+# Apply 2344's hand wrapper views.
 mj codegen --skipfiles --no-ai               # PASS 3 — virtual fields on the wrappers
-#   → append to 2206. The capture must not DROP or CREATE the public views.
+#   → append to 2344. The capture must not DROP or CREATE the public views.
 mj codegen --skipdb --no-ai                  # entity classes, resolvers, forms
 # revert sync write-back (lastModified/checksum) before committing
 ```
@@ -605,15 +618,22 @@ and returns:
 
 ```ts
 { oracleType: 'rubric',
-  passed: evaluation.Passed ?? !evaluation.GateFailed,
-  score: evaluation.NormalizedScore ?? 0,
-  message: '<rubric> v<label>: <Outcome> (<score shown on display scale>)',
-  details: { RubricEvaluationID, RubricVersionLabel, Outcome, Criteria: [{Key, Name, NormalizedScore, GateFailed, Rationale}] } }
+  passed: outcome === 'Passed' || outcome === 'Scored',
+  score: score ?? 0,
+  message: '<rubric> v<label>: <Outcome> (<display score>)',
+  details: { RubricEvaluationID, RubricVersionLabel, Outcome, Criteria: [{Key, Name, NormalizedScore, Rationale}] } }
 ```
 
+`Name` in that details list is the criterion key. The subject is `MJ: Test Runs` / the run id, and
+the context is `MJ: Tests` / the test id. The content is the output the driver already has, because
+the test-run row is not saved until later. A missing run id returns "subject not found or not readable".
+
 **Implicit rubric.** When §10.2 resolves a rubric and the test configures no `rubric` oracle, the
-driver adds one. It always gates status; it contributes to the score when `scoringWeights` is absent
-or names `rubric`. Document this in the Engine README.
+driver adds one. A test that already has an `llm-judge` oracle keeps that oracle when the rubric
+choice came from the agent. `--rubric`, `Test.RubricID`, a suite rubric, and a promoted rubric are
+not skipped for that reason. The pin is written after the oracle config, so the config cannot
+replace the version. The oracle gates status. It contributes to the score when `scoringWeights` is
+absent or names `rubric`.
 
 ### 10.4 Inline criteria and `llm-judge`
 `judgeValidationCriteria: string[]` keeps working as an **inline rubric**: every string is a binary
@@ -665,11 +685,13 @@ per-criterion score spread in addition to the overall variance it already report
 
 ### 10.10 CLI
 - `mj test run|suite … --rubric <name|id>[@version]` (§10.2 override).
-- `mj test report` shows the per-criterion breakdown.
-- New `mj rubric` topic (thin shims in `packages/MJCLI`, logic in `@memberjunction/rubrics`):
-  `list`, `show <rubric>[@version]`, `diff <rubric> <v1> <v2>` (prints the §5.2 classification),
-  `validate <file>` (tree rules, weights, gates, scales), `evaluate --rubric --entity --record
-  [--evaluator]`.
+- `mj test report <run-id>` prints the per-criterion breakdown.
+- `mj test promote-criteria <test>` copies inline judge criteria onto a Draft rubric and sets
+  `Test.RubricID`. It does not publish.
+- `mj rubric` is a thin shim in `packages/MJCLI`. The commands live in `@memberjunction/testing-cli`:
+  `list`, `show <rubric>[@version]`, `diff <rubric> <version> <version>`, `validate <file>`, and
+  `evaluate --rubric --entity --record [--evaluator LLM|Deterministic]`. The default evaluator is
+  LLM, which is stored as AIPrompt. None of these commands publish.
 
 ### 10.11 Deprecate `TestRubric`
 Deprecation is metadata, not DDL: `metadata/entities/.test-rubrics-deprecation.json` (committed with this plan) sets
@@ -692,16 +714,14 @@ The agent's default `Evaluation` rubric is step 5 of §10.2, so every Agent Eval
 judged by it unless the test says otherwise.
 
 ### 11.3 Self-check
-When an agent has an Active `SelfCheck` rubric, `BaseAgent` evaluates the **candidate final output**
-before returning it — at the same point the `finishIf` gate runs (`base-agent.ts`):
-- subject = `MJ: AI Agent Runs` / the current run; evaluator per `EvaluatorConfig` (default
-  `LLMRubricEvaluator`); threshold = link override ?? version default;
-- recorded as an agent run step of the existing `StepType = 'Validation'`, linked to the evaluation;
-- **Loop agents:** on failure, if attempts < `MaxSelfCheckAttempts` (default 1), the failed criteria
-  and their rationales are fed back as the next turn's input and the loop continues; otherwise it
-  returns with the failure recorded (never silently).
-- **Flow agents:** evaluated and recorded at the end; no retry.
-- Opt-in only; cost and latency are the agent owner's choice.
+`DecideSelfCheck` runs only for an Active `SelfCheck` link. The five shipped SelfCheck links are
+Disabled, so they skip. The score is the in-memory candidate message and payload, not a stored
+turns column.
+- A passing score is accepted.
+- **Loop agents:** a failure retries while the attempt is still within `MaxSelfCheckAttempts`.
+  The default is 1, so the first failure retries once. The failed criteria and their rationales
+  are the next turn's input. After the attempts are used, the run fails.
+- **Flow agents:** the failure is recorded and the run stays Success. There is no retry.
 
 ### 11.4 Production sampling
 A scheduled job **"Evaluate Sampled Agent Runs"** (MJ scheduled jobs, no new queue):
@@ -716,25 +736,23 @@ plan; the alerting can follow.
 
 ### 11.5 Core rubric agents and prompts (metadata)
 - Prompt **"Rubric Evaluator"** — §8.3.
-- Agent **"Rubric Evaluation Agent"** (Loop) — read-only tools for evaluations that need
-  investigation; the `AgentRubricEvaluator` default.
-- Agent **"Rubric Architect"** (Loop) — helps people author rubrics; **produces Drafts, never
-  publishes**:
-  - draft a rubric from a description, a policy or sample documents;
-  - **import** a requirements matrix from a spreadsheet (CSV/XLSX; nesting from numbered paths like
-    `3.2.1` or indentation; weights and knockout flags from columns);
-  - **critique** a rubric: vague or overlapping criteria, missing anchors, weight sanity, gates with
-    risky N/A policies;
-  - **improve from data** using `GetDiagnostics` and `GetAgreement` — which criteria don't
-    discriminate, which ones humans and AI disagree on.
+- Agent **"Rubric Evaluation Agent"** (Loop) — `AgentRubricEvaluator`'s default. Its actions are
+  Get Rubric and Get Rubric Subject. Get Rubric Consensus is a `deleteRecord`. The prompt says not
+  to call it, not to publish, not to create a draft, and not to call Evaluate Record Against Rubric.
+- Agent **"Rubric Architect"** (Loop) — helps people author rubrics. It writes Drafts and does not
+  publish. `ImportMatrix` reads a CSV of path, name, weight, and knockout. A path such as `3.2.1`
+  nests under `3.2`. The knockout cell sets a gate when it is yes, true, 1, or knockout. Quoted
+  cells may contain commas. A missing parent is not silently re-rooted.
 
 ### 11.6 Rubrics as metadata
 Core ships example rubrics and scales under `metadata/rubrics/` and `metadata/rubric-scales/`
 (declarative JSON with `uuidgen` primary keys, no `sync` blocks — `metadata/CLAUDE.md` rule 1b).
 Because published versions are frozen, **a change to a shipped rubric is a new version object in the
 JSON, never an edit to an existing one** — an edit would be refused by the triggers on push, which is
-the intended behavior. Shipped scales: `Binary (Met / Not met)`, `Likert 1-5`, `Compliance
-(Compliant / Partial / Non-compliant)`, `Percentage 0-100`.
+the intended behavior. The six guide-example versions stay Draft. The seven agent rubrics in §18
+are set to Published by `metadata/rubric-publications/`. Shipped scales: `Binary (Met / Not met)`,
+`Meets / Partial / Miss`, `Likert 1-5`, `Compliance (Compliant / Partial / Non-compliant)`, and
+`Percentage 0-100` (numeric, minimum 0, maximum 100, step 1, no level rows).
 
 ---
 
@@ -747,14 +765,15 @@ Follow `guides/UI_LAYERING_GUIDE.md`. Nothing below L3 imports the router or an 
 | `mj-rubric-builder` | L2 | tree editor for a Draft: add/move nodes, weights with live share %, scale picker, per-level anchors, gates, N/A policy, bands; validation panel; **preview** a score from sample answers |
 | `mj-rubric-publish-dialog` | L2 | shows the computed bump and each change's reason (`ChangeDetails`), optional higher bump, change summary |
 | `mj-rubric-version-diff` | L2 | side-by-side diff of two versions |
-| `mj-rubric-scoring-form` | L2 | fill in an evaluation: keyboard-first (built for reviewers doing hundreds), N/A, rationale, evidence, required-field enforcement, draft autosave, submit |
-| `mj-rubric-result` | L1/L2 | score on the display scale, band, gates, completeness, per-criterion bars with rationale/evidence |
-| `mj-rubric-comparison-matrix` | L2 | evaluators × criteria for a cohort; disagreement highlighting; human vs AI; self-assessment column |
+| `mj-rubric-scoring-form` | L2 | fill in an evaluation: level buttons, a number input for a Percentage or other Numeric scale, N/A, rationale, evidence as `IRubricEvidence[]`, required-field enforcement, and submit through the host |
+| `mj-rubric-result` | L1/L2 | score on the display scale, band, gate, completeness, per-criterion bars with rationale and evidence. A missing completeness stays missing. |
+| `mj-rubric-comparison-matrix` | L2 | one column per evaluation. While the viewer's own evaluation is Draft, cohort figures and other people's rationales stay hidden. |
 
 Explorer (L3): custom entity forms for `MJ: Rubrics` (versions list + builder + publish),
-`MJ: Rubric Evaluations` (result view + cohort comparison), `MJ: Rubric Scales`; a **Rubrics** nav
-item in the AI application. Design tokens only; `<mj-loading>`; confirm left, cancel right;
-`NotifyLoadComplete()` in resource components.
+`MJ: Rubric Evaluations` (result view + cohort matrix), and `MJ: Rubric Scales`. **Rubrics is its
+own application** (`metadata/applications/.rubrics-application.json`). It is not a nav item in the
+AI application. The agent form keeps a Rubrics tab. Design tokens only. The resource components
+call `NotifyLoadComplete()`.
 
 ---
 
@@ -780,15 +799,12 @@ item in the AI application. Design tokens only; `<mj-loading>`; confirm left, ca
   READMEs (rubric oracle, resolution order, inline criteria, calibration test type).
 
 ### 13.1 Blinding and permissions
-Consensus columns would leak peer scores to a reviewer whose own evaluation is still a Draft. Core
-provides:
-- `RubricEngine.GetVisibleEvaluations(subject, context, user, blinding)` with
-  `blinding: 'None' | 'UntilSubmitted' | 'Always'`, which also blanks cohort columns on rows the user
-  may not see aggregated;
-- guidance for consumers to add **row-level security** on `MJ: Rubric Evaluations` and **field-level
-  permissions** (`MJ: Entity Field Permissions`) on the cohort columns for reviewer roles.
-Core's default entity permissions: read for authenticated users on definitions; evaluations readable
-by their evaluator and by roles the consumer grants.
+Core does not hide peer scores. There is no `GetVisibleEvaluations` and no blinding mode of None,
+UntilSubmitted, or Always. Anyone who can read a score row can read its cohort columns. `Self` is
+excluded from consensus and from those means. The comparison matrix hides cohort figures and other
+people's rationales while the viewer's own evaluation is Draft. That is a widget rule, not an
+engine API. A consumer that must keep a reviewer's draft invisible to the other reviewers does
+that with permissions on the evaluation records.
 
 ---
 
@@ -802,7 +818,7 @@ by their evaluator and by roles the consumer grants.
   re-declaring the per-criterion score type. Plan-only PR:
   [MemberJunction/bizapps-ats#102](https://github.com/MemberJunction/bizapps-ats/pull/102).
 - A future **generic submissions / peer-review application** uses evaluations with a review round as
-  the context, the blinding API, and the comparison matrix.
+  the context, its own permissions on those evaluations, and the comparison matrix.
 
 ---
 
@@ -811,7 +827,7 @@ by their evaluator and by roles the consumer grants.
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (say why in §16).
 
 **R — core**
-- [ ] **R0** Run the §9.2 procedure: CodeGen captures appended to 2204 and 2206, generated
+- [ ] **R0** Run the §9.2 procedure: CodeGen captures appended to 2342 and 2344, generated
       entities committed, from-zero build green. Add `packages/Rubrics/*` to workspace globs.
       Layered flags stay in `metadata/entities/.layered-base-views.json` — no Entity UPDATE migration.
       The tails, generated entities, workspace glob, and layered-flag file are in. A from-zero build of this head is not recorded green.
@@ -834,7 +850,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **R6** Actions (§8.6). Evaluate Record Against Rubric, Get Rubric Consensus, Get Rubric,
       and Create Rubric Draft are `@RegisterClass` actions. Each `Invoke` calls `RubricEngine`.
       Create Rubric Draft never publishes.
-- [x] **R7** Integration bundle **"Rubrics"** (deterministic tier, sequence 50, ahead of the
+- [x] **R7** Integration bundle **"Rubrics"** (deterministic tier, IT98 at sequence 49, ahead of the
       client-transport tests). Publish classifies Initial then Major. Raw SQL throws 51101–51110.
       Submit stores the `RubricScoring` result. Supersede and withdraw. The cohort mean matches
       the engine `Mean`. Deleting a draft removes its tree.
@@ -867,7 +883,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
       dialog, version diff, and comparison matrix. Explorer forms are U2.
 - [x] **U2** Explorer forms and nav (§12). The rubric form loads the draft and saves the
       author and publish. The evaluation form loads the result and the cohort matrix. The scale
-      form loads levels and saves a label. Rubrics is a nav item in the AI application.
+      form loads levels and saves a label. Rubrics is its own application, not a nav item in the AI application.
 - [x] **U3** `guides/RUBRICS_GUIDE.md` has the six worked examples. The ng-rubrics README lists the presentational widgets.
       The TestingFramework and Engine README updates are not in this pass.
 - [x] **U4** Shipped scales and the six guide-example rubrics under `metadata/`. Versions are Draft. Percentage is numeric 0–100 with `Step` 1 and no level rows.
@@ -885,7 +901,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 ## 16. Progress log
 
 - **2026-10-02** — §15 rechecked against the branch. R0 is open: the CodeGen tails, generated entities, `packages/Rubrics/*` glob, and layered-flag file are in, and a from-zero build of this head is not recorded green. R1, R5, R7, T2, T3, T8, T9, T10, U2, U3, and S1 stay done. A5 stays done with Get Rubric Consensus removed.
-- **2026-10-01** — R7 adds the rest of the deterministic Rubrics bundle at sequence 50.
+- **2026-10-01** — R7 adds the rest of the deterministic Rubrics bundle. It is IT98 at sequence 49.
   Raw SQL covers 51101–51110. Publish classifies Initial then Major. Submit is compared
   with `RubricScoring`. Supersede and withdraw, and the cohort mean against the engine Mean,
   are in the same bundle. Draft delete stays the existing tree check.
@@ -919,22 +935,22 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - **2026-10-01** — Correction: the three hand-written `UPDATE`s in `V202609302343` are removed.
   Layering flags stay only in `.layered-base-views.json`. Label name-field pins are
   `.rubric-label-name-fields.json` (Entity Field lookups, no sync block, no hand-written UUID).
-  The CodeGen section of 2205 — the inner views — stays. A no-sync CodeGen run is not the gate
+  The CodeGen section of 2343 — the inner views — stays. A no-sync CodeGen run is not the gate
   for these columns.
 - **2026-10-01** — Review of `552e976a`. Draft delete is `INSTEAD OF DELETE`: a second
   cascade on `FK_RubricCriterion_Parent` is illegal (multiple cascade paths), so the trigger
   clears anchors, then parent links, then criteria, then bands. `GeneratePluralName` pluralizes
-  the last PascalCase segment, so the base view is `vwRubricCriteria`. IT96 is sequence 50,
+  the last PascalCase segment, so the base view is `vwRubricCriteria`. The rubrics bundle is IT98 at sequence 49,
   before the client-transport block. On `MJ_6_2_CLEAN_pr4937_proof2` (105 migrations, then
   `mj codegen --skipfiles` with no sync) `BaseView` is `vwRubricCriteria`, `vwRubricCriterions`
-  does not exist, and `vwRubricEvaluations` still selects `CohortMeanScore`. IT96 with
+  does not exist, and `vwRubricEvaluations` still selects `CohortMeanScore`. The rubrics bundle with
   `RUN_MUTATION_TESTS=1`: 5 passed, 0 failed, 0 skipped.
 - **2026-09-30** — Review of `9c8a8611`. Restored `V202609302343`: migrate does not sync metadata,
   so the layering flags have to be in the migration or the next CodeGen replaces the wrappers.
   The metadata file stays. `GeneratePluralName` pluralizes the last word (`Rubric Criterion` →
   `Rubric Criteria`). `TestSuiteRun.Score` is `DECIMAL(9,6)`. `Label` is pinned as the name field
   on scale levels and bands before the inner-view capture. `SelfAssessmentCount` is beside the
-  max. Immutability triggers are the `rubrics` integration bundle (IT96). Proof:
+  max. Immutability triggers are the `rubrics` integration bundle (IT98). Proof:
   `MJ_6_2_CLEAN_pr4937_proof` applied 105 migrations, then `mj codegen --skipfiles --no-ai`
   with no metadata sync. `vwRubricEvaluations` still selects `CohortMeanScore` and
   `SelfAssessmentCount` from `vwRubricEvaluationsGenerated`. The entity is
@@ -950,7 +966,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - **2026-09-30** — Removed `V202609302343` (the `UPDATE Entity` that set layered-base-view flags).
   Those flags now live only in `metadata/entities/.layered-base-views.json`, applied with
   `mj sync push`. `V202609302344` stays: the consensus wrappers are schema DDL, and they have
-  to run after 2204's CodeGen section creates the inner views.
+  to run after 2342's CodeGen section creates the inner views.
 - **2026-09-30** — `TestRubric` deprecation moved out of the migration into
   `metadata/entities/.test-rubrics-deprecation.json` (entity `Status = Deprecated` + description).
 - **2026-09-30** — Design agreed. Hand-written DDL committed (tables, constraints, immutability
@@ -977,8 +993,9 @@ Marketing is a demo agent and is not in this set. The six guide-example rubrics 
 stay unbound. These seven ship as Published 1.0.0 on the scale Meets / Partial / Miss. The gate
 minimum is 0.6, so Partial fails the gate. Pass threshold is 0.7.
 
-An Evaluation link is the default rubric for that agent. Self-check is one retry on the
-orchestrator's final answer. Sampling is off the response path.
+An Evaluation link is the default rubric for that agent, and those links are Active. The shipped
+SelfCheck links and the sampling job are Disabled, so they do not run until a person turns them
+on. Sampling stays off the response path.
 
 | Rubric | Gate | Also scored | Evaluation | Self-check | Sample rate |
 | --- | --- | --- | --- | --- | --- |
@@ -990,11 +1007,10 @@ orchestrator's final answer. Sampling is off the response path.
 | Picture from the data | The title matches the request | Every series is one the person supplied. Labels or a legend name those series. | Infographic Agent | One attempt | None |
 | Duplicate decision | Says merge or keep | Names the fields that agree and the fields that conflict. Refuses a merge when a conflicting unique field is present. | Duplicate Resolution Agent | One attempt | 0.10 |
 
-`ensureImplicitRubricOracle` currently removes an `llm-judge` oracle once a version resolves.
-That would drop the scenario criteria on the two Research Agent tests. The approved rule is the
-other way: a test that already has `llm-judge` keeps that oracle, and the agent's Evaluation
-rubric is not added. Tests with no `llm-judge` and no `Test.RubricID` still receive the agent's
-Evaluation rubric.
+`ensureImplicitRubricOracle` keeps an `llm-judge` oracle when the rubric choice came from the
+agent, so the two Research Agent tests keep their scenario criteria. The agent's Evaluation
+rubric is not added beside that judge. Tests with no `llm-judge` and no `Test.RubricID` still
+receive the agent's Evaluation rubric.
 
 New suite **Core agent rubrics**: one Agent Eval per orchestrator in the table, `trace-no-errors`
 only, no `llm-judge`, no `Test.RubricID`.
