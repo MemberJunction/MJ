@@ -78,6 +78,14 @@ vi.mock('@memberjunction/core-entities', () => {
 
 vi.mock('@memberjunction/ai-vectordb', () => ({ VectorDBBase: class {}, IndexModelMetricEnum: {} }));
 vi.mock('@memberjunction/ai', () => ({ GetAIAPIKey: () => 'test-api-key' }));
+// The delete path resolves the provider-side name through the engine's one rule (ExternalID, else Name).
+vi.mock('@memberjunction/ai-engine-base', () => ({
+    AIEngineBase: {
+        Instance: {
+            GetProviderIndexName: (index: { ExternalID: string | null; Name: string }) => index.ExternalID || index.Name,
+        },
+    },
+}));
 
 import { MJVectorIndexEntityServer } from '../custom/MJVectorIndexEntityServer.server';
 
@@ -186,6 +194,22 @@ describe('MJVectorIndexEntityServer.Save', () => {
         expect(logged(/timed out/)).toBe(true);
         expect(superSaveMock).toHaveBeenCalledTimes(1);
         expect(index.ExternalID).toBeNull();
+    });
+
+    it('provisions an auto-generated (already slug-form) name unchanged, so the provider index is the one the sync targets', async () => {
+        // The shape BuildAutoVectorIndexName (ng-dashboards) emits: lowercase, digits, hyphens, under 45
+        // characters, with a 6-character hash tail. Everything downstream addresses the index by Name,
+        // so sanitizing must be a no-op for it.
+        createIndexMock.mockResolvedValue({ success: true, data: {} });
+        const index = makeNewIndex();
+        index.Name = 'mj-accounts-text-embedding-3-small-k3x9zq';
+
+        await index.Save();
+        await vi.waitFor(() => expect(superSaveMock).toHaveBeenCalledTimes(2));
+
+        expect(createIndexMock.mock.calls[0][0]).toMatchObject({ id: index.Name });
+        expect(index.ExternalID).toBe(index.Name);
+        expect(logStatusMock.mock.calls.some(call => String(call[0]).includes('sanitized'))).toBe(false);
     });
 
     it('leaves the provider alone when saving a record that already exists', async () => {

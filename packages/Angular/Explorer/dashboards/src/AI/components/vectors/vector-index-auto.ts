@@ -15,8 +15,15 @@ export interface VectorIndexCandidate {
     EmbeddingModelID: string | null;
 }
 
-/** Longest auto-generated index name we write; the provider-facing name is sanitized server-side. */
-export const AUTO_VECTOR_INDEX_NAME_MAX_LENGTH = 100;
+/**
+ * The provider-side cap `MJVectorIndexEntityServer.sanitizeIndexName` applies (Pinecone's limit). An
+ * auto-generated name is kept under it so the server's sanitizing is a no-op; see
+ * {@link BuildAutoVectorIndexName}.
+ */
+export const AUTO_VECTOR_INDEX_NAME_MAX_LENGTH = 45;
+
+/** Length of the hash suffix that keeps two long, truncated names from colliding. */
+const NAME_HASH_LENGTH = 6;
 
 /**
  * The index already built for this database + embedding model, or null when none exists. Never falls
@@ -36,17 +43,38 @@ export function FindMatchingVectorIndex<T extends VectorIndexCandidate>(
 }
 
 /**
- * Human-readable name for an auto-created index: "<entity> - <embedding model>", so an operator can
- * tell at a glance which entity document and model it serves.
+ * Name for an auto-created index, built so the provider index gets the SAME name.
+ *
+ * Everything downstream (the sync upserter, the duplicate detector, the vectors resolver) addresses
+ * the provider index by the record's `Name`, while `MJVectorIndexEntityServer` provisions it under
+ * `sanitizeIndexName(Name)`: lowercase letters, digits and hyphens only, at most 45 characters. A
+ * name that does not survive that sanitizing points the sync at an index that does not exist, so the
+ * name is emitted already in that form: `<entity>-<model>` as a slug, cut to fit, plus a short hash
+ * of the full slug so two long names that only differ past the cut do not collide.
  */
 export function BuildAutoVectorIndexName(
     entityName: string | null | undefined,
     embeddingModelName: string | null | undefined
 ): string {
-    const entity = (entityName ?? '').trim() || 'Entity';
-    const model = (embeddingModelName ?? '').trim() || 'Embeddings';
-    const name = `${entity} - ${model}`;
-    return name.length > AUTO_VECTOR_INDEX_NAME_MAX_LENGTH
-        ? name.substring(0, AUTO_VECTOR_INDEX_NAME_MAX_LENGTH).trimEnd()
-        : name;
+    const fullSlug = slugify(`${(entityName ?? '').trim() || 'entity'} ${(embeddingModelName ?? '').trim() || 'embeddings'}`);
+    const hash = hashBase36(fullSlug).slice(0, NAME_HASH_LENGTH).padStart(NAME_HASH_LENGTH, '0');
+    const stem = fullSlug.slice(0, AUTO_VECTOR_INDEX_NAME_MAX_LENGTH - NAME_HASH_LENGTH - 1).replace(/-+$/, '');
+    return `${stem}-${hash}`;
+}
+
+/** Lowercase, runs of anything but letters and digits collapsed to one hyphen, no leading or trailing hyphen. */
+function slugify(value: string): string {
+    return value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+/** Deterministic djb2 hash rendered in base 36; stable across sessions and tenants for the same input. */
+function hashBase36(value: string): string {
+    let hash = 5381;
+    for (let i = 0; i < value.length; i++) {
+        hash = ((hash << 5) + hash + value.charCodeAt(i)) >>> 0;
+    }
+    return hash.toString(36);
 }

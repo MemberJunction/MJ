@@ -281,11 +281,16 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public set SelectedEntityDocumentID(value: string) {
         const changed = !UUIDsEqual(this._selectedEntityDocumentID || null, value || null);
         this.applyEntityDocumentSelection(value);
+        if (!changed) {
+            return;
+        }
+        // Any change through this setter is the user's (or the agent's) choice, including one made
+        // while the first load is still running; the default pick must never override it. The
+        // board's own default goes through applyEntityDocumentSelection() directly.
+        this.selectionIsDefault = false;
         // The board shows one document's current run, so a new selection means new review rows.
-        // A change after the first load is the user's (or the agent's) choice; the default pick
-        // must not override it on later refreshes.
-        if (changed && this.runDataLoaded) {
-            this.selectionIsDefault = false;
+        // During the first load, loadRunData() notices the selection moved and fetches again itself.
+        if (this.runDataLoaded) {
             void this.reloadRunDataForSelection();
         }
     }
@@ -597,6 +602,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.IsLoading = true;
         this.cdr.detectChanges();
 
+        // This load owns the review rows and the results spinner only while no newer load (a document
+        // switch) has started; see reviewLoadGeneration.
+        const generation = ++this.reviewLoadGeneration;
         try {
             // Phase 1: Populate entity document picker from cache (instant)
             await this.loadEntityDocuments();
@@ -607,12 +615,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             this.cdr.detectChanges();
 
             // Phase 2: Load heavy run/detail/match data
-            await this.loadRunData();
+            await this.loadRunData(generation);
         } catch (error) {
             console.error('Error loading duplicate detection data:', error);
         } finally {
             this.IsLoading = false;
-            this.IsLoadingResults = false;
+            if (generation === this.reviewLoadGeneration) {
+                this.IsLoadingResults = false;
+            }
             this.cdr.detectChanges();
         }
     }
@@ -624,8 +634,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.buildEntityDocumentOptionsFromEngine(engine.GetActiveEntityDocuments());
     }
 
-    /** Phase 2: Load the runs, then the review rows (details + matches) of the selected document's current run. */
-    private async loadRunData(): Promise<void> {
+    /**
+     * Phase 2: Load the runs, then the review rows (details + matches) of the selected document's
+     * current run. `generation` is the load this call belongs to (see reviewLoadGeneration).
+     */
+    private async loadRunData(generation: number): Promise<void> {
         // Runs are one row each and cheap. The review rows (details + matches) are the heavy side,
         // so they are loaded for ONE run only: the selected entity document's current run. See
         // duplicate-detection-run-scope.ts for why, and why those two queries keep IgnoreMaxRows.
@@ -649,8 +662,18 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             }
         }
 
-        const generation = ++this.reviewLoadGeneration;
-        const rows = await this.fetchReviewRowsForSelectedDocument();
+        // The picker stays live while this runs. If the user picks another document before the rows
+        // land, the rows fetched for the old selection are not what the picker says; fetch again for
+        // the new one rather than show document A's run under document B's name.
+        let rows: ReviewRows;
+        let selectedAtFetch: string;
+        do {
+            selectedAtFetch = this.SelectedEntityDocumentID;
+            rows = await this.fetchReviewRowsForSelectedDocument();
+        } while (
+            generation === this.reviewLoadGeneration &&
+            !UUIDsEqual(selectedAtFetch || null, this.SelectedEntityDocumentID || null)
+        );
         if (generation === this.reviewLoadGeneration) {
             this.applyReviewRows(rows);
         }
@@ -1070,7 +1093,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
         // Auto-select the first entity document if available
         if (this.EntityDocuments.length > 0 && !this.SelectedEntityDocumentID) {
-            this.SelectedEntityDocumentID = this.EntityDocuments[0].ID;
+            // Not through the setter: this is the board's own default, not a user choice, and
+            // loadRunData() may still move it to the document that has runs.
+            this.applyEntityDocumentSelection(this.EntityDocuments[0].ID);
         }
     }
 

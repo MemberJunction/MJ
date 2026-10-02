@@ -12,10 +12,11 @@ import { AIEngineBase } from "@memberjunction/ai-engine-base";
  *
  * Provisioning is DETACHED from the save that triggers it: the save returns once the metadata row is
  * written, and the provider call runs afterwards (see {@link Save}). That call is bounded by
- * {@link CREATE_INDEX_TIMEOUT_MS}, so a provider that never answers is logged and released instead of
- * pinning the promise and its client for the life of the process. Pinecone's createIndex returns as
- * soon as the request is accepted (we never pass waitUntilReady), so the bound only ever trips on a
- * hung connection, not on a slow index build.
+ * {@link CREATE_INDEX_TIMEOUT_MS}: past it the hook stops waiting, logs, and skips the metadata
+ * write-back. The provider call itself is abandoned, not cancelled (there is no cancellation handle),
+ * so the bound limits how long this record's provisioning stays open, not the provider's work.
+ * Pinecone's createIndex returns as soon as the request is accepted (we never pass waitUntilReady),
+ * so the bound only ever trips on a hung connection, not on a slow index build.
  */
 @RegisterClass(BaseEntity, 'MJ: Vector Indexes')
 export class MJVectorIndexEntityServer extends MJVectorIndexEntity {

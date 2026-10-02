@@ -32,6 +32,19 @@ export interface DuplicateRunCandidate {
     EntityID: string;
     ProcessingStatus: string;
     StartedAt: Date | string | null;
+    /** Set when the run covered one list's records rather than the whole entity. */
+    SourceListID: string | null;
+}
+
+const RUN_FAILED = 'Failed';
+
+/**
+ * A run worth putting on the board ahead of others: it did not fail (a run is marked Failed on any
+ * exception in detection, usually before a single detail is written) and it covered the whole
+ * entity rather than one list (a list run is a small subset that would hide the entity-wide results).
+ */
+function isPreferredRun(run: DuplicateRunCandidate): boolean {
+    return run.ProcessingStatus !== RUN_FAILED && !run.SourceListID;
 }
 
 /** How many detail IDs go into one matches query; keeps each `IN (...)` list a sane size. */
@@ -46,15 +59,16 @@ export interface EntityDocumentCandidate {
 }
 
 /**
- * Pick the run the board should display for an entity: its most recent run, whatever its status.
+ * Pick the run the board should display for an entity: the newest run that did not fail and covered
+ * the whole entity, or, when there is none, the newest run of any kind.
  *
- * Not "most recent Complete run" on purpose. A run the user cancels keeps `ProcessingStatus =
- * 'In Progress'` (the detector marks it for resumption), and the board's own idle timer can finish a
- * detection before the server does; both end with a reload while a newer run exists. Preferring an
- * older Complete run there would hide the rows the user just watched being produced behind the
- * previous run's. The newest run is what the user is looking at; when it completes, the board
- * reloads and shows its full set. Runs for other entities are never candidates. Returns null when
- * there is no entity or no run for it.
+ * Not "most recent Complete run": a run the user cancels keeps `ProcessingStatus = 'In Progress'`
+ * (the detector marks it for resumption), and the board's own idle timer can finish a detection
+ * before the server does; both end with a reload while a newer run exists, and preferring an older
+ * Complete run there would hide the rows the user just watched being produced. Not plain "newest"
+ * either: a Failed run usually has no details, and a list-scoped run holds a small subset, so each
+ * would hide a good entity-wide run behind an empty or partial board. Runs for other entities are
+ * never candidates. Returns null when there is no entity or no run for it.
  */
 export function SelectCurrentRunForEntity<T extends DuplicateRunCandidate>(
     runs: readonly T[],
@@ -63,13 +77,15 @@ export function SelectCurrentRunForEntity<T extends DuplicateRunCandidate>(
     if (!entityID) {
         return null;
     }
-    return newestFirst(runs.filter(r => UUIDsEqual(r.EntityID, entityID)))[0] ?? null;
+    const forEntity = newestFirst(runs.filter(r => UUIDsEqual(r.EntityID, entityID)));
+    return forEntity.find(isPreferredRun) ?? forEntity[0] ?? null;
 }
 
 /**
  * The entity document the board should show before the user picks one: the document for the entity
- * of the most recent run, so a first visit lands on results that exist. Falls back to the first
- * document when no run matches any document, and to null when there are no documents at all.
+ * of the newest run worth showing (see {@link SelectCurrentRunForEntity}), so a first visit lands on
+ * results that exist. Falls back to the first document when no run matches any document, and to
+ * null when there are no documents at all.
  */
 export function PickDefaultEntityDocument<D extends EntityDocumentCandidate>(
     documents: readonly D[],
@@ -78,7 +94,8 @@ export function PickDefaultEntityDocument<D extends EntityDocumentCandidate>(
     if (documents.length === 0) {
         return null;
     }
-    for (const run of newestFirst(runs)) {
+    const ordered = [...newestFirst(runs.filter(isPreferredRun)), ...newestFirst(runs)];
+    for (const run of ordered) {
         const match = documents.find(d => UUIDsEqual(d.EntityID, run.EntityID));
         if (match) {
             return match;

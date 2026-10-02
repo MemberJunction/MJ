@@ -107,9 +107,11 @@ function loadReviewRows(runViews: ReturnType<typeof fakeRunViews>, runID: string
     return { details, matchQueries, matches };
 }
 
-function run(ID: string, EntityID: string, ProcessingStatus: string, StartedAt: string) {
-    return { ID, EntityID, ProcessingStatus, StartedAt: new Date(StartedAt) };
+function run(ID: string, EntityID: string, ProcessingStatus: string, StartedAt: string, SourceListID: string | null = null) {
+    return { ID, EntityID, ProcessingStatus, StartedAt: new Date(StartedAt), SourceListID };
 }
+
+const RUN_NEWEST = 'D0000000-0000-0000-0000-00000000000D';
 
 describe('SelectCurrentRunForEntity', () => {
     const runs = [
@@ -125,8 +127,26 @@ describe('SelectCurrentRunForEntity', () => {
 
     it('shows a newer run even while it is still In Progress (a cancelled run stays In Progress)', () => {
         // Preferring the older Complete run here would hide the rows the user just watched being produced.
-        const withActive = [...runs, run('D0000000-0000-0000-0000-00000000000D', ENTITY_ORGS, 'In Progress', '2026-09-22T00:00:00Z')];
-        expect(SelectCurrentRunForEntity(withActive, ENTITY_ORGS)?.ID).toBe('D0000000-0000-0000-0000-00000000000D');
+        const withActive = [...runs, run(RUN_NEWEST, ENTITY_ORGS, 'In Progress', '2026-09-22T00:00:00Z')];
+        expect(SelectCurrentRunForEntity(withActive, ENTITY_ORGS)?.ID).toBe(RUN_NEWEST);
+    });
+
+    it('skips a newer Failed run, which usually has no details, in favour of the newest good one', () => {
+        const withFailed = [...runs, run(RUN_NEWEST, ENTITY_ORGS, 'Failed', '2026-09-22T00:00:00Z')];
+        expect(SelectCurrentRunForEntity(withFailed, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+    });
+
+    it('skips a newer list-scoped run, which holds a subset, in favour of the newest entity-wide one', () => {
+        const withListRun = [...runs, run(RUN_NEWEST, ENTITY_ORGS, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L')];
+        expect(SelectCurrentRunForEntity(withListRun, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+    });
+
+    it('falls back to the newest run of any kind when every run failed or was list-scoped', () => {
+        const onlyPoor = [
+            run('F0000000-0000-0000-0000-00000000000F', ENTITY_ORGS, 'Failed', '2026-09-10T00:00:00Z'),
+            run(RUN_NEWEST, ENTITY_ORGS, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L'),
+        ];
+        expect(SelectCurrentRunForEntity(onlyPoor, ENTITY_ORGS)?.ID).toBe(RUN_NEWEST);
     });
 
     it('orders by StartedAt, not by the order the rows arrived in', () => {
@@ -163,6 +183,15 @@ describe('PickDefaultEntityDocument', () => {
             run(RUN_PEOPLE, ENTITY_PEOPLE, 'Complete', '2026-09-20T00:00:00Z'),
         ];
         expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-PEOPLE');
+    });
+
+    it('prefers the entity of the newest good run over a newer Failed or list-scoped one', () => {
+        const runs = [
+            run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
+            run(RUN_PEOPLE, ENTITY_PEOPLE, 'Failed', '2026-09-20T00:00:00Z'),
+            run(RUN_NEWEST, ENTITY_PEOPLE, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L'),
+        ];
+        expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-ORGS');
     });
 
     it('skips runs whose entity has no document and takes the next newest', () => {
