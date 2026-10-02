@@ -20,6 +20,7 @@
  */
 
 import { IMetadataProvider, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
+import { RunOutsideCatalogScope } from './CatalogScope.js';
 import type {
     MJActionEntity,
     MJActionParamEntity,
@@ -91,6 +92,8 @@ export class IntegrationActionGenerator {
         contextUser: UserInfo,
         provider?: IMetadataProvider,
     ): Promise<GenerateIntegrationActionResult> {
+        // An Action describes the vendor's API, not one connection's projection of it.
+        return RunOutsideCatalogScope(async () => {
         const md = this.resolveProvider(provider);
         try {
             const objectInfo = await this.loadObjectInfo(md, integrationName, objectName, contextUser);
@@ -111,6 +114,7 @@ export class IntegrationActionGenerator {
             const msg = err instanceof Error ? err.message : String(err);
             return this.failure(verb, objectName, `Unexpected error: ${msg}`);
         }
+        });
     }
 
     /**
@@ -123,6 +127,8 @@ export class IntegrationActionGenerator {
         contextUser: UserInfo,
         provider?: IMetadataProvider,
     ): Promise<GenerateIntegrationActionResult[]> {
+        // An Action describes the vendor's API, not one connection's projection of it.
+        return RunOutsideCatalogScope(async () => {
         const md = this.resolveProvider(provider);
         const objectInfo = await this.loadObjectInfo(md, integrationName, objectName, contextUser);
         if (!objectInfo) {
@@ -136,6 +142,7 @@ export class IntegrationActionGenerator {
             results.push(await this.GenerateAction(integrationName, objectName, verb, contextUser, provider));
         }
         return results;
+        });
     }
 
     // ─── Provider ────────────────────────────────────────────────────
