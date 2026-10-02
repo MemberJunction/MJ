@@ -42,7 +42,7 @@ export class WorkingRecordHydrator {
             GetEntityName(entity),
             this.contextUser,
         );
-        const loaded = await entityObject.InnerLoad(CompositeKey.FromID(recordID));
+        const loaded = await entityObject.InnerLoad(CompositeKey.FromID(recordID)); // first-pk-ok: MJ core content entity, single-column ID
         if (!loaded) {
             throw new Error(`${GetEntityName(entity)} record '${recordID}' could not be loaded for hydration`);
         }

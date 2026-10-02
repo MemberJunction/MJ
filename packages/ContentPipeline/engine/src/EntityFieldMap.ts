@@ -92,14 +92,23 @@ export function GetStatusFields(entity: WorkingRecordEntity): readonly string[] 
     return StatusFields[entity];
 }
 
+/**
+ * The MemberJunction entity names the pipeline operates on.
+ *
+ * All three are MJ core entities with a single-column `ID` primary key, which is what lets the
+ * pipeline key records with {@link CompositeKey.FromID}. Keeping the set a literal union rather
+ * than `string` makes that assumption true by construction instead of by convention.
+ */
+export type PipelineEntityName = 'MJ: Content Sources' | 'MJ: Content Items' | 'MJ: Content Item Chunks';
+
 /** The MemberJunction entity name backing each working-record entity. */
-const EntityNames: Record<WorkingRecordEntity, string> = {
+const EntityNames: Record<WorkingRecordEntity, PipelineEntityName> = {
     'Content Source': 'MJ: Content Sources',
     'Content Item': 'MJ: Content Items',
     'Content Item Chunk': 'MJ: Content Item Chunks',
 };
 
 /** The `MJ: `-prefixed entity name to load through `Metadata`. */
-export function GetEntityName(entity: WorkingRecordEntity): string {
+export function GetEntityName(entity: WorkingRecordEntity): PipelineEntityName {
     return EntityNames[entity];
 }

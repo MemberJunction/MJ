@@ -25,7 +25,7 @@ import {
     WorkingRecord,
 } from '@memberjunction/content-pipeline-base';
 import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { WorkingRecordCommitter } from './WorkingRecordCommitter.js';
+import { ChildCommitDefaults, WorkingRecordCommitter } from './WorkingRecordCommitter.js';
 import { WorkingRecordHydrator } from './WorkingRecordHydrator.js';
 import { ContentPipelineDeleteMarker } from './ContentPipelineDeleteMarker.js';
 import { ReconcileChildren } from './ChildReconciliation.js';
@@ -410,44 +410,63 @@ export class PipelineProcessor implements IRecordProcessor {
         let committed = 0;
 
         for (const child of working.Children) {
-            let outcome: RecordResult;
-            try {
-                if (!this.config.IsTest) {
-                    await committer.CommitChild(child, defaults, this.childStatusField(child), this.childStatus(child));
-                    committed++;
-                }
-                outcome = {
-                    Status: 'Succeeded',
-                    AttemptCount: 1,
-                    ResultPayload: {
-                        Stage: this.stages[this.stages.length - 1].Name,
-                        ProducedBy: working.Identity.Key,
-                        IsTest: this.config.IsTest,
-                        URL: child.Identity.EphemeralID,
-                        Complete: child.IsComplete,
-                    },
-                };
-            } catch (error) {
-                outcome = {
-                    Status: 'Failed',
-                    AttemptCount: 1,
-                    ErrorMessage: error instanceof Error ? error.message : String(error),
-                };
+            const outcome = await this.persistOneChild(child, working, defaults, committer);
+            if (outcome.Status === 'Succeeded' && !this.config.IsTest) {
+                committed++;
             }
             await this.progress?.RecordChildOutcome?.(record, child.Identity.Key, outcome);
         }
 
+        await this.sweepOrphans(working, context);
+        return committed;
+    }
+
+    /** Commit one child and describe how it went, so a failure fails that child and not the batch. */
+    private async persistOneChild(
+        child: WorkingRecord,
+        working: WorkingRecord,
+        defaults: ChildCommitDefaults,
+        committer: WorkingRecordCommitter,
+    ): Promise<RecordResult> {
+        try {
+            if (!this.config.IsTest) {
+                await committer.CommitChild(child, defaults, this.childStatusField(child), this.childStatus(child));
+            }
+            return {
+                Status: 'Succeeded',
+                AttemptCount: 1,
+                ResultPayload: {
+                    Stage: this.stages[this.stages.length - 1].Name,
+                    ProducedBy: working.Identity.Key,
+                    IsTest: this.config.IsTest,
+                    URL: child.Identity.EphemeralID,
+                    Complete: child.IsComplete,
+                },
+            };
+        } catch (error) {
+            return {
+                Status: 'Failed',
+                AttemptCount: 1,
+                ErrorMessage: error instanceof Error ? error.message : String(error),
+            };
+        }
+    }
+
+    /**
+     * Sweep children the re-run no longer produces.
+     *
+     * Reconciliation is housekeeping. A record whose stage succeeded must not be failed because the
+     * orphan sweep could not run — the next re-extraction sweeps again.
+     */
+    private async sweepOrphans(working: WorkingRecord, context: RecordProcessorContext): Promise<void> {
         try {
             await this.removeOrphans(working, context);
         } catch (error) {
-            // Reconciliation is housekeeping. A record whose stage succeeded must not be failed
-            // because the orphan sweep could not run — the next re-extraction sweeps again.
             LogError(
                 `PipelineProcessor: orphan reconciliation failed for '${working.Identity.Key}': ` +
                     `${error instanceof Error ? error.message : String(error)}`,
             );
         }
-        return committed;
     }
 
     /**

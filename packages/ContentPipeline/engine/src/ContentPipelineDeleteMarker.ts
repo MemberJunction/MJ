@@ -12,6 +12,8 @@
 
 import { BaseEntity, CompositeKey, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 
+import { PipelineEntityName } from './EntityFieldMap';
+
 /** Marks a deleted item's dependents pending. */
 export class ContentPipelineDeleteMarker {
     constructor(
@@ -56,7 +58,7 @@ export class ContentPipelineDeleteMarker {
      * Marking rather than removing is deliberate: the Delete stage owns the outside-system cleanup,
      * and routing every removal through it keeps that cleanup in one place and makes it retryable.
      */
-    public async MarkForDeletion(entityName: string, recordID: string, contextUser?: UserInfo): Promise<boolean> {
+    public async MarkForDeletion(entityName: PipelineEntityName, recordID: string, contextUser?: UserInfo): Promise<boolean> {
         const user = contextUser ?? this.contextUser;
         if (!user) {
             throw new Error('ContentPipelineDeleteMarker: a context user is required');
@@ -65,12 +67,12 @@ export class ContentPipelineDeleteMarker {
     }
 
     /** Set `DeleteStatus = 'Pending'` on each row. */
-    private async mark(entityName: string, rows: readonly { ID: string }[], contextUser: UserInfo): Promise<number> {
+    private async mark(entityName: PipelineEntityName, rows: readonly { ID: string }[], contextUser: UserInfo): Promise<number> {
         let marked = 0;
         for (const row of rows) {
             try {
                 const entityObject = await this.provider.GetEntityObject<BaseEntity>(entityName, contextUser);
-                if (!(await entityObject.InnerLoad(CompositeKey.FromID(row.ID)))) {
+                if (!(await entityObject.InnerLoad(CompositeKey.FromID(row.ID)))) { // first-pk-ok: MJ core content entity, single-column ID
                     continue;
                 }
                 entityObject.Set('DeleteStatus', 'Pending');

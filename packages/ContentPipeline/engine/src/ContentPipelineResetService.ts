@@ -69,7 +69,7 @@ export class ContentPipelineResetService {
         const user = this.requireUser(contextUser);
         const fields = this.fieldsFor(entity, options);
         const entityObject = await this.provider.GetEntityObject<BaseEntity>(GetEntityName(entity), user);
-        if (!(await entityObject.InnerLoad(CompositeKey.FromID(recordID)))) {
+        if (!(await entityObject.InnerLoad(CompositeKey.FromID(recordID)))) { // first-pk-ok: MJ core content entity, single-column ID
             throw new Error(`${GetEntityName(entity)} record '${recordID}' not found`);
         }
         const written = this.applyStatuses(entityObject, fields, options.Status ?? 'Pending');

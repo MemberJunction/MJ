@@ -245,7 +245,8 @@ export class WorkingRecordCommitter {
             this.contextUser,
         );
         if (record.Identity.IsPersisted) {
-            if (!(await entityObject.InnerLoad(CompositeKey.FromID(record.Identity.RecordID as string)))) {
+            const recordID = record.Identity.RecordID as string;
+            if (!(await entityObject.InnerLoad(CompositeKey.FromID(recordID)))) { // first-pk-ok: MJ core content entity, single-column ID
                 throw new Error(
                     `${GetEntityName(record.Entity)} record '${record.Identity.RecordID}' vanished before commit`,
                 );
@@ -278,7 +279,7 @@ export class WorkingRecordCommitter {
             GetEntityName('Content Source'),
             this.contextUser,
         );
-        if (!(await source.InnerLoad(CompositeKey.FromID(contentSourceID)))) {
+        if (!(await source.InnerLoad(CompositeKey.FromID(contentSourceID)))) { // first-pk-ok: MJ core content entity, single-column ID
             throw new Error(`Content Source '${contentSourceID}' could not be loaded to seed its items`);
         }
         return {
