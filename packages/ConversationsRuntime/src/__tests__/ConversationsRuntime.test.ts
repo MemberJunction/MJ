@@ -17,6 +17,10 @@ const hoisted = vi.hoisted(() => ({
     aiConfig: vi.fn().mockResolvedValue(undefined),
     settingsConfig: vi.fn().mockResolvedValue(undefined),
     conversationsConfig: vi.fn().mockResolvedValue(undefined),
+    /** Flips `GraphQLDataProvider.Instance` between constructed and not-yet-constructed. */
+    provider: { available: true },
+    /** Listeners on `GraphQLDataProvider.Instance.SocketReconnected$`, fired by the test. */
+    socketListeners: [] as Array<() => void>,
 }));
 
 vi.mock('@memberjunction/ai-engine-base', () => ({
@@ -66,11 +70,27 @@ vi.mock('@memberjunction/ai-agent-client', () => ({
     },
 }));
 
-// Streaming only touches GraphQLDataProvider inside `.initialize()`, which we never
-// call in this test. But the import side-effect needs to resolve.
-vi.mock('@memberjunction/graphql-dataprovider', () => ({
-    GraphQLDataProvider: { Instance: { PushStatusUpdates: vi.fn() } },
-}));
+// Streaming only touches GraphQLDataProvider inside `.Initialize()`, which we never call in this
+// test. Liveness reads `SocketReconnected$` when it is wired. `Instance` returns undefined rather
+// than throwing while the provider is not yet constructed, as the real one does.
+vi.mock('@memberjunction/graphql-dataprovider', () => {
+    const provider = {
+        PushStatusUpdates: vi.fn(),
+        SocketReconnected$: {
+            subscribe: (listener: () => void) => {
+                hoisted.socketListeners.push(listener);
+                return { unsubscribe: () => undefined };
+            },
+        },
+    };
+    return {
+        GraphQLDataProvider: {
+            get Instance() {
+                return hoisted.provider.available ? provider : undefined;
+            },
+        },
+    };
+});
 
 import { StartupManager } from '@memberjunction/core';
 import { ConversationsRuntime } from '../ConversationsRuntime';
@@ -148,6 +168,28 @@ describe('ConversationsRuntime', () => {
         expect(aiConfig).toHaveBeenCalledWith(true, contextUser, provider);
         expect(settingsConfig).toHaveBeenCalledWith(true, contextUser, provider);
         expect(conversationsConfig).toHaveBeenCalledWith(true, contextUser, provider);
+    });
+
+    it('wires the socket signal on a later Liveness access once the provider exists', () => {
+        // The first access can come before the data provider is constructed. Liveness then
+        // cannot attach the socket signal, and only a later Initialize call can attach it.
+        const runtime = ConversationsRuntime.Instance;
+        (runtime as unknown as { _liveness?: unknown })._liveness = undefined;
+        hoisted.socketListeners.length = 0;
+        hoisted.provider.available = false;
+        try {
+            const liveness = runtime.Liveness;
+            hoisted.provider.available = true;
+            expect(runtime.Liveness).toBe(liveness);
+
+            const seen: string[] = [];
+            liveness.ReconciliationRequired$.subscribe((reason) => seen.push(reason));
+            hoisted.socketListeners.forEach((listener) => listener());
+
+            expect(seen).toEqual(['socket-reconnected']);
+        } finally {
+            hoisted.provider.available = true;
+        }
     });
 
     it('Dispose is safe to call', () => {

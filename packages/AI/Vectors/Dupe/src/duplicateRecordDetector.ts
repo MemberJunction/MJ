@@ -28,6 +28,7 @@ import {
     LogStatus,
     RecordMergeRequest,
     EntityInfo,
+    EntityFieldInfo,
     PotentialDuplicate,
     DuplicateDetectionOptions,
     DuplicateDetectionProgress,
@@ -47,7 +48,11 @@ import { EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-ve
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
-import { DuplicateReasoningProvider } from "./reasoning/DuplicateReasoningProvider";
+import {
+    DuplicateReasoningProvider,
+    DECISION_REASONING_PROVIDER_KEY,
+    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
+} from "./reasoning/DuplicateReasoningProvider";
 import {
     DuplicateReasoningInput,
     DuplicateReasoningOutput,
@@ -56,6 +61,17 @@ import {
     ReasoningFieldDelta,
 } from "./reasoning/DuplicateReasoningTypes";
 import { MatchedSetDeltaBuilder } from "./reasoning/MatchedSetDeltaBuilder";
+import type { DecisionReasoningProvider, DuplicateCandidateProbability } from "./reasoning/DecisionReasoningProvider";
+import {
+    DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS,
+    DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH,
+    DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS,
+    DuplicateEntryCandidate,
+    DuplicateEntryCheckOptions,
+    DuplicateEntryCheckResult,
+    DuplicateEntryCheckStatus,
+} from "./duplicateEntryCheckTypes";
+import { EntryCheckDeadline, EntryCheckStoppedError } from "./entryCheckDeadline";
 
 /** Default number of nearest neighbors to retrieve per record */
 const DEFAULT_TOP_K = 5;
@@ -74,6 +90,15 @@ const VECTOR_QUERY_BATCH_SIZE = 100;
 
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
+
+/**
+ * The entity-document ReasoningModes that turn on the entry-time check. Both carry a typed
+ * decision, which is fast enough to answer while a person types.
+ */
+const ENTRY_CHECK_REASONING_MODES: ReadonlySet<string> = new Set([
+    DECISION_REASONING_PROVIDER_KEY,
+    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
+]);
 
 /**
  * Metadata structure returned by vector DB for each matched record.
@@ -116,12 +141,34 @@ interface SetReasoning {
 }
 
 /**
+ * What the entry-time check carries into its decision step: the unsaved record, its vector
+ * candidates narrowed to those the context user can read, and their display names.
+ */
+interface EntryCheckCandidates {
+    EntityInfo: EntityInfo;
+    EntityDocument: MJEntityDocumentEntity;
+    /** The unsaved record built from the entered values. */
+    Record: BaseEntity;
+    /** The vector query result, holding only the readable candidates. */
+    Query: RecordQueryResult;
+    /** Display name by normalized compact record id, for every readable candidate. */
+    DisplayNames: Map<string, string>;
+    ContextUser: UserInfo;
+    /** The check's budget and cancellation. */
+    Deadline: EntryCheckDeadline;
+}
+
+/** The entry-time decision's outcome: the flagged candidates, or why there are none. */
+type EntryCheckDecision = { Candidates: DuplicateEntryCandidate[] } | { Error: string };
+
+/**
  * Modernized duplicate record detection engine.
  *
  * Supports:
  * - List-based batch detection (getDuplicateRecords)
  * - View/filter/full-entity batch detection (vector-first approach)
  * - Single-record duplicate check (CheckSingleRecord)
+ * - Entry-time check of a new record's unsaved values, flag only (CheckRecordValues)
  * - Hybrid search via RRF when vector DB supports it
  * - Optional post-retrieval reranking via MJ's BaseReranker
  * - Configurable topK, thresholds, and progress reporting
@@ -330,25 +377,8 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const record = records.Results[0];
-        const templateParser = EntityDocumentTemplateParser.CreateInstance();
-        const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, [record], ContextUser);
-        const embedResult = await this.EmbeddingRunner.RunEmbedding({
-            Texts: templateTexts,
-            ModelID: this.embeddingModelID ?? undefined,
-            ContextUser: ContextUser,
-            Description: `Duplicate detection single record (${entityDocument.Name})`
-        });
-        if (!embedResult.Success || !embedResult.Vectors || embedResult.Vectors.length === 0) {
-            throw new Error(`Embedding failed for duplicate detection: ${embedResult.ErrorMessage ?? 'Unknown error'}`);
-        }
-
-        const topK = options.TopK ?? DEFAULT_TOP_K;
-        const queryResults = await this.QueryDuplicatesForRecords(
-            [record], embedResult.Vectors, templateTexts, entityDocument, topK, options,
-            this.GetQueryConcurrency(entityDocument)
-        );
-
-        if (queryResults.length === 0) {
+        const single = await this.QueryCandidatesForRecord(record, entityDocument, options, ContextUser);
+        if (!single) {
             return new PotentialDuplicateResult();
         }
 
@@ -356,12 +386,381 @@ export class DuplicateRecordDetector extends VectorBase {
         // has it enabled and the set clears the gate — same gate as the batch path. There are no
         // match rows to stamp run ids onto here; the verdict rides on the returned result so a
         // real-time "is this a duplicate?" caller gets recommendation + resolved field map too.
-        const single = queryResults[0];
         const reasoning = await this.RunReasoningForSet(single, entityInfo, entityDocument, ContextUser);
         if (reasoning) {
             this.applyReasoningToResult(single.Duplicates, reasoning.Output, reasoning.FieldMap);
         }
         return single.Duplicates;
+    }
+
+    /**
+     * Check values a person is entering for a new record against the entity's existing records, and
+     * flag the plausible duplicates. It only flags: nothing is saved, merged or blocked.
+     *
+     * 1. **The switch.** The check runs only for an entity with an Active entity document that has
+     *    `EnableLLMReasoning` on and whose `ReasoningMode` is `'Decision'` or `'DecisionThenPrompt'`
+     *    (see {@link FindEntryCheckDocument}). Without one the result is `NotConfigured` and nothing
+     *    else runs.
+     * 2. **Candidates.** The values, each text cut to {@link DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH},
+     *    become an unsaved entity object, rendered by the document's template, embedded, and queried
+     *    with the same TopK and threshold as {@link CheckSingleRecord}.
+     * 3. **Permission.** The vector index does not know who is asking, so the candidates are narrowed
+     *    to those the context user can read, with one RunView as that user.
+     * 4. **Decision.** One {@link DecisionReasoningProvider.DecideCandidates} call over the readable
+     *    candidates, in either mode: the prompt half of `'DecisionThenPrompt'` is too slow for entry,
+     *    and it can recommend a merge. Its state is bounded by
+     *    {@link DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS} and the field-text limit. A candidate is
+     *    flagged when the provider bands it `Uncertain`, by its own threshold, on the probability
+     *    calibrated for the model that answered. A candidate the decision gave no answer for is
+     *    flagged. A failed decision flags nothing, and neither does a decision from a model with no
+     *    calibration: its probabilities can't be banded, and flagging every candidate would be the
+     *    vector threshold alone. Both give a `Failed` result with the reason.
+     *
+     * **Budget.** The whole check is bounded by `options.TimeoutMS`
+     * ({@link DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS} by default) and by `options.CancellationToken`.
+     * No step starts once either has fired, the check stops waiting for a running step, and the
+     * decision call receives both, so the model call is aborted. A stopped check is `Failed`.
+     *
+     * Never throws: any failure is a `Failed` result with the reason.
+     *
+     * @param entityName the entity the new record belongs to
+     * @param values the entered values by field name; fields the entity does not have are ignored
+     * @param contextUser the person entering the record. Required: the candidates are narrowed to the
+     *   records this user can read, and without a user the check fails rather than skip that step.
+     * @param options overrides for TopK and the potential-match threshold, the budget and cancellation
+     * @returns the flagged candidates, most probable first, or why there are none
+     */
+    public async CheckRecordValues(
+        entityName: string,
+        values: Record<string, unknown>,
+        contextUser: UserInfo,
+        options?: DuplicateEntryCheckOptions
+    ): Promise<DuplicateEntryCheckResult> {
+        const startTime = Date.now();
+        if (!contextUser) {
+            return this.entryCheckResult('Failed', startTime, [],
+                'A context user is required: the check shows only the records that user can read');
+        }
+        this.CurrentUser = contextUser;
+        const deadline = new EntryCheckDeadline(
+            options?.TimeoutMS ?? DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS, options?.CancellationToken
+        );
+        try {
+            return await this.runEntryCheck(entityName, values, options ?? {}, contextUser, deadline, startTime);
+        } catch (e) {
+            if (e instanceof EntryCheckStoppedError) {
+                // Running out of the budget, or being cancelled, is how an abandoned check ends: not a fault.
+                return this.entryCheckResult('Failed', startTime, [], e.message);
+            }
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`Duplicate entry check for ${entityName} failed: ${message}`);
+            return this.entryCheckResult('Failed', startTime, [], message);
+        } finally {
+            deadline.Dispose();
+        }
+    }
+
+    /**
+     * Render one record with the entity document's template, embed it, and query the vector index
+     * for its candidates. Shared by {@link CheckSingleRecord} (a saved record) and
+     * {@link CheckRecordValues} (an unsaved one).
+     *
+     * @param deadline bounds each step, for the entry-time check; without one the steps are unbounded
+     * @returns the record's query result, or null when the query produced none
+     */
+    protected async QueryCandidatesForRecord(
+        record: BaseEntity,
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions,
+        contextUser?: UserInfo,
+        deadline?: EntryCheckDeadline
+    ): Promise<RecordQueryResult | null> {
+        const step = <T>(name: string, work: () => Promise<T>): Promise<T> => deadline ? deadline.Run(name, work) : work();
+        const templateParser = EntityDocumentTemplateParser.CreateInstance();
+        const templateTexts = await step('rendering the template',
+            () => this.GenerateTemplateTexts(templateParser, entityDocument, [record], contextUser));
+        const embedResult = await step('embedding the record', () => this.EmbeddingRunner.RunEmbedding({
+            Texts: templateTexts,
+            ModelID: this.embeddingModelID ?? undefined,
+            ContextUser: contextUser,
+            Description: `Duplicate detection single record (${entityDocument.Name})`
+        }));
+        if (!embedResult.Success || !embedResult.Vectors || embedResult.Vectors.length === 0) {
+            throw new Error(`Embedding failed for duplicate detection: ${embedResult.ErrorMessage ?? 'Unknown error'}`);
+        }
+        const vectors = embedResult.Vectors;
+
+        const topK = options.TopK ?? DEFAULT_TOP_K;
+        const queryResults = await step('querying the vector index', () => this.QueryDuplicatesForRecords(
+            [record], vectors, templateTexts, entityDocument, topK, options,
+            this.GetQueryConcurrency(entityDocument)
+        ));
+        return queryResults[0] ?? null;
+    }
+
+    // ─────────────────────────────────────────────
+    // Entry-Time Check
+    // ─────────────────────────────────────────────
+
+    /**
+     * The entity document that turns the entry-time check on for an entity: an Active document with
+     * `EnableLLMReasoning` on whose `ReasoningMode` is `'Decision'` or `'DecisionThenPrompt'`. The
+     * check makes a decision-model call on every pause in typing, so switching reasoning off on the
+     * document turns the check off too, as it turns off reasoning in batch runs
+     * ({@link IsReasoningGateOpen}). When several qualify, the oldest wins (earliest
+     * `__mj_CreatedAt`, then lowest ID), so adding a document never silently changes which one an
+     * entity uses.
+     *
+     * @returns the document, or null when the check is not configured for the entity
+     */
+    protected async FindEntryCheckDocument(entityName: string): Promise<MJEntityDocumentEntity | null> {
+        await KnowledgeHubMetadataEngine.Instance.Config(false, this.CurrentUser);
+        const documents = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentsForEntity(entityName)
+            .filter(d => d.Status === 'Active' && d.EnableLLMReasoning && ENTRY_CHECK_REASONING_MODES.has(d.ReasoningMode));
+        return documents.sort(compareOldestFirst)[0] ?? null;
+    }
+
+    /**
+     * Build an unsaved entity object holding the entered values, so the entity document's template
+     * renders it as it renders a saved record. Values for fields the entity does not have are ignored,
+     * and text longer than {@link DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH} is cut, so the
+     * template, the embedding and the decision state never see more of a field than that.
+     */
+    protected async BuildUnsavedRecord(
+        entityInfo: EntityInfo,
+        values: Record<string, unknown>,
+        contextUser: UserInfo
+    ): Promise<BaseEntity> {
+        const record = await this.Metadata.GetEntityObject<BaseEntity>(entityInfo.Name, contextUser);
+        record.NewRecord();
+        record.SetMany(boundEnteredValues(values), true);
+        return record;
+    }
+
+    /**
+     * The display names of the candidates the context user can read, from one RunView over the
+     * candidate keys run as that user, so entity permissions and row-level security apply. A
+     * candidate missing from the map must not be shown. When the RunView fails the map is empty:
+     * a candidate is shown only when the user is known to be able to read it.
+     *
+     * @param contextUser the person the candidates are narrowed for; the RunView runs as this user
+     * @returns display name by normalized compact record id ({@link NormalizeUUID})
+     */
+    protected async LoadReadableCandidateNames(
+        candidates: PotentialDuplicate[],
+        entityInfo: EntityInfo,
+        contextUser: UserInfo
+    ): Promise<Map<string, string>> {
+        const names = new Map<string, string>();
+        if (candidates.length === 0) {
+            return names;
+        }
+        const nameFields = this.DisplayNameFields(entityInfo);
+        const result = await this.RunView.RunView<Record<string, unknown>>({
+            EntityName: entityInfo.Name,
+            ExtraFilter: candidates.map(c => `(${c.ToWhereClause()})`).join(' OR '),
+            Fields: [...new Set([...entityInfo.PrimaryKeys.map(pk => pk.Name), ...nameFields.map(f => f.Name)])],
+            ResultType: 'simple',
+            MaxRows: candidates.length,
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`Duplicate entry check: could not confirm which ${entityInfo.Name} candidates are readable: ${result.ErrorMessage}`);
+            return names;
+        }
+        for (const row of result.Results) {
+            const recordID = CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment();
+            names.set(NormalizeUUID(recordID), this.rowDisplayName(row, nameFields) || recordID);
+        }
+        return names;
+    }
+
+    /**
+     * The decision provider the entry-time check asks: whatever the class factory holds for the
+     * `'Decision'` mode, which is {@link DecisionReasoningProvider} unless an app registers a
+     * subclass. Null when that registration is not a decision provider.
+     */
+    protected ResolveEntryDecisionProvider(): DecisionReasoningProvider | null {
+        const provider = MJGlobal.Instance.ClassFactory.CreateInstance<DuplicateReasoningProvider>(
+            DuplicateReasoningProvider, DECISION_REASONING_PROVIDER_KEY
+        );
+        return isDecisionReasoningProvider(provider) ? provider : null;
+    }
+
+    /**
+     * The fields whose values make up a record's display name: every `IsNameField` field in
+     * Sequence order, or the entity's single `NameField` when none is flagged.
+     */
+    protected DisplayNameFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+        const nameFields = entityInfo.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+
+        // Fall back to singular NameField if no IsNameField flags
+        if (nameFields.length === 0 && entityInfo.NameField) {
+            nameFields.push(entityInfo.NameField);
+        }
+        return nameFields;
+    }
+
+    /**
+     * The steps of {@link CheckRecordValues} after it has recorded the start time, each bounded by
+     * the deadline. May throw, {@link EntryCheckStoppedError} included.
+     */
+    private async runEntryCheck(
+        entityName: string,
+        values: Record<string, unknown>,
+        options: DuplicateDetectionOptions,
+        contextUser: UserInfo,
+        deadline: EntryCheckDeadline,
+        startTime: number
+    ): Promise<DuplicateEntryCheckResult> {
+        const entityDocument = await deadline.Run('finding the entity document', () => this.FindEntryCheckDocument(entityName));
+        if (!entityDocument) {
+            return this.entryCheckResult('NotConfigured', startTime);
+        }
+        const entityInfo = this.Metadata.EntityByID(entityDocument.EntityID);
+        if (!entityInfo) {
+            return this.entryCheckResult('Failed', startTime, [], `Entity not found for ID ${entityDocument.EntityID}`);
+        }
+        await deadline.Run('loading the embedding and vector providers', () => this.InitializeProviders(entityDocument));
+        const record = await deadline.Run('building the unsaved record', () => this.BuildUnsavedRecord(entityInfo, values, contextUser));
+        const query = await this.QueryCandidatesForRecord(record, entityDocument, options, contextUser, deadline);
+        if (!query) {
+            return this.entryCheckResult('Checked', startTime);
+        }
+        const displayNames = await this.keepReadableCandidates(query, entityInfo, contextUser, deadline);
+        if (query.Duplicates.Duplicates.length === 0) {
+            return this.entryCheckResult('Checked', startTime);
+        }
+        const decision = await this.decideEntryCandidates({
+            EntityInfo: entityInfo, EntityDocument: entityDocument, Record: record, Query: query,
+            DisplayNames: displayNames, ContextUser: contextUser, Deadline: deadline,
+        });
+        return 'Error' in decision
+            ? this.entryCheckResult('Failed', startTime, [], decision.Error)
+            : this.entryCheckResult('Checked', startTime, decision.Candidates);
+    }
+
+    /** Narrow a query result's candidates, in place, to those the context user can read. */
+    private async keepReadableCandidates(
+        query: RecordQueryResult,
+        entityInfo: EntityInfo,
+        contextUser: UserInfo,
+        deadline: EntryCheckDeadline
+    ): Promise<Map<string, string>> {
+        const names = await deadline.Run('checking which candidates the user can read',
+            () => this.LoadReadableCandidateNames(query.Duplicates.Duplicates, entityInfo, contextUser));
+        query.Duplicates.Duplicates = query.Duplicates.Duplicates.filter(
+            d => names.has(NormalizeUUID(d.ToCompactURLSegment()))
+        );
+        return names;
+    }
+
+    /**
+     * Ask the decision about the readable candidates, with the unsaved record's own values as the
+     * source, and flag the ones the provider bands `Uncertain`. The decision call gets the deadline's
+     * signal and remaining time, so the model call is aborted when the check must stop.
+     */
+    private async decideEntryCandidates(state: EntryCheckCandidates): Promise<EntryCheckDecision> {
+        const provider = this.ResolveEntryDecisionProvider();
+        if (!provider) {
+            return { Error: `No DecisionReasoningProvider is registered for the '${DECISION_REASONING_PROVIDER_KEY}' reasoning mode` };
+        }
+        const input = await state.Deadline.Run('loading the candidates\' field values', () => this.BuildReasoningInput(
+            state.Query, state.EntityInfo, state.EntityDocument, state.ContextUser, state.Record
+        ));
+        const decision = await state.Deadline.Run('asking the decision model', () => provider.DecideCandidates(
+            this.BoundEntryDecisionInput(input), {
+                Provider: this._provider,
+                ContextUser: state.ContextUser,
+                CancellationToken: state.Deadline.Signal,
+                TimeoutMS: state.Deadline.RemainingMS,
+            }
+        ));
+        if (!decision.Success) {
+            const message = `Decision failed: ${decision.ErrorMessage ?? 'unknown error'}`;
+            LogError(`Duplicate entry check for ${state.EntityInfo.Name}: ${message}. Nothing is flagged.`);
+            return { Error: message };
+        }
+        if (decision.UncalibratedModel) {
+            // Not logged here: the provider logs a missing calibration once per model, not per check.
+            return { Error: `The decision model "${decision.UncalibratedModel}" has no calibration, so nothing is flagged` };
+        }
+        return { Candidates: this.flagEntryCandidates(provider, decision.Candidates, state) };
+    }
+
+    /**
+     * The entry-time decision's input, bounded: at most {@link DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS}
+     * differing fields, the ones the person entered first, and every value and label cut to
+     * {@link DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH}. A candidate's stored values are cut too:
+     * a long Notes field on an existing record would otherwise reach the model in full.
+     */
+    protected BoundEntryDecisionInput(input: DuplicateReasoningInput): DuplicateReasoningInput {
+        const sourceID = input.SourceRecord.RecordID;
+        const entered = (delta: ReasoningFieldDelta): boolean => delta.Values.some(
+            v => this.recordIdMatches(v.RecordID, sourceID) && v.Value != null && v.Value.trim().length > 0
+        );
+        const fields = [...input.FieldDeltas.filter(entered), ...input.FieldDeltas.filter(d => !entered(d))]
+            .slice(0, DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS)
+            .map(delta => ({
+                FieldName: delta.FieldName,
+                Values: delta.Values.map(v => ({ RecordID: v.RecordID, Value: v.Value == null ? null : truncateText(v.Value) })),
+            }));
+        return {
+            ...input,
+            SourceRecord: { ...input.SourceRecord, Label: truncateText(input.SourceRecord.Label) },
+            Candidates: input.Candidates.map(c => ({ ...c, Label: truncateText(c.Label) })),
+            FieldDeltas: fields,
+        };
+    }
+
+    /**
+     * The candidates the provider bands `Uncertain` (they cannot be ruled out), most probable first.
+     * The decision answers in input order, so each answer lines up with the query's candidate at the
+     * same index.
+     */
+    private flagEntryCandidates(
+        provider: DecisionReasoningProvider,
+        answers: DuplicateCandidateProbability[],
+        state: EntryCheckCandidates
+    ): DuplicateEntryCandidate[] {
+        const flagged: DuplicateEntryCandidate[] = [];
+        answers.forEach((answer, index) => {
+            const duplicate = state.Query.Duplicates.Duplicates[index];
+            if (!duplicate || provider.BandCandidate(answer).Recommendation !== 'Uncertain') {
+                return;
+            }
+            const recordID = duplicate.ToCompactURLSegment();
+            flagged.push({
+                RecordID: recordID,
+                DisplayName: state.DisplayNames.get(NormalizeUUID(recordID)) ?? recordID,
+                VectorScore: duplicate.ProbabilityScore,
+                Probability: answer.Probability,
+            });
+        });
+        return flagged.sort(compareMostProbableFirst);
+    }
+
+    /** A row's name-field values joined with spaces; empty when it has none the user may read. */
+    private rowDisplayName(row: Record<string, unknown>, nameFields: EntityFieldInfo[]): string {
+        return nameFields
+            .map(f => row[f.Name])
+            .filter(v => v != null && String(v).trim() !== '')
+            .map(v => String(v))
+            .join(' ');
+    }
+
+    private entryCheckResult(
+        status: DuplicateEntryCheckStatus,
+        startTime: number,
+        candidates: DuplicateEntryCandidate[] = [],
+        errorMessage?: string
+    ): DuplicateEntryCheckResult {
+        const result: DuplicateEntryCheckResult = { Status: status, Candidates: candidates, ElapsedMs: Date.now() - startTime };
+        if (errorMessage) {
+            result.ErrorMessage = errorMessage;
+        }
+        return result;
     }
 
     // ─────────────────────────────────────────────
@@ -1063,14 +1462,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const metadataMap = new Map<string, string>();
 
         // Combine all IsNameField fields in Sequence order for the display name
-        const nameFields = entityInfo.Fields
-            .filter(f => f.IsNameField)
-            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
-
-        // Fall back to singular NameField if no IsNameField flags
-        if (nameFields.length === 0 && entityInfo.NameField) {
-            nameFields.push(entityInfo.NameField);
-        }
+        const nameFields = this.DisplayNameFields(entityInfo);
 
         // Use DefaultInView fields for display, plus IsNameField fields
         const internalNames = new Set(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
@@ -1581,19 +1973,23 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Assemble the reasoning input for a matched set: source description, candidate
      * descriptions, and the differing-field deltas loaded for the whole set.
+     *
+     * @param unsavedSource the source record when it is not saved yet (the entry-time check): its
+     *   in-memory values stand in for the database row the delta load cannot find
      */
     protected async BuildReasoningInput(
         qr: RecordQueryResult,
         entityInfo: EntityInfo,
         entityDocument: MJEntityDocumentEntity,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        unsavedSource?: BaseEntity
     ): Promise<DuplicateReasoningInput> {
         // Load the field deltas first — the same pass yields a record-id → name label map, which
         // gives BOTH the source and the candidates real names (loaded from the records) instead of
         // raw GUIDs. The vector-metadata name is a weaker fallback; the GUID is the last resort.
         const deltaBuilder = new MatchedSetDeltaBuilder(this.RunView);
         const allKeys = [qr.SourceKey, ...qr.Duplicates.Duplicates];
-        const { FieldDeltas: fieldDeltas, Labels: labels } = await deltaBuilder.Build(entityInfo, allKeys, contextUser);
+        const { FieldDeltas: fieldDeltas, Labels: labels } = await deltaBuilder.Build(entityInfo, allKeys, contextUser, unsavedSource);
 
         const candidates: ReasoningCandidate[] = qr.Duplicates.Duplicates.map(d => ({
             RecordID: d.Values(),
@@ -1826,6 +2222,55 @@ function chunkArray<T>(array: T[], chunkSize: number): T[][] {
         chunks.push(array.slice(i, i + chunkSize));
     }
     return chunks;
+}
+
+/**
+ * Whether a reasoning provider is a decision provider. Checked by shape, not `instanceof`, so this
+ * module need not load the decision provider and the AI engine behind it; the package index
+ * registers the provider, as it does every other reasoning mode's.
+ */
+function isDecisionReasoningProvider(provider: DuplicateReasoningProvider | null): provider is DecisionReasoningProvider {
+    return provider != null
+        && 'DecideCandidates' in provider && typeof provider.DecideCandidates === 'function'
+        && 'BandCandidate' in provider && typeof provider.BandCandidate === 'function';
+}
+
+/**
+ * The entered values with every string cut to {@link DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH}.
+ * Other values pass through as they are.
+ */
+function boundEnteredValues(values: Record<string, unknown>): Record<string, unknown> {
+    const bounded: Record<string, unknown> = {};
+    for (const [name, value] of Object.entries(values)) {
+        bounded[name] = typeof value === 'string' ? truncateText(value) : value;
+    }
+    return bounded;
+}
+
+/**
+ * Text cut to at most `max` characters; a cut text ends with an ellipsis, so a reader (the decision
+ * model included) can tell it was cut.
+ */
+function truncateText(text: string, max: number = DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH): string {
+    return text.length <= max ? text : `${text.slice(0, max - 1)}\u2026`;
+}
+
+/**
+ * Orders entity documents oldest first: by `__mj_CreatedAt`, then by ID, so the order is total
+ * and stable across calls.
+ */
+function compareOldestFirst(a: MJEntityDocumentEntity, b: MJEntityDocumentEntity): number {
+    const byAge = (a.__mj_CreatedAt?.getTime() ?? 0) - (b.__mj_CreatedAt?.getTime() ?? 0);
+    return byAge !== 0 ? byAge : NormalizeUUID(a.ID).localeCompare(NormalizeUUID(b.ID));
+}
+
+/**
+ * Orders flagged candidates most probable first. A candidate the decision gave no answer for sorts
+ * after every answered one; ties fall back to the vector score.
+ */
+function compareMostProbableFirst(a: DuplicateEntryCandidate, b: DuplicateEntryCandidate): number {
+    const byProbability = (b.Probability ?? -1) - (a.Probability ?? -1);
+    return byProbability !== 0 ? byProbability : b.VectorScore - a.VectorScore;
 }
 
 /**

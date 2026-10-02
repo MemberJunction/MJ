@@ -32,6 +32,15 @@ export class DecisionRunResult {
     @Field({ nullable: true })
     modelName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name, camelCase like AIPromptRunResult's — clients query it by this name
 
+    /**
+     * The exact model behind `modelName`, as its driver reports it (`DecisionResult.ResolvedModel`):
+     * the vendor's dated model for a vendor decision model, the chat model for LLM Decision. A
+     * consumer that calibrates per model needs it: a calibration holds only for the model it was
+     * fitted on. Absent when the driver reports none.
+     */
+    @Field({ nullable: true })
+    resolvedModel?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name, camelCase like AIPromptRunResult's — clients query it by this name
+
     @Field({ nullable: true })
     executionTimeMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name, camelCase like AIPromptRunResult's — clients query it by this name
 }
@@ -404,6 +413,7 @@ export class RunDecisionResolver extends ResolverBase {
             success: result.success,
             promptRunId: result.promptRun?.ID,
             modelName: result.modelInfo?.modelName,
+            resolvedModel: result.DecisionResult?.ResolvedModel,
             executionTimeMs: Date.now() - startTime,
         };
         if (result.success) {

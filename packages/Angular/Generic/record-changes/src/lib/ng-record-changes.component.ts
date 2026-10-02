@@ -22,6 +22,7 @@ import {
 } from '@memberjunction/core';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
+import { FormatChangeValue } from './format-change-value';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { diffChars, diffWords, Change } from 'diff';
@@ -1087,9 +1088,8 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     );
 
     const fieldType = this.classifyFieldType(field);
-    const isDateField = fieldType === 'date';
-    const formattedOld = this.formatChangeValue(changeInfo.oldValue, isDateField);
-    const formattedNew = this.formatChangeValue(changeInfo.newValue, isDateField);
+    const formattedOld = FormatChangeValue(changeInfo.oldValue, field);
+    const formattedNew = FormatChangeValue(changeInfo.newValue, field);
 
     let diffHtml: SafeHtml | undefined;
     if (fieldType === 'text' && formattedOld !== formattedNew) {
@@ -1126,7 +1126,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
         .map((field: EntityFieldInfo) => ({
           name: field.Name,
           displayName: field.DisplayNameOrName,
-          value: this.formatChangeValue(record[field.Name], field.TSType === EntityFieldTSType.Date),
+          value: FormatChangeValue(record[field.Name], field),
         }));
     } catch {
       return [];
@@ -1139,32 +1139,6 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   }
 
   // ─── Value Formatting ───────────────────────────────────────────
-
-  private formatChangeValue(value: unknown, isDateField: boolean): string {
-    if (value == null) return '';
-
-    if (typeof value === 'object') {
-      const keys = Object.keys(value as Record<string, unknown>);
-      if (keys.length === 0) return '';
-      return JSON.stringify(value);
-    }
-
-    if (isDateField && typeof value === 'string') {
-      const date = new Date(value);
-      if (!isNaN(date.getTime())) {
-        return new Intl.DateTimeFormat('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-        }).format(date);
-      }
-    }
-
-    return String(value);
-  }
 
   // ─── Diff Generation (text fields only) ─────────────────────────
 

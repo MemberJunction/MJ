@@ -90,6 +90,10 @@ export type EmbeddingData = {
     __mj_compositeKey?: string;
     /** Plain object representation of the entity document */
     EntityDocument?: Record<string, unknown>;
+    /**
+     * The RENDERED document text for this record: the exact string that was embedded, persisted as
+     * `EntityRecordDocument.DocumentText`. Not the raw template, which is identical for every record.
+     */
     TemplateContent?: string;
     VectorIndexID?: string;
 };

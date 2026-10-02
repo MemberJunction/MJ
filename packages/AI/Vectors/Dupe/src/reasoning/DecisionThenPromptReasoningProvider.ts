@@ -60,7 +60,8 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
      * under the 'Decision' and 'Prompt' modes: an application's override of either mode applies
      * inside the chain too.
      *
-     * @param decisionStage the filter stage; defaults to {@link ResolveDecisionStage}
+     * @param decisionStage the filter stage; defaults to {@link ResolveDecisionStage}, at the pre-filter
+     *   threshold ({@link DecisionReasoningProvider.PRE_FILTER_UNCERTAIN_ABOVE}), which keeps recall
      * @param promptStage the reasoning stage; defaults to {@link ResolvePromptStage}
      */
     constructor(decisionStage?: DecisionReasoningProvider, promptStage?: DuplicateReasoningProvider) {
@@ -110,13 +111,16 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
     }
 
     /**
-     * The filter stage: the provider registered for the 'Decision' mode. The chain needs its
-     * probability API, so a registration that is not a `DecisionReasoningProvider` falls back to
-     * the shipped one.
+     * The filter stage: the provider registered for the 'Decision' mode, built with the pre-filter
+     * threshold ({@link DecisionReasoningProvider.PRE_FILTER_UNCERTAIN_ABOVE}) as its `uncertainAbove`
+     * argument, since here the decision only drops implausible candidates and keeps recall. The chain
+     * needs its probability API, so a registration that is not a `DecisionReasoningProvider` falls
+     * back to the shipped one, at the same threshold.
      */
     protected ResolveDecisionStage(): DecisionReasoningProvider {
-        const registered = this.resolveRegisteredProvider(DECISION_REASONING_PROVIDER_KEY);
-        return registered instanceof DecisionReasoningProvider ? registered : new DecisionReasoningProvider();
+        const threshold = DecisionReasoningProvider.PRE_FILTER_UNCERTAIN_ABOVE;
+        const registered = this.resolveRegisteredProvider(DECISION_REASONING_PROVIDER_KEY, threshold);
+        return registered instanceof DecisionReasoningProvider ? registered : new DecisionReasoningProvider(threshold);
     }
 
     /** The reasoning stage: the provider registered for the 'Prompt' mode, else the shipped one. */
@@ -124,9 +128,12 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
         return this.resolveRegisteredProvider(PROMPT_REASONING_PROVIDER_KEY) ?? new PromptReasoningProvider();
     }
 
-    /** The provider the class factory registers for a mode, or null when none is registered. */
-    private resolveRegisteredProvider(mode: string): DuplicateReasoningProvider | null {
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<DuplicateReasoningProvider>(DuplicateReasoningProvider, mode);
+    /**
+     * The provider the class factory registers for a mode, built with `params` as its constructor
+     * arguments, or null when none is registered.
+     */
+    private resolveRegisteredProvider(mode: string, ...params: number[]): DuplicateReasoningProvider | null {
+        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<DuplicateReasoningProvider>(DuplicateReasoningProvider, mode, ...params);
         return result.Resolved ? result.Instance : null;
     }
 

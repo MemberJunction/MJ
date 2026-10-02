@@ -134,6 +134,8 @@
     "check:naming": "node packages/MJCLI/bin/run.js standards check --check naming-conventions",
     "check:changeset": "node .github/scripts/check-changeset-bump.mjs",
     "check:changeset:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-changeset-bump",
+    "check:citizen-builder-template": "node .github/scripts/check-citizen-builder-template.mjs",
+    "check:citizen-builder-template:test": "node .github/scripts/check-citizen-builder-template.mjs --self-test",
     "check:ai-model-ranks": "node .github/scripts/check-ai-model-ranks.mjs",
     "check:ai-model-ranks:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-ai-model-ranks"
   },
