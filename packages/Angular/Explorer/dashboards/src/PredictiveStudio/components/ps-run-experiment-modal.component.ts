@@ -205,103 +205,269 @@ const ALGO_ICONS: Record<string, string> = {
 export class PSRunExperimentModalComponent implements OnInit {
   @Input() engine!: PredictiveStudioEngine;
   @Input() provider: IMetadataProvider | null = null;
-  @Input() currentUser: UserInfo | null = null;
-  @Input() preselectedPipelineId?: string;
+  @Input() CurrentUser: UserInfo | null = null;
 
-  @Output() closed = new EventEmitter<void>();
-  @Output() started = new EventEmitter<string>();
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | null) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
+  @Input() PreselectedPipelineId?: string;
+
+  /** @deprecated Use {@link PreselectedPipelineId}. */
+  @Input() set preselectedPipelineId(value: string | undefined) {
+    this.PreselectedPipelineId = value;
+  }
+  /** @deprecated Use {@link PreselectedPipelineId}. */
+  get preselectedPipelineId(): string | undefined {
+    return this.PreselectedPipelineId;
+  }
+
+  @Output() Closed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
+  @Output() Started = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link Started}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (started) keeps working. Must stay AFTER Started: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() started = this.Started;
 
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
 
-  public selectedPipelineId = '';
+  public SelectedPipelineId = '';
+
+  /** @deprecated Use {@link SelectedPipelineId}. */
+  public get selectedPipelineId() {
+    return this.SelectedPipelineId;
+  }
+  /** @deprecated Use {@link SelectedPipelineId}. */
+  public set selectedPipelineId(value) {
+    this.SelectedPipelineId = value;
+  }
   public sessionName = '';
-  public goal = '';
-  public successMetric: 'AUC' | 'F1' | 'Accuracy' | 'RMSE' | 'MAE' | 'R2' = 'AUC';
-  public problemType: 'classification' | 'regression' = 'classification';
+  public Goal = '';
 
-  public selectedAlgoIds = new Set<string>();
+  /** @deprecated Use {@link Goal}. */
+  public get goal() {
+    return this.Goal;
+  }
+  /** @deprecated Use {@link Goal}. */
+  public set goal(value) {
+    this.Goal = value;
+  }
+  public SuccessMetric: 'AUC' | 'F1' | 'Accuracy' | 'RMSE' | 'MAE' | 'R2' = 'AUC';
 
-  public budgetRuns = 15;
-  public budgetCost = 25;
-  public budgetMinutes = 30;
-  public holdoutPercent = 15;
+  /** @deprecated Use {@link SuccessMetric}. */
+  public get successMetric(): 'AUC' | 'F1' | 'Accuracy' | 'RMSE' | 'MAE' | 'R2' {
+    return this.SuccessMetric;
+  }
+  /** @deprecated Use {@link SuccessMetric}. */
+  public set successMetric(value: 'AUC' | 'F1' | 'Accuracy' | 'RMSE' | 'MAE' | 'R2') {
+    this.SuccessMetric = value;
+  }
+  public ProblemType: 'classification' | 'regression' = 'classification';
 
-  public busy = false;
+  /** @deprecated Use {@link ProblemType}. */
+  public get problemType(): 'classification' | 'regression' {
+    return this.ProblemType;
+  }
+  /** @deprecated Use {@link ProblemType}. */
+  public set problemType(value: 'classification' | 'regression') {
+    this.ProblemType = value;
+  }
+
+  public SelectedAlgoIds = new Set<string>();
+
+  /** @deprecated Use {@link SelectedAlgoIds}. */
+  public get selectedAlgoIds() {
+    return this.SelectedAlgoIds;
+  }
+  /** @deprecated Use {@link SelectedAlgoIds}. */
+  public set selectedAlgoIds(value) {
+    this.SelectedAlgoIds = value;
+  }
+
+  public BudgetRuns = 15;
+
+  /** @deprecated Use {@link BudgetRuns}. */
+  public get budgetRuns() {
+    return this.BudgetRuns;
+  }
+  /** @deprecated Use {@link BudgetRuns}. */
+  public set budgetRuns(value) {
+    this.BudgetRuns = value;
+  }
+  public BudgetCost = 25;
+
+  /** @deprecated Use {@link BudgetCost}. */
+  public get budgetCost() {
+    return this.BudgetCost;
+  }
+  /** @deprecated Use {@link BudgetCost}. */
+  public set budgetCost(value) {
+    this.BudgetCost = value;
+  }
+  public BudgetMinutes = 30;
+
+  /** @deprecated Use {@link BudgetMinutes}. */
+  public get budgetMinutes() {
+    return this.BudgetMinutes;
+  }
+  /** @deprecated Use {@link BudgetMinutes}. */
+  public set budgetMinutes(value) {
+    this.BudgetMinutes = value;
+  }
+  public HoldoutPercent = 15;
+
+  /** @deprecated Use {@link HoldoutPercent}. */
+  public get holdoutPercent() {
+    return this.HoldoutPercent;
+  }
+  /** @deprecated Use {@link HoldoutPercent}. */
+  public set holdoutPercent(value) {
+    this.HoldoutPercent = value;
+  }
+
+  public Busy = false;
+
+  /** @deprecated Use {@link Busy}. */
+  public get busy() {
+    return this.Busy;
+  }
+  /** @deprecated Use {@link Busy}. */
+  public set busy(value) {
+    this.Busy = value;
+  }
 
   ngOnInit(): void {
     const pipelines = this.engine?.Pipelines ?? [];
-    if (this.preselectedPipelineId && pipelines.some((p) => UUIDsEqual(p.ID, this.preselectedPipelineId))) {
-      this.selectedPipelineId = this.preselectedPipelineId;
+    if (this.PreselectedPipelineId && pipelines.some((p) => UUIDsEqual(p.ID, this.PreselectedPipelineId))) {
+      this.SelectedPipelineId = this.PreselectedPipelineId;
     } else if (pipelines.length > 0) {
-      this.selectedPipelineId = pipelines[0].ID;
+      this.SelectedPipelineId = pipelines[0].ID;
     }
     this.syncFromSelectedPipeline();
   }
 
-  public get availableAlgorithms(): MJMLAlgorithmEntity[] {
+  public get AvailableAlgorithms(): MJMLAlgorithmEntity[] {
     return this.engine?.Algorithms ?? [];
   }
 
-  public get selectedPipeline(): MJMLTrainingPipelineEntity | undefined {
-    return this.engine?.Pipelines.find((p) => UUIDsEqual(p.ID, this.selectedPipelineId));
+  /** @deprecated Use {@link AvailableAlgorithms}. */
+  public get availableAlgorithms(): MJMLAlgorithmEntity[] {
+    return this.AvailableAlgorithms;
   }
 
-  public onPipelineChange(newId: string): void {
-    this.selectedPipelineId = newId;
+  public get SelectedPipeline(): MJMLTrainingPipelineEntity | undefined {
+    return this.engine?.Pipelines.find((p) => UUIDsEqual(p.ID, this.SelectedPipelineId));
+  }
+
+  /** @deprecated Use {@link SelectedPipeline}. */
+  public get selectedPipeline(): MJMLTrainingPipelineEntity | undefined {
+    return this.SelectedPipeline;
+  }
+
+  public OnPipelineChange(newId: string): void {
+    this.SelectedPipelineId = newId;
     this.syncFromSelectedPipeline();
   }
 
-  private syncFromSelectedPipeline(): void {
-    const p = this.selectedPipeline;
-    if (!p) return;
-    this.problemType = (p.ProblemType as 'classification' | 'regression') || 'classification';
-    this.successMetric = this.problemType === 'classification' ? 'AUC' : 'RMSE';
-    this.sessionName = `${p.Name} — Multi-Algorithm Tournament`;
-    this.goal = `Evaluate and compare algorithms on ${p.Name} to maximize ${this.successMetric}.`;
-    this.selectRecommendedAlgos();
+  /** @deprecated Use {@link OnPipelineChange}. */
+  public onPipelineChange(newId: string): void {
+    return this.OnPipelineChange(newId);
   }
 
-  public selectRecommendedAlgos(): void {
-    this.selectedAlgoIds.clear();
-    const pt = this.problemType;
-    for (const algo of this.availableAlgorithms) {
+  private syncFromSelectedPipeline(): void {
+    const p = this.SelectedPipeline;
+    if (!p) return;
+    this.ProblemType = (p.ProblemType as 'classification' | 'regression') || 'classification';
+    this.SuccessMetric = this.ProblemType === 'classification' ? 'AUC' : 'RMSE';
+    this.sessionName = `${p.Name} — Multi-Algorithm Tournament`;
+    this.Goal = `Evaluate and compare algorithms on ${p.Name} to maximize ${this.SuccessMetric}.`;
+    this.SelectRecommendedAlgos();
+  }
+
+  public SelectRecommendedAlgos(): void {
+    this.SelectedAlgoIds.clear();
+    const pt = this.ProblemType;
+    for (const algo of this.AvailableAlgorithms) {
       const types = (algo.ProblemTypes || '').toLowerCase();
       if (types.includes(pt) || types.length === 0) {
         // Recommend gradient boosting and random forest by default
         const dc = (algo.DriverClass || '').toLowerCase();
         if (dc.includes('xgboost') || dc.includes('lightgbm') || dc.includes('forest') || dc.includes('logistic')) {
-          this.selectedAlgoIds.add(algo.ID);
+          this.SelectedAlgoIds.add(algo.ID);
         }
       }
     }
-    if (this.selectedAlgoIds.size === 0) {
+    if (this.SelectedAlgoIds.size === 0) {
       // Fallback: select first 3
-      this.availableAlgorithms.slice(0, 3).forEach((a) => this.selectedAlgoIds.add(a.ID));
+      this.AvailableAlgorithms.slice(0, 3).forEach((a) => this.SelectedAlgoIds.add(a.ID));
     }
   }
 
+  /** @deprecated Use {@link SelectRecommendedAlgos}. */
+  public selectRecommendedAlgos(): void {
+    return this.SelectRecommendedAlgos();
+  }
+
+  public SelectAllAlgos(): void {
+    this.AvailableAlgorithms.forEach((a) => this.SelectedAlgoIds.add(a.ID));
+  }
+
+  /** @deprecated Use {@link SelectAllAlgos}. */
   public selectAllAlgos(): void {
-    this.availableAlgorithms.forEach((a) => this.selectedAlgoIds.add(a.ID));
+    return this.SelectAllAlgos();
   }
 
+  public ClearAlgos(): void {
+    this.SelectedAlgoIds.clear();
+  }
+
+  /** @deprecated Use {@link ClearAlgos}. */
   public clearAlgos(): void {
-    this.selectedAlgoIds.clear();
+    return this.ClearAlgos();
   }
 
+  public IsAlgoSelected(id: string): boolean {
+    return this.SelectedAlgoIds.has(id);
+  }
+
+  /** @deprecated Use {@link IsAlgoSelected}. */
   public isAlgoSelected(id: string): boolean {
-    return this.selectedAlgoIds.has(id);
+    return this.IsAlgoSelected(id);
   }
 
-  public toggleAlgo(id: string): void {
-    if (this.selectedAlgoIds.has(id)) {
-      this.selectedAlgoIds.delete(id);
+  public ToggleAlgo(id: string): void {
+    if (this.SelectedAlgoIds.has(id)) {
+      this.SelectedAlgoIds.delete(id);
     } else {
-      this.selectedAlgoIds.add(id);
+      this.SelectedAlgoIds.add(id);
     }
   }
 
-  public getAlgoIcon(driverClass: string): string {
+  /** @deprecated Use {@link ToggleAlgo}. */
+  public toggleAlgo(id: string): void {
+    return this.ToggleAlgo(id);
+  }
+
+  public GetAlgoIcon(driverClass: string): string {
     const key = (driverClass || '').toLowerCase();
     for (const [k, icon] of Object.entries(ALGO_ICONS)) {
       if (key.includes(k)) return icon;
@@ -309,32 +475,47 @@ export class PSRunExperimentModalComponent implements OnInit {
     return 'fa-solid fa-chart-line';
   }
 
-  public get isValid(): boolean {
+  /** @deprecated Use {@link GetAlgoIcon}. */
+  public getAlgoIcon(driverClass: string): string {
+    return this.GetAlgoIcon(driverClass);
+  }
+
+  public get IsValid(): boolean {
     return Boolean(
-      this.selectedPipelineId &&
+      this.SelectedPipelineId &&
       this.sessionName.trim() &&
-      this.selectedAlgoIds.size > 0 &&
-      this.budgetRuns > 0 &&
-      this.budgetCost > 0
+      this.SelectedAlgoIds.size > 0 &&
+      this.BudgetRuns > 0 &&
+      this.BudgetCost > 0
     );
   }
 
-  public cancel(): void {
-    if (this.busy) return;
-    this.closed.emit();
+  /** @deprecated Use {@link IsValid}. */
+  public get isValid(): boolean {
+    return this.IsValid;
   }
 
-  public onBackdropClick(event: MouseEvent): void {
-    if (event.target === event.currentTarget && !this.busy) {
+  public cancel(): void {
+    if (this.Busy) return;
+    this.Closed.emit();
+  }
+
+  public OnBackdropClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget && !this.Busy) {
       this.cancel();
     }
   }
 
-  public async launch(): Promise<void> {
-    const pipeline = this.selectedPipeline;
-    if (!pipeline || !this.isValid || this.busy) return;
+  /** @deprecated Use {@link OnBackdropClick}. */
+  public onBackdropClick(event: MouseEvent): void {
+    return this.OnBackdropClick(event);
+  }
 
-    this.busy = true;
+  public async Launch(): Promise<void> {
+    const pipeline = this.SelectedPipeline;
+    if (!pipeline || !this.IsValid || this.Busy) return;
+
+    this.Busy = true;
     this.notifications.CreateSimpleNotification('Starting experiment session…', 'info', 3000);
 
     try {
@@ -362,15 +543,15 @@ export class PSRunExperimentModalComponent implements OnInit {
         }
       }
 
-      const selectedAlgos = this.availableAlgorithms.filter((a) => this.selectedAlgoIds.has(a.ID));
+      const selectedAlgos = this.AvailableAlgorithms.filter((a) => this.SelectedAlgoIds.has(a.ID));
 
       const planSpec: ModelingPlanSpec = {
-        Goal: this.goal.trim() || `Optimize model for ${pipeline.Name}`,
+        Goal: this.Goal.trim() || `Optimize model for ${pipeline.Name}`,
         TargetDefinition: {
           EntityName: sourceEntity,
           TargetVariable: pipeline.TargetVariable || 'Target',
-          ProblemType: this.problemType,
-          SuccessMetric: this.successMetric,
+          ProblemType: this.ProblemType,
+          SuccessMetric: this.SuccessMetric,
           AsOfStrategy: asOf,
         },
         CandidateSources: sources.map((s) => ({
@@ -398,17 +579,17 @@ export class PSRunExperimentModalComponent implements OnInit {
         })),
         ValidationStrategy: validation,
         ProposedBudget: {
-          MaxRuns: this.budgetRuns,
-          MaxComputeCost: this.budgetCost,
-          MaxWallclockMinutes: this.budgetMinutes,
+          MaxRuns: this.BudgetRuns,
+          MaxComputeCost: this.BudgetCost,
+          MaxWallclockMinutes: this.BudgetMinutes,
         },
         Approved: true,
       };
 
       const budget: Budget = {
-        MaxRuns: this.budgetRuns,
-        MaxComputeCost: this.budgetCost,
-        MaxWallclockMinutes: this.budgetMinutes,
+        MaxRuns: this.BudgetRuns,
+        MaxComputeCost: this.BudgetCost,
+        MaxWallclockMinutes: this.BudgetMinutes,
       };
 
       const op = new PredictiveStudioStartExperimentSessionOperation();
@@ -417,7 +598,7 @@ export class PSRunExperimentModalComponent implements OnInit {
           planSpec,
           budget,
         },
-        { provider: this.provider ?? undefined, user: this.currentUser ?? undefined },
+        { provider: this.provider ?? undefined, user: this.CurrentUser ?? undefined },
       );
 
       if (result.Success && result.Output) {
@@ -426,8 +607,8 @@ export class PSRunExperimentModalComponent implements OnInit {
           'success',
           5000,
         );
-        this.started.emit(result.Output.sessionId);
-        this.closed.emit();
+        this.Started.emit(result.Output.sessionId);
+        this.Closed.emit();
       } else {
         this.notifications.CreateSimpleNotification(
           result.ErrorMessage || 'Failed to start experiment session.',
@@ -442,9 +623,14 @@ export class PSRunExperimentModalComponent implements OnInit {
         6000,
       );
     } finally {
-      this.busy = false;
+      this.Busy = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link Launch}. */
+  public async launch(): Promise<void> {
+    return this.Launch();
   }
 
   private parseJson<T>(raw: string | null | undefined, fallback: T): T {

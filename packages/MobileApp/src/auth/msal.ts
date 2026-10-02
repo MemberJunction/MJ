@@ -33,11 +33,11 @@ const STORE_KEY = 'mj-msal-tokens';
 
 /** Persisted MSAL/Azure AD token bundle. */
 export type MJAuthTokens = {
-    idToken: string;
-    accessToken: string;
-    refreshToken?: string;
+    idToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    accessToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    refreshToken?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
     /** Epoch ms when idToken expires (or 0 if unknown). */
-    expiresAt: number;
+    expiresAt: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 };
 
 /**
@@ -51,6 +51,11 @@ export function GetRedirectUri(): string {
     });
 }
 
+/** @deprecated Use {@link GetRedirectUri}. */
+export function getRedirectUri(): string {
+    return GetRedirectUri();
+}
+
 /**
  * Build the OIDC discovery document (authorize/token/logout endpoints) for the
  * configured Azure AD authority (`Env.msalAuthority`).
@@ -61,6 +66,11 @@ export function GetDiscovery(): DiscoveryDocument {
         tokenEndpoint: `${Env.msalAuthority}/oauth2/v2.0/token`,
         endSessionEndpoint: `${Env.msalAuthority}/oauth2/v2.0/logout`,
     };
+}
+
+/** @deprecated Use {@link GetDiscovery}. */
+export function getDiscovery(): DiscoveryDocument {
+    return GetDiscovery();
 }
 
 /**
@@ -76,6 +86,11 @@ export function BuildAuthRequest(): AuthRequest {
         // Force a fresh consent on first run to avoid silent-failure surprises.
         prompt: undefined,
     });
+}
+
+/** @deprecated Use {@link BuildAuthRequest}. */
+export function buildAuthRequest(): AuthRequest {
+    return BuildAuthRequest();
 }
 
 /**
@@ -132,9 +147,19 @@ export async function ExchangeCodeForTokens(code: string, codeVerifier: string):
     return tokens;
 }
 
+/** @deprecated Use {@link ExchangeCodeForTokens}. */
+export async function exchangeCodeForTokens(code: string, codeVerifier: string): Promise<MJAuthTokens> {
+    return ExchangeCodeForTokens(code, codeVerifier);
+}
+
 /** Persist the token bundle to expo-secure-store (keychain on iOS). */
 export async function PersistTokens(tokens: MJAuthTokens): Promise<void> {
     await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(tokens));
+}
+
+/** @deprecated Use {@link PersistTokens}. */
+export async function persistTokens(tokens: MJAuthTokens): Promise<void> {
+    return PersistTokens(tokens);
 }
 
 /**
@@ -151,9 +176,19 @@ export async function LoadStoredTokens(): Promise<MJAuthTokens | null> {
     }
 }
 
+/** @deprecated Use {@link LoadStoredTokens}. */
+export async function loadStoredTokens(): Promise<MJAuthTokens | null> {
+    return LoadStoredTokens();
+}
+
 /** Delete the persisted token bundle from secure-store (best-effort; swallows errors). */
 export async function ClearStoredTokens(): Promise<void> {
     await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined);
+}
+
+/** @deprecated Use {@link ClearStoredTokens}. */
+export async function clearStoredTokens(): Promise<void> {
+    return ClearStoredTokens();
 }
 
 /**
@@ -178,6 +213,11 @@ export async function RefreshTokens(): Promise<MJAuthTokens> {
     return tokens;
 }
 
+/** @deprecated Use {@link RefreshTokens}. */
+export async function refreshTokens(): Promise<MJAuthTokens> {
+    return RefreshTokens();
+}
+
 /**
  * Returns a usable idToken — refreshes if expired or near-expiry.
  * Throws if no tokens are stored or refresh fails.
@@ -194,6 +234,11 @@ export async function GetValidIdToken(): Promise<string> {
     return current.idToken;
 }
 
+/** @deprecated Use {@link GetValidIdToken}. */
+export async function getValidIdToken(): Promise<string> {
+    return GetValidIdToken();
+}
+
 /**
  * Whether a bundle should be treated as expired (missing, or within 60s of
  * `expiresAt`). Unknown expiry (`expiresAt === 0`) is treated as NOT expired —
@@ -205,4 +250,9 @@ export function IsExpired(tokens: MJAuthTokens | null): boolean {
     if (!tokens) return true;
     if (!tokens.expiresAt) return false; // unknown expiry — let server tell us
     return tokens.expiresAt - Date.now() < 60_000;
+}
+
+/** @deprecated Use {@link IsExpired}. */
+export function isExpired(tokens: MJAuthTokens | null): boolean {
+    return IsExpired(tokens);
 }

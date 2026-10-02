@@ -60,7 +60,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
   it('invokes SQLExpressionValidator.validateFullQuery with exactly the ad-hoc SQL before executing', async () => {
     const provider = makeProvider();
     const sqlText = 'SELECT TOP 10 ID, Name FROM __mj.vwUsers ORDER BY Name';
-    const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'validateFullQuery');
+    const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'ValidateFullQuery');
     mssqlState.QueueResult({ rows: [{ ID: '1', Name: 'Alice' }] });
 
     const result = await provider.RunQueryDirect({ SQL: sqlText }, TEST_USER);
@@ -173,7 +173,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
   it('routes to the ad-hoc path when BOTH SQL and QueryID are supplied (SQL wins)', async () => {
     const provider = makeProvider();
     const sqlText = 'SELECT 1 AS One';
-    const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'validateFullQuery');
+    const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'ValidateFullQuery');
     mssqlState.QueueResult({ rows: [{ One: 1 }] });
 
     const result = await provider.RunQueryDirect(
@@ -191,7 +191,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
 
   it('falls through to the saved-query path (and fails cleanly) when SQL is not provided', async () => {
     const provider = makeProvider();
-    const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'validateFullQuery');
+    const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'ValidateFullQuery');
 
     const result = await provider.RunQueryDirect(
       { QueryID: 'AAAAAAAA-0000-0000-0000-000000000001' },

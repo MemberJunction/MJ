@@ -1,23 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import {
-    distillGoalPostconditions,
-    executeGoalPostconditions,
-    evaluatePreludeLanding,
-    isCheckpointRun,
-    latchDeterministic,
-    latchVisualFromVerdict,
-    unlatchedVisualCriteria,
-    allCheckpointsMet,
-    countMetCheckpoints,
-    synthesizeCheckpointVerdict,
-    findCheckpoint,
-    checkpointVisualCriteria,
+    DistillGoalPostconditions,
+    ExecuteGoalPostconditions,
+    EvaluatePreludeLanding,
+    IsCheckpointRun,
+    LatchDeterministic,
+    LatchVisualFromVerdict,
+    UnlatchedVisualCriteria,
+    AllCheckpointsMet,
+    CountMetCheckpoints,
+    SynthesizeCheckpointVerdict,
+    FindCheckpoint,
+    CheckpointVisualCriteria,
     CheckpointLatch,
-    makeJudgeCacheKey,
+    MakeJudgeCacheKey,
     JudgeVerdictCache,
-    gateImpossibleVerdict,
+    GateImpossibleVerdict,
     DEFAULT_IMPOSSIBLE_QUORUM,
-    buildFailureMemo,
+    BuildFailureMemo,
     DEFAULT_FAILURE_MEMO_MAX_CHARS,
 } from '../engine/verdict.js';
 import { StepRecord, JudgeVerdict } from '../types/judge.js';
@@ -40,7 +40,7 @@ describe('distillGoalPostconditions', () => {
     it('distills a normalized final-URL postcondition', () => {
         const step = new StepRecord();
         step.UrlAfter = `http://localhost:4200/app/record/${UUID}`;
-        const posts = distillGoalPostconditions({ finalStep: step });
+        const posts = DistillGoalPostconditions({ finalStep: step });
         expect(posts[0].Kind).toBe('url');
         expect(posts[0].UrlPattern).toBe('http://localhost:4200/app/record/{uuid}');
     });
@@ -55,14 +55,14 @@ describe('distillGoalPostconditions', () => {
             el('heading', 'Extra', '#h4'),   // 4th ignored (cap 3)
             el('button', 'Save', '#save'),   // non-heading ignored
         ];
-        const posts = distillGoalPostconditions({ finalStep: step });
+        const posts = DistillGoalPostconditions({ finalStep: step });
         const visible = posts.filter(p => p.Kind === 'visible');
         expect(visible).toHaveLength(3);
         expect(visible.map(p => p.Target?.Name)).toEqual(['Data Explorer', 'Members', 'Details']);
     });
 
     it('returns [] when there is no URL and no headings', () => {
-        expect(distillGoalPostconditions({})).toEqual([]);
+        expect(DistillGoalPostconditions({})).toEqual([]);
     });
 });
 
@@ -78,7 +78,7 @@ describe('executeGoalPostconditions', () => {
     }
 
     it('passes when the URL matches and the element is present', () => {
-        const r = executeGoalPostconditions(
+        const r = ExecuteGoalPostconditions(
             [urlPost('/app/data'), visiblePost('heading', 'Data Explorer')],
             { url: 'http://x/app/data/list', elements: [el('heading', 'Data Explorer Page')] },
         );
@@ -86,13 +86,13 @@ describe('executeGoalPostconditions', () => {
     });
 
     it('fails when the URL does not match', () => {
-        const r = executeGoalPostconditions([urlPost('/app/data')], { url: 'http://x/app/home', elements: [] });
+        const r = ExecuteGoalPostconditions([urlPost('/app/data')], { url: 'http://x/app/home', elements: [] });
         expect(r.passed).toBe(false);
         expect(r.results[0].detail).toContain('did not match');
     });
 
     it('fails when an expected element is absent', () => {
-        const r = executeGoalPostconditions([visiblePost('heading', 'Missing')], { url: 'http://x', elements: [el('heading', 'Present')] });
+        const r = ExecuteGoalPostconditions([visiblePost('heading', 'Missing')], { url: 'http://x', elements: [el('heading', 'Present')] });
         expect(r.passed).toBe(false);
     });
 
@@ -101,28 +101,28 @@ describe('executeGoalPostconditions', () => {
             Kind: 'absent',
             Target: Object.assign(new TraceTarget(), { Role: 'alert', Name: 'Error' }),
         });
-        expect(executeGoalPostconditions([absent], { url: 'http://x', elements: [el('heading', 'OK')] }).passed).toBe(true);
-        expect(executeGoalPostconditions([absent], { url: 'http://x', elements: [el('alert', 'Error occurred')] }).passed).toBe(false);
+        expect(ExecuteGoalPostconditions([absent], { url: 'http://x', elements: [el('heading', 'OK')] }).passed).toBe(true);
+        expect(ExecuteGoalPostconditions([absent], { url: 'http://x', elements: [el('alert', 'Error occurred')] }).passed).toBe(false);
     });
 });
 
 
 describe('evaluatePreludeLanding', () => {
     it('lands trivially when nothing is declared', () => {
-        expect(evaluatePreludeLanding({ hasSelector: false, selectorVisible: false, hasUrl: false, urlMatched: false }).landed).toBe(true);
+        expect(EvaluatePreludeLanding({ hasSelector: false, selectorVisible: false, hasUrl: false, urlMatched: false }).landed).toBe(true);
     });
     it('fails when a declared selector is not visible', () => {
-        const r = evaluatePreludeLanding({ hasSelector: true, selectorVisible: false, hasUrl: false, urlMatched: false });
+        const r = EvaluatePreludeLanding({ hasSelector: true, selectorVisible: false, hasUrl: false, urlMatched: false });
         expect(r.landed).toBe(false);
         expect(r.reason).toContain('element not visible');
     });
     it('fails when a declared URL pattern does not match', () => {
-        const r = evaluatePreludeLanding({ hasSelector: false, selectorVisible: false, hasUrl: true, urlMatched: false });
+        const r = EvaluatePreludeLanding({ hasSelector: false, selectorVisible: false, hasUrl: true, urlMatched: false });
         expect(r.landed).toBe(false);
         expect(r.reason).toContain('unexpected URL');
     });
     it('lands when the declared selector is visible and URL matches', () => {
-        expect(evaluatePreludeLanding({ hasSelector: true, selectorVisible: true, hasUrl: true, urlMatched: true }).landed).toBe(true);
+        expect(EvaluatePreludeLanding({ hasSelector: true, selectorVisible: true, hasUrl: true, urlMatched: true }).landed).toBe(true);
     });
 });
 
@@ -171,9 +171,9 @@ const noElements: InteractiveElement[] = [];
 
 describe('isCheckpointRun', () => {
     it('is false for undefined / empty, true for ≥1 checkpoint', () => {
-        expect(isCheckpointRun(undefined)).toBe(false);
-        expect(isCheckpointRun([])).toBe(false);
-        expect(isCheckpointRun([urlCp('a', '/a')])).toBe(true);
+        expect(IsCheckpointRun(undefined)).toBe(false);
+        expect(IsCheckpointRun([])).toBe(false);
+        expect(IsCheckpointRun([urlCp('a', '/a')])).toBe(true);
     });
 });
 
@@ -181,7 +181,7 @@ describe('latchDeterministic', () => {
     it('latches a URL checkpoint when the observed URL matches', () => {
         const cps = [urlCp('agents', '/app/agents')];
         const latches = new Map<string, CheckpointLatch>();
-        latchDeterministic(cps, latches, { url: 'http://host/app/agents', elements: noElements }, 3);
+        LatchDeterministic(cps, latches, { url: 'http://host/app/agents', elements: noElements }, 3);
         expect(latches.get('agents')?.met).toBe(true);
         expect(latches.get('agents')?.assertionsMet).toBe(true);
         expect(latches.get('agents')?.stepLatched).toBe(3);
@@ -190,15 +190,15 @@ describe('latchDeterministic', () => {
     it('does NOT latch when the URL does not match', () => {
         const cps = [urlCp('agents', '/app/agents')];
         const latches = new Map<string, CheckpointLatch>();
-        latchDeterministic(cps, latches, { url: 'http://host/app/prompts', elements: noElements }, 1);
+        LatchDeterministic(cps, latches, { url: 'http://host/app/prompts', elements: noElements }, 1);
         expect(latches.get('agents')?.met).toBe(false);
     });
 
     it('is sticky — stays met after the agent navigates away', () => {
         const cps = [urlCp('agents', '/app/agents')];
         const latches = new Map<string, CheckpointLatch>();
-        latchDeterministic(cps, latches, { url: 'http://host/app/agents', elements: noElements }, 2);
-        latchDeterministic(cps, latches, { url: 'http://host/app/models', elements: noElements }, 5);
+        LatchDeterministic(cps, latches, { url: 'http://host/app/agents', elements: noElements }, 2);
+        LatchDeterministic(cps, latches, { url: 'http://host/app/models', elements: noElements }, 5);
         const l = latches.get('agents');
         expect(l?.met).toBe(true);
         expect(l?.stepLatched).toBe(2); // stamped at first latch, not overwritten
@@ -207,14 +207,14 @@ describe('latchDeterministic', () => {
     it('latches a visible checkpoint when the element is present', () => {
         const cps = [visibleCp('agents', 'heading', 'Agents')];
         const latches = new Map<string, CheckpointLatch>();
-        latchDeterministic(cps, latches, { url: 'http://host/x', elements: [el('heading', 'Agents')] }, 4);
+        LatchDeterministic(cps, latches, { url: 'http://host/x', elements: [el('heading', 'Agents')] }, 4);
         expect(latches.get('agents')?.met).toBe(true);
     });
 
     it('does NOT latch a visible checkpoint when no elements are available (grounding off)', () => {
         const cps = [visibleCp('agents', 'heading', 'Agents')];
         const latches = new Map<string, CheckpointLatch>();
-        latchDeterministic(cps, latches, { url: 'http://host/x', elements: noElements }, 4);
+        LatchDeterministic(cps, latches, { url: 'http://host/x', elements: noElements }, 4);
         expect(latches.get('agents')?.met).toBe(false);
     });
 });
@@ -224,10 +224,10 @@ describe('latchVisualFromVerdict', () => {
         const cps = [visualCp('chart', ['bars rendered', 'legend visible'])];
         const latches = new Map<string, CheckpointLatch>();
 
-        latchVisualFromVerdict(cps, latches, verdict([{ criterion: 'bars rendered', met: true }, { criterion: 'legend visible', met: false }]), 2);
+        LatchVisualFromVerdict(cps, latches, verdict([{ criterion: 'bars rendered', met: true }, { criterion: 'legend visible', met: false }]), 2);
         expect(latches.get('chart')?.met).toBe(false);
 
-        latchVisualFromVerdict(cps, latches, verdict([{ criterion: 'bars rendered', met: true }, { criterion: 'legend visible', met: true }]), 4);
+        LatchVisualFromVerdict(cps, latches, verdict([{ criterion: 'bars rendered', met: true }, { criterion: 'legend visible', met: true }]), 4);
         expect(latches.get('chart')?.met).toBe(true);
         expect(latches.get('chart')?.stepLatched).toBe(4);
     });
@@ -245,7 +245,7 @@ describe('latchVisualFromVerdict scalar fallback (judge omitted the per-criterio
     it('latches pending visual criteria when the scalar verdict says Done', () => {
         const cps = [visualCp('chart', ['bars rendered', 'legend visible'])];
         const latches = new Map<string, CheckpointLatch>();
-        latchVisualFromVerdict(cps, latches, scalarVerdict(true), 3);
+        LatchVisualFromVerdict(cps, latches, scalarVerdict(true), 3);
         expect(latches.get('chart')?.met).toBe(true);
         expect(latches.get('chart')?.evidence).toContain('looks right');
     });
@@ -253,7 +253,7 @@ describe('latchVisualFromVerdict scalar fallback (judge omitted the per-criterio
     it('does NOT latch when the scalar verdict says not-Done', () => {
         const cps = [visualCp('chart', ['bars rendered'])];
         const latches = new Map<string, CheckpointLatch>();
-        latchVisualFromVerdict(cps, latches, scalarVerdict(false), 3);
+        LatchVisualFromVerdict(cps, latches, scalarVerdict(false), 3);
         expect(latches.get('chart')?.met).toBe(false);
     });
 
@@ -263,7 +263,7 @@ describe('latchVisualFromVerdict scalar fallback (judge omitted the per-criterio
         const latches = new Map<string, CheckpointLatch>();
         const v = verdict([{ criterion: 'bars rendered', met: true }, { criterion: 'legend visible', met: false }]);
         v.Done = true;
-        latchVisualFromVerdict(cps, latches, v, 2);
+        LatchVisualFromVerdict(cps, latches, v, 2);
         expect(latches.get('chart')?.met).toBe(false);
     });
 });
@@ -276,12 +276,12 @@ describe('checkpoint with both assertions AND visual criteria', () => {
         const latches = new Map<string, CheckpointLatch>();
 
         // assertions pass but visual still pending → not met
-        latchDeterministic(cps, latches, { url: 'http://host/app/prompts/123', elements: noElements }, 1);
+        LatchDeterministic(cps, latches, { url: 'http://host/app/prompts/123', elements: noElements }, 1);
         expect(latches.get('prompt')?.assertionsMet).toBe(true);
         expect(latches.get('prompt')?.met).toBe(false);
 
         // visual now met → fully met
-        latchVisualFromVerdict(cps, latches, verdict([{ criterion: 'run-history chart rendered', met: true }]), 3);
+        LatchVisualFromVerdict(cps, latches, verdict([{ criterion: 'run-history chart rendered', met: true }]), 3);
         expect(latches.get('prompt')?.met).toBe(true);
         expect(latches.get('prompt')?.stepLatched).toBe(3);
     });
@@ -291,41 +291,41 @@ describe('unlatchedVisualCriteria', () => {
     it('returns the union of pending visual criteria (dedup), empty when none pending', () => {
         const cps = [visualCp('a', ['x', 'y']), visualCp('b', ['y', 'z']), urlCp('c', '/c')];
         const latches = new Map<string, CheckpointLatch>();
-        expect(unlatchedVisualCriteria(cps, latches)).toEqual(['x', 'y', 'z']);
+        expect(UnlatchedVisualCriteria(cps, latches)).toEqual(['x', 'y', 'z']);
 
         // latch 'a' visually → its criteria drop out; 'b' still pending
-        latchVisualFromVerdict(cps, latches, verdict([{ criterion: 'x', met: true }, { criterion: 'y', met: true }]), 1);
-        expect(unlatchedVisualCriteria(cps, latches)).toEqual(['y', 'z']);
+        LatchVisualFromVerdict(cps, latches, verdict([{ criterion: 'x', met: true }, { criterion: 'y', met: true }]), 1);
+        expect(UnlatchedVisualCriteria(cps, latches)).toEqual(['y', 'z']);
     });
 
     it('is empty for a pure-deterministic tour (no judge needed)', () => {
         const cps = [urlCp('a', '/a'), urlCp('b', '/b')];
-        expect(unlatchedVisualCriteria(cps, new Map())).toEqual([]);
+        expect(UnlatchedVisualCriteria(cps, new Map())).toEqual([]);
     });
 });
 
 describe('findCheckpoint + checkpointVisualCriteria (checkpoint scoping)', () => {
     it('findCheckpoint matches case-insensitively and trims', () => {
         const cps = [visualCp('Agents List', ['x'])];
-        expect(findCheckpoint(cps, '  agents list ')?.Name).toBe('Agents List');
-        expect(findCheckpoint(cps, 'nope')).toBeUndefined();
+        expect(FindCheckpoint(cps, '  agents list ')?.Name).toBe('Agents List');
+        expect(FindCheckpoint(cps, 'nope')).toBeUndefined();
     });
 
     it('scopes to a single checkpoint’s pending visual criteria', () => {
         const cps = [visualCp('a', ['x', 'y']), visualCp('b', ['z'])];
         const latches = new Map<string, CheckpointLatch>();
-        expect(checkpointVisualCriteria(cps, latches, 'a')).toEqual(['x', 'y']);
-        expect(checkpointVisualCriteria(cps, latches, 'b')).toEqual(['z']);
+        expect(CheckpointVisualCriteria(cps, latches, 'a')).toEqual(['x', 'y']);
+        expect(CheckpointVisualCriteria(cps, latches, 'b')).toEqual(['z']);
     });
 
     it('returns empty for unknown name, deterministic-only checkpoint, or already-latched visual', () => {
         const cps = [visualCp('a', ['x']), urlCp('det', '/d')];
         const latches = new Map<string, CheckpointLatch>();
-        expect(checkpointVisualCriteria(cps, latches, 'unknown')).toEqual([]);
-        expect(checkpointVisualCriteria(cps, latches, 'det')).toEqual([]);
+        expect(CheckpointVisualCriteria(cps, latches, 'unknown')).toEqual([]);
+        expect(CheckpointVisualCriteria(cps, latches, 'det')).toEqual([]);
 
-        latchVisualFromVerdict(cps, latches, verdict([{ criterion: 'x', met: true }]), 1);
-        expect(checkpointVisualCriteria(cps, latches, 'a')).toEqual([]);
+        LatchVisualFromVerdict(cps, latches, verdict([{ criterion: 'x', met: true }]), 1);
+        expect(CheckpointVisualCriteria(cps, latches, 'a')).toEqual([]);
     });
 });
 
@@ -333,10 +333,10 @@ describe('allCheckpointsMet + synthesizeCheckpointVerdict', () => {
     it('a partial tour is not Done and reports unmet sections', () => {
         const cps = [urlCp('agents', '/app/agents'), urlCp('models', '/app/models')];
         const latches = new Map<string, CheckpointLatch>();
-        latchDeterministic(cps, latches, { url: 'http://host/app/agents', elements: noElements }, 1);
+        LatchDeterministic(cps, latches, { url: 'http://host/app/agents', elements: noElements }, 1);
 
-        expect(allCheckpointsMet(cps, latches)).toBe(false);
-        const v = synthesizeCheckpointVerdict(cps, latches);
+        expect(AllCheckpointsMet(cps, latches)).toBe(false);
+        const v = SynthesizeCheckpointVerdict(cps, latches);
         expect(v.Done).toBe(false);
         expect(v.Confidence).toBe(0.5);
         expect(v.CriteriaVerdicts).toHaveLength(2);
@@ -348,11 +348,11 @@ describe('allCheckpointsMet + synthesizeCheckpointVerdict', () => {
     it('a fully-reached tour is Done with confidence 1', () => {
         const cps = [urlCp('agents', '/app/agents'), urlCp('models', '/app/models')];
         const latches = new Map<string, CheckpointLatch>();
-        latchDeterministic(cps, latches, { url: 'http://host/app/agents', elements: noElements }, 1);
-        latchDeterministic(cps, latches, { url: 'http://host/app/models', elements: noElements }, 2);
+        LatchDeterministic(cps, latches, { url: 'http://host/app/agents', elements: noElements }, 1);
+        LatchDeterministic(cps, latches, { url: 'http://host/app/models', elements: noElements }, 2);
 
-        expect(allCheckpointsMet(cps, latches)).toBe(true);
-        const v = synthesizeCheckpointVerdict(cps, latches);
+        expect(AllCheckpointsMet(cps, latches)).toBe(true);
+        const v = SynthesizeCheckpointVerdict(cps, latches);
         expect(v.Done).toBe(true);
         expect(v.Confidence).toBe(1);
         expect(v.CriteriaVerdicts?.every(c => c.met)).toBe(true);
@@ -362,35 +362,35 @@ describe('allCheckpointsMet + synthesizeCheckpointVerdict', () => {
         const empty = new RunCheckpoint();
         empty.Name = 'noop';
         const latches = new Map<string, CheckpointLatch>();
-        expect(allCheckpointsMet([empty], latches)).toBe(true);
+        expect(AllCheckpointsMet([empty], latches)).toBe(true);
     });
 });
 
 describe('countMetCheckpoints', () => {
     it('counts zero when nothing has latched', () => {
         const cps = [urlCp('a', '/a'), urlCp('b', '/b')];
-        expect(countMetCheckpoints(cps, new Map())).toBe(0);
+        expect(CountMetCheckpoints(cps, new Map())).toBe(0);
     });
 
     it('counts each checkpoint as it latches', () => {
         const cps = [urlCp('a', '/a'), urlCp('b', '/b')];
         const latches = new Map<string, CheckpointLatch>();
-        latchDeterministic(cps, latches, { url: 'https://app/a', elements: [] }, 1);
-        expect(countMetCheckpoints(cps, latches)).toBe(1);
-        latchDeterministic(cps, latches, { url: 'https://app/b', elements: [] }, 2);
-        expect(countMetCheckpoints(cps, latches)).toBe(2);
+        LatchDeterministic(cps, latches, { url: 'https://app/a', elements: [] }, 1);
+        expect(CountMetCheckpoints(cps, latches)).toBe(1);
+        LatchDeterministic(cps, latches, { url: 'https://app/b', elements: [] }, 2);
+        expect(CountMetCheckpoints(cps, latches)).toBe(2);
     });
 
     it('agrees with allCheckpointsMet at full coverage', () => {
         const cps = [urlCp('only', '/only')];
         const latches = new Map<string, CheckpointLatch>();
-        latchDeterministic(cps, latches, { url: 'https://app/only', elements: [] }, 1);
-        expect(countMetCheckpoints(cps, latches)).toBe(cps.length);
-        expect(allCheckpointsMet(cps, latches)).toBe(true);
+        LatchDeterministic(cps, latches, { url: 'https://app/only', elements: [] }, 1);
+        expect(CountMetCheckpoints(cps, latches)).toBe(cps.length);
+        expect(AllCheckpointsMet(cps, latches)).toBe(true);
     });
 
     it('returns 0 for an empty checkpoint list', () => {
-        expect(countMetCheckpoints([], new Map())).toBe(0);
+        expect(CountMetCheckpoints([], new Map())).toBe(0);
     });
 });
 
@@ -401,17 +401,17 @@ const UUID_B = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 describe('makeJudgeCacheKey', () => {
     it('is stable for the same goal/url/state', () => {
-        expect(makeJudgeCacheKey('g1', 'http://x/app/data', 's1')).toBe(makeJudgeCacheKey('g1', 'http://x/app/data', 's1'));
+        expect(MakeJudgeCacheKey('g1', 'http://x/app/data', 's1')).toBe(MakeJudgeCacheKey('g1', 'http://x/app/data', 's1'));
     });
 
     it('normalizes the URL (per-record UUIDs key the same)', () => {
-        const a = makeJudgeCacheKey('g1', `http://x/r/${UUID_A}`, 's1');
-        const b = makeJudgeCacheKey('g1', `http://x/r/${UUID_B}`, 's1');
+        const a = MakeJudgeCacheKey('g1', `http://x/r/${UUID_A}`, 's1');
+        const b = MakeJudgeCacheKey('g1', `http://x/r/${UUID_B}`, 's1');
         expect(a).toBe(b);
     });
 
     it('differs when the state hash differs', () => {
-        expect(makeJudgeCacheKey('g1', 'http://x', 's1')).not.toBe(makeJudgeCacheKey('g1', 'http://x', 's2'));
+        expect(MakeJudgeCacheKey('g1', 'http://x', 's1')).not.toBe(MakeJudgeCacheKey('g1', 'http://x', 's2'));
     });
 });
 
@@ -419,7 +419,7 @@ describe('JudgeVerdictCache', () => {
     it('stores and retrieves verdicts by key', () => {
         const cache = new JudgeVerdictCache();
         const v = Object.assign(new JudgeVerdict(), { Impossible: true, Reason: 'no permission' });
-        const key = makeJudgeCacheKey('g', 'http://x', 's');
+        const key = MakeJudgeCacheKey('g', 'http://x', 's');
 
         expect(cache.has(key)).toBe(false);
         cache.set(key, v);
@@ -430,7 +430,7 @@ describe('JudgeVerdictCache', () => {
 
     it('clears', () => {
         const cache = new JudgeVerdictCache();
-        cache.set(makeJudgeCacheKey('g', 'http://x', 's'), new JudgeVerdict());
+        cache.set(MakeJudgeCacheKey('g', 'http://x', 's'), new JudgeVerdict());
         cache.clear();
         expect(cache.size).toBe(0);
     });
@@ -442,26 +442,26 @@ describe('gateImpossibleVerdict', () => {
     const base = { impossible: true, pageLoading: false, priorCount: 0, quorum: 2 };
 
     it('does not accept the first Impossible (needs a quorum)', () => {
-        const r = gateImpossibleVerdict(base);
+        const r = GateImpossibleVerdict(base);
         expect(r.accept).toBe(false);
         expect(r.newCount).toBe(1);
         expect(r.suppressed).toBe(false);
     });
 
     it('accepts the second concurring Impossible', () => {
-        const r = gateImpossibleVerdict({ ...base, priorCount: 1 });
+        const r = GateImpossibleVerdict({ ...base, priorCount: 1 });
         expect(r.accept).toBe(true);
         expect(r.newCount).toBe(2);
     });
 
     it('resets the count on a non-Impossible verdict', () => {
-        const r = gateImpossibleVerdict({ ...base, impossible: false, priorCount: 1 });
+        const r = GateImpossibleVerdict({ ...base, impossible: false, priorCount: 1 });
         expect(r.accept).toBe(false);
         expect(r.newCount).toBe(0);
     });
 
     it('suppresses Impossible while the page is loading and holds the count', () => {
-        const r = gateImpossibleVerdict({ ...base, pageLoading: true, priorCount: 1 });
+        const r = GateImpossibleVerdict({ ...base, pageLoading: true, priorCount: 1 });
         expect(r.accept).toBe(false);
         expect(r.suppressed).toBe(true);
         expect(r.newCount).toBe(1); // held — neither built toward nor cleared
@@ -470,7 +470,7 @@ describe('gateImpossibleVerdict', () => {
     it('a loading boot screen never reaches quorum on its own', () => {
         let count = 0;
         for (let i = 0; i < 5; i++) {
-            const r = gateImpossibleVerdict({ impossible: true, pageLoading: true, priorCount: count, quorum: 2 });
+            const r = GateImpossibleVerdict({ impossible: true, pageLoading: true, priorCount: count, quorum: 2 });
             count = r.newCount;
             expect(r.accept).toBe(false);
         }
@@ -478,7 +478,7 @@ describe('gateImpossibleVerdict', () => {
     });
 
     it('honors a quorum of 1 (accept immediately)', () => {
-        expect(gateImpossibleVerdict({ ...base, quorum: 1 }).accept).toBe(true);
+        expect(GateImpossibleVerdict({ ...base, quorum: 1 }).accept).toBe(true);
     });
 
     it('exposes a sane default quorum', () => {
@@ -490,13 +490,13 @@ describe('gateImpossibleVerdict', () => {
 
 describe('buildFailureMemo', () => {
     it('states the terminal status and reason', () => {
-        const memo = buildFailureMemo({ status: 'Failed', failureReason: 'LoopDetected', finalUrl: 'http://x/app/data' });
+        const memo = BuildFailureMemo({ status: 'Failed', failureReason: 'LoopDetected', finalUrl: 'http://x/app/data' });
         expect(memo).toContain('Failed (LoopDetected)');
         expect(memo).toContain('/app/data');
     });
 
     it('includes judge reason + distinct feedback', () => {
-        const memo = buildFailureMemo({
+        const memo = BuildFailureMemo({
             status: 'MaxStepsReached',
             judgeReason: 'the record was never saved',
             judgeFeedback: 'click Save, not Cancel',
@@ -506,17 +506,17 @@ describe('buildFailureMemo', () => {
     });
 
     it('does not duplicate feedback identical to the reason', () => {
-        const memo = buildFailureMemo({ status: 'Failed', judgeReason: 'same', judgeFeedback: 'same' });
+        const memo = BuildFailureMemo({ status: 'Failed', judgeReason: 'same', judgeFeedback: 'same' });
         expect(memo.match(/same/g)).toHaveLength(1);
     });
 
     it('surfaces loop evidence as "avoid repeating"', () => {
-        const memo = buildFailureMemo({ status: 'Failed', loopEvidence: 'visited /app/switcher 4×' });
+        const memo = BuildFailureMemo({ status: 'Failed', loopEvidence: 'visited /app/switcher 4×' });
         expect(memo).toContain('Avoid repeating: visited /app/switcher 4×');
     });
 
     it('renders a deduped recent-path trail excluding the final URL', () => {
-        const memo = buildFailureMemo({
+        const memo = BuildFailureMemo({
             status: 'Failed',
             finalUrl: 'http://x/app/data',
             recentUrls: ['http://x/app/home', 'http://x/app/home', 'http://x/app/switcher', 'http://x/app/data'],
@@ -526,7 +526,7 @@ describe('buildFailureMemo', () => {
     });
 
     it('bounds the memo to the char cap', () => {
-        const memo = buildFailureMemo({
+        const memo = BuildFailureMemo({
             status: 'Failed',
             judgeReason: 'x'.repeat(2000),
         }, 120);
@@ -535,7 +535,7 @@ describe('buildFailureMemo', () => {
     });
 
     it('uses the default cap when unspecified', () => {
-        const memo = buildFailureMemo({ status: 'Failed', judgeReason: 'y'.repeat(5000) });
+        const memo = BuildFailureMemo({ status: 'Failed', judgeReason: 'y'.repeat(5000) });
         expect(memo.length).toBeLessThanOrEqual(DEFAULT_FAILURE_MEMO_MAX_CHARS);
     });
 });

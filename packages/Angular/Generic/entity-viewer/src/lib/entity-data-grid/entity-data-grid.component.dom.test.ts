@@ -1,10 +1,18 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, Input } from '@angular/core';
-import { renderComponentFixture, query, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { EntityInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { EntityDataGridComponent } from './entity-data-grid.component';
 import { ExportService } from '@memberjunction/ng-export-service';
+
+// The grid checks, per entity, whether Send Message applies. These specs cover toolbar chrome with a
+// stub provider that has no RunViews, so the communication engine is stubbed to "no message types".
+vi.mock('@memberjunction/communication-types', () => ({
+  CommunicationEngineBase: {
+    GetProviderInstance: () => ({ Config: async () => {}, Metadata: { EntityCommunicationMessageTypes: [] } }),
+  },
+}));
 
 /**
  * DOM coverage for <mj-entity-data-grid> — the AG-Grid-backed entity grid (~10×, the largest Generic
@@ -33,14 +41,20 @@ class ActionHostStub { @Input() Context: unknown; @Input() DriverClass = ''; }
 const CHILDREN = [AgGridStub, PaginationStub, ExportDialogStub, RecycleChipStub, ActionHostStub, StubEmptyStateComponent, StubLoadingComponent];
 type RefreshProto = { Refresh: () => Promise<void> };
 
-function render(inputs: Record<string, unknown> = {}, rowCount = 0) {
+function render(inputs: Record<string, unknown> = {}, rowCount = 0, entityInfo: EntityInfo | null = null) {
   vi.spyOn(EntityDataGridComponent.prototype as unknown as RefreshProto, 'Refresh').mockResolvedValue(undefined);
   return renderComponentFixture(EntityDataGridComponent, {
     imports: CHILDREN,
     declarations: [EntityDataGridComponent],
     providers: [{ provide: ExportService, useValue: {} }],
     inputs: { ShowToolbar: true, ...inputs },
-    setup: (c) => { (c as unknown as { totalRowCount: number }).totalRowCount = rowCount; },
+    setup: (c) => {
+      const priv = c as unknown as { totalRowCount: number; _entityInfo: EntityInfo | null };
+      priv.totalRowCount = rowCount;
+      if (entityInfo) {
+        priv._entityInfo = entityInfo;
+      }
+    },
   });
 }
 type Fx = ReturnType<typeof render>;
@@ -48,6 +62,16 @@ type Fx = ReturnType<typeof render>;
 afterEach(() => vi.restoreAllMocks());
 
 describe('EntityDataGridComponent (DOM)', () => {
+  // Pinned because a broken template expression still type-checks and would pass a presence check.
+  it('names the entity in the empty-state title once metadata is set', () => {
+    const named = { DisplayNamePlural: 'Accounts' } as unknown as EntityInfo;
+    expect(text(render({}, 0, named), '.stub-empty-title')).toBe('No Accounts to display');
+  });
+
+  it('falls back to the generic empty-state title before metadata is set', () => {
+    expect(text(render(), '.stub-empty-title')).toBe('No data to display');
+  });
+
   it('renders the toolbar when ShowToolbar is true', () => {
     expect(query(render({ ShowToolbar: true }), '.mj-grid-toolbar')).not.toBeNull();
   });

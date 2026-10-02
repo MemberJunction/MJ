@@ -39,13 +39,27 @@ export class AudienceSourceSummaryComponent extends BaseAngularComponent {
   @Input() RecordCount: number | null = null;
 
   public label: string | null = null;
-  public icon = 'fa-solid fa-bullseye';
+  public Icon = 'fa-solid fa-bullseye';
 
-  public get kindLabel(): string {
+  /** @deprecated Use {@link Icon}. */
+  public get icon() {
+    return this.Icon;
+  }
+  /** @deprecated Use {@link Icon}. */
+  public set icon(value) {
+    this.Icon = value;
+  }
+
+  public get KindLabel(): string {
     if (!this._source) return '';
     if (this._source.kind === 'list') return 'List';
     if (this._source.kind === 'view') return 'View';
     return 'Ad-hoc Filter';
+  }
+
+  /** @deprecated Use {@link KindLabel}. */
+  public get kindLabel(): string {
+    return this.KindLabel;
   }
 
   /**
@@ -62,15 +76,15 @@ export class AudienceSourceSummaryComponent extends BaseAngularComponent {
         const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', this.ProviderToUse.CurrentUser ?? undefined);
         const loaded = await list.Load(source.listId);
         this.label = loaded ? list.Name : source.listId;
-        this.icon = 'fa-solid fa-list';
+        this.Icon = 'fa-solid fa-list';
       } else if (source.kind === 'view') {
         const view = await md.GetEntityObject<MJUserViewEntity>('MJ: User Views', this.ProviderToUse.CurrentUser ?? undefined);
         const loaded = await view.Load(source.viewId);
         this.label = loaded ? view.Name : source.viewId;
-        this.icon = 'fa-solid fa-eye';
+        this.Icon = 'fa-solid fa-eye';
       } else {
         this.label = `${source.entityName} — ${this.truncate(source.extraFilter, 80)}`;
-        this.icon = 'fa-solid fa-filter';
+        this.Icon = 'fa-solid fa-filter';
       }
     } catch {
       this.label = '(unable to resolve)';

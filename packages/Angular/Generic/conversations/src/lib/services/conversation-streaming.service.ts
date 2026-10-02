@@ -43,56 +43,114 @@ export class ConversationStreamingService implements OnDestroy {
     }
 
     /** Pass-through to {@link ConversationsRuntime.Instance.Streaming.completionEvents$}. */
-    public get completionEvents$(): Subject<CompletionEvent> {
+    public get CompletionEvents$(): Subject<CompletionEvent> {
         return this.streaming.completionEvents$;
+    }
+
+    /** @deprecated Use {@link CompletionEvents$}. */
+    public get completionEvents$(): Subject<CompletionEvent> {
+        return this.CompletionEvents$;
     }
 
     public initialize(): void {
         this.streaming.initialize();
     }
 
-    public getConnectionStatus$(): Observable<StreamingConnectionStatus> {
+    public GetConnectionStatus$(): Observable<StreamingConnectionStatus> {
         return this.streaming.getConnectionStatus$();
     }
 
-    public getConnectionStatus(): StreamingConnectionStatus {
+    /** @deprecated Use {@link GetConnectionStatus$}. */
+    public getConnectionStatus$(): Observable<StreamingConnectionStatus> {
+        return this.GetConnectionStatus$();
+    }
+
+    public GetConnectionStatus(): StreamingConnectionStatus {
         return this.streaming.getConnectionStatus();
     }
 
-    public registerMessageCallback(
+    /** @deprecated Use {@link GetConnectionStatus}. */
+    public getConnectionStatus(): StreamingConnectionStatus {
+        return this.GetConnectionStatus();
+    }
+
+    public RegisterMessageCallback(
         conversationDetailId: string,
         callback: MessageProgressCallback
     ): void {
         this.streaming.registerMessageCallback(conversationDetailId, callback);
     }
 
-    public unregisterMessageCallback(
+    /** @deprecated Use {@link RegisterMessageCallback}. */
+    public registerMessageCallback(
+        conversationDetailId: string,
+        callback: MessageProgressCallback
+    ): void {
+        return this.RegisterMessageCallback(conversationDetailId, callback);
+    }
+
+    public UnregisterMessageCallback(
         conversationDetailId: string,
         callback?: MessageProgressCallback
     ): void {
         this.streaming.unregisterMessageCallback(conversationDetailId, callback);
     }
 
-    public getRegisteredCallbackCount(): number {
+    /** @deprecated Use {@link UnregisterMessageCallback}. */
+    public unregisterMessageCallback(
+        conversationDetailId: string,
+        callback?: MessageProgressCallback
+    ): void {
+        return this.UnregisterMessageCallback(conversationDetailId, callback);
+    }
+
+    public GetRegisteredCallbackCount(): number {
         return this.streaming.getRegisteredCallbackCount();
     }
 
-    public getTrackedMessageCount(): number {
+    /** @deprecated Use {@link GetRegisteredCallbackCount}. */
+    public getRegisteredCallbackCount(): number {
+        return this.GetRegisteredCallbackCount();
+    }
+
+    public GetTrackedMessageCount(): number {
         return this.streaming.getTrackedMessageCount();
     }
 
-    public getRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
+    /** @deprecated Use {@link GetTrackedMessageCount}. */
+    public getTrackedMessageCount(): number {
+        return this.GetTrackedMessageCount();
+    }
+
+    public GetRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
         return this.streaming.getRecentCompletion(conversationDetailId);
     }
 
-    public clearRecentCompletion(conversationDetailId: string): void {
+    /** @deprecated Use {@link GetRecentCompletion}. */
+    public getRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
+        return this.GetRecentCompletion(conversationDetailId);
+    }
+
+    public ClearRecentCompletion(conversationDetailId: string): void {
         this.streaming.clearRecentCompletion(conversationDetailId);
     }
 
-    public getDiagnosticSnapshot(messageId: string): ReturnType<
+    /** @deprecated Use {@link ClearRecentCompletion}. */
+    public clearRecentCompletion(conversationDetailId: string): void {
+        return this.ClearRecentCompletion(conversationDetailId);
+    }
+
+    public GetDiagnosticSnapshot(messageId: string): ReturnType<
         typeof ConversationsRuntime.Instance.Streaming.getDiagnosticSnapshot
     > {
         return this.streaming.getDiagnosticSnapshot(messageId);
+    }
+
+    /** @deprecated Use {@link GetDiagnosticSnapshot}. */
+    public getDiagnosticSnapshot(messageId: string): ReturnType<
+        typeof ConversationsRuntime.Instance.Streaming.getDiagnosticSnapshot
+    > {
+        return this.GetDiagnosticSnapshot(messageId);
     }
 
     /**

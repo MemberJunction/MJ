@@ -6,99 +6,99 @@ import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity
 import { UUIDsEqual } from '@memberjunction/global';
 
 export interface SchedulingKPIs {
-  totalActiveJobs: number;
-  jobsDueInNextHour: number;
-  recentExecutions24h: number;
-  successRate24h: number;
-  currentlyRunning: number;
-  lockedJobs: number;
-  totalCost24h: number;
-  failureRate7d: number;
-  totalFailures7d: number;
+  totalActiveJobs: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobsDueInNextHour: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  recentExecutions24h: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  successRate24h: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  currentlyRunning: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  lockedJobs: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalCost24h: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  failureRate7d: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalFailures7d: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface JobExecution {
-  id: string;
-  jobId: string;
-  jobName: string;
-  jobType: string;
-  status: 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Timeout';
-  startedAt: Date;
-  completedAt?: Date;
-  duration?: number;
-  success?: boolean;
-  errorMessage?: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobType: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Timeout';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  startedAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  completedAt?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  duration?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  success?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface UpcomingExecution {
-  jobId: string;
-  jobName: string;
-  jobType: string;
-  nextRunAt: Date;
-  cronExpression: string;
-  timezone: string;
+  jobId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobType: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  nextRunAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cronExpression: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  timezone: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface JobStatistics {
-  jobId: string;
-  jobName: string;
-  jobType: string;
-  jobTypeId: string;
-  status: string;
-  description: string | null;
-  cronExpression: string;
-  timezone: string;
-  totalRuns: number;
-  successCount: number;
-  failureCount: number;
-  successRate: number;
-  lastRunAt?: Date;
-  nextRunAt?: Date;
-  concurrencyMode: string;
-  configuration: string | null;
-  ownerUserID: string | null;
-  ownerUser: string | null;
-  notifyOnSuccess: boolean;
-  notifyOnFailure: boolean;
+  jobId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobType: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobTypeId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  description: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cronExpression: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  timezone: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalRuns: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  successCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  failureCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  successRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  lastRunAt?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  nextRunAt?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  concurrencyMode: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  configuration: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  ownerUserID: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  ownerUser: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  notifyOnSuccess: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  notifyOnFailure: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** When true AND lastRunAt is unset, the scheduler runs the job immediately on its next poll instead of waiting for the next cron tick. */
-  runImmediatelyIfNeverRun: boolean;
-  startAt?: Date;
-  endAt?: Date;
-  createdAt: Date;
+  runImmediatelyIfNeverRun: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  startAt?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  endAt?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  createdAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface JobTypeStatistics {
-  typeId: string;
-  typeName: string;
-  activeJobsCount: number;
-  totalRuns: number;
-  successRate: number;
+  typeId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  typeName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  activeJobsCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalRuns: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  successRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ExecutionTrendData {
-  timestamp: Date;
-  executions: number;
-  successes: number;
-  failures: number;
+  timestamp: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  executions: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  successes: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  failures: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface LockInfo {
-  jobId: string;
-  jobName: string;
-  lockToken: string;
-  lockedAt: Date;
-  lockedBy: string;
-  expectedCompletion: Date;
-  isStale: boolean;
+  jobId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  lockToken: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  lockedAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  lockedBy: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  expectedCompletion: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  isStale: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface AlertCondition {
-  type: 'stale-lock' | 'high-failure' | 'job-expired';
-  severity: 'warning' | 'error';
-  title: string;
-  message: string;
-  jobId?: string;
-  jobName?: string;
+  type: 'stale-lock' | 'high-failure' | 'job-expired';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  severity: 'warning' | 'error';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  message: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  jobName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Injectable({
@@ -124,65 +124,125 @@ export class SchedulingInstrumentationService {
   private readonly _refreshTrigger$ = new BehaviorSubject<number>(0);
   private readonly _isLoading$ = new BehaviorSubject<boolean>(false);
 
-  readonly isLoading$ = this._isLoading$.asObservable();
+  readonly IsLoading$ = this._isLoading$.asObservable();
 
-  readonly kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+
+  readonly Kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadKPIs())),
     tap(() => this._isLoading$.next(false)),
     shareReplay(1)
   );
 
-  readonly liveExecutions$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link Kpis$}. */
+  get kpis$() {
+    return this.Kpis$;
+  }
+
+  readonly LiveExecutions$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadLiveExecutions())),
     shareReplay(1)
   );
 
-  readonly upcomingExecutions$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link LiveExecutions$}. */
+  get liveExecutions$() {
+    return this.LiveExecutions$;
+  }
+
+  readonly UpcomingExecutions$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadUpcomingExecutions())),
     shareReplay(1)
   );
 
-  readonly executionHistory$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link UpcomingExecutions$}. */
+  get upcomingExecutions$() {
+    return this.UpcomingExecutions$;
+  }
+
+  readonly ExecutionHistory$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     switchMap(() => from(this.loadExecutionHistory())),
     shareReplay(1)
   );
 
-  readonly executionTrends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link ExecutionHistory$}. */
+  get executionHistory$() {
+    return this.ExecutionHistory$;
+  }
+
+  readonly ExecutionTrends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     switchMap(() => from(this.loadExecutionTrends())),
     shareReplay(1)
   );
 
-  readonly jobStatistics$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link ExecutionTrends$}. */
+  get executionTrends$() {
+    return this.ExecutionTrends$;
+  }
+
+  readonly JobStatistics$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadJobStatistics())),
     shareReplay(1)
   );
 
-  readonly jobTypes$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link JobStatistics$}. */
+  get jobStatistics$() {
+    return this.JobStatistics$;
+  }
+
+  readonly JobTypes$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadJobTypes())),
     shareReplay(1)
   );
 
-  readonly lockInfo$ = this._refreshTrigger$.pipe(
+  /** @deprecated Use {@link JobTypes$}. */
+  get jobTypes$() {
+    return this.JobTypes$;
+  }
+
+  readonly LockInfo$ = this._refreshTrigger$.pipe(
     switchMap(() => from(this.loadLockInfo())),
     shareReplay(1)
   );
 
-  readonly alerts$ = combineLatest([this.lockInfo$, this.kpis$, this.jobStatistics$]).pipe(
+  /** @deprecated Use {@link LockInfo$}. */
+  get lockInfo$() {
+    return this.LockInfo$;
+  }
+
+  readonly Alerts$ = combineLatest([this.LockInfo$, this.Kpis$, this.JobStatistics$]).pipe(
     switchMap(([locks, kpis, jobs]) => from(this.buildAlerts(locks, kpis, jobs))),
     shareReplay(1)
   );
 
-  setDateRange(start: Date, end: Date): void {
+  /** @deprecated Use {@link Alerts$}. */
+  get alerts$() {
+    return this.Alerts$;
+  }
+
+  SetDateRange(start: Date, end: Date): void {
     this._dateRange$.next({ start, end });
+  }
+
+  /** @deprecated Use {@link SetDateRange}. */
+  setDateRange(start: Date, end: Date): void {
+    return this.SetDateRange(start, end);
   }
 
   get CurrentDateRange(): { start: Date; end: Date } {
     return this._dateRange$.value;
   }
 
-  refresh(): void {
+  Refresh(): void {
     this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  refresh(): void {
+    return this.Refresh();
   }
 
   // ── KPIs ──────────────────────────────────────────────────
@@ -549,14 +609,14 @@ export class SchedulingInstrumentationService {
   }
 
   // ── CRUD Operations ───────────────────────────────────────
-  async updateJobStatus(jobId: string, status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired'): Promise<boolean> {
+  async UpdateJobStatus(jobId: string, status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired'): Promise<boolean> {
     try {
       const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       job.Status = status;
       const result = await job.Save();
-      if (result) this.refresh();
+      if (result) this.Refresh();
       return result;
     } catch (error) {
       console.error('Failed to update job status:', error);
@@ -564,7 +624,12 @@ export class SchedulingInstrumentationService {
     }
   }
 
-  async saveJob(jobId: string | null, data: Partial<{
+  /** @deprecated Use {@link UpdateJobStatus}. */
+  async updateJobStatus(jobId: string, status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired'): Promise<boolean> {
+    return this.UpdateJobStatus(jobId, status);
+  }
+
+  async SaveJob(jobId: string | null, data: Partial<{
     Name: string;
     Description: string | null;
     JobTypeID: string;
@@ -602,7 +667,7 @@ export class SchedulingInstrumentationService {
       if (data.NotifyOnFailure !== undefined) job.NotifyOnFailure = data.NotifyOnFailure;
 
       const result = await job.Save();
-      if (result) this.refresh();
+      if (result) this.Refresh();
       return result;
     } catch (error) {
       console.error('Failed to save job:', error);
@@ -610,13 +675,31 @@ export class SchedulingInstrumentationService {
     }
   }
 
-  async deleteJob(jobId: string): Promise<boolean> {
+  /** @deprecated Use {@link SaveJob}. */
+  async saveJob(jobId: string | null, data: Partial<{
+    Name: string;
+    Description: string | null;
+    JobTypeID: string;
+    CronExpression: string;
+    Timezone: string;
+    Status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired';
+    Configuration: string | null;
+    ConcurrencyMode: 'Concurrent' | 'Queue' | 'Skip';
+    StartAt: Date | null;
+    EndAt: Date | null;
+    NotifyOnSuccess: boolean;
+    NotifyOnFailure: boolean;
+  }>): Promise<boolean> {
+    return this.SaveJob(jobId, data);
+  }
+
+  async DeleteJob(jobId: string): Promise<boolean> {
     try {
       const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       const result = await job.Delete();
-      if (result) this.refresh();
+      if (result) this.Refresh();
       return result;
     } catch (error) {
       console.error('Failed to delete job:', error);
@@ -624,7 +707,12 @@ export class SchedulingInstrumentationService {
     }
   }
 
-  async releaseLock(jobId: string): Promise<boolean> {
+  /** @deprecated Use {@link DeleteJob}. */
+  async deleteJob(jobId: string): Promise<boolean> {
+    return this.DeleteJob(jobId);
+  }
+
+  async ReleaseLock(jobId: string): Promise<boolean> {
     try {
       const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
@@ -634,7 +722,7 @@ export class SchedulingInstrumentationService {
       job.LockedByInstance = null;
       job.ExpectedCompletionAt = null;
       const result = await job.Save();
-      if (result) this.refresh();
+      if (result) this.Refresh();
       return result;
     } catch (error) {
       console.error('Failed to release lock:', error);
@@ -642,7 +730,12 @@ export class SchedulingInstrumentationService {
     }
   }
 
-  async loadJobTypesForDropdown(): Promise<{ id: string; name: string }[]> {
+  /** @deprecated Use {@link ReleaseLock}. */
+  async releaseLock(jobId: string): Promise<boolean> {
+    return this.ReleaseLock(jobId);
+  }
+
+  async LoadJobTypesForDropdown(): Promise<{ id: string; name: string }[]> {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJScheduledJobTypeEntity>({
       EntityName: 'MJ: Scheduled Job Types',
@@ -653,5 +746,10 @@ export class SchedulingInstrumentationService {
 
     if (!result.Success) return [];
     return (result.Results || []).map(t => ({ id: t.ID, name: t.Name }));
+  }
+
+  /** @deprecated Use {@link LoadJobTypesForDropdown}. */
+  async loadJobTypesForDropdown(): Promise<{ id: string; name: string }[]> {
+    return this.LoadJobTypesForDropdown();
   }
 }

@@ -40,14 +40,14 @@ export type ProbeResponseFormat = 'Any' | 'JSON';
  * can round-trip through a config file unchanged.
  */
 export type ArgumentMatcher =
-    | { kind: 'nonEmptyString'; parameter: string }
-    | { kind: 'containsIgnoreCase'; parameter: string; value: string }
-    | { kind: 'oneOf'; parameter: string; values: string[] };
+    | { kind: 'nonEmptyString'; parameter: string }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { kind: 'containsIgnoreCase'; parameter: string; value: string }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { kind: 'oneOf'; parameter: string; values: string[] };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** One call a correct answer makes, with the argument checks that make it usable. */
 export interface ExpectedToolCall {
-    toolName: string;
-    arguments: ArgumentMatcher[];
+    toolName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    arguments: ArgumentMatcher[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -63,29 +63,29 @@ export interface ProbeExpectation {
      * from the model's own knowledge, and a call is a FAILURE. This is the 1/8 failure class the
      * hybrid loop has to survive.
      */
-    toolCallWarranted: boolean;
+    ToolCallWarranted: boolean;
     /** The calls a correct answer makes, in any order. Empty when `toolCallWarranted` is false. */
-    calls: ExpectedToolCall[];
+    calls: ExpectedToolCall[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /**
      * Whether the scenario's system prompt asks for MJ's `LoopAgentResponse` envelope, making
      * envelope compliance measurable on this cell. Set only on the envelope scenario.
      */
-    envelopeRequested: boolean;
+    EnvelopeRequested: boolean;
 }
 
 /** One probe: a fixed conversation plus the tools offered and what a correct answer looks like. */
 export interface ProbeScenario {
-    id: string;
+    Id: string;
     /** One line on what this scenario measures. Printed in the scorecard legend. */
-    purpose: string;
+    purpose: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Only the envelope scenario needs one; the rest send a bare user turn. */
-    systemPrompt?: string;
-    userPrompt: string;
+    SystemPrompt?: string;
+    UserPrompt: string;
     /** Declarations sent whenever the cell's mode is not `no-tools`. */
-    tools: ChatTool[];
+    Tools: ChatTool[];
     /** The tool a `named` cell forces. Scenarios never run in `named` mode omit it. */
-    forcedToolName?: string;
-    expectation: ProbeExpectation;
+    ForcedToolName?: string;
+    Expectation: ProbeExpectation;
 }
 
 /**
@@ -98,59 +98,59 @@ export interface ProbeScenario {
  */
 export interface MatrixModel {
     /** Scorecard row label. */
-    label: string;
+    Label: string;
     /** Model developer (Anthropic / OpenAI / Google) — NOT the serving vendor. */
-    developer: string;
+    Developer: string;
     /** Generation tag, so the scorecard can group "newest agentically-trained" against the rest. */
-    generation: string;
+    Generation: string;
     /** Driver class registered on the ClassFactory — `AIModelVendor.DriverClass`. */
-    driverClass: string;
+    DriverClass: string;
     /** The provider's own model id — `AIModelVendor.APIName`. */
-    apiName: string;
+    ApiName: string;
     /**
      * Effort levels to sweep, `null` meaning "send no effortLevel and take the provider default".
      * Omit for the default-only single pass. The thinking axis exists because reasoning × tools is
      * the recurring cross-provider interaction (audit §7.2).
      */
-    effortLevels?: (string | null)[];
+    EffortLevels?: (string | null)[];
     /**
      * Thinking budget to send alongside a non-null `effortLevel`. Anthropic's driver defaults this
      * to 31,000 tokens, which is a fortune to spend deciding whether to look up the weather — and
      * thinking tokens bill as output. A probe-sized budget keeps the thinking axis affordable
      * without changing what it measures.
      */
-    reasoningBudgetTokens?: number;
+    ReasoningBudgetTokens?: number;
 }
 
 /** The matrix definition: axes in, cells out. */
 export interface MatrixSpec {
-    models: MatrixModel[];
-    scenarioIds: string[];
-    toolModes: ProbeToolMode[];
-    responseFormats: ProbeResponseFormat[];
+    Models: MatrixModel[];
+    ScenarioIds: string[];
+    ToolModes: ProbeToolMode[];
+    ResponseFormats: ProbeResponseFormat[];
     /** Repetitions per cell. Rates, not booleans — a model's choice varies run to run. */
-    reps: number;
+    reps: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** One (model × scenario × mode × format × effort) combination, repeated `reps` times. */
 export interface MatrixCell {
     /** Stable key: the scorecard row id and the JSONL join key. */
-    id: string;
-    model: MatrixModel;
-    scenarioId: string;
-    toolMode: ProbeToolMode;
-    responseFormat: ProbeResponseFormat;
-    effortLevel: string | null;
+    Id: string;
+    Model: MatrixModel;
+    ScenarioId: string;
+    ToolMode: ProbeToolMode;
+    ResponseFormat: ProbeResponseFormat;
+    EffortLevel: string | null;
 }
 
 /** A combination the sparseness rules dropped, with the reason — the matrix logs what it skips. */
 export interface SkippedCell {
-    id: string;
-    reason: string;
+    Id: string;
+    Reason: string;
 }
 
 /** What `expandMatrix` produces. */
 export interface ExpandedMatrix {
-    cells: MatrixCell[];
-    skipped: SkippedCell[];
+    Cells: MatrixCell[];
+    Skipped: SkippedCell[];
 }

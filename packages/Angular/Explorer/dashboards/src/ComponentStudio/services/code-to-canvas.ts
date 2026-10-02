@@ -18,20 +18,20 @@
  */
 import type { CuratedFormSchema } from '@memberjunction/interactive-component-types/forms';
 import type { FormCanvasModel, FormCanvasSection, FormCanvasElement } from './form-canvas-model';
-import { buildEmptySection, generateCanvasId } from './form-canvas-model';
+import { BuildEmptySection, GenerateCanvasId } from './form-canvas-model';
 
 export interface ParseResult {
     /** The reconstructed canvas, or null if too lossy to use. */
-    canvas: FormCanvasModel | null;
+    Canvas: FormCanvasModel | null;
     /** True iff we used the AST fallback path. (Reserved — currently regex only.) */
-    usedAst: false;
+    UsedAst: false;
     /** True iff the parser detected JSX patterns it couldn't represent. */
-    hasUnknownConstructs: boolean;
+    HasUnknownConstructs: boolean;
     /** Optional debug breadcrumbs. */
-    notes: string[];
+    Notes: string[];
 }
 
-export function parseCanvasFromCode(
+export function ParseCanvasFromCode(
     code: string,
     schema: CuratedFormSchema,
 ): ParseResult {
@@ -49,7 +49,7 @@ export function parseCanvasFromCode(
 
     if (fieldMatches.length === 0) {
         notes.push('No field references detected; canvas not reconstructible from code.');
-        return { canvas: null, usedAst: false, hasUnknownConstructs: true, notes };
+        return { Canvas: null, UsedAst: false, HasUnknownConstructs: true, Notes: notes };
     }
 
     // 3) Bucket fields into sections by position. A field whose position is
@@ -57,8 +57,8 @@ export function parseCanvasFromCode(
     //    If there are no headings, everything goes into a default "Details"
     //    section.
     const sections: FormCanvasSection[] = headings.length === 0
-        ? [buildEmptySection('Details')]
-        : headings.map(h => ({ ...buildEmptySection(h.title), title: h.title }));
+        ? [BuildEmptySection('Details')]
+        : headings.map(h => ({ ...BuildEmptySection(h.title), title: h.title }));
 
     const seen = new Set<string>();
     let unknown = false;
@@ -79,7 +79,7 @@ export function parseCanvasFromCode(
             : findSectionIndex(ref.index, headings);
         const section = sections[sectionIndex];
         const element: FormCanvasElement = {
-            id: generateCanvasId('field'),
+            id: GenerateCanvasId('field'),
             type: 'field',
             fieldName: ref.name,
             span: 1,
@@ -98,7 +98,7 @@ export function parseCanvasFromCode(
     // Drop empty sections (no fields landed in them).
     const nonEmpty = sections.filter(s => s.elements.length > 0);
     if (nonEmpty.length === 0) {
-        return { canvas: null, usedAst: false, hasUnknownConstructs: true, notes };
+        return { Canvas: null, UsedAst: false, HasUnknownConstructs: true, Notes: notes };
     }
 
     // 5) Try to find the form title from <h2>...</h2>.
@@ -106,15 +106,23 @@ export function parseCanvasFromCode(
     const title = titleMatch ? stripJsx(titleMatch[1]) : undefined;
 
     return {
-        canvas: {
+        Canvas: {
             entityName: schema.entityName,
             title,
             sections: nonEmpty,
         },
-        usedAst: false,
-        hasUnknownConstructs: unknown,
-        notes,
+        UsedAst: false,
+        HasUnknownConstructs: unknown,
+        Notes: notes,
     };
+}
+
+/** @deprecated Use {@link ParseCanvasFromCode}. */
+export function parseCanvasFromCode(
+    code: string,
+    schema: CuratedFormSchema,
+): ParseResult {
+    return ParseCanvasFromCode(code, schema);
 }
 
 function findSectionIndex(charIndex: number, headings: Array<{ index: number; title: string }>): number {

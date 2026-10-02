@@ -51,9 +51,17 @@
           [class.in-progress]="isInProgressAIMessage"
           [class.active]="!isInProgressAIMessage && isAgentRunActive"
           [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
-          [class.failed]="messageStatus === 'Error'">
-          <i class="fas fa-clock"></i>
+          [class.failed]="messageStatus === 'Error'"
+          [class.checking]="LivenessState === 'checking'"
+          [class.stalled]="LivenessState === 'stalled'"
+          [title]="LivenessState === 'stalled' ? 'No progress reported for several minutes' : (LivenessState === 'checking' ? 'No recent progress — re-checking' : '')">
+          <i class="fas" [ngClass]="LivenessState === 'live' ? 'fa-clock' : 'fa-exclamation-triangle'"></i>
           {{ timePillText }}
+          @if (LivenessState === 'checking') {
+            <span class="liveness-label">checking…</span>
+          } @else if (LivenessState === 'stalled') {
+            <span class="liveness-label">no response</span>
+          }
         </span>
       }
 
@@ -162,7 +170,7 @@
         }
 
         <!-- Agent Response Form (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && responseForm) {
+        @if (!ReadOnly && isLastMessageInConversation && isConversationOwner && responseForm) {
           <mj-dynamic-form
             [FormDefinition]="responseForm"
             [Disabled]="isProcessing"
@@ -171,7 +179,7 @@
         }
 
         <!-- Actionable Commands (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
+        @if (!ReadOnly && isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
           <mj-actionable-commands
             [commands]="actionableCommands"
             [disabled]="isProcessing"
@@ -225,7 +233,7 @@
                 [currentUser]="currentUser"
                 [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
                 [ratingsData]="ratings"
-                [canEdit]="isConversationOwner">
+                [canEdit]="isConversationOwner && !ReadOnly">
               </mj-conversation-message-rating>
             }
             @if (allowPinning) {
@@ -328,7 +336,7 @@
                       [conversationDetailId]="message.ID"
                       [currentUser]="currentUser"
                       [ratingsData]="ratings"
-                      [canEdit]="isConversationOwner">
+                      [canEdit]="isConversationOwner && !ReadOnly">
                     </mj-conversation-message-rating>
                   }
                   @if (allowPinning) {

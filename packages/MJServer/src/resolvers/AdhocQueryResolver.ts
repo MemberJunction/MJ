@@ -7,7 +7,7 @@ import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { RunQueryResultType } from './QueryResolver.js';
-import { exactTotalFromPage, resolveAdhocTotalRowCount } from './adhoc-query-helpers.js';
+import { ExactTotalFromPage, ResolveAdhocTotalRowCount } from './adhoc-query-helpers.js';
 
 /**
  * Input type for executing ad-hoc SQL queries directly.
@@ -188,7 +188,7 @@ export class AdhocQueryResolver extends ResolverBase {
     /**
      * Runs the page's data SQL, then — only when the page is FULL (so more rows may
      * exist) — a COUNT(*) for the true total. A short (or unpaged) page needs no
-     * count: the exact total is `startRow + rowsReturned` (see {@link exactTotalFromPage}).
+     * count: the exact total is `startRow + rowsReturned` (see {@link ExactTotalFromPage}).
      *
      * The count is NON-FATAL: some queries page fine but cannot be counted — e.g.
      * duplicate column names are legal in a result set but rejected inside the COUNT
@@ -206,7 +206,7 @@ export class AdhocQueryResolver extends ResolverBase {
         const recordset = await this.runSqlWithDeadline<Record<string, unknown>>(provider, dataSQL, deadline);
 
         // Total already known from the page alone (unpaged, or a short page)? Skip the count.
-        const exact = exactTotalFromPage(startRow, recordset.length, maxRows);
+        const exact = ExactTotalFromPage(startRow, recordset.length, maxRows);
         if (exact != null || !countSQL) {
             return { recordset, totalRowCount: exact ?? recordset.length };
         }
@@ -215,7 +215,7 @@ export class AdhocQueryResolver extends ResolverBase {
         const lowerBound = startRow + recordset.length;
         try {
             const countRows = await this.runSqlWithDeadline<{ TotalRowCount: number }>(provider, countSQL, deadline);
-            return { recordset, totalRowCount: resolveAdhocTotalRowCount(countRows, lowerBound) };
+            return { recordset, totalRowCount: ResolveAdhocTotalRowCount(countRows, lowerBound) };
         } catch (countErr) {
             const msg = countErr instanceof Error ? countErr.message : String(countErr);
             LogError(`Ad-hoc query row-count failed; reporting a lower-bound total (${lowerBound}). ${msg}`);

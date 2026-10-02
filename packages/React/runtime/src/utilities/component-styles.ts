@@ -150,7 +150,10 @@ export function SetupStyles(): ComponentStyles {
 }
 
 // Also export with the original name for backward compatibility
-export const createDefaultComponentStyles = SetupStyles;
+export const CreateDefaultComponentStyles = SetupStyles;
+
+/** @deprecated Use {@link CreateDefaultComponentStyles}. */
+export const createDefaultComponentStyles = CreateDefaultComponentStyles;
 
 /**
  * The `--mj-*` semantic token → `ComponentStyles` mapping used by the theme bridge.

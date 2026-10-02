@@ -9,7 +9,9 @@
  * - rerank-multilingual-v3.0: Supports 100+ languages
  *
  * API Key:
- * Set via environment variable: AI_VENDOR_API_KEY__COHERELLM
+ * The legacy environment-variable fallback is named after the model-vendor row's driver class:
+ * AI_VENDOR_API_KEY__COHERERERANKER for the shipped Cohere reranker models. A Cohere credential
+ * binding takes precedence over it.
  *
  * Usage:
  * ```typescript
@@ -34,6 +36,6 @@
  * ```
  */
 
-export { CohereReranker, createCohereReranker } from './models/CohereReranker';
+export { CohereReranker, CreateCohereReranker, createCohereReranker } from './models/CohereReranker';
 
 export { CohereEmbedding } from './models/CohereEmbedding';

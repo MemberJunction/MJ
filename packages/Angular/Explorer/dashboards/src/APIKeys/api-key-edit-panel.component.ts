@@ -249,7 +249,7 @@ export class APIKeyEditPanelComponent extends BaseAngularComponent implements On
     /**
      * Toggle edit mode
      */
-    public toggleEdit(): void {
+    public ToggleEdit(): void {
         if (this.IsEditing) {
             // Cancel edit
             this.EditLabel = this.APIKey!.Label;
@@ -259,10 +259,15 @@ export class APIKeyEditPanelComponent extends BaseAngularComponent implements On
         this.IsEditing = !this.IsEditing;
     }
 
+    /** @deprecated Use {@link ToggleEdit}. */
+    public toggleEdit(): void {
+      return this.ToggleEdit();
+    }
+
     /**
      * Save changes to the key
      */
-    public async saveChanges(): Promise<void> {
+    public async SaveChanges(): Promise<void> {
         if (!this.APIKey) return;
 
         this.IsSaving = true;
@@ -290,10 +295,15 @@ export class APIKeyEditPanelComponent extends BaseAngularComponent implements On
         }
     }
 
+    /** @deprecated Use {@link SaveChanges}. */
+    public async saveChanges(): Promise<void> {
+      return this.SaveChanges();
+    }
+
     /**
      * Save scope changes
      */
-    public async saveScopeChanges(): Promise<void> {
+    public async SaveScopeChanges(): Promise<void> {
         if (!this.APIKey) return;
 
         this.IsSaving = true;
@@ -355,10 +365,15 @@ export class APIKeyEditPanelComponent extends BaseAngularComponent implements On
         }
     }
 
+    /** @deprecated Use {@link SaveScopeChanges}. */
+    public async saveScopeChanges(): Promise<void> {
+      return this.SaveScopeChanges();
+    }
+
     /**
      * Check for scope changes and update category allSelected states
      */
-    public onScopeChange(): void {
+    public OnScopeChange(): void {
         // Update allSelected state for each category
         for (const category of this.ScopeCategories) {
             category.allSelected = category.scopes.length > 0 && category.scopes.every(s => s.selected);
@@ -369,17 +384,27 @@ export class APIKeyEditPanelComponent extends BaseAngularComponent implements On
         this.HasScopeChanges = allScopes.some(s => s.selected !== s.originallySelected);
     }
 
+    /** @deprecated Use {@link OnScopeChange}. */
+    public onScopeChange(): void {
+      return this.OnScopeChange();
+    }
+
     /**
      * Toggle category expansion
      */
-    public toggleCategory(category: ScopeCategory): void {
+    public ToggleCategory(category: ScopeCategory): void {
         category.expanded = !category.expanded;
+    }
+
+    /** @deprecated Use {@link ToggleCategory}. */
+    public toggleCategory(category: ScopeCategory): void {
+      return this.ToggleCategory(category);
     }
 
     /**
      * Toggle all scopes in a category on/off
      */
-    public toggleCategoryAll(category: ScopeCategory): void {
+    public ToggleCategoryAll(category: ScopeCategory): void {
         // Toggle to opposite of current allSelected state
         const newState = !category.allSelected;
         category.allSelected = newState;
@@ -390,29 +415,44 @@ export class APIKeyEditPanelComponent extends BaseAngularComponent implements On
         }
 
         // Update change tracking
-        this.onScopeChange();
+        this.OnScopeChange();
+    }
+
+    /** @deprecated Use {@link ToggleCategoryAll}. */
+    public toggleCategoryAll(category: ScopeCategory): void {
+      return this.ToggleCategoryAll(category);
     }
 
     /**
      * Start revoke flow
      */
-    public startRevoke(): void {
+    public StartRevoke(): void {
         this.ShowRevokeConfirm = true;
         this.RevokeConfirmText = '';
+    }
+
+    /** @deprecated Use {@link StartRevoke}. */
+    public startRevoke(): void {
+      return this.StartRevoke();
     }
 
     /**
      * Cancel revoke
      */
-    public cancelRevoke(): void {
+    public CancelRevoke(): void {
         this.ShowRevokeConfirm = false;
         this.RevokeConfirmText = '';
+    }
+
+    /** @deprecated Use {@link CancelRevoke}. */
+    public cancelRevoke(): void {
+      return this.CancelRevoke();
     }
 
     /**
      * Confirm and execute revoke using GraphQL client
      */
-    public async confirmRevoke(): Promise<void> {
+    public async ConfirmRevoke(): Promise<void> {
         if (!this.APIKey || this.RevokeConfirmText !== 'REVOKE') return;
 
         this.IsRevoking = true;
@@ -441,6 +481,11 @@ export class APIKeyEditPanelComponent extends BaseAngularComponent implements On
         }
     }
 
+    /** @deprecated Use {@link ConfirmRevoke}. */
+    public async confirmRevoke(): Promise<void> {
+      return this.ConfirmRevoke();
+    }
+
     /**
      * Format date for display
      */
@@ -458,7 +503,7 @@ export class APIKeyEditPanelComponent extends BaseAngularComponent implements On
     /**
      * Format relative time
      */
-    public formatRelativeTime(date: Date): string {
+    public FormatRelativeTime(date: Date): string {
         const now = new Date();
         const diff = now.getTime() - new Date(date).getTime();
         const minutes = Math.floor(diff / 60000);
@@ -473,38 +518,63 @@ export class APIKeyEditPanelComponent extends BaseAngularComponent implements On
         return new Date(date).toLocaleDateString();
     }
 
+    /** @deprecated Use {@link FormatRelativeTime}. */
+    public formatRelativeTime(date: Date): string {
+      return this.FormatRelativeTime(date);
+    }
+
     /**
      * Get status class for HTTP status code
      */
-    public getStatusClass(statusCode: number): string {
+    public GetStatusClass(statusCode: number): string {
         if (statusCode >= 200 && statusCode < 300) return 'status-success';
         if (statusCode >= 400 && statusCode < 500) return 'status-warning';
         if (statusCode >= 500) return 'status-error';
         return '';
     }
 
+    /** @deprecated Use {@link GetStatusClass}. */
+    public getStatusClass(statusCode: number): string {
+      return this.GetStatusClass(statusCode);
+    }
+
     /**
      * Get assigned scope count
      */
-    public getAssignedScopeCount(): number {
+    public GetAssignedScopeCount(): number {
         return this.ScopeCategories.reduce((sum, cat) =>
             sum + cat.scopes.filter(s => s.selected).length, 0);
+    }
+
+    /** @deprecated Use {@link GetAssignedScopeCount}. */
+    public getAssignedScopeCount(): number {
+      return this.GetAssignedScopeCount();
     }
 
     /**
      * Get selected scope count for a category (for template use)
      */
-    public getSelectedCount(category: ScopeCategory): number {
+    public GetSelectedCount(category: ScopeCategory): number {
         return category.scopes.filter(s => s.selected).length;
+    }
+
+    /** @deprecated Use {@link GetSelectedCount}. */
+    public getSelectedCount(category: ScopeCategory): number {
+      return this.GetSelectedCount(category);
     }
 
     /**
      * Get minimum date for expiration (tomorrow)
      */
-    public getMinDate(): Date {
+    public GetMinDate(): Date {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         return tomorrow;
+    }
+
+    /** @deprecated Use {@link GetMinDate}. */
+    public getMinDate(): Date {
+      return this.GetMinDate();
     }
 
     /**

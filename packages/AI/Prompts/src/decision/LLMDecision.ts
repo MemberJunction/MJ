@@ -1,0 +1,588 @@
+/**
+ * @fileoverview LLM-based Decision Driver for MemberJunction.
+ *
+ * Executes multi-question decisions by formatting state, questions, and expected output format
+ * into template variables, running an AI prompt via AIPromptRunner, and normalizing/mapping
+ * the model output into strongly typed DecisionAnswers.
+ *
+ * @module @memberjunction/ai-prompts
+ */
+
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { AIEngine } from '@memberjunction/aiengine';
+import {
+    BaseDecision,
+    DecisionParams,
+    DecisionResult,
+    DecisionQuestion,
+    DecisionAnswer,
+    LikelihoodAnswer,
+    ChoiceAnswer,
+    ScoreAnswer,
+    ChoiceQuestion,
+    ScoreQuestion,
+    ModelUsage,
+} from '@memberjunction/ai';
+import {
+    AIPromptParams,
+    AIPromptRunResult,
+    MJAIPromptEntityExtended,
+} from '@memberjunction/ai-core-plus';
+import { AIPromptRunner } from '../AIPromptRunner';
+
+/** Longest slice of an unparseable reply quoted in an error message. */
+const MAX_REPLY_IN_ERROR = 500;
+
+/**
+ * How far outside [0, 1] a Likelihood may fall and still be clamped into it: the tolerance
+ * `BaseDecision` allows a distribution's sum. A value further out is not a probability (85 is the
+ * percent-scale reading of 0.85), so the question fails instead of becoming a certainty.
+ */
+const LIKELIHOOD_CLAMP_TOLERANCE = 0.01;
+
+/** Where `outputFormat` shows the model a Likelihood's number. Written unquoted, like a number. */
+const LIKELIHOOD_PLACEHOLDER = '<probability 0-1>';
+
+/** Where `outputFormat` shows the model an option's or level's number. Written unquoted, like a number. */
+const DISTRIBUTION_PLACEHOLDER = '<probability>';
+
+/**
+ * Driver that answers typed decision questions with a chat LLM through an MJ prompt. It is the
+ * fallback `BaseDecision` driver: everything downstream can be written against `BaseDecision`
+ * before a native decision model is configured. Unlike a native driver it must parse, because a
+ * chat model can return malformed JSON.
+ *
+ * The prompt receives three template variables:
+ * - `state`: the decision state, as-is when it is a string, otherwise as indented JSON;
+ * - `questions`: JSON mapping each question key to `{ kind, instructions, options?, levels? }`;
+ * - `outputFormat`: the reply's shape as JSON, with every option or level listed and an unquoted
+ *   placeholder where each number goes.
+ *
+ * It must reply with one JSON object with the same keys: a number for a Likelihood, and an object
+ * mapping every option value (Choice) or level name (Score) to a number. Choice and Score
+ * distributions are normalised here, so `BaseDecision.Decide` can validate them strictly. A value
+ * that is present but is not a usable number fails the question; it is never read as 0.
+ *
+ * Registered with ClassFactory under BaseDecision with key 'LLMDecision'.
+ */
+@RegisterClass(BaseDecision, 'LLMDecision')
+export class LLMDecision extends BaseDecision {
+    private _promptID: string;
+    private _contextUser: UserInfo;
+    private _promptRunner: AIPromptRunner;
+    private _cachedPrompt: MJAIPromptEntityExtended | null = null;
+
+    /**
+     * The `MJ: AI Prompt Runs` row this decision is recorded under. When set, the chat prompt's run
+     * is created as its child (`ParentID`), so the chat call's cost rolls up to the decision's run.
+     * `AIDecisionRunner` sets it to its own run before it calls the driver.
+     */
+    public ParentPromptRunID?: string;
+
+    /**
+     * Creates an instance of LLMDecision.
+     *
+     * @param apiKey - Optional API key for BaseDecision/BaseModel compatibility.
+     * @param promptID - ID of the MJAIPrompt entity to execute.
+     * @param contextUser - User context for prompt execution.
+     */
+    constructor(apiKey: string, promptID: string, contextUser: UserInfo) {
+        super(apiKey);
+        this._promptID = promptID;
+        this._contextUser = contextUser;
+        this._promptRunner = new AIPromptRunner();
+    }
+
+    /**
+     * Gets the configured prompt ID.
+     */
+    public get PromptID(): string {
+        return this._promptID;
+    }
+
+    /**
+     * Executes the decision by calling the AI prompt and mapping answers.
+     *
+     * @param params - Parameters for the decision including State and Questions.
+     * @returns DecisionResult containing answers or error details.
+     */
+    protected async DoDecide(params: DecisionParams): Promise<DecisionResult> {
+        const prompt = this.loadPrompt();
+        if (!prompt) {
+            LogError(`LLMDecision: Prompt not found with ID: ${this._promptID}`);
+            return this.failure(`Prompt not found with ID: ${this._promptID}`);
+        }
+
+        const promptParams = this.buildPromptParams(prompt, params);
+        const promptResult = await this._promptRunner.ExecutePrompt(promptParams);
+        // The chat run's cost is computed when its row is saved, and the runner saves it
+        // fire-and-forget. Wait for the save, so recordTelemetry can read the cost, and so the
+        // save's cost rollup to the parent run lands before the parent run is finalized.
+        await this._promptRunner.WaitForPendingPromptRunSaves();
+        if (!promptResult || !promptResult.success) {
+            return this.failure(promptResult?.errorMessage || 'Prompt execution failed', promptResult);
+        }
+
+        const parsedReply = this.parseReply(promptResult);
+        if ('error' in parsedReply) {
+            return this.failure(parsedReply.error, promptResult);
+        }
+
+        const answers: Record<string, DecisionAnswer> = {};
+        for (const [key, question] of Object.entries(params.Questions)) {
+            const mapped = this.mapQuestion(key, question, parsedReply.data);
+            if ('error' in mapped) {
+                return this.failure(mapped.error, promptResult);
+            }
+            answers[key] = mapped.answer;
+        }
+
+        const result = new DecisionResult(true, new Date(), new Date());
+        result.Answers = answers;
+        this.recordTelemetry(result, promptResult);
+        return result;
+    }
+
+    /**
+     * Builds a failed result. `BaseDecision.Decide` sets the timings. Usage and the model are
+     * recorded whenever the prompt ran, because a failed mapping still cost a model call.
+     */
+    private failure(message: string, promptResult?: AIPromptRunResult | null): DecisionResult {
+        const failure = new DecisionResult(false, new Date(), new Date());
+        failure.errorMessage = message;
+        if (promptResult) {
+            this.recordTelemetry(failure, promptResult);
+        }
+        return failure;
+    }
+
+    /**
+     * Loads the prompt entity from AIEngine with caching.
+     */
+    private loadPrompt(): MJAIPromptEntityExtended | null {
+        if (this._cachedPrompt) {
+            return this._cachedPrompt;
+        }
+
+        const prompts = AIEngine.Instance.Prompts;
+        const prompt = prompts?.find(p => UUIDsEqual(p.ID, this._promptID));
+        if (!prompt) {
+            return null;
+        }
+
+        this._cachedPrompt = prompt;
+        return prompt;
+    }
+
+    /**
+     * Builds the AIPromptParams instance with template data and cancellation token.
+     */
+    private buildPromptParams(prompt: MJAIPromptEntityExtended, params: DecisionParams): AIPromptParams {
+        const promptParams = new AIPromptParams();
+        promptParams.prompt = prompt;
+        promptParams.contextUser = this._contextUser;
+        promptParams.attemptJSONRepair = true;
+        // The reply's keys are question keys, option values and level names, and level names are
+        // often sentences such as "blocked: no workaround". The runner's output validation reads
+        // ':', '?' and '*' in keys as OutputExample syntax and strips them, which would rename those
+        // keys. This driver maps the reply itself and BaseDecision validates the answers, so skip it.
+        promptParams.skipValidation = true;
+        promptParams.cancellationToken = params.CancellationToken;
+        if (this.ParentPromptRunID) {
+            promptParams.parentPromptRunId = this.ParentPromptRunID;
+        }
+        promptParams.data = {
+            state: this.formatState(params.State),
+            questions: this.formatQuestionsSpec(params.Questions),
+            outputFormat: this.formatOutputTemplate(params.Questions),
+        };
+        return promptParams;
+    }
+
+    /**
+     * Formats state parameter: as-is if string, JSON stringified if object.
+     */
+    private formatState(state: string | Record<string, unknown>): string {
+        if (typeof state === 'string') {
+            return state;
+        }
+        return JSON.stringify(state, null, 1);
+    }
+
+    /**
+     * Formats question specifications into JSON string.
+     */
+    private formatQuestionsSpec(questions: Record<string, DecisionQuestion>): string {
+        const spec: Record<string, {
+            kind: string;
+            instructions: string;
+            options?: Array<{ value: string; description: string }>;
+            levels?: string[];
+        }> = {};
+
+        for (const [key, q] of Object.entries(questions)) {
+            if (q.Kind === 'Likelihood') {
+                spec[key] = {
+                    kind: 'Likelihood',
+                    instructions: q.Instructions,
+                };
+            } else if (q.Kind === 'Choice') {
+                spec[key] = {
+                    kind: 'Choice',
+                    instructions: q.Instructions,
+                    options: q.Options.map(opt => ({
+                        value: opt.Value,
+                        description: opt.Description,
+                    })),
+                };
+            } else if (q.Kind === 'Score') {
+                spec[key] = {
+                    kind: 'Score',
+                    instructions: q.Instructions,
+                    levels: [...q.Levels],
+                };
+            }
+        }
+
+        return JSON.stringify(spec, null, 1);
+    }
+
+    /**
+     * Formats the reply's shape: JSON laid out as `JSON.stringify(value, null, 1)` would, except that
+     * each placeholder is unquoted. A quoted placeholder shows the value as a string, and a chat model
+     * copied it, writing `"0.1"` for `0.1`. Keys are still JSON-encoded, so any option value or level
+     * name is shown exactly.
+     */
+    private formatOutputTemplate(questions: Record<string, DecisionQuestion>): string {
+        const entries = Object.entries(questions).map(([key, q]) => {
+            if (q.Kind === 'Likelihood') {
+                return ` ${JSON.stringify(key)}: ${LIKELIHOOD_PLACEHOLDER}`;
+            }
+            const names = q.Kind === 'Choice' ? q.Options.map(opt => opt.Value) : q.Levels;
+            const lines = names.map(name => `  ${JSON.stringify(name)}: ${DISTRIBUTION_PLACEHOLDER}`);
+            return ` ${JSON.stringify(key)}: {\n${lines.join(',\n')}\n }`;
+        });
+
+        return `{\n${entries.join(',\n')}\n}`;
+    }
+
+    /**
+     * Parses the model reply from the prompt result into an object record.
+     */
+    private parseReply(
+        promptResult: AIPromptRunResult
+    ): { success: true; data: Record<string, unknown> } | { success: false; error: string } {
+        let raw: unknown = promptResult.result ?? promptResult.rawResult;
+
+        if (typeof raw === 'string') {
+            const text = raw;
+            try {
+                raw = JSON.parse(text);
+            } catch {
+                return {
+                    success: false,
+                    error: `Failed to parse model reply as JSON: ${text.slice(0, MAX_REPLY_IN_ERROR)}`,
+                };
+            }
+        }
+
+        if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+            return { success: true, data: raw as Record<string, unknown> };
+        }
+
+        return {
+            success: false,
+            error: `Model reply is not a JSON object: ${typeof raw === 'object' && raw !== null ? 'Array' : String(raw)}`,
+        };
+    }
+
+    /**
+     * Maps an individual question from the parsed reply to a DecisionAnswer.
+     */
+    private mapQuestion(
+        key: string,
+        question: DecisionQuestion,
+        reply: Record<string, unknown>
+    ): { success: true; answer: DecisionAnswer } | { success: false; error: string } {
+        if (!this.isPresent(reply, key)) {
+            return { success: false, error: `Question '${key}': Missing answer in model reply` };
+        }
+
+        const rawVal = reply[key];
+        switch (question.Kind) {
+            case 'Likelihood':
+                return this.mapLikelihood(key, rawVal);
+            case 'Choice':
+                return this.mapChoice(key, question, rawVal);
+            case 'Score':
+                return this.mapScore(key, question, rawVal);
+            default: {
+                const exhaustiveCheck: never = question;
+                return { success: false, error: `Question '${key}': Unknown Kind '${(exhaustiveCheck as DecisionQuestion).Kind}'` };
+            }
+        }
+    }
+
+    /**
+     * Maps a Likelihood question answer: a finite number within `LIKELIHOOD_CLAMP_TOLERANCE` of
+     * [0, 1] is clamped into it; anything else fails.
+     */
+    private mapLikelihood(
+        key: string,
+        rawVal: unknown
+    ): { success: true; answer: LikelihoodAnswer } | { success: false; error: string } {
+        const value = this.toFiniteNumber(rawVal);
+        if (value === undefined) {
+            return {
+                success: false,
+                error: `Question '${key}': Likelihood value must be a finite number, got ${this.describeValue(rawVal)}`,
+            };
+        }
+        if (value < -LIKELIHOOD_CLAMP_TOLERANCE || value > 1 + LIKELIHOOD_CLAMP_TOLERANCE) {
+            return {
+                success: false,
+                error: `Question '${key}': Likelihood value must be a probability in [0, 1], got ${this.describeValue(rawVal)}`,
+            };
+        }
+
+        const probability = Math.max(0, Math.min(1, value));
+        return {
+            success: true,
+            answer: {
+                Kind: 'Likelihood',
+                Probability: probability,
+            },
+        };
+    }
+
+    /**
+     * Maps a Choice question answer: normalizes distribution, selects argmax, tie goes to first option.
+     */
+    private mapChoice(
+        key: string,
+        question: ChoiceQuestion,
+        rawVal: unknown
+    ): { success: true; answer: ChoiceAnswer } | { success: false; error: string } {
+        const optionValues = question.Options.map(o => o.Value);
+        const normResult = this.normalizeDistribution(key, 'Choice', optionValues, rawVal);
+        if ('error' in normResult) {
+            return { success: false, error: normResult.error };
+        }
+
+        const probabilities = normResult.probabilities;
+        let bestOptionValue = question.Options[0].Value;
+        let maxProb = -1;
+
+        for (const opt of question.Options) {
+            const prob = probabilities[opt.Value];
+            if (prob > maxProb) {
+                maxProb = prob;
+                bestOptionValue = opt.Value;
+            }
+        }
+
+        return {
+            success: true,
+            answer: {
+                Kind: 'Choice',
+                Value: bestOptionValue,
+                Confidence: maxProb,
+                Probabilities: probabilities,
+            },
+        };
+    }
+
+    /**
+     * Maps a Score question answer: normalizes distribution, computes expected level position, max prob confidence.
+     */
+    private mapScore(
+        key: string,
+        question: ScoreQuestion,
+        rawVal: unknown
+    ): { success: true; answer: ScoreAnswer } | { success: false; error: string } {
+        const normResult = this.normalizeDistribution(key, 'Score', question.Levels, rawVal);
+        if ('error' in normResult) {
+            return { success: false, error: normResult.error };
+        }
+
+        const probabilities = normResult.probabilities;
+        let expectedPosition = 0;
+        let maxProb = -1;
+
+        for (let i = 0; i < question.Levels.length; i++) {
+            const levelName = question.Levels[i];
+            const prob = probabilities[levelName];
+            expectedPosition += i * prob;
+            if (prob > maxProb) {
+                maxProb = prob;
+            }
+        }
+
+        return {
+            success: true,
+            answer: {
+                Kind: 'Score',
+                Value: expectedPosition,
+                Confidence: maxProb,
+                Probabilities: probabilities,
+            },
+        };
+    }
+
+    /**
+     * Normalizes a probability distribution for Choice or Score questions.
+     * Validates object shape, ignores unexpected keys with LogStatus, counts a missing entry as 0,
+     * fails on an entry that is present but not a finite non-negative number, fails if sum <= 0,
+     * and divides each by the sum.
+     */
+    private normalizeDistribution(
+        questionKey: string,
+        kind: 'Choice' | 'Score',
+        expectedKeys: string[],
+        rawVal: unknown
+    ): { success: true; probabilities: Record<string, number> } | { success: false; error: string } {
+        if (typeof rawVal !== 'object' || rawVal === null || Array.isArray(rawVal)) {
+            return {
+                success: false,
+                error: `Question '${questionKey}': ${kind} answer must be an object`,
+            };
+        }
+
+        const rawRecord = rawVal as Record<string, unknown>;
+        const expectedSet = new Set(expectedKeys);
+
+        for (const actualKey of Object.keys(rawRecord)) {
+            if (!expectedSet.has(actualKey)) {
+                LogStatus(`LLMDecision: Question '${questionKey}': ignoring unexpected key '${actualKey}' in ${kind} answer`);
+            }
+        }
+
+        const entityName = kind === 'Choice' ? 'option' : 'level';
+        const rawProbs: Record<string, number> = {};
+        let sum = 0;
+        for (const expectedKey of expectedKeys) {
+            if (!this.isPresent(rawRecord, expectedKey)) {
+                rawProbs[expectedKey] = 0;
+                continue;
+            }
+            // Reading a malformed entry such as "80%" as 0 would demote what may be the model's
+            // favourite and hand another answer its share, with nothing to show for it.
+            const itemVal = rawRecord[expectedKey];
+            const parsed = this.toFiniteNumber(itemVal);
+            if (parsed === undefined || parsed < 0) {
+                return {
+                    success: false,
+                    error: `Question '${questionKey}': ${kind} probability for ${entityName} '${expectedKey}' must be a finite non-negative number, got ${this.describeValue(itemVal)}`,
+                };
+            }
+            rawProbs[expectedKey] = parsed;
+            sum += parsed;
+        }
+
+        if (sum <= 0) {
+            return {
+                success: false,
+                error: `Question '${questionKey}': ${kind} probabilities sum to ${sum}, must be greater than 0`,
+            };
+        }
+
+        const normalized: Record<string, number> = {};
+        for (const expectedKey of expectedKeys) {
+            normalized[expectedKey] = rawProbs[expectedKey] / sum;
+        }
+
+        return { success: true, probabilities: normalized };
+    }
+
+    /**
+     * Reads a probability as a number. A chat model sometimes copies the quoted placeholder in
+     * `outputFormat` and writes `"0.1"` for `0.1`, so a string holding a finite number counts too.
+     */
+    private toFiniteNumber(value: unknown): number | undefined {
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : undefined;
+        }
+        if (typeof value === 'string' && value.trim() !== '') {
+            const parsed = Number(value.trim());
+            return Number.isFinite(parsed) ? parsed : undefined;
+        }
+        return undefined;
+    }
+
+    /**
+     * Whether the reply holds a value under `key`. Only an own key counts, so a question or option
+     * named after an `Object.prototype` member (`toString`) is not answered by the prototype.
+     */
+    private isPresent(record: Record<string, unknown>, key: string): boolean {
+        return Object.prototype.hasOwnProperty.call(record, key) && record[key] !== undefined;
+    }
+
+    /**
+     * Renders a reply value for an error message, quoting a string so `"80%"` reads as the text it was.
+     */
+    private describeValue(value: unknown): string {
+        return typeof value === 'string' ? `"${value}"` : String(value);
+    }
+
+    /**
+     * Populates Usage and ResolvedModel telemetry on DecisionResult from prompt result.
+     */
+    private recordTelemetry(decisionResult: DecisionResult, promptResult: AIPromptRunResult): void {
+        const cost = this.resolveCost(promptResult);
+        decisionResult.Usage = new ModelUsage(
+            promptResult.promptTokens ?? 0,
+            promptResult.completionTokens ?? 0,
+            cost.cost,
+            cost.currency
+        );
+        if (promptResult.modelInfo?.modelName) {
+            decisionResult.ResolvedModel = promptResult.modelInfo.modelName;
+        }
+    }
+
+    /**
+     * The chat call's cost. Once the chat run is saved, its saved cost wins: `TotalCost`, else
+     * `Cost`, which the server computes when the run is saved and which is what rolls up to the
+     * decision's run. It differs from the runner's reported cost only when the runner reports 0,
+     * which the server treats as unpriced and reprices, so reporting the saved cost keeps the
+     * decision run's descendant cost equal to the rollup. Before the run is saved, the runner's
+     * reported cost wins, then the run's cost as it stands. Unset when none is known.
+     */
+    private resolveCost(promptResult: AIPromptRunResult): { cost?: number; currency?: string } {
+        const run = promptResult.promptRun;
+        const runCost = run ? this.savedRunCost(run) : undefined;
+        if (run?.IsSaved && runCost !== undefined) {
+            return { cost: runCost, currency: run.CostCurrency ?? promptResult.costCurrency };
+        }
+        if (promptResult.cost !== undefined) {
+            return { cost: promptResult.cost, currency: promptResult.costCurrency };
+        }
+        if (runCost === undefined) {
+            return { currency: promptResult.costCurrency };
+        }
+        return { cost: runCost, currency: run?.CostCurrency ?? promptResult.costCurrency };
+    }
+
+    /**
+     * A saved run's cost: `TotalCost`, else `Cost`. The server writes `TotalCost = 0` for a run it
+     * could not price, so `TotalCost` counts only when the run has a `Cost` or a `DescendantCost`.
+     */
+    private savedRunCost(run: NonNullable<AIPromptRunResult['promptRun']>): number | undefined {
+        if (run.Cost == null && run.DescendantCost == null) {
+            return undefined;
+        }
+        return run.TotalCost ?? run.Cost ?? undefined;
+    }
+}
+
+/**
+ * Factory function to create an LLMDecision instance.
+ *
+ * @param promptID - ID of the prompt to execute.
+ * @param contextUser - User context for prompt execution.
+ * @returns Configured LLMDecision instance.
+ */
+export function CreateLLMDecision(promptID: string, contextUser: UserInfo): LLMDecision {
+    return new LLMDecision('', promptID, contextUser);
+}

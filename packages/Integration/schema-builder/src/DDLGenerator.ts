@@ -55,7 +55,7 @@ export class DDLGenerator {
         }
 
         // Standard integration columns (prefixed to avoid collisions)
-        lines.push(...this.StandardColumns(platform));
+        lines.push(...this.standardColumns(platform));
 
         // PK is SOFT-ONLY — declared in additionalSchemaInfo (which CodeGen reads to set the entity's
         // metadata PK), and emitted as NO database constraint here: not a PRIMARY KEY, and not even a
@@ -69,7 +69,7 @@ export class DDLGenerator {
         // Create-Tables safe even when MJ has no entity for the table yet (e.g. a prior run
         // created the table but entity generation hadn't completed), avoiding
         // "There is already an object named '<table>'" collisions.
-        const createTable = this.GenerateIdempotentCreateTableStatement(fullTable, body, platform);
+        const createTable = this.generateIdempotentCreateTableStatement(fullTable, body, platform);
 
         // Generate extended properties for descriptions (SQL Server only)
         if (platform === 'sqlserver') {
@@ -88,7 +88,7 @@ export class DDLGenerator {
      * "not sqlserver" catch-all — and the `never` default makes adding a new DatabasePlatform
      * a compile error here rather than a silent fall-through to the wrong dialect.
      */
-    private GenerateIdempotentCreateTableStatement(fullTable: string, body: string, platform: DatabasePlatform): string {
+    private generateIdempotentCreateTableStatement(fullTable: string, body: string, platform: DatabasePlatform): string {
         switch (platform) {
             case 'sqlserver':
                 // Single-statement IF guard (no BEGIN/END) so RSU's batch chunking on ';\n' can't split it.
@@ -118,7 +118,7 @@ export class DDLGenerator {
                 `    @value = N'${escaped}',\n` +
                 `    @level0type = N'SCHEMA', @level0name = '${config.SchemaName}',\n` +
                 `    @level1type = N'TABLE', @level1name = '${config.TableName}';`;
-            props.push(this.GuardExtendedProperty(config.SchemaName, config.TableName, null, exec));
+            props.push(this.guardExtendedProperty(config.SchemaName, config.TableName, null, exec));
         }
 
         // Standard column descriptions
@@ -132,13 +132,13 @@ export class DDLGenerator {
         };
 
         for (const [colName, desc] of Object.entries(standardDescriptions)) {
-            props.push(this.MakeColumnExtendedProperty(config.SchemaName, config.TableName, colName, desc));
+            props.push(this.makeColumnExtendedProperty(config.SchemaName, config.TableName, colName, desc));
         }
 
         // User-configured column descriptions
         for (const col of config.Columns) {
             if (col.Description) {
-                props.push(this.MakeColumnExtendedProperty(
+                props.push(this.makeColumnExtendedProperty(
                     config.SchemaName, config.TableName, col.TargetColumnName, col.Description
                 ));
             }
@@ -147,7 +147,7 @@ export class DDLGenerator {
         return props;
     }
 
-    private MakeColumnExtendedProperty(
+    private makeColumnExtendedProperty(
         schemaName: string, tableName: string, columnName: string, description: string
     ): string {
         const escaped = EscapeSQLString(description);
@@ -158,7 +158,7 @@ export class DDLGenerator {
             `    @level0type = N'SCHEMA', @level0name = '${schemaName}',\n` +
             `    @level1type = N'TABLE', @level1name = '${tableName}',\n` +
             `    @level2type = N'COLUMN', @level2name = '${columnName}';`;
-        return this.GuardExtendedProperty(schemaName, tableName, columnName, exec);
+        return this.guardExtendedProperty(schemaName, tableName, columnName, exec);
     }
 
     /**
@@ -169,7 +169,7 @@ export class DDLGenerator {
      * postgresql uses no extended properties here. Pass columnName=null for a table-level
      * property, or the column name for a column-level one (levels must match the EXEC).
      */
-    private GuardExtendedProperty(
+    private guardExtendedProperty(
         schemaName: string, tableName: string, columnName: string | null, execStatement: string
     ): string {
         const level2 = columnName ? `N'COLUMN', N'${columnName}'` : `NULL, NULL`;
@@ -265,7 +265,7 @@ export class DDLGenerator {
         return `${dropDependentViews}\n${alter}`;
     }
 
-    private StandardColumns(platform: DatabasePlatform): string[] {
+    private standardColumns(platform: DatabasePlatform): string[] {
         const q = platform === 'sqlserver' ? QuoteSqlServer : QuotePostgres;
         if (platform === 'sqlserver') {
             return [

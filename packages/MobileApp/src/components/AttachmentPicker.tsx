@@ -26,11 +26,11 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  */
 export type AttachmentPickerProps = {
     /** Whether the action sheet is shown. */
-    visible: boolean;
+    Visible: boolean;
     /** Called to dismiss the sheet (backdrop tap, Cancel, or after a pick). */
-    onClose: () => void;
+    OnClose: () => void;
     /** Called with the chosen attachment when a pick succeeds. */
-    onPicked: (attachment: CapturedAttachment) => void;
+    OnPicked: (attachment: CapturedAttachment) => void;
 };
 
 /** The distinct capture sources, used to show a per-row busy spinner. */
@@ -39,7 +39,7 @@ type PickerSource = 'camera' | 'library' | 'document';
 /**
  * Bottom-sheet attachment action menu. See {@link AttachmentPickerProps}.
  */
-export function AttachmentPicker({ visible, onClose, onPicked }: AttachmentPickerProps) {
+export function AttachmentPicker({ Visible: visible, OnClose: onClose, OnPicked: onPicked }: AttachmentPickerProps) {
     const [busy, setBusy] = useState<PickerSource | null>(null);
 
     const run = async (source: PickerSource, pick: () => Promise<CapturedAttachment | null>) => {
