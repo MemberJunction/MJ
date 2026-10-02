@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ComponentFixture } from '@angular/core/testing';
@@ -182,4 +182,22 @@ describe('QueryRowDetailComponent (DOM)', () => {
     });
     expect(hasClass(f, '.action-btn', 'active')).toBe(true);
   });
+
+  describe('a SQL date column (a calendar day)', () => {
+    // Pinned west of Greenwich: the day arrives as UTC midnight, and at UTC a local-zone formatter
+    // lands on the right day by accident.
+    const originalTZ = process.env.TZ;
+    beforeEach(() => { process.env.TZ = 'America/Chicago'; });
+    afterEach(() => { process.env.TZ = originalTZ; });
+
+    it('shows the stored day, with no time and no "hours ago"', () => {
+      const f = render({
+        Visible: true,
+        Columns: [col({ field: 'PaymentDate', title: 'Payment Date', sqlBaseType: 'date', sqlFullType: 'date' })],
+        RowData: { PaymentDate: '2026-10-01T00:00:00.000Z' },
+      });
+      expect(text(f, '.field-value .value-text')).toBe('Oct 1, 2026');
+    });
+  });
 });
+

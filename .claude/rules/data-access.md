@@ -357,6 +357,10 @@ Other rules that follow from this:
   it. `ClassFactory` priority auto-increments by load order, so the server subclass wins server-side
   with no configuration — and the browser still sees the collection.
 - **`BeginISATransaction()`, `ProviderTransaction` and `PropagateTransactionToParents()` were removed in 6.2.** Use `BeginEntityTransaction()` / `RunInEntityTransaction()`.
+- **`DeclareRelatedRecordsDynamic(options)` is for generic engines only.** It is the public form of
+  the protected `DeclareRelatedRecords`: it registers a collection on *one instance* at runtime, for a
+  relationship the class declares no collection for (Record Cloning's materializer, `mj sync push`).
+  It throws on a duplicate name. In entity code, declare the collection statically or in metadata.
 
 Read [`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md)
 before writing anything that saves more than one record together, and
@@ -752,6 +756,33 @@ If you're tempted to use `localStorage` because "it's just a little thing" — t
 - This feature tracks all changes to entity records unless explicitly disabled
 - No need to implement custom versioning - it's handled automatically by the framework
 - Access historical versions through the Record Changes entities
+
+### Record Changes written by a clone
+
+A row saved by the record-cloning engine gets a Record Change with `Source = 'Clone'` and a
+`ChangeContext` JSON column shaped like `IRecordChangeContext`
+(`metadata/entities/JSONType-interfaces/IRecordChangeContext.ts`):
+`{ Version: 1, Kind: 'Clone', Clone: { CloneLogID, SourceEntityName, SourceRecordID, RootEntityName, RootSourceRecordID, RootTargetRecordID, Depth, Route, FieldChangeSummary, Reason? } }`.
+Read it through the typed `ChangeContextObject` accessor on `MJRecordChangeEntity`.
+
+- **Only the server sets it, through the engine.** `CloneExecutor` calls `BaseEntity.SetCloneContext()`
+  on each row it stages, and the database provider writes `Source`/`ChangeContext` from it. The
+  context stays on the instance until `ClearCloneContext()`.
+- **GraphQL clients cannot supply it.** `GraphQLDataProvider` never sends a clone context (a wire
+  test guards this) and the resolver accepts only `RestoreContext___`. A client-supplied clone
+  context would forge lineage.
+- A save can't be both: with a restore context also set, the provider throws ("an operation cannot be both a restore and a clone"). `SetCloneContext()` does not clear a pending restore context, so clear one before setting the other.
+
+### Annotating a Record Change — `Comments` only
+
+Record Changes are immutable except for `Comments`. `MJRecordChangeEntityServer`
+(`packages/MJCoreEntitiesServer/src/custom/MJRecordChangeEntityServer.server.ts`) refuses an update
+unless **all** of these hold:
+
+1. `Comments` is the only dirty field.
+2. The user holds `Record Changes: Annotate` (directly or through an ancestor authorization).
+3. The user has ordinary Update permission on `MJ: Record Changes` and its Update API is enabled.
+   The authorization narrows who may annotate; it does not replace the role permission.
 
 ## Related guides
 

@@ -555,6 +555,43 @@ describe('AIRerankerRunner', () => {
             expect(promptRuns[0].Cost).toBeUndefined();
         });
 
+        it("for LLMReranker the runner puts the chat run's tokens in its token rollups, as its descendants'", async () => {
+            MockReranker.Usage = new ModelUsage(120, 45, 0.002, 'USD');
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams({ ModelID: LLM_MODEL_ID }));
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.DriverClass).toBe(LLM_DRIVER);
+            expect(promptRuns[0].TokensPromptRollup).toBe(120);
+            expect(promptRuns[0].TokensCompletionRollup).toBe(45);
+            expect(promptRuns[0].TokensUsedRollup).toBe(165);
+            expect(promptRuns[0].TokensPrompt).toBeUndefined();
+        });
+
+        it("for a driver that calls its model directly the token rollups stay the run's own", async () => {
+            MockReranker.Usage = new ModelUsage(120, 45, 0.002, 'USD');
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams());
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.DriverClass).toBe(NATIVE_DRIVER);
+            expect(promptRuns[0].TokensUsedRollup).toBeUndefined();
+        });
+
+        it('returns the run row itself, so an agent step can carry it and count its cost', async () => {
+            MockReranker.Usage = new ModelUsage(120, 45, 0.002, 'USD');
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams({ ModelID: LLM_MODEL_ID }));
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.PromptRun).toBe(promptRuns[0]);
+            expect(result.PromptRun?.TotalCost).toBe(0.002);
+            expect(result.PromptRun?.TokensUsedRollup).toBe(165);
+        });
+
         it('for a driver that calls its model directly the runner records Cost', async () => {
             MockReranker.Usage = new ModelUsage(0, 0, 0.002, 'USD');
             const runner = newRunner();

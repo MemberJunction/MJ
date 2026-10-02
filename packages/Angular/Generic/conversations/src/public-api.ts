@@ -14,12 +14,15 @@ export * from './lib/models/navigation-request.model';
 export * from './lib/models/agent-turn.model';
 export * from './lib/utils/agent-turn-routing';
 // Opt-in decision routing for an unmentioned message (EnableDecisionRouting)
+// NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
+// @memberjunction/ai-core-plus — import them from there directly.
 export * from './lib/utils/decision-routing';
 
 // Services - State
 export * from './lib/services/data-cache.service';
 export * from './lib/services/artifact-state.service';
 export * from './lib/services/agent-state.service';
+export * from './lib/services/conversation-liveness-dom.service';
 export * from './lib/services/conversation-agent.service';
 export * from './lib/services/active-tasks.service';
 export * from './lib/services/conversation-streaming.service';

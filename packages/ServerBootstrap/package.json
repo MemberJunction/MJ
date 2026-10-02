@@ -135,6 +135,8 @@
     "@memberjunction/predictive-studio": "6.2.0-edge.1",
     "@memberjunction/queue": "6.2.0-edge.1",
     "@memberjunction/react-linter": "6.2.0-edge.1",
+    "@memberjunction/record-cloning": "6.2.0-edge.1",
+    "@memberjunction/record-cloning-base": "6.2.0-edge.1",
     "@memberjunction/record-comparison": "6.2.0-edge.1",
     "@memberjunction/record-set-processor": "6.2.0-edge.1",
     "@memberjunction/remote-browser-selfhost": "6.2.0-edge.1",
