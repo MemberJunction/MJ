@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Core agent rubrics - Duplicate Resolution Agent",
+    "Description": "Answers from the run itself. Scored by the Duplicate Resolution Agent Evaluation rubric, not an inline judge.",
+    "InputDefinition": {
+      "userMessage": "Record A and record B both have email ada@example.com and no other fields. Say merge or keep."
+    },
+    "ExpectedOutcomes": {},
+    "Configuration": {
+      "agentId": "@lookup:MJ: AI Agents.Name=Duplicate Resolution Agent",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "34509B0F-AF8F-492C-9FF7-5F29FB5E7E6E"
+  }
+}

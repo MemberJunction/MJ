@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Core agent rubrics - Infographic Agent",
+    "Description": "Answers from the run itself. Scored by the Infographic Agent Evaluation rubric, not an inline judge.",
+    "InputDefinition": {
+      "userMessage": "The only series is sales with values 1 and 2. Title the picture Sales."
+    },
+    "ExpectedOutcomes": {},
+    "Configuration": {
+      "agentId": "@lookup:MJ: AI Agents.Name=Infographic Agent",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "7BB18D9D-C313-490D-841E-2030C35E60F7"
+  }
+}

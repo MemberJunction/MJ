@@ -15,7 +15,8 @@ export function FormContextsEqual(a: FormContext, b: FormContext): boolean {
     && a.allowSectionReorder === b.allowSectionReorder
     && SameKeys(a.hiddenSectionKeys, b.hiddenSectionKeys)
     && SameKeys(a.visibleSectionKeys, b.visibleSectionKeys)
-    && SameKeys(a.claimedFieldNames, b.claimedFieldNames);
+    && SameKeys(a.claimedFieldNames, b.claimedFieldNames)
+    && SameKeys(a.hiddenFieldNames, b.hiddenFieldNames);
 }
 
 export function SameKeys(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {

@@ -6,7 +6,7 @@
   IsClaimedByContribution may precede it because it reads only the form context: a field a
   panel stands in for is not drawn, in either mode.
 -->
-@if (!IsClaimedByContribution && IsFieldReadableByUser && Record && (Record.IsSaved || !IsFieldReadOnly)) {
+@if (!IsClaimedByContribution && IsFieldReadableByUser && Record && (Record.IsSaved || !IsFieldReadOnly) && !ShouldHideField) {
   <!-- READ-ONLY MODE -->
   @if ((!EditMode || IsFieldReadOnly) && !ShouldHideField) {
     <div class="mj-forms-field" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly" [class.mj-forms-field--dirty]="IsDirty">

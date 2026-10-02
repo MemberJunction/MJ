@@ -125,6 +125,11 @@ export interface FormContext {
    * inside a card, the other removes the card.
    */
   claimedFieldNames?: string[];
+  /**
+   * Field names to omit from the form. A draft evaluation uses this to hide
+   * cohort figures until the viewer submits.
+   */
+  hiddenFieldNames?: string[];
 }
 
 /**

@@ -9,6 +9,8 @@
  * @since 2.49.0
  */
 
+import './rubric-evaluation-agent-runner.js';
+
 export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';

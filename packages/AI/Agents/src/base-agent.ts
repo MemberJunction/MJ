@@ -22,6 +22,8 @@ import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
+import { ProviderRubricEngine } from '@memberjunction/rubrics';
+import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
@@ -6366,6 +6368,93 @@ export class BaseAgent {
      * @returns Modified next step if guardrails exceeded, or original next step
      * @protected
      */
+    private _selfCheckAttemptsByRun = new Map<string, number>();
+    private _selfCheckLinkByAgent = new Map<string, SelfCheckLinkRow | null>();
+
+    private async applySelfCheck<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentPayload: P,
+    ): Promise<BaseAgentNextStep<P> | null> {
+        if (params.cancellationToken?.aborted) return null;
+        const provider = params.provider || this._activeProvider;
+        let row = this._selfCheckLinkByAgent.get(agentRun.AgentID);
+        if (row === undefined) {
+            try {
+                const view = RunView.FromMetadataProvider(provider as never);
+                const found = await view.RunView({
+                    EntityName: 'MJ: AI Agent Rubrics',
+                    ExtraFilter: `AgentID='${agentRun.AgentID}' AND Purpose='SelfCheck' AND Status='Active'`,
+                    OrderBy: 'ID',
+                    ResultType: 'simple',
+                }, params.contextUser);
+                if (!found.Success) {
+                    LogError(`Self-check lookup failed, so the run continues: ${found.ErrorMessage || 'the view did not succeed'}`);
+                    return null;
+                }
+                row = PickSelfCheckLink((found.Results ?? []) as SelfCheckLinkRow[]) ?? null;
+                this._selfCheckLinkByAgent.set(agentRun.AgentID, row);
+            } catch (error) {
+                LogError(`Self-check lookup failed, so the run continues: ${error instanceof Error ? error.message : String(error)}`);
+                return null;
+            }
+        }
+        if (!row?.RubricID) return null;
+        const link: SelfCheckLink & { rubricId: string; passThreshold?: number | null } = {
+            Purpose: String(row.Purpose ?? ''),
+            Status: String(row.Status ?? ''),
+            MaxAttempts: row.MaxSelfCheckAttempts ?? null,
+            rubricId: String(row.RubricID),
+            passThreshold: row.PassThreshold ?? null,
+        };
+        const attempt = (this._selfCheckAttemptsByRun.get(agentRun.ID) ?? 0) + 1;
+        this._selfCheckAttemptsByRun.set(agentRun.ID, attempt);
+        const record = async (step: { EvaluationId?: string; Passed: boolean; Message?: string }) => {
+            const saved = await this.createStepEntity({
+                stepType: 'Validation',
+                stepName: 'Rubric self-check',
+                contextUser: params.contextUser,
+                inputData: { rubricEvaluationId: step.EvaluationId, passed: step.Passed },
+            });
+            await this.finalizeStepEntity(saved, step.Passed, step.Message || undefined);
+        };
+        try {
+            const outcome = await ExecuteSelfCheck({
+                engine: ProviderRubricEngine(provider, params.contextUser),
+                link,
+                runId: agentRun.ID,
+                agentKind: this.AgentTypeInstance?.constructor?.name === 'LoopAgentType' ? 'loop' : 'flow',
+                attempt,
+                candidate: { Message: nextStep.message, Payload: nextStep.newPayload ?? currentPayload },
+                record,
+            });
+            if (outcome.step === 'Success') return null;
+            if (outcome.step === 'Retry') return { ...nextStep, step: 'Retry', message: outcome.decision.Message };
+            return { ...nextStep, step: 'Failed', message: outcome.decision.Message, errorMessage: outcome.decision.Message };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`Self-check could not be saved, so the run continues: ${message}`);
+            try {
+                await record({ Passed: false, Message: message });
+            } catch (recordError) {
+                LogError(`Self-check validation step could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}`);
+            }
+            return null;
+        }
+    }
+
+    /** Runs the self-check when a success exit did not pass through the guardrail hook. */
+    private async selfCheckSuccess<P>(
+        params: ExecuteAgentParams,
+        step: BaseAgentNextStep<P>,
+        payload: P,
+    ): Promise<BaseAgentNextStep<P>> {
+        if (step.step !== 'Success' || !this._agentRun) return step;
+        const checked = await this.applySelfCheck(params, step, this._agentRun, payload);
+        return checked ?? step;
+    }
+
     protected async checkExecutionGuardrails<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
@@ -6373,9 +6462,12 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        // Skip guardrail checks for terminal steps
-        if (nextStep.step === 'Success' || nextStep.step === 'Failed' || nextStep.step === 'Chat') {
+        if (nextStep.step === 'Failed' || nextStep.step === 'Chat') {
             return nextStep;
+        }
+        if (nextStep.step === 'Success') {
+            const checked = await this.applySelfCheck(params, nextStep, agentRun, currentPayload);
+            return checked ?? nextStep;
         }
 
         // Check if any guardrails are exceeded
@@ -12044,7 +12136,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // so the run shows what was emitted even if the sub-agent then fails.
                 await this.recordFoldedTaskGraph(params, previousDecision);
                 const subAgentResult = await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
-                return (await this.finishAfterSubAgent<P>(params, previousDecision, subAgentResult)) ?? subAgentResult;
+                const afterSubAgent = (await this.finishAfterSubAgent<P>(params, previousDecision, subAgentResult)) ?? subAgentResult;
+                return this.selfCheckSuccess(params, afterSubAgent, afterSubAgent.newPayload ?? subAgentResult.newPayload);
             }
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount, this.actionOptionsForAgentType());
@@ -14804,7 +14897,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             const finished = await this.finishAfterActions(params, previousDecision, actionResults, actionSummaries, finalPayload, parentStepId, addConversationMessage);
             if (finished) {
-                return finished;
+                return this.selfCheckSuccess(params, finished, finalPayload);
             }
 
             // After actions complete, we need to process the results
@@ -14961,7 +15054,7 @@ The context is now within limits. Please retry your request with the recovered c
         // If the LLM already declared taskComplete=true alongside the client tools,
         // honor that intent now that tools have executed — no need for another LLM call.
         if (previousDecision.terminateAfterExecution) {
-            return {
+            return this.selfCheckSuccess(params, {
                 step: 'Success',
                 terminate: true,
                 message: previousDecision.message || 'Client tools executed successfully.',
@@ -14974,7 +15067,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // own artifact directive has to come along. Omitting it silently discarded the
                 // instruction whenever an agent declared client tools and taskComplete together.
                 artifactDirective: previousDecision.artifactDirective
-            };
+            }, previousDecision.newPayload);
         }
 
         return await this.executePromptStep(params, config, previousDecision, stepCount);

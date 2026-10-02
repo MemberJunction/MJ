@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Core agent rubrics - Database Designer",
+    "Description": "Answers from the run itself. Scored by the Database Designer Evaluation rubric, not an inline judge.",
+    "InputDefinition": {
+      "userMessage": "Propose columns for a note with a title and a body. Do not run a migration."
+    },
+    "ExpectedOutcomes": {},
+    "Configuration": {
+      "agentId": "@lookup:MJ: AI Agents.Name=Database Designer",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "1131ADD2-7707-4792-AE8C-C6FF7D33936B"
+  }
+}

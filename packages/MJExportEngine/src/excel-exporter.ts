@@ -926,7 +926,7 @@ export class ExcelExporter extends BaseExporter {
         column.numFmt = col.numberFormat;
       } else if (col.dataType === 'currency') {
         column.numFmt = '$#,##0.00';
-      } else if (col.dataType === 'date') {
+      } else if (col.dataType === 'date' || col.dataType === 'dateonly') {
         column.numFmt = this.options.defaultDateFormat || 'yyyy-mm-dd';
       } else if (col.dataType === 'percentage') {
         column.numFmt = '0.00%';

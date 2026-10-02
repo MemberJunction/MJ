@@ -2,9 +2,10 @@
  * Oracle value substitution — `$` in substituted values (issue #3171).
  *
  * Both oracles splice runtime data into a string they then act on:
- *   - `LLMJudgeOracle.buildPrompt` puts the test input, the expected output and
- *     the actual output into the judge prompt. These are arbitrary JSON, and `$`
- *     is ordinary in currency, regexes and template text.
+ *   - `FillRubricEvaluatorTemplate` puts the subject and the criteria into the
+ *     judge prompt. These are arbitrary text, and `$` is ordinary in currency,
+ *     regexes and template text. `RenderRubricEvaluatorPrompt` is that same fill
+ *     against the shipped template.
  *   - `SQLValidatorOracle.replaceParameters` puts a `'`-escaped value into SQL
  *     that is then executed.
  *
@@ -15,53 +16,44 @@
  * path had a test before.
  */
 import { describe, it, expect } from 'vitest';
-import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
+import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { RenderRubricEvaluatorPrompt } from '@memberjunction/rubrics';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
-import type { OracleInput } from '../types';
 
 /** `$` before an ordinary character is NOT special — that case must keep working. */
 const HOSTILE = ['a$$b', 'a$&b', 'a$`b', "a$'b", 'a$1b', 'a$b', "x$&$`$'$$y"];
 
-describe('LLMJudgeOracle.buildPrompt — $ in test data (#3171)', () => {
-    const oracle = new LLMJudgeOracle();
+function version(name: string): RubricVersionSnapshot {
+    return {
+        id: 'version',
+        rubricId: 'rubric',
+        notApplicablePolicy: 'NotAllowed',
+        scoreDisplayMin: 0,
+        scoreDisplayMax: 1,
+        nodes: [{
+            id: 'criterion',
+            key: 'clarity',
+            name,
+            nodeType: 'Criterion',
+            weight: 1,
+            isAdvisory: false,
+            isGate: false,
+            evidenceRequired: false,
+            rationaleRequired: false,
+            sequence: 0,
+        }],
+        scales: [],
+        bands: [],
+    };
+}
 
-    const build = (input: OracleInput, criteria: string[], template?: string): string =>
-        (oracle as unknown as Record<string, (...a: unknown[]) => string>)
-            .buildPrompt(input, criteria, template);
-
-    const inputWith = (actual: unknown, expected: unknown = 'ok'): OracleInput =>
-        ({
-            test: { InputDefinition: { q: 'ping' } },
-            expectedOutput: expected,
-            actualOutput: actual,
-        } as unknown as OracleInput);
-
+describe('FillRubricEvaluatorTemplate — $ in the subject (#3171)', () => {
     for (const value of HOSTILE) {
-        it(`carries an actual output containing ${JSON.stringify(value)} into the prompt verbatim`, () => {
-            const prompt = build(inputWith(value), ['is it right?'], 'ACTUAL[{{actual}}]');
-            // JSON.stringify wraps it in quotes; the `$` run must survive untouched.
-            expect(prompt).toBe(`ACTUAL[${JSON.stringify(value)}]`);
-        });
-
-        it(`carries an expected output containing ${JSON.stringify(value)} into the prompt verbatim`, () => {
-            const prompt = build(inputWith('ok', value), ['is it right?'], 'EXPECTED[{{expected}}]');
-            expect(prompt).toBe(`EXPECTED[${JSON.stringify(value)}]`);
+        it(`carries ${JSON.stringify(value)} through the live fill and the shipped template`, () => {
+            const rendered = RenderRubricEvaluatorPrompt(version(value), { text: value }, 'SinglePass');
+            expect(rendered).toContain(value);
         });
     }
-
-    it('carries a criterion containing $ verbatim', () => {
-        const prompt = build(inputWith('ok'), ['price must be $$5 not $& more'], 'C[{{criteria}}]');
-        expect(prompt).toBe('C[1. price must be $$5 not $& more]');
-    });
-
-    it('maps every placeholder to its own value', () => {
-        const prompt = build(
-            inputWith('A', 'E'),
-            ['C1'],
-            'e={{expected}} a={{actual}} c={{criteria}}',
-        );
-        expect(prompt).toBe('e="E" a="A" c=1. C1');
-    });
 });
 
 describe('SQLValidatorOracle.replaceParameters — $ in values (#3171)', () => {

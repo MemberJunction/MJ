@@ -29,6 +29,15 @@ describe('FormContext identity comparison', () => {
         expect(FormContextsEqualForTest(base, { ...base, hiddenSectionKeys: [] })).toBe(false);
     });
 
+    it('detects changed claimed and hidden field names', () => {
+        expect(FormContextsEqualForTest(base, { ...base, claimedFieldNames: ['Name'] })).toBe(false);
+        expect(FormContextsEqualForTest(base, { ...base, hiddenFieldNames: ['Name'] })).toBe(false);
+        expect(FormContextsEqualForTest(
+            { ...base, hiddenFieldNames: ['Name'] },
+            { ...base, hiddenFieldNames: ['Name'] },
+        )).toBe(true);
+    });
+
     it('compares key arrays by content, not reference', () => {
         expect(SameKeysForTest(['a', 'b'], ['a', 'b'])).toBe(true);
         expect(SameKeysForTest(['a', 'b'], ['b', 'a'])).toBe(false);

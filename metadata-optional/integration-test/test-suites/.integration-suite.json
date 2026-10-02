@@ -1165,6 +1165,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT98 - Rubric Immutability Triggers",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F30C408B-B1CF-47AC-92A4-D1DF726D75F1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT95 - Trailing Runtime State",
             "Sequence": 48,
             "Status": "Active"

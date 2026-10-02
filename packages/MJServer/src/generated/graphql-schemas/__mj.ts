@@ -18,7 +18,7 @@ import { mj_core_schema } from '../../config.js';
 
 
 
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRubricEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationScoreEntity, MJRubricEvaluationEntity, MJRubricScaleLevelEntity, MJRubricScaleEntity, MJRubricVersionEntity, MJRubricEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -5375,6 +5375,242 @@ export class MJAIAgentRequestResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Agent Requests', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Rubrics
+//****************************************************************************
+@ObjectType({ description: `A rubric an agent publishes for how it should be judged: Evaluation (used by agent eval tests), SelfCheck (the agent checks its own output before returning), or ProductionSampling (a share of real runs is evaluated asynchronously to watch for drift).` })
+export class MJAIAgentRubric_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    AgentID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RubricID?: string;
+        
+    @Field({nullable: true, description: `How the agent uses the rubric: Evaluation, SelfCheck or ProductionSampling.`}) 
+    @MaxLength(30)
+    Purpose?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `1 = the rubric used for this purpose when a caller does not name one.`}) 
+    IsDefault?: boolean;
+        
+    @Field({nullable: true, description: `Active links are used; Disabled links are kept but ignored.`}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Overrides the rubric version's PassThreshold (0..1) for this agent and purpose. NULL = use the version default.`}) 
+    PassThreshold?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Share (0..1) of completed production runs to evaluate. Required for ProductionSampling. Sampling is deterministic on the run ID so it is reproducible.`}) 
+    SampleRate?: number;
+        
+    @Field(() => Int, {nullable: true, description: `For SelfCheck: how many times the agent may revise its output after a failed self-check before returning anyway (with the failure recorded). NULL = 1.`}) 
+    MaxSelfCheckAttempts?: number;
+        
+    @Field({nullable: true, description: `JSON (IRubricEvaluatorSelection) naming which evaluator to use and its settings (e.g. judge prompt, model), overriding the defaults.`}) 
+    EvaluatorConfig?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Display and evaluation order when an agent has several rubrics for one purpose.`}) 
+    Sequence?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Rubric?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Rubrics
+//****************************************************************************
+@InputType()
+export class CreateMJAIAgentRubricInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    RubricID?: string;
+
+    @Field({ nullable: true })
+    Purpose?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Float, { nullable: true })
+    PassThreshold: number | null;
+
+    @Field(() => Float, { nullable: true })
+    SampleRate: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxSelfCheckAttempts: number | null;
+
+    @Field({ nullable: true })
+    EvaluatorConfig: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Rubrics
+//****************************************************************************
+@InputType()
+export class UpdateMJAIAgentRubricInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    RubricID?: string;
+
+    @Field({ nullable: true })
+    Purpose?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Float, { nullable: true })
+    PassThreshold?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    SampleRate?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxSelfCheckAttempts?: number | null;
+
+    @Field({ nullable: true })
+    EvaluatorConfig?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Rubrics
+//****************************************************************************
+@ObjectType()
+export class RunMJAIAgentRubricViewResult {
+    @Field(() => [MJAIAgentRubric_])
+    Results: MJAIAgentRubric_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIAgentRubric_)
+export class MJAIAgentRubricResolver extends ResolverBase {
+    @Query(() => RunMJAIAgentRubricViewResult)
+    async RunMJAIAgentRubricViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentRubricViewResult)
+    async RunMJAIAgentRubricViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentRubricViewResult)
+    async RunMJAIAgentRubricDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Rubrics';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIAgentRubric_, { nullable: true })
+    async MJAIAgentRubric(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIAgentRubric_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Rubrics', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentRubrics')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Rubrics', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Agent Rubrics', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIAgentRubric_)
+    async CreateMJAIAgentRubric(
+        @Arg('input', () => CreateMJAIAgentRubricInput) input: CreateMJAIAgentRubricInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Agent Rubrics', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIAgentRubric_)
+    async UpdateMJAIAgentRubric(
+        @Arg('input', () => UpdateMJAIAgentRubricInput) input: UpdateMJAIAgentRubricInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Agent Rubrics', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIAgentRubric_)
+    async DeleteMJAIAgentRubric(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Rubrics', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -75690,6 +75926,2616 @@ export class MJRowLevelSecurityFilterResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Rubric Bands
+//****************************************************************************
+@ObjectType({ description: `A labeled range of the normalized score, e.g. Exemplary / Proficient / Developing. Display and reporting ONLY: bands never decide pass or fail, which is always PassThreshold plus gates.` })
+export class MJRubricBand_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RubricVersionID?: string;
+        
+    @Field({nullable: true, description: `Display label of the band.`}) 
+    @MaxLength(100)
+    Label?: string;
+        
+    @Field({nullable: true, description: `What a result in this band means.`}) 
+    Description?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Inclusive lower bound of the band on the 0..1 normalized scale.`}) 
+    MinScore?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Exclusive upper bound of the band on the 0..1 normalized scale; the highest band also includes 1.`}) 
+    MaxScore?: number;
+        
+    @Field({nullable: true, description: `Semantic tone the UI maps to design tokens (never a raw color).`}) 
+    @MaxLength(20)
+    DisplayTone?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Display order of the band.`}) 
+    Sequence?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Bands
+//****************************************************************************
+@InputType()
+export class CreateMJRubricBandInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    RubricVersionID?: string;
+
+    @Field({ nullable: true })
+    Label?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field(() => Float, { nullable: true })
+    MinScore?: number;
+
+    @Field(() => Float, { nullable: true })
+    MaxScore?: number;
+
+    @Field({ nullable: true })
+    DisplayTone?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Bands
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricBandInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    RubricVersionID?: string;
+
+    @Field({ nullable: true })
+    Label?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    MinScore?: number;
+
+    @Field(() => Float, { nullable: true })
+    MaxScore?: number;
+
+    @Field({ nullable: true })
+    DisplayTone?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubric Bands
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricBandViewResult {
+    @Field(() => [MJRubricBand_])
+    Results: MJRubricBand_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubricBand_)
+export class MJRubricBandResolver extends ResolverBase {
+    @Query(() => RunMJRubricBandViewResult)
+    async RunMJRubricBandViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricBandViewResult)
+    async RunMJRubricBandViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricBandViewResult)
+    async RunMJRubricBandDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubric Bands';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubricBand_, { nullable: true })
+    async MJRubricBand(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubricBand_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubric Bands', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubricBands')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubric Bands', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubric Bands', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubricBand_)
+    async CreateMJRubricBand(
+        @Arg('input', () => CreateMJRubricBandInput) input: CreateMJRubricBandInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubric Bands', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubricBand_)
+    async UpdateMJRubricBand(
+        @Arg('input', () => UpdateMJRubricBandInput) input: UpdateMJRubricBandInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubric Bands', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubricBand_)
+    async DeleteMJRubricBand(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubric Bands', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Rubric Categories
+//****************************************************************************
+@ObjectType({ description: `Hierarchical folders for organizing rubrics.` })
+export class MJRubricCategory_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: `Display name of the category.`}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: `What rubrics in this category are for.`}) 
+    Description?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Parent?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Categories
+//****************************************************************************
+@InputType()
+export class CreateMJRubricCategoryInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Categories
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricCategoryInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubric Categories
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricCategoryViewResult {
+    @Field(() => [MJRubricCategory_])
+    Results: MJRubricCategory_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubricCategory_)
+export class MJRubricCategoryResolver extends ResolverBase {
+    @Query(() => RunMJRubricCategoryViewResult)
+    async RunMJRubricCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricCategoryViewResult)
+    async RunMJRubricCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricCategoryViewResult)
+    async RunMJRubricCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubric Categories';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubricCategory_, { nullable: true })
+    async MJRubricCategory(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubricCategory_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubric Categories', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubricCategories')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubric Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubric Categories', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubricCategory_)
+    async CreateMJRubricCategory(
+        @Arg('input', () => CreateMJRubricCategoryInput) input: CreateMJRubricCategoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubric Categories', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubricCategory_)
+    async UpdateMJRubricCategory(
+        @Arg('input', () => UpdateMJRubricCategoryInput) input: UpdateMJRubricCategoryInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubric Categories', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubricCategory_)
+    async DeleteMJRubricCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubric Categories', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Rubric Criteria
+//****************************************************************************
+@ObjectType({ description: `A node in a rubric version\'s weighted tree. Groups roll up their children; criteria (leaves) are answered on a scale. Weights are relative among siblings, so a node\'s share of the total is the product of its and its ancestors\' normalized weights.` })
+export class MJRubricCriterion_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RubricVersionID?: string;
+        
+    @Field({nullable: true, description: `Parent group node. NULL = a top-level node of the rubric.`}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field({nullable: true, description: `Stable machine key, unique within the version and carried unchanged across versions. It is the criterion's identity for comparing and aggregating results over time; renaming it is a removal plus an addition (a major bump).`}) 
+    @MaxLength(100)
+    Key?: string;
+        
+    @Field({nullable: true, description: `Display name of the group or criterion.`}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: `What the node covers.`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Instructions to evaluators (human and AI) on how to judge this criterion and what evidence counts.`}) 
+    Guidance?: string;
+        
+    @Field({nullable: true, description: `Group: has children, no scale, and a computed score. Criterion: a leaf answered on ScaleID.`}) 
+    @MaxLength(20)
+    NodeType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ScaleID?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Relative weight among siblings (normalized within the parent at scoring time). Must be >= 0.`}) 
+    Weight?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `1 = recorded and displayed but excluded from every score, gate and pass decision.`}) 
+    IsAdvisory?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `1 = knockout: if this node's normalized score is below GateMinimumScore the whole evaluation fails, whatever its overall score. Also applies to groups.`}) 
+    IsGate?: boolean;
+        
+    @Field(() => Float, {nullable: true, description: `Normalized score (0..1) a gate node must reach. Required when IsGate = 1.`}) 
+    GateMinimumScore?: number;
+        
+    @Field({nullable: true, description: `Overrides the version's NotApplicablePolicy for this node. NULL = inherit.`}) 
+    @MaxLength(30)
+    NotApplicablePolicy?: string;
+        
+    @Field({nullable: true, description: `How a group combines its children's scores: WeightedMean (default when NULL), Minimum (weakest child), or Maximum (strongest child). Groups only.`}) 
+    @MaxLength(20)
+    RollupMethod?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `1 = an evaluation cannot be submitted without evidence for this criterion.`}) 
+    EvidenceRequired?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `1 = an evaluation cannot be submitted without a written rationale for this criterion.`}) 
+    RationaleRequired?: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Display order among siblings.`}) 
+    Sequence?: number;
+        
+    @Field({nullable: true, description: `JSON (IRubricCriterionEvaluatorConfig) of evaluator-specific settings, keyed by evaluator: e.g. a deterministic rule, or hints for AI judges. Changes are treated as scoring changes (major bump) because a deterministic rule decides the score.`}) 
+    EvaluatorConfig?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Scale?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Criteria
+//****************************************************************************
+@InputType()
+export class CreateMJRubricCriterionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    RubricVersionID?: string;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    Key?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Guidance: string | null;
+
+    @Field({ nullable: true })
+    NodeType?: string;
+
+    @Field({ nullable: true })
+    ScaleID: string | null;
+
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAdvisory?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGate?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    GateMinimumScore: number | null;
+
+    @Field({ nullable: true })
+    NotApplicablePolicy: string | null;
+
+    @Field({ nullable: true })
+    RollupMethod: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    EvidenceRequired?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    RationaleRequired?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    EvaluatorConfig: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Criteria
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricCriterionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    RubricVersionID?: string;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    Key?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Guidance?: string | null;
+
+    @Field({ nullable: true })
+    NodeType?: string;
+
+    @Field({ nullable: true })
+    ScaleID?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    Weight?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAdvisory?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGate?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    GateMinimumScore?: number | null;
+
+    @Field({ nullable: true })
+    NotApplicablePolicy?: string | null;
+
+    @Field({ nullable: true })
+    RollupMethod?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    EvidenceRequired?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    RationaleRequired?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    EvaluatorConfig?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubric Criteria
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricCriterionViewResult {
+    @Field(() => [MJRubricCriterion_])
+    Results: MJRubricCriterion_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubricCriterion_)
+export class MJRubricCriterionResolver extends ResolverBase {
+    @Query(() => RunMJRubricCriterionViewResult)
+    async RunMJRubricCriterionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricCriterionViewResult)
+    async RunMJRubricCriterionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricCriterionViewResult)
+    async RunMJRubricCriterionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubric Criteria';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubricCriterion_, { nullable: true })
+    async MJRubricCriterion(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubricCriterion_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubric Criteria', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubricCriteria')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubric Criteria', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubric Criteria', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubricCriterion_)
+    async CreateMJRubricCriterion(
+        @Arg('input', () => CreateMJRubricCriterionInput) input: CreateMJRubricCriterionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubric Criteria', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubricCriterion_)
+    async UpdateMJRubricCriterion(
+        @Arg('input', () => UpdateMJRubricCriterionInput) input: UpdateMJRubricCriterionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubric Criteria', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubricCriterion_)
+    async DeleteMJRubricCriterion(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubric Criteria', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Rubric Criterion Levels
+//****************************************************************************
+@ObjectType({ description: `Criterion-specific anchor text: what a given level (or numeric value) looks like for THIS criterion, e.g. what "4 - Strong" means for Methodology.` })
+export class MJRubricCriterionLevel_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    CriterionID?: string;
+        
+    @Field({nullable: true, description: `The Levels-scale level this anchor describes. Exactly one of ScaleLevelID and AnchorValue is set.`}) 
+    @MaxLength(36)
+    ScaleLevelID?: string;
+        
+    @Field(() => Float, {nullable: true, description: `For a Numeric scale: the value this anchor describes (e.g. 0, 50, 100).`}) 
+    AnchorValue?: number;
+        
+    @Field({nullable: true, description: `The anchor text shown to evaluators and given to AI judges.`}) 
+    Descriptor?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Criterion?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ScaleLevel?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Criterion Levels
+//****************************************************************************
+@InputType()
+export class CreateMJRubricCriterionLevelInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    CriterionID?: string;
+
+    @Field({ nullable: true })
+    ScaleLevelID: string | null;
+
+    @Field(() => Float, { nullable: true })
+    AnchorValue: number | null;
+
+    @Field({ nullable: true })
+    Descriptor?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Criterion Levels
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricCriterionLevelInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    CriterionID?: string;
+
+    @Field({ nullable: true })
+    ScaleLevelID?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    AnchorValue?: number | null;
+
+    @Field({ nullable: true })
+    Descriptor?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubric Criterion Levels
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricCriterionLevelViewResult {
+    @Field(() => [MJRubricCriterionLevel_])
+    Results: MJRubricCriterionLevel_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubricCriterionLevel_)
+export class MJRubricCriterionLevelResolver extends ResolverBase {
+    @Query(() => RunMJRubricCriterionLevelViewResult)
+    async RunMJRubricCriterionLevelViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricCriterionLevelViewResult)
+    async RunMJRubricCriterionLevelViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricCriterionLevelViewResult)
+    async RunMJRubricCriterionLevelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubric Criterion Levels';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubricCriterionLevel_, { nullable: true })
+    async MJRubricCriterionLevel(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubricCriterionLevel_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubric Criterion Levels', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubricCriterionLevels')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubric Criterion Levels', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubric Criterion Levels', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubricCriterionLevel_)
+    async CreateMJRubricCriterionLevel(
+        @Arg('input', () => CreateMJRubricCriterionLevelInput) input: CreateMJRubricCriterionLevelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubric Criterion Levels', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubricCriterionLevel_)
+    async UpdateMJRubricCriterionLevel(
+        @Arg('input', () => UpdateMJRubricCriterionLevelInput) input: UpdateMJRubricCriterionLevelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubric Criterion Levels', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubricCriterionLevel_)
+    async DeleteMJRubricCriterionLevel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubric Criterion Levels', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Rubric Evaluation Scores
+//****************************************************************************
+@ObjectType({ description: `One node of one evaluation: an evaluator\'s answer to a criterion, or (IsComputed = 1) a group\'s computed rollup. Writable only while the evaluation is a Draft.` })
+export class MJRubricEvaluationScore_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    EvaluationID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    CriterionID?: string;
+        
+    @Field({nullable: true, description: `The level chosen, for a criterion on a Levels scale.`}) 
+    @MaxLength(36)
+    ScaleLevelID?: string;
+        
+    @Field(() => Float, {nullable: true, description: `The number entered, for a criterion on a Numeric scale.`}) 
+    RawValue?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `1 = the evaluator judged this criterion not applicable to the subject; handled per the effective NotApplicablePolicy.`}) 
+    IsNotApplicable?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `1 = a group rollup written by the server at submit, not an evaluator's answer.`}) 
+    IsComputed?: boolean;
+        
+    @Field(() => Float, {nullable: true, description: `The node's score on the 0..1 scale: the answer normalized through its scale, or the group rollup.`}) 
+    NormalizedScore?: number;
+        
+    @Field(() => Float, {nullable: true, description: `The node's share of its parent (0..1) after Not Applicable redistribution.`}) 
+    EffectiveWeight?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Points this node contributed to the evaluation's overall NormalizedScore (its score times the product of effective weights to the root). Leaves' contributions sum to the overall score under weighted-mean rollups.`}) 
+    OverallContribution?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `1 = this node is a gate and scored below its GateMinimumScore.`}) 
+    GateFailed?: boolean;
+        
+    @Field(() => Float, {nullable: true, description: `For group rows: share (0..1) of applicable descendant criteria that were scored.`}) 
+    Completeness?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Evaluator's confidence in this answer (0..1), e.g. from an AI judge's level probabilities. Low confidence can route the criterion to a human.`}) 
+    Confidence?: number;
+        
+    @Field({nullable: true, description: `The evaluator's reasoning for this answer.`}) 
+    Rationale?: string;
+        
+    @Field({nullable: true, description: `JSON array (IRubricEvidence[]) of evidence items: quotes with spans, conversation turns, file references, URLs, record references.`}) 
+    Evidence?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Criterion?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ScaleLevel?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    CriterionKey?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    CriterionNodeType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    CriterionParentID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    EvaluationStatus?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    EvaluatorType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    EvaluatorUserID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    SubjectEntityID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(450)
+    SubjectRecordID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ContextEntityID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(450)
+    ContextRecordID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RubricID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    RubricMajorVersion?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    CriterionCohortCount?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CriterionCohortMeanScore?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CriterionCohortMinScore?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CriterionCohortMaxScore?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CriterionCohortScoreStdDev?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CriterionCohortHumanMeanScore?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CriterionCohortAIMeanScore?: number;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Evaluation Scores
+//****************************************************************************
+@InputType()
+export class CreateMJRubricEvaluationScoreInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EvaluationID?: string;
+
+    @Field({ nullable: true })
+    CriterionID?: string;
+
+    @Field({ nullable: true })
+    ScaleLevelID: string | null;
+
+    @Field(() => Float, { nullable: true })
+    RawValue: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsNotApplicable?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsComputed?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    NormalizedScore: number | null;
+
+    @Field(() => Float, { nullable: true })
+    EffectiveWeight: number | null;
+
+    @Field(() => Float, { nullable: true })
+    OverallContribution: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    GateFailed?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    Completeness: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Confidence: number | null;
+
+    @Field({ nullable: true })
+    Rationale: string | null;
+
+    @Field({ nullable: true })
+    Evidence: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Evaluation Scores
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricEvaluationScoreInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    EvaluationID?: string;
+
+    @Field({ nullable: true })
+    CriterionID?: string;
+
+    @Field({ nullable: true })
+    ScaleLevelID?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    RawValue?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsNotApplicable?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsComputed?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    NormalizedScore?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    EffectiveWeight?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    OverallContribution?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    GateFailed?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    Completeness?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Confidence?: number | null;
+
+    @Field({ nullable: true })
+    Rationale?: string | null;
+
+    @Field({ nullable: true })
+    Evidence?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubric Evaluation Scores
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricEvaluationScoreViewResult {
+    @Field(() => [MJRubricEvaluationScore_])
+    Results: MJRubricEvaluationScore_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubricEvaluationScore_)
+export class MJRubricEvaluationScoreResolver extends ResolverBase {
+    @Query(() => RunMJRubricEvaluationScoreViewResult)
+    async RunMJRubricEvaluationScoreViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricEvaluationScoreViewResult)
+    async RunMJRubricEvaluationScoreViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricEvaluationScoreViewResult)
+    async RunMJRubricEvaluationScoreDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubric Evaluation Scores';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubricEvaluationScore_, { nullable: true })
+    async MJRubricEvaluationScore(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubricEvaluationScore_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubric Evaluation Scores', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubricEvaluationScores')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubric Evaluation Scores', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubric Evaluation Scores', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubricEvaluationScore_)
+    async CreateMJRubricEvaluationScore(
+        @Arg('input', () => CreateMJRubricEvaluationScoreInput) input: CreateMJRubricEvaluationScoreInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubric Evaluation Scores', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubricEvaluationScore_)
+    async UpdateMJRubricEvaluationScore(
+        @Arg('input', () => UpdateMJRubricEvaluationScoreInput) input: UpdateMJRubricEvaluationScoreInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubric Evaluation Scores', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubricEvaluationScore_)
+    async DeleteMJRubricEvaluationScore(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubric Evaluation Scores', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Rubric Evaluations
+//****************************************************************************
+@ObjectType({ description: `One evaluator\'s judgment of one record (the subject) against one pinned rubric version. Editable while Draft; on submit the server computes and stores the result once, after which the row is immutable. Several evaluations of the same subject in the same context form a cohort whose consensus is exposed by the base view.` })
+export class MJRubricEvaluation_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RubricVersionID?: string;
+        
+    @Field({nullable: true, description: `The entity of the record being evaluated (a test run, an agent run, a submission, a vendor response, ...).`}) 
+    @MaxLength(36)
+    SubjectEntityID?: string;
+        
+    @Field({nullable: true, description: `Primary key of the record being evaluated, in MemberJunction's composite-key string form.`}) 
+    @MaxLength(450)
+    SubjectRecordID?: string;
+        
+    @Field({nullable: true, description: `Optional entity of the record that asked for this evaluation (a test, a review round, a workflow step). Evaluations share a consensus cohort only when their context matches.`}) 
+    @MaxLength(36)
+    ContextEntityID?: string;
+        
+    @Field({nullable: true, description: `Primary key of the context record. Set together with ContextEntityID or not at all.`}) 
+    @MaxLength(450)
+    ContextRecordID?: string;
+        
+    @Field({nullable: true, description: `Who judged: Human (a user), AIPrompt (an LLM judge), Agent (an agent that may use tools), Deterministic (rules), Self (the subject's own party, e.g. a vendor asserting compliance; excluded from reviewer consensus), External (imported from another system).`}) 
+    @MaxLength(20)
+    EvaluatorType?: string;
+        
+    @Field({nullable: true, description: `The user who evaluated. Required for Human; the responding user for Self.`}) 
+    @MaxLength(36)
+    EvaluatorUserID?: string;
+        
+    @Field({nullable: true, description: `The prompt run that produced an AIPrompt evaluation (model, cost, raw output).`}) 
+    @MaxLength(36)
+    AIPromptRunID?: string;
+        
+    @Field({nullable: true, description: `The agent run that produced an Agent evaluation.`}) 
+    @MaxLength(36)
+    AIAgentRunID?: string;
+        
+    @Field({nullable: true, description: `Name of the evaluator implementation or external source (e.g. the evaluator driver class) for provenance.`}) 
+    @MaxLength(255)
+    EvaluatorName?: string;
+        
+    @Field({nullable: true, description: `Draft (being filled in), Submitted (final, counted in consensus), Superseded (replaced by a newer evaluation), Withdrawn (retracted, e.g. a conflict of interest), Failed (the evaluator errored; see ErrorMessage).`}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: `The earlier evaluation this one corrects. Submitting this one moves that one to Superseded.`}) 
+    @MaxLength(36)
+    SupersedesEvaluationID?: string;
+        
+    @Field({nullable: true, description: `When the evaluation was submitted and its result computed.`}) 
+    SubmittedAt?: Date;
+        
+    @Field(() => Float, {nullable: true, description: `The pass threshold used to compute Passed (the version default or a consumer override). Stored so a later change to either never rewrites history.`}) 
+    PassThresholdApplied?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Overall score, 0..1, computed once at submit from the score rows. NULL if nothing applicable was scored.`}) 
+    NormalizedScore?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `Computed verdict: 1 = passed, 0 = failed, NULL = no threshold applied and no gate or N/A failure (Outcome = Scored).`}) 
+    Passed?: boolean;
+        
+    @Field({nullable: true, description: `Why the evaluation ended as it did: Passed, BelowThreshold, GateFailed, NotApplicableFailure, Incomplete (below MinimumCompleteness or nothing scored), or Scored (no threshold to judge against).`}) 
+    @MaxLength(30)
+    Outcome?: string;
+        
+    @Field({nullable: true, description: `The band NormalizedScore falls in, for display. Interpretation only.`}) 
+    @MaxLength(36)
+    BandID?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `1 = at least one gate node scored below its GateMinimumScore.`}) 
+    GateFailed?: boolean;
+        
+    @Field(() => Float, {nullable: true, description: `Share (0..1) of applicable, non-advisory criteria that were scored.`}) 
+    Completeness?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of non-advisory criteria that received a score.`}) 
+    ScoredCriteriaCount?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of non-advisory criteria not answered Not Applicable.`}) 
+    ApplicableCriteriaCount?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Number of non-advisory criteria (leaves) in the version.`}) 
+    TotalCriteriaCount?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Evaluator's overall confidence (0..1), typically the weighted mean of per-criterion confidences from an AI judge. NULL for evaluators that do not report one.`}) 
+    Confidence?: number;
+        
+    @Field({nullable: true, description: `The evaluator's overall written assessment.`}) 
+    Narrative?: string;
+        
+    @Field({nullable: true, description: `Why the evaluator failed, when Status = Failed.`}) 
+    ErrorMessage?: string;
+        
+    @Field({nullable: true, description: `Version of the scoring algorithm that computed the stored result, so a future algorithm change is visible rather than silent.`}) 
+    @MaxLength(20)
+    ScoringEngineVersion?: string;
+        
+    @Field({nullable: true, description: `JSON (IRubricEvaluationMetadata) of evaluator provenance not covered by columns: model settings, timings, the consumer that requested it.`}) 
+    Metadata?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    SubjectEntity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ContextEntity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    EvaluatorUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIPromptRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIAgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Band?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RubricID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Rubric?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    RubricMajorVersion?: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(122)
+    RubricVersionLabel?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    CohortEvaluationCount?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    CohortScoredCount?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    CohortPassedCount?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CohortMeanScore?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CohortMinScore?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CohortMaxScore?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CohortScoreStdDev?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    CohortHumanCount?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CohortHumanMeanScore?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    CohortAICount?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    CohortAIMeanScore?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    SelfAssessmentScore?: number;
+        
+    @Field(() => Int, {nullable: true}) 
+    SelfAssessmentCount?: number;
+        
+    @Field(() => Float, {nullable: true}) 
+    DeviationFromCohortMean?: number;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Evaluations
+//****************************************************************************
+@InputType()
+export class CreateMJRubricEvaluationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    RubricVersionID?: string;
+
+    @Field({ nullable: true })
+    SubjectEntityID?: string;
+
+    @Field({ nullable: true })
+    SubjectRecordID?: string;
+
+    @Field({ nullable: true })
+    ContextEntityID: string | null;
+
+    @Field({ nullable: true })
+    ContextRecordID: string | null;
+
+    @Field({ nullable: true })
+    EvaluatorType?: string;
+
+    @Field({ nullable: true })
+    EvaluatorUserID: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID: string | null;
+
+    @Field({ nullable: true })
+    EvaluatorName: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    SupersedesEvaluationID: string | null;
+
+    @Field({ nullable: true })
+    SubmittedAt: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    PassThresholdApplied: number | null;
+
+    @Field(() => Float, { nullable: true })
+    NormalizedScore: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Passed: boolean | null;
+
+    @Field({ nullable: true })
+    Outcome: string | null;
+
+    @Field({ nullable: true })
+    BandID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    GateFailed?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    Completeness: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ScoredCriteriaCount: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ApplicableCriteriaCount: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCriteriaCount: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Confidence: number | null;
+
+    @Field({ nullable: true })
+    Narrative: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    ScoringEngineVersion: string | null;
+
+    @Field({ nullable: true })
+    Metadata: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Evaluations
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricEvaluationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    RubricVersionID?: string;
+
+    @Field({ nullable: true })
+    SubjectEntityID?: string;
+
+    @Field({ nullable: true })
+    SubjectRecordID?: string;
+
+    @Field({ nullable: true })
+    ContextEntityID?: string | null;
+
+    @Field({ nullable: true })
+    ContextRecordID?: string | null;
+
+    @Field({ nullable: true })
+    EvaluatorType?: string;
+
+    @Field({ nullable: true })
+    EvaluatorUserID?: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID?: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    EvaluatorName?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    SupersedesEvaluationID?: string | null;
+
+    @Field({ nullable: true })
+    SubmittedAt?: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    PassThresholdApplied?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    NormalizedScore?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Passed?: boolean | null;
+
+    @Field({ nullable: true })
+    Outcome?: string | null;
+
+    @Field({ nullable: true })
+    BandID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    GateFailed?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    Completeness?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ScoredCriteriaCount?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ApplicableCriteriaCount?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    TotalCriteriaCount?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Confidence?: number | null;
+
+    @Field({ nullable: true })
+    Narrative?: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    ScoringEngineVersion?: string | null;
+
+    @Field({ nullable: true })
+    Metadata?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubric Evaluations
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricEvaluationViewResult {
+    @Field(() => [MJRubricEvaluation_])
+    Results: MJRubricEvaluation_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubricEvaluation_)
+export class MJRubricEvaluationResolver extends ResolverBase {
+    @Query(() => RunMJRubricEvaluationViewResult)
+    async RunMJRubricEvaluationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricEvaluationViewResult)
+    async RunMJRubricEvaluationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricEvaluationViewResult)
+    async RunMJRubricEvaluationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubric Evaluations';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubricEvaluation_, { nullable: true })
+    async MJRubricEvaluation(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubricEvaluation_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubric Evaluations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubricEvaluations')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubric Evaluations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubric Evaluations', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubricEvaluation_)
+    async CreateMJRubricEvaluation(
+        @Arg('input', () => CreateMJRubricEvaluationInput) input: CreateMJRubricEvaluationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubric Evaluations', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubricEvaluation_)
+    async UpdateMJRubricEvaluation(
+        @Arg('input', () => UpdateMJRubricEvaluationInput) input: UpdateMJRubricEvaluationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubric Evaluations', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubricEvaluation_)
+    async DeleteMJRubricEvaluation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubric Evaluations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Rubric Scale Levels
+//****************************************************************************
+@ObjectType({ description: `One level of a Levels-type rubric scale.` })
+export class MJRubricScaleLevel_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ScaleID?: string;
+        
+    @Field({nullable: true, description: `What evaluators see and pick, e.g. "Exceeds", "Partially compliant", "4".`}) 
+    @MaxLength(100)
+    Label?: string;
+        
+    @Field(() => Float, {nullable: true, description: `The level's raw value in the scale's own units, e.g. 4 on a 1-5 scale. Display and export only; scoring uses NormalizedValue.`}) 
+    Value?: number;
+        
+    @Field(() => Float, {nullable: true, description: `The score this level contributes, from 0 (worst) to 1 (best). Explicit rather than derived so non-linear scales (e.g. Partial = 0.4) are expressible.`}) 
+    NormalizedValue?: number;
+        
+    @Field({nullable: true, description: `Generic meaning of the level. Criteria can override it with their own anchor text (RubricCriterionLevel).`}) 
+    Description?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Display order of the level within its scale, worst to best by convention.`}) 
+    Sequence?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Scale?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Scale Levels
+//****************************************************************************
+@InputType()
+export class CreateMJRubricScaleLevelInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ScaleID?: string;
+
+    @Field({ nullable: true })
+    Label?: string;
+
+    @Field(() => Float, { nullable: true })
+    Value?: number;
+
+    @Field(() => Float, { nullable: true })
+    NormalizedValue?: number;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Scale Levels
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricScaleLevelInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ScaleID?: string;
+
+    @Field({ nullable: true })
+    Label?: string;
+
+    @Field(() => Float, { nullable: true })
+    Value?: number;
+
+    @Field(() => Float, { nullable: true })
+    NormalizedValue?: number;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubric Scale Levels
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricScaleLevelViewResult {
+    @Field(() => [MJRubricScaleLevel_])
+    Results: MJRubricScaleLevel_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubricScaleLevel_)
+export class MJRubricScaleLevelResolver extends ResolverBase {
+    @Query(() => RunMJRubricScaleLevelViewResult)
+    async RunMJRubricScaleLevelViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricScaleLevelViewResult)
+    async RunMJRubricScaleLevelViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricScaleLevelViewResult)
+    async RunMJRubricScaleLevelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubric Scale Levels';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubricScaleLevel_, { nullable: true })
+    async MJRubricScaleLevel(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubricScaleLevel_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubric Scale Levels', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubricScaleLevels')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubric Scale Levels', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubric Scale Levels', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubricScaleLevel_)
+    async CreateMJRubricScaleLevel(
+        @Arg('input', () => CreateMJRubricScaleLevelInput) input: CreateMJRubricScaleLevelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubric Scale Levels', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubricScaleLevel_)
+    async UpdateMJRubricScaleLevel(
+        @Arg('input', () => UpdateMJRubricScaleLevelInput) input: UpdateMJRubricScaleLevelInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubric Scale Levels', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubricScaleLevel_)
+    async DeleteMJRubricScaleLevel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubric Scale Levels', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Rubric Scales
+//****************************************************************************
+@ObjectType({ description: `A reusable response scale that criteria are answered on: either ordered Levels (e.g. 1-5, Pass/Fail, Compliant/Partial/Non-compliant) or a Numeric range. Every answer is converted to a normalized 0..1 score. A scale used by a published rubric version is frozen in everything that affects scoring.` })
+export class MJRubricScale_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: `Unique display name of the scale, e.g. "Likert 1-5" or "Compliance".`}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: `What the scale measures and how evaluators should read it.`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `Levels: answers pick one of the scale's RubricScaleLevel rows, each carrying its own normalized value. Numeric: answers are a number between MinValue and MaxValue, normalized linearly (inverted when HigherIsBetter = 0).`}) 
+    @MaxLength(20)
+    ScaleType?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Lowest allowed answer for a Numeric scale. Required when ScaleType = Numeric.`}) 
+    MinValue?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Highest allowed answer for a Numeric scale. Required when ScaleType = Numeric and must exceed MinValue.`}) 
+    MaxValue?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Optional input increment for a Numeric scale (e.g. 0.5). NULL = any value in range.`}) 
+    Step?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `For Numeric scales: 1 = a higher answer is better (normalizes to a higher score); 0 = lower is better (e.g. error counts), so normalization is inverted.`}) 
+    HigherIsBetter?: boolean;
+        
+    @Field({nullable: true, description: `Active scales can be chosen for new criteria; Disabled scales stay valid for versions that already use them.`}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Scales
+//****************************************************************************
+@InputType()
+export class CreateMJRubricScaleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ScaleType?: string;
+
+    @Field(() => Float, { nullable: true })
+    MinValue: number | null;
+
+    @Field(() => Float, { nullable: true })
+    MaxValue: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Step: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HigherIsBetter?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Scales
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricScaleInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ScaleType?: string;
+
+    @Field(() => Float, { nullable: true })
+    MinValue?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    MaxValue?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    Step?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HigherIsBetter?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubric Scales
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricScaleViewResult {
+    @Field(() => [MJRubricScale_])
+    Results: MJRubricScale_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubricScale_)
+export class MJRubricScaleResolver extends ResolverBase {
+    @Query(() => RunMJRubricScaleViewResult)
+    async RunMJRubricScaleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricScaleViewResult)
+    async RunMJRubricScaleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricScaleViewResult)
+    async RunMJRubricScaleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubric Scales';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubricScale_, { nullable: true })
+    async MJRubricScale(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubricScale_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubric Scales', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubricScales')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubric Scales', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubric Scales', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubricScale_)
+    async CreateMJRubricScale(
+        @Arg('input', () => CreateMJRubricScaleInput) input: CreateMJRubricScaleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubric Scales', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubricScale_)
+    async UpdateMJRubricScale(
+        @Arg('input', () => UpdateMJRubricScaleInput) input: UpdateMJRubricScaleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubric Scales', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubricScale_)
+    async DeleteMJRubricScale(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubric Scales', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Rubric Versions
+//****************************************************************************
+@ObjectType({ description: `An immutable-once-published snapshot of a rubric\'s content. Edits happen on the single Draft; publishing freezes it and assigns a semantic version whose bump is computed by the server from a diff against the previous published version: Major = scores are not comparable (weights, scales, gates, tree shape, N/A policy, rollup, evaluator rules), Minor = scores comparable but verdicts or interpretation may differ (threshold, bands, advisory criteria, required evidence), Patch = wording only.` })
+export class MJRubricVersion_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RubricID?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Semantic major version, assigned at publish. Evaluations sharing a rubric and major version are directly comparable. NULL while Draft.`}) 
+    MajorVersion?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Semantic minor version, assigned at publish. NULL while Draft.`}) 
+    MinorVersion?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Semantic patch version, assigned at publish. NULL while Draft.`}) 
+    PatchVersion?: number;
+        
+    @Field({nullable: true, description: `Draft (editable, at most one per rubric), Published (frozen, available for new evaluations), or Retired (frozen, kept for history and for evaluations already pinned to it).`}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: `The version this draft was cloned from; the publish-time diff and bump are computed against it.`}) 
+    @MaxLength(36)
+    BasedOnVersionID?: string;
+        
+    @Field({nullable: true, description: `Overall guidance for evaluators (human and AI) applying this version. Wording only: changing it is a patch.`}) 
+    Instructions?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Default minimum normalized score (0..1) for an evaluation to pass. Consumers (a test, a review round) may override it; the threshold actually used is stored on each evaluation. NULL = no threshold (evaluations report a score and gate results only).`}) 
+    PassThreshold?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Minimum share (0..1) of applicable scored criteria required for a valid result. Below it the evaluation's Outcome is Incomplete and it does not pass. NULL = no minimum.`}) 
+    MinimumCompleteness?: number;
+        
+    @Field({nullable: true, description: `Default handling of a criterion answered Not Applicable (criteria may override): ExcludeAndRedistribute (drop it and share its weight among its siblings), CountAsZero (score it 0), FailEvaluation (allowed, but the evaluation fails), NotAllowed (the evaluation cannot be submitted).`}) 
+    @MaxLength(30)
+    NotApplicablePolicy?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Display-only lower bound: the value a normalized score of 0 is shown as (e.g. 0 or 1). Never used in scoring.`}) 
+    ScoreDisplayMin?: number;
+        
+    @Field(() => Float, {nullable: true, description: `Display-only upper bound: the value a normalized score of 1 is shown as (e.g. 100 or 5). Never used in scoring.`}) 
+    ScoreDisplayMax?: number;
+        
+    @Field({nullable: true, description: `Optional bump the author asks for on publish. The server applies the larger of this and the bump it computes; an author can never publish a smaller bump than the change requires.`}) 
+    @MaxLength(10)
+    RequestedBump?: string;
+        
+    @Field({nullable: true, description: `The bump the server computed from the diff at publish (Initial for a rubric's first version).`}) 
+    @MaxLength(10)
+    ComputedBump?: string;
+        
+    @Field({nullable: true, description: `The bump actually applied at publish: the larger of ComputedBump and RequestedBump.`}) 
+    @MaxLength(10)
+    AppliedBump?: string;
+        
+    @Field({nullable: true, description: `Author's human-readable summary of what changed in this version.`}) 
+    ChangeSummary?: string;
+        
+    @Field({nullable: true, description: `JSON diff produced at publish: every added, removed and changed node and property, each with the bump it required. Explains ComputedBump.`}) 
+    ChangeDetails?: string;
+        
+    @Field({nullable: true, description: `SHA-256 of the version's full canonical content (scoring math plus all wording), computed at publish.`}) 
+    @MaxLength(64)
+    ContentHash?: string;
+        
+    @Field({nullable: true, description: `SHA-256 of only the scoring-relevant content (tree shape, keys, weights, scales, gates, policies, rollups, evaluator rules). Two versions with equal ScoringHash compute identical scores from identical answers.`}) 
+    @MaxLength(64)
+    ScoringHash?: string;
+        
+    @Field({nullable: true, description: `When the version was published.`}) 
+    PublishedAt?: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    PublishedByUserID?: string;
+        
+    @Field({nullable: true, description: `When the version was retired. NULL while Draft or Published.`}) 
+    RetiredAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Rubric?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    PublishedByUser?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Versions
+//****************************************************************************
+@InputType()
+export class CreateMJRubricVersionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    RubricID?: string;
+
+    @Field(() => Int, { nullable: true })
+    MajorVersion: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MinorVersion: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PatchVersion: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    BasedOnVersionID: string | null;
+
+    @Field({ nullable: true })
+    Instructions: string | null;
+
+    @Field(() => Float, { nullable: true })
+    PassThreshold: number | null;
+
+    @Field(() => Float, { nullable: true })
+    MinimumCompleteness: number | null;
+
+    @Field({ nullable: true })
+    NotApplicablePolicy?: string;
+
+    @Field(() => Float, { nullable: true })
+    ScoreDisplayMin?: number;
+
+    @Field(() => Float, { nullable: true })
+    ScoreDisplayMax?: number;
+
+    @Field({ nullable: true })
+    RequestedBump: string | null;
+
+    @Field({ nullable: true })
+    ComputedBump: string | null;
+
+    @Field({ nullable: true })
+    AppliedBump: string | null;
+
+    @Field({ nullable: true })
+    ChangeSummary: string | null;
+
+    @Field({ nullable: true })
+    ChangeDetails: string | null;
+
+    @Field({ nullable: true })
+    ContentHash: string | null;
+
+    @Field({ nullable: true })
+    ScoringHash: string | null;
+
+    @Field({ nullable: true })
+    PublishedAt: Date | null;
+
+    @Field({ nullable: true })
+    PublishedByUserID: string | null;
+
+    @Field({ nullable: true })
+    RetiredAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubric Versions
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricVersionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    RubricID?: string;
+
+    @Field(() => Int, { nullable: true })
+    MajorVersion?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    MinorVersion?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PatchVersion?: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    BasedOnVersionID?: string | null;
+
+    @Field({ nullable: true })
+    Instructions?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    PassThreshold?: number | null;
+
+    @Field(() => Float, { nullable: true })
+    MinimumCompleteness?: number | null;
+
+    @Field({ nullable: true })
+    NotApplicablePolicy?: string;
+
+    @Field(() => Float, { nullable: true })
+    ScoreDisplayMin?: number;
+
+    @Field(() => Float, { nullable: true })
+    ScoreDisplayMax?: number;
+
+    @Field({ nullable: true })
+    RequestedBump?: string | null;
+
+    @Field({ nullable: true })
+    ComputedBump?: string | null;
+
+    @Field({ nullable: true })
+    AppliedBump?: string | null;
+
+    @Field({ nullable: true })
+    ChangeSummary?: string | null;
+
+    @Field({ nullable: true })
+    ChangeDetails?: string | null;
+
+    @Field({ nullable: true })
+    ContentHash?: string | null;
+
+    @Field({ nullable: true })
+    ScoringHash?: string | null;
+
+    @Field({ nullable: true })
+    PublishedAt?: Date | null;
+
+    @Field({ nullable: true })
+    PublishedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    RetiredAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubric Versions
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricVersionViewResult {
+    @Field(() => [MJRubricVersion_])
+    Results: MJRubricVersion_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubricVersion_)
+export class MJRubricVersionResolver extends ResolverBase {
+    @Query(() => RunMJRubricVersionViewResult)
+    async RunMJRubricVersionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricVersionViewResult)
+    async RunMJRubricVersionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricVersionViewResult)
+    async RunMJRubricVersionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubric Versions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubricVersion_, { nullable: true })
+    async MJRubricVersion(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubricVersion_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubric Versions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubricVersions')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubric Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubric Versions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubricVersion_)
+    async CreateMJRubricVersion(
+        @Arg('input', () => CreateMJRubricVersionInput) input: CreateMJRubricVersionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubric Versions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubricVersion_)
+    async UpdateMJRubricVersion(
+        @Arg('input', () => UpdateMJRubricVersionInput) input: UpdateMJRubricVersionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubric Versions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubricVersion_)
+    async DeleteMJRubricVersion(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubric Versions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Rubrics
+//****************************************************************************
+@ObjectType({ description: `The stable identity of a rubric: weighted, nested criteria that records are evaluated against. The content lives in immutable, semantically versioned RubricVersion rows.` })
+export class MJRubric_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: `Unique display name of the rubric.`}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: `What the rubric evaluates and when to use it.`}) 
+    Description?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    CategoryID?: string;
+        
+    @Field({nullable: true, description: `Active rubrics can be assigned and evaluated against; Disabled rubrics keep their history but are not offered for new use.`}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Category?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubrics
+//****************************************************************************
+@InputType()
+export class CreateMJRubricInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    CategoryID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Rubrics
+//****************************************************************************
+@InputType()
+export class UpdateMJRubricInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    CategoryID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Rubrics
+//****************************************************************************
+@ObjectType()
+export class RunMJRubricViewResult {
+    @Field(() => [MJRubric_])
+    Results: MJRubric_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJRubric_)
+export class MJRubricResolver extends ResolverBase {
+    @Query(() => RunMJRubricViewResult)
+    async RunMJRubricViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricViewResult)
+    async RunMJRubricViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJRubricViewResult)
+    async RunMJRubricDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Rubrics';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJRubric_, { nullable: true })
+    async MJRubric(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJRubric_ | null> {
+        this.CheckUserReadPermissions('MJ: Rubrics', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRubrics')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Rubrics', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Rubrics', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJRubric_)
+    async CreateMJRubric(
+        @Arg('input', () => CreateMJRubricInput) input: CreateMJRubricInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Rubrics', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJRubric_)
+    async UpdateMJRubric(
+        @Arg('input', () => UpdateMJRubricInput) input: UpdateMJRubricInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Rubrics', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJRubric_)
+    async DeleteMJRubric(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Rubrics', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: SQL Dialects
 //****************************************************************************
 @ObjectType()
@@ -85869,6 +88715,9 @@ export class MJTestSuiteRun_ {
     @Field({nullable: true, description: `JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".`}) 
     ResolvedVariables?: string;
         
+    @Field(() => Float, {nullable: true, description: `Suite-level score (0..1): the mean score of the suite's executed (non-skipped) test runs.`}) 
+    Score?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Suite?: string;
@@ -85968,6 +88817,9 @@ export class CreateMJTestSuiteRunInput {
     @Field({ nullable: true })
     ResolvedVariables: string | null;
 
+    @Field(() => Float, { nullable: true })
+    Score: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -86058,6 +88910,9 @@ export class UpdateMJTestSuiteRunInput {
 
     @Field({ nullable: true })
     ResolvedVariables?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    Score?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -86384,9 +89239,17 @@ export class MJTestSuite_ {
     @Field({nullable: true, description: `JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.`}) 
     Variables?: string;
         
+    @Field({nullable: true, description: `Default rubric for tests in this suite and its child suites that do not name their own.`}) 
+    @MaxLength(36)
+    RubricID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Rubric?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -86441,6 +89304,9 @@ export class CreateMJTestSuiteInput {
     @Field({ nullable: true })
     Variables: string | null;
 
+    @Field({ nullable: true })
+    RubricID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -86477,6 +89343,9 @@ export class UpdateMJTestSuiteInput {
 
     @Field({ nullable: true })
     Variables?: string | null;
+
+    @Field({ nullable: true })
+    RubricID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -86813,9 +89682,17 @@ export class MJTest_ {
     @Field({nullable: true, description: `JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.`}) 
     Variables?: string;
         
+    @Field({nullable: true, description: `The rubric this test's output is judged by. NULL = inherit from the suite (walking up ParentID). The latest published version is pinned when each run starts.`}) 
+    @MaxLength(36)
+    RubricID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Type?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Rubric?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -86872,6 +89749,9 @@ export class CreateMJTestInput {
     @Field({ nullable: true })
     Variables: string | null;
 
+    @Field({ nullable: true })
+    RubricID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -86926,6 +89806,9 @@ export class UpdateMJTestInput {
 
     @Field({ nullable: true })
     Variables?: string | null;
+
+    @Field({ nullable: true })
+    RubricID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

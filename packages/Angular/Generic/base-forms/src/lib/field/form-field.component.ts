@@ -623,6 +623,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // a denied field. Returning true here is also what lets a section whose fields are all
     // denied collapse away instead of rendering an empty card.
     if (!this.IsFieldReadableByUser) return true;
+    if (this.FormContext?.hiddenFieldNames?.includes(this.FieldName)) return true;
     if (this.EditMode) return false;
     if (!this.HideWhenEmptyInReadOnlyMode) return false;
     if (this.FormContext?.showEmptyFields) return false;

@@ -5,6 +5,7 @@ import { MJEntityDocumentEntity, MJVectorIndexEntity, MJVectorDatabaseEntity } f
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
+import { AIEngine } from '@memberjunction/aiengine';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 
 /* ───── GraphQL types ───── */
@@ -99,7 +100,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             const metadataFilter: Record<string, unknown> = { Entity: { $eq: entityName } };
 
             const queryResponse = await vectorDBInstance.QueryIndex({
-                id: vectorIndex.Name,  // index name (stripped before Pinecone query)
+                id: AIEngine.Instance.GetProviderIndexName(vectorIndex),
                 vector: uniformVector,
                 topK: limit,
                 includeMetadata: true,
