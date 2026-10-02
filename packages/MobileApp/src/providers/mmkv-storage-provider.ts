@@ -38,6 +38,11 @@ function categoryIndexKey(category: string): string {
  * maintained so category-wide operations stay O(category-size).
  */
 export class MMKVStorageProvider implements ILocalStorageProvider {
+    /**
+     * `true` — MMKV is backed by a file on the device, so what it holds survives an app restart.
+     * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public readonly SupportsCrossProcessPersistence = true;
     private readonly _mmkv: MMKV;
 
     /**

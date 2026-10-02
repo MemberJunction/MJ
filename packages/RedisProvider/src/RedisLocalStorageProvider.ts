@@ -167,6 +167,11 @@ const DEFAULT_CATEGORY = 'default';
  * ```
  */
 export class RedisLocalStorageProvider implements ILocalStorageProvider {
+    /**
+     * `true` — that is the whole point of this provider: every server in the fleet reads what any
+     * other wrote. See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public readonly SupportsCrossProcessPersistence = true;
     private _client: Redis;
     private _keyPrefix: string;
     private _defaultTTLSeconds: number | undefined;
