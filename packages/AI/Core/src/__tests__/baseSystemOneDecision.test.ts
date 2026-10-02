@@ -204,14 +204,16 @@ describe('BaseSystemOneDecision', () => {
             expect(ParseSystemOneCredential('')).toEqual({ APIKey: '' });
         });
 
-        it('fails fatally, without a request, when the configuration check reports a problem', async () => {
+        it('fails without a request, allowing failover, when the configuration check reports a problem', async () => {
             const driver = new MisconfiguredSystemOneDecision();
             const result = await driver.Decide(params());
 
             expect(driver.Sent).toHaveLength(0);
             expect(result.success).toBe(false);
             expect(result.errorMessage).toBe('Test Decisions API has no endpoint');
-            expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Fatal', canFailover: false });
+            // Not 'Fatal': the failover loop stops on any Fatal error, so a misconfigured fallback
+            // candidate would stop the loop before a correctly configured one got its turn.
+            expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
             expect(result.Answers).toEqual({});
         });
     });

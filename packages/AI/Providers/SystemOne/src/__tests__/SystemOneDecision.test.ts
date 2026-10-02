@@ -202,7 +202,7 @@ describe('SystemOneDecision', () => {
       expect(ToSystemOneURL(' http://127.0.0.1:8080/v1/systemone ')).toBe('http://127.0.0.1:8080/v1/systemone');
     });
 
-    it('fails fatally, without a request, when no base URL is configured', async () => {
+    it('fails without a request, allowing failover, when no base URL is configured', async () => {
       const calls = fakeFetch(() => jsonResponse(KEV_RESPONSE));
       const driver = new SystemOneDecision('tok');
       const result = await driver.Decide(params());
@@ -212,7 +212,7 @@ describe('SystemOneDecision', () => {
       expect(result.success).toBe(false);
       expect(result.errorMessage).toContain("'API Key with Endpoint'");
       expect(result.errorMessage).toContain('SYSTEMONE_BASE_URL');
-      expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Fatal', canFailover: false });
+      expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
     });
   });
 

@@ -223,7 +223,7 @@ describe('CloudflareDecision', () => {
       expect(calls[0].Init?.headers).toEqual({ Authorization: `Bearer ${API_TOKEN}`, 'Content-Type': 'application/json' });
     });
 
-    it('fails fatally, without a request, when neither the key nor the environment gives one', async () => {
+    it('fails without a request, allowing failover, when neither the key nor the environment gives one', async () => {
       const calls = fakeFetch(() => jsonResponse(WRAPPED_RESPONSE));
       const result = await new CloudflareDecision(API_TOKEN).Decide(params());
 
@@ -231,17 +231,17 @@ describe('CloudflareDecision', () => {
       expect(result.success).toBe(false);
       expect(result.errorMessage).toContain("'<accountId>:<apiToken>'");
       expect(result.errorMessage).toContain('CLOUDFLARE_ACCOUNT_ID');
-      expect(result.errorInfo).toEqual({ errorType: 'Authentication', severity: 'Fatal', canFailover: false });
+      expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
       expect(result.Answers).toEqual({});
     });
 
-    it('fails fatally when the key names an account but no token', async () => {
+    it('fails without a request, allowing failover, when the key names an account but no token', async () => {
       const calls = fakeFetch(() => jsonResponse(WRAPPED_RESPONSE));
       const result = await new CloudflareDecision(`${ACCOUNT_ID}:`).Decide(params());
 
       expect(calls).toHaveLength(0);
       expect(result.errorMessage).toMatch(/has no API token/);
-      expect(result.errorInfo).toEqual({ errorType: 'Authentication', severity: 'Fatal', canFailover: false });
+      expect(result.errorInfo).toEqual({ errorType: 'NoCredentials', severity: 'Retriable', canFailover: true });
     });
   });
 

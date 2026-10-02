@@ -57,7 +57,9 @@ export interface SystemOneCredential {
 
 /**
  * A configuration problem that stops a call before any request: a credential that lacks a part the
- * driver needs. Another attempt would repeat it, so it is fatal and does not fail over.
+ * driver needs. Retrying this candidate would repeat it, but another candidate may be configured
+ * correctly, so the failure allows failover, as `AIDecisionRunner` does for a credential it cannot
+ * resolve. It is never 'Fatal', which would stop the failover loop before the next candidate.
  */
 export interface SystemOneConfigurationError {
     Message: string;
@@ -172,8 +174,8 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
 
     /**
      * What stops a call before any request, such as a credential without a part the driver needs, or
-     * undefined when nothing does. Defaults to undefined. {@link DoDecide} turns it into a fatal failure
-     * that does not fail over.
+     * undefined when nothing does. Defaults to undefined. {@link DoDecide} turns it into a failure that
+     * allows failover, since another candidate may be configured correctly.
      */
     protected GetConfigurationError(): SystemOneConfigurationError | undefined {
         return undefined;
@@ -273,11 +275,14 @@ export abstract class BaseSystemOneDecision extends BaseDecision {
         return result;
     }
 
-    /** A failed result for a configuration problem: fatal, so the failover loop stops, and not failover-eligible. */
+    /**
+     * A failed result for a configuration problem. It allows failover and is not 'Fatal': a misconfigured
+     * fallback candidate must not stop the failover loop before a correctly configured one gets its turn.
+     */
     private configurationFailure(error: SystemOneConfigurationError, startTime: Date): DecisionResult {
         const result = new DecisionResult(false, startTime, new Date());
         result.errorMessage = error.Message;
-        result.errorInfo = { errorType: error.ErrorType, severity: 'Fatal', canFailover: false };
+        result.errorInfo = { errorType: error.ErrorType, severity: 'Retriable', canFailover: true };
         return result;
     }
 

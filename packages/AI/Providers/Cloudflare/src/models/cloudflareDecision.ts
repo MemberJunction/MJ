@@ -129,18 +129,20 @@ export class CloudflareDecision extends BaseSystemOneDecision {
 
     /**
      * A credential without a token, or without an account ID when the URL needs one, stops the call
-     * before any request: a fatal Authentication error that names how to supply it.
+     * before any request, with a message that names how to supply it. It is a `NoCredentials` error
+     * that allows failover: another candidate may be configured, and the type does not exclude the
+     * vendor's other models, whose rows may have their own credentials bound.
      */
     protected GetConfigurationError(): SystemOneConfigurationError | undefined {
         if (this._apiToken.length === 0) {
             return {
-                ErrorType: 'Authentication',
+                ErrorType: 'NoCredentials',
                 Message: `${this.ServiceName} has no API token: set the API key to '<accountId>:<apiToken>', or to the token with ${CloudflareDecision.ACCOUNT_ID_ENV_VAR} set`,
             };
         }
         if (!this.AccountID && this.BaseURL.includes(ACCOUNT_ID_PLACEHOLDER)) {
             return {
-                ErrorType: 'Authentication',
+                ErrorType: 'NoCredentials',
                 Message: `${this.ServiceName} has no Cloudflare account ID: set the API key to '<accountId>:<apiToken>', or set the ${CloudflareDecision.ACCOUNT_ID_ENV_VAR} environment variable`,
             };
         }

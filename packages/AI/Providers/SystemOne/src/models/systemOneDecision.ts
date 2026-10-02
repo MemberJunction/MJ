@@ -88,7 +88,11 @@ export class SystemOneDecision extends BaseSystemOneDecision {
         return message ? `${this.ServiceName} returned HTTP ${status}: ${message}` : super.DescribeHTTPError(status, bodyText);
     }
 
-    /** No base URL stops the call before any request, naming the three ways to give one. */
+    /**
+     * No base URL stops the call before any request, naming the ways to give one. It is a
+     * `NoCredentials` error that allows failover: another candidate may be configured, and the type does
+     * not exclude this vendor's other models, each of which may have its own endpoint bound.
+     */
     protected GetConfigurationError(): SystemOneConfigurationError | undefined {
         if (this._endpointURL) {
             return undefined;
