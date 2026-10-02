@@ -1,9 +1,10 @@
-import { BaseEntity, RunInEntityTransaction, type EntitySaveOptions } from '@memberjunction/core';
+import { BaseEntity, RunInEntityTransaction, type EntitySaveOptions, type ValidationResult } from '@memberjunction/core';
 import { IsValidUUID } from '@memberjunction/global';
 import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { LoadDraftForPublish } from './rubrics/versionPublish.js';
 import { AssertCanSupersede, AssertPinnedVersionForCreate, SubmitEvaluation, type PersistedEvaluation, type PersistedScore, type SubmitEvaluationInput } from './rubrics/evaluationSubmit.js';
+import { EvaluationStatusError, PushFailure } from './rubrics/statusRules.js';
 
 /**
  * Creates and submits an evaluation.
@@ -54,6 +55,19 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
      * failed save does not leave the prior row Superseded. SubmittedAt is set
      * with the status. The three writes share one entity transaction.
      */
+    /**
+     * A new evaluation is Draft. Draft may be submitted or fail. Submitted may
+     * be superseded or withdrawn. Every other move is refused.
+     */
+    public override async ValidateAsync(): Promise<ValidationResult> {
+        const result = await super.ValidateAsync();
+        const status = this.GetFieldByName('Status');
+        const previous = this.IsSaved === false ? null : String(status?.OldValue ?? this.Status);
+        const message = EvaluationStatusError(this.IsSaved === false, previous, String(this.Status));
+        if (message) PushFailure(result, 'Status', message, this.Status);
+        return result;
+    }
+
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         if (this.IsSaved === false) {
             await this.assertNewPinPublished();

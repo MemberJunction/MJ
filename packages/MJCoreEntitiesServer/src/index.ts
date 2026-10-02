@@ -60,6 +60,8 @@ export * from './custom/MJRemoteOperationEntityServer.server';
 export * from './custom/MJRecordChangeEntityServer.server';
 export * from './custom/MJRubricVersionEntityServer.server';
 export * from './custom/MJRubricCriterionEntityServer.server';
+export * from './custom/MJRubricCriterionLevelEntityServer.server';
+export * from './custom/MJRubricBandEntityServer.server';
 export * from './custom/MJRubricEvaluationEntityServer.server';
 export * from './custom/MJRubricEvaluationScoreEntityServer.server';
 export * from './custom/MJRubricScaleEntityServer.server';

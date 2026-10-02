@@ -1,7 +1,8 @@
-import { BaseEntity, type EntitySaveOptions } from '@memberjunction/core';
+import { BaseEntity, type EntitySaveOptions, type ValidationResult } from '@memberjunction/core';
 import { MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { FROZEN_VERSION_FIELDS, PushFailure, VersionStatusError } from './rubrics/statusRules.js';
 import { CloneVersionNodes, LoadDraftForPublish, PublishRubricVersion, type PublishResult } from './rubrics/versionPublish.js';
 
 /**
@@ -61,10 +62,34 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
     }
 
     /**
+     * A new version is Draft. Draft becomes Published only through publish.
+     * A frozen version moves only between Published and Retired, and none of
+     * the columns the immutability trigger freezes may change on that move.
+     */
+    public override async ValidateAsync(): Promise<ValidationResult> {
+        const result = await super.ValidateAsync();
+        const status = this.GetFieldByName('Status');
+        const previous = this.IsSaved === false ? null : String(status?.OldValue ?? this.Status);
+        const statusError = VersionStatusError(this.IsSaved === false, previous, this.Status);
+        if (statusError) PushFailure(result, 'Status', statusError, this.Status);
+        if (this.IsSaved !== false && previous && previous !== 'Draft') {
+            for (const name of FROZEN_VERSION_FIELDS) {
+                const field = this.GetFieldByName(name);
+                if (field?.Dirty) {
+                    PushFailure(result, name, 'A published rubric version is immutable. Create a new draft version to change it; only its Status may move between Published and Retired.', field.Value);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
      * When Status moves Draft → Published, loads the draft tree and its base
      * version and calls {@link publish}. Setting Status and saving is enough.
      * Refuses the cases documented on the class. Writes PublishedAt with the
-     * status, which the published-version check constraint requires.
+     * status, which the published-version check constraint requires, and stamps
+     * PublishedByUserID from the current user. Retiring stamps RetiredAt.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const status = this.GetFieldByName('Status');
@@ -75,6 +100,11 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
             const loaded = await LoadDraftForPublish(run, this.ID, this.RubricID, this.BasedOnVersionID);
             const requested = (this as { RequestedBump?: 'Major' | 'Minor' | 'Patch' | null }).RequestedBump ?? null;
             await this.Publish(loaded.base, loaded.draft, requested);
+            const userId = (this.ContextCurrentUser as { ID?: string } | null)?.ID;
+            if (userId && !this.PublishedByUserID) this.PublishedByUserID = userId;
+        }
+        if (status?.Dirty && this.Status === 'Retired' && !this.RetiredAt) {
+            this.RetiredAt = new Date();
         }
         return super.Save(options);
     }

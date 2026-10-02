@@ -10,11 +10,17 @@ vi.mock('@memberjunction/core-entities', () => {
         public ProviderToUse: { RunView: (params: { EntityName: string; ExtraFilter: string }) => Promise<{ Success: boolean; Results: unknown[] }> } | null = null;
         public ContextCurrentUser = { ID: 'user-1' };
         public SuperSaveCalled = false;
+        public IsSaved = true;
         public MajorVersion: number | null = null;
         public MinorVersion: number | null = null;
         public PatchVersion: number | null = null;
         public PublishedAt: Date | null = null;
+        public PublishedByUserID: string | null = null;
+        public RetiredAt: Date | null = null;
         public AppliedBump: string | null = null;
+        public async ValidateAsync(): Promise<{ Success: boolean; Errors: unknown[] }> {
+            return { Success: true, Errors: [] };
+        }
         public GetFieldByName(name: string): { Dirty: boolean; OldValue: string; Value: string } | null {
             if (name !== 'Status') return null;
             return { Dirty: this.Status !== this.LoadedStatus, OldValue: this.LoadedStatus, Value: this.Status };
@@ -39,6 +45,7 @@ describe('MJRubricVersionEntityServer.Save', () => {
             MinorVersion: number | null;
             PatchVersion: number | null;
             PublishedAt: Date | null;
+            PublishedByUserID: string | null;
             AppliedBump: string | null;
             SuperSaveCalled: boolean;
         };
@@ -69,7 +76,50 @@ describe('MJRubricVersionEntityServer.Save', () => {
         expect(host.PatchVersion).toBe(0);
         expect(host.AppliedBump).toBe('Major');
         expect(host.PublishedAt).toBeInstanceOf(Date);
+        expect(host.PublishedByUserID).toBe('user-1');
         expect(host.SuperSaveCalled).toBe(true);
+    });
+
+    it('stamps RetiredAt when a published version is retired', async () => {
+        const version = new MJRubricVersionEntityServer();
+        const host = version as unknown as {
+            Status: string;
+            LoadedStatus: string;
+            RetiredAt: Date | null;
+            SuperSaveCalled: boolean;
+        };
+        host.LoadedStatus = 'Published';
+        host.Status = 'Retired';
+        await version.Save();
+        expect(host.RetiredAt).toBeInstanceOf(Date);
+        expect(host.SuperSaveCalled).toBe(true);
+    });
+
+    it('refuses a new version that is not Draft, and a frozen version moving back to Draft', async () => {
+        const created = new MJRubricVersionEntityServer();
+        const createdHost = created as unknown as { IsSaved: boolean; Status: string };
+        createdHost.IsSaved = false;
+        createdHost.Status = 'Published';
+        const refused = await created.ValidateAsync();
+        expect(refused.Success).toBe(false);
+        expect(refused.Errors[0]?.Type).toBe('Failure');
+
+        const retired = new MJRubricVersionEntityServer();
+        const retiredHost = retired as unknown as { IsSaved: boolean; LoadedStatus: string; Status: string };
+        retiredHost.IsSaved = true;
+        retiredHost.LoadedStatus = 'Published';
+        retiredHost.Status = 'Retired';
+        const allowed = await retired.ValidateAsync();
+        expect(allowed.Success).toBe(true);
+
+        const back = new MJRubricVersionEntityServer();
+        const backHost = back as unknown as { IsSaved: boolean; LoadedStatus: string; Status: string };
+        backHost.IsSaved = true;
+        backHost.LoadedStatus = 'Retired';
+        backHost.Status = 'Draft';
+        const draftAgain = await back.ValidateAsync();
+        expect(draftAgain.Success).toBe(false);
+        expect(draftAgain.Errors[0]?.Type).toBe('Failure');
     });
 
     it('numbers from the highest non-draft version when BasedOnVersionID is null', async () => {
