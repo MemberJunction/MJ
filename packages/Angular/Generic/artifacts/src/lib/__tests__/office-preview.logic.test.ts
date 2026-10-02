@@ -3,7 +3,7 @@
  * mammoth conversion's handling of warnings.
  */
 import { describe, it, expect } from 'vitest';
-import { ConvertDocxToHtml, ParseWorkbook, type MammothModuleShim, type XlsxModuleShim } from '../components/previews/office-preview.logic';
+import { ConvertDocxToHtml, ParseWorkbook, type MammothModuleShim, type XlsxModuleShim, EscapeHtml } from '../components/previews/office-preview.logic';
 
 describe('ParseWorkbook', () => {
   const XLSX: XlsxModuleShim = {
@@ -46,5 +46,16 @@ describe('ConvertDocxToHtml', () => {
     const html = await ConvertDocxToHtml(new ArrayBuffer(8), mammoth, (m) => warned.push(m));
     expect(html).toBe('<h1>Review</h1><p>Body</p>');
     expect(warned).toEqual(['Unrecognised style']);
+  });
+
+  it('lets a mammoth failure propagate, so the viewer shows an error rather than a blank page', async () => {
+    const mammoth = { convertToHtml: async () => { throw new Error('not a docx'); } };
+    await expect(ConvertDocxToHtml(new ArrayBuffer(4), mammoth)).rejects.toThrow('not a docx');
+  });
+});
+
+describe('EscapeHtml', () => {
+  it('escapes the five characters that can close or open a tag or an attribute', () => {
+    expect(EscapeHtml('</title><script>alert(1)</script> & "q" \'s\'')).toBe('&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;q&quot; &#39;s&#39;');
   });
 });

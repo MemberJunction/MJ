@@ -1,9 +1,10 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
-import { SafeHtml } from '@angular/platform-browser';
+import { Component, OnInit, ChangeDetectorRef, SecurityContext, inject } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot } from '@memberjunction/core';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
+import { EscapeHtml, FetchArrayBuffer } from '../previews/office-preview.logic';
 
 /**
  * Viewer plugin for Word (DOCX) artifact versions stored in MJStorage.
@@ -79,7 +80,6 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'DocxArtifactViewerPlugin')
 export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
-  public isLoading = true;
   public IsDownloading = false;
 
   /** @deprecated Use {@link IsDownloading}. */
@@ -168,7 +168,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       if (this.artifactVersion.ContentMode === 'File') {
         // File-backed: download from storage via pre-auth URL
         this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
-        arrayBuffer = await this.fetchAsArrayBuffer(this.downloadUrl);
+        arrayBuffer = await FetchArrayBuffer(this.downloadUrl);
       } else {
         // Inline: content is a base64 data URL stored in the artifact version
         const content = this.artifactVersion.Content;
@@ -195,19 +195,16 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public OnPreviewLoaded(html: string): void {
     this.rawHtml = html;
     this.SafeHtml = html;
-    this.isLoading = false;
     this.cdr.markForCheck();
   }
 
-  private async fetchAsArrayBuffer(url: string): Promise<ArrayBuffer> {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} fetching file`);
-    }
-    return response.arrayBuffer();
-  }
 
-  /** Open a minimal print window containing only the document HTML. */
+  private readonly sanitizer = inject(DomSanitizer);
+
+  /**
+   * Open a minimal print window containing only the document HTML. The window shares this one's origin, so what goes
+   * into it is sanitized as the display path sanitizes it, and the file name is escaped before it sits in `<title>`.
+   */
   private openPrintWindow(html: string): void {
     const printWindow = window.open('', '_blank', 'width=900,height=700');
     if (!printWindow) {
@@ -219,7 +216,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       <html>
         <head>
           <meta charset="utf-8">
-          <title>${this.artifactVersion?.FileName ?? 'Document'}</title>
+          <title>${EscapeHtml(this.artifactVersion?.FileName ?? 'Document')}</title>
           <style>
             body { font-family: Georgia, serif; font-size: 13pt; line-height: 1.6; margin: 2cm; color: #000; }
             table { border-collapse: collapse; width: 100%; }
@@ -228,7 +225,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
             img { max-width: 100%; }
           </style>
         </head>
-        <body>${html}</body>
+        <body>${this.sanitizer.sanitize(SecurityContext.HTML, html) ?? ''}</body>
       </html>
     `);
     printWindow.document.close();
@@ -238,7 +235,6 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public ShowError(message: string): void {
-    this.isLoading = false;
     this.errorMessage = message;
     this.cdr.markForCheck();
   }

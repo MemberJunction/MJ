@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, EventEmitter, Input, OnChanges, Output, SecurityContext, SimpleChanges } from '@angular/core';
+import { Component, ChangeDetectorRef, EventEmitter, Input, Output, SecurityContext, inject } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ConvertDocxToHtml, FetchArrayBuffer, type MammothModuleShim } from './office-preview.logic';
 
@@ -97,11 +97,27 @@ import { ConvertDocxToHtml, FetchArrayBuffer, type MammothModuleShim } from './o
     `,
   ],
 })
-export class DocxPreviewComponent implements OnChanges {
+export class DocxPreviewComponent {
   /** Where to fetch the document's bytes. Ignored when `ArrayBuffer` is set. */
-  @Input() Url: string | null = null;
+  @Input()
+  public set Url(value: string | null) {
+    this._url = value;
+    void this.load();
+  }
+  public get Url(): string | null {
+    return this._url;
+  }
+  private _url: string | null = null;
   /** The document's bytes, when the caller already has them. */
-  @Input() ArrayBuffer: ArrayBuffer | null = null;
+  @Input()
+  public set ArrayBuffer(value: ArrayBuffer | null) {
+    this._arrayBuffer = value;
+    void this.load();
+  }
+  public get ArrayBuffer(): ArrayBuffer | null {
+    return this._arrayBuffer;
+  }
+  private _arrayBuffer: ArrayBuffer | null = null;
 
   /** The raw HTML mammoth produced, once the document is shown. */
   @Output() Loaded = new EventEmitter<string>();
@@ -116,16 +132,9 @@ export class DocxPreviewComponent implements OnChanges {
 
   private loadToken = 0;
 
-  constructor(
-    private sanitizer: DomSanitizer,
-    private cdr: ChangeDetectorRef,
-  ) {}
+  private readonly sanitizer = inject(DomSanitizer);
+  private readonly cdr = inject(ChangeDetectorRef);
 
-  public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['Url'] || changes['ArrayBuffer']) {
-      void this.load();
-    }
-  }
 
   private async load(): Promise<void> {
     const token = ++this.loadToken;
@@ -135,6 +144,8 @@ export class DocxPreviewComponent implements OnChanges {
     try {
       const bytes = this.ArrayBuffer ?? (this.Url ? await FetchArrayBuffer(this.Url) : null);
       if (!bytes) {
+        // Neither input holds anything yet: the setter that fires first lands here. Wait for the other, do not error.
+        if (this._url === null && this._arrayBuffer === null) return;
         this.showError('No document to show.');
         return;
       }

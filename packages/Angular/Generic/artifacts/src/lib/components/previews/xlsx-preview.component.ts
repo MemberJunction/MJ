@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { Component, ChangeDetectorRef, EventEmitter, Input, Output, inject } from '@angular/core';
 import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
 import { FetchArrayBuffer, ParseWorkbook, type SheetData, type XlsxModuleShim } from './office-preview.logic';
 
@@ -134,11 +134,27 @@ import { FetchArrayBuffer, ParseWorkbook, type SheetData, type XlsxModuleShim } 
     `,
   ],
 })
-export class XlsxPreviewComponent implements OnChanges {
+export class XlsxPreviewComponent {
   /** Where to fetch the workbook's bytes. Ignored when `ArrayBuffer` is set. */
-  @Input() Url: string | null = null;
+  @Input()
+  public set Url(value: string | null) {
+    this._url = value;
+    void this.load();
+  }
+  public get Url(): string | null {
+    return this._url;
+  }
+  private _url: string | null = null;
   /** The workbook's bytes, when the caller already has them. */
-  @Input() ArrayBuffer: ArrayBuffer | null = null;
+  @Input()
+  public set ArrayBuffer(value: ArrayBuffer | null) {
+    this._arrayBuffer = value;
+    void this.load();
+  }
+  public get ArrayBuffer(): ArrayBuffer | null {
+    return this._arrayBuffer;
+  }
+  private _arrayBuffer: ArrayBuffer | null = null;
 
   /** The parsed sheets, once the workbook is shown. */
   @Output() Loaded = new EventEmitter<SheetData[]>();
@@ -156,17 +172,12 @@ export class XlsxPreviewComponent implements OnChanges {
   private gridApi: GridApi | null = null;
   private loadToken = 0;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  private readonly cdr = inject(ChangeDetectorRef);
 
   public get ActiveSheet(): SheetData | null {
     return this.Sheets[this.ActiveSheetIndex] ?? null;
   }
 
-  public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['Url'] || changes['ArrayBuffer']) {
-      void this.load();
-    }
-  }
 
   public OnGridReady(event: GridReadyEvent): void {
     this.gridApi = event.api;
@@ -190,6 +201,8 @@ export class XlsxPreviewComponent implements OnChanges {
     try {
       const bytes = this.ArrayBuffer ?? (this.Url ? await FetchArrayBuffer(this.Url) : null);
       if (!bytes) {
+        // Neither input holds anything yet: the setter that fires first lands here. Wait for the other, do not error.
+        if (this._url === null && this._arrayBuffer === null) return;
         this.showError('No workbook to show.');
         return;
       }

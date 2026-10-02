@@ -4,7 +4,7 @@ import { DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/cor
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { ColDef } from 'ag-grid-community';
-import { type SheetData } from '../previews/office-preview.logic';
+import { FetchArrayBuffer, type SheetData } from '../previews/office-preview.logic';
 
 
 /**
@@ -77,7 +77,6 @@ import { type SheetData } from '../previews/office-preview.logic';
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'XlsxArtifactViewerPlugin')
 export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
-  public isLoading = true;
   public IsDownloading = false;
 
   /** @deprecated Use {@link IsDownloading}. */
@@ -181,7 +180,7 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       if (this.artifactVersion.ContentMode === 'File') {
         // File-backed: download from storage via pre-auth URL
         this.downloadUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
-        arrayBuffer = await this.fetchAsArrayBuffer(this.downloadUrl);
+        arrayBuffer = await FetchArrayBuffer(this.downloadUrl);
       } else {
         // Inline: content is a base64 data URL stored in the artifact version
         const content = this.artifactVersion.Content;
@@ -208,20 +207,11 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public OnPreviewLoaded(sheets: SheetData[]): void {
     this.Sheets = sheets;
     this.ActiveSheetIndex = 0;
-    this.isLoading = false;
     this.cdr.markForCheck();
   }
 
-  private async fetchAsArrayBuffer(url: string): Promise<ArrayBuffer> {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} fetching file`);
-    }
-    return response.arrayBuffer();
-  }
 
   public ShowError(message: string): void {
-    this.isLoading = false;
     this.errorMessage = message;
     this.cdr.markForCheck();
   }

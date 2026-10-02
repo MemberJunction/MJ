@@ -112,7 +112,7 @@
   flex: 1;
   position: relative;
   overflow: auto;
-  background: var(--mj-bg-surface-sunken, #0f172a);
+  background: var(--mj-bg-surface-sunken, #f1f5f9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -123,7 +123,7 @@
   position: absolute;
   inset: 0;
   z-index: 10;
-  background: var(--mj-bg-surface-sunken, #0f172a);
+  background: var(--mj-bg-surface-sunken, #f1f5f9);
   display: flex;
   align-items: center;
   justify-content: center;

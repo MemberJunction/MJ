@@ -68,3 +68,8 @@ export function ParseWorkbook(workbook: WorkbookShim, XLSX: XlsxModuleShim): She
     return { name, rowData: rows, columnDefs };
   });
 }
+
+/** Escapes text for an HTML context (a `<title>`, say), so a file name cannot close the tag it sits in. */
+export function EscapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch);
+}
