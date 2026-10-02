@@ -46,6 +46,8 @@ export type RelatedRolePolicy = 'keep-all-primary' | 'smart';
 export type FormRole = 'Primary' | 'Detail';
 /** L1 membership on a parent form. None never reaches the ranker. */
 export type FormInclusion = 'Primary' | 'More' | 'None';
+/** What a form does with a related section / contribution that has 0 rows. */
+export type FormWhenEmpty = 'show' | 'hide' | 'more';
 
 import {
     IEntityConfiguration,
@@ -202,6 +204,60 @@ export function ReadRelationshipSortKey(raw: string | IEntityRelationshipConfigu
     const sort = ParseEntityRelationshipConfiguration(raw)?.UI?.sortKey;
     if (typeof sort !== 'number' || !Number.isFinite(sort)) return null;
     return sort;
+}
+
+function asWhenEmpty(value: unknown): FormWhenEmpty | null {
+    return value === 'show' || value === 'hide' || value === 'more' ? value : null;
+}
+
+/**
+ * Resolve a related section's empty behaviour. Precedence: the relationship's
+ * `UI.whenEmpty` (L1) → the parent entity's `UI.Form.RelatedWhenEmpty` (L2) → `'show'`.
+ */
+export function ReadRelationshipWhenEmpty(
+    relationshipConfig: string | IEntityRelationshipConfiguration | null | undefined,
+    parentEntityConfig: string | IEntityConfiguration | null | undefined,
+): FormWhenEmpty {
+    return asWhenEmpty(ParseEntityRelationshipConfiguration(relationshipConfig)?.UI?.whenEmpty)
+        ?? asWhenEmpty(ParseEntityConfiguration(parentEntityConfig)?.UI?.Form?.RelatedWhenEmpty)
+        ?? 'show';
+}
+
+/**
+ * Resolve whether a related section's row count is prefetched and badged.
+ * Precedence: `UI.showCount` (L1) → parent `UI.Form.ShowRelatedCounts` (L2) → `true`.
+ */
+export function ReadRelationshipShowCount(
+    relationshipConfig: string | IEntityRelationshipConfiguration | null | undefined,
+    parentEntityConfig: string | IEntityConfiguration | null | undefined,
+): boolean {
+    const own = ParseEntityRelationshipConfiguration(relationshipConfig)?.UI?.showCount;
+    if (typeof own === 'boolean') return own;
+    const inherited = ParseEntityConfiguration(parentEntityConfig)?.UI?.Form?.ShowRelatedCounts;
+    if (typeof inherited === 'boolean') return inherited;
+    return true;
+}
+
+/**
+ * Resolve a form contribution's empty behaviour / count flag: its own
+ * registration value wins, then the parent entity default, then the built-in default.
+ */
+export function ResolveContributionWhenEmpty(
+    own: FormWhenEmpty | null | undefined,
+    parentEntityConfig: string | IEntityConfiguration | null | undefined,
+): FormWhenEmpty {
+    return asWhenEmpty(own)
+        ?? asWhenEmpty(ParseEntityConfiguration(parentEntityConfig)?.UI?.Form?.RelatedWhenEmpty)
+        ?? 'show';
+}
+
+export function ResolveContributionShowCount(
+    own: boolean | null | undefined,
+    parentEntityConfig: string | IEntityConfiguration | null | undefined,
+): boolean {
+    if (typeof own === 'boolean') return own;
+    const inherited = ParseEntityConfiguration(parentEntityConfig)?.UI?.Form?.ShowRelatedCounts;
+    return typeof inherited === 'boolean' ? inherited : true;
 }
 
 export function ReadRelationshipJoinFields(raw: string | IEntityRelationshipConfiguration | null | undefined): string[] | null {

@@ -261,6 +261,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    */
   @Output() RecordReady = new EventEmitter<BaseEntity>();
 
+  /**
+   * Fires when a section's known row count changes — from the container's batched
+   * count prefetch, a related grid load (including a manual grid refresh), or a
+   * contribution reporting its own count. The container re-resolves empty-section
+   * chrome (`whenEmpty`) when a count crosses zero.
+   */
+  @Output() SectionRowCountChanged = new EventEmitter<{ SectionKey: string; RowCount: number; Previous: number | undefined }>();
+
   // #endregion
 
   /** Subscription to form state changes */
@@ -1185,12 +1193,39 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     }
   }
 
+  /**
+   * The row count shown as a section's badge. `undefined` until known, and always
+   * `undefined` for a section whose badge is turned off (`showCount: false`) — use
+   * {@link PeekSectionRowCount} for the underlying number.
+   */
   public GetSectionRowCount(sectionKey: string): number | undefined {
-    const section = this.sectionMap.get(sectionKey);
-    return section?.rowCount;
+    if (this.suppressedBadgeSectionKeys.has(sectionKey)) return undefined;
+    return this.PeekSectionRowCount(sectionKey);
+  }
+
+  /** The last known row count for a section, regardless of whether its badge shows. */
+  public PeekSectionRowCount(sectionKey: string): number | undefined {
+    return this.sectionMap.get(sectionKey)?.rowCount;
+  }
+
+  private suppressedBadgeSectionKeys = new Set<string>();
+
+  /** Show or hide a section's row-count badge (metadata `showCount`). The count itself is still tracked. */
+  public SetSectionBadgeVisible(sectionKey: string, visible: boolean): void {
+    const changed = visible ? this.suppressedBadgeSectionKeys.delete(sectionKey) : !this.suppressedBadgeSectionKeys.has(sectionKey);
+    if (!visible) this.suppressedBadgeSectionKeys.add(sectionKey);
+    if (changed) this.cdr.markForCheck();
   }
 
   public SetSectionRowCount(sectionKey: string, rowCount: number): void {
+    const previous = this.PeekSectionRowCount(sectionKey);
+    this.applySectionRowCount(sectionKey, rowCount);
+    if (previous !== rowCount) {
+      this.SectionRowCountChanged.emit({ SectionKey: sectionKey, RowCount: rowCount, Previous: previous });
+    }
+  }
+
+  private applySectionRowCount(sectionKey: string, rowCount: number): void {
     let section = this.sectionMap.get(sectionKey);
     if (!section) {
       // Contribution panels use their own SectionKey (e.g. 'orders') which

@@ -21,6 +21,7 @@ import type { FormContributionWinner } from './form-contribution';
             Variant="related-entity"
             [Form]="FormComponent"
             [FormContext]="FormContext"
+            [BadgeCount]="FormComponent.GetSectionRowCount(Contribution.BakedSectionKey)"
             [DefaultExpanded]="false">
             @if (Record.IsSaved) {
                 <mj-explorer-entity-data-grid

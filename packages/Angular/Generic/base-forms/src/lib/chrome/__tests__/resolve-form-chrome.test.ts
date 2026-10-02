@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
 import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges } from '../form-chrome';
-import { ApplyFormChromeRuleTitles, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
+import { ApplyEmptySectionBehavior, ApplyFormChromeRuleTitles, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
 import type { FormChromeGroup, FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
 
@@ -1160,5 +1160,71 @@ describe('EntityInfo ConfigurationObject', () => {
             }),
         });
         expect(entity.ConfigurationObject?.UI?.Form?.PrimaryRelatedBudget).toBe(4);
+    });
+});
+
+describe('ApplyEmptySectionBehavior', () => {
+    const spec = (): FormChromeSpec => ({
+        Layout: 'left-nav',
+        Groups: [
+            { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card', SectionKeys: ['identity'], IsMore: false },
+            { Key: 'tasks', Title: 'Tasks', Icon: 'fa fa-list', SectionKeys: ['tasks'], IsMore: false },
+            { Key: 'orders', Title: 'Orders', Icon: 'fa fa-cart', SectionKeys: ['ordersBillTo', 'ordersShipTo'], IsMore: false },
+            { Key: 'deals', Title: 'Deals', Icon: 'fa fa-handshake', SectionKeys: ['deals'], IsMore: false },
+            { Key: MORE_SECTION_KEY, Title: 'More', Icon: 'fa fa-folder', SectionKeys: ['systemMetadata', 'notes'], IsMore: true },
+        ],
+        RelatedRoles: new Map(),
+        MoreSectionKeys: ['systemMetadata', 'notes'],
+    });
+
+    it('is a no-op with no behaviour', () => {
+        const s = spec();
+        expect(ApplyEmptySectionBehavior(s, new Map()).Groups).toHaveLength(5);
+    });
+
+    it("removes 'hide' sections from first-class groups and from More", () => {
+        const s = ApplyEmptySectionBehavior(spec(), new Map([['tasks', 'hide'], ['notes', 'hide']]));
+        expect(s.Groups.find((g) => g.Key === 'tasks')).toBeUndefined();
+        expect(s.MoreSectionKeys).toEqual(['systemMetadata']);
+        expect(s.Layout).toBe('left-nav');
+    });
+
+    it("moves a group into More only when every section in it is empty-'more'", () => {
+        const partial = ApplyEmptySectionBehavior(spec(), new Map([['ordersBillTo', 'more'], ['deals', 'more']]));
+        expect(partial.Groups.find((g) => g.Key === 'orders')?.SectionKeys).toEqual(['ordersBillTo', 'ordersShipTo']);
+        expect(partial.MoreSectionKeys).toContain('deals');
+        expect(partial.Groups.find((g) => g.Key === 'deals')).toBeUndefined();
+
+        const full = ApplyEmptySectionBehavior(spec(), new Map([['ordersBillTo', 'more'], ['ordersShipTo', 'more']]));
+        expect(full.MoreSectionKeys).toEqual(expect.arrayContaining(['ordersBillTo', 'ordersShipTo']));
+    });
+
+    it('is applied by ResolveFormChrome without changing the chosen layout', () => {
+        const relatedId = '99999999-9999-9999-9999-999999999999';
+        const entity = new EntityInfo({
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [{
+                ID: '11111111-1111-1111-1111-111111111111',
+                RelatedEntity: 'MJ_BizApps_Tasks: Tasks',
+                RelatedEntityID: relatedId,
+                RelatedEntityJoinField: 'PersonID',
+                DisplayInForm: true,
+                Configuration: JSON.stringify({ UI: { inclusion: 'Primary' } }),
+            }],
+        });
+        const base = {
+            Entity: entity,
+            Panels: [
+                { SectionKey: 'identity', SectionName: 'Identity', Variant: 'default' as const },
+                { SectionKey: 'mJBizAppsTasksTasks', SectionName: 'Tasks', Variant: 'related-entity' as const },
+            ],
+            RelatedSchemaByEntityId: new Map([[relatedId, 'MJ_BizApps_Tasks']]),
+        };
+        const before = ResolveFormChrome(base);
+        const after = ResolveFormChrome({ ...base, EmptySectionBehavior: new Map([['mJBizAppsTasksTasks', 'hide' as const]]) });
+        expect(before.Spec.Groups.some((g) => g.SectionKeys.includes('mJBizAppsTasksTasks'))).toBe(true);
+        expect(after.Spec.Groups.some((g) => g.SectionKeys.includes('mJBizAppsTasksTasks'))).toBe(false);
+        expect(after.Spec.Layout).toBe(before.Spec.Layout);
     });
 });

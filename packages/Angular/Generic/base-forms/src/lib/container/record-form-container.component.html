@@ -271,6 +271,12 @@
                   <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ moreIndicators.WarningCount }}
                 </span>
               }
+              @if (!MoreExpanded) {
+                @let moreRowCount = ChromeMoreRowCount;
+                @if (moreRowCount != null && moreRowCount > 0) {
+                  <span class="mj-forms-chrome-rail-count" title="Rows across the sections in More">{{ moreRowCount }}</span>
+                }
+              }
               <i class="fa-solid mj-forms-chrome-rail-more-toggle"
                  [class.fa-minus]="MoreExpanded"
                  [class.fa-plus]="!MoreExpanded"
@@ -393,6 +399,12 @@
               <span class="mj-forms-more-overflow-label">{{ MoreExpanded ? 'Hide more' : 'More' }}</span>
               @if (!MoreExpanded && MorePreview) {
                 <span class="mj-forms-more-overflow-preview">{{ MorePreview }}</span>
+              }
+              @if (!MoreExpanded) {
+                @let accordionMoreCount = ChromeMoreRowCount;
+                @if (accordionMoreCount != null && accordionMoreCount > 0) {
+                  <span class="mj-forms-chrome-rail-count" title="Rows across the sections in More">{{ accordionMoreCount }}</span>
+                }
               }
               <i class="fa-solid"
                  [class.fa-chevron-down]="MoreExpanded"
