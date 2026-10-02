@@ -245,6 +245,49 @@ describe('RubricEngine', () => {
         expect(RubricEngine.Instance).not.toBe(first);
     });
 
+describe('consensus cohort', () => {
+    it('filters the subject entity, excludes Self, and does not pool every context', async () => {
+        const filters: string[] = [];
+        const records = {
+            async rows(entityName: string, filter: string) {
+                filters.push(`${entityName} ${filter}`);
+                if (entityName === 'MJ: Rubrics') return [{ ID: 'rubric' }];
+                if (entityName === 'MJ: Rubric Versions') return [{ ID: 'version-1', RubricID: 'rubric', Status: 'Published', MajorVersion: 1 }];
+                if (entityName === 'MJ: Entities' && filter.includes('Documents')) return [{ ID: 'entity-docs' }];
+                if (entityName === 'MJ: Entities' && filter.includes('Tasks')) return [{ ID: 'entity-tasks' }];
+                return [];
+            },
+            async createDraft() { return { id: 'draft', status: 'Draft' }; },
+        };
+        const engine = new RubricEngine({
+            async createDraft() { return { id: 'draft', status: 'Draft' }; },
+            async submit() { throw new Error('no'); },
+            async fail() { throw new Error('no'); },
+        }, records);
+        await engine.consensusForSubject({
+            rubricId: 'rubric',
+            subjectEntityName: 'MJ: Documents',
+            subjectRecordId: 'record-1',
+        });
+        const open = filters.find(filter => filter.startsWith('MJ: Rubric Evaluations'));
+        expect(open).toContain("SubjectEntityID='entity-docs'");
+        expect(open).toContain("EvaluatorType<>'Self'");
+        expect(open).toContain('ContextEntityID IS NULL');
+        expect(open).toContain('ContextRecordID IS NULL');
+        await engine.consensusForSubject({
+            rubricId: 'rubric',
+            subjectEntityName: 'MJ: Documents',
+            subjectRecordId: 'record-1',
+            contextEntityName: 'MJ: Tasks',
+            contextRecordId: 'task-1',
+        });
+        const scoped = filters.filter(filter => filter.startsWith('MJ: Rubric Evaluations')).at(-1);
+        expect(scoped).toContain("ContextEntityID='entity-tasks'");
+        expect(scoped).toContain("ContextRecordID='task-1'");
+        expect(scoped).not.toContain('ContextEntityID IS NULL');
+    });
+});
+
 describe('agreement and consensus', () => {
     it('matches a hand-computed quadratic kappa of 0.4 and withholds below 20 subjects', () => {
         const pairs: [number, number][] = [

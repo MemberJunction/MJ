@@ -306,7 +306,11 @@ export class RubricEngine {
     public async ConsensusForSubject(input: {
         rubricId?: string;
         rubricName?: string;
+        subjectEntityName?: string;
+        subjectEntityId?: string;
         subjectRecordId: string;
+        contextEntityName?: string;
+        contextEntityId?: string;
         contextRecordId?: string;
         /** When omitted, the latest Published major. Scores from other majors are left out. */
         major?: number;
@@ -320,8 +324,14 @@ export class RubricEngine {
             .map(row => text(row.ID))
             .filter(id => id.length > 0);
         if (ids.length === 0) return this.Consensus([], input.method);
-        let filter = `Status='Submitted' AND SubjectRecordID=${sqlLiteral(input.subjectRecordId)} AND RubricVersionID IN (${ids.map(sqlLiteral).join(', ')})`;
-        if (input.contextRecordId !== undefined) filter += ` AND ContextRecordID=${sqlLiteral(input.contextRecordId)}`;
+        const subjectEntityId = input.subjectEntityId ?? await this.entityId(input.subjectEntityName ?? '');
+        let filter = `Status='Submitted' AND EvaluatorType<>'Self' AND SubjectEntityID=${sqlLiteral(subjectEntityId)} AND SubjectRecordID=${sqlLiteral(input.subjectRecordId)} AND RubricVersionID IN (${ids.map(sqlLiteral).join(', ')})`;
+        if (input.contextRecordId !== undefined) {
+            const contextEntityId = input.contextEntityId ?? await this.entityId(input.contextEntityName ?? '');
+            filter += ` AND ContextEntityID=${sqlLiteral(contextEntityId)} AND ContextRecordID=${sqlLiteral(input.contextRecordId)}`;
+        } else {
+            filter += ` AND ContextEntityID IS NULL AND ContextRecordID IS NULL`;
+        }
         const scores = await this.records.rows('MJ: Rubric Evaluations', filter);
         const values = scores.map(row => numberOrNull(row.NormalizedScore)).filter((value): value is number => value !== null);
         return this.Consensus(values, input.method);
@@ -331,7 +341,11 @@ export class RubricEngine {
     public async consensusForSubject(input: {
         rubricId?: string;
         rubricName?: string;
+        subjectEntityName?: string;
+        subjectEntityId?: string;
         subjectRecordId: string;
+        contextEntityName?: string;
+        contextEntityId?: string;
         contextRecordId?: string;
         /** When omitted, the latest Published major. Scores from other majors are left out. */
         major?: number;

@@ -109,7 +109,9 @@ export class GetRubricConsensusAction extends BaseAction {
     public async Invoke(engine: RubricEngine, input: {
         rubricId?: string;
         rubricName?: string;
+        subjectEntityName?: string;
         subjectRecordId: string;
+        contextEntityName?: string;
         contextRecordId?: string;
         major?: number;
         method?: ConsensusResult['Method'];
@@ -122,7 +124,9 @@ export class GetRubricConsensusAction extends BaseAction {
             const result = await this.Invoke(EngineForAction(params), {
                 rubricId: textValue(params, 'RubricID'),
                 rubricName: textValue(params, 'RubricName'),
+                subjectEntityName: textValue(params, 'SubjectEntityName'),
                 subjectRecordId: textValue(params, 'SubjectRecordID') ?? '',
+                contextEntityName: textValue(params, 'ContextEntityName'),
                 contextRecordId: textValue(params, 'ContextRecordID'),
                 major: numberInput(params, 'Major'),
                 method: textValue(params, 'Method') as ConsensusResult['Method'],

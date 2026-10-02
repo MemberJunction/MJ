@@ -255,6 +255,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "SubjectEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity of the subject. Consensus is limited to this entity.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A4E0C1B2-7F55-4C0A-9D11-2B6E8A91C4D0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SubjectRecordID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -269,11 +283,25 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "ContextEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity of the context. Set together with ContextRecordID. When both are omitted, only evaluations with no context are included.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7D21E44-6A18-4F90-8C33-91E0A5D27B61"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ContextRecordID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "When set, only scores for this context record are included.",
+            "Description": "When set with ContextEntityName, only scores for that context are included.",
             "IsRequired": false
           },
           "primaryKey": {
