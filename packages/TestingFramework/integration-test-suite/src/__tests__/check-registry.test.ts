@@ -45,6 +45,7 @@ import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
 import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { CloudflareClefChecks } from '../checks/cloudflare-clef.checks';
+import { SystemOneKevChecks } from '../checks/systemone-kev.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
@@ -151,6 +152,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['cloudflare-clef', CloudflareClefChecks, 3], // CF1-CF3 Clef/Clef-flash metadata, driver registration, runner call through an HTTP stand-in (IT99)
+        ['systemone-kev', SystemOneKevChecks, 3], // KV1-KV3 Kev metadata, SystemOneDecision registration, runner call against a loopback System One server (IT100)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
@@ -308,6 +310,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'startup-mode': 3,
         'storage': 6,
         'subscription-isolation': 2,
+        'systemone-kev': 3,
         'task-graph-execution': 27,
         'task-graph-orchestration': 18,
         'templates': 8,
@@ -341,7 +344,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(99);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(100);
     });
 });
 

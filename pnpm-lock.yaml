@@ -15494,6 +15494,9 @@ importers:
       '@memberjunction/ai-prompts':
         specifier: 6.2.0-edge.1
         version: link:../../AI/Prompts
+      '@memberjunction/ai-systemone':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Providers/SystemOne
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.1
         version: link:../../AI/Vectors/Dupe

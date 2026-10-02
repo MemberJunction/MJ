@@ -25,6 +25,7 @@
     "@memberjunction/ai-core-plus": "6.2.0-edge.1",
     "@memberjunction/ai-engine-base": "6.2.0-edge.1",
     "@memberjunction/ai-prompts": "6.2.0-edge.1",
+    "@memberjunction/ai-systemone": "6.2.0-edge.1",
     "@memberjunction/ai-vector-dupe": "6.2.0-edge.1",
     "@memberjunction/aiengine": "6.2.0-edge.1",
     "@memberjunction/api-keys": "6.2.0-edge.1",

@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT100 - Kev and System One Endpoint Decision Models",
+    "Description": "Jared Palmer's Kev decision models and the generic SystemOneDecision driver resolve from the synced metadata through AIDecisionRunner to a real HTTP request against a System One server on loopback. KV1 the System One Endpoint vendor takes an API Key with Endpoint credential; Kev-0.8B, Kev-4B, Kev-9B and Kev-27B are Active Decision models whose effective Decision limits are 255 Choice options, 10 Score levels and 8,192 state tokens (65,536 for Kev-27B); each has one Active System One Endpoint Inference Provider row naming SystemOneDecision and kev-latest, with no cost row on that vendor; Kev-4B also has an Active OpenRouter row naming OpenRouterDecision and jaredpalmer/kev-4b-20260924 with 8,192 input tokens, at a higher priority than its self-hosted row, and an active Realtime cost row at $0.042 per million input tokens with free output. KV2 ClassFactory.CreateInstance(BaseDecision, 'SystemOneDecision', credential) returns the shipped SystemOneDecision class, which reads the endpoint from an API Key with Endpoint credential's JSON and appends /v1/systemone. KV3 starts a node:http System One server on 127.0.0.1 and runs a real AIDecisionRunner.ExecuteDecision on the Default Decision prompt with override naming Kev-4B, then Kev-27B, on the System One Endpoint vendor, the credential being the JSON an API Key with Endpoint credential resolves to: the driver POSTs the System One body for a Likelihood, a Choice and a Score question to /v1/systemone, with a bearer token for Kev-4B and no Authorization header for Kev-27B's open-server credential; the answers come back mapped (Score probabilities keyed by level name and renormalised); and the MJ: AI Prompt Runs row is recorded against that model and vendor, successful, with the served input tokens and no cost. The server is stopped after KV3. Every prompt run the bundle creates is deleted in teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Kev-0.8B, Kev-4B, Kev-9B and Kev-27B are usable as Decision models: their metadata resolves with the right limits, drivers and routes (Kev-4B on OpenRouter first), the SystemOneDecision driver builds through the ClassFactory, and an AIDecisionRunner call naming a Kev model on the System One Endpoint vendor reaches the configured server, maps its answers and records the run."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "systemone-kev"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "875F0319-5E5C-4AC2-B792-21B649F27783"
+  }
+}

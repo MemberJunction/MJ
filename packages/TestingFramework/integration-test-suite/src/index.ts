@@ -102,6 +102,7 @@ export * from './checks/agent-wire-callback.checks';
 export * from './checks/view-security.checks';
 export * from './checks/ai-providers.checks';
 export * from './checks/cloudflare-clef.checks';
+export * from './checks/systemone-kev.checks';
 export * from './checks/app-behavioral.checks';
 export * from './checks/content-vectorization.checks';
 export * from './checks/materialized-read.checks';
