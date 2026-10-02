@@ -1,28 +1,35 @@
 import { RunView } from '@memberjunction/core';
+import { MJAIAgentRubricEntity, MJAIAgentRunEntity, MJEntityEntity, MJRubricEvaluationEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
 import type { ProductionSamplingCatalog } from './sampling.js';
 
 /**
  * Reads Active agent-rubric links, completed agent runs, and evaluations whose
  * subject is an agent run. Purpose filtering stays in productionSamplingLinks.
  *
- * `vwRubricEvaluations` exposes `SubjectEntityID` (the stored uuid) and
- * `SubjectEntity` (`Entity.Name` from `vwRubricEvaluationsGenerated`). The
- * filter uses `SubjectEntityID`. The evaluation stores `RubricVersionID`;
- * `RubricID` on that view is the version's rubric, so the catalog reads the
- * version row instead.
+ * Rows are the generated entity classes (`ResultType: 'entity_object'`), not a
+ * hand-rolled field bag. `vwRubricEvaluations` exposes `SubjectEntityID` (the
+ * stored uuid) and `SubjectEntity` (`Entity.Name` from
+ * `vwRubricEvaluationsGenerated`). The filter uses `SubjectEntityID`. The
+ * evaluation stores `RubricVersionID`; `RubricID` on that view is the version's
+ * rubric, so the catalog reads the version row instead.
  */
 export function ProviderProductionCatalog(provider: unknown, user: unknown): ProductionSamplingCatalog {
-    const read = async (entityName: string, filter: string): Promise<Record<string, unknown>[]> => {
+    async function read(entityName: 'MJ: AI Agent Rubrics', filter: string): Promise<MJAIAgentRubricEntity[]>;
+    async function read(entityName: 'MJ: AI Agent Runs', filter: string): Promise<MJAIAgentRunEntity[]>;
+    async function read(entityName: 'MJ: Entities', filter: string): Promise<MJEntityEntity[]>;
+    async function read(entityName: 'MJ: Rubric Evaluations', filter: string): Promise<MJRubricEvaluationEntity[]>;
+    async function read(entityName: 'MJ: Rubric Versions', filter: string): Promise<MJRubricVersionEntity[]>;
+    async function read(entityName: string, filter: string): Promise<Array<MJAIAgentRubricEntity | MJAIAgentRunEntity | MJEntityEntity | MJRubricEvaluationEntity | MJRubricVersionEntity>> {
         const view = RunView.FromMetadataProvider(provider as never);
         const result = await view.RunView({
             EntityName: entityName,
             ExtraFilter: filter,
-            ResultType: 'simple',
+            ResultType: 'entity_object',
             MaxRows: 5000,
         }, user as never);
         if (!result.Success) throw new Error(result.ErrorMessage || `Could not read ${entityName}.`);
-        return (result.Results ?? []) as Record<string, unknown>[];
-    };
+        return (result.Results ?? []) as Array<MJAIAgentRubricEntity | MJAIAgentRunEntity | MJEntityEntity | MJRubricEvaluationEntity | MJRubricVersionEntity>;
+    }
     return {
         async links() {
             const rows = await read('MJ: AI Agent Rubrics', "Status = 'Active'");
@@ -45,7 +52,7 @@ export function ProviderProductionCatalog(provider: unknown, user: unknown): Pro
                 id: String(row.ID ?? ''),
                 agentId: String(row.AgentID ?? ''),
                 status: String(row.Status ?? ''),
-                startedAt: row.StartedAt == null ? undefined : new Date(row.StartedAt as string | Date).toISOString(),
+                startedAt: row.StartedAt == null ? undefined : new Date(row.StartedAt).toISOString(),
             }));
         },
         async evaluated(runIds) {

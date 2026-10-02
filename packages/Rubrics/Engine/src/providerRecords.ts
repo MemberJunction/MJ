@@ -3,20 +3,17 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { RubricDecisionRunner } from './LLMRubricEvaluator.js';
 import { RubricEvaluationAgentRunner } from './RubricEvaluationAgentRunner.js';
 import { RunView } from '@memberjunction/core';
+import { MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { HighestNonDraftVersion, type RubricNodeSnapshot, type ScoredNode } from '@memberjunction/rubrics-base';
 import { RubricEngine, type RubricEvaluationStore, type RubricPromptRun, type RubricRecords } from './RubricEngine.js';
 
-interface RubricRow {
-    NewRecord?: () => void;
-    Load?: (id: string) => Promise<boolean>;
-    Set: (field: string, value: unknown) => void;
-    Get: (field: string) => unknown;
-    Save: () => Promise<boolean>;
-    LatestResult?: { Message?: string };
-}
-
 interface RubricProvider {
-    GetEntityObject(entityName: string, contextUser?: unknown): Promise<RubricRow>;
+    GetEntityObject(entityName: 'MJ: Rubric Versions', contextUser?: unknown): Promise<MJRubricVersionEntity>;
+    GetEntityObject(entityName: 'MJ: Rubric Criteria', contextUser?: unknown): Promise<MJRubricCriterionEntity>;
+    GetEntityObject(entityName: 'MJ: Rubric Criterion Levels', contextUser?: unknown): Promise<MJRubricCriterionLevelEntity>;
+    GetEntityObject(entityName: 'MJ: Rubric Bands', contextUser?: unknown): Promise<MJRubricBandEntity>;
+    GetEntityObject(entityName: 'MJ: Rubric Evaluations', contextUser?: unknown): Promise<MJRubricEvaluationEntity>;
+    GetEntityObject(entityName: 'MJ: Rubric Evaluation Scores', contextUser?: unknown): Promise<MJRubricEvaluationScoreEntity>;
 }
 
 /**
@@ -52,39 +49,39 @@ export function providerRecords(provider: RubricProvider, user: unknown): Rubric
 export async function CreateDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
     const base = await findHighestVersion(provider, user, input.rubricId);
     const version = await provider.GetEntityObject('MJ: Rubric Versions', user);
-    version.NewRecord?.();
-    version.Set('RubricID', input.rubricId);
-    version.Set('Status', 'Draft');
-    if (base) version.Set('BasedOnVersionID', base.id);
+    version.NewRecord();
+    version.RubricID = input.rubricId;
+    version.Status = 'Draft';
+    if (base) version.BasedOnVersionID = base.id;
     if (!await version.Save()) throw new Error(version.LatestResult?.Message || 'Could not create the draft version.');
-    const versionId = String(version.Get('ID') ?? '');
+    const versionId = String(version.ID ?? '');
     const nodes = input.nodes.length > 0 ? input.nodes : await clonedBaseNodes(provider, user, base?.id ?? null);
     for (const node of parentsFirst(nodes)) {
         const row = await provider.GetEntityObject('MJ: Rubric Criteria', user);
-        row.NewRecord?.();
-        row.Set('ID', node.id);
-        row.Set('RubricVersionID', versionId);
-        if (node.parentId) row.Set('ParentID', node.parentId);
-        row.Set('Key', node.key);
-        row.Set('Name', node.name);
-        row.Set('Description', node.description ?? null);
-        row.Set('Guidance', node.guidance ?? null);
-        row.Set('NodeType', node.nodeType);
-        row.Set('ScaleID', node.scaleId ?? null);
-        row.Set('Weight', node.weight);
-        row.Set('IsAdvisory', node.isAdvisory);
-        row.Set('IsGate', node.isGate);
-        row.Set('GateMinimumScore', node.gateMinimumScore ?? null);
-        row.Set('NotApplicablePolicy', node.notApplicablePolicy ?? null);
-        row.Set('RollupMethod', node.rollupMethod ?? null);
-        row.Set('EvidenceRequired', node.evidenceRequired);
-        row.Set('RationaleRequired', node.rationaleRequired);
-        row.Set('Sequence', node.sequence);
-        row.Set('EvaluatorConfig', node.evaluatorConfig === undefined ? null : JSON.stringify(node.evaluatorConfig));
+        row.NewRecord();
+        row.ID = node.id;
+        row.RubricVersionID = versionId;
+        if (node.parentId) row.ParentID = node.parentId;
+        row.Key = node.key;
+        row.Name = node.name;
+        row.Description = node.description ?? null;
+        row.Guidance = node.guidance ?? null;
+        row.NodeType = node.nodeType;
+        row.ScaleID = node.scaleId ?? null;
+        row.Weight = node.weight;
+        row.IsAdvisory = node.isAdvisory;
+        row.IsGate = node.isGate;
+        row.GateMinimumScore = node.gateMinimumScore ?? null;
+        row.NotApplicablePolicy = node.notApplicablePolicy ?? null;
+        row.RollupMethod = node.rollupMethod ?? null;
+        row.EvidenceRequired = node.evidenceRequired;
+        row.RationaleRequired = node.rationaleRequired;
+        row.Sequence = node.sequence;
+        row.EvaluatorConfig = node.evaluatorConfig === undefined || node.evaluatorConfig === null ? null : JSON.stringify(node.evaluatorConfig);
         if (!await row.Save()) throw new Error(row.LatestResult?.Message || `Could not save criterion ${node.key}.`);
     }
     if (base) await copyAnchorsAndBands(provider, user, base.id, versionId, nodes);
-    return { id: versionId, status: String(version.Get('Status') ?? '') };
+    return { id: versionId, status: String(version.Status ?? '') };
 }
 
 /** @deprecated Use {@link CreateDraftVersion}. */
@@ -168,25 +165,25 @@ async function copyAnchorsAndBands(
         if (!sourceId) continue;
         for (const anchor of anchors.filter(row => String(row.CriterionID) === sourceId)) {
             const level = await provider.GetEntityObject('MJ: Rubric Criterion Levels', user);
-            level.NewRecord?.();
-            level.Set('CriterionID', node.id);
-            level.Set('ScaleLevelID', anchor.ScaleLevelID ?? null);
-            level.Set('Descriptor', anchor.Descriptor ?? null);
-            if (anchor.Sequence !== undefined) level.Set('Sequence', anchor.Sequence);
+            level.NewRecord();
+            level.CriterionID = node.id;
+            level.ScaleLevelID = anchor.ScaleLevelID == null ? null : String(anchor.ScaleLevelID);
+            if (anchor.AnchorValue != null && anchor.AnchorValue !== '') level.AnchorValue = Number(anchor.AnchorValue);
+            level.Descriptor = anchor.Descriptor == null ? '' : String(anchor.Descriptor);
             if (!await level.Save()) throw new Error(level.LatestResult?.Message || `Could not copy an anchor for ${node.key}.`);
         }
     }
     const bands = await listRows(provider, user, 'MJ: Rubric Bands', `RubricVersionID='${baseId}'`);
     for (const band of bands) {
         const row = await provider.GetEntityObject('MJ: Rubric Bands', user);
-        row.NewRecord?.();
-        row.Set('RubricVersionID', versionId);
-        row.Set('Label', band.Label ?? null);
-        row.Set('MinScore', band.MinScore ?? null);
-        row.Set('MaxScore', band.MaxScore ?? null);
-        row.Set('DisplayTone', band.DisplayTone ?? null);
-        row.Set('Sequence', band.Sequence ?? 0);
-        if (band.Description !== undefined) row.Set('Description', band.Description);
+        row.NewRecord();
+        row.RubricVersionID = versionId;
+        row.Label = band.Label == null ? '' : String(band.Label);
+        row.MinScore = band.MinScore == null ? 0 : Number(band.MinScore);
+        row.MaxScore = band.MaxScore == null ? 0 : Number(band.MaxScore);
+        row.DisplayTone = (band.DisplayTone == null ? 'Neutral' : String(band.DisplayTone)) as MJRubricBandEntity['DisplayTone'];
+        row.Sequence = band.Sequence == null ? 0 : Number(band.Sequence);
+        if (band.Description !== undefined) row.Description = band.Description == null ? null : String(band.Description);
         if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not copy a band.');
     }
 }
@@ -213,61 +210,61 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
     return {
         async createDraft(input) {
             const row = await provider.GetEntityObject('MJ: Rubric Evaluations', user);
-            row.NewRecord?.();
-            row.Set('RubricVersionID', input.versionId);
-            row.Set('SubjectEntityID', input.subjectEntityId);
-            row.Set('SubjectRecordID', input.subjectRecordId);
-            row.Set('ContextEntityID', input.contextEntityId ?? null);
-            row.Set('ContextRecordID', input.contextRecordId ?? null);
-            row.Set('EvaluatorType', evaluatorType(input.evaluator));
-            row.Set('Status', 'Draft');
-            if (input.passThreshold !== undefined && input.passThreshold !== null) row.Set('PassThresholdApplied', input.passThreshold);
-            if (input.aiAgentRunId) row.Set('AIAgentRunID', input.aiAgentRunId);
-            if (input.aiPromptRunId) row.Set('AIPromptRunID', input.aiPromptRunId);
-            if (input.evaluatorName) row.Set('EvaluatorName', input.evaluatorName);
-            if (input.metadata !== undefined) row.Set('Metadata', typeof input.metadata === 'string' ? input.metadata : JSON.stringify(input.metadata));
+            row.NewRecord();
+            row.RubricVersionID = input.versionId;
+            row.SubjectEntityID = input.subjectEntityId;
+            row.SubjectRecordID = input.subjectRecordId;
+            row.ContextEntityID = input.contextEntityId ?? null;
+            row.ContextRecordID = input.contextRecordId ?? null;
+            row.EvaluatorType = evaluatorType(input.evaluator);
+            row.Status = 'Draft';
+            if (input.passThreshold !== undefined && input.passThreshold !== null) row.PassThresholdApplied = input.passThreshold;
+            if (input.aiAgentRunId) row.AIAgentRunID = input.aiAgentRunId;
+            if (input.aiPromptRunId) row.AIPromptRunID = input.aiPromptRunId;
+            if (input.evaluatorName) row.EvaluatorName = input.evaluatorName;
+            if (input.metadata !== undefined) row.Metadata = typeof input.metadata === 'string' ? input.metadata : JSON.stringify(input.metadata);
             if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not create the evaluation draft.');
-            return { id: String(row.Get('ID') ?? ''), status: 'Draft' };
+            return { id: String(row.ID ?? ''), status: 'Draft' };
         },
         async submit(evaluationId, answers) {
             for (const answer of answers) {
                 const score = await provider.GetEntityObject('MJ: Rubric Evaluation Scores', user);
-                score.NewRecord?.();
-                score.Set('EvaluationID', evaluationId);
-                score.Set('CriterionID', answer.criterionId);
-                score.Set('ScaleLevelID', answer.scaleLevelId ?? null);
-                score.Set('RawValue', answer.rawValue ?? null);
-                score.Set('IsNotApplicable', answer.isNotApplicable === true);
-                score.Set('Confidence', answer.confidence ?? null);
-                score.Set('IsComputed', false);
-                if (answer.rationale) score.Set('Rationale', answer.rationale);
+                score.NewRecord();
+                score.EvaluationID = evaluationId;
+                score.CriterionID = answer.criterionId;
+                score.ScaleLevelID = answer.scaleLevelId ?? null;
+                score.RawValue = answer.rawValue ?? null;
+                score.IsNotApplicable = answer.isNotApplicable === true;
+                score.Confidence = answer.confidence ?? null;
+                score.IsComputed = false;
+                if (answer.rationale) score.Rationale = answer.rationale;
                 if (answer.evidence !== undefined && answer.evidence !== null) {
-                    score.Set('Evidence', typeof answer.evidence === 'string' ? answer.evidence : JSON.stringify(answer.evidence));
+                    score.Evidence = typeof answer.evidence === 'string' ? answer.evidence : JSON.stringify(answer.evidence);
                 }
                 if (!await score.Save()) throw new Error(score.LatestResult?.Message || 'Could not save an answer.');
             }
             const evaluation = await provider.GetEntityObject('MJ: Rubric Evaluations', user);
-            if (evaluation.Load) await evaluation.Load(evaluationId);
-            evaluation.Set('Status', 'Submitted');
+            await evaluation.Load(evaluationId);
+            evaluation.Status = 'Submitted';
             if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.Message || 'Could not submit the evaluation.');
             return {
-                normalizedScore: numberOrNull(evaluation.Get('NormalizedScore')),
-                completeness: numberOrNull(evaluation.Get('Completeness')),
-                outcome: evaluation.Get('Outcome') as 'Passed',
-                passed: evaluation.Get('Passed') === null || evaluation.Get('Passed') === undefined ? null : evaluation.Get('Passed') === true,
-                gateFailed: evaluation.Get('GateFailed') === true,
-                passThresholdApplied: numberOrNull(evaluation.Get('PassThresholdApplied')),
-                bandId: evaluation.Get('BandID') == null ? null : String(evaluation.Get('BandID')),
-                confidence: numberOrNull(evaluation.Get('Confidence')),
+                normalizedScore: numberOrNull(evaluation.NormalizedScore),
+                completeness: numberOrNull(evaluation.Completeness),
+                outcome: evaluation.Outcome as 'Passed',
+                passed: evaluation.Passed === null || evaluation.Passed === undefined ? null : evaluation.Passed === true,
+                gateFailed: evaluation.GateFailed === true,
+                passThresholdApplied: numberOrNull(evaluation.PassThresholdApplied),
+                bandId: evaluation.BandID == null ? null : String(evaluation.BandID),
+                confidence: numberOrNull(evaluation.Confidence),
                 nodes: await loadScoredNodes(provider, user, evaluationId),
                 scoringEngineVersion: '1.0',
             };
         },
         async fail(evaluationId, errorMessage) {
             const evaluation = await provider.GetEntityObject('MJ: Rubric Evaluations', user);
-            if (evaluation.Load) await evaluation.Load(evaluationId);
-            evaluation.Set('Status', 'Failed');
-            evaluation.Set('ErrorMessage', errorMessage);
+            await evaluation.Load(evaluationId);
+            evaluation.Status = 'Failed';
+            evaluation.ErrorMessage = errorMessage;
             if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.Message || 'Could not record the failure.');
             return { id: evaluationId, status: 'Failed', errorMessage };
         },
@@ -279,7 +276,7 @@ export function providerEvaluationStore(provider: RubricProvider, user: unknown)
     return ProviderEvaluationStore(provider, user);
 }
 
-function evaluatorType(evaluator: string | undefined): string {
+function evaluatorType(evaluator: string | undefined): MJRubricEvaluationEntity['EvaluatorType'] {
     if (evaluator === 'AI') return 'Agent';
     if (evaluator === 'Deterministic') return 'Deterministic';
     return 'AIPrompt';

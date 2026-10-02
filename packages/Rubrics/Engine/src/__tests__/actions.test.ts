@@ -30,6 +30,30 @@ import { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAc
 import { CreateDraftVersion } from '../providerRecords.js';
 import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from '../RubricEngine.js';
 
+/** Property assignment, as on a generated MJRubric*Entity. Set is absent, so the old row type fails. */
+function draftEntity(entity: string, onSave: (values: Map<string, unknown>) => void) {
+    const values = new Map<string, unknown>();
+    const row = {
+        NewRecord() { /* the draft starts empty */ },
+        async Load() { return true; },
+        async Save() {
+            onSave(values);
+            if (entity === 'MJ: Rubric Versions') values.set('ID', 'version-new');
+            return true;
+        },
+    };
+    return new Proxy(row, {
+        get(target, prop, receiver) {
+            if (typeof prop === 'string' && prop in target) return Reflect.get(target, prop, receiver);
+            return values.get(prop as string);
+        },
+        set(_target, prop, value) {
+            if (typeof prop === 'string') values.set(prop, value);
+            return true;
+        },
+    });
+}
+
 const score: RubricScoreResult = {
     normalizedScore: 0.75,
     completeness: 1,
@@ -183,16 +207,9 @@ describe('rubric actions', () => {
                 return { Success: true, Results: [] };
             },
             async GetEntityObject(entity: string) {
-                const values = new Map<string, unknown>();
-                return {
-                    Set(field: string, value: unknown) { values.set(field, value); },
-                    Get(field: string) { return values.get(field); },
-                    async Save() {
-                        saved.push({ entity, status: values.get('Status') });
-                        if (entity === 'MJ: Rubric Versions') values.set('ID', 'version-new');
-                        return true;
-                    },
-                };
+                return draftEntity(entity, values => {
+                    saved.push({ entity, status: values.get('Status') });
+                });
             },
         };
         const draft = await CreateDraftVersion(provider, { id: 'user' }, {
@@ -219,7 +236,10 @@ describe('rubric actions', () => {
                     return { Success: true, Results: [{ ID: 'old-clarity', Key: 'clarity', Name: 'Clarity', NodeType: 'Criterion', Weight: 1 }] };
                 }
                 if (params.EntityName === 'MJ: Rubric Criterion Levels') {
-                    return { Success: true, Results: [{ CriterionID: 'old-clarity', ScaleLevelID: 'high', Descriptor: 'Clear' }] };
+                    return { Success: true, Results: [
+                        { CriterionID: 'old-clarity', ScaleLevelID: 'high', Descriptor: 'Clear' },
+                        { CriterionID: 'old-clarity', AnchorValue: 0.5, Descriptor: 'Mid' },
+                    ] };
                 }
                 if (params.EntityName === 'MJ: Rubric Bands') {
                     return { Success: true, Results: [{ Label: 'Met', MinScore: 0.8, MaxScore: 1, DisplayTone: 'Success', Sequence: 0 }] };
@@ -227,16 +247,9 @@ describe('rubric actions', () => {
                 return { Success: true, Results: [] };
             },
             async GetEntityObject(entity: string) {
-                const values = new Map<string, unknown>();
-                return {
-                    Set(field: string, value: unknown) { values.set(field, value); },
-                    Get(field: string) { return values.get(field); },
-                    async Save() {
-                        written.push({ entity, values: new Map(values) });
-                        if (entity === 'MJ: Rubric Versions') values.set('ID', 'version-new');
-                        return true;
-                    },
-                };
+                return draftEntity(entity, values => {
+                    written.push({ entity, values: new Map(values) });
+                });
             },
         };
         await CreateDraftVersion(provider, { id: 'user' }, {
@@ -246,9 +259,13 @@ describe('rubric actions', () => {
         const version = written.find(row => row.entity === 'MJ: Rubric Versions');
         expect(version?.values.get('BasedOnVersionID')).toBe('retired');
         expect(version?.values.get('Status')).toBe('Draft');
-        const anchor = written.find(row => row.entity === 'MJ: Rubric Criterion Levels');
-        expect(anchor?.values.get('CriterionID')).toBe('leaf');
-        expect(anchor?.values.get('Descriptor')).toBe('Clear');
+        const anchors = written.filter(row => row.entity === 'MJ: Rubric Criterion Levels');
+        expect(anchors[0]?.values.get('CriterionID')).toBe('leaf');
+        expect(anchors[0]?.values.get('ScaleLevelID')).toBe('high');
+        expect(anchors[0]?.values.get('Descriptor')).toBe('Clear');
+        expect(anchors[0]?.values.has('Sequence')).toBe(false);
+        expect(anchors[1]?.values.get('AnchorValue')).toBe(0.5);
+        expect(anchors[1]?.values.get('Descriptor')).toBe('Mid');
         const band = written.find(row => row.entity === 'MJ: Rubric Bands');
         expect(band?.values.get('RubricVersionID')).toBe('version-new');
         expect(band?.values.get('Label')).toBe('Met');

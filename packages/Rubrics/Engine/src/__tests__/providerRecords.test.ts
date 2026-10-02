@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const viewCalls: { EntityName: string }[] = [];
@@ -40,6 +43,50 @@ vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class AIPromptP
 
 import { ProviderEvaluationStore } from '../providerRecords.js';
 
+/** A generated entity records property assignment. Calling Set throws, which is the failure mode of the old row type. */
+function generatedEntity(written: { field: string; value: unknown }[]) {
+    const fields: Record<string, unknown> = {};
+    const row = {
+        NewRecord() { /* filled by property assignment */ },
+        async Load() { return true; },
+        async Save() { return true; },
+    };
+    return new Proxy(row, {
+        get(target, prop, receiver) {
+            if (typeof prop !== 'string' || prop in target) return Reflect.get(target, prop, receiver);
+            if (prop === 'ID') return 'eval-1';
+            if (prop === 'NormalizedScore') return 0;
+            if (prop === 'Completeness') return 1;
+            if (prop === 'Outcome') return 'GateFailed';
+            if (prop === 'Passed') return false;
+            if (prop === 'GateFailed') return true;
+            return fields[prop] ?? null;
+        },
+        set(_target, prop, value) {
+            if (typeof prop === 'string') {
+                fields[prop] = value;
+                written.push({ field: prop, value });
+            }
+            return true;
+        },
+    });
+}
+
+describe('generated rubric entity rows', () => {
+    it('writes drafts through MJRubric entity properties instead of a Get/Set row', () => {
+        const directory = dirname(fileURLToPath(import.meta.url));
+        const records = readFileSync(join(directory, '../providerRecords.ts'), 'utf8');
+        const catalog = readFileSync(join(directory, '../productionSamplingCatalog.ts'), 'utf8');
+        expect(records).not.toMatch(/interface RubricRow/);
+        expect(records).not.toMatch(/\.Set\(/);
+        expect(records).toMatch(/MJRubricVersionEntity/);
+        expect(records).toMatch(/MJRubricEvaluationScoreEntity/);
+        expect(catalog).toMatch(/MJAIAgentRubricEntity/);
+        expect(catalog).toMatch(/MJRubricEvaluationEntity/);
+        expect(catalog).toMatch(/ResultType: 'entity_object'/);
+    });
+});
+
 describe('ProviderEvaluationStore.submit', () => {
     const written: { field: string; value: unknown }[] = [];
 
@@ -50,26 +97,8 @@ describe('ProviderEvaluationStore.submit', () => {
 
     it('writes rationale and evidence and returns the scored nodes', async () => {
         const store = ProviderEvaluationStore({
-            async GetEntityObject(name: string) {
-                const fields: Record<string, unknown> = {};
-                return {
-                    NewRecord() { /* filled by the store */ },
-                    Set(field: string, value: unknown) {
-                        fields[field] = value;
-                        written.push({ field, value });
-                    },
-                    Get(field: string) {
-                        if (field === 'ID') return 'eval-1';
-                        if (field === 'NormalizedScore') return 0;
-                        if (field === 'Completeness') return 1;
-                        if (field === 'Outcome') return 'GateFailed';
-                        if (field === 'Passed') return false;
-                        if (field === 'GateFailed') return true;
-                        return fields[field] ?? null;
-                    },
-                    async Load() { return true; },
-                    async Save() { return true; },
-                };
+            async GetEntityObject() {
+                return generatedEntity(written);
             },
         }, { ID: 'user' });
         const result = await store.submit('eval-1', [{

@@ -1,20 +1,29 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rows = new Map<string, Record<string, unknown>[]>();
 const filters: string[] = [];
+const resultTypes: string[] = [];
 
-vi.mock('@memberjunction/core', () => ({
-    RunView: {
-        FromMetadataProvider() {
-            return {
-                async RunView(params: { EntityName: string; ExtraFilter?: string }) {
-                    filters.push(`${params.EntityName} ${params.ExtraFilter ?? ''}`);
-                    return { Success: true, Results: rows.get(params.EntityName) ?? [] };
-                },
-            };
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        RunView: {
+            FromMetadataProvider() {
+                return {
+                    async RunView(params: { EntityName: string; ExtraFilter?: string; ResultType?: string }) {
+                        filters.push(`${params.EntityName} ${params.ExtraFilter ?? ''}`);
+                        resultTypes.push(params.ResultType ?? '');
+                        return { Success: true, Results: rows.get(params.EntityName) ?? [] };
+                    },
+                };
+            },
         },
-    },
-}));
+    };
+});
 
 import { ProviderProductionCatalog } from '../productionSamplingCatalog.js';
 
@@ -22,6 +31,14 @@ describe('ProviderProductionCatalog', () => {
     beforeEach(() => {
         rows.clear();
         filters.length = 0;
+        resultTypes.length = 0;
+    });
+
+    it('reads generated entity objects instead of a hand-rolled row', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../productionSamplingCatalog.ts'), 'utf8');
+        expect(source).toMatch(/MJAIAgentRubricEntity/);
+        expect(source).toMatch(/MJRubricVersionEntity/);
+        expect(source).not.toMatch(/Record<string, unknown>/);
     });
 
     it('copies EvaluatorConfig from the agent rubric row', async () => {
@@ -43,6 +60,7 @@ describe('ProviderProductionCatalog', () => {
             purpose: 'ProductionSampling',
             evaluatorConfig: '{"EvaluatorType":"Deterministic"}',
         }]);
+        expect(resultTypes).toEqual(['entity_object']);
     });
 
     it('limits runs to the agent and the recency window, and looks up evaluations by run id', async () => {
