@@ -218,6 +218,8 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         const outputRate = ElevenLabsRealtimeClient.ParsePcmRate(formats?.agent_output_audio_format, 'output');
         const inputRate = ElevenLabsRealtimeClient.ParsePcmRate(formats?.user_input_audio_format, 'input');
         this.playback = this.createPlayback(outputRate);
+        // A speaker mute requested before the playout engine existed sticks (obligation #10).
+        this.playback.SetMuted(this.outputMuted);
         this.micCapture = await this.createMicCapture(micStream, inputRate, (base64Pcm16) =>
             this.sendMicChunk(base64Pcm16)
         );
@@ -363,6 +365,15 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         for (const track of tracks) {
             track.enabled = !muted;
         }
+    }
+
+    /**
+     * Speaker mute (obligation #10): silences the local playout engine's output stage. Audio
+     * keeps being enqueued and scheduled, so {@link IsAudioPlaying} and the output meter stay
+     * honest — only the speaker goes quiet. No frame is sent to ElevenLabs.
+     */
+    protected applyOutputMute(muted: boolean): void {
+        this.playback?.SetMuted(muted);
     }
 
     /** @inheritdoc */

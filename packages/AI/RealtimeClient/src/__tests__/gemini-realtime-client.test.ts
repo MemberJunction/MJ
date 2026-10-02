@@ -61,6 +61,13 @@ class FakePlayback implements IGeminiAudioPlayback {
         this.Closed = true;
         this.IsPlaying = false;
     }
+    /** Records the speaker-mute requests the driver made (obligation #10). */
+    public IsMuted = false;
+    public MuteCalls: boolean[] = [];
+    public SetMuted(muted: boolean): void {
+        this.IsMuted = muted;
+        this.MuteCalls.push(muted);
+    }
 }
 
 /** Fake mic capture handle. */
@@ -744,6 +751,30 @@ describe('GeminiRealtimeClient', () => {
             client.Emit({ serverContent: { outputTranscription: { text: 'more' } } } as LiveServerMessage);
             client.Emit({ serverContent: { interrupted: true } } as LiveServerMessage);
             expect(interruptions).toHaveLength(2);
+        });
+    });
+
+    describe('SetOutputMuted (speaker mute — obligation #10)', () => {
+        it('silences only the local playout engine; nothing reaches Gemini', async () => {
+            const track = await connect(client);
+            const sentBefore = client.Fake.RealtimeInputs.length + client.Fake.ClientContents.length + client.Fake.ToolResponses.length;
+            client.SetOutputMuted(true);
+            expect(client.IsOutputMuted).toBe(true);
+            expect(client.Playback.IsMuted).toBe(true);
+            // The mic is untouched (speaker mute is not mic mute) and nothing went to the provider.
+            expect(track.enabled).toBe(true);
+            expect(client.Fake.RealtimeInputs.length + client.Fake.ClientContents.length + client.Fake.ToolResponses.length).toBe(sentBefore);
+            client.SetOutputMuted(false);
+            expect(client.IsOutputMuted).toBe(false);
+            expect(client.Playback.IsMuted).toBe(false);
+        });
+
+        it('applies a mute requested BEFORE Connect once the playout engine exists', async () => {
+            client.SetOutputMuted(true);
+            expect(client.Playback.MuteCalls).toEqual([]); // no engine yet — nothing to apply
+            await connect(client);
+            expect(client.Playback.IsMuted).toBe(true);
+            expect(client.Playback.MuteCalls).toEqual([true]);
         });
     });
 

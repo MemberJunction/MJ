@@ -338,6 +338,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Emitted when the mic mute is toggled; payload is the new muted state. */
   @Output() MuteChanged = new EventEmitter<boolean>();
 
+  /**
+   * Emitted when the SPEAKER mute is toggled; payload is the new muted state. A local output
+   * mute: the agent keeps going (nothing reaches the provider), the listener just stops hearing it.
+   */
+  @Output() OutputMuteChanged = new EventEmitter<boolean>();
+
   /** Emitted when the interface density changes. */
   @Output() DensityChanged = new EventEmitter<RealtimeUxDensity>();
 
@@ -403,6 +409,15 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** Local mic-muted state, the single source the resolver-independent controls reflect. */
   public Muted = false;
+
+  /**
+   * Speaker-muted state (the agent's voice silenced locally). Read straight from the session
+   * service so every affordance (dock, focus pill, imperative API) reflects one truth and a
+   * new session — which always comes up audible — can never leave a stale "muted" badge behind.
+   */
+  public get OutputMuted(): boolean {
+    return this.realtime.IsOutputMuted;
+  }
 
   private _reviewData: RealtimeSessionReview | null = null;
 
@@ -506,6 +521,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   private static readonly captionsPrefKey = 'mj.realtimeVoice.captions.v1';
 
   /**
+   * Whether the SPEAKER MUTE button renders on the call controls (dock + focus pill). A
+   * demo-oriented setting: off by default, toggled from the gear popover, persisted per user
+   * under {@link speakerMutePrefKey}. The imperative {@link SetOutputMuted} works regardless.
+   */
+  public ShowSpeakerMute = false;
+
+  /** UserInfoEngine key for the persisted speaker-mute-button setting. */
+  private static readonly speakerMutePrefKey = 'mj.realtimeVoice.speakerMute.v1';
+
+  /**
    * Whether developer affordances (open-record links) are revealed. Per-session view
    * state on this shell — off by default, reset with the overlay, never persisted.
    */
@@ -598,6 +623,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.loadPanelWidthPref();
     this.loadDisclosurePref();
     this.loadCaptionsPref();
+    this.loadSpeakerMutePref();
     this.State.Attach(this.realtime);
     this.subs.push(
       // Re-render on merged-state changes; content arrival raises the disclosure level.
@@ -1031,6 +1057,38 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     } catch {
       // engine unavailable — the preference still applies for this session
     }
+  }
+
+  /** Reads the persisted speaker-mute-button setting (tolerant; default = hidden). */
+  private loadSpeakerMutePref(): void {
+    try {
+      this.ShowSpeakerMute = UserInfoEngine.Instance.GetSetting(RealtimeSessionOverlayComponent.speakerMutePrefKey) === 'true';
+    } catch {
+      // UserInfoEngine not configured — the control stays hidden.
+    }
+  }
+
+  /** Persists the speaker-mute-button setting (debounced, best-effort). */
+  private persistSpeakerMutePref(): void {
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(RealtimeSessionOverlayComponent.speakerMutePrefKey, String(this.ShowSpeakerMute));
+    } catch {
+      // engine unavailable — the setting still applies for this session
+    }
+  }
+
+  /**
+   * The gear popover toggled the speaker-mute button setting. Applies it to every affordance,
+   * persists it, and — when hiding the control while the speaker is muted — restores the
+   * sound, so the agent can never be left silenced with no visible way to undo it.
+   */
+  public OnSpeakerMuteSettingToggled(on: boolean): void {
+    this.ShowSpeakerMute = on;
+    if (!on && this.OutputMuted) {
+      this.SetOutputMuted(false);
+    }
+    this.persistSpeakerMutePref();
+    this.cdr.markForCheck();
   }
 
   /** Persists the disclosure milestones server-side (debounced, best-effort). */
@@ -1717,6 +1775,11 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.ToggleMute();
   }
 
+  /** Focus pill: toggle the speaker mute (routes through the overlay's single speaker path). */
+  public OnFocusPillOutputMute(): void {
+    this.ToggleOutputMute();
+  }
+
   /** Focus pill: leave focus mode (show the thread column again). */
   public OnFocusPillExit(): void {
     // Route through the focus-holding channel so ITS surface toggle stays in sync — it
@@ -1756,6 +1819,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     this.MuteChanged.emit(muted);
     this.ControlInvoked.emit('mute');
+  }
+
+  /**
+   * The composer dock toggled the speaker. The service already holds the new state (the dock
+   * drove it); surface the {@link OutputMuteChanged} / {@link ControlInvoked} outputs and refresh.
+   */
+  public OnComposerOutputMuteChanged(muted: boolean): void {
+    this.OutputMuteChanged.emit(muted);
+    this.ControlInvoked.emit('speaker');
+    this.cdr.markForCheck();
   }
 
   // ── Imperative API — drive the surface from a host via @ViewChild ────────────
@@ -1806,6 +1879,29 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.FocusPillMuted = this.Muted;
     this.MuteChanged.emit(this.Muted);
     this.ControlInvoked.emit('mute');
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Set the SPEAKER mute to an explicit state (no-op when already there). Silences the agent's
+   * voice locally without touching the call — the agent keeps listening, speaking and calling
+   * tools, and is never told. Emits {@link OutputMuteChanged} + {@link ControlInvoked}.
+   *
+   * @param muted the desired speaker-muted state.
+   * @example `voice.SetOutputMuted(true); // demo: agent keeps going, room hears nothing`
+   */
+  public SetOutputMuted(muted: boolean): void {
+    if (muted === this.OutputMuted) {
+      return;
+    }
+    this.ToggleOutputMute();
+  }
+
+  /** Toggle the speaker mute. Drives the session service and emits {@link OutputMuteChanged} + {@link ControlInvoked}. */
+  public ToggleOutputMute(): void {
+    const muted = this.realtime.ToggleOutputMute();
+    this.OutputMuteChanged.emit(muted);
+    this.ControlInvoked.emit('speaker');
     this.cdr.markForCheck();
   }
 

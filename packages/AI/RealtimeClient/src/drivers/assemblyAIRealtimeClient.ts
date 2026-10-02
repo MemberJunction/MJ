@@ -259,6 +259,8 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
 
         await ready;
         this.playback = this.createPlayback(ASSEMBLYAI_PCM_SAMPLE_RATE);
+        // A speaker mute requested before the playout engine existed sticks (obligation #10).
+        this.playback.SetMuted(this.outputMuted);
         this.micCapture = await this.createMicCapture(micStream, ASSEMBLYAI_PCM_SAMPLE_RATE, (base64Pcm16) =>
             this.sendMicChunk(base64Pcm16)
         );
@@ -415,6 +417,15 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         for (const track of tracks) {
             track.enabled = !muted;
         }
+    }
+
+    /**
+     * Speaker mute (obligation #10): silences the local playout engine's output stage. Audio
+     * keeps being enqueued and scheduled, so {@link IsAudioPlaying} and the output meter stay
+     * honest — only the speaker goes quiet. No frame is sent to AssemblyAI.
+     */
+    protected applyOutputMute(muted: boolean): void {
+        this.playback?.SetMuted(muted);
     }
 
     /** @inheritdoc */

@@ -83,6 +83,29 @@ describe('RealtimeAgentBannerComponent (DOM)', () => {
     expect(densities).toEqual(['simple']);
   });
 
+  it('offers the speaker-mute button setting in the gear popover, off by default, and emits the toggle', () => {
+    const f = render({ State: 'listening', AgentName: 'Sage', ShowGear: true });
+    const toggled = capture(f.componentInstance.SpeakerMuteSettingToggled);
+    click(f, '.bar-actions .iconb');
+    f.detectChanges();
+    const row = query(f, '.gear-pop .gp-link--speaker');
+    expect(row).not.toBeNull();
+    expect(row?.getAttribute('aria-pressed')).toBe('false');
+    expect(row?.textContent).toContain('Speaker mute button off');
+    (row as HTMLElement).click();
+    f.detectChanges();
+    expect(toggled).toEqual([true]);
+    expect(query(f, '.gear-pop .gp-link--speaker')?.getAttribute('aria-pressed')).toBe('true');
+    expect(text(f, '.gear-pop .gp-link--speaker')).toContain('on');
+  });
+
+  it('reflects an already-on speaker-mute setting in the gear popover', () => {
+    const f = render({ State: 'listening', AgentName: 'Sage', ShowGear: true, ShowSpeakerMute: true });
+    click(f, '.bar-actions .iconb');
+    f.detectChanges();
+    expect(query(f, '.gear-pop .gp-link--speaker')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('emits MinimizeRequested from the minimize control', () => {
     const f = render({ State: 'listening', ShowMinimize: true });
     const mins = capture(f.componentInstance.MinimizeRequested);

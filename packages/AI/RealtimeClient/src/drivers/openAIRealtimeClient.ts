@@ -39,6 +39,8 @@ export interface IRealtimePeerConnection {
 /** The subset of the hidden `<audio>` sink element this client uses. */
 export interface IRealtimeAudioSink {
     srcObject: MediaProvider | null;
+    /** The element's speaker mute — the local output mute on peer-connection drivers (obligation #10). */
+    muted: boolean;
     remove(): void;
 }
 
@@ -193,6 +195,18 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         return this.audioPlaying;
     }
 
+    /**
+     * Speaker mute (obligation #10): flips the hidden `<audio>` sink's `muted` flag. The peer
+     * connection keeps receiving + decoding the remote track, `output_audio_buffer.*` events
+     * keep driving {@link IsAudioPlaying}, and the output meter (tapped on the remote stream,
+     * not the element) keeps reporting — only the speaker goes quiet. Nothing is sent to OpenAI.
+     */
+    protected applyOutputMute(muted: boolean): void {
+        if (this.remoteAudioEl) {
+            this.remoteAudioEl.muted = muted;
+        }
+    }
+
     // ── Overridable creation seams (tests inject fakes — no network / WebRTC) ──
 
     /** Creates the peer connection. Production returns a real `RTCPeerConnection`. */
@@ -251,6 +265,8 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
     /** Routes the provider's audio track into the hidden `<audio>` sink. */
     private attachRemoteAudio(pc: IRealtimePeerConnection): void {
         this.remoteAudioEl = this.createAudioSink();
+        // A speaker mute requested before the sink existed sticks (obligation #10).
+        this.remoteAudioEl.muted = this.outputMuted;
         pc.ontrack = (e: RTCTrackEvent) => {
             if (this.remoteAudioEl && e.streams[0]) {
                 this.remoteAudioEl.srcObject = e.streams[0];

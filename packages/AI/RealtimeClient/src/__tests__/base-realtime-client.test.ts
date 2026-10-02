@@ -23,6 +23,11 @@ class StubRealtimeClient extends BaseRealtimeClient {
     public SendToolResult(_callID: string, _outputJson: string): void {}
     public CancelActiveResponse(): void {}
     public SetMuted(_muted: boolean): void {}
+    /** Records the speaker-mute applications so the base's SetOutputMuted plumbing can be asserted. */
+    public AppliedOutputMutes: boolean[] = [];
+    protected applyOutputMute(muted: boolean): void {
+        this.AppliedOutputMutes.push(muted);
+    }
     public async Disconnect(): Promise<void> {}
     public get IsBusy(): boolean {
         return false;
@@ -157,6 +162,18 @@ describe('BaseRealtimeClient', () => {
                 client.EmitInterruption();
                 client.EmitUsage({ InputTokens: 1 });
             }).not.toThrow();
+        });
+    });
+
+    describe('SetOutputMuted (speaker mute — obligation #10)', () => {
+        it('records the state and hands each change to the driver hook', () => {
+            const client = new StubRealtimeClient();
+            expect(client.IsOutputMuted).toBe(false);
+            client.SetOutputMuted(true);
+            expect(client.IsOutputMuted).toBe(true);
+            client.SetOutputMuted(false);
+            expect(client.IsOutputMuted).toBe(false);
+            expect(client.AppliedOutputMutes).toEqual([true, false]);
         });
     });
 });

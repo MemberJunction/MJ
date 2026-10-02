@@ -87,6 +87,7 @@ class FakePeerConnection implements IRealtimePeerConnection {
 /** Fake hidden `<audio>` sink. */
 class FakeAudioSink implements IRealtimeAudioSink {
     public srcObject: MediaProvider | null = null;
+    public muted = false;
     public Removed = false;
     public remove(): void {
         this.Removed = true;
@@ -799,6 +800,31 @@ describe('OpenAIRealtimeClient', () => {
                 { type: 'session.update', session: { instructions: 'co-agent' } },
             ]);
             expect(states).toEqual(['connecting', 'connected', 'listening']);
+        });
+
+        it('SetOutputMuted flips the hidden <audio> sink muted flag and sends nothing (obligation #10)', async () => {
+            const connectClient = new ConnectTestClient();
+            const track = new FakeTrack();
+            await connectClient.Connect(makeConfig(), new FakeMediaStream([track]));
+            connectClient.Pc.Channel.Open();
+            const sentBefore = connectClient.Pc.Channel.SentEvents().length;
+
+            connectClient.SetOutputMuted(true);
+            expect(connectClient.IsOutputMuted).toBe(true);
+            expect(connectClient.Sink.muted).toBe(true);
+            expect(track.enabled).toBe(true); // speaker mute is not mic mute
+            expect(connectClient.Pc.Channel.SentEvents().length).toBe(sentBefore);
+
+            connectClient.SetOutputMuted(false);
+            expect(connectClient.Sink.muted).toBe(false);
+        });
+
+        it('SetOutputMuted before Connect is applied to the sink when it is created', async () => {
+            const connectClient = new ConnectTestClient();
+            connectClient.SetOutputMuted(true);
+            expect(connectClient.Sink.muted).toBe(false); // sink not attached yet
+            await connectClient.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+            expect(connectClient.Sink.muted).toBe(true);
         });
 
         it('should toggle mic track enablement via SetMuted', async () => {

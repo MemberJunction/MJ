@@ -55,6 +55,13 @@ export class RealtimeAgentBannerComponent {
   /** Whether developer affordances (the "Open session" link) are revealed (gear-gated). */
   @Input() DevMode = false;
 
+  /**
+   * Whether the SPEAKER MUTE button (silence the agent locally, never interrupting it) is shown
+   * on the call controls. Off by default — a demo-oriented control the user opts into from the
+   * gear popover; the overlay persists the choice per user.
+   */
+  @Input() ShowSpeakerMute = false;
+
   /** ID of the server-side agent session record (`MJ: AI Agent Sessions`), when known. */
   @Input() SessionID: string | null = null;
 
@@ -100,6 +107,9 @@ export class RealtimeAgentBannerComponent {
 
   /** Emitted when the user toggles developer links from the gear popover. */
   @Output() DevModeToggled = new EventEmitter<boolean>();
+
+  /** Emitted when the user toggles the speaker-mute button setting from the gear popover. */
+  @Output() SpeakerMuteSettingToggled = new EventEmitter<boolean>();
 
   /** Emitted when the user picks an interface density in the gear popover. */
   @Output() DensityChanged = new EventEmitter<RealtimeUxDensity>();
@@ -159,6 +169,12 @@ export class RealtimeAgentBannerComponent {
   public ToggleDev(): void {
     this.DevMode = !this.DevMode;
     this.DevModeToggled.emit(this.DevMode);
+  }
+
+  /** Gear popover: toggle the speaker-mute button setting (the overlay applies + persists it). */
+  public ToggleSpeakerMuteSetting(): void {
+    this.ShowSpeakerMute = !this.ShowSpeakerMute;
+    this.SpeakerMuteSettingToggled.emit(this.ShowSpeakerMute);
   }
 
   /** The review banner's "started → closed" time-range label (empty when the start is unknown). */

@@ -98,6 +98,7 @@ class FakePeerConnection implements IRealtimeLivePeerConnection {
 
 class FakeAudioSink implements IRealtimeAudioSink {
     public srcObject: MediaProvider | null = null;
+    public muted = false;
     public Removed = false;
     public remove(): void {
         this.Removed = true;
@@ -233,6 +234,18 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
 
         const i2 = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeClient>(BaseRealtimeClient, 'OpenAILiveRealtime');
         expect(i2).toBeInstanceOf(OpenAILiveClient);
+    });
+
+    it('SetOutputMuted flips the hidden <audio> sink muted flag and leaves the mic alone (obligation #10)', async () => {
+        client.SetOutputMuted(true); // before Connect — must stick once the sink exists
+        await client.Connect(makeConfig(), micStream);
+        expect(client.MockSink.muted).toBe(true);
+        expect(client.IsOutputMuted).toBe(true);
+        for (const t of micStream.getAudioTracks()) {
+            expect(t.enabled).toBe(true);
+        }
+        client.SetOutputMuted(false);
+        expect(client.MockSink.muted).toBe(false);
     });
 
     it('creates data channel BEFORE createOffer and performs non-trickle SDP handshake', async () => {
