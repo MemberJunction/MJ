@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RubricVersionDiff } from '../RubricVersionDiff.js';
+import { HighestNonDraftVersion, RubricVersionDiff } from '../RubricVersionDiff.js';
 import { Sha256Hex } from '../canonical.js';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '../types.js';
 
@@ -53,6 +53,16 @@ describe('RubricVersionDiff', () => {
         const result = RubricVersionDiff.diff(null, base);
         expect(result.appliedBump).toBe('Initial');
         expect(result.nextVersion).toEqual({ major: 1, minor: 0, patch: 0 });
+    });
+
+    it('picks the highest Published or Retired version and ignores drafts', () => {
+        const best = HighestNonDraftVersion([
+            { id: 'published', status: 'Published', major: 1, minor: 5, patch: 0 },
+            { id: 'draft', status: 'Draft', major: 9, minor: 0, patch: 0 },
+            { id: 'retired', status: 'Retired', major: 2, minor: 0, patch: 0 },
+        ]);
+        expect(best?.id).toBe('retired');
+        expect(HighestNonDraftVersion([{ id: 'only', status: 'Draft', major: 1, minor: 0, patch: 0 }])).toBeNull();
     });
 
     it('refuses a draft identical to its base', () => {

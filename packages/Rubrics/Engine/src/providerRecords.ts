@@ -1,7 +1,7 @@
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { RunView } from '@memberjunction/core';
-import type { RubricNodeSnapshot, ScoredNode } from '@memberjunction/rubrics-base';
+import { HighestNonDraftVersion, type RubricNodeSnapshot, type ScoredNode } from '@memberjunction/rubrics-base';
 import { RubricEngine, type RubricEvaluationStore, type RubricPromptRun, type RubricRecords } from './RubricEngine.js';
 
 interface RubricRow {
@@ -40,15 +40,24 @@ export function providerRecords(provider: RubricProvider, user: unknown): Rubric
     return ProviderRecords(provider, user);
 }
 
-/** Inserts a Draft version and its criteria. The status written is Draft. */
+/**
+ * Inserts a Draft version and its criteria. The status written is Draft.
+ * BasedOnVersionID is the highest Published or Retired version of this rubric.
+ * When the caller does not supply nodes, that version is cloned, including its
+ * anchors and bands. Caller-supplied nodes are written as given, and anchors
+ * and bands are still copied from the base where the keys match.
+ */
 export async function CreateDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
+    const base = await findHighestVersion(provider, user, input.rubricId);
     const version = await provider.GetEntityObject('MJ: Rubric Versions', user);
     version.NewRecord?.();
     version.Set('RubricID', input.rubricId);
     version.Set('Status', 'Draft');
+    if (base) version.Set('BasedOnVersionID', base.id);
     if (!await version.Save()) throw new Error(version.LatestResult?.Message || 'Could not create the draft version.');
     const versionId = String(version.Get('ID') ?? '');
-    for (const node of parentsFirst(input.nodes)) {
+    const nodes = input.nodes.length > 0 ? input.nodes : await clonedBaseNodes(provider, user, base?.id ?? null);
+    for (const node of parentsFirst(nodes)) {
         const row = await provider.GetEntityObject('MJ: Rubric Criteria', user);
         row.NewRecord?.();
         row.Set('ID', node.id);
@@ -72,12 +81,112 @@ export async function CreateDraftVersion(provider: RubricProvider, user: unknown
         row.Set('EvaluatorConfig', node.evaluatorConfig === undefined ? null : JSON.stringify(node.evaluatorConfig));
         if (!await row.Save()) throw new Error(row.LatestResult?.Message || `Could not save criterion ${node.key}.`);
     }
+    if (base) await copyAnchorsAndBands(provider, user, base.id, versionId, nodes);
     return { id: versionId, status: String(version.Get('Status') ?? '') };
 }
 
 /** @deprecated Use {@link CreateDraftVersion}. */
 export async function createDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
     return CreateDraftVersion(provider, user, input);
+}
+
+interface ListedRows {
+    Success: boolean;
+    Results?: Record<string, unknown>[];
+    ErrorMessage?: string;
+}
+
+async function listRows(provider: RubricProvider, user: unknown, entityName: string, filter: string): Promise<Record<string, unknown>[]> {
+    const direct = provider as RubricProvider & {
+        RunView?: (params: { EntityName: string; ExtraFilter: string }, contextUser?: unknown) => Promise<ListedRows>;
+    };
+    const result = direct.RunView
+        ? await direct.RunView({ EntityName: entityName, ExtraFilter: filter }, user)
+        : await RunView.FromMetadataProvider(provider as never).RunView(
+            { EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 5000 },
+            user as never,
+        );
+    if (!result.Success) throw new Error(result.ErrorMessage || `Could not read ${entityName}.`);
+    return (result.Results ?? []) as Record<string, unknown>[];
+}
+
+async function findHighestVersion(provider: RubricProvider, user: unknown, rubricId: string): Promise<{ id: string } | null> {
+    const rows = await listRows(provider, user, 'MJ: Rubric Versions', `RubricID='${rubricId}' AND Status <> 'Draft'`);
+    const best = HighestNonDraftVersion(rows.map(row => ({
+        id: String(row.ID ?? ''),
+        status: String(row.Status ?? ''),
+        major: Number(row.MajorVersion ?? 0),
+        minor: Number(row.MinorVersion ?? 0),
+        patch: Number(row.PatchVersion ?? 0),
+    })));
+    return best ? { id: best.id } : null;
+}
+
+async function clonedBaseNodes(provider: RubricProvider, user: unknown, baseId: string | null): Promise<RubricNodeSnapshot[]> {
+    if (!baseId) return [];
+    const criteria = await listRows(provider, user, 'MJ: Rubric Criteria', `RubricVersionID='${baseId}'`);
+    const ids = new Map(criteria.map(row => [String(row.ID ?? ''), crypto.randomUUID()]));
+    return criteria.map(row => ({
+        id: ids.get(String(row.ID ?? '')) as string,
+        key: String(row.Key ?? ''),
+        name: String(row.Name ?? ''),
+        description: row.Description == null ? null : String(row.Description),
+        guidance: row.Guidance == null ? null : String(row.Guidance),
+        parentId: row.ParentID ? ids.get(String(row.ParentID)) ?? null : null,
+        nodeType: (row.NodeType === 'Group' ? 'Group' : 'Criterion') as RubricNodeSnapshot['nodeType'],
+        scaleId: row.ScaleID == null ? null : String(row.ScaleID),
+        weight: Number(row.Weight ?? 1),
+        isAdvisory: row.IsAdvisory === true || row.IsAdvisory === 1,
+        isGate: row.IsGate === true || row.IsGate === 1,
+        gateMinimumScore: row.GateMinimumScore == null ? null : Number(row.GateMinimumScore),
+        notApplicablePolicy: row.NotApplicablePolicy == null ? null : row.NotApplicablePolicy as RubricNodeSnapshot['notApplicablePolicy'],
+        rollupMethod: row.RollupMethod == null ? null : row.RollupMethod as RubricNodeSnapshot['rollupMethod'],
+        evidenceRequired: row.EvidenceRequired === true || row.EvidenceRequired === 1,
+        rationaleRequired: row.RationaleRequired === true || row.RationaleRequired === 1,
+        sequence: Number(row.Sequence ?? 0),
+        sourceCriterionId: String(row.ID ?? ''),
+    })) as Array<RubricNodeSnapshot & { sourceCriterionId?: string }>;
+}
+
+async function copyAnchorsAndBands(
+    provider: RubricProvider,
+    user: unknown,
+    baseId: string,
+    versionId: string,
+    nodes: Array<RubricNodeSnapshot & { sourceCriterionId?: string }>,
+): Promise<void> {
+    const baseCriteria = await listRows(provider, user, 'MJ: Rubric Criteria', `RubricVersionID='${baseId}'`);
+    const byKey = new Map(baseCriteria.map(row => [String(row.Key ?? ''), String(row.ID ?? '')]));
+    const baseIds = [...byKey.values()].filter(id => id.length > 0);
+    const anchors = baseIds.length === 0
+        ? []
+        : await listRows(provider, user, 'MJ: Rubric Criterion Levels', `CriterionID IN (${baseIds.map(id => `'${id}'`).join(',')})`);
+    for (const node of nodes) {
+        const sourceId = node.sourceCriterionId ?? byKey.get(node.key);
+        if (!sourceId) continue;
+        for (const anchor of anchors.filter(row => String(row.CriterionID) === sourceId)) {
+            const level = await provider.GetEntityObject('MJ: Rubric Criterion Levels', user);
+            level.NewRecord?.();
+            level.Set('CriterionID', node.id);
+            level.Set('ScaleLevelID', anchor.ScaleLevelID ?? null);
+            level.Set('Descriptor', anchor.Descriptor ?? null);
+            if (anchor.Sequence !== undefined) level.Set('Sequence', anchor.Sequence);
+            if (!await level.Save()) throw new Error(level.LatestResult?.Message || `Could not copy an anchor for ${node.key}.`);
+        }
+    }
+    const bands = await listRows(provider, user, 'MJ: Rubric Bands', `RubricVersionID='${baseId}'`);
+    for (const band of bands) {
+        const row = await provider.GetEntityObject('MJ: Rubric Bands', user);
+        row.NewRecord?.();
+        row.Set('RubricVersionID', versionId);
+        row.Set('Label', band.Label ?? null);
+        row.Set('MinScore', band.MinScore ?? null);
+        row.Set('MaxScore', band.MaxScore ?? null);
+        row.Set('DisplayTone', band.DisplayTone ?? null);
+        row.Set('Sequence', band.Sequence ?? 0);
+        if (band.Description !== undefined) row.Set('Description', band.Description);
+        if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not copy a band.');
+    }
 }
 
 function parentsFirst(nodes: RubricNodeSnapshot[]): RubricNodeSnapshot[] {

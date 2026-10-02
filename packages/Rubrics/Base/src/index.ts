@@ -10,7 +10,8 @@ export type {
     RubricVersionRecord,
 } from './RubricEngineBase.js';
 export { RubricScoring, RubricValidationError, SCORING_ENGINE_VERSION } from './RubricScoring.js';
-export { RubricVersionDiff } from './RubricVersionDiff.js';
+export { HighestNonDraftVersion, RubricVersionDiff } from './RubricVersionDiff.js';
+export type { VersionNumberRow } from './RubricVersionDiff.js';
 export {
     DriftDeltas, driftDeltas, DriftSeries, driftSeries, KeepSample, keepSample, PeriodMeans, periodMeans,
     RubricIdFromVersion, rubricIdFromVersion, SampleBucket, sampleBucket,

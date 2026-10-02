@@ -3,6 +3,31 @@ import type { RubricNodeSnapshot, RubricVersionSnapshot, VersionBump, VersionCha
 
 const RANK: Record<'Patch' | 'Minor' | 'Major', number> = { Patch: 1, Minor: 2, Major: 3 };
 
+/** A version number used to choose the base a new draft or publish is measured against. */
+export interface VersionNumberRow {
+    id: string;
+    status: string;
+    major: number;
+    minor: number;
+    patch: number;
+}
+
+/**
+ * The highest Published or Retired version. A Draft is not a base. Equal numbers
+ * keep the first row. A rubric with only drafts returns null, and that publish
+ * is 1.0.0.
+ */
+export function HighestNonDraftVersion(versions: VersionNumberRow[]): VersionNumberRow | null {
+    const ranked = versions.filter(version => version.status !== 'Draft' && version.id.length > 0);
+    if (ranked.length === 0) return null;
+    return ranked.reduce((best, version) => {
+        if (version.major !== best.major) return version.major > best.major ? version : best;
+        if (version.minor !== best.minor) return version.minor > best.minor ? version : best;
+        if (version.patch !== best.patch) return version.patch > best.patch ? version : best;
+        return best;
+    });
+}
+
 /**
  * Classifies a draft against the version it was cloned from.
  *

@@ -173,6 +173,9 @@ describe('rubric actions', () => {
     it('writes a draft version and does not set Status to Published', async () => {
         const saved: { entity: string; status?: unknown }[] = [];
         const provider = {
+            async RunView() {
+                return { Success: true, Results: [] };
+            },
             async GetEntityObject(entity: string) {
                 const values = new Map<string, unknown>();
                 return {
@@ -193,6 +196,56 @@ describe('rubric actions', () => {
         expect(draft).toEqual({ id: 'version-new', status: 'Draft' });
         expect(saved.map(row => row.status)).toEqual(['Draft', undefined]);
         expect(saved.some(row => row.status === 'Published')).toBe(false);
+    });
+
+    it('sets BasedOnVersionID to the highest non-draft version and copies its anchors and bands', async () => {
+        const written: { entity: string; values: Map<string, unknown> }[] = [];
+        const provider = {
+            async RunView(params: { EntityName: string }) {
+                if (params.EntityName === 'MJ: Rubric Versions') {
+                    return { Success: true, Results: [
+                        { ID: 'published', Status: 'Published', MajorVersion: 1, MinorVersion: 0, PatchVersion: 0 },
+                        { ID: 'retired', Status: 'Retired', MajorVersion: 2, MinorVersion: 1, PatchVersion: 0 },
+                        { ID: 'draft-old', Status: 'Draft', MajorVersion: 8, MinorVersion: 0, PatchVersion: 0 },
+                    ] };
+                }
+                if (params.EntityName === 'MJ: Rubric Criteria') {
+                    return { Success: true, Results: [{ ID: 'old-clarity', Key: 'clarity', Name: 'Clarity', NodeType: 'Criterion', Weight: 1 }] };
+                }
+                if (params.EntityName === 'MJ: Rubric Criterion Levels') {
+                    return { Success: true, Results: [{ CriterionID: 'old-clarity', ScaleLevelID: 'high', Descriptor: 'Clear' }] };
+                }
+                if (params.EntityName === 'MJ: Rubric Bands') {
+                    return { Success: true, Results: [{ Label: 'Met', MinScore: 0.8, MaxScore: 1, DisplayTone: 'Success', Sequence: 0 }] };
+                }
+                return { Success: true, Results: [] };
+            },
+            async GetEntityObject(entity: string) {
+                const values = new Map<string, unknown>();
+                return {
+                    Set(field: string, value: unknown) { values.set(field, value); },
+                    Get(field: string) { return values.get(field); },
+                    async Save() {
+                        written.push({ entity, values: new Map(values) });
+                        if (entity === 'MJ: Rubric Versions') values.set('ID', 'version-new');
+                        return true;
+                    },
+                };
+            },
+        };
+        await CreateDraftVersion(provider, { id: 'user' }, {
+            rubricId: 'rubric',
+            nodes: [{ id: 'leaf', key: 'clarity', name: 'Clarity', nodeType: 'Criterion', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 }],
+        });
+        const version = written.find(row => row.entity === 'MJ: Rubric Versions');
+        expect(version?.values.get('BasedOnVersionID')).toBe('retired');
+        expect(version?.values.get('Status')).toBe('Draft');
+        const anchor = written.find(row => row.entity === 'MJ: Rubric Criterion Levels');
+        expect(anchor?.values.get('CriterionID')).toBe('leaf');
+        expect(anchor?.values.get('Descriptor')).toBe('Clear');
+        const band = written.find(row => row.entity === 'MJ: Rubric Bands');
+        expect(band?.values.get('RubricVersionID')).toBe('version-new');
+        expect(band?.values.get('Label')).toBe('Met');
     });
 
     it('runs LLM through the Rubric Evaluator prompt and does not accept AI', async () => {

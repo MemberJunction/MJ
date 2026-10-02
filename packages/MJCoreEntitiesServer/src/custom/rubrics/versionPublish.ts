@@ -1,4 +1,4 @@
-import { RubricVersionDiff, SnapshotFromRows, sha256Hex, type RubricNodeSnapshot, type RubricVersionSnapshot, type VersionBump } from '@memberjunction/rubrics-base';
+import { HighestNonDraftVersion, RubricVersionDiff, SnapshotFromRows, sha256Hex, type RubricNodeSnapshot, type RubricVersionSnapshot, type VersionBump } from '@memberjunction/rubrics-base';
 
 export class RubricPublishError extends Error {
     public readonly details: string[];
@@ -144,11 +144,29 @@ function read(row: unknown, name: string): unknown {
     return record?.[name];
 }
 
-/** Loads the draft tree and the base version so Save can publish without a separate call. */
+/**
+ * Loads the draft tree and the base version so Save can publish without a separate call.
+ * A null base id does not mean "first version" when this rubric already has a
+ * Published or Retired version. The base is then the highest of those, so the
+ * publish is numbered from that version instead of 1.0.0.
+ */
 export async function LoadDraftForPublish(run: RowRun, versionId: string, rubricId: string, basedOnVersionId: string | null): Promise<{ base: RubricVersionSnapshot | null; draft: RubricVersionSnapshot }> {
     const draft = await loadSnapshot(run, versionId, rubricId);
-    const base = basedOnVersionId ? await loadSnapshot(run, basedOnVersionId, rubricId) : null;
+    const baseId = basedOnVersionId ?? await highestNonDraftId(run, rubricId, versionId);
+    const base = baseId ? await loadSnapshot(run, baseId, rubricId) : null;
     return { base, draft };
+}
+
+async function highestNonDraftId(run: RowRun, rubricId: string, exceptVersionId: string): Promise<string | null> {
+    const siblings = await rows(run, 'MJ: Rubric Versions', `RubricID='${rubricId}' AND Status <> 'Draft'`);
+    const best = HighestNonDraftVersion(siblings.map(row => ({
+        id: String(read(row, 'ID') ?? ''),
+        status: String(read(row, 'Status') ?? ''),
+        major: Number(read(row, 'MajorVersion') ?? 0),
+        minor: Number(read(row, 'MinorVersion') ?? 0),
+        patch: Number(read(row, 'PatchVersion') ?? 0),
+    })).filter(version => version.id !== exceptVersionId));
+    return best?.id ?? null;
 }
 
 /** @deprecated Use {@link LoadDraftForPublish}. */
