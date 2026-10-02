@@ -1001,6 +1001,28 @@ export class SQLCodeGenBase {
                 ? await this.generateSPDelete(entity, pool)
                 : '';
 
+        // Full-text search DDL. Without its own phase the generated
+        // *.fulltext.generated.sql is written to disk and then never executed on
+        // any provider that implements executeEntityPhased — nothing in the
+        // phase list carried it. The search objects were therefore absent while
+        // applyPermissions still GRANTed EXECUTE on the search function, and the
+        // resulting `function does not exist` failed the whole CodeGen run.
+        // Generated here (not in the provider) because building it needs the
+        // internal generators and a pool round trip for the PK index name.
+        let ftsSQL = '';
+        if (entity.FullTextSearchEnabled && !entity.VirtualEntity) {
+            try {
+                const ft = await this.generateEntityFullTextSearchSQL(pool, entity);
+                ftsSQL = ft.sql;
+            } catch (e) {
+                return {
+                    success: false,
+                    phase: 'fulltext-generate',
+                    error: e instanceof Error ? e : new Error(String(e)),
+                };
+            }
+        }
+
         return this._dbProvider.executeEntityPhased!({
             entity,
             tvfSQL,
@@ -1008,6 +1030,7 @@ export class SQLCodeGenBase {
             crudCreateSQL,
             crudUpdateSQL,
             crudDeleteSQL,
+            ftsSQL,
             viewPermSQL: viewPieces.viewPermSQL,
             willRegenerate,
         });
@@ -1764,12 +1787,25 @@ export class SQLCodeGenBase {
             primaryKeyIndexName = await this.GetEntityPrimaryKeyIndexName(pool, entity);
         }
 
-        // If the function name is not set, save it to the DB
-        const functionName = entity.FullTextSearchFunction && entity.FullTextSearchFunction.length > 0
-            ? entity.FullTextSearchFunction
-            : `fnSearch${entity.CodeName}`;
+        // Delegate SQL generation to the provider FIRST — the provider owns the
+        // platform's naming scheme, and the name it used is what actually exists
+        // in the database. PostgreSQL creates `fn_search_<snake(BaseTable)>`;
+        // deriving the name here instead (the SQL Server `fnSearch<CodeName>`
+        // form) recorded a function that never exists on PG, and runtime search
+        // then called a name that was never created.
+        const result = this._dbProvider.generateFullTextSearch(entity, searchFields, primaryKeyIndexName);
 
-        if (entity.FullTextSearchFunctionGenerated && (!entity.FullTextSearchFunction || entity.FullTextSearchFunction.length === 0)) {
+        const functionName = result.functionName && result.functionName.length > 0
+            ? result.functionName
+            : (entity.FullTextSearchFunction && entity.FullTextSearchFunction.length > 0
+                ? entity.FullTextSearchFunction
+                : `fnSearch${entity.CodeName}`);
+
+        // Persist the provider-derived name whenever the stored one DIFFERS, not
+        // only when it is empty. An empty-only condition can never correct a row
+        // stamped with the wrong platform's scheme by an earlier run, because the
+        // wrong name is still a non-empty one.
+        if (entity.FullTextSearchFunctionGenerated && entity.FullTextSearchFunction !== functionName) {
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const u = UserCache.Instance.Users[0];
             if (!u)
@@ -1781,9 +1817,6 @@ export class SQLCodeGenBase {
             if (!await e.Save())
                 throw new Error(`Could not update the FullTextSearchFunction for entity ${entity.Name}`);
         }
-
-        // Delegate SQL generation to the provider
-        const result = this._dbProvider.generateFullTextSearch(entity, searchFields, primaryKeyIndexName);
 
         // Add permissions if function was generated
         if (entity.FullTextSearchFunctionGenerated) {
