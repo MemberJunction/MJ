@@ -11,6 +11,13 @@ interface CalibrationInput {
     evaluator?: { type?: string };
 }
 
+/** The link's evaluator. A missing name stays LLM. Agent runs through the engine's AI evaluator. */
+function CalibrationEvaluator(type: string | undefined): 'AI' | 'Deterministic' | 'LLM' {
+    if (type === 'Deterministic') return 'Deterministic';
+    if (type === 'Agent' || type === 'AI') return 'AI';
+    return 'LLM';
+}
+
 /**
  * Scores a gold set with the AI evaluator and checks agreement with the submitted human scores
  * on the same rubric major. The test score is the overall quadratic-weighted kappa, clamped to 0..1.
@@ -70,22 +77,19 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
             const subject = String(row.SubjectRecordID);
             if (!needed.has(subject)) needed.set(subject, major);
         }
-        let scored = false;
+        const freshIds = new Set<string>();
         for (const [subjectId, major] of needed) {
-            const already = evaluationRows.some(row => String(row.SubjectRecordID) === subjectId && (String(row.EvaluatorType) === 'AIPrompt' || String(row.EvaluatorType) === 'Agent') && (majorByVersion.get(String(row.RubricVersionID)) ?? 0) === major);
-            if (already) continue;
-            await this.scoreSubject(input, subjectId, subjects.find(subject => subject.recordID === subjectId)?.entity ?? '', versionRows, major, context);
-            scored = true;
+            const created = await this.scoreSubject(input, subjectId, subjects.find(subject => subject.recordID === subjectId)?.entity ?? '', versionRows, major, context);
+            if (created) freshIds.add(created);
         }
-        const refreshed = scored
-            ? ((await view.RunView({
-                EntityName: 'MJ: Rubric Evaluations',
-                ExtraFilter: `RubricID='${rubricId}' AND Status='Submitted' AND SubjectRecordID IN (${subjectIds})`,
-                ResultType: 'simple',
-                MaxRows: 1000,
-            }, user)).Results ?? []) as Record<string, unknown>[]
-            : evaluationRows;
-        return this.pairsFrom(refreshed, versionRows, view, user);
+        const refreshed = ((await view.RunView({
+            EntityName: 'MJ: Rubric Evaluations',
+            ExtraFilter: `RubricID='${rubricId}' AND Status='Submitted' AND SubjectRecordID IN (${subjectIds})`,
+            ResultType: 'simple',
+            MaxRows: 1000,
+        }, user)).Results ?? []) as Record<string, unknown>[];
+        const scoped = refreshed.filter(row => String(row.EvaluatorType) === 'Human' || freshIds.has(String(row.ID)));
+        return this.pairsFrom(scoped, versionRows, view, user);
     }
 
     private async goldSubjects(input: CalibrationInput, context: DriverExecutionContext): Promise<{ entity: string; recordID: string }[]> {
@@ -103,7 +107,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
         })).filter(subject => subject.recordID.length > 0);
     }
 
-    /** Runs the AI evaluator for one gold subject. A subclass can replace this in a test. */
+    /** Runs the named evaluator for one gold subject, in this test's context. A subclass can replace this in a test. */
     protected async scoreSubject(
         input: CalibrationInput,
         subjectId: string,
@@ -111,20 +115,21 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
         versions: Record<string, unknown>[],
         major: number,
         context: DriverExecutionContext,
-    ): Promise<void> {
+    ): Promise<string | undefined> {
         const published = versions
             .filter(row => Number(row.MajorVersion ?? 0) === major && String(row.Status) === 'Published')
             .sort((left, right) => Number(right.MinorVersion ?? 0) - Number(left.MinorVersion ?? 0) || Number(right.PatchVersion ?? 0) - Number(left.PatchVersion ?? 0))[0];
         const engine = providerRubricEngine(this.Provider as never, context.contextUser);
-        await engine.evaluateRecord({
+        const result = await engine.evaluateRecord({
             rubricId: input.rubricId,
             versionId: published ? String(published.ID) : undefined,
             subjectEntityName: entityName,
             subjectRecordId: subjectId,
             contextEntityName: 'MJ: Tests',
             contextRecordId: context.test.ID,
-            evaluator: 'LLM',
+            evaluator: CalibrationEvaluator(input.evaluator?.type),
         });
+        return result.evaluationId;
     }
 
     private async pairsFrom(evaluations: Record<string, unknown>[], versions: Record<string, unknown>[], view: RunView, user: DriverExecutionContext['contextUser']): Promise<CalibrationPair[]> {
