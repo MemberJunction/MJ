@@ -780,6 +780,7 @@ export const ContextFunction =
       dataSources,
       userPayload,
       providers,
+      ClientIp: expressReq.ip,
     };
   };
 

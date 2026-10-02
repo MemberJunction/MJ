@@ -15492,6 +15492,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/core-entities-server':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJCoreEntitiesServer
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.1
         version: link:../../GenericDatabaseProvider
