@@ -25,9 +25,43 @@ import type { DatabasePlatform } from './interfaces.js';
 import * as nodePath from 'node:path';
 import { appendFileSync } from 'node:fs';
 import * as childProcess from 'node:child_process';
+import * as nodeOS from 'node:os';
+
+/** Options accepted by the promisified `exec` wrapper in {@link RuntimeSchemaManager.getExecAsync}. */
+interface ExecOptions {
+  timeout?: number;
+  maxBuffer?: number;
+  /** Full environment for the child. Omit to inherit this process's. */
+  env?: NodeJS.ProcessEnv;
+}
 
 /** Signal string used to detect lock-held condition in database messages. */
 const RSU_LOCK_HELD_SIGNAL = 'RSU_LOCK_HELD';
+
+// ─── Child-process heap containment ──────────────────────────────
+//
+// CodeGen and the TypeScript compile run as SEPARATE node processes while THIS process is
+// still resident holding its own V8 heap. `NODE_OPTIONS` is an environment variable, so a
+// child inherits it -- including `--max-old-space-size`. A deployer who sizes the API's
+// ceiling to leave room for exactly this child then watches the child be handed the API's
+// ceiling as well, and nothing enforces the sum.
+//
+// Observed 2026-09-14 on a 2 vCPU / 4 GB workspace compiling 364 new entities: the API was
+// started with `--max-old-space-size=1964` (the deployer's arithmetic, reserving 1024 MB for
+// the OS and this very child), the compile inherited the same 1964, and 1964 + 1964 > 3830.
+// The kernel arbitrated by killing the largest RSS -- the API -- mid-step, taking the
+// pipeline with it. No V8 abort, no JS error, nothing in any log but `dmesg`.
+
+/** Share of currently-free memory a build child may claim as V8 old space. */
+const CHILD_HEAP_FREE_FRACTION = 0.6;
+/**
+ * Floor for a derived child ceiling. Going below this buys nothing: a child that cannot
+ * compile aborts either way, and an explicit small ceiling at least aborts DIAGNOSABLY,
+ * with V8 naming itself, instead of inheriting a large one and being killed by the kernel.
+ */
+const MIN_CHILD_HEAP_MB = 512;
+/** Cap for a derived child ceiling. A build does not need more, and the API still has to live. */
+const MAX_CHILD_HEAP_MB = 4096;
 
 // ─── Typed RSU Configuration ─────────────────────────────────────────
 
@@ -63,6 +97,19 @@ class RSUConfig {
   }
   get CompilePackages(): string | undefined {
     return process.env.RSU_COMPILE_PACKAGES;
+  }
+  /**
+   * V8 old-space ceiling, in MB, for the CodeGen and compile CHILD processes.
+   *
+   * Unset means "derive one from the memory actually free when the step runs", which is almost
+   * always the right answer -- see {@link RuntimeSchemaManager.resolveChildHeapMB}. Set it only
+   * to pin a number a particular host is known to need.
+   */
+  get CompileHeapMB(): number | undefined {
+    const raw = process.env.RSU_COMPILE_HEAP_MB;
+    if (!raw) return undefined;
+    const parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
   }
   get RestartCommand(): string | undefined {
     return process.env.RSU_RESTART_COMMAND;
@@ -1175,6 +1222,25 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     if (successfulItems.length === 0) return result;
 
+    const successfulInputs = successfulItems.map((r) => r.Input);
+
+    // Register durable pending work BEFORE CodeGen and the compile, not after.
+    //
+    // The work becomes OWED the moment the migrations succeed: the tables exist, and nothing but
+    // these rows records that they still need entity maps. Registering after the compile left the
+    // two longest and most memory-hungry steps of the pipeline inside the window where a crash
+    // loses the work SILENTLY -- which is precisely where crashes land. Observed 2026-09-14: a
+    // kernel OOM kill during CompileTypeScript left 364 tables built, zero entity maps, no
+    // pending-work row and no error anywhere, because the only process that could have reported
+    // it was the one that died.
+    //
+    // Rows stay Pending until the post-restart consumer completes them, so moving this earlier
+    // only widens the window in which a crash is RECOVERABLE. A run that now fails before the
+    // restart leaves visible, resumable work instead of silence.
+    const pendingWork = await this.registerPendingWork(successfulInputs);
+    result.PendingWorkIDs = pendingWork.IDs;
+    result.PendingWorkErrors = pendingWork.Errors;
+
     await this.runStep('WriteAdditionalSchemaInfo', () => this.writeAdditionalSchemaInfo(successfulItems.map((r) => r.Input)), sharedSteps);
 
     const codegenOk = await this.runStep('RunCodeGen', () => this.runCodeGen(), sharedSteps);
@@ -1211,15 +1277,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // Write caller-provided PostRestartFiles ONLY for successful migrations.
     // Failed migrations should not trigger post-restart entity maps or syncs.
-    const successfulInputs = successfulItems.map(r => r.Input);
     await this.writePostRestartFiles(successfulInputs);
-
-    // Register durable pending work for successful migrations. Rows stay Pending
-    // until the post-restart consumer completes them, so a crash between here and
-    // consumption leaves the work visible instead of losing it.
-    const pendingWork = await this.registerPendingWork(successfulInputs);
-    result.PendingWorkIDs = pendingWork.IDs;
-    result.PendingWorkErrors = pendingWork.Errors;
 
     // Restart LAST — PM2 restart kills this process, nothing runs after this
     if (!inputs.every((i) => i.SkipRestart)) {
@@ -1739,7 +1797,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     const customCmd = rsuConfig.CodeGenCommand;
     if (customCmd) {
-      await execAsync(`cd "${codegenDir}" && ${customCmd}`, { timeout: timeoutMs });
+      await execAsync(`cd "${codegenDir}" && ${customCmd}`, { timeout: timeoutMs, env: this.buildChildEnv() });
       return true;
     }
 
@@ -1757,7 +1815,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     try {
       // Exit code 0 = success. No stdout string matching needed.
-      await execAsync(`cd "${codegenDir}" && node "${tmpScript}"`, { timeout: timeoutMs });
+      await execAsync(`cd "${codegenDir}" && node "${tmpScript}"`, { timeout: timeoutMs, env: this.buildChildEnv() });
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1789,6 +1847,38 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * Set RSU_COMPILE_COMMAND to override the entire build command (e.g. for
    * environments without turbo).
    */
+  /**
+   * V8 old-space ceiling to hand a build child, in MB.
+   *
+   * Derived from the memory free AT THE MOMENT THE STEP RUNS, which beats any constant chosen
+   * at deploy time: by this point the API's real usage is a measurement rather than a guess,
+   * and it is the API's real usage that decides what is left for the child.
+   */
+  private resolveChildHeapMB(): number {
+    const configured = rsuConfig.CompileHeapMB;
+    if (configured) return configured;
+    const freeMB = Math.floor(nodeOS.freemem() / (1024 * 1024));
+    const candidate = Math.floor(freeMB * CHILD_HEAP_FREE_FRACTION);
+    return Math.min(MAX_CHILD_HEAP_MB, Math.max(MIN_CHILD_HEAP_MB, candidate));
+  }
+
+  /**
+   * Environment for a CodeGen or compile child, with THIS process's heap ceiling replaced by one
+   * sized for a process that runs ALONGSIDE it rather than instead of it. See the
+   * child-heap-containment note at the top of this file for what inheriting it costs.
+   *
+   * Only `--max-old-space-size` is rewritten; every other `NODE_OPTIONS` flag the host set is
+   * preserved, because some of them (module resolution, loaders) are load-bearing for the build.
+   */
+  private buildChildEnv(): NodeJS.ProcessEnv {
+    const heapMB = this.resolveChildHeapMB();
+    const inherited = process.env.NODE_OPTIONS ?? '';
+    const withoutHeap = inherited.replace(/--max-old-space-size=\d+/g, '').replace(/\s+/g, ' ').trim();
+    const nodeOptions = `${withoutHeap} --max-old-space-size=${heapMB}`.trim();
+    this.rsuLog(`[RSU] build child heap ceiling: ${heapMB} MB (inherited NODE_OPTIONS: "${inherited || '(unset)'}")`);
+    return { ...process.env, NODE_OPTIONS: nodeOptions };
+  }
+
   private async compileTypeScript(): Promise<boolean> {
     const { execAsync } = await this.getExecAsync();
     const codegenDir = rsuConfig.CodeGenDir;
@@ -1797,7 +1887,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     // Allow full command override
     const compileCmd = rsuConfig.CompileCommand;
     if (compileCmd) {
-      await execAsync(`cd "${codegenDir}" && ${compileCmd}`, { timeout: timeoutMs });
+      await execAsync(`cd "${codegenDir}" && ${compileCmd}`, { timeout: timeoutMs, env: this.buildChildEnv() });
       return true;
     }
 
@@ -1811,7 +1901,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       .filter((p) => p.length > 0);
 
     const filterArgs = packageNames.map((p) => `--filter="${p}"`).join(' ');
-    await execAsync(`cd "${codegenDir}" && npx turbo build ${filterArgs}`, { timeout: timeoutMs });
+    // --concurrency=1: the ceiling above is PER CHILD, and turbo's default fans out to ten of
+    // them. These packages are a dependency chain (entities -> actions -> api), so parallelism
+    // buys nothing here while multiplying peak memory by the fan-out. A host that wants the
+    // parallel build back can set RSU_COMPILE_COMMAND.
+    await execAsync(`cd "${codegenDir}" && npx turbo build --concurrency=1 ${filterArgs}`, { timeout: timeoutMs, env: this.buildChildEnv() });
 
     return true;
   }
@@ -2464,16 +2558,19 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * Helper to execute shell commands asynchronously.
    */
   private async getExecAsync(): Promise<{
-    execAsync: (cmd: string, opts?: { timeout?: number; maxBuffer?: number }) => Promise<{ stdout: string; stderr: string }>;
+    execAsync: (cmd: string, opts?: ExecOptions) => Promise<{ stdout: string; stderr: string }>;
   }> {
     const { exec } = await import('node:child_process');
     const { promisify } = await import('node:util');
     const execAsync = promisify(exec);
     return {
-      execAsync: (cmd: string, opts?: { timeout?: number; maxBuffer?: number }) =>
+      execAsync: (cmd: string, opts?: ExecOptions) =>
         execAsync(cmd, {
           timeout: opts?.timeout ?? 60_000,
           maxBuffer: opts?.maxBuffer ?? 50 * 1024 * 1024, // 50 MB (CodeGen is verbose)
+          // Only forwarded when the caller supplies one; omitted, the child inherits
+          // process.env exactly as before.
+          ...(opts?.env ? { env: opts.env } : {}),
         }),
     };
   }
