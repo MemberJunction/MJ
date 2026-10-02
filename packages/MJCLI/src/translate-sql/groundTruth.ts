@@ -4,9 +4,9 @@ import { DatabasePlatform } from '@memberjunction/core';
  * A single translation example pairing source and target SQL.
  */
 export interface TranslationExample {
-    source: { platform: DatabasePlatform; sql: string };
-    target: { platform: DatabasePlatform; sql: string };
-    category: string;
+    Source: { platform: DatabasePlatform; sql: string };
+    Target: { platform: DatabasePlatform; sql: string };
+    Category: string;
 }
 
 /**
@@ -16,75 +16,75 @@ export interface TranslationExample {
 export const GROUND_TRUTH_EXAMPLES: TranslationExample[] = [
     // Identifier quoting
     {
-        source: { platform: 'sqlserver', sql: "[Status] = 'Active' AND [Name] LIKE 'J%'" },
-        target: { platform: 'postgresql', sql: '"Status" = \'Active\' AND "Name" LIKE \'J%\'' },
-        category: 'identifier-quoting'
+        Source: { platform: 'sqlserver', sql: "[Status] = 'Active' AND [Name] LIKE 'J%'" },
+        Target: { platform: 'postgresql', sql: '"Status" = \'Active\' AND "Name" LIKE \'J%\'' },
+        Category: 'identifier-quoting'
     },
     // Boolean literals
     {
-        source: { platform: 'sqlserver', sql: "[IsActive] = 1 AND [IsAdmin] = 0" },
-        target: { platform: 'postgresql', sql: '"IsActive" = true AND "IsAdmin" = false' },
-        category: 'boolean-literal'
+        Source: { platform: 'sqlserver', sql: "[IsActive] = 1 AND [IsAdmin] = 0" },
+        Target: { platform: 'postgresql', sql: '"IsActive" = true AND "IsAdmin" = false' },
+        Category: 'boolean-literal'
     },
     // TOP → LIMIT
     {
-        source: { platform: 'sqlserver', sql: "SELECT TOP 10 [Name], [Email] FROM [__mj].[vwUsers] WHERE [IsActive] = 1 ORDER BY [Name]" },
-        target: { platform: 'postgresql', sql: 'SELECT "Name", "Email" FROM __mj."vwUsers" WHERE "IsActive" = true ORDER BY "Name" LIMIT 10' },
-        category: 'top-to-limit'
+        Source: { platform: 'sqlserver', sql: "SELECT TOP 10 [Name], [Email] FROM [__mj].[vwUsers] WHERE [IsActive] = 1 ORDER BY [Name]" },
+        Target: { platform: 'postgresql', sql: 'SELECT "Name", "Email" FROM __mj."vwUsers" WHERE "IsActive" = true ORDER BY "Name" LIMIT 10' },
+        Category: 'top-to-limit'
     },
     // GETUTCDATE → NOW()
     {
-        source: { platform: 'sqlserver', sql: "[CreatedAt] > GETUTCDATE() - 30" },
-        target: { platform: 'postgresql', sql: '"CreatedAt" > NOW() - INTERVAL \'30 days\'' },
-        category: 'date-function'
+        Source: { platform: 'sqlserver', sql: "[CreatedAt] > GETUTCDATE() - 30" },
+        Target: { platform: 'postgresql', sql: '"CreatedAt" > NOW() - INTERVAL \'30 days\'' },
+        Category: 'date-function'
     },
     // ISNULL → COALESCE
     {
-        source: { platform: 'sqlserver', sql: "ISNULL([MiddleName], '') + ' ' + [LastName]" },
-        target: { platform: 'postgresql', sql: "COALESCE(\"MiddleName\", '') || ' ' || \"LastName\"" },
-        category: 'null-function'
+        Source: { platform: 'sqlserver', sql: "ISNULL([MiddleName], '') + ' ' + [LastName]" },
+        Target: { platform: 'postgresql', sql: "COALESCE(\"MiddleName\", '') || ' ' || \"LastName\"" },
+        Category: 'null-function'
     },
     // String concatenation (+ → ||)
     {
-        source: { platform: 'sqlserver', sql: "[FirstName] + ' ' + [LastName]" },
-        target: { platform: 'postgresql', sql: '"FirstName" || \' \' || "LastName"' },
-        category: 'string-concat'
+        Source: { platform: 'sqlserver', sql: "[FirstName] + ' ' + [LastName]" },
+        Target: { platform: 'postgresql', sql: '"FirstName" || \' \' || "LastName"' },
+        Category: 'string-concat'
     },
     // CONVERT → CAST
     {
-        source: { platform: 'sqlserver', sql: "CONVERT(NVARCHAR(50), [Price])" },
-        target: { platform: 'postgresql', sql: 'CAST("Price" AS VARCHAR(50))' },
-        category: 'type-conversion'
+        Source: { platform: 'sqlserver', sql: "CONVERT(NVARCHAR(50), [Price])" },
+        Target: { platform: 'postgresql', sql: 'CAST("Price" AS VARCHAR(50))' },
+        Category: 'type-conversion'
     },
     // IIF → CASE
     {
-        source: { platform: 'sqlserver', sql: "IIF([Status] = 1, 'Active', 'Inactive')" },
-        target: { platform: 'postgresql', sql: "CASE WHEN \"Status\" = true THEN 'Active' ELSE 'Inactive' END" },
-        category: 'conditional'
+        Source: { platform: 'sqlserver', sql: "IIF([Status] = 1, 'Active', 'Inactive')" },
+        Target: { platform: 'postgresql', sql: "CASE WHEN \"Status\" = true THEN 'Active' ELSE 'Inactive' END" },
+        Category: 'conditional'
     },
     // DATEADD → interval arithmetic
     {
-        source: { platform: 'sqlserver', sql: "DATEADD(day, -7, GETUTCDATE())" },
-        target: { platform: 'postgresql', sql: "NOW() - INTERVAL '7 days'" },
-        category: 'date-arithmetic'
+        Source: { platform: 'sqlserver', sql: "DATEADD(day, -7, GETUTCDATE())" },
+        Target: { platform: 'postgresql', sql: "NOW() - INTERVAL '7 days'" },
+        Category: 'date-arithmetic'
     },
     // DATEDIFF → EXTRACT/date_part
     {
-        source: { platform: 'sqlserver', sql: "DATEDIFF(day, [StartDate], [EndDate])" },
-        target: { platform: 'postgresql', sql: 'EXTRACT(DAY FROM ("EndDate" - "StartDate"))::integer' },
-        category: 'date-diff'
+        Source: { platform: 'sqlserver', sql: "DATEDIFF(day, [StartDate], [EndDate])" },
+        Target: { platform: 'postgresql', sql: 'EXTRACT(DAY FROM ("EndDate" - "StartDate"))::integer' },
+        Category: 'date-diff'
     },
     // Schema-qualified with brackets
     {
-        source: { platform: 'sqlserver', sql: "SELECT * FROM [__mj].[vwEntities] WHERE [SchemaName] = '__mj'" },
-        target: { platform: 'postgresql', sql: 'SELECT * FROM __mj."vwEntities" WHERE "SchemaName" = \'__mj\'' },
-        category: 'schema-qualified'
+        Source: { platform: 'sqlserver', sql: "SELECT * FROM [__mj].[vwEntities] WHERE [SchemaName] = '__mj'" },
+        Target: { platform: 'postgresql', sql: 'SELECT * FROM __mj."vwEntities" WHERE "SchemaName" = \'__mj\'' },
+        Category: 'schema-qualified'
     },
     // Complex WHERE clause
     {
-        source: { platform: 'sqlserver', sql: "[EntityID] IN (SELECT [ID] FROM [__mj].[vwEntities] WHERE [IncludeInAPI] = 1)" },
-        target: { platform: 'postgresql', sql: '"EntityID" IN (SELECT "ID" FROM __mj."vwEntities" WHERE "IncludeInAPI" = true)' },
-        category: 'subquery'
+        Source: { platform: 'sqlserver', sql: "[EntityID] IN (SELECT [ID] FROM [__mj].[vwEntities] WHERE [IncludeInAPI] = 1)" },
+        Target: { platform: 'postgresql', sql: '"EntityID" IN (SELECT "ID" FROM __mj."vwEntities" WHERE "IncludeInAPI" = true)' },
+        Category: 'subquery'
     },
 ];
 
@@ -97,15 +97,15 @@ export function BuildGroundTruthPromptSection(
     maxExamples: number = 8
 ): string {
     const relevant = GROUND_TRUTH_EXAMPLES
-        .filter(e => e.source.platform === from && e.target.platform === to)
+        .filter(e => e.Source.platform === from && e.Target.platform === to)
         .slice(0, maxExamples);
 
     if (relevant.length === 0) return '';
 
     const lines = relevant.map((ex, i) =>
-        `Example ${i + 1} (${ex.category}):\n` +
-        `  Source (${from}): ${ex.source.sql}\n` +
-        `  Target (${to}): ${ex.target.sql}`
+        `Example ${i + 1} (${ex.Category}):\n` +
+        `  Source (${from}): ${ex.Source.sql}\n` +
+        `  Target (${to}): ${ex.Target.sql}`
     );
 
     return `## Translation Examples\n\n${lines.join('\n\n')}`;

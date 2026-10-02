@@ -2,15 +2,15 @@ import { AgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { ExecutionLogger } from '../lib/execution-logger';
-import { initializeMJProvider } from '../lib/mj-provider';
+import { InitializeMJProvider } from '../lib/mj-provider';
 import { AgentInfo, ExecutionResult } from '../lib/output-formatter';
 import { ConsoleManager } from '../lib/console-manager';
 import chalk from 'chalk';
 
 export interface AgentExecutionOptions {
-  verbose?: boolean;
-  timeout?: number;
-  conversationMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  verbose?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  timeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  conversationMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class AgentService {
@@ -18,11 +18,11 @@ export class AgentService {
   private contextUser?: UserInfo;
   private metadata?: Metadata;
 
-  async initialize(): Promise<void> {
+  async Initialize(): Promise<void> {
     if (this.initialized) return;
 
     try {
-      await initializeMJProvider();
+      await InitializeMJProvider();
       this.metadata = new Metadata(); // global-provider-ok: CLI tool, single-provider context
       this.contextUser = await this.getContextUser();
       this.initialized = true;
@@ -31,7 +31,12 @@ export class AgentService {
     }
   }
 
-  async listAgents(): Promise<AgentInfo[]> {
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(): Promise<void> {
+    return this.Initialize();
+  }
+
+  async ListAgents(): Promise<AgentInfo[]> {
     await this.ensureInitialized();
 
     try {
@@ -72,7 +77,12 @@ For help with agent configuration, see the MJ documentation.`);
     }
   }
 
-  async findAgent(agentName: string): Promise<MJAIAgentEntityExtended | null> {
+  /** @deprecated Use {@link ListAgents}. */
+  async listAgents(): Promise<AgentInfo[]> {
+    return this.ListAgents();
+  }
+
+  async FindAgent(agentName: string): Promise<MJAIAgentEntityExtended | null> {
     await this.ensureInitialized();
 
     try {
@@ -94,7 +104,12 @@ For help with agent configuration, see the MJ documentation.`);
     }
   }
 
-  async executeAgent(
+  /** @deprecated Use {@link FindAgent}. */
+  async findAgent(agentName: string): Promise<MJAIAgentEntityExtended | null> {
+    return this.FindAgent(agentName);
+  }
+
+  async ExecuteAgent(
     agentName: string, 
     prompt: string, 
     options: AgentExecutionOptions = {}
@@ -107,7 +122,7 @@ For help with agent configuration, see the MJ documentation.`);
     try {
       // Find the agent
       logger.logStep('INFO', 'SYSTEM', 'Finding agent', { agentName });
-      const agent = await this.findAgent(agentName);
+      const agent = await this.FindAgent(agentName);
       
       if (!agent) {
         const suggestions = await this.getSimilarAgentNames(agentName);
@@ -345,9 +360,18 @@ Log file: ${logger.getLogFilePath()}${stackInfo}`);
     }
   }
 
+  /** @deprecated Use {@link ExecuteAgent}. */
+  async executeAgent(
+    agentName: string, 
+    prompt: string, 
+    options: AgentExecutionOptions = {}
+  ): Promise<ExecutionResult> {
+    return this.ExecuteAgent(agentName, prompt, options);
+  }
+
   private async getSimilarAgentNames(searchName: string): Promise<string[]> {
     try {
-      const agents = await this.listAgents();
+      const agents = await this.ListAgents();
       const searchLower = searchName.toLowerCase();
       
       return agents
@@ -431,7 +455,7 @@ This is typically a configuration or database setup issue.`);
 
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized) {
-      await this.initialize();
+      await this.Initialize();
     }
   }
 }

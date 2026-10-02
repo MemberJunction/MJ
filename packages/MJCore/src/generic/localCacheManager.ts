@@ -1579,9 +1579,38 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   same entity+filter, so they must never share a cache entry. When empty/undefined (the
      *   common case — users with no RLS filter), the fingerprint is byte-for-byte identical to the
      *   pre-RLS format so normal cache sharing is preserved and no existing entries are invalidated.
+     * @param flsFieldsKey - Canonical key identifying this user's field-security access on the
+     *   entity: lowercased field names, sorted, comma-joined. Opaque here — the caller decides
+     *   what goes in it, and `ProviderBase.ComputeRunViewFLSFingerprintKey` is the single place
+     *   that decision lives so the two tiers cannot drift.
+     *
+     *   **CLIENT-ONLY in practice.** The client passes its ALLOWED set
+     *   (`ProviderBase.ComputeClientFLSAllowedKey`); the SERVER passes nothing. Server slots are
+     *   full-width and shared by every user, with narrowing applied at read time by
+     *   `ApplyFieldSecurityProjection` on both the hit and miss paths — a segment there would
+     *   fragment one shared slot into one per permission class and protect nothing. Client slots
+     *   are stored exactly as the server returned them (already narrowed on the wire) and are
+     *   never projected on read, so the field set has to be part of slot identity: without it a
+     *   user whose access is tightened keeps being served their persisted IndexedDB slot, because
+     *   the currency check compares only `maxUpdatedAt` and `rowCount` and neither notices a
+     *   column.
+     *
+     *   Keyed on the ALLOWED set rather than the denied one deliberately: once client metadata is
+     *   filtered for restricted users ([#3485](https://github.com/MemberJunction/MJ/issues/3485))
+     *   a denied field will not appear in the client's field list at all, so a denied-set key
+     *   would be empty and would silently stop segmenting. It also resolves the `f:*` ambiguity
+     *   in the projection segment, where "full width" means different columns for different users.
+     *
+     *   Empty for unrestricted users and non-FLS entities, which appends no segment at all — so
+     *   their fingerprints stay byte-identical and keep sharing slots (the `rls:` rule). A
+     *   permission change produces a new hash → fresh slot; slots keyed to the old hash strand
+     *   until eviction (memory cost, not a leak).
+     * @param datasetSegment - Namespace for dataset-item slots (see the `ds:` append below): keeps
+     *   `GetDatasetByName` item caching from colliding with a plain unfiltered read of the same
+     *   entity. Appended only when supplied, so ordinary reads keep their pre-existing key.
      * @returns A unique, human-readable fingerprint string
      */
-    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, datasetSegment?: string): string {
+    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, datasetSegment?: string, flsFieldsKey?: string): string {
         const entity = params.EntityName?.trim() || 'Unknown';
         const rawFilter = params.ExtraFilter;
         const filter = (typeof rawFilter === 'string' ? rawFilter : rawFilter ? JSON.stringify(rawFilter) : '').trim();
@@ -1665,6 +1694,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const rls = (rlsWhereClause ?? '').trim();
         if (rls.length > 0) {
             parts.push(`rls:${this.simpleHash(rls)}`);
+        }
+
+        // Field-Level-Security segment — the column counterpart of `rls:`, and CLIENT-ONLY.
+        //
+        // A browser stores rows exactly as the server returned them (already narrowed to the
+        // user's allowed columns) and never projects on read, so the field set has to be part
+        // of slot identity. Without it, a user whose access is tightened keeps being served
+        // their persisted IndexedDB slot: the currency check compares maxUpdatedAt and rowCount
+        // only, neither of which notices a column.
+        //
+        // The server passes nothing here — its slots are full-width and shared, with narrowing
+        // applied at read time by ApplyFieldSecurityProjection.
+        // ProviderBase.ComputeRunViewFLSFingerprintKey is where that split is decided.
+        //
+        // Appended ONLY when non-empty, so unrestricted users and non-FLS entities keep
+        // byte-identical fingerprints and shared slots (the rls: rule).
+        const fls = (flsFieldsKey ?? '').trim();
+        if (fls.length > 0) {
+            parts.push(`fls:${this.simpleHash(fls)}`);
         }
 
         // Stored-view identity. A saved view's WhereClause/OrderBy live on the view, not in
@@ -2205,7 +2253,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param params - The original RunView parameters (for re-storing the cache)
      * @param updatedRows - Rows that have been created or updated since the cache was stored
      * @param deletedRecordIDs - Record IDs (in CompositeKey concatenated string format) that have been deleted
-     * @param primaryKeyFieldName - The name of the primary key field (or first PK field for composite keys)
+     * @param primaryKeyFieldNames - Every primary key column name, in key order (a single name is accepted for a
+     *   single-column key). Cached and updated rows are keyed on ALL of them so a composite key matches the
+     *   server's full `deletedRecordIDs` segment; passing only the first column silently truncates the key.
      * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
      * @param serverRowCount - The database's authoritative total row count (fresh COUNT(*) over the
      *   view) from the smart-cache check. Used as the merged entry's `totalRowCount` when it exceeds
@@ -2221,7 +2271,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         params: RunViewParams,
         updatedRows: unknown[],
         deletedRecordIDs: string[],
-        primaryKeyFieldName: string,
+        primaryKeyFieldNames: string | string[],
         newMaxUpdatedAt: string,
         serverRowCount?: number,
         aggregateResults?: AggregateResult[],
@@ -2275,7 +2325,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
 
             // Build a map of existing records by composite key string for O(1) lookups
-            const pkFieldNames = [primaryKeyFieldName];
+            const pkFieldNames = Array.isArray(primaryKeyFieldNames) ? primaryKeyFieldNames : [primaryKeyFieldNames];
             const resultMap = new Map<string, unknown>();
             for (const row of cached.results) {
                 const rowObj = row as Record<string, unknown>;

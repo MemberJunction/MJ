@@ -636,6 +636,26 @@ CodeGen reporting success.
 **MJ core uses this itself.** `MJ: Version Installations` and `MJ: User View Run Details` are layered
 as of v6.1, and the remaining fully-custom core entities are expected to follow.
 
+**One CodeGen pass.** Apply the hand-authored overlay (it selects `g.*` from the inner generated
+view plus extra columns), `mj sync push` any Entity pins (e.g. `SupportsGeoCoding`), then run
+`mj codegen --skipfiles` **once from the Open App cwd**. Pass 1 discovers overlay columns from
+`BaseView` (`vwSQLColumnsAndEntityFields`) and logs EntityField INSERTs; Pass 2 writes only the
+**inner** view (`GeneratedBaseViewName`) and never DROPs the overlay. A second CodeGen run is not
+required for overlay columns and is how duplicate `__mj_Latitude` / missing SPs happen.
+
+### Open App metadata SQL (`CodeGen_Run_*.sql`)
+
+EntityField INSERTs are **not** in `SQL Scripts/generated/` (that tree is views/SPs). They go to
+`SQLOutput` as `CodeGen_Run_<utc>.sql`.
+
+- Run `mj codegen` from the **Open App cwd** (`mj-app.json`). SQLOutput defaults to
+  `./migrations/codegen`. Do not run it from the MJ repo with `includeSchemas` pointing at an
+  app — that used to dump EntityField SQL into `MJ/migrations/v5`.
+- `--sql-output-dir` overrides the folder. Pointing it at `MJ/migrations/v*` from an app fails.
+- If `SQLOutput.enabled` and no log file is open, CodeGen **refuses to apply** metadata SQL.
+  Fold the `CodeGen_Run` file into the app V migration; never transcribe EntityField rows from
+  the live DB. ExtendedType pins stay in `metadata/entities` (`mj sync push`).
+
 ### The two paths, side by side
 
 The thing to hold onto: **`BaseView` is always the public surface**, and the only question is who
@@ -1222,7 +1242,7 @@ Virtual entities are defined in `database-metadata-config.json` under the `Virtu
 
 - **`ViewName`**: The SQL view name (must already exist in the database)
 - **`EntityName`**: The MemberJunction entity name (appears in metadata, UI, APIs)
-- **`SchemaName`**: Database schema (typically `__mj` for core entities)
+- **`SchemaName`**: Database schema that holds the view (defaults to `dbo`)
 - **`Description`**: Entity description for metadata and documentation
 - **`PrimaryKey`**: Array of column names forming the primary key (supports composite keys)
 - **`ForeignKeys`**: Optional array of foreign key relationships to other entities (if omitted, LLM decoration discovers them)
@@ -1232,19 +1252,21 @@ Virtual entities are defined in `database-metadata-config.json` under the `Virtu
 CodeGen processes virtual entities through several specialized steps:
 
 #### 1. `processVirtualEntityConfig()` - Entity Creation
-Reads the `VirtualEntities` configuration and calls `spCreateVirtualEntity` for each entry:
+Reads the `VirtualEntities` configuration and, for each entry whose view exists and has no entity yet, writes two logged statements:
 
-```typescript
-// CodeGen calls this stored procedure for each virtual entity
-EXEC spCreateVirtualEntity
-    @Name = 'Sales Summary',
-    @SchemaName = '__mj',
-    @BaseView = 'vwSalesSummary',
-    @Description = 'Aggregated sales data...',
-    @PrimaryKeyColumnName = 'SummaryID'
+```sql
+-- Entity row with a CodeGen-generated ID (read-only flags, Description kept)
+INSERT INTO [__mj].[Entity] ([ID], [Name], [Description], [BaseTable], [BaseView], [SchemaName], [VirtualEntity], ...)
+VALUES (CAST('<new id>' AS uniqueidentifier), 'Sales Summary', 'Aggregated sales data...', 'vwSalesSummary', 'vwSalesSummary', 'dbo', 1, ...)
+
+-- First PrimaryKey column, typed later by the field sync
+INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name], [IsPrimaryKey], [IsUnique], [Type], ...)
+VALUES (..., (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM ...), 'SummaryID', 1, 1, 'int', ...)
 ```
 
-This creates the `Entity` metadata record with `VirtualEntity = 1`.
+Both statements go to the CodeGen_Run capture, so a migration replays them with the same entity ID. The entity is then added to its schema's application, gets the default permissions, and joins the new-entity list so its class, GraphQL type and form are generated in the same run.
+
+If another entity already uses the `EntityName` (compared without case, like `UQ_Entity_Name`), the entry is skipped with an error before anything is written, so the capture never holds an INSERT that fails. A name derived from `ViewName` gets a `__<schema>` suffix instead, like a table-backed entity.
 
 #### 2. `manageVirtualEntities()` - Field Synchronization
 Scans `sys.columns` on the virtual entity's view and creates `EntityField` metadata for each column:
@@ -1269,20 +1291,20 @@ WHERE
     object_id = OBJECT_ID('__mj.vwSalesSummary')
 ```
 
-#### 3. `applySoftPKFKConfig()` - Explicit Relationship Overrides
-Applies the `primaryKeyColumnName` and `foreignKeyDefinitions` from the config:
+#### 3. `applyVirtualEntitySoftKeys()` - Explicit Keys
+Applies every `PrimaryKey` column and every `ForeignKeys` entry from the config. It runs on every CodeGen run, right after the field sync, so a column added to the view and named as a key in the same change gets its key in one run. A configured column that is not in the view is skipped with a warning. On a composite key, `IsUnique` is cleared on the key columns:
 
-```typescript
-// Sets the primary key field
-UPDATE EntityField
-SET IsPrimaryKey = 1
-WHERE EntityID = @VirtualEntityID
-  AND Name = 'SummaryID'
+```sql
+-- Each PrimaryKey column (composite keys supported)
+UPDATE EntityField SET IsPrimaryKey = 1, IsSoftPrimaryKey = 1
+WHERE EntityID = @VirtualEntityID AND Name = 'SummaryID'
 
-// Creates foreign key relationships
-INSERT INTO EntityRelationship (...)
-SELECT ... FROM foreignKeyDefinitions
+-- Each ForeignKeys entry
+UPDATE EntityField SET RelatedEntityID = @RegionEntityID, RelatedEntityFieldName = 'ID', IsSoftForeignKey = 1
+WHERE EntityID = @VirtualEntityID AND Name = 'RegionID'
 ```
+
+When a key changed, `EntityRelationship` rows are then built from these soft foreign keys in the same run.
 
 **Why explicit FK definitions?** Views don't have database-level foreign keys, so CodeGen can't detect relationships automatically. The config provides this metadata.
 

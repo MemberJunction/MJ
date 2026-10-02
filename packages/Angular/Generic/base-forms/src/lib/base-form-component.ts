@@ -11,9 +11,11 @@ import {
   Metadata, RunViewParams, LogError,
   RecordDependency, BaseEntityEvent, CompositeKey, RunView, RunViewResult
 } from '@memberjunction/core';
-import { MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
+import { DeserializeValidationErrors, MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
 import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCodes } from '@memberjunction/ng-base-types';
 import { MJListEntity } from '@memberjunction/core-entities';
+import { GraphQLAIClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import type { DuplicateEntryCandidate, DuplicateEntryCheckResult } from '@memberjunction/graphql-dataprovider';
 
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormSectionInfo } from './base-form-section-info';
@@ -34,6 +36,7 @@ import { EntityFormConfig } from './types/entity-form-config';
 import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs } from './types/form-toolbar-item';
 import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
 import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
+import { DuplicateEntryCheckController, type DuplicateEntryCheckValue } from './duplicate-entry-check/duplicate-entry-check';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -317,6 +320,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.formStateSubscription) {
       this.formStateSubscription.unsubscribe();
     }
+    this._duplicateEntryCheck?.Dispose();
   }
 
   // #region Pending Records
@@ -443,47 +447,54 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         // ignore blur errors
       }
 
-      if (this.record) {
-        this.PopulatePendingRecords();
-        const valResults = this.Validate();
-        if (valResults.Success) {
-          const result = await this.InternalSaveRecord();
-          if (result) {
-            this._pendingRecords = [];
-            this.clearValidationState();
-            if (StopEditModeAfterSave)
-              this.EndEditMode();
-
-            this.Notification.emit({ Message: 'Record saved successfully', Type: 'success', Duration: 2500 });
-            this.RecordSaved.emit({
-              EntityName: this.record.EntityInfo.Name,
-              RecordId: this.record.PrimaryKey.ToString(),
-              Result: { Success: true }
-            });
-            return true;
-          } else {
-            const serverMsg = this.record.LatestResult?.Message || '';
-            const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
-            this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
-            this.RecordSaveFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
-          }
-        } else {
-          // Broadcast validation errors to all fields via FormContext
-          this._showValidation = true;
-          this._validationErrors = valResults.Errors;
-          this.cdr.markForCheck();
-
-          const errorMessages = valResults.Errors.map(x => x.Message);
-          this.Notification.emit({
-            Message: 'Validation Errors\n' + errorMessages.join('\n'),
-            Type: 'warning',
-            Duration: 5000
-          });
-          this.ValidationFailed.emit({ EntityName: this.record.EntityInfo.Name, Errors: errorMessages });
-        }
+      if (!this.record) {
+        // The only failure this method cannot show the user: with no record there is nothing to
+        // validate, toast about or paint. Every other refusal below is already reported through
+        // the toast and the fields, so it is NOT logged again here — a second, generic line
+        // ("Record not found") on a create that failed validation sent readers hunting for an
+        // ID or routing fault that did not exist.
+        LogError('Could not save record: the form has no record bound to it');
+        return false;
       }
 
-      LogError("Could not save record: Record not found");
+      this.PopulatePendingRecords();
+      const valResults = this.Validate();
+      if (!valResults.Success) {
+        this.publishValidationFailure(valResults.Errors);
+        return false;
+      }
+
+      const result = await this.InternalSaveRecord();
+      if (result) {
+        this._pendingRecords = [];
+        this.clearValidationState();
+        this._duplicateEntryCheck?.RecordSaved();
+        if (StopEditModeAfterSave)
+          this.EndEditMode();
+
+        this.Notification.emit({ Message: 'Record saved successfully', Type: 'success', Duration: 2500 });
+        this.RecordSaved.emit({
+          EntityName: this.record.EntityInfo.Name,
+          RecordId: this.record.PrimaryKey.ToString(),
+          Result: { Success: true }
+        });
+        return true;
+      }
+
+      const serverMsg = this.record.LatestResult?.Message || '';
+      const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
+      // A server-side Validate()/ValidateAsync() refusal comes back with its field-named
+      // reasons in LatestResult.Errors (rehydrated by the provider). When any of them names a
+      // field on this record, publish them through the SAME path the local Validate() branch
+      // uses above, so the field paints red with its message instead of the user getting a
+      // toast and a form with nothing marked. Errors with no field source stay toast-only.
+      const serverErrors = this.fieldSourcedServerErrors();
+      if (serverErrors.length > 0) {
+        this.publishValidationFailure(serverErrors);
+      } else {
+        this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
+      }
+      this.RecordSaveFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
       return false;
     } catch (e) {
       const errorMsg = 'Error saving record: ' + e;
@@ -636,6 +647,79 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async Wait(duration: number): Promise<void> {
     return new Promise<void>(resolve => setTimeout(resolve, duration));
+  }
+
+  // #endregion
+
+  // #region Duplicate Entry Check
+
+  private _duplicateEntryCheck: DuplicateEntryCheckController | null = null;
+
+  /**
+   * The entry-time duplicate check. While a person enters a new record it asks the server, after
+   * each pause in editing, whether the values duplicate existing records, and holds the ones to
+   * flag. It only flags: saving is never blocked and nothing is merged. `mj-record-form-container`
+   * shows the notice.
+   */
+  public get DuplicateEntryCheck(): DuplicateEntryCheckController {
+    if (!this._duplicateEntryCheck) {
+      this._duplicateEntryCheck = new DuplicateEntryCheckController(
+        (entityName, values) => this.CheckDuplicateEntry(entityName, values)
+      );
+    }
+    return this._duplicateEntryCheck;
+  }
+
+  /** Whether the possible-duplicate notice shows: a new record with flagged candidates not dismissed. */
+  public get ShowDuplicateEntryNotice(): boolean {
+    return !!this.record && !this.record.IsSaved && (this._duplicateEntryCheck?.IsNoticeVisible ?? false);
+  }
+
+  /**
+   * A person edited a field on this form. For a new record this restarts the entry-time duplicate
+   * check. `mj-record-form-container` calls it for every `mj-form-field` edit; a custom editor that
+   * changes the record some other way can call it too.
+   *
+   * A user who cannot read the entity (one who may only create its records) never starts a check:
+   * the server would refuse it, and a flagged record is one they could not open anyway.
+   */
+  public OnFieldEdited(): void {
+    if (this.record && !this.record.IsSaved && this.UserCanRead) {
+      this.DuplicateEntryCheck.RecordEdited(this.record);
+    }
+  }
+
+  /**
+   * Opens a flagged candidate the way the form opens any record: a `Navigate` event the host
+   * handles, never a router call. It asks for a new tab, so the record being entered is kept.
+   */
+  public OpenDuplicateCandidate(candidate: DuplicateEntryCandidate): void {
+    const entityInfo = this.record?.EntityInfo;
+    if (!entityInfo) return;
+    this.Navigate.emit({
+      Kind: 'record',
+      EntityName: entityInfo.Name,
+      PrimaryKey: CompositeKey.FromURLSegment(entityInfo, candidate.RecordID),
+      OpenInNewTab: true
+    });
+  }
+
+  /** The person dismissed the possible-duplicate notice. */
+  public DismissDuplicateNotice(): void {
+    this._duplicateEntryCheck?.Dismiss();
+  }
+
+  /**
+   * Asks the server whether the values being entered duplicate existing records. A form on a
+   * provider that is not a `GraphQLDataProvider` has no server to ask, so the check reports
+   * `NotConfigured` and stops for the entity. Override to send the check elsewhere.
+   */
+  protected async CheckDuplicateEntry(entityName: string, values: Record<string, DuplicateEntryCheckValue>): Promise<DuplicateEntryCheckResult> {
+    const provider = this.ProviderToUse;
+    if (!(provider instanceof GraphQLDataProvider)) {
+      return { Status: 'NotConfigured', Candidates: [] };
+    }
+    return new GraphQLAIClient(provider).CheckDuplicateEntry({ EntityName: entityName, Values: values });
   }
 
   // #endregion
@@ -955,6 +1039,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       showEmptyFields: this.showEmptyFields,
       showValidation: this._showValidation,
       validationErrors: this._validationErrors,
+      validationRevision: this._validationRevision,
       collapsibleSections: this.Config?.CollapsibleSections,
       enableRecordLinks: this.Config?.EnableRecordLinks,
       showRelatedEntities: this.Config?.ShowRelatedEntities,
@@ -996,6 +1081,50 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (!this.Config) return true;
     if (this.Config.Toolbar === null) return false;
     return this.Config.Toolbar?.AllowSectionReorder ?? true;
+  }
+
+  /**
+   * Bumped on every {@link publishValidationFailure}; published as `FormContext.validationRevision`
+   * so a field can tell an edit made before the failure from one made after it.
+   */
+  private _validationRevision = 0;
+
+  /**
+   * The ONE way validation errors reach the fields and the user — used by both the local
+   * `Validate()` refusal and a server-side refusal that came back on `LatestResult.Errors`, so the
+   * two cannot drift: broadcast through `FormContext` (fields match `Source === FieldName`), bump
+   * the revision, toast the messages, and raise `ValidationFailed`.
+   */
+  private publishValidationFailure(errors: ValidationErrorInfo[]): void {
+    this._showValidation = true;
+    this._validationErrors = errors;
+    this._validationRevision++;
+    this.cdr.markForCheck();
+
+    const errorMessages = errors.map(x => x.Message);
+    this.Notification.emit({
+      Message: 'Validation Errors\n' + errorMessages.join('\n'),
+      Type: 'warning',
+      Duration: 5000
+    });
+    this.ValidationFailed.emit({ EntityName: this.record.EntityInfo.Name, Errors: errorMessages });
+  }
+
+  /**
+   * The structured errors of the last failed save, when at least one names a field on this record.
+   *
+   * `LatestResult.Errors` is untyped and may hold anything a provider put there, so it is normalised
+   * through `DeserializeValidationErrors` first. Returns `[]` unless some entry's `Source` is one of
+   * this record's field names — a refusal that is purely record-level ("the database timed out",
+   * "not authorised") has nothing to paint and keeps the plain error toast. When there IS a
+   * field-sourced entry, the WHOLE set is returned: field-agnostic entries paint nothing (no field
+   * matches an empty Source) but still belong in the toast.
+   */
+  private fieldSourcedServerErrors(): ValidationErrorInfo[] {
+    const errors = DeserializeValidationErrors(this.record?.LatestResult?.Errors);
+    if (errors.length === 0) return [];
+    const fieldNames = new Set(this.record.EntityInfo.Fields.map(f => f.Name));
+    return errors.some(e => e.Source.length > 0 && fieldNames.has(e.Source)) ? errors : [];
   }
 
   /** Clears all validation display state (called on save success, cancel, end edit) */

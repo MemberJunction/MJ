@@ -26,6 +26,10 @@
       "MJ: AI Agent Prompts": {
         "entity": "MJ: AI Agent Prompts",
         "foreignKey": "AgentID"
+      },
+      "MJ: AI Agent Skills": {
+        "entity": "MJ: AI Agent Skills",
+        "foreignKey": "AgentID"
       }
     }
   }

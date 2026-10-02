@@ -163,10 +163,21 @@ export class SearchFusion {
                                   result.SourceType === 'entity' ? result :
                                   result.Score > existing.Score ? result : existing;
 
+                const mergedTags = Array.from(new Set([...(existing.Tags ?? []), ...(result.Tags ?? [])]));
+
+                const other = preferred === existing ? result : existing;
+                let snippet = preferred.Snippet;
+                const isGeneric = (s: string | undefined) => !s || s === 'Matched record' || s.startsWith('Matched in ');
+                if (isGeneric(snippet) && !isGeneric(other.Snippet)) {
+                    snippet = other.Snippet;
+                }
+
                 seen.set(key, {
                     ...preferred,
+                    Snippet: snippet,
                     Score: maxScore,
-                    ScoreBreakdown: mergedBreakdown
+                    ScoreBreakdown: mergedBreakdown,
+                    Tags: mergedTags
                 });
             }
         }

@@ -18,7 +18,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * @param props.children The app content to protect (the router stack).
  */
 export function AppLockGate({ children }: { children: ReactNode }) {
-    const { state, unlock } = useAppLock();
+    const { State: state, Unlock: unlock } = useAppLock();
     if (state === 'unlocked') return <>{children}</>;
     return <LockScreen authenticating={state === 'authenticating'} onUnlock={() => void unlock()} />;
 }

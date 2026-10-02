@@ -96,9 +96,36 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'HtmlArtifactViewerPlugin')
 export class HtmlArtifactViewerComponent extends BaseArtifactViewerPluginComponent {
-  public htmlContent = '';
-  public safeHtmlContent: SafeHtml = '';
-  public viewMode: 'preview' | 'source' = 'preview';
+  public HtmlContent = '';
+
+  /** @deprecated Use {@link HtmlContent}. */
+  public get htmlContent() {
+    return this.HtmlContent;
+  }
+  /** @deprecated Use {@link HtmlContent}. */
+  public set htmlContent(value) {
+    this.HtmlContent = value;
+  }
+  public SafeHtmlContent: SafeHtml = '';
+
+  /** @deprecated Use {@link SafeHtmlContent}. */
+  public get safeHtmlContent(): SafeHtml {
+    return this.SafeHtmlContent;
+  }
+  /** @deprecated Use {@link SafeHtmlContent}. */
+  public set safeHtmlContent(value: SafeHtml) {
+    this.SafeHtmlContent = value;
+  }
+  public ViewMode: 'preview' | 'source' = 'preview';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): 'preview' | 'source' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: 'preview' | 'source') {
+    this.ViewMode = value;
+  }
 
   /**
    * HTML artifacts always have content to display
@@ -128,8 +155,8 @@ export class HtmlArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     content = content.replace(/\\t/g, '');
     content = content.replace(/\\\\t/g, '');
 
-    this.htmlContent = content;
-    this.safeHtmlContent = this.sanitizer.sanitize(1, this.htmlContent) || '';
+    this.HtmlContent = content;
+    this.SafeHtmlContent = this.sanitizer.sanitize(1, this.HtmlContent) || '';
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
@@ -141,13 +168,18 @@ export class HtmlArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     return snap;
   }
 
-  onCopy(): void {
-    if (this.htmlContent) {
-      navigator.clipboard.writeText(this.htmlContent).then(() => {
+  OnCopy(): void {
+    if (this.HtmlContent) {
+      navigator.clipboard.writeText(this.HtmlContent).then(() => {
         console.log('✅ Copied HTML to clipboard');
       }).catch(err => {
         console.error('Failed to copy to clipboard:', err);
       });
     }
+  }
+
+  /** @deprecated Use {@link OnCopy}. */
+  onCopy(): void {
+    return this.OnCopy();
   }
 }

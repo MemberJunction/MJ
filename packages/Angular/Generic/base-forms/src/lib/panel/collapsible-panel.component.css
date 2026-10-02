@@ -137,6 +137,73 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
 }
 
 /* ============================================
+   SECTION INDICATORS
+   Unsaved-changes dot + invalid-field count, derived from the section's own
+   fields so a collapsed accordion header (or the left-nav rail, which reads
+   the same counts) says WHERE the edited / failing field is.
+   ============================================ */
+
+/* Same 6px amber dot an edited field shows after its label. */
+.mj-forms-panel-dirty {
+  display: inline-block;
+  width: var(--mj-space-1-5);
+  height: var(--mj-space-1-5);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-status-warning);
+  margin-left: var(--mj-space-2);
+  vertical-align: middle;
+}
+
+.mj-forms-panel-error-badge,
+.mj-forms-panel-warning-badge {
+  padding: var(--mj-space-0-5) var(--mj-space-2);
+  border-radius: var(--mj-radius-full);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  margin-left: var(--mj-space-2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  justify-content: center;
+  min-width: var(--mj-space-6);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* Same colour as the failing field's underline. */
+.mj-forms-panel-error-badge {
+  background: var(--mj-status-error);
+  color: var(--mj-text-inverse);
+}
+
+.mj-forms-panel-warning-badge {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+  border: 1px solid var(--mj-status-warning-border);
+}
+
+.mj-forms-panel-error-badge i,
+.mj-forms-panel-warning-badge i {
+  font-size: var(--mj-text-xs);
+}
+
+/* Card edge + header tint while the section holds an invalid field — the same
+   left-edge treatment the related / inherited variants use. Not applied to the
+   selected left-nav section (`.mj-chrome-show`): there the rail is the header
+   and the card chrome is stripped. */
+mj-collapsible-panel.mj-panel-has-errors:not(.mj-chrome-show) > .mj-forms-panel {
+  border-left: 3px solid var(--mj-status-error);
+}
+
+mj-collapsible-panel.mj-panel-has-errors:not(.mj-chrome-show) > .mj-forms-panel > .mj-forms-panel-header {
+  background: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface-elevated));
+}
+
+mj-collapsible-panel.mj-panel-has-warnings:not(.mj-chrome-show) > .mj-forms-panel {
+  border-left: 3px solid var(--mj-status-warning);
+}
+
+/* ============================================
    INHERITED VARIANT (IS-A parent fields)
    ============================================ */
 .mj-forms-panel--inherited {

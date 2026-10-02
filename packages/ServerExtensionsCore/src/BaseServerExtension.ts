@@ -4,7 +4,13 @@
  */
 
 import { Application } from 'express';
-import { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } from './types.js';
+import {
+    ServerExtensionConfig,
+    ServerExtensionPhase,
+    ServerExtensionInitContext,
+    ExtensionInitResult,
+    ExtensionHealthResult,
+} from './types.js';
 
 /**
  * Abstract base class for MJServer extensions.
@@ -20,62 +26,39 @@ import { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } fro
  * 1. MJServer loads the merged `serverExtensions[]` (Open App packages + host overlay)
  * 2. For each enabled entry, looks up `@RegisterClass(BaseServerExtension, driverClass)`
  * 3. Creates instance via `ClassFactory.CreateInstance()`
- * 4. Calls `Initialize(app, config)` — extension registers routes
- * 5. Periodic `HealthCheck()` calls for monitoring
- * 6. On server shutdown, calls `Shutdown()` for cleanup
- *
- * ## Usage
- *
- * ```typescript
- * import { RegisterClass } from '@memberjunction/global';
- * import { BaseServerExtension, ServerExtensionConfig, ExtensionInitResult } from '@memberjunction/server-extensions-core';
- *
- * @RegisterClass(BaseServerExtension, 'MyCustomExtension')
- * export class MyCustomExtension extends BaseServerExtension {
- *     async Initialize(app: Application, config: ServerExtensionConfig): Promise<ExtensionInitResult> {
- *         app.get(config.RootPath + '/hello', (_req, res) => {
- *             res.json({ message: 'Hello from my extension!' });
- *         });
- *         return { Success: true, Message: 'Custom extension loaded', RegisteredRoutes: [`GET ${config.RootPath}/hello`] };
- *     }
- *
- *     async Shutdown(): Promise<void> {
- *         // Clean up resources
- *     }
- *
- *     async HealthCheck(): Promise<ExtensionHealthResult> {
- *         return { Healthy: true, Name: 'MyCustomExtension' };
- *     }
- * }
- * ```
- *
- * ## Auth Middleware
- *
- * Extensions handle their own authentication by default. If you want to leverage
- * MJServer's built-in auth middleware, import it from `@memberjunction/server`:
- *
- * ```typescript
- * import { getSystemUser, verifyUserRecord } from '@memberjunction/server';
- * ```
- *
- * This is opt-in — extensions like Slack/Teams use platform-specific auth
- * (signature verification, Bot Framework JWT) instead.
+ * 4. Calls `Initialize(context)` (or legacy `Initialize(app, config)`) — extension registers routes
+ * 5. After all extensions across both pre-auth and post-auth phases are mounted,
+ *    calls `OnAllExtensionsMounted(context)` if implemented
+ * 6. Periodic `HealthCheck()` calls for monitoring
+ * 7. On server shutdown, calls `Shutdown()` for cleanup
  */
 export abstract class BaseServerExtension {
     /**
+     * Default lifecycle phase for this extension when unspecified in configuration.
+     * Defaults to `'pre-auth'` for backwards compatibility.
+     */
+    public get DefaultPhase(): ServerExtensionPhase {
+        return 'pre-auth';
+    }
+
+    /**
      * Initialize the extension. Called once during MJServer startup.
      *
-     * Use this to register Express routes, set up WebSocket handlers,
-     * initialize connections, and prepare the extension for operation.
-     *
-     * @param app - The Express application instance to register routes on.
-     *              Routes should be registered under `config.RootPath`.
-     * @param config - Extension-specific configuration from `mj.config.cjs`.
-     *                 The `Settings` object contains extension-specific config.
-     * @returns A result indicating whether initialization succeeded.
-     *          On failure, the extension is skipped but other extensions still load.
+     * Supports both modern context-based signature:
+     *   `Initialize(context: ServerExtensionInitContext): Promise<ExtensionInitResult>`
+     * and legacy 2-argument signature:
+     *   `Initialize(app: Application, config: ServerExtensionConfig): Promise<ExtensionInitResult>`
      */
-    abstract Initialize(app: Application, config: ServerExtensionConfig): Promise<ExtensionInitResult>;
+    abstract Initialize(
+        contextOrApp: ServerExtensionInitContext | Application,
+        config?: ServerExtensionConfig
+    ): Promise<ExtensionInitResult>;
+
+    /**
+     * Optional lifecycle hook called after ALL extensions have been mounted across all phases.
+     * Ideal for cross-extension service wiring (e.g. connecting a webhook router to a telephony service).
+     */
+    OnAllExtensionsMounted?(context: ServerExtensionInitContext): Promise<void>;
 
     /**
      * Graceful shutdown. Called when MJServer is shutting down (SIGTERM/SIGINT).

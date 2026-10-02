@@ -13,7 +13,7 @@ import { MJCLIErrorCodes, type IMJCLIRuntimeHost, type MJCLIResult, type PluginU
  * shared {@link BaseCLIPlugin.run} wires up the {@link IMJCLIRuntimeHost}, emits
  * the runtime advisory, renders the result per `--format`, and sets the exit code.
  *
- * The global flags `--format`, `--verbose`, `--no-banner`, and `--interactive`
+ * The global flags `--format`, `--verbose`, `--no-banner`, `--no-app-packages`, and `--interactive`
  * are declared on {@link BaseCLIPlugin.baseFlags} and inherited by every subclass
  * via oclif's native `baseFlags` merging — no per-command duplication (plan D3).
  *
@@ -38,6 +38,14 @@ export abstract class BaseCLIPlugin extends Command {
     }),
     verbose: Flags.boolean({ char: 'v', default: false, description: 'Show detailed output' }),
     'no-banner': Flags.boolean({ default: false, description: 'Suppress the startup banner and runtime advisory' }),
+    // Consumed by the `mj` prerun hook (like --no-banner) and mapped to MJ_DYNAMIC_PACKAGES=none
+    // before any command parses argv; declared here so it appears in --help.
+    'no-app-packages': Flags.boolean({
+      default: false,
+      description:
+        "Do not load installed Open App server packages (or the host's generated packages) for this run, " +
+        'so records are written with the generic BaseEntity — no custom Save() logic or lifecycle hooks.',
+    }),
     interactive: Flags.boolean({
       allowNo: true,
       description:
@@ -106,7 +114,7 @@ export abstract class BaseCLIPlugin extends Command {
       this.Host.AnnounceRuntime(ctor.Usage);
     }
 
-    const result = await this.RunExecute(ctor);
+    const result = await this.runExecute(ctor);
     this.Host.Emit(result);
 
     // Optional cleanup hook (e.g. close DB pools, reset singletons). Runs after
@@ -127,7 +135,7 @@ export abstract class BaseCLIPlugin extends Command {
    * `{code:'E_NON_INTERACTIVE', suggestion:'Pass --entity …'}` than from a stack trace.
    * Every other error keeps propagating to oclif untouched.
    */
-  private async RunExecute(ctor: typeof BaseCLIPlugin): Promise<MJCLIResult> {
+  private async runExecute(ctor: typeof BaseCLIPlugin): Promise<MJCLIResult> {
     try {
       return await this.Execute();
     } catch (e) {

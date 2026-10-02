@@ -71,7 +71,7 @@ export interface ParsedType {
   Scale?: number;
 }
 
-export function parseTypeString(typeStr: string): ParsedType {
+export function ParseTypeString(typeStr: string): ParsedType {
   const trimmed = typeStr.trim();
 
   // Match TYPE(args)
@@ -114,6 +114,11 @@ export function parseTypeString(typeStr: string): ParsedType {
   return { BaseName: baseName };
 }
 
+/** @deprecated Use {@link ParseTypeString}. */
+export function parseTypeString(typeStr: string): ParsedType {
+  return ParseTypeString(typeStr);
+}
+
 /**
  * Resolve a T-SQL type to its target dialect equivalent.
  *
@@ -121,8 +126,8 @@ export function parseTypeString(typeStr: string): ParsedType {
  * @param targetDialect  Target dialect (default: 'postgres')
  * @returns  The mapped type string for the target dialect
  */
-export function resolveType(typeStr: string, targetDialect: string = 'postgres'): string {
-  const parsed = parseTypeString(typeStr);
+export function ResolveType(typeStr: string, targetDialect: string = 'postgres'): string {
+  const parsed = ParseTypeString(typeStr);
 
   // Check MJ overrides first (takes precedence)
   const override = MJ_OVERRIDES.get(parsed.BaseName);
@@ -145,6 +150,11 @@ export function resolveType(typeStr: string, targetDialect: string = 'postgres')
   return typeStr;
 }
 
+/** @deprecated Use {@link ResolveType}. */
+export function resolveType(typeStr: string, targetDialect: string = 'postgres'): string {
+  return ResolveType(typeStr, targetDialect);
+}
+
 /**
  * Resolve a type for inline CAST/CONVERT usage.
  *
@@ -152,6 +162,11 @@ export function resolveType(typeStr: string, targetDialect: string = 'postgres')
  * - Types with precision in parentheses that should be stripped (e.g., DATETIME2(7) -> TIMESTAMPTZ)
  * - NVARCHAR without length -> TEXT
  */
+export function ResolveInlineType(typeStr: string, targetDialect: string = 'postgres'): string {
+  return ResolveType(typeStr, targetDialect);
+}
+
+/** @deprecated Use {@link ResolveInlineType}. */
 export function resolveInlineType(typeStr: string, targetDialect: string = 'postgres'): string {
-  return resolveType(typeStr, targetDialect);
+  return ResolveInlineType(typeStr, targetDialect);
 }

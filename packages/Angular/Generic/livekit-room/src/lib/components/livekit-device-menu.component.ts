@@ -142,9 +142,14 @@ export class LiveKitDeviceMenuComponent {
   @Output() public Close = new EventEmitter<void>();
 
   /** Emits a device selection for the given kind. */
-  public emit(kind: LiveKitDeviceSelection['Kind'], deviceId: string): void {
+  public Emit(kind: LiveKitDeviceSelection['Kind'], deviceId: string): void {
     if (deviceId) {
       this.DeviceSelected.emit({ Kind: kind, DeviceId: deviceId });
     }
+  }
+
+  /** @deprecated Use {@link Emit}. */
+  public emit(kind: LiveKitDeviceSelection['Kind'], deviceId: string): void {
+    return this.Emit(kind, deviceId);
   }
 }

@@ -37,6 +37,9 @@ interface ICloudStorageSourceConfig {
  */
 @RegisterClass(AutotagBase, 'AutotagCloudStorage')
 export class AutotagCloudStorage extends AutotagBase {
+    /** Maximum folder depth ListModifiedObjects will descend below PathPrefix. */
+    private static readonly MAX_LIST_DEPTH = 16;
+
     private contextUser!: UserInfo;
     private engine!: AutotagBaseEngine;
     protected contentSourceTypeID!: string;
@@ -64,7 +67,7 @@ export class AutotagCloudStorage extends AutotagBase {
 
         for (const contentSource of contentSources) {
             try {
-                const items = await this.ProcessContentSource(contentSource);
+                const items = await this.processContentSource(contentSource);
                 contentItemsToProcess.push(...items);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -79,16 +82,16 @@ export class AutotagCloudStorage extends AutotagBase {
      * Process a single content source: initialize the storage driver, list files,
      * detect new/modified files, download and extract text, create ContentItems.
      */
-    private async ProcessContentSource(contentSource: MJContentSourceEntity): Promise<MJContentItemEntity[]> {
-        const config = this.ParseSourceConfig(contentSource);
+    private async processContentSource(contentSource: MJContentSourceEntity): Promise<MJContentItemEntity[]> {
+        const config = this.parseSourceConfig(contentSource);
         if (!config) return [];
 
-        const driver = this.CreateStorageDriver(config.FileStorageProviderKey);
+        const driver = this.createStorageDriver(config.FileStorageProviderKey);
         if (!driver) return [];
 
         const lastRunDate = await this.engine.getContentSourceLastRunDate(contentSource.ID, this.contextUser);
         const prefix = config.PathPrefix ?? '';
-        const objects = await this.ListModifiedObjects(driver, prefix, lastRunDate, config.IncludeExtensions);
+        const objects = await this.listModifiedObjects(driver, prefix, lastRunDate, config.IncludeExtensions);
 
         if (objects.length === 0) {
             LogStatus(`AutotagCloudStorage: no modified files in source "${contentSource.Name}" since ${lastRunDate.toISOString()}`);
@@ -98,7 +101,7 @@ export class AutotagCloudStorage extends AutotagBase {
         LogStatus(`AutotagCloudStorage: found ${objects.length} new/modified files in source "${contentSource.Name}"`);
 
         // Load existing content items for this source to enable upsert by URL
-        const existingItems = await this.LoadExistingContentItems(contentSource.ID);
+        const existingItems = await this.loadExistingContentItems(contentSource.ID);
 
         const contentSourceParams: ContentSourceParams = {
             contentSourceID: contentSource.ID,
@@ -112,7 +115,7 @@ export class AutotagCloudStorage extends AutotagBase {
         const items: MJContentItemEntity[] = [];
         for (const obj of objects) {
             try {
-                const item = await this.ProcessSingleFile(driver, obj, contentSourceParams, existingItems);
+                const item = await this.processSingleFile(driver, obj, contentSourceParams, existingItems);
                 if (item) items.push(item);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -126,7 +129,7 @@ export class AutotagCloudStorage extends AutotagBase {
     /**
      * Parse the ContentSource.Configuration JSON to extract cloud storage config.
      */
-    private ParseSourceConfig(contentSource: MJContentSourceEntity): ICloudStorageSourceConfig | null {
+    private parseSourceConfig(contentSource: MJContentSourceEntity): ICloudStorageSourceConfig | null {
         const configObj = contentSource.ConfigurationObject;
         if (!configObj) {
             // Fall back: try to infer from URL or legacy setup
@@ -151,7 +154,7 @@ export class AutotagCloudStorage extends AutotagBase {
     /**
      * Create and return a storage driver via ClassFactory using the provider key.
      */
-    private CreateStorageDriver(providerKey: string): FileStorageBase | null {
+    private createStorageDriver(providerKey: string): FileStorageBase | null {
         const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
             FileStorageBase,
             providerKey
@@ -171,22 +174,38 @@ export class AutotagCloudStorage extends AutotagBase {
      * List all objects in the storage driver that were modified after lastRunDate.
      * Optionally filter by file extension.
      */
-    private async ListModifiedObjects(
+    private async listModifiedObjects(
         driver: FileStorageBase,
         prefix: string,
         lastRunDate: Date,
         includeExtensions?: string[]
     ): Promise<StorageObjectMetadata[]> {
-        const result = await driver.ListObjects(prefix);
         const extSet = includeExtensions?.length
             ? new Set(includeExtensions.map(ext => ext.toLowerCase()))
             : null;
 
-        return result.objects.filter(obj => {
+        // Walk the tree under the prefix: ListObjects returns one level (objects + child prefixes), so
+        // recurse into every child prefix. Guard against pathological depth and prefix loops.
+        const objects: StorageObjectMetadata[] = [];
+        const seen = new Set<string>();
+        const walk = async (current: string, depth: number): Promise<void> => {
+            const key = current.replace(/\/+$/, '');
+            if (seen.has(key) || depth > AutotagCloudStorage.MAX_LIST_DEPTH) return;
+            seen.add(key);
+            const result = await driver.ListObjects(current);
+            objects.push(...result.objects);
+            for (const child of result.prefixes ?? []) {
+                if (child.replace(/\/+$/, '') === key) continue; // provider echoed the folder itself
+                await walk(child, depth + 1);
+            }
+        };
+        await walk(prefix, 0);
+
+        return objects.filter(obj => {
             if (obj.isDirectory) return false;
             if (obj.lastModified <= lastRunDate) return false;
             if (extSet) {
-                const ext = this.GetFileExtension(obj.name);
+                const ext = this.getFileExtension(obj.name);
                 if (!extSet.has(ext)) return false;
             }
             return true;
@@ -196,7 +215,7 @@ export class AutotagCloudStorage extends AutotagBase {
     /**
      * Download a file, extract text, and create/update a ContentItem.
      */
-    private async ProcessSingleFile(
+    private async processSingleFile(
         driver: FileStorageBase,
         obj: StorageObjectMetadata,
         contentSourceParams: ContentSourceParams,
@@ -206,7 +225,7 @@ export class AutotagCloudStorage extends AutotagBase {
         const buffer = await driver.GetObject({ fullPath: obj.fullPath });
 
         // Extract text using the engine's built-in parsers (PDF, DOCX, etc.)
-        const text = await this.ExtractTextFromBuffer(buffer, obj.name);
+        const text = await this.extractTextFromBuffer(buffer, obj.name);
         if (!text || text.trim().length === 0) {
             LogStatus(`AutotagCloudStorage: no extractable text from "${obj.fullPath}", skipping`);
             return null;
@@ -253,7 +272,7 @@ export class AutotagCloudStorage extends AutotagBase {
     /**
      * Load existing ContentItems for a source, keyed by lowercase URL for upsert lookups.
      */
-    private async LoadExistingContentItems(contentSourceID: string): Promise<Map<string, MJContentItemEntity>> {
+    private async loadExistingContentItems(contentSourceID: string): Promise<Map<string, MJContentItemEntity>> {
         const rv = new RunView();
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
@@ -276,8 +295,8 @@ export class AutotagCloudStorage extends AutotagBase {
      * Extract text from a file buffer based on file extension.
      * Delegates to the engine's built-in parsers for PDF and Office documents.
      */
-    private async ExtractTextFromBuffer(buffer: Buffer, fileName: string): Promise<string> {
-        const ext = this.GetFileExtension(fileName);
+    private async extractTextFromBuffer(buffer: Buffer, fileName: string): Promise<string> {
+        const ext = this.getFileExtension(fileName);
 
         if (ext === '.pdf' || ext === '.docx' || ext === '.doc' || ext === '.pptx' || ext === '.xlsx') {
             return this.engine.parsePDF(buffer);
@@ -299,7 +318,7 @@ export class AutotagCloudStorage extends AutotagBase {
     /**
      * Get the lowercase file extension including the dot (e.g., '.pdf').
      */
-    private GetFileExtension(fileName: string): string {
+    private getFileExtension(fileName: string): string {
         const lastDot = fileName.lastIndexOf('.');
         if (lastDot < 0) return '';
         return fileName.substring(lastDot).toLowerCase();

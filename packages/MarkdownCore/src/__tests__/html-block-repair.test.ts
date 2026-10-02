@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Token, Tokens } from 'marked';
-import { createHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension.js';
+import { CreateHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension.js';
 import { MarkdownEngine } from '../engine/markdown-engine.js';
 
 /**
@@ -10,7 +10,7 @@ import { MarkdownEngine } from '../engine/markdown-engine.js';
  * dependency on how marked happens to tokenize a given markdown fixture).
  */
 function getHook(): (tokens: Token[]) => Token[] {
-  const ext = createHtmlBlockRepairExtension();
+  const ext = CreateHtmlBlockRepairExtension();
   const hook = ext.hooks?.processAllTokens;
   expect(hook).toBeTypeOf('function');
   return hook as (tokens: Token[]) => Token[];

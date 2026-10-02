@@ -254,7 +254,7 @@ If a column stores structured JSON (like a `Settings` or `Configuration` column)
 4. **Push the metadata and re-run CodeGen**:
 
    ```bash
-   npx mj sync push --dir=metadata --include="entities"
+   pnpm mj sync push --dir=metadata --include="entities"
    mj codegen
    ```
 
@@ -286,7 +286,7 @@ If your new table is a lookup table (e.g., `WidgetCategory`), **do not seed it w
 
 1. Create `metadata/widget-categories/.mj-sync.json` with the entity configuration
 2. Create `metadata/widget-categories/.widget-categories.json` with the seed data
-3. Push: `npx mj sync push --dir=metadata --include="widget-categories"`
+3. Push: `pnpm mj sync push --dir=metadata --include="widget-categories"`
 
 See [metadata/CLAUDE.md](../metadata/CLAUDE.md) for the full metadata file format.
 
@@ -310,7 +310,26 @@ Before considering your migration complete:
 - [ ] Ran `mj codegen` and appended output to migration file
 - [ ] Deleted standalone `CodeGen_Run_*.sql` file after appending
 - [ ] Verified on a clean database: drop → `mj migrate --dir ./migrations` → success
+- [ ] Verified CodeGen idempotency: `node scripts/codegen-idempotency-check.mjs --stage warm-twice --no-ai` produces 0 diffs
 - [ ] Committed migration + all generated TypeScript/Angular files CodeGen updated
+
+---
+
+## CodeGen Idempotency and Churn Verification
+
+MemberJunction enforces strict CodeGen idempotency and minimal blast radius. When developing migrations or core engine features:
+
+1. **Verify No-Churn / Warm Runs**:
+   ```bash
+   node scripts/codegen-idempotency-check.mjs --stage warm-twice --no-ai
+   ```
+   A second CodeGen run against an unchanged schema must result in **0 modified files**, **0 surviving SQL capture files**, and report `fieldsNew = 0, fieldsChanged = 0, decisionRecordsWritten = 0`.
+
+2. **Verify Single-Column Blast Radius**:
+   ```bash
+   node scripts/codegen-idempotency-check.mjs --stage single-column --no-ai
+   ```
+   Adding a column to an entity must only touch that entity's files, leaving sibling fields, other entities, and `generated-forms.module.ts` unchanged.
 
 ---
 

@@ -748,7 +748,7 @@ export interface EntityNamingOptions {
  * @param s - The database identifier to convert
  * @param options - Optional naming configuration. When omitted, ALL CAPS normalization and compound splitting are enabled by default.
  */
-export function createDisplayName(s: string, options?: EntityNamingOptions): string {
+export function CreateDisplayName(s: string, options?: EntityNamingOptions): string {
     const normalizeAllCaps = options?.normalizeAllCaps ?? true;
     const splitCompoundWords = options?.splitCompoundWords ?? true;
 
@@ -767,7 +767,12 @@ export function createDisplayName(s: string, options?: EntityNamingOptions): str
         // Entire string is ALL CAPS with no delimiters
         s = normalizeAllCapsWord(s, splitCompoundWords, options?.additionalDomainWords);
     }
-    return convertCamelCaseToHaveSpaces(s);
+    return ConvertCamelCaseToHaveSpaces(s);
+}
+
+/** @deprecated Use {@link CreateDisplayName}. */
+export function createDisplayName(s: string, options?: EntityNamingOptions): string {
+  return CreateDisplayName(s, options);
 }
 
 /**
@@ -1085,7 +1090,7 @@ const __builtInDictionaryWords = [
 * "DatabaseVersion" -> "Database Version"
 * "AIAgentLearningCycle" -> "AI Agent Learning Cycle"
 */
-export function convertCamelCaseToHaveSpaces(s: string): string {
+export function ConvertCamelCaseToHaveSpaces(s: string): string {
     let result = '';
     for (let i = 0; i < s.length; ++i) {
        if (
@@ -1099,6 +1104,11 @@ export function convertCamelCaseToHaveSpaces(s: string): string {
        result += s[i];
     }
     return result;
+}
+
+/** @deprecated Use {@link ConvertCamelCaseToHaveSpaces}. */
+export function convertCamelCaseToHaveSpaces(s: string): string {
+  return ConvertCamelCaseToHaveSpaces(s);
 }
 
 
@@ -1115,12 +1125,17 @@ export function convertCamelCaseToHaveSpaces(s: string): string {
  * stripWhitespace(""); // ""
  * ```
  */
-export function stripWhitespace(s: string): string {
+export function StripWhitespace(s: string): string {
     if (!s) {
         // Return the original string if it is null, undefined, or empty
         return s;
     }
     return s.replace(/\s+/g, ''); // Use \s+ for efficiency in case of consecutive whitespace
+}
+
+/** @deprecated Use {@link StripWhitespace}. */
+export function stripWhitespace(s: string): string {
+  return StripWhitespace(s);
 }
 
 
@@ -1204,8 +1219,13 @@ const __irregularPlurals: Record<string, string> = {
  * getIrregularPlural('dog'); // returns null
  * ```
  */
-export function getIrregularPlural(singularName: string): string | null {
+export function GetIrregularPlural(singularName: string): string | null {
     return __irregularPlurals[singularName.toLowerCase()] || null;
+}
+
+/** @deprecated Use {@link GetIrregularPlural}. */
+export function getIrregularPlural(singularName: string): string | null {
+  return GetIrregularPlural(singularName);
 }
 
 /**
@@ -1260,25 +1280,25 @@ function getSingularForm(word: string): string | null {
  * generatePluralName('dog'); // returns 'dogs'
  * ```
  */
-export function generatePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
+export function GeneratePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
     // Check if it's already plural
     const detectedSingular = getSingularForm(singularName);
     if (!detectedSingular) {
         // if we did NOT find a singular, assume it is already plural
-        return adjustCasing(singularName, options); 
+        return AdjustCasing(singularName, options); 
     }
     else if (detectedSingular.trim().toLowerCase() !== singularName.trim().toLowerCase()) {
         // here we did detect a singular form. Check to see if it is DIFFERENT from
         // the provided value. Because we're supposed to be provided a singular to this
         // function if we are given a plural - like Customers - we want to just throw it back
         // but if we were passed a true singular, then we keep on going
-        return adjustCasing(singularName, options);
+        return AdjustCasing(singularName, options);
     }
 
     // Check for irregular plurals
-    const irregularPlural = getIrregularPlural(singularName);
+    const irregularPlural = GetIrregularPlural(singularName);
     if (irregularPlural) {
-        return adjustCasing(irregularPlural, options);
+        return AdjustCasing(irregularPlural, options);
     }
 
     // Handle common pluralization rules
@@ -1286,20 +1306,25 @@ export function generatePluralName(singularName: string, options? : { capitalize
         const secondLastChar = singularName[singularName.length - 2].toLowerCase();
         if ('aeiou'.includes(secondLastChar)) {
             // Ends with a vowel + y, just add 's'
-            return adjustCasing(singularName + 's', options);
+            return AdjustCasing(singularName + 's', options);
         } else {
             // Ends with a consonant + y, replace 'y' with 'ies'
-            return adjustCasing(singularName.slice(0, -1) + 'ies', options);
+            return AdjustCasing(singularName.slice(0, -1) + 'ies', options);
         }
     }
 
     if (/(s|ch|sh|x|z)$/.test(singularName)) {
         // Ends with 's', 'ch', 'sh', 'x', or 'z', add 'es'
-        return adjustCasing(singularName + 'es', options);
+        return AdjustCasing(singularName + 'es', options);
     }
 
     // Default case: Add 's' to the singular name
-    return adjustCasing(singularName + 's', options);
+    return AdjustCasing(singularName + 's', options);
+}
+
+/** @deprecated Use {@link GeneratePluralName}. */
+export function generatePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
+  return GeneratePluralName(singularName, options);
 }
 
 /**
@@ -1310,7 +1335,7 @@ export function generatePluralName(singularName: string, options? : { capitalize
  * @param options 
  * @returns 
  */
-export function adjustCasing(word: string, options?: { 
+export function AdjustCasing(word: string, options?: { 
     capitalizeFirstLetterOnly?: boolean, 
     capitalizeEntireWord?: boolean
     forceRestOfWordLowerCase?: boolean }): string {
@@ -1338,6 +1363,14 @@ export function adjustCasing(word: string, options?: {
     }
 }
 
+/** @deprecated Use {@link AdjustCasing}. */
+export function adjustCasing(word: string, options?: { 
+    capitalizeFirstLetterOnly?: boolean, 
+    capitalizeEntireWord?: boolean
+    forceRestOfWordLowerCase?: boolean }): string {
+  return AdjustCasing(word, options);
+}
+
 
 
 /**
@@ -1356,7 +1389,7 @@ export function adjustCasing(word: string, options?: {
  * stripTrailingChars(".txt", ".txt", true);         // ".txt" (exact match, not stripped)
  * ```
  */
-export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactMatch: boolean): string {
+export function StripTrailingChars(s: string, charsToStrip: string, skipIfExactMatch: boolean): string {
     if (!s || !charsToStrip) {
         // Return the original string if either input is empty
         return s;
@@ -1371,6 +1404,11 @@ export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactM
     }
 
     return s;
+}
+
+/** @deprecated Use {@link StripTrailingChars}. */
+export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactMatch: boolean): string {
+  return StripTrailingChars(s, charsToStrip, skipIfExactMatch);
 }
 
 
@@ -1389,7 +1427,7 @@ export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactM
  * replaceAllSpaces("");                 // ""
  * ```
  */
-export function replaceAllSpaces(s: string): string {
+export function ReplaceAllSpaces(s: string): string {
     if (!s) {
         // Handle null, undefined, or empty string cases
         return s;
@@ -1397,11 +1435,16 @@ export function replaceAllSpaces(s: string): string {
 
     if (s.includes(' ')) {
         // Recursive case: Replace a single space and call the function again
-        return replaceAllSpaces(s.replace(' ', ''));
+        return ReplaceAllSpaces(s.replace(' ', ''));
     }
 
     // Base case: No spaces left to replace
     return s;
+}
+
+/** @deprecated Use {@link ReplaceAllSpaces}. */
+export function replaceAllSpaces(s: string): string {
+  return ReplaceAllSpaces(s);
 }
  
 
@@ -1409,8 +1452,13 @@ export function replaceAllSpaces(s: string): string {
  * Generates a version 4 UUID (Universally Unique Identifier) using the uuid library.
  * @returns the generated UUID as a string.
  */
-export function uuidv4(): string {
+export function Uuidv4(): string {
     return v4();
+}
+
+/** @deprecated Use {@link Uuidv4}. */
+export function uuidv4(): string {
+  return Uuidv4();
 }
 
 
@@ -1424,7 +1472,7 @@ export function uuidv4(): string {
  * @param str2 
  * @returns An array of strings representing the differences found between the two input strings. If array is empty, it means no differences were found.
  */
-export function compareStringsByLine(str1: string, str2: string, logToConsole: boolean = true): string[] {
+export function CompareStringsByLine(str1: string, str2: string, logToConsole: boolean = true): string[] {
     const lines1 = str1.split('\n');
     const lines2 = str2.split('\n');
     const maxLines = Math.max(lines1.length, lines2.length);
@@ -1468,6 +1516,11 @@ export function compareStringsByLine(str1: string, str2: string, logToConsole: b
         }
     }
     return returnArray;
+}
+
+/** @deprecated Use {@link CompareStringsByLine}. */
+export function compareStringsByLine(str1: string, str2: string, logToConsole: boolean = true): string[] {
+  return CompareStringsByLine(str1, str2, logToConsole);
 }
 
 
@@ -1723,7 +1776,7 @@ const WEAK_MARKDOWN_PATTERNS: readonly RegExp[] = [
  * @param maxScanLength - Leading characters to inspect. Defaults to {@link DEFAULT_RICH_TEXT_SCAN_LENGTH} (500).
  * @returns `'markdown'`, `'html'`, or `'plain'`.
  */
-export function detectRichTextFormat(
+export function DetectRichTextFormat(
     value: string | null | undefined,
     maxScanLength: number = DEFAULT_RICH_TEXT_SCAN_LENGTH
 ): RichTextFormat {
@@ -1740,6 +1793,14 @@ export function detectRichTextFormat(
     if (countHtmlTags(sample) >= 2) return 'html';
 
     return 'plain';
+}
+
+/** @deprecated Use {@link DetectRichTextFormat}. */
+export function detectRichTextFormat(
+    value: string | null | undefined,
+    maxScanLength: number = DEFAULT_RICH_TEXT_SCAN_LENGTH
+): RichTextFormat {
+  return DetectRichTextFormat(value, maxScanLength);
 }
 
 /** True when the sample shows a strong Markdown signal, or two or more weak signals. */
@@ -1947,4 +2008,21 @@ export function ToEpochMs(value: Date | string | number | null | undefined): num
     if (value == null) return 0;
     const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
     return Number.isNaN(ms) ? 0 : ms;
+}
+
+/**
+ * Locale-independent total order on strings (UTF-16 code units). Use for every sort whose
+ * result is EMITTED (generated code, SQL, file names, migration captures). Not for UI display —
+ * users expect locale collation there. `localeCompare` without a locale argument follows the
+ * process ICU default and is not reproducible across machines.
+ */
+export function OrdinalCompare(a: string | null | undefined, b: string | null | undefined): number {
+    const sa = a ?? '';
+    const sb = b ?? '';
+    return sa < sb ? -1 : sa > sb ? 1 : 0;
+}
+
+/** @deprecated Use {@link OrdinalCompare}. */
+export function ordinalCompare(a: string | null | undefined, b: string | null | undefined): number {
+  return OrdinalCompare(a, b);
 }

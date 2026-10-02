@@ -1,16 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { FunctionRule } from '../rules/FunctionRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new FunctionRule();
 
 function convert(sql: string): string {
-  const context = createConversionContext('tsql', 'postgres');
+  const context = CreateConversionContext('tsql', 'postgres');
   return rule.PostProcess!(sql, sql, context);
 }
 
-function convertWithContext(sql: string): { result: string; context: ReturnType<typeof createConversionContext> } {
-  const context = createConversionContext('tsql', 'postgres');
+function convertWithContext(sql: string): { result: string; context: ReturnType<typeof CreateConversionContext> } {
+  const context = CreateConversionContext('tsql', 'postgres');
   const result = rule.PostProcess!(sql, sql, context);
   return { result, context };
 }
@@ -156,7 +156,7 @@ END;`;
     });
 
     it('should use context HandWrittenFunctions if set', () => {
-      const context = createConversionContext('tsql', 'postgres');
+      const context = CreateConversionContext('tsql', 'postgres');
       context.HandWrittenFunctions.set('customfunc', 'CREATE OR REPLACE FUNCTION __mj."CustomFunc"() RETURNS TEXT AS $$ BEGIN RETURN \'custom\'; END; $$ LANGUAGE plpgsql;');
       const sql = `CREATE FUNCTION [__mj].[CustomFunc]()
 RETURNS NVARCHAR(MAX)

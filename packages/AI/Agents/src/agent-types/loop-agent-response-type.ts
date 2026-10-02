@@ -1,10 +1,39 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest, AgentFinishIf } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
 import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
 
 // Re-export universal types for backward compatibility
 export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationToolCall, MemoryWriteRequest };
+
+/**
+ * Every value `nextStep.type` may take, in the canonical casing the dispatcher switches on.
+ *
+ * Exported because three things have to agree and used to agree only by hand: this union, the
+ * validator's accept-list, and the exemplars shipped in `metadata/prompts/**` that teach models
+ * what to emit. The compile-time checks below make the first two inseparable; the exemplar guard
+ * in `__tests__/loop-exemplar-conformance.test.ts` binds the third to this constant, so a new step
+ * type cannot be added without the exemplars being re-checked against it.
+ *
+ * Casing is load-bearing. `LoopAgentType.DetermineNextStep` switches on the raw value, so a
+ * lower-cased `'chat'` passes validation (which compares case-insensitively) and then falls
+ * through to `default:` — a forced Retry that costs a whole iteration.
+ */
+export const LOOP_NEXT_STEP_TYPES = [
+    'Actions', 'ClientTools', 'Sub-Agent', 'Chat', 'Retry',
+    'ForEach', 'While', 'Pipeline', 'Skill', 'Plan', 'Tasks'
+] as const;
+
+/** The `nextStep.type` union, derived from the interface rather than restated. */
+export type LoopNextStepType = NonNullable<LoopAgentResponse['nextStep']>['type'];
+
+// Compile-time proof that LOOP_NEXT_STEP_TYPES and the interface's union are the SAME set.
+// Both directions are checked: a plain `readonly LoopNextStepType[]` annotation accepts a SUBSET,
+// so it catches an invented value but not a forgotten one — hence the second Exclude.
+type _ListedButNotInTheUnion = Exclude<(typeof LOOP_NEXT_STEP_TYPES)[number], LoopNextStepType>;
+type _InTheUnionButNotListed = Exclude<LoopNextStepType, (typeof LOOP_NEXT_STEP_TYPES)[number]>;
+const _noInventedValues: _ListedButNotInTheUnion extends never ? true : never = true;
+const _noForgottenValues: _InTheUnionButNotListed extends never ? true : never = true;
 
 /**
  * Response structure for Loop Agent Type
@@ -53,6 +82,12 @@ export interface LoopAgentResponse<P = any> {
      * @since 2.46.0
      */
     scratchpad?: AgentScratchpad;
+
+    /**
+     * Decision requests answered inline on the same turn (zero turn cost)
+     * by a fast decision model. Results arrive on the next turn.
+     */
+    decisions?: AgentDecisionRequest[];
 
     /**
      * Artifact tool invocations — explore input artifacts without
@@ -223,6 +258,13 @@ export interface LoopAgentResponse<P = any> {
          * results into the conversation or starts you a fresh turn with the outcome.
          */
         tasks?: TaskGraphSpec;
+
+        /**
+         * Conditional completion gate for Actions or Sub-Agent steps.
+         * Evaluated inline after the step executes: if all questions pass the probability
+         * threshold, the agent completes immediately with `message` without an extra turn.
+         */
+        finishIf?: AgentFinishIf;
     };
 }
 

@@ -60,7 +60,7 @@ export class ReactRootManager {
    * @param componentId - Optional component ID for resource tracking
    * @returns The root ID for future operations
    */
-  createRoot(
+  CreateRoot(
     container: HTMLElement,
     createRootFn: (container: HTMLElement) => any,
     componentId?: string
@@ -83,7 +83,7 @@ export class ReactRootManager {
       resourceManager.registerReactRoot(
         componentId,
         root,
-        () => this.unmountRoot(rootId)
+        () => this.UnmountRoot(rootId)
       );
     }
 
@@ -98,6 +98,15 @@ export class ReactRootManager {
     this.invokeHooks('OnRootCreated', hookContext);
     
     return rootId;
+  }
+
+  /** @deprecated Use {@link CreateRoot}. */
+  createRoot(
+    container: HTMLElement,
+    createRootFn: (container: HTMLElement) => any,
+    componentId?: string
+  ): string {
+    return this.CreateRoot(container, createRootFn, componentId);
   }
   
   /**
@@ -160,7 +169,7 @@ export class ReactRootManager {
    * @param rootId - The root ID
    * @param force - Force unmount even if rendering
    */
-  unmountRoot(rootId: string, force: boolean = false): Promise<void> {
+  UnmountRoot(rootId: string, force: boolean = false): Promise<void> {
     return new Promise((resolve) => {
       const managedRoot = this.roots.get(rootId);
       if (!managedRoot) {
@@ -205,12 +214,17 @@ export class ReactRootManager {
       }
     });
   }
+
+  /** @deprecated Use {@link UnmountRoot}. */
+  unmountRoot(rootId: string, force: boolean = false): Promise<void> {
+    return this.UnmountRoot(rootId, force);
+  }
   
   /**
    * Unmount all roots associated with a component
    * @param componentId - The component ID
    */
-  async unmountComponentRoots(componentId: string): Promise<void> {
+  async UnmountComponentRoots(componentId: string): Promise<void> {
     const rootIds: string[] = [];
     
     for (const [rootId, managedRoot] of this.roots) {
@@ -219,7 +233,12 @@ export class ReactRootManager {
       }
     }
     
-    await Promise.all(rootIds.map(id => this.unmountRoot(id)));
+    await Promise.all(rootIds.map(id => this.UnmountRoot(id)));
+  }
+
+  /** @deprecated Use {@link UnmountComponentRoots}. */
+  async unmountComponentRoots(componentId: string): Promise<void> {
+    return this.UnmountComponentRoots(componentId);
   }
   
   /**
@@ -227,14 +246,19 @@ export class ReactRootManager {
    * @param rootId - The root ID
    * @returns true if rendering
    */
-  isRendering(rootId: string): boolean {
+  IsRendering(rootId: string): boolean {
     return this.renderingRoots.has(rootId);
+  }
+
+  /** @deprecated Use {@link IsRendering}. */
+  isRendering(rootId: string): boolean {
+    return this.IsRendering(rootId);
   }
   
   /**
    * Get statistics about managed roots
    */
-  getStats(): {
+  GetStats(): {
     totalRoots: number;
     renderingRoots: number;
     pendingUnmounts: number;
@@ -246,18 +270,32 @@ export class ReactRootManager {
     };
   }
 
+  /** @deprecated Use {@link GetStats}. */
+  getStats(): {
+    totalRoots: number;
+    renderingRoots: number;
+    pendingUnmounts: number;
+  } {
+    return this.GetStats();
+  }
+
   /**
    * Clean up all roots (for testing or shutdown)
    */
-  async cleanup(): Promise<void> {
+  async Cleanup(): Promise<void> {
     // Invoke cleanup hooks before unmounting roots
     this.invokeHooks('OnCleanup');
 
     const allRootIds = Array.from(this.roots.keys());
-    await Promise.all(allRootIds.map(id => this.unmountRoot(id, true)));
+    await Promise.all(allRootIds.map(id => this.UnmountRoot(id, true)));
 
     // Reset state so hooks fire again if runtime is re-initialized
     this.firstRootCreated = false;
+  }
+
+  /** @deprecated Use {@link Cleanup}. */
+  async cleanup(): Promise<void> {
+    return this.Cleanup();
   }
 
   /**
@@ -280,4 +318,4 @@ export class ReactRootManager {
 }
 
 // Singleton instance
-export const reactRootManager = new ReactRootManager();
+export const reactRootManager = new ReactRootManager();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope

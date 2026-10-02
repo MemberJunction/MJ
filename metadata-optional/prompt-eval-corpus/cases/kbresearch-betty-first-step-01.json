@@ -1,0 +1,26 @@
+{
+  "id": "kbresearch-betty-first-step-01",
+  "agent": "Knowledge Base Research Agent",
+  "tags": [
+    "first-step-action"
+  ],
+  "description": "Single-action agent: the only correct move is to query the knowledge base. Establishes the ceiling — anything below 100% here is not about tool selection.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "What is our policy on carrying over unused PTO into the next year?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Betty"
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

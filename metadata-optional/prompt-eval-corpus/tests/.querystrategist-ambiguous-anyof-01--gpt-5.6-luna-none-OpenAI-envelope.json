@@ -1,0 +1,105 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "querystrategist-ambiguous-anyof-01 [gpt-5.6-luna@none · OpenAI · envelope]",
+    "Description": "Genuinely ambiguous: exploring the schema first and asking which entity is meant are both defensible. anyOf keeps the corpus honest instead of encoding one reviewer's taste.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Show me the recent stuff."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "querystrategist-ambiguous-anyof-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            }
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Get Entity Details"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Search Query Catalog"
+              }
+            ],
+            "allowAdditionalActions": true
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Query Strategist",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "chat",
+                "message": {
+                  "matcher": "nonEmpty"
+                }
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Get Entity Details"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Search Query Catalog"
+                  }
+                ],
+                "allowAdditionalActions": true
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9F3B74F8-A399-423F-ABA4-99258EA59927"
+  }
+}

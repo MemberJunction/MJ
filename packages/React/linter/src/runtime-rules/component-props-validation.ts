@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -219,7 +219,7 @@ function MyComponent({ utilities, styles, components, callbacks, savedUserSettin
       }
     };
 
-    traverse(ast, {
+    Traverse(ast, {
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {
           const param = path.node.params[0];

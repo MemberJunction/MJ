@@ -33,7 +33,7 @@ export const DEFAULT_QUERY_PAGE_SIZE = 50;
  * @param defaultRows - the fallback when input is missing/invalid
  * @param hardCap - the absolute maximum (clamped, never exceeded)
  */
-export function normalizeMaxRows(
+export function NormalizeMaxRows(
     raw: unknown,
     defaultRows: number = DEFAULT_QUERY_MAX_ROWS,
     hardCap: number = QUERY_MAX_ROWS_HARD_CAP,
@@ -47,16 +47,30 @@ export function normalizeMaxRows(
     return Math.min(Math.floor(value), cap);
 }
 
+/** @deprecated Use {@link NormalizeMaxRows}. */
+export function normalizeMaxRows(
+    raw: unknown,
+    defaultRows: number = DEFAULT_QUERY_MAX_ROWS,
+    hardCap: number = QUERY_MAX_ROWS_HARD_CAP,
+): number {
+    return NormalizeMaxRows(raw, defaultRows, hardCap);
+}
+
 /**
  * Normalize an untrusted PageNumber into a 1-based integer page (minimum 1).
  * Missing / non-numeric / sub-1 input becomes page 1. Never throws.
  */
-export function normalizePageNumber(raw: unknown): number {
+export function NormalizePageNumber(raw: unknown): number {
     const value = typeof raw === 'number' ? raw : Number(raw);
     if (!Number.isFinite(value) || value < 1) {
         return 1;
     }
     return Math.floor(value);
+}
+
+/** @deprecated Use {@link NormalizePageNumber}. */
+export function normalizePageNumber(raw: unknown): number {
+    return NormalizePageNumber(raw);
 }
 
 /**
@@ -66,14 +80,22 @@ export function normalizePageNumber(raw: unknown): number {
  *
  * @returns `{ startRow, pageNumber, pageSize }` — all safe, bounded integers.
  */
+export function ComputePaging(
+    rawPageNumber: unknown,
+    rawPageSize: unknown,
+): { startRow: number; pageNumber: number; pageSize: number } {
+    const pageNumber = NormalizePageNumber(rawPageNumber);
+    const pageSize = NormalizeMaxRows(rawPageSize, DEFAULT_QUERY_PAGE_SIZE);
+    const startRow = (pageNumber - 1) * pageSize;
+    return { startRow, pageNumber, pageSize };
+}
+
+/** @deprecated Use {@link ComputePaging}. */
 export function computePaging(
     rawPageNumber: unknown,
     rawPageSize: unknown,
 ): { startRow: number; pageNumber: number; pageSize: number } {
-    const pageNumber = normalizePageNumber(rawPageNumber);
-    const pageSize = normalizeMaxRows(rawPageSize, DEFAULT_QUERY_PAGE_SIZE);
-    const startRow = (pageNumber - 1) * pageSize;
-    return { startRow, pageNumber, pageSize };
+    return ComputePaging(rawPageNumber, rawPageSize);
 }
 
 /**
@@ -85,12 +107,17 @@ export function computePaging(
  * @param rows - the raw result rows (typed as unknown to stay caller-agnostic)
  * @param cap - the maximum number of rows to keep
  */
-export function boundResultRows<T>(rows: readonly T[] | null | undefined, cap: number): T[] {
+export function BoundResultRows<T>(rows: readonly T[] | null | undefined, cap: number): T[] {
     if (!Array.isArray(rows)) {
         return [];
     }
     const safeCap = Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : QUERY_MAX_ROWS_HARD_CAP;
     return rows.slice(0, safeCap);
+}
+
+/** @deprecated Use {@link BoundResultRows}. */
+export function boundResultRows<T>(rows: readonly T[] | null | undefined, cap: number): T[] {
+    return BoundResultRows(rows, cap);
 }
 
 /**
@@ -103,7 +130,7 @@ export function boundResultRows<T>(rows: readonly T[] | null | undefined, cap: n
  * pipeline validates and type-coerces them against the Query's parameter
  * metadata, so we don't second-guess types here.
  */
-export function normalizeQueryParameters(raw: unknown): Record<string, unknown> | undefined {
+export function NormalizeQueryParameters(raw: unknown): Record<string, unknown> | undefined {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
         return undefined;
     }
@@ -112,6 +139,11 @@ export function normalizeQueryParameters(raw: unknown): Record<string, unknown> 
         out[key] = (raw as Record<string, unknown>)[key];
     }
     return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** @deprecated Use {@link NormalizeQueryParameters}. */
+export function normalizeQueryParameters(raw: unknown): Record<string, unknown> | undefined {
+    return NormalizeQueryParameters(raw);
 }
 
 /**
@@ -129,7 +161,7 @@ export function normalizeQueryParameters(raw: unknown): Record<string, unknown> 
  * @param returnedRowCount - the bounded count of rows actually returned
  * @returns a non-negative integer total, falling back to returnedRowCount
  */
-export function resolveTotalRowCount(rawTotal: unknown, returnedRowCount: number): number {
+export function ResolveTotalRowCount(rawTotal: unknown, returnedRowCount: number): number {
     // Treat null/undefined as "not provided" — fall back. (Number(null) === 0,
     // which would otherwise masquerade as a legitimate total of zero.)
     if (rawTotal != null) {
@@ -139,4 +171,9 @@ export function resolveTotalRowCount(rawTotal: unknown, returnedRowCount: number
         }
     }
     return Number.isFinite(returnedRowCount) && returnedRowCount >= 0 ? Math.floor(returnedRowCount) : 0;
+}
+
+/** @deprecated Use {@link ResolveTotalRowCount}. */
+export function resolveTotalRowCount(rawTotal: unknown, returnedRowCount: number): number {
+    return ResolveTotalRowCount(rawTotal, returnedRowCount);
 }

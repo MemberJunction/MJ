@@ -1,13 +1,13 @@
 import { Component, Input } from '@angular/core';
 
 export interface OracleResult {
-  name: string;
-  status: 'Passed' | 'Failed' | 'Skipped' | 'Error';
-  score: number;
-  cost: number;
-  duration: number; // milliseconds
-  errorMessage?: string;
-  details?: any;
+  Name: string;
+  Status: 'Passed' | 'Failed' | 'Skipped' | 'Error';
+  Score: number;
+  Cost: number;
+  Duration: number; // milliseconds
+  ErrorMessage?: string;
+  Details?: any;
 }
 
 @Component({
@@ -39,44 +39,44 @@ export interface OracleResult {
               <div class="header-cell">Duration</div>
             </div>
     
-            @for (oracle of results; track oracle.name) {
-              <div class="table-row" [class.has-error]="oracle.errorMessage">
+            @for (oracle of results; track oracle.Name) {
+              <div class="table-row" [class.has-error]="oracle.ErrorMessage">
                 <div class="table-cell">
                   <div class="oracle-name">
-                    @if (oracle.status === 'Passed') {
+                    @if (oracle.Status === 'Passed') {
                       <i class="fa-solid fa-check-circle oracle-icon"></i>
                     }
-                    @if (oracle.status === 'Failed') {
+                    @if (oracle.Status === 'Failed') {
                       <i class="fa-solid fa-times-circle oracle-icon"></i>
                     }
-                    @if (oracle.status === 'Error') {
+                    @if (oracle.Status === 'Error') {
                       <i class="fa-solid fa-exclamation-triangle oracle-icon"></i>
                     }
-                    @if (oracle.status === 'Skipped') {
+                    @if (oracle.Status === 'Skipped') {
                       <i class="fa-solid fa-forward oracle-icon"></i>
                     }
-                    <span>{{ oracle.name }}</span>
+                    <span>{{ oracle.Name }}</span>
                   </div>
                 </div>
                 <div class="table-cell">
-                  <app-test-status-badge [status]="oracle.status" [showIcon]="false"></app-test-status-badge>
+                  <app-test-status-badge [status]="oracle.Status" [showIcon]="false"></app-test-status-badge>
                 </div>
                 <div class="table-cell">
-                  <app-score-indicator [score]="oracle.score" [showBar]="true"></app-score-indicator>
+                  <app-score-indicator [score]="oracle.Score" [showBar]="true"></app-score-indicator>
                 </div>
                 <div class="table-cell">
-                  <app-cost-display [cost]="oracle.cost" [showIcon]="true" [decimals]="6"></app-cost-display>
+                  <app-cost-display [cost]="oracle.Cost" [showIcon]="true" [decimals]="6"></app-cost-display>
                 </div>
                 <div class="table-cell">
-                  {{ formatDuration(oracle.duration) }}
+                  {{ formatDuration(oracle.Duration) }}
                 </div>
               </div>
     
-              @if (oracle.errorMessage) {
+              @if (oracle.ErrorMessage) {
                 <div class="error-row">
                   <div class="error-message">
                     <i class="fa-solid fa-exclamation-circle"></i>
-                    {{ oracle.errorMessage }}
+                    {{ oracle.ErrorMessage }}
                   </div>
                 </div>
               }
@@ -304,9 +304,18 @@ export interface OracleResult {
   `]
 })
 export class OracleBreakdownTableComponent {
-  @Input() results: OracleResult[] = [];
+  @Input() Results: OracleResult[] = [];
 
-  formatDuration(milliseconds: number): string {
+  /** @deprecated Use {@link Results}. */
+  @Input() set results(value: OracleResult[]) {
+    this.Results = value;
+  }
+  /** @deprecated Use {@link Results}. */
+  get results(): OracleResult[] {
+    return this.Results;
+  }
+
+  FormatDuration(milliseconds: number): string {
     if (milliseconds < 1000) {
       return `${milliseconds}ms`;
     }
@@ -324,19 +333,39 @@ export class OracleBreakdownTableComponent {
     }
   }
 
+  /** @deprecated Use {@link FormatDuration}. */
+  formatDuration(milliseconds: number): string {
+    return this.FormatDuration(milliseconds);
+  }
+
+  GetAggregateScore(): number {
+    if (!this.Results || this.Results.length === 0) return 0;
+    const total = this.Results.reduce((sum, r) => sum + r.Score, 0);
+    return total / this.Results.length;
+  }
+
+  /** @deprecated Use {@link GetAggregateScore}. */
   getAggregateScore(): number {
-    if (!this.results || this.results.length === 0) return 0;
-    const total = this.results.reduce((sum, r) => sum + r.score, 0);
-    return total / this.results.length;
+    return this.GetAggregateScore();
   }
 
+  GetTotalCost(): number {
+    if (!this.Results || this.Results.length === 0) return 0;
+    return this.Results.reduce((sum, r) => sum + r.Cost, 0);
+  }
+
+  /** @deprecated Use {@link GetTotalCost}. */
   getTotalCost(): number {
-    if (!this.results || this.results.length === 0) return 0;
-    return this.results.reduce((sum, r) => sum + r.cost, 0);
+    return this.GetTotalCost();
   }
 
+  GetTotalDuration(): number {
+    if (!this.Results || this.Results.length === 0) return 0;
+    return this.Results.reduce((sum, r) => sum + r.Duration, 0);
+  }
+
+  /** @deprecated Use {@link GetTotalDuration}. */
   getTotalDuration(): number {
-    if (!this.results || this.results.length === 0) return 0;
-    return this.results.reduce((sum, r) => sum + r.duration, 0);
+    return this.GetTotalDuration();
   }
 }

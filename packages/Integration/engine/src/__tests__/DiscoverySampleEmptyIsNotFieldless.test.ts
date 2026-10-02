@@ -24,7 +24,7 @@ import type { ConnectorCreationPipelineOptions } from '../IntegrationConnectorCr
 import type { SourceObjectInfo } from '../types.js';
 
 type IntrospectHost = {
-    StageIntrospect: (
+    stageIntrospect: (
         emitter: unknown,
         opts: ConnectorCreationPipelineOptions
     ) => Promise<{ Objects: SourceObjectInfo[] }>;
@@ -90,7 +90,7 @@ describe('StageIntrospect — an empty sample never persists a fieldless object'
             runtime: [{ Name: 'Widgets', Label: 'Widgets', Description: '' }],
         });
 
-        const schema = await host().StageIntrospect(makeEmitter(), opts);
+        const schema = await host().stageIntrospect(makeEmitter(), opts);
 
         // THE regression: this object used to be persisted with Fields: [].
         expect(schema.Objects[0].Fields.map((f) => f.Name)).toEqual(['id', 'note']);
@@ -100,7 +100,7 @@ describe('StageIntrospect — an empty sample never persists a fieldless object'
     it('backstops a NAME-ONLY declared object', async () => {
         const { opts, discoverFields } = makeOpts({ declared: [nameOnly('Widgets')] });
 
-        const schema = await host().StageIntrospect(makeEmitter(), opts);
+        const schema = await host().stageIntrospect(makeEmitter(), opts);
 
         expect(schema.Objects[0].Fields.map((f) => f.Name)).toEqual(['id', 'note']);
         expect(discoverFields).toHaveBeenCalledTimes(1);
@@ -110,7 +110,7 @@ describe('StageIntrospect — an empty sample never persists a fieldless object'
         const { opts } = makeOpts({ runtime: [{ Name: 'Widgets', Label: 'Widgets', Description: '' }] });
         const emitter = makeEmitter();
 
-        await host().StageIntrospect(emitter, opts);
+        await host().stageIntrospect(emitter, opts);
 
         // Same channel the failure fallback already uses: from the outside, "sampled" and "gave up
         // and used the catalog" must not look alike.
@@ -123,7 +123,7 @@ describe('StageIntrospect — an empty sample never persists a fieldless object'
             discoverFields: vi.fn(async () => { throw new Error('describe unavailable'); }),
         });
 
-        const schema = await host().StageIntrospect(makeEmitter(), opts);
+        const schema = await host().stageIntrospect(makeEmitter(), opts);
 
         expect(schema.Objects[0].Fields).toEqual([]);
     });
@@ -135,7 +135,7 @@ describe('StageIntrospect — an empty sample never persists a fieldless object'
         const { opts, discoverFields } = makeOpts({ declared: [withFields('Widgets')] });
         const emitter = makeEmitter();
 
-        const schema = await host().StageIntrospect(emitter, opts);
+        const schema = await host().stageIntrospect(emitter, opts);
 
         expect(discoverFields).not.toHaveBeenCalled();
         expect(schema.Objects[0].Fields.map((f) => f.Name)).toEqual(['declared_id']);
@@ -148,7 +148,7 @@ describe('StageIntrospect — an empty sample never persists a fieldless object'
             sampled: [field('observed', 900)],
         });
 
-        const schema = await host().StageIntrospect(makeEmitter(), opts);
+        const schema = await host().stageIntrospect(makeEmitter(), opts);
 
         expect(discoverFields).not.toHaveBeenCalled();
         expect(schema.Objects[0].Fields.map((f) => f.Name)).toEqual(['observed']);
