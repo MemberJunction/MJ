@@ -1,9 +1,11 @@
 import { Component } from '@angular/core';
+import { ActionParam } from '@memberjunction/actions-base';
 import { CompositeKey, RunView } from '@memberjunction/core';
+import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPolicy, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
-import { bandFromRow, nodeFromRow, planBandSave, planNodeSave, publishPreview, scaleFromRow, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionCard, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { bandFromRow, nodeFromRow, planBandSave, planNodeSave, publishPreview, scaleFromRow, VersionShownWithoutDraft, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionCard, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { MJRubricEntity } from '@memberjunction/core-entities';
 import { MJRubricFormComponent } from '../../generated/Entities/MJRubric/mjrubric.form.component';
 
@@ -58,17 +60,32 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
             this.Versions = rows;
             const draft = rows.find(row => row.Status === 'Draft') ?? null;
             this.DraftId = draft ? String(draft.ID) : null;
+            this.DraftVersion = null;
+            this.BaseVersion = null;
+            this.Nodes = [];
+            this.Bands = [];
             this.Scales = await this.loadScales();
             if (draft) {
+                this.Viewing = 'draft';
                 this.Nodes = await this.loadNodes(String(draft.ID));
                 this.Bands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${draft.ID}'`)).map(bandFromRow);
                 this.DraftVersion = this.snapshot(draft, this.Nodes, this.Bands);
                 const baseId = draft.BasedOnVersionID ? String(draft.BasedOnVersionID) : null;
-                const base = baseId ? rows.find(row => String(row.ID) === baseId) : null;
+                const base = baseId ? rows.find(row => String(row.ID) === baseId) : rows.find(row => row.Status === 'Published');
                 if (base) {
                     const baseNodes = await this.loadNodes(String(base.ID));
                     const baseBands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${base.ID}'`)).map(bandFromRow);
                     this.BaseVersion = this.snapshot(base, baseNodes, baseBands);
+                }
+            } else {
+                this.Viewing = 'published';
+                const published = VersionShownWithoutDraft(rows);
+                if (published) {
+                    const nodes = await this.loadNodes(String(published.ID));
+                    const bands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${published.ID}'`)).map(bandFromRow);
+                    this.Nodes = nodes;
+                    this.Bands = bands;
+                    this.BaseVersion = this.snapshot(published, nodes, bands);
                 }
             }
             this.VersionCards = await this.buildVersionCards(rows);
@@ -134,6 +151,20 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
         for (const id of plan.removedIds) await this.remove('MJ: Rubric Bands', id);
         for (const item of plan.upserts) await this.write('MJ: Rubric Bands', item.id, item.isNew, { ...item.fields, RubricVersionID: this.DraftId });
         if (this.DraftVersion) this.DraftVersion = { ...this.DraftVersion, bands };
+    }
+
+    /** Clones the highest published or retired version through Create Rubric Draft. */
+    public async StartDraft(): Promise<void> {
+        const found = await this.rows('MJ: Actions', `Name='Create Rubric Draft'`);
+        const actionId = String(found[0]?.ID ?? '');
+        if (!actionId) {
+            this.Message = 'Create Rubric Draft was not found.';
+            return;
+        }
+        const params: ActionParam[] = [{ Name: 'RubricID', Value: this.record.ID, Type: 'Input' }];
+        const result = await new GraphQLActionClient(this.ProviderToUse as GraphQLDataProvider).RunAction(actionId, params);
+        this.Message = result.Success ? 'Draft started.' : (result.Message ?? 'Could not start a draft.');
+        if (result.Success) await this.LoadWorkspace();
     }
 
     public OnCancel(): void {

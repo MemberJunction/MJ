@@ -25,13 +25,16 @@ function host(panel: BaseFormPanel<MJRubricEntity>): MJRubricFormComponentExtend
 @Component({
     selector: 'mj-rubric-author-panel',
     standalone: true,
-    imports: [BaseFormsModule, RubricBuilderComponent],
+    imports: [BaseFormsModule, MJButtonDirective, RubricBuilderComponent],
     template: `
       <mj-collapsible-panel SectionKey="rubric-author" SectionName="Author" Icon="fa-solid fa-pen" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
         @if (Form.Loading) {
           <p>Loading the rubric...</p>
         } @else {
-          <mj-rubric-builder [Name]="Record.Name" [PublishedLabel]="Form.PublishedLabel" [NextVersion]="Form.NextVersion" [ComputedBump]="Form.ComputedBump" [Viewing]="Form.Viewing" (ViewingChange)="Form.Viewing = $event" [Nodes]="Form.Viewing === 'published' ? (Form.BaseVersion?.nodes ?? []) : Form.Nodes" [Scales]="Form.Scales" [Bands]="Form.Viewing === 'published' ? (Form.BaseVersion?.bands ?? []) : Form.Bands" [BaseBands]="Form.BaseVersion?.bands ?? []" [Version]="Form.Viewing === 'published' ? Form.BaseVersion : Form.DraftVersion" [ReadOnly]="Form.Viewing === 'published'" (NodesChange)="Form.OnNodes($event)" (BandsChange)="Form.OnBands($event)"></mj-rubric-builder>
+          @if (!Form.DraftId) {
+            <button mjButton variant="outline" size="sm" type="button" (click)="Form.StartDraft()">Start new draft</button>
+          }
+          <mj-rubric-builder [Name]="Record.Name" [PublishedLabel]="Form.PublishedLabel" [NextVersion]="Form.NextVersion" [ComputedBump]="Form.ComputedBump" [Viewing]="Form.Viewing" (ViewingChange)="Form.Viewing = $event" [Nodes]="Form.Viewing === 'published' ? (Form.BaseVersion?.nodes ?? []) : Form.Nodes" [Scales]="Form.Scales" [Bands]="Form.Viewing === 'published' ? (Form.BaseVersion?.bands ?? []) : Form.Bands" [BaseBands]="Form.BaseVersion?.bands ?? []" [Version]="Form.Viewing === 'published' ? Form.BaseVersion : Form.DraftVersion" [ReadOnly]="!Form.DraftId || Form.Viewing === 'published'" (NodesChange)="Form.OnNodes($event)" (BandsChange)="Form.OnBands($event)"></mj-rubric-builder>
         }
       </mj-collapsible-panel>
     `,
@@ -91,6 +94,8 @@ export class RubricDiffPanel extends BaseFormPanel<MJRubricEntity> {
           @if (Form.Message) { <p>{{ Form.Message }}</p> }
         } @else {
           <p>This rubric has no draft to publish.</p>
+          <button mjButton variant="outline" size="sm" type="button" (click)="Form.StartDraft()">Start new draft</button>
+          @if (Form.Message) { <p>{{ Form.Message }}</p> }
         }
       </mj-collapsible-panel>
     `,

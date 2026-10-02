@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, WeightShares } from './model.js';
+import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -210,6 +210,12 @@ describe('publish, diff, and comparison', () => {
         expect(stored.map(column => column.evaluatorType)).toEqual(['AIPrompt', 'Agent']);
         expect(ComparisonMatrix(['clarity'], stored).aiMean).toBe(1);
         expect(ComparisonCohortFilter("rubric", 2, "subject")).toBe("RubricID='rubric' AND RubricMajorVersion=2 AND SubjectEntityID='subject' AND Status='Submitted'");
+        const shown = VersionShownWithoutDraft([
+            { ID: 'old', Status: 'Retired', MajorVersion: 1, MinorVersion: 0, PatchVersion: 0 },
+            { ID: 'live', Status: 'Published', MajorVersion: 1, MinorVersion: 2, PatchVersion: 0 },
+        ]);
+        expect(shown?.ID).toBe('live');
+        expect(VersionShownWithoutDraft([])).toBeNull();
     });
 });
 

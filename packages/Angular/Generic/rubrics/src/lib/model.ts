@@ -477,6 +477,16 @@ export function IsAiEvaluator(type: string): boolean {
     return type === 'AIPrompt' || type === 'Agent' || type === 'AI';
 }
 
+/** The version to show when the rubric has no draft. A published version wins over a retired one. */
+export function VersionShownWithoutDraft<T extends { Status?: unknown; MajorVersion?: unknown; MinorVersion?: unknown; PatchVersion?: unknown }>(rows: T[]): T | null {
+    const published = rows.filter(row => row.Status === 'Published');
+    const pool = published.length > 0 ? published : rows.filter(row => row.Status === 'Retired');
+    return [...pool].sort((left, right) =>
+        Number(right.MajorVersion ?? 0) - Number(left.MajorVersion ?? 0)
+        || Number(right.MinorVersion ?? 0) - Number(left.MinorVersion ?? 0)
+        || Number(right.PatchVersion ?? 0) - Number(left.PatchVersion ?? 0))[0] ?? null;
+}
+
 /** Submitted evaluations for one subject, one rubric, and one major. */
 export function ComparisonCohortFilter(rubricId: string, major: number, subjectEntityId: string): string {
     const quote = (value: string) => value.replace(/'/g, "''");
