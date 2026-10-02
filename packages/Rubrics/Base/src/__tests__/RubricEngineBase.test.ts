@@ -82,6 +82,33 @@ const snapshot: RubricCacheSnapshot = {
 };
 
 describe('RubricEngineBase', () => {
+    it('rebuilds the published cache from the entities Config loaded', async () => {
+        class Probe extends RubricEngineBase {
+            public override async Load(): Promise<void> {
+                const rows: Record<string, unknown[]> = {
+                    _MJRubricCategories: [{ ID: 'cat', Name: 'Quality', Sequence: 0 }],
+                    _MJRubricScales: [{ ID: 'scale', Name: 'Met', ScaleType: 'Levels', HigherIsBetter: true }],
+                    _MJRubricScaleLevels: [{ ID: 'high', ScaleID: 'scale', Label: 'High', Value: 1, NormalizedValue: 1, Sequence: 0 }],
+                    _MJRubrics: [{ ID: 'rubric', Name: 'Writing', CategoryID: 'cat', Status: 'Active' }],
+                    _MJRubricVersions: [
+                        { ID: 'draft', RubricID: 'rubric', Status: 'Draft', MajorVersion: 2, MinorVersion: 0, PatchVersion: 0, NotApplicablePolicy: 'ExcludeAndRedistribute', ScoreDisplayMin: 0, ScoreDisplayMax: 100 },
+                        { ID: 'published', RubricID: 'rubric', Status: 'Published', MajorVersion: 1, MinorVersion: 0, PatchVersion: 0, NotApplicablePolicy: 'ExcludeAndRedistribute', ScoreDisplayMin: 0, ScoreDisplayMax: 100 },
+                    ],
+                    _MJRubricCriteria: [{ ID: 'crit', RubricVersionID: 'published', Key: 'clarity', Name: 'Clarity', NodeType: 'Criterion', ScaleID: 'scale', Weight: 1, Sequence: 0 }],
+                    _MJRubricCriterionLevels: [],
+                    _MJRubricBands: [],
+                    _MJAIAgentRubrics: [{ ID: 'link', AgentID: 'agent', RubricID: 'rubric', Status: 'Active', Priority: 1, IsDefault: true }],
+                };
+                Object.assign(this, rows);
+            }
+        }
+        const engine = new Probe();
+        await engine.Config();
+        expect(engine.GetLatestPublishedVersion('rubric')?.nodes.map(node => node.key)).toEqual(['clarity']);
+        expect(engine.GetAgentRubrics('agent')).toHaveLength(1);
+        expect(engine.GetLatestPublishedVersion('rubric')?.id).toBe('published');
+    });
+
     it('caches a published version with its tree and does not cache a draft', () => {
         const engine = new RubricEngineBase();
         engine.replaceCache(snapshot);

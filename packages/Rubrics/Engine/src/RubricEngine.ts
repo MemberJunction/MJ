@@ -1,5 +1,4 @@
 import { SnapshotFromRows, type RubricAnswer, type RubricNodeSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { BaseSingleton } from '@memberjunction/global';
 import { AgentRubricEvaluator, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import { LLMRubricEvaluator, type RubricEvaluatorMessages, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 import { ShapeContent, type RubricSubjectContent } from './content.js';
@@ -115,18 +114,20 @@ const unsetEvaluations: RubricEvaluationStore = {
     async fail() { throw new Error('RubricEngine has no evaluation store.'); },
 };
 
-export class RubricEngine extends BaseSingleton<RubricEngine> {
+export class RubricEngine {
+    private static singleton: RubricEngine | undefined;
+
+    /** The process-wide engine. Constructing another engine does not rebind this one. */
     public static get Instance(): RubricEngine {
-        return super.getInstance<RubricEngine>();
+        if (!RubricEngine.singleton) RubricEngine.singleton = new RubricEngine();
+        return RubricEngine.singleton;
     }
 
     public constructor(
         private evaluations: RubricEvaluationStore = unsetEvaluations,
         private records: RubricRecords = emptyRecords,
         private promptRun?: RubricPromptRun,
-    ) {
-        super();
-    }
+    ) {}
 
     /**
      * Runs the evaluator, saves the draft, and submits it. On failure the

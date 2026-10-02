@@ -206,6 +206,28 @@ describe('RubricEngine', () => {
     });
 });
 
+    it('keeps a per-user store when another engine is constructed', async () => {
+        const calls: string[] = [];
+        const store = (name: string): RubricEvaluationStore => ({
+            async createDraft() { calls.push(name); return { id: name, status: 'Draft' }; },
+            async submit() {
+                return { normalizedScore: 1, completeness: 1, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' };
+            },
+            async fail() { throw new Error('should not fail'); },
+        });
+        const first = new RubricEngine(store('first'));
+        const second = new RubricEngine(store('second'));
+        await first.evaluate({
+            version: version(),
+            subject: { entityName: 'MJ: Documents', recordId: '1', entityId: 'entity' },
+            content: { data: { score: 1 } },
+            evaluator: 'Deterministic',
+        });
+        expect(calls).toEqual(['first']);
+        expect(second).not.toBe(first);
+        expect(RubricEngine.Instance).not.toBe(first);
+    });
+
 describe('agreement and consensus', () => {
     it('matches a hand-computed quadratic kappa of 0.4 and withholds below 20 subjects', () => {
         const pairs: [number, number][] = [

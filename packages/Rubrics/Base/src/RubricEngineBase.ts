@@ -1,5 +1,6 @@
 import { BaseEngine, type BaseEnginePropertyConfig, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
+import { SnapshotFromRows } from './snapshot.js';
 import type { NotApplicablePolicy, RubricBandSnapshot, RubricNodeSnapshot } from './types.js';
 
 export interface RubricCategoryRecord {
@@ -129,8 +130,8 @@ export class RubricEngineBase extends BaseEngine<RubricEngineBase> {
     }
 
     /**
-     * Loads the rubric entities into this engine. The shaped cache is still
-     * filled by {@link ReplaceCache}; this is the metadata subscription.
+     * Loads the rubric entities, then rebuilds the published-version maps the
+     * readers use. A metadata refresh is not visible until that rebuild.
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = RUBRIC_CACHE_ENTITIES.map(entityName => ({
@@ -140,6 +141,22 @@ export class RubricEngineBase extends BaseEngine<RubricEngineBase> {
             CacheLocal: true,
         }));
         await this.Load(configs, provider, forceRefresh, contextUser);
+        this.ReplaceCache(ShapedCacheFromRows({
+            categories: this.loaded('MJ: Rubric Categories'),
+            scales: this.loaded('MJ: Rubric Scales'),
+            levels: this.loaded('MJ: Rubric Scale Levels'),
+            rubrics: this.loaded('MJ: Rubrics'),
+            versions: this.loaded('MJ: Rubric Versions'),
+            criteria: this.loaded('MJ: Rubric Criteria'),
+            anchors: this.loaded('MJ: Rubric Criterion Levels'),
+            bands: this.loaded('MJ: Rubric Bands'),
+            agentRubrics: this.loaded('MJ: AI Agent Rubrics'),
+        }));
+    }
+
+    private loaded(entityName: string): unknown[] {
+        const value = (this as unknown as Record<string, unknown>)[propertyName(entityName)];
+        return Array.isArray(value) ? value : [];
     }
     private categories = new Map<string, RubricCategoryRecord>();
     private scales = new Map<string, RubricScaleRecord>();
@@ -281,4 +298,122 @@ function compareVersionDesc(a: CachedPublishedVersion, b: CachedPublishedVersion
 
 function propertyName(entityName: string): string {
     return `_${entityName.replace(/[^A-Za-z0-9]/g, '')}`;
+}
+
+/** Builds the shaped cache from the entity rows {@link RubricEngineBase.Config} just loaded. */
+export function ShapedCacheFromRows(loaded: {
+    categories: unknown[];
+    scales: unknown[];
+    levels: unknown[];
+    rubrics: unknown[];
+    versions: unknown[];
+    criteria: unknown[];
+    anchors: unknown[];
+    bands: unknown[];
+    agentRubrics: unknown[];
+}): RubricCacheSnapshot {
+    const scales: RubricScaleRecord[] = loaded.scales.map(scale => {
+        const id = text(cell(scale, 'ID'));
+        return {
+            id,
+            name: text(cell(scale, 'Name')),
+            scaleType: cell(scale, 'ScaleType') === 'Numeric' ? 'Numeric' : 'Levels',
+            minValue: numberOrNull(cell(scale, 'MinValue')),
+            maxValue: numberOrNull(cell(scale, 'MaxValue')),
+            step: numberOrNull(cell(scale, 'Step')),
+            higherIsBetter: cell(scale, 'HigherIsBetter') == null ? true : bit(cell(scale, 'HigherIsBetter')),
+            levels: loaded.levels.filter(level => text(cell(level, 'ScaleID')) === id).map(level => ({
+                id: text(cell(level, 'ID')),
+                label: text(cell(level, 'Label')),
+                value: numberOrZero(cell(level, 'Value')),
+                normalizedValue: numberOrZero(cell(level, 'NormalizedValue')),
+                description: text(cell(level, 'Description')) || null,
+                sequence: numberOrZero(cell(level, 'Sequence')),
+            })),
+        };
+    });
+    const versions: RubricVersionRecord[] = loaded.versions.map(version => {
+        const id = text(cell(version, 'ID'));
+        const rubricId = text(cell(version, 'RubricID'));
+        const criteria = loaded.criteria.filter(row => text(cell(row, 'RubricVersionID')) === id);
+        const criterionIds = new Set(criteria.map(row => text(cell(row, 'ID'))));
+        const scaleIds = criteria.map(row => text(cell(row, 'ScaleID'))).filter(scaleId => scaleId.length > 0);
+        const tree = SnapshotFromRows({
+            version,
+            rubricId,
+            criteria,
+            anchors: loaded.anchors.filter(row => criterionIds.has(text(cell(row, 'CriterionID')))),
+            bands: loaded.bands.filter(row => text(cell(row, 'RubricVersionID')) === id),
+            scales: loaded.scales.filter(row => scaleIds.includes(text(cell(row, 'ID')))),
+            levels: loaded.levels.filter(row => scaleIds.includes(text(cell(row, 'ScaleID')))),
+        });
+        return {
+            id,
+            rubricId,
+            status: text(cell(version, 'Status')),
+            majorVersion: numberOrNull(cell(version, 'MajorVersion')),
+            minorVersion: numberOrNull(cell(version, 'MinorVersion')),
+            patchVersion: numberOrNull(cell(version, 'PatchVersion')),
+            notApplicablePolicy: (text(cell(version, 'NotApplicablePolicy')) || 'ExcludeAndRedistribute') as RubricVersionRecord['notApplicablePolicy'],
+            passThreshold: numberOrNull(cell(version, 'PassThreshold')),
+            minimumCompleteness: numberOrNull(cell(version, 'MinimumCompleteness')),
+            instructions: text(cell(version, 'Instructions')) || null,
+            scoreDisplayMin: numberOrZero(cell(version, 'ScoreDisplayMin')),
+            scoreDisplayMax: cell(version, 'ScoreDisplayMax') == null ? 100 : numberOrZero(cell(version, 'ScoreDisplayMax')),
+            nodes: tree.nodes,
+            bands: tree.bands,
+        };
+    });
+    return {
+        categories: loaded.categories.map(row => ({
+            id: text(cell(row, 'ID')),
+            name: text(cell(row, 'Name')),
+            parentId: text(cell(row, 'ParentID')) || null,
+            description: text(cell(row, 'Description')) || null,
+            sequence: numberOrZero(cell(row, 'Sequence')),
+        })),
+        scales,
+        rubrics: loaded.rubrics.map(row => ({
+            id: text(cell(row, 'ID')),
+            name: text(cell(row, 'Name')),
+            categoryId: text(cell(row, 'CategoryID')) || null,
+            description: text(cell(row, 'Description')) || null,
+            status: text(cell(row, 'Status')),
+        })),
+        versions,
+        agentRubrics: loaded.agentRubrics.map(row => ({
+            id: text(cell(row, 'ID')),
+            agentId: text(cell(row, 'AgentID')),
+            rubricId: text(cell(row, 'RubricID')),
+            purpose: text(cell(row, 'Purpose')) || null,
+            isDefault: bit(cell(row, 'IsDefault')),
+            status: text(cell(row, 'Status')),
+            priority: numberOrZero(cell(row, 'Priority')),
+        })),
+    };
+}
+
+function cell(row: unknown, name: string): unknown {
+    const record = row as { Get?: (fieldName: string) => unknown } & Record<string, unknown>;
+    if (record && record[name] === undefined && typeof record.Get === 'function') return record.Get(name);
+    return record?.[name];
+}
+
+function text(value: unknown): string {
+    return value == null ? '' : String(value);
+}
+
+function numberOrZero(value: unknown): number {
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function numberOrNull(value: unknown): number | null {
+    if (value == null || value === '') return null;
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function bit(value: unknown): boolean {
+    return value === true || value === 1 || value === '1';
 }
