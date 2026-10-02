@@ -512,5 +512,15 @@
       "lastModified": "2026-09-29T19:19:09.136Z",
       "checksum": "929c970f960d3242d054a57a4e240bb3f892453abe6e2932182113eb2845daeb"
     }
+  },
+  {
+    "fields": {
+      "Name": "Cloudflare",
+      "Description": "Cloudflare runs Workers AI, a serverless inference platform on its network, at https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}, authenticated with an account ID and an API token. It also develops the open-weight Clef decision models and serves them on Workers AI, the only cloud that hosts them. MJ reaches them through the CloudflareDecision driver.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "21A966E8-AB6D-42E2-BD56-37584838A5A8"
+    }
   }
 ]
