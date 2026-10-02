@@ -12,12 +12,14 @@ sequenceDiagram
     autonumber
     participant Caller as Caller (action, test oracle, self-check, sampling job, CLI)
     participant Eng as RubricEngine
-    participant Ev as Evaluator (LLM / Agent / Deterministic)
+    participant Ev as Evaluator (registered by name)
     participant Srv as Evaluation entity server
-    Caller->>Eng: EvaluateRecord(rubric, subject, context, evaluator)
+    Caller->>Eng: EvaluateRecord(rubric, subject, context, evaluator or evaluatorConfig)
     Eng->>Eng: latest Published version (or versionId)
+    Eng->>Eng: ResolveRubricEvaluatorSelection, then ClassFactory by name
     Eng->>Eng: content = input.content, or load the subject and ShapeContent
-    Eng->>Ev: answers for each leaf
+    Eng->>Ev: EvaluateRubric(version, content, settings, services)
+    Ev-->>Eng: answers, and the prompt or agent run that produced them
     Eng->>Srv: save Draft evaluation, then submit the answers
     Srv->>Srv: RubricScoring.Compute — the only math
     Srv-->>Eng: score, outcome, per-criterion results
@@ -38,24 +40,37 @@ const result = await ProviderRubricEngine(provider, contextUser).EvaluateRecord(
 ```
 
 
-`RubricEngine` has its own `Instance`. It does not extend `BaseSingleton`.
+`RubricEngine` has its own `Instance`. It does not extend `BaseSingleton`; an engine is built per provider and user, so use `ProviderRubricEngine`.
 
-`Evaluate` does not resolve a version and does not look an evaluator up in ClassFactory. The caller passes the version. `runEvaluator` constructs the class:
+`Evaluate` takes a version the caller already loaded and an evaluator **name**. It creates that evaluator with `CreateRubricEvaluator`, which looks the name up under `BaseRubricEvaluator` in the class factory, and calls `EvaluateRubric` with a context: the version, the subject content, the settings, and the services. It then saves a Draft, submits it, and returns the computed result. A throw from the evaluator produces a Failed evaluation with `ErrorMessage`. An unregistered name, or an evaluator a person completes (Human), throws before anything is saved.
 
-- `evaluator === 'AI'` builds `AgentRubricEvaluator`.
-- `evaluator === 'LLM'` builds `LLMRubricEvaluator`.
-- Anything else builds `DeterministicRubricEvaluator`.
+`EvaluateRecord` also accepts `evaluatorConfig`, an evaluator selection in the `AIAgentRubric.EvaluatorConfig` shape. `ResolveRubricEvaluatorSelection` turns it into a name and settings; `evaluator` and `settings` on the call override them.
 
-It saves a Draft, submits it, and returns the computed result. A throw produces a Failed evaluation with `ErrorMessage`.
+The services are what the engine lends an evaluator. `ProviderRubricEngine` supplies all three, bound to the caller's provider and user:
 
-`RubricEvaluator.Evaluate(version, candidates)` scores those candidates and returns `{ normalizedScore, rationale, evidence, result, answers }`. `BaseRubricEvaluator` extends it. Concrete classes register as Deterministic, LLM, Agent, and Human.
+| Service | Provider implementation | Used by |
+|---|---|---|
+| `Prompts.Run(prompt, messages, modelId)` | `ProviderPromptService` — `AIPromptRunner`, prompt by ID or name, `override.modelId` | LLM |
+| `Decisions.Decide(prompt, state, questions, modelId)` | `ProviderDecisionService` — `AIDecisionRunner` on the prompt's Decision-type models | Decision |
+| `Agent.Run(...)` | the runner `@memberjunction/ai-agents` registers with `RegisterRubricAgentRunner` | Agent |
+
+A call can replace any of them through `EvaluateParams.services`.
+
+The draft stores the evaluator's `EvaluatorType` and `EvaluatorName`, the prompt or agent run that produced the evaluation in `AIPromptRunID` / `AIAgentRunID`, and `Metadata.Evaluator`: the name, the settings, and what the evaluator reported about its run.
+
+`RubricEvaluator.Evaluate(version, candidates)` scores those candidates and returns `{ normalizedScore, rationale, evidence, result, answers }`. `BaseRubricEvaluator` extends it and adds the plugin contract: `EvaluatorName`, `EvaluatorType`, `IsAutomated`, and `EvaluateRubric(context)`.
 
 ## Evaluators
 
-- **LLM** — one prompt call for the whole rubric (`SinglePass`), or one decision per leaf (`PerCriterion`). A quote that is not in the subject text is dropped. `EvaluateSamples` runs the rubric more than once.
-- **Agent** — one run of the Rubric Evaluation Agent. That agent is a Loop agent. Its tools are Get Rubric and Get Rubric Subject. Get Rubric Consensus is not one of its tools. It does not publish.
-- **Deterministic** — a rule on the criterion's evaluator config.
-- **Human** — `HumanRubricEvaluator.Start` creates a Draft evaluation and a task titled `Score <rubric>`. It does not score. `StartHumanEvaluation` constructs that class. The person answers in the form, and submit runs `RubricScoring`.
+Each registers under `BaseRubricEvaluator` by the name in bold. `ListRubricEvaluators()` reports every registered one. `AI` is an alias for Agent and `AIPrompt` for LLM.
+
+- **LLM** (stored as AIPrompt) — a chat prompt, Rubric Evaluator unless `PromptID` or `PromptName` names another, through the prompt system. `SinglePass` is one call for the whole rubric; `PerCriterion` is one call per leaf. `Samples` runs it up to 9 times and keeps each criterion's median level. `ModelID` pins the model. A quote that is not in the subject text is dropped.
+- **Decision** (stored as AIPrompt) — every leaf with a level scale becomes a typed Score question, and all of them go to a Decision-type model in one call, Default Decision (Jev, then LLM Decision) unless a prompt is named. The most probable level is the answer and its probability is the confidence. It refuses a rubric with an evidence-required leaf before calling anything, and leaves numeric-scale leaves unanswered.
+- **Agent** (stored as Agent) — one run of the Rubric Evaluation Agent, or the agent `AgentID` names. That agent is a Loop agent. Its tools are Get Rubric and Get Rubric Subject. Get Rubric Consensus is not one of its tools. It does not publish.
+- **Deterministic** — a rule on the criterion's evaluator config. No model call.
+- **Human** — not run by the engine. `HumanRubricEvaluator.Start` creates a Draft evaluation and a task titled `Score <rubric>`. It does not score. `StartHumanEvaluation` constructs that class. The person answers in the form, and submit runs `RubricScoring`.
+
+A custom evaluator subclasses `BaseRubricEvaluator`, registers with `@RegisterClass(BaseRubricEvaluator, '<Name>')`, and scores with `this.Evaluate`. The class factory constructs it with no arguments. Its own settings go in `Settings.Extensions['<Name>']`. The [Rubrics Guide](../../../guides/RUBRICS_GUIDE.md#custom-evaluators) has a worked example.
 
 Register a provider for your own entity with `RubricContentRegistry.Instance.Register(entityName, record => ({ text, data, files }))`; unregistered entities fall back to the record's readable columns. `ShapeContent` returns `RubricSubjectContent`: `text`, `data`, and `files`. A caller may pass `content` on `Evaluate` and skip the lookup. Test runs use input, expected output, actual output, and result details. Agent runs use the final payload and the in-memory message. There is no turns column and no transcript column.
 
@@ -65,7 +80,7 @@ Each action calls `RubricEngine`. None of them call another action.
 
 | Action | What it does |
 |---|---|
-| Evaluate Record Against Rubric | Scores one record. A missing subject fails. It does not score `{}`. |
+| Evaluate Record Against Rubric | Scores one record with any registered evaluator the engine can run (LLM when omitted; Human is refused). A missing subject fails. It does not score `{}`. |
 | Get Rubric | Returns the version tree. |
 | Get Rubric Subject | Loads subject content. It does not score. |
 | Get Rubric Consensus | Mean, median, or trimmed mean of Submitted non-Self scores on one major. |
@@ -83,10 +98,10 @@ mj rubric list
 mj rubric show <rubric>[@version]
 mj rubric diff <rubric> <version> <version>
 mj rubric validate <file>
-mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator LLM|Deterministic]
+mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator <name>] [--prompt <name>] [--model <id>] [--mode SinglePass|PerCriterion]
 ```
 
-The default `--evaluator` is LLM, stored as AIPrompt. Deterministic is stored as Deterministic. `evaluate` does not publish.
+`--evaluator` takes any registered evaluator name and defaults to LLM. `--prompt`, `--model`, and `--mode` become the evaluator's settings. `evaluate` does not publish.
 
 `mj test run --rubric <name-or-id>[@version]` and `mj test suite --rubric <name-or-id>[@version]` pin that rubric for the run. The version is `1.2.0` or a version id. Resolution order is the run flag, the rubric oracle's own config, `Test.RubricID`, the suite's `RubricID` walking up parents, then the agent's default Evaluation rubric.
 

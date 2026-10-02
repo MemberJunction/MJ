@@ -131,7 +131,7 @@ describe('RubricEngine', () => {
         });
         expect(done.evaluation.status).toBe('Failed');
         expect(done.evaluation.errorMessage).toMatch(/agent/);
-        expect(failed[0]).toMatch(/eval-2:An AI evaluation requires an agent/);
+        expect(failed[0]).toMatch(/eval-2:An Agent evaluation requires an agent runner/);
     });
 
     it('runs LLM SinglePass once, submits, and returns the scored draft', async () => {
@@ -148,13 +148,14 @@ describe('RubricEngine', () => {
             subject: { entityName: 'MJ: Documents', recordId: '1', entityId: 'entity' },
             content: { text: 'Easy to read.' },
             evaluator: 'LLM',
-            promptMode: 'SinglePass',
-            promptRunner: { async run() { calls.push('prompt'); return JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [{ quote: 'Easy' }] }] }); } },
+            settings: { Mode: 'SinglePass' },
+            services: { Prompts: { async Run() { calls.push('prompt'); return { Text: JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [{ quote: 'Easy' }] }] }), PromptRunID: 'prompt-run-1' }; } } },
         });
         expect(calls.filter(call => call === 'prompt')).toHaveLength(1);
         expect(calls).toContain('submit');
         expect(done.evaluation.status).toBe('Submitted');
         expect(done.output?.normalizedScore).toBe(1);
+        expect(done.output?.aiPromptRunId).toBe('prompt-run-1');
     });
 
     it('defaults a missing evaluator to LLM SinglePass and runs an Agent config', async () => {
@@ -163,7 +164,7 @@ describe('RubricEngine', () => {
         const drafted: string[] = [];
         const store: RubricEvaluationStore = {
             async createDraft(input) {
-                drafted.push(input.evaluator ?? 'missing');
+                drafted.push(`${input.evaluatorName}:${input.evaluatorType}`);
                 return { id: 'eval-choice', status: 'Draft' };
             },
             async submit() {
@@ -190,9 +191,11 @@ describe('RubricEngine', () => {
             async createDraft() { return { id: 'draft', status: 'Draft' }; },
         };
         const engine = new RubricEngine(store, records, {
-            async Run(_name, messages) {
-                prompts.push(messages.system);
-                return JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [] }] });
+            Prompts: {
+                async Run(input) {
+                    prompts.push(input.Messages.system);
+                    return { Text: JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [] }] }) };
+                },
             },
         });
         await engine.EvaluateRecord({
@@ -201,7 +204,7 @@ describe('RubricEngine', () => {
             subjectRecordId: 'record-1',
             content: { text: 'Easy to read.' },
         });
-        expect(drafted).toEqual(['LLM']);
+        expect(drafted).toEqual(['LLM:AIPrompt']);
         expect(prompts).toHaveLength(1);
 
         const agentCalls: string[] = [];
@@ -219,7 +222,7 @@ describe('RubricEngine', () => {
             },
         });
         expect(agentCalls).toEqual(['agent']);
-        expect(drafted).toEqual(['LLM', 'AI']);
+        expect(drafted).toEqual(['LLM:AIPrompt', 'Agent:Agent']);
     });
 });
 

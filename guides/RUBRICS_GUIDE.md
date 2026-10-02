@@ -12,7 +12,7 @@ reference:
 | Layer | Package | What it is |
 |---|---|---|
 | Math | [`@memberjunction/rubrics-base`](../packages/Rubrics/Base/README.md) | `RubricScoring`, `RubricVersionDiff`, snapshots. Pure functions, browser-safe |
-| Engine + evaluators | [`@memberjunction/rubrics`](../packages/Rubrics/Engine/README.md) | `RubricEngine`, the LLM / agent / deterministic / human evaluators, actions, `mj rubric` |
+| Engine + evaluators | [`@memberjunction/rubrics`](../packages/Rubrics/Engine/README.md) | `RubricEngine`, the evaluator registry and the LLM / Decision / Agent / Deterministic / Human evaluators, actions, `mj rubric` |
 | Server rules | `@memberjunction/core-entities-server` | Publish, submit, supersede, and validation on the entity subclasses |
 | Widgets | [`@memberjunction/ng-rubrics`](../packages/Angular/Generic/rubrics/README.md) | Author, answer, result, publish, diff, and comparison widgets |
 | Testing | [`@memberjunction/testing-engine`](../packages/TestingFramework/Engine/README.md) | `RubricOracle`, rubric resolution, the calibration test type |
@@ -196,7 +196,8 @@ const result = await engine.EvaluateRecord({
     subjectRecordId: proposalId,
     contextEntityName: 'Procurement Rounds',  // optional: what the subject was scored for
     contextRecordId: roundId,
-    evaluator: 'LLM',                          // 'LLM' (default) | 'AI' (agent) | 'Deterministic'
+    evaluator: 'LLM',                          // any registered evaluator; LLM when omitted (section 8)
+    settings: { ModelID: modelId },            // optional: prompt, model, mode, samples (section 8)
 });
 
 result.score;        // 0..1, or null when nothing could be scored
@@ -209,7 +210,8 @@ result.evaluationId; // the stored MJ: Rubric Evaluations row
 `EvaluateRecord` throws when the rubric has no published version, when the subject is missing or not readable
 by `contextUser`, or when the evaluator fails. A failed run is still stored as a `Failed` evaluation with its
 `ErrorMessage`. Pass `versionId` to score against one specific version, and `content` when the subject is
-already in memory (self-check does this, because the run's payload is not saved yet).
+already in memory (self-check does this, because the run's payload is not saved yet). Pass `evaluatorConfig`
+instead of `evaluator` and `settings` to use a stored evaluator selection as is, the way sampling and self-check do.
 
 From an agent, a workflow, or a low-code builder, use the **Evaluate Record Against Rubric** action. It takes
 the same inputs and returns `EvaluationID`, `Score`, `Outcome`, and `Criteria`.
@@ -309,9 +311,14 @@ set with the AI evaluator and compares it with the submitted human scores on the
 {
   "rubricId": "<rubric id>",
   "goldSet": { "subjectEntity": "MJ: Test Runs", "filter": "TestID='...'" },
-  "evaluator": { "type": "LLM" }
+  "evaluator": { "EvaluatorName": "Decision", "ModelID": "<model id>" }
 }
 ```
+
+`evaluator` is an evaluator selection, the same shape as a link's `EvaluatorConfig`
+([Choosing the evaluator for a link](#choosing-the-evaluator-for-a-link)). The older `{ "type": "LLM" }` still
+works, with `type` read as the evaluator name. Calibrate each judge you intend to run: an LLM prompt, a
+Decision model, and an agent disagree with people in different ways.
 
 The test score is the overall quadratic-weighted kappa, clamped to 0..1. Agreement needs at least 20 subjects
 that both a person and the judge scored; with fewer, the statistic is withheld and the sample size is still
@@ -380,15 +387,16 @@ pay for.
 
 ### Choosing the evaluator for a link
 
-`EvaluatorConfig` on the link (type `IRubricEvaluatorSelection`) picks how it is scored:
+`EvaluatorConfig` on the link (type `IRubricEvaluatorSelection`) picks the evaluator and its settings:
 
 ```json
-{ "EvaluatorType": "AIPrompt", "Mode": "PerCriterion" }
+{ "EvaluatorType": "AIPrompt", "EvaluatorName": "Decision", "ModelID": "<Jev's AI Model ID>" }
 ```
 
-`EvaluatorType` is `AIPrompt` (the default, one LLM prompt), `Agent` (the Rubric Evaluation Agent), or
-`Deterministic`. `Mode` is `SinglePass` (one call for the whole rubric, the default) or `PerCriterion` (one
-decision per leaf). The sampling job honors both. Self-check always uses the LLM evaluator in SinglePass.
+`EvaluatorName` names any registered evaluator ([section 8](#8-evaluators)), including one your application
+registered. Without it, `EvaluatorType` picks a built-in: `AIPrompt` is LLM, `Agent` is Agent, `Deterministic`
+is Deterministic. An empty config is LLM SinglePass. `PromptID`, `ModelID`, `AgentID`, `Mode`, and `Samples`
+are passed to the evaluator as its settings. Self-check and the sampling job both honor the whole selection.
 `PassThreshold` on the link overrides the version's threshold for that purpose.
 
 ---
@@ -528,16 +536,43 @@ comparable:
 
 ## 8. Evaluators
 
-Every evaluation records who scored it in `EvaluatorType`:
+An evaluator turns a subject into one answer per criterion. It never computes the score: it hands its answers
+to `RubricScoring`, so every evaluator scores the same way. Evaluators are plugins. Each one registers under
+`BaseRubricEvaluator` by name, and the engine creates the one a call names through the class factory.
 
-| Type | Who | How it is created |
-|---|---|---|
-| Human | A person. `EvaluatorUserID` is required | Scoring form, or the Submit Human Rubric action |
-| AIPrompt | The Rubric Evaluator prompt | `evaluator: 'LLM'`. `SinglePass`: one call for the whole rubric. `PerCriterion`: one decision per leaf |
-| Agent | The Rubric Evaluation Agent, a Loop agent that can read the rubric and the subject | `evaluator: 'AI'` |
-| Deterministic | A rule on the criterion's `EvaluatorConfig.Deterministic` | `evaluator: 'Deterministic'`. No LLM call |
-| Self | The subject's own assertion, for example a vendor's self-assessment | Stored and shown; **never part of consensus** |
-| External | Another system's score, imported | Stored and shown |
+```mermaid
+graph LR
+    CALLER["A call, a link's EvaluatorConfig,<br/>a test, the action, or the CLI"] --> RES["ResolveRubricEvaluatorSelection<br/><i>name + settings</i>"]
+    RES --> CF["ClassFactory<br/><i>BaseRubricEvaluator, name</i>"]
+    CF --> EV["Evaluator.EvaluateRubric<br/><i>version · content · settings · services</i>"]
+    EV --> SC["RubricScoring<br/><i>the only scorer</i>"]
+    SC --> ROW["RubricEvaluation<br/><i>EvaluatorType · EvaluatorName · run IDs · Metadata</i>"]
+```
+
+### The built-in evaluators
+
+| Name | Stored as | What runs | Settings it reads |
+|---|---|---|---|
+| `LLM` (default) | AIPrompt | A chat prompt, **Rubric Evaluator** unless one is named. `SinglePass` asks once for the whole rubric; `PerCriterion` asks once per leaf | `PromptID` or `PromptName`, `ModelID`, `Mode`, `Samples` (at most 9) |
+| `Decision` | AIPrompt | Typed Score questions on a Decision-type model, all leaves in one call. **Default Decision** binds Jev and LLM Decision | `PromptID` or `PromptName`, `ModelID` |
+| `Agent` | Agent | The **Rubric Evaluation Agent**, a Loop agent that can read the rubric and the subject | `AgentID` |
+| `Deterministic` | Deterministic | Each criterion's `EvaluatorConfig.Deterministic` rule. No model call | none |
+| `Human` | Human | A person, through the scoring form or the Submit Human Rubric action. The engine never runs it | — |
+
+`AI` is accepted as the old name for `Agent`, and `AIPrompt` as a name for `LLM`. Names are case-insensitive.
+
+Every LLM and Decision call goes through MJ's prompt system, so the prompt's model bindings, failover,
+credentials, and cost tracking all apply, and the prompt run is linked from the evaluation's `AIPromptRunID`.
+An Agent evaluation links its agent run from `AIAgentRunID`. Both columns point at the run that **produced** the
+evaluation, never at the subject.
+
+**LLM or Decision?** A Decision model answers with a calibrated probability for each level, which is cheaper
+and steadier than asking a chat model to emit JSON, and the chosen level's probability becomes the answer's
+`Confidence`. It returns no rationale and no quotes, so it suits rubrics whose levels are well anchored and whose
+criteria do not require evidence. The Decision evaluator refuses a rubric with an evidence-required criterion
+before calling anything, writes each rationale as the chosen level and its probability, and leaves a criterion
+on a numeric scale unanswered (it is listed in the run metadata as `UnaskedCriteria`). Use LLM when you need
+written rationale, quotes, or numeric scales.
 
 The LLM evaluator receives the rubric as the system message and the subject as a separate, delimited user
 message, so subject text cannot rewrite the instructions. A quote cited as evidence that does not appear in
@@ -560,7 +595,18 @@ A deterministic rule reads a dotted path in the subject content's `data` and map
 
 Operators: `equals`, `notEquals`, `in`, `notIn`, `contains`, `exists`, `between`, `gte`, `lte`, `matches`.
 
----
+### What an evaluation records
+
+| Column | Value |
+|---|---|
+| `EvaluatorType` | The evaluator's type: Human, AIPrompt, Agent, Deterministic, Self, or External |
+| `EvaluatorName` | The registered name, for example `Decision` or your own |
+| `AIPromptRunID` / `AIAgentRunID` | The run that produced it, when there was exactly one |
+| `Metadata.Evaluator` | `Name`, the `Settings` it ran with, and what the evaluator reported: the prompt, every prompt run when there were several, the samples, dropped keys and quotes |
+
+`Self` and `External` are not run by the engine: they are another party's or another system's scores, stored
+and shown. **Self is never part of consensus.** A custom evaluator that is neither an AI prompt nor an agent
+should report `External`.
 
 ## 9. Consensus and agreement
 
@@ -629,10 +675,46 @@ version snapshot.
 
 ### Custom evaluators
 
-Evaluator classes register under `BaseRubricEvaluator` (`Deterministic`, `LLM`, `Agent`, `Human`), but
-`RubricEngine` currently chooses among its built-in evaluators by the `evaluator` argument, not through the
-class factory. To score with your own logic today, compute the answers yourself and submit them through the
-Submit Human Rubric action or an `External` evaluation; `RubricScoring` still produces the score.
+Subclass `BaseRubricEvaluator`, register it by name, and every caller can run it: `EvaluateRecord`, a link's
+`EvaluatorConfig`, a test's evaluator, the Evaluate Record Against Rubric action, and `mj rubric evaluate`.
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { BaseRubricEvaluator, type RubricEvaluatorContext, type RubricEvaluatorRun, type RubricEvaluatorType } from '@memberjunction/rubrics';
+
+@RegisterClass(BaseRubricEvaluator, 'Acme Readability')
+export class ReadabilityEvaluator extends BaseRubricEvaluator {
+    public get EvaluatorName(): string { return 'Acme Readability'; }
+    public get EvaluatorType(): RubricEvaluatorType { return 'External'; }
+
+    public async EvaluateRubric(context: RubricEvaluatorContext): Promise<RubricEvaluatorRun> {
+        const target = Number(context.Settings.Extensions?.['Acme Readability'] ?? 60);
+        const grade = ReadingEase(context.Content.text ?? '');          // your own logic
+        const answers = context.Version.nodes
+            .filter(node => node.nodeType === 'Criterion')
+            .map(node => ({
+                criterionId: node.id,
+                scaleLevelId: LevelFor(context.Version, node, grade >= target),
+                rationale: `Reading ease ${grade}, target ${target}.`,
+                evidence: [],
+            }));
+        return { ...this.Evaluate(context.Version, answers), metadata: { ReadingEase: grade } };
+    }
+}
+```
+
+- **Score with `this.Evaluate`.** It calls `RubricScoring`, which is what makes your evaluator's scores
+  comparable with every other evaluator's.
+- **Read settings from `context.Settings`.** Your own go under `Extensions['<your evaluator name>']`, so a link
+  can carry them: `{ "EvaluatorName": "Acme Readability", "Extensions": { "Acme Readability": 70 } }`.
+- **Use `context.Services` for models.** `Prompts` runs a chat prompt, `Decisions` asks Score questions, and
+  `Agent` runs an agent, all through the caller's provider and user. Return the run's ID as `aiPromptRunId` or
+  `aiAgentRunId` so the evaluation links to it.
+- **Throw to fail.** The engine stores a `Failed` evaluation with your message.
+- **The class factory constructs it with no arguments.** Everything a run needs arrives in the context.
+- **Replace a built-in** by registering your class under the same name. The highest-priority registration wins.
+
+`ListRubricEvaluators()` reports every registered evaluator with its type and whether the engine can run it.
 
 ---
 
@@ -645,7 +727,7 @@ mj rubric list
 mj rubric show <rubric>[@version]
 mj rubric diff <rubric> <version> <version>
 mj rubric validate <file>
-mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator LLM|Deterministic]
+mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator <name>] [--prompt <name>] [--model <id>] [--mode SinglePass|PerCriterion]
 
 mj test run   --rubric <name-or-id>[@version]     # pin a rubric for this run
 mj test suite --rubric <name-or-id>[@version]

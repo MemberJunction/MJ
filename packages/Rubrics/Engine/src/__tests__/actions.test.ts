@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RubricScoreResult } from '@memberjunction/rubrics-base';
 
-vi.mock('@memberjunction/global', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@memberjunction/global')>();
-    return { ...actual, RegisterClass: () => (target: unknown) => target };
-});
-
 vi.mock('@memberjunction/actions', () => ({
     BaseAction: class BaseAction {},
 }));
@@ -24,6 +19,8 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 
 vi.mock('@memberjunction/ai-prompts', () => ({
     AIPromptRunner: class AIPromptRunner {},
+    AIDecisionParams: class AIDecisionParams {},
+    AIDecisionRunner: class AIDecisionRunner {},
 }));
 
 import { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction } from '../actions.js';
@@ -438,14 +435,16 @@ describe('rubric actions', () => {
         await expect(CreateDraftVersion(explained, { id: 'user' }, { rubricId: 'rubric', nodes: [leaf] })).rejects.toThrow('the criterion key is already used');
     });
 
-    it('runs LLM through the Rubric Evaluator prompt and does not accept AI', async () => {
+    it('runs LLM through the Rubric Evaluator prompt, accepts registered evaluators, and refuses Human', async () => {
         const records = catalog();
         const store = evaluations();
         const prompts: string[] = [];
         const engine = new RubricEngine(store, records, {
-            async Run(name) {
-                prompts.push(name);
-                return '{"decisions":[]}';
+            Prompts: {
+                async Run(input) {
+                    prompts.push(input.Prompt.Name ?? input.Prompt.ID ?? '');
+                    return { Text: '{"decisions":[]}' };
+                },
             },
         });
         const action = new EvaluateRecordAgainstRubricAction();
@@ -470,8 +469,10 @@ describe('rubric actions', () => {
             ],
             Context: { rubricEngine: engine },
         } as never);
+        // AI is accepted as Agent and reaches the engine; this engine has no agent runner, so the run fails there.
         expect(ai.Success).toBe(false);
-        expect(ai.Message).toBe('Evaluator AI is not accepted.');
+        expect(ai.ResultCode).toBe('FAILED');
+        expect(ai.Message).not.toBe('Evaluator AI is not accepted.');
         const unknown = await action.InternalRunAction({
             Params: [
                 { Name: 'RubricID', Type: 'Input', Value: 'rubric' },
@@ -527,7 +528,7 @@ describe('rubric actions', () => {
             async createDraft() { return { id: 'draft', status: 'Draft' }; },
         };
         const engine = new RubricEngine(store, records, {
-            async Run() { throw new Error('the model refused'); },
+            Prompts: { async Run() { throw new Error('the model refused'); } },
         });
         const params = {
             Params: [

@@ -120,8 +120,8 @@ describe('rubric resolution', () => {
             contextRecordId: 'test-1',
             versionId: 'v1',
             passThreshold: null,
-            evaluator: 'LLM',
         });
+        expect(seen[0]).not.toHaveProperty('evaluator');
         const refused = await oracle.evaluate(
             { test: { ID: 'test-1' } as never, contextUser: {} as never },
             { rubricId: 'rubric' } as never,

@@ -1,10 +1,12 @@
 import { SnapshotFromRows, type RubricAnswer, type RubricNodeSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AgentRubricEvaluator, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
-import { LLMRubricEvaluator, type RubricDecisionRunner, type RubricEvaluatorMessages, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
+import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import { ShapeContent, type RubricSubjectContent } from './content.js';
-import { DeterministicRubricEvaluator } from './DeterministicRubricEvaluator.js';
 import { HumanRubricEvaluator, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
-import { RubricEvaluator, type RubricEvaluatorOutput } from './RubricEvaluator.js';
+import { RubricEvaluator, type BaseRubricEvaluator } from './RubricEvaluator.js';
+import { CreateRubricEvaluator, ResolveRubricEvaluatorSelection } from './evaluatorRegistry.js';
+import type {
+    RubricEvaluatorRun, RubricEvaluatorServices, RubricEvaluatorSettings, RubricEvaluatorType, RubricJsonValue, RubricPromptMode,
+} from './evaluatorServices.js';
 import { GetAgreement, GetConsensus, GetDiagnostics, type AgreementResult, type ConsensusResult, type DiagnosticFlag } from './statistics.js';
 
 export interface RubricEvaluationRecord {
@@ -26,8 +28,11 @@ export interface RubricEvaluationStore {
         contextEntityId?: string | null;
         contextRecordId?: string | null;
         passThreshold?: number | null;
-        evaluator?: EvaluateParams['evaluator'];
+        /** The evaluator's EvaluatorType, stored as RubricEvaluation.EvaluatorType. */
+        evaluatorType: RubricEvaluatorType;
+        /** The agent run that produced the evaluation. */
         aiAgentRunId?: string | null;
+        /** The prompt run that produced the evaluation. */
         aiPromptRunId?: string | null;
         evaluatorName?: string | null;
         metadata?: unknown;
@@ -42,13 +47,6 @@ export interface RubricRecords {
     createDraft(input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }>;
 }
 
-/** Runs a named prompt. The engine builds the Rubric Evaluator runner from this. */
-export interface RubricPromptRun {
-    Run(promptName: string, messages: RubricEvaluatorMessages): Promise<string>;
-}
-
-const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
-
 export interface EvaluateParams {
     version: RubricVersionSnapshot;
     subject: { entityName: string; recordId: string; entityId: string };
@@ -60,11 +58,12 @@ export interface EvaluateParams {
     context?: { entityName?: string; entityId: string; recordId: string };
     /** Stored on the draft as PassThresholdApplied. Null uses the version threshold. */
     passThreshold?: number | null;
-    evaluator: 'AI' | 'Deterministic' | 'LLM';
-    agent?: EvaluationAgentRunner;
-    promptRunner?: RubricPromptRunner;
-    promptMode?: RubricPromptMode;
-    decisionRunner?: RubricDecisionRunner;
+    /** A registered evaluator name or alias: LLM, Decision, Agent, Deterministic, or a custom one. */
+    evaluator: string;
+    /** What the evaluator reads: prompt, model, mode, samples, agent, and custom extensions. */
+    settings?: RubricEvaluatorSettings;
+    /** Replaces the engine's services for this call, one by one. */
+    services?: RubricEvaluatorServices;
 }
 
 export interface EvaluateRecordInput {
@@ -74,10 +73,18 @@ export interface EvaluateRecordInput {
     subjectRecordId: string;
     contextEntityName?: string;
     contextRecordId?: string;
-    evaluator?: EvaluateParams['evaluator'];
-    /** SinglePass when omitted. Sampling passes PerCriterion when the agent rubric says so. */
-    promptMode?: EvaluateParams['promptMode'];
-    /** Used when the agent rubric's evaluator is Agent. */
+    /**
+     * An evaluator selection in the `AIAgentRubric.EvaluatorConfig` shape, parsed or as JSON text.
+     * See {@link ResolveRubricEvaluatorSelection}. `evaluator` and `settings` override what it names.
+     */
+    evaluatorConfig?: unknown;
+    /** A registered evaluator name or alias. LLM when neither this nor evaluatorConfig names one. */
+    evaluator?: string;
+    /** Merged over the settings evaluatorConfig resolves to. */
+    settings?: RubricEvaluatorSettings;
+    /** SinglePass when omitted. Shorthand for settings.Mode. */
+    promptMode?: RubricPromptMode;
+    /** Used by the Agent evaluator in place of the engine's agent runner. */
     agent?: EvaluationAgentRunner;
     passThreshold?: number | null;
     /** When set, this version is used instead of the latest Published version. */
@@ -124,31 +131,44 @@ export class RubricEngine {
         return RubricEngine.singleton;
     }
 
+    /**
+     * @param services What the engine lends every evaluator: the prompt and decision services and
+     * the agent runner. A call can replace any of them through {@link EvaluateParams.services}.
+     */
     public constructor(
         private evaluations: RubricEvaluationStore = unsetEvaluations,
         private records: RubricRecords = emptyRecords,
-        private promptRun?: RubricPromptRun,
-        private decisionRunner?: RubricDecisionRunner,
-        private evaluationAgent?: EvaluationAgentRunner,
+        private services: RubricEvaluatorServices = {},
     ) {}
 
     /**
-     * Runs the evaluator, saves the draft, and submits it. On failure the
-     * returned record is Failed and carries the error message.
+     * Creates the named evaluator, runs it, saves the draft, and submits it. A throw from the
+     * evaluator becomes a Failed evaluation carrying the message. An unregistered name, or an
+     * evaluator a person completes such as Human, throws before anything is saved.
      */
-    public async Evaluate(params: EvaluateParams): Promise<{ evaluation: RubricEvaluationRecord; output?: RubricEvaluatorOutput }> {
+    public async Evaluate(params: EvaluateParams): Promise<{ evaluation: RubricEvaluationRecord; output?: RubricEvaluatorRun }> {
+        const evaluator = CreateRubricEvaluator(params.evaluator);
+        if (!evaluator.IsAutomated) {
+            throw new Error(`The ${evaluator.EvaluatorName} evaluator is completed by a person, not run by the engine.`);
+        }
         let draft: RubricEvaluationRecord | null = null;
         try {
             const content = params.content ?? await this.resolveContent(params);
-            const output = await this.runEvaluator(params, content);
-            draft = await this.evaluations.createDraft(this.draftInput(params));
+            const output = await evaluator.EvaluateRubric({
+                Version: params.version,
+                Content: content,
+                Subject: { entityName: params.subject.entityName, recordId: params.subject.recordId },
+                Settings: params.settings ?? {},
+                Services: { ...this.services, ...definedServices(params.services) },
+            });
+            draft = await this.evaluations.createDraft(this.draftInput(params, evaluator, output));
             const result = await this.evaluations.submit(draft.id, output.answers);
             return { evaluation: { ...draft, status: 'Submitted' }, output: { ...output, result } };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             const failed = draft
                 ? await this.evaluations.fail(draft.id, message)
-                : await this.evaluations.createDraft(this.draftInput(params)).then(created => this.evaluations.fail(created.id, message));
+                : await this.evaluations.createDraft(this.draftInput(params, evaluator)).then(created => this.evaluations.fail(created.id, message));
             return { evaluation: { ...failed, status: 'Failed', errorMessage: message } };
         }
     }
@@ -177,19 +197,6 @@ export class RubricEngine {
         });
     }
 
-    private async runEvaluator(params: EvaluateParams, content: RubricSubjectContent): Promise<RubricEvaluatorOutput> {
-        const subject = { entityName: params.subject.entityName, recordId: params.subject.recordId };
-        if (params.evaluator === 'AI') {
-            if (!params.agent) throw new Error('An AI evaluation requires an agent.');
-            return new AgentRubricEvaluator(params.agent).EvaluateContent(params.version, content, subject);
-        }
-        if (params.evaluator === 'LLM') {
-            if (!params.promptRunner) throw new Error('An LLM evaluation requires a prompt runner.');
-            return new LLMRubricEvaluator(params.promptRunner, params.promptMode ?? 'SinglePass', params.decisionRunner).EvaluateContent(params.version, content);
-        }
-        return new DeterministicRubricEvaluator().EvaluateData(params.version, content);
-    }
-
     private async resolveContent(params: EvaluateParams): Promise<RubricSubjectContent> {
         if (!params.loadRecord) return { text: '' };
         const record = await params.loadRecord(params.subject.entityName, params.subject.recordId);
@@ -208,8 +215,13 @@ export class RubricEngine {
      * {@link evaluate}. This is not the Get Rubric action.
      */
     public async EvaluateRecord(input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
-        const evaluator = input.evaluator ?? 'LLM';
-        const promptMode = input.promptMode ?? 'SinglePass';
+        const choice = ResolveRubricEvaluatorSelection(input.evaluatorConfig);
+        const evaluator = input.evaluator ?? choice.Name;
+        const settings: RubricEvaluatorSettings = {
+            ...choice.Settings,
+            ...(input.promptMode ? { Mode: input.promptMode } : {}),
+            ...(input.settings ?? {}),
+        };
         const version = input.versionId
             ? await this.GetRubric({ versionId: input.versionId })
             : await this.latestPublished(input);
@@ -227,10 +239,8 @@ export class RubricEngine {
             context,
             passThreshold: input.passThreshold ?? null,
             evaluator,
-            promptMode,
-            promptRunner: evaluator === 'LLM' ? this.rubricEvaluatorRunner() : undefined,
-            decisionRunner: evaluator === 'LLM' && promptMode === 'PerCriterion' ? this.decisionRunner : undefined,
-            agent: input.agent ?? this.evaluationAgent,
+            settings,
+            services: input.agent ? { Agent: input.agent } : undefined,
             content: input.content,
             loadRecord: input.content ? undefined : async (entityName, recordId) => {
                 const rows = await this.records.rows(entityName, `ID=${sqlLiteral(recordId)}`);
@@ -333,18 +343,17 @@ export class RubricEngine {
         return GetDiagnostics(criteria);
     }
 
-        /** The catalog does not pass a runner. This one executes the Rubric Evaluator prompt. */
-    private rubricEvaluatorRunner(): RubricPromptRunner {
-        const prompts = this.promptRun;
-        return {
-            run(messages) {
-                if (!prompts) throw new Error('The Rubric Evaluator prompt is not configured.');
-                return prompts.Run(RUBRIC_EVALUATOR_PROMPT, messages);
-            },
+    /**
+     * The draft row. EvaluatorType and EvaluatorName come from the evaluator, and the prompt or agent
+     * run is the one that produced the evaluation, never the subject. Metadata keeps the settings
+     * and whatever the evaluator reported about its run.
+     */
+    private draftInput(params: EvaluateParams, evaluator: BaseRubricEvaluator, run?: RubricEvaluatorRun): Parameters<RubricEvaluationStore['createDraft']>[0] {
+        const evaluatorMetadata: Record<string, RubricJsonValue> = {
+            Name: evaluator.EvaluatorName,
+            Settings: settingsJson(params.settings ?? {}),
+            ...(run?.metadata ?? {}),
         };
-    }
-
-    private draftInput(params: EvaluateParams) {
         return {
             versionId: params.version.id,
             rubricId: params.version.rubricId,
@@ -353,11 +362,11 @@ export class RubricEngine {
             contextEntityId: params.context?.entityId ?? null,
             contextRecordId: params.context?.recordId ?? null,
             passThreshold: params.passThreshold ?? null,
-            evaluator: params.evaluator,
-            aiAgentRunId: params.subject.entityName === 'MJ: AI Agent Runs' ? params.subject.recordId : null,
-            aiPromptRunId: params.subject.entityName === 'MJ: AI Prompt Runs' ? params.subject.recordId : null,
-            evaluatorName: params.evaluator ?? 'LLM',
-            metadata: { Evaluator: { Name: params.evaluator ?? 'LLM' } },
+            evaluatorType: evaluator.EvaluatorType,
+            aiAgentRunId: run?.aiAgentRunId ?? null,
+            aiPromptRunId: run?.aiPromptRunId ?? null,
+            evaluatorName: evaluator.EvaluatorName,
+            metadata: { Evaluator: evaluatorMetadata },
         };
     }
 
@@ -415,6 +424,24 @@ export class RubricEngine {
     }
 
     }
+
+/** The services a call supplied, without its undefined entries, so they never mask the engine's own. */
+function definedServices(services: RubricEvaluatorServices | undefined): RubricEvaluatorServices {
+    const defined: RubricEvaluatorServices = {};
+    if (services?.Prompts) defined.Prompts = services.Prompts;
+    if (services?.Decisions) defined.Decisions = services.Decisions;
+    if (services?.Agent) defined.Agent = services.Agent;
+    return defined;
+}
+
+/** The settings as stored JSON, without undefined fields. */
+function settingsJson(settings: RubricEvaluatorSettings): Record<string, RubricJsonValue> {
+    const stored: Record<string, RubricJsonValue> = {};
+    for (const [key, value] of Object.entries(settings) as [string, RubricJsonValue | undefined][]) {
+        if (value !== undefined) stored[key] = value;
+    }
+    return stored;
+}
 
 function latestPublishedMajor(versions: Record<string, unknown>[]): number | null {
     const majors = versions

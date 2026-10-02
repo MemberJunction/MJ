@@ -1,39 +1,22 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import type { ScoreAnswer, ScoreQuestion } from '@memberjunction/ai';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { CleanAndParseJSON, RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
 import { BaseRubricEvaluator, type EvidenceRef, type RubricEvaluatorOutput } from './RubricEvaluator.js';
+import type {
+    RubricEvaluatorContext, RubricEvaluatorMessages, RubricEvaluatorRun, RubricEvaluatorType, RubricJsonValue, RubricPromptMode, RubricPromptRef,
+} from './evaluatorServices.js';
 
-export type RubricPromptMode = 'SinglePass' | 'PerCriterion';
+/** The prompt the LLM evaluator runs when the settings name none. */
+export const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
 
-/** The rubric, and the subject in a separate user message. */
-export interface RubricEvaluatorMessages {
-    system: string;
-    user: string;
-}
+/** The most times one evaluation may run the rubric when Samples is set. */
+export const MAX_RUBRIC_SAMPLES = 9;
 
 /** A prompt already split. Tests return JSON. Production calls the model. */
 export interface RubricPromptRunner {
     run(prompt: RubricEvaluatorMessages): Promise<string>;
-}
-
-/** One ScoreQuestion about the subject. PerCriterion uses this instead of the whole-rubric prompt. */
-export interface RubricDecisionRunner {
-    Score(key: string, question: ScoreQuestion, state: string): Promise<ScoreAnswer>;
-}
-
-/** Ordered levels, lowest to highest, for one criterion. Null when the scale has fewer than two labels. */
-export function ScoreQuestionForCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapshot): ScoreQuestion | null {
-    const scale = version.scales.find(item => item.id === node.scaleId);
-    const levels = [...(scale?.levels ?? [])].sort((left, right) => left.normalizedValue - right.normalizedValue || left.sequence - right.sequence);
-    if (levels.length < 2) return null;
-    return {
-        Kind: 'Score',
-        Instructions: renderCriterion(version, node),
-        Levels: levels.map(level => level.label),
-    };
 }
 
 export interface LLMDecision {
@@ -57,23 +40,71 @@ export interface LLMRubricResult extends RubricEvaluatorOutput {
 }
 
 /**
- * Renders the Rubric Evaluator prompt and runs it. SinglePass is one call for
- * the whole rubric. PerCriterion is one call per leaf, and confidence is the
- * probability of the chosen level. Unknown keys are dropped and counted.
- * Levels map by label. A numeric value outside the scale throws before
- * scoring. A quote that is not in the subject text is dropped.
+ * Renders the rubric into a chat prompt and runs it through the prompt system, so the prompt's model
+ * bindings, failover, and prompt-run logging all apply. The prompt is the settings' PromptID or
+ * PromptName, else Rubric Evaluator, and ModelID pins the model.
+ *
+ * SinglePass is one call for the whole rubric. PerCriterion is one call per leaf, and confidence is
+ * the probability of the chosen level. Samples runs the rubric several times and keeps each
+ * criterion's median level. Unknown keys are dropped and counted. Levels map by label. A numeric
+ * value outside the scale throws before scoring. A quote that is not in the subject text is dropped.
+ *
+ * Typed Score questions on a Decision model are the Decision evaluator, not a mode of this one.
  */
 @RegisterClass(BaseRubricEvaluator, 'LLM')
 export class LLMRubricEvaluator extends BaseRubricEvaluator {
     public get EvaluatorName(): string {
         return 'LLM';
     }
+
+    public get EvaluatorType(): RubricEvaluatorType {
+        return 'AIPrompt';
+    }
+
+    /** The class factory passes no runner. {@link EvaluateRubric} builds one from the prompt service. */
     public constructor(
-        private readonly runner: RubricPromptRunner,
+        private readonly runner?: RubricPromptRunner,
         private readonly mode: RubricPromptMode = 'SinglePass',
-        private readonly decision?: RubricDecisionRunner,
     ) {
         super();
+    }
+
+    /** Runs the configured prompt through `context.Services.Prompts` and records each prompt run. */
+    public async EvaluateRubric(context: RubricEvaluatorContext): Promise<RubricEvaluatorRun> {
+        const prompts = context.Services.Prompts;
+        if (!prompts) throw new Error('An LLM evaluation requires a prompt service.');
+        const prompt: RubricPromptRef = context.Settings.PromptID
+            ? { ID: context.Settings.PromptID }
+            : { Name: context.Settings.PromptName ?? RUBRIC_EVALUATOR_PROMPT };
+        const promptRunIds: string[] = [];
+        const runner: RubricPromptRunner = {
+            async run(messages) {
+                const output = await prompts.Run({ Prompt: prompt, Messages: messages, ModelID: context.Settings.ModelID });
+                if (output.PromptRunID) promptRunIds.push(output.PromptRunID);
+                return output.Text;
+            },
+        };
+        const mode = context.Settings.Mode ?? this.mode;
+        const samples = SampleCount(context.Settings.Samples);
+        const evaluator = new LLMRubricEvaluator(runner, mode);
+        const result = samples > 1
+            ? await evaluator.EvaluateSamples(context.Version, context.Content, samples)
+            : await evaluator.EvaluateContent(context.Version, context.Content);
+        const metadata: Record<string, RubricJsonValue> = {
+            Prompt: prompt.ID ?? prompt.Name ?? null,
+            Mode: mode,
+            Samples: samples,
+            PromptRunIDs: promptRunIds,
+            DroppedUnknownKeys: result.droppedUnknownKeys,
+            DroppedQuotes: result.droppedQuotes,
+        };
+        if (context.Settings.ModelID) metadata.ModelID = context.Settings.ModelID;
+        return { ...result, aiPromptRunId: promptRunIds.length === 1 ? promptRunIds[0] : null, metadata };
+    }
+
+    private get promptRunner(): RubricPromptRunner {
+        if (!this.runner) throw new Error('An LLM evaluation requires a prompt runner.');
+        return this.runner;
     }
 
     /**
@@ -191,7 +222,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
     }
 
         private async singlePass(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
-        const raw = await this.runner.run(BuildRubricEvaluatorMessages(version, content, 'SinglePass'));
+        const raw = await this.promptRunner.run(BuildRubricEvaluatorMessages(version, content, 'SinglePass'));
         const parsed = CleanAndParseJSON<{ decisions?: LLMDecision[] } | LLMDecision[]>(raw);
         if (!parsed) return [];
         return Array.isArray(parsed) ? parsed : parsed.decisions ?? [];
@@ -199,30 +230,19 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
 
     private async perCriterion(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
         const decisions: LLMDecision[] = [];
-        const state = SubjectBody(content);
         for (const node of version.nodes.filter(item => item.nodeType === 'Criterion')) {
-            const question = ScoreQuestionForCriterion(version, node);
-            if (question && this.decision) {
-                const answer = await this.decision.Score(node.key, question, state);
-                const index = Math.min(question.Levels.length - 1, Math.max(0, Math.round(answer.Value)));
-                const level = question.Levels[index];
-                decisions.push({
-                    key: node.key,
-                    chosen: level,
-                    level,
-                    probabilities: answer.Probabilities,
-                    confidence: answer.Probabilities?.[level] ?? answer.Confidence,
-                    rationale: '',
-                    evidence: [],
-                });
-                continue;
-            }
-            const raw = await this.runner.run(BuildRubricEvaluatorMessages(version, content, 'PerCriterion', node));
+            const raw = await this.promptRunner.run(BuildRubricEvaluatorMessages(version, content, 'PerCriterion', node));
             const parsed = CleanAndParseJSON<LLMDecision>(raw);
             decisions.push({ ...(parsed ?? {}), key: node.key });
         }
         return decisions;
     }
+}
+
+/** Samples as a whole number of runs, at least one and at most {@link MAX_RUBRIC_SAMPLES}. */
+function SampleCount(samples: number | undefined): number {
+    if (samples === undefined || samples === null || !Number.isFinite(samples)) return 1;
+    return Math.min(MAX_RUBRIC_SAMPLES, Math.max(1, Math.floor(samples)));
 }
 
 /** Shipped next to src and dist, so an installed package does not read the MJ repo. Read once, not on every render. */
@@ -271,7 +291,7 @@ export function FillRubricEvaluatorTemplate(
     nonce?: string,
 ): string {
     const nodes = only ? [only] : version.nodes.filter(node => node.nodeType === 'Criterion');
-    const criteria = nodes.map(node => renderCriterion(version, node)).join('\n\n');
+    const criteria = nodes.map(node => RenderCriterion(version, node)).join('\n\n');
     const ask = mode === 'SinglePass'
         ? 'Return JSON {"decisions":[{"key","level","value","notApplicable","rationale","evidence":[{"quote"}],"confidence"}]} for every criterion.'
         : `Return JSON {"chosen","probabilities","rationale","evidence":[{"quote"}]} for ${only?.key}. confidence is probabilities[chosen].`;
@@ -293,7 +313,7 @@ function fitBudget(text: string, room: number): string {
     return text.slice(0, keep) + note;
 }
 
-function SubjectBody(content: RubricSubjectContent): string {
+export function SubjectBody(content: RubricSubjectContent): string {
     const text = content.text ?? '';
     const data = content.data && Object.keys(content.data).length > 0 ? JSON.stringify(content.data) : '';
     return [text, data].filter(part => part.length > 0).join('\n');
@@ -325,7 +345,8 @@ function notApplicableLine(version: RubricVersionSnapshot, node: RubricNodeSnaps
     return 'Not applicable is not allowed. Choose a level.';
 }
 
-function renderCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapshot): string {
+/** One criterion's name, guidance, hints, N/A rule, and scale, as the prompts show it. */
+export function RenderCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapshot): string {
     const scale = version.scales.find(item => item.id === node.scaleId);
     const anchors = new Map((node.anchors ?? []).map(anchor => [anchor.scaleLevelId ?? '', anchor.descriptor]));
     const levels = (scale?.levels ?? []).map(level => `- ${level.label} (${level.normalizedValue}): ${anchors.get(level.id) ?? ''}`).join('\n');

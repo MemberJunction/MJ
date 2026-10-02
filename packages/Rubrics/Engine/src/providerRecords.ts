@@ -1,11 +1,12 @@
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import type { RubricDecisionRunner } from './LLMRubricEvaluator.js';
+import { AIDecisionParams, AIDecisionRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
+import type { RubricDecisionOutput, RubricDecisionService, RubricPromptRef, RubricPromptService } from './evaluatorServices.js';
 import { RunInEntityTransaction, RunView, type EntityTransactionScope } from '@memberjunction/core';
-import { MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
+import { MJAIPromptEntity, MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { EvidenceJson, HighestNonDraftVersion, type RubricNodeSnapshot, type ScoredNode } from '@memberjunction/rubrics-base';
-import { RubricEngine, type RubricEvaluationStore, type RubricPromptRun, type RubricRecords } from './RubricEngine.js';
+import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from './RubricEngine.js';
 
 interface RubricProvider {
     SupportsEntityTransactions?: boolean;
@@ -253,7 +254,7 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
             row.SubjectRecordID = input.subjectRecordId;
             row.ContextEntityID = input.contextEntityId ?? null;
             row.ContextRecordID = input.contextRecordId ?? null;
-            row.EvaluatorType = evaluatorType(input.evaluator);
+            row.EvaluatorType = input.evaluatorType;
             row.Status = 'Draft';
             if (input.passThreshold !== undefined && input.passThreshold !== null) row.PassThresholdApplied = input.passThreshold;
             if (input.aiAgentRunId) row.AIAgentRunID = input.aiAgentRunId;
@@ -311,12 +312,6 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
     };
 }
 
-function evaluatorType(evaluator: string | undefined): MJRubricEvaluationEntity['EvaluatorType'] {
-    if (evaluator === 'AI') return 'Agent';
-    if (evaluator === 'Deterministic') return 'Deterministic';
-    return 'AIPrompt';
-}
-
 /** Reads the score rows the entity server just wrote and returns them as scored nodes. */
 async function loadScoredNodes(provider: RubricProvider, user: unknown, evaluationId: string): Promise<ScoredNode[]> {
     const view = RunView.FromMetadataProvider(provider as never);
@@ -362,61 +357,68 @@ function numberOrNull(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
+/** Loads the prompt a reference names, by ID when it has one, otherwise by name. */
+async function LoadPrompt(provider: unknown, user: unknown, ref: RubricPromptRef): Promise<MJAIPromptEntity> {
+    const filter = ref.ID ? `ID='${EscapeSQLString(ref.ID)}'` : `Name='${EscapeSQLString(ref.Name ?? '')}'`;
+    if (!ref.ID && !ref.Name) throw new Error('A prompt ID or name is required.');
+    const found = await RunView.FromMetadataProvider(provider as never).RunView<MJAIPromptEntity>({
+        EntityName: 'MJ: AI Prompts',
+        ExtraFilter: filter,
+        ResultType: 'entity_object',
+        MaxRows: 1,
+    }, user as never);
+    if (!found.Success) throw new Error(found.ErrorMessage || `Could not read the ${ref.ID ?? ref.Name} prompt.`);
+    const prompt = found.Results?.[0];
+    if (!prompt) throw new Error(`The ${ref.ID ?? ref.Name} prompt was not found.`);
+    return prompt;
+}
+
 /**
- * Runs the already-rendered rubric text through the named prompt, so model
- * selection stays on that prompt. The action does not receive a runner.
+ * Runs the already-rendered rubric text through a chat prompt with AIPromptRunner, so the prompt's
+ * model bindings, failover, and prompt-run logging apply. ModelID pins the model. Returns the
+ * prompt run it wrote.
  */
-export function RubricEvaluatorPromptRun(provider: RubricProvider, user: unknown): RubricPromptRun {
+export function ProviderPromptService(provider: RubricProvider, user: unknown): RubricPromptService {
     return {
-        async Run(promptName, messages) {
-            const view = RunView.FromMetadataProvider(provider as never);
-            const found = await view.RunView({
-                EntityName: 'MJ: AI Prompts',
-                ExtraFilter: `Name='${promptName.replace(/'/g, "''")}'`,
-                ResultType: 'entity_object',
-                MaxRows: 1,
-            }, user as never);
-            const prompt = found.Results?.[0];
-            if (!prompt) throw new Error(`The ${promptName} prompt was not found.`);
+        async Run(input) {
+            const prompt = await LoadPrompt(provider, user, input.Prompt);
             const params = new AIPromptParams();
             params.prompt = prompt as AIPromptParams['prompt'];
-            params.systemPromptOverride = messages.system;
+            params.systemPromptOverride = input.Messages.system;
             params.templateMessageRole = 'system';
-            params.conversationMessages = [{ role: 'user', content: messages.user }];
+            params.conversationMessages = [{ role: 'user', content: input.Messages.user }];
             params.contextUser = user as AIPromptParams['contextUser'];
+            if (input.ModelID) params.override = { modelId: input.ModelID };
             const result = await new AIPromptRunner().ExecutePrompt(params);
-            if (!result.success) throw new Error(result.errorMessage || `The ${promptName} prompt failed.`);
-            if (typeof result.rawResult === 'string' && result.rawResult.length > 0) return result.rawResult;
-            return JSON.stringify(result.result ?? {});
+            if (!result.success) throw new Error(result.errorMessage || `The ${prompt.Name} prompt failed.`);
+            const text = typeof result.rawResult === 'string' && result.rawResult.length > 0 ? result.rawResult : JSON.stringify(result.result ?? {});
+            return { Text: text, PromptRunID: result.promptRun?.ID ?? null };
         },
     };
 }
 
-/** A RubricEngine whose catalog, evaluations, and Rubric Evaluator prompt use the caller's provider. */
-/** PerCriterion asks AIDecisionRunner for a ScoreQuestion instead of sending the whole rubric. */
-export function PromptDecisionRunner(provider: unknown, user: unknown): RubricDecisionRunner {
+/**
+ * Asks typed Score questions with AIDecisionRunner, on the Decision-type models the prompt binds
+ * (Default Decision binds Jev and LLM Decision). ModelID pins the model. Returns the prompt run it wrote.
+ */
+export function ProviderDecisionService(provider: unknown, user: unknown): RubricDecisionService {
     return {
-        async Score(key, question, state) {
-            const view = RunView.FromMetadataProvider(provider as never);
-            const found = await view.RunView({
-                EntityName: 'MJ: AI Prompts',
-                ExtraFilter: `Name='Rubric Evaluator'`,
-                ResultType: 'entity_object',
-                MaxRows: 1,
-            }, user as never);
-            const prompt = found.Results?.[0];
-            if (!found.Success || !prompt) throw new Error('The Rubric Evaluator prompt was not found.');
-            const { AIDecisionParams, AIDecisionRunner } = await import('@memberjunction/ai-prompts');
+        async Decide(input) {
+            const prompt = await LoadPrompt(provider, user, input.Prompt);
             const params = new AIDecisionParams();
-            params.prompt = prompt as typeof params.prompt;
-            params.State = state;
-            params.Questions = { [key]: question };
-            params.contextUser = user as typeof params.contextUser;
+            params.prompt = prompt as AIDecisionParams['prompt'];
+            params.State = input.State;
+            params.Questions = input.Questions;
+            params.contextUser = user as AIDecisionParams['contextUser'];
+            if (input.ModelID) params.override = { modelId: input.ModelID };
             const result = await new AIDecisionRunner().ExecuteDecision(params);
-            if (!result.success) throw new Error(result.errorMessage || 'The score decision failed.');
-            const answer = result.Answers[key];
-            if (!answer || answer.Kind !== 'Score') throw new Error('The decision did not return a score.');
-            return answer;
+            if (!result.success) throw new Error(result.errorMessage || `The ${prompt.Name} decision failed.`);
+            const answers: RubricDecisionOutput['Answers'] = {};
+            for (const [key, answer] of Object.entries(result.Answers)) {
+                if (answer.Kind !== 'Score') throw new Error(`The decision answered ${key} with a ${answer.Kind}, not a score.`);
+                answers[key] = answer;
+            }
+            return { Answers: answers, PromptRunID: result.promptRun?.ID ?? null };
         },
     };
 }
@@ -430,15 +432,14 @@ export function RegisterRubricAgentRunner(factory: AgentRunnerFactory): void {
     agentRunnerFactory = factory;
 }
 
+/** A RubricEngine whose catalog, evaluations, prompts, decisions, and agent runs use the caller's provider. */
 export function ProviderRubricEngine(provider: unknown, user: unknown): RubricEngine {
     const data = provider as RubricProvider;
-    return new RubricEngine(
-        ProviderEvaluationStore(data, user),
-        ProviderRecords(data, user),
-        RubricEvaluatorPromptRun(data, user),
-        PromptDecisionRunner(data, user),
-        agentRunnerFactory?.(data, user),
-    );
+    return new RubricEngine(ProviderEvaluationStore(data, user), ProviderRecords(data, user), {
+        Prompts: ProviderPromptService(data, user),
+        Decisions: ProviderDecisionService(data, user),
+        Agent: agentRunnerFactory?.(data, user),
+    });
 }
 
 export interface HumanScoreAnswer {

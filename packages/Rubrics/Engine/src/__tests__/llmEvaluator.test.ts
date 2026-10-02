@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { RubricScoring, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { BuildRubricEvaluatorMessages, FillRubricEvaluatorTemplate, LLMRubricEvaluator, RUBRIC_PROMPT_BUDGET, type RubricEvaluatorMessages } from '../LLMRubricEvaluator.js';
+import { BuildRubricEvaluatorMessages, FillRubricEvaluatorTemplate, LLMRubricEvaluator, MAX_RUBRIC_SAMPLES, RUBRIC_PROMPT_BUDGET } from '../LLMRubricEvaluator.js';
+import type { RubricEvaluatorMessages, RubricPromptService } from '../evaluatorServices.js';
 
 function version(): RubricVersionSnapshot {
     return {
@@ -182,25 +183,6 @@ describe('LLMRubricEvaluator', () => {
         expect(output.answers.some(answer => answer.criterionId === 'b')).toBe(true);
     });
 
-    it('asks a ScoreQuestion for each leaf in PerCriterion', async () => {
-        const tree = version();
-        tree.scales[0].levels.push({ id: 'low', label: 'Low', value: 0, normalizedValue: 0, sequence: 1 });
-        const questions: { Kind: string; Levels: string[] }[] = [];
-        const decision = {
-            async Score(_key: string, question: { Kind: string; Levels: string[] }) {
-                questions.push(question);
-                return { Kind: 'Score' as const, Value: question.Levels.length - 1, Probabilities: { High: 0.8, Low: 0.2 }, Confidence: 0.8 };
-            },
-        };
-        const runner = { async run() { throw new Error('the prompt runner is not used'); } };
-        const output = await new LLMRubricEvaluator(runner, 'PerCriterion', decision).EvaluateContent(tree, { text: 'Easy to read.' });
-        expect(questions).toHaveLength(1);
-        expect(questions[0].Kind).toBe('Score');
-        expect(questions[0].Levels).toEqual(['Low', 'High']);
-        expect(output.answers[0].scaleLevelId).toBe('high');
-        expect(output.answers[0].confidence).toBe(0.8);
-    });
-
     it('keeps a not-applicable sample and a numeric sample', async () => {
         const skipped = await new LLMRubricEvaluator({
             async run() { return JSON.stringify({ decisions: [{ key: 'clarity', notApplicable: true, rationale: 'skip', evidence: [] }] }); },
@@ -223,5 +205,50 @@ describe('LLMRubricEvaluator', () => {
         const output = await new LLMRubricEvaluator(runner, 'SinglePass').EvaluateSamples(tree, { text: 'Easy to read.' }, 1);
         expect(output.answers).toHaveLength(0);
         expect(output.droppedUnknownKeys).toBe(1);
+    });
+});
+
+describe('LLMRubricEvaluator as a registered evaluator', () => {
+    function service(calls: { prompt: string; model?: string }[]): RubricPromptService {
+        let run = 0;
+        return {
+            async Run(input) {
+                run += 1;
+                calls.push({ prompt: input.Prompt.ID ?? input.Prompt.Name ?? '', model: input.ModelID });
+                return { Text: JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [{ quote: 'Easy' }] }] }), PromptRunID: `run-${run}` };
+            },
+        };
+    }
+
+    it('runs the Rubric Evaluator prompt by default and records the prompt run', async () => {
+        const calls: { prompt: string; model?: string }[] = [];
+        const output = await new LLMRubricEvaluator().EvaluateRubric({
+            Version: version(), Content: { text: 'Easy to read.' }, Subject: { entityName: 'MJ: Documents', recordId: '1' },
+            Settings: {}, Services: { Prompts: service(calls) },
+        });
+        expect(calls).toEqual([{ prompt: 'Rubric Evaluator', model: undefined }]);
+        expect(output.aiPromptRunId).toBe('run-1');
+        expect(output.metadata).toMatchObject({ Prompt: 'Rubric Evaluator', Mode: 'SinglePass', Samples: 1, PromptRunIDs: ['run-1'] });
+    });
+
+    it('honors PromptID, ModelID, and Samples, capped at the maximum', async () => {
+        const calls: { prompt: string; model?: string }[] = [];
+        const output = await new LLMRubricEvaluator().EvaluateRubric({
+            Version: version(), Content: { text: 'Easy to read.' }, Subject: { entityName: 'MJ: Documents', recordId: '1' },
+            Settings: { PromptID: 'judge', ModelID: 'model-1', Samples: 50 }, Services: { Prompts: service(calls) },
+        });
+        expect(calls).toHaveLength(MAX_RUBRIC_SAMPLES);
+        expect(calls.every(call => call.prompt === 'judge' && call.model === 'model-1')).toBe(true);
+        expect(output.aiPromptRunId).toBeNull();
+        expect(output.metadata?.PromptRunIDs).toHaveLength(MAX_RUBRIC_SAMPLES);
+        expect(output.metadata?.ModelID).toBe('model-1');
+        expect(output.sampleSpread?.[0].median).toBe('High');
+    });
+
+    it('fails clearly without a prompt service', async () => {
+        await expect(new LLMRubricEvaluator().EvaluateRubric({
+            Version: version(), Content: { text: '' }, Subject: { entityName: 'MJ: Documents', recordId: '1' }, Settings: {}, Services: {},
+        })).rejects.toThrow('An LLM evaluation requires a prompt service.');
+        await expect(new LLMRubricEvaluator().EvaluateContent(version(), { text: '' })).rejects.toThrow('An LLM evaluation requires a prompt runner.');
     });
 });

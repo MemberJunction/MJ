@@ -1,11 +1,12 @@
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import { RegisterRubricAgentRunner, type EvaluationAgentRunner } from '@memberjunction/rubrics';
+import { RegisterRubricAgentRunner, WithAgentRun, type EvaluationAgentRunner } from '@memberjunction/rubrics';
 
 const RUBRIC_EVALUATION_AGENT = 'Rubric Evaluation Agent';
 
 /**
- * Runs the Rubric Evaluation Agent. Registered for ProviderRubricEngine so the
+ * Runs the Rubric Evaluation Agent, or the agent the evaluator settings name, and returns its
+ * decisions with the agent run that produced them. Registered for ProviderRubricEngine so the
  * rubrics package does not depend on this package.
  */
 class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
@@ -15,12 +16,13 @@ class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
         const view = RunView.FromMetadataProvider(this.provider as never);
         const found = await view.RunView({
             EntityName: 'MJ: AI Agents',
-            ExtraFilter: `Name='${EscapeSQLString(RUBRIC_EVALUATION_AGENT)}'`,
+            ExtraFilter: input.agentId ? `ID='${EscapeSQLString(input.agentId)}'` : `Name='${EscapeSQLString(RUBRIC_EVALUATION_AGENT)}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
         }, this.user as never);
         const agent = found.Results?.[0];
-        if (!found.Success || !agent) throw new Error('The Rubric Evaluation Agent was not found.');
+        if (!found.Success) throw new Error(found.ErrorMessage || 'Could not read the rubric evaluation agent.');
+        if (!agent) throw new Error(input.agentId ? `Agent ${input.agentId} was not found.` : 'The Rubric Evaluation Agent was not found.');
         const { AgentRunner } = await import('./AgentRunner.js');
         const result = await new AgentRunner(this.provider as never).RunAgent({
             agent: agent as never,
@@ -29,7 +31,7 @@ class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
             conversationMessages: [],
         });
         if (!result.success) throw new Error(result.errorMessage || 'The Rubric Evaluation Agent failed.');
-        return (result.payload ?? {}) as Awaited<ReturnType<EvaluationAgentRunner['Run']>>;
+        return WithAgentRun(result.payload, result.agentRun?.ID);
     }
 }
 

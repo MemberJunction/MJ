@@ -12,7 +12,7 @@ export interface RubricOracleEngine {
         contextEntityName?: string;
         contextRecordId?: string;
         passThreshold?: number | null;
-        evaluator?: 'LLM' | 'Deterministic' | 'AI';
+        evaluatorConfig?: unknown;
         content?: { text?: string; data?: Record<string, unknown> };
     }): Promise<{
         evaluationId: string;
@@ -26,6 +26,8 @@ export interface RubricOracleEngine {
 /**
  * Judges a test run with a rubric. The subject is the test run and the context
  * is the test. A host can inject the engine; otherwise the call uses the input provider.
+ * The oracle config's `evaluator` is an evaluator selection (IRubricEvaluatorSelection);
+ * LLM SinglePass when it is absent.
  */
 export class RubricOracle implements IOracle {
     public readonly type = 'rubric';
@@ -33,7 +35,7 @@ export class RubricOracle implements IOracle {
     public constructor(private readonly engine?: RubricOracleEngine) {}
 
     public async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
-        const settings = config as { rubricId?: string; rubricVersionId?: string; passThreshold?: number; versionLabel?: string };
+        const settings = config as { rubricId?: string; rubricVersionId?: string; passThreshold?: number; versionLabel?: string; evaluator?: unknown };
         const provider = input.provider;
         const engine = this.engine ?? (provider ? ProviderRubricEngine(provider, input.contextUser) : undefined);
         if (!engine) {
@@ -50,7 +52,7 @@ export class RubricOracle implements IOracle {
             contextEntityName: 'MJ: Tests',
             contextRecordId: input.test?.ID,
             passThreshold: settings.passThreshold ?? null,
-            evaluator: 'LLM',
+            evaluatorConfig: settings.evaluator,
             content: RubricOracleContent(input),
         });
         const passed = result.outcome === 'Passed' || result.outcome === 'Scored';

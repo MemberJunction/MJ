@@ -3,7 +3,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const viewCalls: { EntityName: string }[] = [];
+const viewCalls: { EntityName: string; ExtraFilter?: string }[] = [];
+const promptCalls: Record<string, unknown>[] = [];
+const decisionCalls: Record<string, unknown>[] = [];
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -12,8 +14,11 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         RunView: {
             FromMetadataProvider() {
                 return {
-                    async RunView(params: { EntityName: string }) {
+                    async RunView(params: { EntityName: string; ExtraFilter?: string }) {
                         viewCalls.push(params);
+                        if (params.EntityName === 'MJ: AI Prompts') {
+                            return { Success: true, Results: params.ExtraFilter?.includes('missing') ? [] : [{ ID: 'prompt-id', Name: 'Found Prompt' }] };
+                        }
                         if (params.EntityName === 'MJ: Rubric Evaluation Scores') {
                             return {
                                 Success: true,
@@ -38,10 +43,66 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
-vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class AIPromptRunner {} }));
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIPromptRunner: class AIPromptRunner {
+        async ExecutePrompt(params: Record<string, unknown>) {
+            promptCalls.push(params);
+            return { success: true, rawResult: '{"decisions":[]}', promptRun: { ID: 'prompt-run' } };
+        }
+    },
+    AIDecisionParams: class AIDecisionParams {},
+    AIDecisionRunner: class AIDecisionRunner {
+        async ExecuteDecision(params: Record<string, unknown>) {
+            decisionCalls.push(params);
+            return {
+                success: true,
+                Answers: { clarity: { Kind: 'Score', Value: 1, Probabilities: { Low: 0.2, High: 0.8 }, Confidence: 0.8 } },
+                promptRun: { ID: 'decision-run' },
+            };
+        }
+    },
+}));
 vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class AIPromptParams {} }));
 
-import { ProviderEvaluationStore } from '../providerRecords.js';
+import { ProviderDecisionService, ProviderEvaluationStore, ProviderPromptService } from '../providerRecords.js';
+
+describe('provider evaluator services', () => {
+    beforeEach(() => {
+        viewCalls.length = 0;
+        promptCalls.length = 0;
+        decisionCalls.length = 0;
+    });
+
+    it('runs a chat prompt found by id, pins the model, and returns the prompt run', async () => {
+        const service = ProviderPromptService({} as never, { ID: 'user' });
+        const output = await service.Run({ Prompt: { ID: 'prompt-id' }, Messages: { system: 'rubric', user: 'subject' }, ModelID: 'model-1' });
+        expect(viewCalls[0].ExtraFilter).toBe("ID='prompt-id'");
+        expect(promptCalls[0]).toMatchObject({
+            systemPromptOverride: 'rubric',
+            conversationMessages: [{ role: 'user', content: 'subject' }],
+            override: { modelId: 'model-1' },
+        });
+        expect(output).toEqual({ Text: '{"decisions":[]}', PromptRunID: 'prompt-run' });
+    });
+
+    it('finds a prompt by name and refuses a missing one', async () => {
+        const service = ProviderPromptService({} as never, { ID: 'user' });
+        await service.Run({ Prompt: { Name: "Judge's Prompt" }, Messages: { system: 's', user: 'u' } });
+        expect(viewCalls[0].ExtraFilter).toBe("Name='Judge''s Prompt'");
+        expect(promptCalls[0]).not.toHaveProperty('override');
+        await expect(service.Run({ Prompt: { Name: 'missing' }, Messages: { system: 's', user: 'u' } })).rejects.toThrow('The missing prompt was not found.');
+    });
+
+    it('asks the Score questions on the decision prompt and returns the answers and the run', async () => {
+        const service = ProviderDecisionService({}, { ID: 'user' });
+        const questions = { clarity: { Kind: 'Score' as const, Instructions: 'Clear?', Levels: ['Low', 'High'] } };
+        const output = await service.Decide({ Prompt: { Name: 'Default Decision' }, State: 'The text.', Questions: questions });
+        expect(viewCalls[0].ExtraFilter).toBe("Name='Default Decision'");
+        expect(decisionCalls[0]).toMatchObject({ State: 'The text.', Questions: questions });
+        expect(output.PromptRunID).toBe('decision-run');
+        expect(output.Answers.clarity.Probabilities.High).toBe(0.8);
+    });
+});
 
 /** A generated entity records property assignment. Calling Set throws, which is the failure mode of the old row type. */
 function generatedEntity(written: { field: string; value: unknown }[]) {
@@ -115,7 +176,7 @@ describe('ProviderEvaluationStore.submit', () => {
             rubricId: 'rubric',
             subjectEntityId: 'entity',
             subjectRecordId: 'run-1',
-            evaluator: 'LLM',
+            evaluatorType: 'AIPrompt',
             aiAgentRunId: 'run-1',
             evaluatorName: 'LLM',
             metadata: { Evaluator: { Name: 'LLM' } },
@@ -131,9 +192,10 @@ describe('ProviderEvaluationStore.submit', () => {
             rubricId: 'rubric',
             subjectEntityId: 'entity',
             subjectRecordId: 'run-1',
+            evaluatorType: 'Deterministic',
         });
-        expect(written).toContainEqual({ field: 'EvaluatorType', value: 'AIPrompt' });
-        expect(written.some(row => row.field === 'EvaluatorType' && row.value === 'Deterministic')).toBe(false);
+        expect(written).toContainEqual({ field: 'EvaluatorType', value: 'Deterministic' });
+        expect(written.some(row => row.field === 'EvaluatorType' && row.value === 'AIPrompt')).toBe(false);
         expect(result.nodes).toEqual([{
             id: 'criterion',
             key: 'accuracy',
