@@ -314,7 +314,7 @@
                 "fields": {
                   "AgentID": "@parent:ID",
                   "Name": "REUSABLE_QUERIES",
-                  "Description": "Lightweight catalog of reusable queries available for composition. Names and descriptions only \u2014 use Search Query Catalog action for full details including SQL.",
+                  "Description": "Lightweight catalog of reusable queries available for composition. Names and descriptions only — use Search Query Catalog action for full details including SQL.",
                   "SourceType": "RunView",
                   "EntityName": "MJ: Queries",
                   "ExtraFilter": "Reusable = 1 AND Status = 'Approved'",

@@ -1,7 +1,7 @@
 [
   {
     "_comments": [
-      "SkillSmith \u2014 top-level skill-authoring meta-agent (the *Smith family, alongside ActionSmith).",
+      "SkillSmith — top-level skill-authoring meta-agent (the *Smith family, alongside ActionSmith).",
       "Pure metadata, no DriverClass: composes existing catalog members into MJ: AI Skills records",
       "via the generic CRUD actions. CreatedByUserID is defaulted server-side by",
       "MJAISkillEntityServer, so the agent never has to know the acting user's ID.",

@@ -69,7 +69,6 @@ import { AnalyticsRealtimeTranscriptsComponent, LoadAnalyticsRealtimeTranscripts
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
 
-
 // Knowledge Hub components
 import {
   KnowledgeConfigResourceComponent,

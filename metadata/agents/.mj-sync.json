@@ -34,10 +34,6 @@
       "MJ: AI Agent Rubrics": {
         "entity": "MJ: AI Agent Rubrics",
         "foreignKey": "AgentID"
-      },
-      "MJ: AI Agent Actions": {
-        "entity": "MJ: AI Agent Actions",
-        "foreignKey": "AgentID"
       }
     }
   }

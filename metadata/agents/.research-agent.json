@@ -81,7 +81,7 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "AVAILABLE_QUERIES",
-            "Description": "Catalog of approved stored queries available for execution via Run Stored Query action. Check here before writing ad-hoc SQL \u2014 stored queries are pre-validated and optimized.",
+            "Description": "Catalog of approved stored queries available for execution via Run Stored Query action. Check here before writing ad-hoc SQL — stored queries are pre-validated and optimized.",
             "SourceType": "RunView",
             "EntityName": "MJ: Queries",
             "ExtraFilter": "Status = 'Approved'",
