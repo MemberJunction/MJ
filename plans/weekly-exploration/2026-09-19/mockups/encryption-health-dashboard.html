@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Encryption Health</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .banner { background: var(--mj-status-error-bg); border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, transparent); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .banner i { color: var(--mj-status-error); font-size: 18px; }
+  .banner .t { font-weight: 700; font-size: 13.5px; }
+  .banner .s { font-size: 12px; color: var(--mj-text-secondary); margin-top: 2px; }
+
+  .key-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 22px; }
+  .key-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .key-card .name { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .key-card .meta { font-size: 11.5px; color: var(--mj-text-secondary); margin-bottom: 12px; }
+  .version-bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+  .version-bar div { height: 100%; }
+  .v-current { background: var(--mj-brand-primary); }
+  .v-old1 { background: #94a3b8; }
+  .v-old2 { background: #cbd5e1; }
+  .legend { display: flex; gap: 12px; font-size: 10.5px; color: var(--mj-text-secondary); flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .rotation-due { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; }
+  .due-ok { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .due-soon { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .due-overdue { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-header .hint { font-size: 11.5px; color: var(--mj-text-muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; padding: 9px 18px; color: var(--mj-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--mj-border-default); }
+  td { padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: ui-monospace, monospace; font-size: 11.5px; }
+
+  .pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .pill-ok { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .pill-warn { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .pill-danger { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+
+  .callout-row td { background: var(--mj-status-error-bg); }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+    <div class="nav-section">Security</div>
+    <div class="nav-item active"><i class="fa-solid fa-key"></i> Encryption Health</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Execution Guardrails</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Tenant Isolation</div>
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item"><i class="fa-solid fa-table-list"></i> Entities</div>
+    <div class="nav-item"><i class="fa-solid fa-lock"></i> Permissions</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-key"></i> Encryption Health</h1>
+        <div class="sub">Key version coverage, rotation currency, and registry gaps — before an auditor finds them</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn"><i class="fa-solid fa-file-shield"></i> Export audit report</button>
+        <button class="btn btn-primary"><i class="fa-solid fa-rotate"></i> Run rotation</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="banner">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div>
+          <div class="t">1 unregistered encrypted value detected — not covered by the last rotation</div>
+          <div class="s">A $ENC$-prefixed value in "Sync Audit Archive" doesn't match any registered column. Envelope versioning means it's still readable on its original key — register it so the next rotation actually reaches it.</div>
+        </div>
+      </div>
+
+      <div class="key-grid">
+        <div class="key-card">
+          <div class="name">PII_MASTER_KEY <span class="pill pill-ok"><i class="fa-solid fa-check"></i> v3 current</span></div>
+          <div class="meta">AES-256-GCM · Azure Key Vault · 6 registered columns</div>
+          <div class="version-bar">
+            <div class="v-current" style="width:82%"></div>
+            <div class="v-old1" style="width:15%"></div>
+            <div class="v-old2" style="width:3%"></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--mj-brand-primary)"></i> v3 · 82%</span>
+            <span><i style="background:#94a3b8"></i> v2 · 15%</span>
+            <span><i style="background:#cbd5e1"></i> v1 · 3%</span>
+          </div>
+          <div class="rotation-due due-ok"><i class="fa-solid fa-calendar-check"></i> Rotated 41 days ago — within policy</div>
+        </div>
+        <div class="key-card">
+          <div class="name">FINANCE_KEY <span class="pill pill-warn"><i class="fa-solid fa-clock"></i> v1 aging</span></div>
+          <div class="meta">AES-256-GCM · AWS KMS · 3 registered columns</div>
+          <div class="version-bar">
+            <div class="v-current" style="width:100%"></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--mj-brand-primary)"></i> v1 · 100%</span>
+          </div>
+          <div class="rotation-due due-soon"><i class="fa-solid fa-hourglass-half"></i> 349 days since last rotation — annual policy, due in 16 days</div>
+        </div>
+        <div class="key-card">
+          <div class="name">ARCHIVE_KEY <span class="pill pill-danger"><i class="fa-solid fa-triangle-exclamation"></i> gap found</span></div>
+          <div class="meta">AES-256-GCM · Config File · 1 registered column, 1 unregistered value found</div>
+          <div class="version-bar">
+            <div class="v-current" style="width:64%"></div>
+            <div class="v-old1" style="width:36%"></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--mj-brand-primary)"></i> v2 · 64%</span>
+            <span><i style="background:#94a3b8"></i> v1 · 36%</span>
+          </div>
+          <div class="rotation-due due-overdue"><i class="fa-solid fa-circle-exclamation"></i> Registry coverage incomplete — see below</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-list-check"></i> Registry coverage</h2>
+          <div class="hint">Every column or store rotation actually knows to re-encrypt</div>
+        </div>
+        <table>
+          <tr>
+            <th>Source</th>
+            <th>Key</th>
+            <th>Type</th>
+            <th>Version</th>
+            <th>Status</th>
+          </tr>
+          <tr>
+            <td><span class="mono">Contact.SSN</span></td>
+            <td>PII_MASTER_KEY</td>
+            <td>Declared field</td>
+            <td class="mono">v3</td>
+            <td><span class="pill pill-ok"><i class="fa-solid fa-check"></i> Registered</span></td>
+          </tr>
+          <tr>
+            <td><span class="mono">Donation.BankRoutingNumber</span></td>
+            <td>FINANCE_KEY</td>
+            <td>Declared field</td>
+            <td class="mono">v1</td>
+            <td><span class="pill pill-ok"><i class="fa-solid fa-check"></i> Registered</span></td>
+          </tr>
+          <tr>
+            <td><span class="mono">SyncAuditArchive.RawPayload</span></td>
+            <td>ARCHIVE_KEY</td>
+            <td>Out-of-band (registered)</td>
+            <td class="mono">v2</td>
+            <td><span class="pill pill-ok"><i class="fa-solid fa-check"></i> Registered</span></td>
+          </tr>
+          <tr class="callout-row">
+            <td><span class="mono">SyncAuditArchive.DeclinedMessageBody</span></td>
+            <td>ARCHIVE_KEY</td>
+            <td>Out-of-band (unregistered)</td>
+            <td class="mono">v1 (inferred)</td>
+            <td><span class="pill pill-danger"><i class="fa-solid fa-triangle-exclamation"></i> Register this</span></td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fa-solid fa-clock-rotate-left"></i> Last rotation — honest coverage reporting</h2>
+        </div>
+        <table>
+          <tr>
+            <th>Key</th>
+            <th>Run date</th>
+            <th>Values found</th>
+            <th>Re-encrypted</th>
+            <th>Skipped (unregistered)</th>
+          </tr>
+          <tr>
+            <td>PII_MASTER_KEY</td>
+            <td>2026-08-09</td>
+            <td>1,204</td>
+            <td><span class="pill pill-ok">1,204</span></td>
+            <td>0</td>
+          </tr>
+          <tr>
+            <td>ARCHIVE_KEY</td>
+            <td>2026-07-22</td>
+            <td>388</td>
+            <td><span class="pill pill-ok">387</span></td>
+            <td><span class="pill pill-warn"><i class="fa-solid fa-triangle-exclamation"></i> 1</span></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
