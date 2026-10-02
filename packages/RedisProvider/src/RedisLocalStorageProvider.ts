@@ -96,7 +96,7 @@ export interface RedisProviderConfig {
      * It defaulted to `10` with a linear 200ms-per-attempt backoff, which is **~11 seconds** of total
      * tolerance — shorter than a Redis restart, an ElastiCache failover or a pod reschedule. A
      * 25-minute Azure Cache outage (2026-09-25) left every running server permanently cache-blind
-     * without saying so, which is issue #4759.
+     * without saying so.
      *
      * Only set this for a short-lived script that genuinely should fail rather than wait.
      *
@@ -220,7 +220,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     /**
      * Whether this client has ever been connected. Before the first connection a command may
      * legitimately wait in ioredis's offline queue (startup warm-up); after a connection has been
-     * LOST, waiting is the wrong answer and commands fail fast instead (#4759 problem 3).
+     * LOST, waiting is the wrong answer and commands fail fast instead.
      */
     private _hasEverConnected: boolean = false;
 
@@ -234,7 +234,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     /**
      * Whether this process mutated shared state while disconnected, so its siblings never heard
      * about it. Reconciliation is symmetric: the gap hides changes in BOTH directions, and this is
-     * the publish side (#4759 problem 2).
+     * the publish side.
      */
     private _mutatedWhileDisconnected: boolean = false;
 
@@ -297,7 +297,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         this._enablePubSub = config.enablePubSub ?? false;
         this._pubSubChannel = `${this._keyPrefix}:__pubsub__`;
 
-        const maxRetries = config.maxRetries; // undefined = retry forever (#4759)
+        const maxRetries = config.maxRetries; // undefined = retry forever, with a capped delay
 
         if (config.url) {
             this._client = new Redis(config.url, {
@@ -332,7 +332,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     private retryStrategy(times: number, maxRetries: number | undefined): number | null {
         // `null` tells ioredis to stop reconnecting FOR THE LIFE OF THE CLIENT — there is no
         // recovery from it short of a process restart. Only a caller that explicitly asked for a
-        // ceiling gets that (#4759).
+        // ceiling gets that.
         if (maxRetries !== undefined && times > maxRetries) {
             // LogError, not LogStatus: status output is compiled out in production
             // (logging.ts logToConsole), and a cache client that has permanently given up is the
@@ -413,7 +413,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * The clients are built with `maxRetriesPerRequest: null` and ioredis's default
      * `enableOfflineQueue: true`, so while disconnected every command is QUEUED and its promise
      * never settles. Over a multi-minute outage that is unbounded memory growth plus awaits that
-     * hang for the duration (#4759 problem 3).
+     * hang for the duration.
      *
      * Failing fast is the right answer for a cache specifically: a read that returns `null` is a
      * miss and the caller refetches from the source of truth, and a write that no-ops just leaves
@@ -447,7 +447,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * Reconciliation has to be symmetric. The obvious direction is what this process MISSED, and the
      * epoch comparison covers that. This is the other direction: writes this process made that its
      * siblings never heard, which leave *them* confidently stale. On recovery the epoch is bumped so
-     * they flush too (#4759 problem 2).
+     * they flush too.
      * @internal
      */
     private noteMutationWhileDisconnected(): void {
@@ -1110,7 +1110,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * @internal
      */
     private createSubscriberClient(): Redis {
-        const maxRetries = this._config.maxRetries; // undefined = retry forever (#4759)
+        const maxRetries = this._config.maxRetries; // undefined = retry forever, with a capped delay
 
         if (this._config.url) {
             return new Redis(this._config.url, {
@@ -1146,7 +1146,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             }
             // The SUBSCRIBER is the connection that misses invalidations, so its recovery is what
             // reconciliation hangs off. ioredis resubscribes for us; what it cannot do is tell us
-            // what was published while we were away (#4759 problem 2).
+            // what was published while we were away.
             if (wasDown) {
                 void this.reconcileAfterReconnect();
             }
@@ -1240,7 +1240,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         // What the epoch buys: pub/sub has NO REPLAY, so a subscriber that was away receives nothing
         // published during the gap. Comparing the epoch on reconnect is what distinguishes "an
         // outage during which nothing changed" (keep the cache) from "an outage during which
-        // something did" (flush it) — see reconcileAfterReconnect (#4759 problem 2).
+        // something did" (flush it) — see reconcileAfterReconnect.
         this._client.incr(this.buildEpochKey()).then((epoch) => {
             this.noteEpochSeen(epoch);
             event.Epoch = epoch;
@@ -1418,7 +1418,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * This is the primary signal, deliberately, because **logging cannot carry it in production**:
      * `LogStatus` / `LogStatusEx` are both compiled out when `GetProductionStatus()` is true
      * (`logging.ts` → `logToConsole`), so a cache client that died emitted nothing at all in a
-     * deployed environment (#4759 problem 4).
+     * deployed environment.
      *
      * Callbacks are invoked on a real transition only — not on the first connect, and not repeatedly
      * while a reconnect is being retried.

@@ -1,5 +1,5 @@
 /**
- * Surviving a Redis outage: reconnect, fail fast, say so, and come back correct (#4759).
+ * Surviving a Redis outage: reconnect, fail fast, say so, and come back correct.
  *
  * Found operationally — an Azure Cache for Redis instance was unreachable for ~25 minutes on
  * 2026-09-25 and every server already running went permanently cache-blind without saying so. Four
@@ -133,7 +133,7 @@ function retryDelayWithCeiling(provider: unknown, times: number, ceiling: number
         .retryStrategy(times, ceiling);
 }
 
-describe('RedisLocalStorageProvider — surviving an outage (#4759)', () => {
+describe('RedisLocalStorageProvider — surviving an outage', () => {
     let RedisLocalStorageProvider: typeof import('../RedisLocalStorageProvider.js').RedisLocalStorageProvider;
 
     beforeEach(async () => {

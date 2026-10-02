@@ -105,7 +105,7 @@ function createMockRedisInstance() {
             return pipe;
         }),
         // The provider INCRs a fleet-wide epoch before publishing, so a reconnect can tell an
-        // outage during which nothing changed from one during which something did (#4759). Modelled
+        // outage during which nothing changed from one during which something did. Modelled
         // as a real counter so tests can assert on the value the event carries.
         incr: vi.fn((key: string) => {
             const next = ((store.get(key) as unknown as number) ?? 0) + 1;
