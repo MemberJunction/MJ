@@ -10,8 +10,14 @@
  * realtime persona/disclosure overrides). Every field is optional — an app opts into
  * exactly what it needs.
  *
- * Disclosure values ('silent' | 'mention' | 'hand-voice') mirror the AgentDisclosurePolicy
- * union declared in @memberjunction/ai-core-plus. Keep the two in lockstep.
+ * Disclosure values ('silent' | 'mention' | 'hand-voice') mirror the RealtimeDisclosurePolicy
+ * union declared in @memberjunction/ai-agents.
+ *
+ * **Lockstep contract**: this interface is mirrored, field for field, by `IAgentSettings` in
+ * `packages/AI/CorePlus/src/agent-settings.ts` (`@memberjunction/ai-core-plus`). Runtime code parses
+ * the column with that mirror (`ParseAgentSettings`) rather than the CodeGen-generated
+ * `AgentSettingsObject` accessor, so a field added here is usable at runtime before CodeGen next
+ * regenerates the inline copy. Edit both in the same commit.
  */
 export interface IAgentSettings {
     /** The app's default/lead agent (conversational default AND realtime lead identity). Agent ID. */
@@ -59,5 +65,24 @@ export interface IAgentSettings {
         } | null;
         /** Model preference override (AI Models Name or ID). */
         ModelPreference?: string | null;
+        /**
+         * Which interactive realtime channels (Whiteboard, Remote Browser, an Open App's own widget, …)
+         * this app's sessions get. Layers into the same per-channel scoping cascade as the agent's own
+         * `realtime.channels` configuration (see `@memberjunction/ai-core-plus` `ResolveRealtimeChannelScope`):
+         * a layer's `Include` turns a channel on (the only way to get an `opt-in` channel), its `Exclude`
+         * turns one off, and the MOST SPECIFIC layer to mention a channel wins; within one layer `Exclude`
+         * beats `Include`. A channel's registry row `IsActive = false` remains a master kill switch that
+         * nothing here can override. Channel keys match the channel's name, case-insensitively.
+         */
+        Channels?: {
+            /** Channel keys to turn ON (required for `opt-in` channels; a no-op for `all-sessions` ones). */
+            Include?: string[] | null;
+            /** Channel keys to turn OFF. Beats `Include` within the same layer. */
+            Exclude?: string[] | null;
+            /** Per-channel opaque configuration, keyed by channel key; delivered to the channel at session start. */
+            Config?: { [channelKey: string]: { [key: string]: unknown } } | null;
+            /** Per-channel display override, keyed by channel key. */
+            DisplayPolicy?: { [channelKey: string]: 'open-on-start' | 'on-demand' | 'headless' } | null;
+        } | null;
     } | null;
 }

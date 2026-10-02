@@ -46,6 +46,19 @@ export {
     type RealtimeSessionRunOptions,
 } from './session/RealtimeSessionRuntime';
 
+// Channel scoping inputs a host supplies at session start.
+export {
+    type RealtimeHostChannelDeclaration,
+    type RealtimeSessionStartOptions,
+} from './session/channel-session-scope';
+
+// Owner-keyed registration of the client tools a host can run for the `ContextTool` proxy.
+export {
+    DEFAULT_APP_TOOL_OWNER,
+    type AppClientToolRegistration,
+    type RealtimeAppClientToolHandler,
+} from './session/app-client-tool-registry';
+
 // The platform seam.
 export {
     type IRealtimeMediaHost,
@@ -58,7 +71,37 @@ export {
     type RealtimeChannelContext,
     type RealtimeSurfaceComponentType,
     type ChannelOnboardingDetails,
+    type VisualPerceptionOptions,
 } from './channels/base-realtime-channel-client';
+
+// Channel contract v2 — the runtime half (events, outputs, verb results, `ContextTool` addressing).
+// The declarative half (descriptors, scoping, policy) lives in `@memberjunction/ai-core-plus`.
+export {
+    type RealtimeChannelVerbResult,
+    type RealtimeChannelEvent,
+    type RealtimeChannelOutput,
+    type RealtimeChannelTarget,
+    type RealtimeContextActionRequest,
+    type RealtimeContextActionResult,
+    type RealtimeContextErrorCode,
+} from './channels/channel-contract-types';
+export { SynthesizeChannelDescriptor, BuildToolBackedVerbs, VerbNameForTool } from './channels/channel-descriptor-synthesis';
+export { ChannelActionDispatcher, CHANNEL_OPEN_ACTION, type ChannelDispatchHost, type DispatchableChannel } from './channels/channel-action-dispatcher';
+export { ComputeStateDelta, FormatChannelNote, ListChangedPaths, type StateDelta } from './channels/channel-state-delta';
+export { FormatParameterList } from './channels/channel-schema-format';
+export { BuildChannelCatalogNote, type ChannelCatalogEntry } from './channels/channel-catalog-note';
+export {
+    VisualPerceptionPump,
+    type VisualFrameReason,
+    type VisualFrameSink,
+    type VisualPerceptionPumpHost,
+} from './channels/channel-visual-pump';
+export {
+    ChannelPerceptionCoalescer,
+    DEFAULT_CHANNEL_PERCEPTION_OPTIONS,
+    type ChannelPerceptionHost,
+    type ChannelPerceptionOptions,
+} from './channels/channel-perception';
 
 // Delegation result parsing + narration instruction assembly.
 export {

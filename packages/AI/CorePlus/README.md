@@ -101,6 +101,21 @@ Run-level payload additions include `scoreDistribution`, `entityTriplesExtracted
 
 For pipeline mechanics, see [`@memberjunction/ai-agents`](../Agents/README.md#consolidation-pipeline).
 
+### Realtime Channel Contract v2 (`realtime-channel-*.ts`, `realtime-session-policy.ts`, `agent-settings.ts`, `json-schema-subset.ts`)
+
+Framework-neutral types and pure functions shared by the browser runtime (`@memberjunction/realtime-runtime`) and the server (`@memberjunction/ai-agents`), so both make the *same* channel decisions from the same inputs.
+
+| Export | Purpose |
+|---|---|
+| `RealtimeChannelDescriptor` (+ `RealtimeChannelNoun`, `RealtimeChannelVerb`, `RealtimeChannelEventSpec`, `RealtimeChannelDisplayPolicy`, `RealtimeChannelAvailability`, `RealtimeChannelExposure`) | A channel's self-description: what it holds (nouns), what it accepts (verbs with parameter schemas and `InvokableBy`), what it emits, how it appears (`'open-on-start' \| 'on-demand' \| 'headless'`), whether it is on for every session or opt-in, and the most the model may perceive of it (`'none' \| 'state' \| 'pixels'`). `REALTIME_CHANNEL_CONTRACT_VERSION` is `2.0.0`; a descriptor synthesized for a channel that only implements the v1 members carries `REALTIME_CHANNEL_LEGACY_CONTRACT_VERSION` (`1.0.0`). |
+| `ResolveRealtimeChannelScope` | Decides which candidate channels are in a session: code default → agent → app → host. A registry row's `IsActive = false` is a master kill switch nothing overrides; a host adds channels but cannot lift an agent/app `exclude`. Also `AccumulateRealtimeChannelsConfig` (per-channel, most-specific-layer-wins folding of the cascade's `channels` sections — *not* a plain deep merge, which would let an app's `exclude` erase the agent's), `DeclaresNativeTools`, `SelectNativeChannelTools`. |
+| `RealtimeChannelCandidate`, `RealtimeSessionClientPolicy`, `ParseRealtimeChannelCandidates`, `ParseRealtimeSessionClientPolicy` | The two wire shapes of **session policy negotiation** at mint: the browser reports candidates (facts about code it owns), the server returns the resolved policy (channels in scope with their resolved display/config, plus the app/static client-tool tiers). Parsers are tolerant and capped; they never throw. |
+| `ParseAgentSettings`, `IAgentSettings` | Tolerant parser + package-side mirror of `Application.AgentSettings` (kept in lockstep with `metadata/entities/JSONType-interfaces/IAgentSettings.ts`). Runtime code reads the raw column through this rather than the CodeGen-generated `AgentSettingsObject`, so a new settings field works before CodeGen next refreshes the generated copy. Includes `Realtime.Channels` (`Include`, `Exclude`, `Config`, `DisplayPolicy`). |
+| `ValidateJsonAgainstSchemaSubset` | Small, dependency-free JSON Schema validator (`type`, `enum`, `required`, `properties`, `additionalProperties: false`, `items`, numeric/length/item bounds; unknown keywords ignored) returning one readable message per violation — what a channel verb's parameters are checked against before it runs. |
+| `ResolveAppClientToolMetadata`, `ClientToolMetadataFromDefinition` | Resolve `Application.AgentSettings.ClientTools` references (ID then Name, priority ascending) against the tool-definition catalog into `ClientToolMetadata`, ready for `ResolveClientTools`. |
+
+`FormatClientToolsForPrompt` was removed: no caller ever adopted it (the async path words its own section; realtime renders compact signatures via `FormatAppContextNote`), and keeping a second, tempting wording with no caller is a liability.
+
 ### System Placeholders (`prompt.system-placeholders.ts`)
 
 The `SystemPlaceholderManager` automatically injects common values into all prompt templates:

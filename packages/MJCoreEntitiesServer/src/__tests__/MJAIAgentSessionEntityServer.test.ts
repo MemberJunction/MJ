@@ -67,9 +67,22 @@ function session(opts: { saved: boolean; previous: string | null; next: string |
     return entity;
 }
 
+describe('channel scope protection', () => {
+    it('refuses removing or widening the persisted channel scope', () => {
+        const before = JSON.stringify({ targetAgentID: 'a', channels: ['Whiteboard'] });
+        expect(FindProtectedSessionConfigChanges(before, JSON.stringify({ targetAgentID: 'a' }))).toEqual(['channels']);
+        expect(FindProtectedSessionConfigChanges(before, JSON.stringify({ targetAgentID: 'a', channels: ['Whiteboard', 'Media'] }))).toEqual(['channels']);
+    });
+
+    it('allows an edit that leaves the channel scope unchanged', () => {
+        const before = JSON.stringify({ targetAgentID: 'a', channels: ['Whiteboard'] });
+        expect(FindProtectedSessionConfigChanges(before, JSON.stringify({ channels: ['Whiteboard'], targetAgentID: 'b' }))).toEqual([]);
+    });
+});
+
 describe('PROTECTED_SESSION_CONFIG_KEYS', () => {
     it('protects the janitor deadline and the verification state', () => {
-        expect(PROTECTED_SESSION_CONFIG_KEYS).toEqual(['maxSessionDeadlineIso', 'identityVerification']);
+        expect(PROTECTED_SESSION_CONFIG_KEYS).toEqual(['maxSessionDeadlineIso', 'identityVerification', 'channels']);
     });
 });
 

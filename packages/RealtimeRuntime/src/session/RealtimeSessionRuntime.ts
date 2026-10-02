@@ -5,7 +5,18 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
-import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
+import {
+  AppContextSnapshot,
+  DeclaresNativeTools,
+  NormalizeChannelKey,
+  ParseRealtimeSessionClientPolicy,
+  ResolveClientTools,
+  SelectNativeChannelTools,
+  type ClientToolMetadata,
+  type RealtimeChannelScopeResult,
+  type RealtimeSessionClientTools,
+  type ResolvedRealtimeChannel
+} from '@memberjunction/ai-core-plus';
 import {
   BaseRealtimeClient,
   LoadAssemblyAIRealtimeClient,
@@ -25,6 +36,21 @@ import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../channels/base-realtime-channel-client';
 import { IRealtimeMediaHost, IRealtimeSessionRecorder } from '../hosts/IRealtimeMediaHost';
+import { ChannelActionDispatcher, type DispatchableChannel } from '../channels/channel-action-dispatcher';
+import { BuildChannelCatalogNote, type ChannelCatalogEntry } from '../channels/channel-catalog-note';
+import type { RealtimeContextActionRequest, RealtimeContextActionResult } from '../channels/channel-contract-types';
+import { AppClientToolRegistry, DEFAULT_APP_TOOL_OWNER, type AppClientToolRegistration } from './app-client-tool-registry';
+import {
+  BuildChannelCandidate,
+  FindPreparedChannel,
+  MergeToolMetadata,
+  ReconcileChannelsWithPolicy,
+  ResolveLocalChannelScope,
+  ToolsByChannelKey,
+  type PreparedChannel,
+  type RealtimeHostChannelDeclaration,
+  type RealtimeSessionStartOptions
+} from './channel-session-scope';
 
 /**
  * `MJ: User Settings` key for the per-user "record this voice call" consent toggle. Stored as
@@ -140,13 +166,15 @@ export interface RealtimeChannelFocusEvent {
 }
 
 /**
- * The narrow projection of an ACTIVE `MJ: AI Agent Channels` registry row the service
- * reads at session start from {@link AIEngineBase}'s cached `AgentChannels`.
+ * The narrow projection of an `MJ: AI Agent Channels` registry row the service reads at session
+ * start from {@link AIEngineBase}'s cached `AgentChannels`. Inactive rows are kept: `IsActive = false`
+ * is the master kill switch, and the scope decision has to see it to honor it.
  */
 interface RealtimeChannelDefinitionRow {
   ID: string;
   Name: string;
   ClientPluginClass: string;
+  IsActive: boolean;
 }
 
 /**
@@ -184,6 +212,17 @@ function trackDescriptorToJSON(track: RealtimeTrackDescriptor): JSONObject {
     json['RequiresConsent'] = track.RequiresConsent;
   }
   return json;
+}
+
+/**
+ * Whether a mint failure is a GraphQL validation rejection of the channel-scoping extension — the
+ * signature of a server that predates it ("Unknown argument "channelCandidatesJson"…", "Cannot query
+ * field "ClientPolicyJson"…"). Only that exact case is recoverable; any other failure is a real mint
+ * failure and must surface.
+ */
+function isUnsupportedChannelScopingError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson');
 }
 
 /**
@@ -300,6 +339,14 @@ export interface StartRealtimeClientSessionResult {
    * last session left off.
    */
   PriorChannelStatesJson: string | null;
+  /**
+   * OPTIONAL — the server's resolved `RealtimeSessionClientPolicy` (from `@memberjunction/ai-core-plus`) as JSON: which of the channel
+   * candidates the client reported at mint are in this session (agent/app scoping and the registry's
+   * kill switch already applied), their resolved display and config, and the app/static client-tool
+   * tiers. Absent from a server that predates channel scoping and from a host that mints through its
+   * own proxy; the runtime then resolves the scope locally from code defaults and host declarations.
+   */
+  ClientPolicyJson?: string | null;
 }
 
 /**
@@ -828,6 +875,12 @@ export class RealtimeSessionRuntime {
    *   the server-side Media channel resolves THIS collection as the agent's media kit for the session,
    *   taking precedence over the agent's `DefaultMediaCollectionID`. The server UUID-validates it
    *   (malformed ⇒ ignored, the agent default applies). Omit/`null` to use the agent default kit.
+   * @param applicationId Optional application the session runs in (sources the app config cascade,
+   *   including `Application.AgentSettings.Realtime.Channels`).
+   * @param appContext Optional live app-context snapshot injected into the companion prompt at mint.
+   * @param options Optional per-start extras — chiefly the channels the HOST brings
+   *   ({@link RealtimeSessionStartOptions.HostChannels}), the way a connect-only embed with no
+   *   registry gets channels at all.
    */
   public async StartRealtimeSession(
     targetAgentId: string,
@@ -841,23 +894,26 @@ export class RealtimeSessionRuntime {
     recordingConsent?: boolean | null,
     mediaCollectionId?: string | null,
     applicationId?: string | null,
-    appContext?: AppContextSnapshot | null
+    appContext?: AppContextSnapshot | null,
+    options?: RealtimeSessionStartOptions | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
     }
 
     const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
-    // Captured BEFORE startChannels so the mint carries exactly the snapshot the prologue
+    // Captured BEFORE the channels are prepared so the mint carries exactly the snapshot the prologue
     // resolved, whatever a channel plugin may push in the meantime.
     const effectiveAppContext = this._appContext$.value;
 
     let session: StartRealtimeClientSessionResult;
     try {
-      // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
-      // tool sets must be declared to the realtime model at session mint.
-      const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
+      // Resolve the interactive-channel plugins FIRST (constructed, not started): the tools of the
+      // channels mounted with the session must be declared to the realtime model at mint, and the
+      // server needs the candidates to scope them. Nothing is initialized until the policy is known.
+      const scope = await this.prepareChannelScope(options?.HostChannels);
+      const allClientTools = [...(clientTools ?? []), ...scope.NativeTools];
+      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext, scope.CandidatesJson);
     } catch (error) {
       await this.failSessionStart(error);
       return;
@@ -996,6 +1052,11 @@ export class RealtimeSessionRuntime {
     // Captured up front: every await below is a window in which the host can end the session.
     const generation = this.startGeneration;
     try {
+      // Mount the channels the resolved policy puts in the session. Deliberately BEFORE the session
+      // id is adopted: `ActiveChannels$` consumers (the sessions adapter) treat an emission that
+      // arrives while no session id is set as the INITIAL set, whose opens they synthesize from
+      // `SessionStarted$` — activating after the id is set would announce every channel twice.
+      this.applySessionClientPolicy(session);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
@@ -1036,6 +1097,10 @@ export class RealtimeSessionRuntime {
           console.error(`[RealtimeSession] Error in channel '${channel.ChannelName}' OnSessionStarted:`, err);
         }
       }
+      // Tell the model which channels exist and how to use them, from the channels' own descriptors —
+      // as soon as the control channel is usable (which may be right now, or a moment after Connect).
+      this.catalogNotePending = true;
+      this.flushChannelCatalogNote();
 
       // Start browser-side recording (mic + agent mix) when consented. Best-effort: an
       // unsupported browser / missing remote stream degrades gracefully (mic-only or off)
@@ -1486,49 +1551,225 @@ export class RealtimeSessionRuntime {
   }
 
 
-  // ── Interactive channels (registry-driven plugins) ─────────────────────────
+  // ── Interactive channels (registry-driven + host-declared plugins) ─────────
+  //
+  // A session's channels come from two places — the `MJ: AI Agent Channels` registry and the channels
+  // the host declares — and pass through three stages:
+  //
+  //   1. PREPARE  (before mint)  construct the plugins, read their descriptors, report them as
+  //                              candidates, and work out the scope the browser can decide alone.
+  //   2. MINT                    the server scopes the candidates with the agent/app cascade and the
+  //                              registry's kill switch, and returns the resolved policy.
+  //   3. ACTIVATE (after mint)   initialize exactly the policy's channels: `open-on-start`/`headless`
+  //                              ones mount now, `on-demand` ones wait to be opened through ContextTool.
+  //
+  // Nothing is initialized before the policy is known, so a channel the server vetoes never runs.
+
+  /** Whether the channel catalog note still has to be sent (see {@link flushChannelCatalogNote}). */
+  private catalogNotePending = false;
+
+  /** Plugins resolved for the current start but not yet initialized. Consumed by {@link activateChannels}. */
+  private preparedChannels: PreparedChannel[] = [];
+
+  /** The scope the browser resolves on its own — the fallback when no server policy comes back. */
+  private localChannelScope: RealtimeChannelScopeResult | null = null;
+
+  /** `on-demand` channels that are in the session but not opened yet (initialized only when opened). */
+  private advertisedChannels: PreparedChannel[] = [];
+
+  /** What the policy resolved for each in-session channel, keyed by normalized channel key. */
+  private readonly resolvedChannels = new Map<string, ResolvedRealtimeChannel>();
+
+  /** The prior session's saved channel states, kept so an `on-demand` channel opened later is restored too. */
+  private priorChannelStates: Record<string, string> = {};
+
+  /** The app/static client-tool tiers the server resolved for this session. */
+  private sessionClientTools: RealtimeSessionClientTools | null = null;
+
+  /** Validates and routes channel-addressed `ContextTool` calls. */
+  private readonly channelDispatcher = new ChannelActionDispatcher({
+    FindChannel: (key: string) => this.findDispatchableChannel(key),
+    ListChannelKeys: () => this.listAddressableChannelKeys(),
+    ActivateChannel: (plugin: BaseRealtimeChannelClient) => this.mountAdvertisedChannel(plugin),
+  });
 
   /**
-   * Resolves, instantiates and initializes the session's interactive-channel plugins from
-   * the `MJ: AI Agent Channels` registry, publishes them on {@link ActiveChannels$}, and
-   * returns their aggregated client-executed tool declarations for the session mint.
-   * Tolerant by design: registry/resolution failures degrade to "no channels" — the voice
-   * session itself always proceeds.
+   * The resolved behavior of an in-session channel (display, exposure ceiling, config, what put it
+   * in the session), or `null` when the channel is not in this session. Hosts and overlays read the
+   * resolved display from here rather than from the channel's code default.
+   *
+   * @param channelName The channel's key (case-insensitive).
    */
-  private async startChannels(): Promise<RealtimeToolDefinition[]> {
-    const channels = await this.loadActiveChannels();
-    for (const plugin of channels) {
-      this.initializeChannel(plugin);
-    }
-    this._activeChannels$.next(channels);
-    return channels.flatMap(plugin => plugin.GetToolDefinitions());
+  public GetResolvedChannel(channelName: string): ResolvedRealtimeChannel | null {
+    return this.resolvedChannels.get(NormalizeChannelKey(channelName)) ?? null;
   }
 
   /**
-   * Loads the ACTIVE channel definitions from the registry and resolves each row's
-   * `ClientPluginClass` through the MJ ClassFactory into a per-session plugin instance —
-   * the client-side mirror of how realtime-model drivers resolve from `BaseRealtimeModel`
-   * / `BaseRealtimeClient`. Rows whose plugin class isn't registered are skipped (logged),
-   * never fatal.
+   * The `on-demand` channels that are in the session but not open yet — what the agent can open
+   * through `ContextTool`. A fresh array; empty before a session starts and after teardown.
    */
-  private async loadActiveChannels(): Promise<BaseRealtimeChannelClient[]> {
+  public get AdvertisedChannels(): readonly BaseRealtimeChannelClient[] {
+    return this.advertisedChannels.map((p) => p.Plugin);
+  }
+
+  /**
+   * Resolves, initializes and mounts the session's channels in one step using the scope the browser
+   * can decide alone (code defaults + host declarations), and returns the native tools to declare at
+   * mint. This is the single-step composition of {@link prepareChannelScope} + {@link activateChannels}
+   * that a session start spreads across the mint; it is kept as a unit because it is the cleanest seam
+   * for exercising the plugin plumbing without a mint.
+   */
+  private async startChannels(hostChannels?: RealtimeHostChannelDeclaration[]): Promise<RealtimeToolDefinition[]> {
+    const scope = await this.prepareChannelScope(hostChannels);
+    this.activateChannels(this.localChannelScope?.Channels ?? []);
+    return scope.NativeTools;
+  }
+
+  /**
+   * Stage 1: constructs the channel plugins (registry rows and host declarations), reads their
+   * descriptors, resolves the scope the browser can decide alone, and builds what the mint needs —
+   * the native tools to declare and the candidates to report. Starts nothing.
+   *
+   * @param hostChannels Channels the host brings to this session.
+   * @returns The native tools to declare at mint, and the candidates as JSON (`null` when there are none,
+   *   so a channel-less session sends exactly the mint it always did).
+   */
+  private async prepareChannelScope(
+    hostChannels?: RealtimeHostChannelDeclaration[]
+  ): Promise<{ NativeTools: RealtimeToolDefinition[]; CandidatesJson: string | null }> {
+    this.discardUnmountedChannels();
+    const prepared = await this.prepareChannels(hostChannels);
+    this.preparedChannels = prepared;
+    const candidates = prepared.map((p) => BuildChannelCandidate(p, p.Plugin.GetDescriptor()));
+    const local = ResolveLocalChannelScope(candidates);
+    this.localChannelScope = local;
+    for (const excluded of local.Excluded) {
+      console.warn(`[RealtimeSession] Channel '${excluded.Key}' is not in this session (${excluded.Reason}).`);
+    }
+    const nativeTools = SelectNativeChannelTools(local.Channels, ToolsByChannelKey(candidates));
+    // `Registry` is the browser's own view and never goes over the wire: the server reads the registry itself.
+    const wire = candidates.map(({ Registry: _registry, ...candidate }) => candidate);
+    return { NativeTools: nativeTools, CandidatesJson: wire.length > 0 ? JSON.stringify(wire) : null };
+  }
+
+  /**
+   * Constructs a plugin for every active-or-inactive registry row and every host declaration. An
+   * INACTIVE row is constructed too — only to learn its key so the kill switch can name it — and is
+   * never initialized. A plugin whose descriptor cannot be read is skipped (logged), never fatal.
+   */
+  private async prepareChannels(hostChannels?: RealtimeHostChannelDeclaration[]): Promise<PreparedChannel[]> {
     const rows = await this.fetchChannelDefinitions();
-    const channels: BaseRealtimeChannelClient[] = [];
+    const prepared: PreparedChannel[] = [];
     for (const row of rows) {
       const plugin = this.resolveChannelPlugin(row);
       if (plugin) {
-        channels.push(plugin);
+        prepared.push({ Plugin: plugin, Key: plugin.ChannelName, Registry: row.IsActive ? 'active' : 'inactive' });
       }
     }
-    return channels;
+    for (const declaration of hostChannels ?? []) {
+      const plugin = this.createHostChannelPlugin(declaration);
+      if (!plugin) {
+        continue;
+      }
+      const existing = FindPreparedChannel(prepared, plugin.ChannelName);
+      if (existing) {
+        // The host's instance replaces the registry's (it may carry the host's collaborators); the
+        // registry row's state — notably the kill switch — still applies.
+        existing.Plugin = plugin;
+        existing.HostDeclaration = declaration;
+      } else {
+        prepared.push({ Plugin: plugin, Key: plugin.ChannelName, Registry: 'none', HostDeclaration: declaration });
+      }
+    }
+    return prepared.filter((p) => this.canDescribe(p));
+  }
+
+  /** Whether a prepared plugin's descriptor can be read; logs and rejects one that throws. */
+  private canDescribe(prepared: PreparedChannel): boolean {
+    try {
+      prepared.Plugin.GetDescriptor();
+      return true;
+    } catch (error) {
+      console.error(`[RealtimeSession] Channel '${prepared.Key}' has an unreadable descriptor — leaving it out:`, error);
+      return false;
+    }
+  }
+
+  /** Builds a plugin from a host declaration; `null` (logged) when it names nothing buildable. */
+  private createHostChannelPlugin(declaration: RealtimeHostChannelDeclaration): BaseRealtimeChannelClient | null {
+    if (declaration.Create) {
+      try {
+        return declaration.Create();
+      } catch (error) {
+        console.error('[RealtimeSession] A host-declared channel factory threw — leaving the channel out:', error);
+        return null;
+      }
+    }
+    const key = declaration.ClientPluginClass?.trim();
+    if (!key) {
+      console.warn('[RealtimeSession] A host-declared channel names neither ClientPluginClass nor Create — ignoring it.');
+      return null;
+    }
+    return this.resolveChannelPlugin({ ID: key, Name: key, ClientPluginClass: key, IsActive: true });
   }
 
   /**
-   * Reads the ACTIVE `MJ: AI Agent Channels` rows from {@link AIEngineBase}'s cached
-   * `AgentChannels` (provider-scoped engine instance, lazy `Config` — no RunView
-   * round-trip; the engine's BaseEntity-event reactivity keeps the registry fresh).
-   * Failures are logged and degrade to an empty list — channel availability must
-   * never block the voice session.
+   * Stage 3: initializes the channels the resolved policy puts in the session. `open-on-start` and
+   * `headless` channels are mounted and published on {@link ActiveChannels$}; `on-demand` channels
+   * are held until opened. Prepared plugins the policy left out are dropped without ever having run.
+   */
+  private activateChannels(channels: ReadonlyArray<ResolvedRealtimeChannel>): void {
+    const reconciled = ReconcileChannelsWithPolicy(this.preparedChannels, channels);
+    for (const key of reconciled.Unknown) {
+      console.warn(`[RealtimeSession] The session policy names channel '${key}' but this host has no plugin for it — ignoring it.`);
+    }
+    this.resolvedChannels.clear();
+    this.advertisedChannels = [];
+    const mounted: BaseRealtimeChannelClient[] = [];
+    for (const { Prepared, Resolved } of reconciled.InSession) {
+      this.resolvedChannels.set(NormalizeChannelKey(Resolved.Key), Resolved);
+      if (Resolved.DisplayPolicy === 'on-demand') {
+        this.advertisedChannels.push(Prepared);
+      } else {
+        this.mountChannel(Prepared, Resolved);
+        mounted.push(Prepared.Plugin);
+      }
+    }
+    this.preparedChannels = [];
+    this._activeChannels$.next(mounted);
+  }
+
+  /**
+   * Applies the mint's outcome to the channel set: the server's policy when it sent a usable one,
+   * else the scope the browser resolved on its own. A policy can only SELECT among the plugins this
+   * host prepared — it cannot add one.
+   */
+  private applySessionClientPolicy(session: StartRealtimeClientSessionResult): void {
+    const policy = ParseRealtimeSessionClientPolicy(session.ClientPolicyJson);
+    if (session.ClientPolicyJson && !policy) {
+      console.warn('[RealtimeSession] The mint returned a client policy this runtime cannot read — resolving channels locally.');
+    }
+    this.sessionClientTools = policy?.ClientTools ?? null;
+    if (this.preparedChannels.length === 0) {
+      this.resolvedChannels.clear();
+      return; // nothing was prepared (a host that mints and runs the session itself) — no channel set to apply
+    }
+    this.activateChannels(policy?.Channels ?? this.localChannelScope?.Channels ?? []);
+  }
+
+  /** Drops plugins that were prepared for a start that never mounted them. They were never initialized, so there is nothing to release. */
+  private discardUnmountedChannels(): void {
+    this.preparedChannels = [];
+    this.advertisedChannels = [];
+    this.localChannelScope = null;
+  }
+
+  /**
+   * Loads the `MJ: AI Agent Channels` registry rows (ACTIVE AND INACTIVE — an inactive row is the master
+   * kill switch, so the scope decision has to see it) from {@link AIEngineBase}'s cached `AgentChannels`
+   * (provider-scoped engine instance, lazy `Config` — no RunView round-trip; the engine's
+   * BaseEntity-event reactivity keeps the registry fresh). Failures are logged and degrade to an empty
+   * list — channel availability must never block the voice session.
    */
   private async fetchChannelDefinitions(): Promise<RealtimeChannelDefinitionRow[]> {
     // A connect-only provider (ConnectGraphQLClient — anonymous embeds) has no entity metadata,
@@ -1541,8 +1782,7 @@ export class RealtimeSessionRuntime {
       const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.Provider, AIEngineBase) as AIEngineBase;
       await engine.Config(false, undefined, this.Provider);
       return (engine.AgentChannels ?? [])
-        .filter(c => c.IsActive)
-        .map<RealtimeChannelDefinitionRow>(c => ({ ID: c.ID, Name: c.Name, ClientPluginClass: c.ClientPluginClass }));
+        .map<RealtimeChannelDefinitionRow>(c => ({ ID: c.ID, Name: c.Name, ClientPluginClass: c.ClientPluginClass, IsActive: c.IsActive }));
     } catch (error) {
       console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error);
       return [];
@@ -1554,16 +1794,23 @@ export class RealtimeSessionRuntime {
    * checked first, exactly like the realtime-client drivers) and instantiates a fresh
    * per-session plugin. Returns `null` (logged) when no plugin is registered for the key
    * — e.g. its Load function was never called or the package isn't included client-side.
+   * An inactive row is resolved quietly: it only needs to be named, and a missing plugin for a
+   * channel nobody wants is not worth a warning.
    */
   private resolveChannelPlugin(row: RealtimeChannelDefinitionRow): BaseRealtimeChannelClient | null {
     const key = row.ClientPluginClass?.trim();
+    const quiet = !row.IsActive;
     if (!key) {
-      console.warn(`[RealtimeSession] Channel '${row.Name}' has no ClientPluginClass — skipping.`);
+      if (!quiet) {
+        console.warn(`[RealtimeSession] Channel '${row.Name}' has no ClientPluginClass — skipping.`);
+      }
       return null;
     }
     const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseRealtimeChannelClient, key);
     if (!registration) {
-      console.warn(`[RealtimeSession] No client plugin registered for channel '${row.Name}' (key '${key}') — skipping.`);
+      if (!quiet) {
+        console.warn(`[RealtimeSession] No client plugin registered for channel '${row.Name}' (key '${key}') — skipping.`);
+      }
       return null;
     }
     const plugin = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeChannelClient>(BaseRealtimeChannelClient, key);
@@ -1575,25 +1822,141 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Wires one plugin into the session: hands it its host context and registers its
-   * prefix-routed local tool executor (so `<ToolNamePrefix>*` calls run in the browser
-   * through {@link BaseRealtimeChannelClient.ApplyAgentTool}, never the server relay).
+   * Wires one plugin into the session: hands it its host context (carrying its resolved config) and,
+   * when it has native tools, registers its prefix-routed local tool executor (so `<ToolNamePrefix>*`
+   * calls run in the browser through {@link BaseRealtimeChannelClient.ApplyAgentTool}, never the
+   * server relay). A channel with no tool prefix has no native route — it is reached through
+   * `ContextTool` — and registering an empty prefix would match EVERY tool name.
    */
-  private initializeChannel(plugin: BaseRealtimeChannelClient): void {
-    plugin.Initialize(this.buildChannelContext(plugin));
+  private mountChannel(prepared: PreparedChannel, resolved: ResolvedRealtimeChannel | undefined): void {
+    const plugin = prepared.Plugin;
+    plugin.Initialize(this.buildChannelContext(plugin, resolved?.Config));
+    if (plugin.ToolNamePrefix.length === 0) {
+      return;
+    }
     this.RegisterClientToolHandler(plugin.ToolNamePrefix, (toolName, argsJson) => {
       // The agent is ACTING on this channel — surface-discovery signal for the overlay
       // (first activity registers + auto-reveals + focuses the channel tab) before the
       // tool applies. Record the channel as USED so the overlay tabs it (channels other
       // than the whiteboard are tab-less until they're first used).
-      this.usedChannelNames.add(plugin.ChannelName);
-      this._channelActivity$.next(plugin);
+      this.noteChannelActivity(plugin);
       return plugin.ApplyAgentTool(toolName, argsJson);
     });
   }
 
+  /** Records that the agent acted on a channel (the overlay's first-use reveal signal). */
+  private noteChannelActivity(plugin: BaseRealtimeChannelClient): void {
+    this.usedChannelNames.add(plugin.ChannelName);
+    this._channelActivity$.next(plugin);
+  }
+
+  /**
+   * Mounts an advertised `on-demand` channel when the agent opens it: initializes it, restores its
+   * prior-session state, publishes it on {@link ActiveChannels$} (so the overlay can give it a tab)
+   * and, if the call is already connected, tells it so. If initialization throws the channel goes
+   * back to being advertised, so the agent can retry or move on.
+   */
+  private async mountAdvertisedChannel(plugin: BaseRealtimeChannelClient): Promise<void> {
+    const index = this.advertisedChannels.findIndex((p) => p.Plugin === plugin);
+    if (index < 0) {
+      return; // already mounted (or never advertised) — the dispatcher opens it regardless
+    }
+    const [prepared] = this.advertisedChannels.splice(index, 1);
+    try {
+      this.mountChannel(prepared, this.GetResolvedChannel(prepared.Key) ?? undefined);
+    } catch (error) {
+      this.advertisedChannels.splice(index, 0, prepared);
+      throw error;
+    }
+    this.restorePriorChannelState(plugin);
+    this._activeChannels$.next([...this._activeChannels$.value, plugin]);
+    if (this.isSessionLive()) {
+      this.notifyChannelSessionStarted(plugin);
+    }
+  }
+
+  /** Tells a channel the session is connected, containing anything it throws. */
+  private notifyChannelSessionStarted(channel: BaseRealtimeChannelClient): void {
+    try {
+      channel.OnSessionStarted?.();
+    } catch (err) {
+      console.error(`[RealtimeSession] Error in channel '${channel.ChannelName}' OnSessionStarted:`, err);
+    }
+  }
+
+  /** Finds a session channel (open or merely advertised) for the dispatcher. */
+  private findDispatchableChannel(key: string): DispatchableChannel | null {
+    const id = NormalizeChannelKey(key);
+    const open = this._activeChannels$.value.find((c) => NormalizeChannelKey(c.ChannelName) === id);
+    if (open) {
+      return { Plugin: open, IsOpen: true };
+    }
+    const advertised = this.advertisedChannels.find((p) => NormalizeChannelKey(p.Key) === id);
+    return advertised ? { Plugin: advertised.Plugin, IsOpen: false } : null;
+  }
+
+  /** The keys the agent can address, for "unknown channel" messages — channels with nothing to address are left out. */
+  private listAddressableChannelKeys(): string[] {
+    const addressable = (plugin: BaseRealtimeChannelClient): boolean => {
+      const descriptor = plugin.GetDescriptor();
+      return descriptor.Verbs.length > 0 || descriptor.Inputs !== undefined;
+    };
+    return [
+      ...this._activeChannels$.value.filter(addressable).map((c) => c.ChannelName),
+      ...this.advertisedChannels.filter((p) => addressable(p.Plugin)).map((p) => p.Key),
+    ];
+  }
+
+  /**
+   * Runs a channel-addressed `ContextTool` call (the {@link RealtimeChannelContext.DispatchContextAction}
+   * implementation): validates it, opens an `on-demand` channel when asked, runs the verb, and on
+   * success records the channel as used so the overlay reveals its tab. Never throws.
+   */
+  private async dispatchContextAction(request: RealtimeContextActionRequest): Promise<RealtimeContextActionResult> {
+    const result = await this.channelDispatcher.Dispatch(request);
+    if (result.Success) {
+      const channel = this.findDispatchableChannel(request.Target.Channel);
+      if (channel) {
+        this.noteChannelActivity(channel.Plugin);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Tells the model which channels exist and how to use them — rendered from the channels' own
+   * descriptors, so a new channel needs no prompt change. Sent ONCE, the first moment the control
+   * channel is usable — a context note sent before then is dropped, and `Connect` can resolve before the
+   * provider reports `listening`, so this runs at start and again on each state change until it has gone.
+   * A session whose only channels describe themselves through native tools sends nothing.
+   */
+  private flushChannelCatalogNote(): void {
+    if (!this.catalogNotePending || !this.isSessionLive()) {
+      return;
+    }
+    this.catalogNotePending = false;
+    const entries: ChannelCatalogEntry[] = [
+      ...this._activeChannels$.value.map((plugin) => this.catalogEntry(plugin, true)),
+      ...this.advertisedChannels.map((p) => this.catalogEntry(p.Plugin, false)),
+    ];
+    const note = BuildChannelCatalogNote(entries);
+    if (note) {
+      this.SendContextNote(note);
+    }
+  }
+
+  /** One catalog entry: a channel's descriptor, whether it is open, and whether its tools were declared natively. */
+  private catalogEntry(plugin: BaseRealtimeChannelClient, isOpen: boolean): ChannelCatalogEntry {
+    const display = this.GetResolvedChannel(plugin.ChannelName)?.DisplayPolicy;
+    return {
+      Descriptor: plugin.GetDescriptor(),
+      IsOpen: isOpen,
+      HasNativeTools: isOpen && display !== undefined && DeclaresNativeTools(display) && plugin.GetToolDefinitions().length > 0,
+    };
+  }
+
   /** Builds the host-services context one channel plugin sees (its only line to the session). */
-  private buildChannelContext(plugin: BaseRealtimeChannelClient): RealtimeChannelContext {
+  private buildChannelContext(plugin: BaseRealtimeChannelClient, channelConfig?: JSONObject): RealtimeChannelContext {
     // Capture the service in a local so the AgentSessionID getter reads the SERVICE's live
     // field (not the object literal's `this`) every time it's accessed.
     const service = this;
@@ -1622,6 +1985,10 @@ export class RealtimeSessionRuntime {
       AppContext$: this.AppContext$,
       ExecuteClientTool: (name: string, params: Record<string, unknown>) =>
         this.executeAppClientTool(name, params),
+      // Channel-addressed ContextTool calls: validated against the verb's schema, open `on-demand` channels.
+      DispatchContextAction: (request: RealtimeContextActionRequest) => this.dispatchContextAction(request),
+      // This channel's resolved configuration (host defaults beneath agent/app config).
+      ChannelConfig: channelConfig ?? {},
       get Client(): BaseRealtimeClient | null {
         return service.client;
       },
@@ -1632,35 +1999,62 @@ export class RealtimeSessionRuntime {
 
   /**
    * Host registry of surface CLIENT TOOLS (Name → handler), fed by the host (Explorer) from the
-   * active surface's `SetAgentClientTools`. The headless ClientContextChannel's `ContextTool` proxy
-   * executes against this via {@link executeAppClientTool}. Keys are lower-cased for case-insensitive
-   * model-supplied action names.
+   * active surface's `SetAgentClientTools` and from its always-on globals. The headless
+   * ClientContextChannel's `ContextTool` proxy executes against this via {@link executeAppClientTool}.
+   * Owner-keyed — see {@link AppClientToolRegistry}.
    */
-  private readonly appClientToolHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown> | unknown>();
+  private readonly appToolRegistry = new AppClientToolRegistry();
 
   /**
-   * Replaces the set of host-registered surface client tools the realtime ContextTool can execute.
-   * The host calls this at session start and whenever the active surface's tool set changes (the
-   * continuous-capability half of client-context delivery). Passing `[]` clears them.
+   * Registers the tools ONE source of the host can run for the realtime `ContextTool`, replacing only
+   * that source's previous set — other owners' tools are untouched. A host with two sources (Explorer's
+   * always-available globals and the active surface's tools) registers each under its own owner key, so
+   * refreshing the surface's tools can neither drop the globals nor leave the previous surface's tools
+   * behind. Passing `[]` clears just that owner. When two owners register the same tool name, the
+   * later-registered owner wins.
    *
-   * @param tools The current surface client tools (name + handler). Descriptions/schemas ride the
-   *   app-context manifest separately; only the executable handler is needed here.
+   * Calling it with one argument (the original form) registers under {@link DEFAULT_APP_TOOL_OWNER}, so
+   * a host with a single source behaves exactly as before.
+   *
+   * @param tools The owner's complete current set (name + handler; description/schema optional).
+   * @param owner A stable key naming the source (e.g. `'explorer.surface'`). Defaults to a shared owner.
    */
-  public RegisterAppClientTools(
-    tools: ReadonlyArray<{ Name: string; Handler: (params: Record<string, unknown>) => Promise<unknown> | unknown }>
-  ): void {
-    this.appClientToolHandlers.clear();
-    for (const tool of tools) {
-      if (tool?.Name && typeof tool.Handler === 'function') {
-        this.appClientToolHandlers.set(tool.Name.trim().toLowerCase(), tool.Handler);
-      }
-    }
+  public RegisterAppClientTools(tools: ReadonlyArray<AppClientToolRegistration>, owner: string = DEFAULT_APP_TOOL_OWNER): void {
+    this.appToolRegistry.Register(owner, tools);
+  }
+
+  /** Removes one owner's tools (and its place in the collision order). No-op when it has none. */
+  public UnregisterAppClientTools(owner: string): void {
+    this.appToolRegistry.Unregister(owner);
+  }
+
+  /** Removes every owner's tools. */
+  public ClearAppClientTools(): void {
+    this.appToolRegistry.Clear();
+  }
+
+  /**
+   * The client tools in effect right now, resolved through the same unified resolver the server uses
+   * (`override → session → app → static`, first match wins): the host's registered tools (described
+   * by the manifest the host streams when it did not describe them itself) first, then the app and
+   * agent tiers the server resolved at mint. Only the host-registered tools can RUN here; the
+   * other tiers describe what the app declares.
+   */
+  private resolveAppClientTools(): ClientToolMetadata[] {
+    const manifest = this._appContext$.value?.Capabilities?.Tools ?? [];
+    return ResolveClientTools({
+      agentId: '',
+      sessionTools: MergeToolMetadata(this.appToolRegistry.ToMetadata(), manifest),
+      appTools: this.sessionClientTools?.App,
+      staticTools: this.sessionClientTools?.Static,
+    });
   }
 
   /**
    * Executes a host-registered surface client tool by name (the {@link RealtimeChannelContext.ExecuteClientTool}
    * implementation). Tolerant: an unknown tool or a thrown handler resolves to a structured
-   * `Success: false` result the channel narrates — never throws.
+   * `Success: false` result the channel narrates — never throws. A tool the app declares but the host has
+   * not registered a handler for says so, instead of reading like a typo.
    *
    * @param name The tool name (the model's `action`).
    * @param params The tool parameters.
@@ -1670,13 +2064,9 @@ export class RealtimeSessionRuntime {
     name: string,
     params: Record<string, unknown>
   ): Promise<{ Success: boolean; Result?: unknown; ErrorMessage?: string }> {
-    const handler = this.appClientToolHandlers.get((name ?? '').trim().toLowerCase());
+    const handler = this.appToolRegistry.Find(name)?.Handler;
     if (!handler) {
-      const available = Array.from(this.appClientToolHandlers.keys()).join(', ');
-      return {
-        Success: false,
-        ErrorMessage: `No client tool named "${name}" is available on this surface. Available: ${available || '(none)'}.`
-      };
+      return { Success: false, ErrorMessage: this.describeMissingClientTool(name) };
     }
     try {
       const result = await handler(params ?? {});
@@ -1684,6 +2074,17 @@ export class RealtimeSessionRuntime {
     } catch (error) {
       return { Success: false, ErrorMessage: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  /** The model-readable reason a client tool could not run. */
+  private describeMissingClientTool(name: string): string {
+    const available = this.appToolRegistry.Names().join(', ');
+    const wanted = (name ?? '').trim().toLowerCase();
+    const declared = this.resolveAppClientTools().find((t) => t.Name.trim().toLowerCase() === wanted);
+    if (declared) {
+      return `The client tool "${name}" is declared for this app but this surface has not registered it, so it cannot run right now. Available: ${available || '(none)'}.`;
+    }
+    return `No client tool named "${name}" is available on this surface. Available: ${available || '(none)'}.`;
   }
 
   /**
@@ -1723,32 +2124,37 @@ export class RealtimeSessionRuntime {
    * never affected.
    */
   private applyPriorChannelStates(statesJson: string | null | undefined): void {
+    this.priorChannelStates = {};
     if (!statesJson) {
       return;
     }
-    let states: Record<string, string>;
     try {
       const parsed: unknown = JSON.parse(statesJson);
       if (parsed === null || typeof parsed !== 'object') {
         return;
       }
-      states = parsed as Record<string, string>;
+      this.priorChannelStates = parsed as Record<string, string>;
     } catch {
       console.warn('[RealtimeSession] PriorChannelStatesJson was malformed — starting channels fresh');
       return;
     }
     for (const plugin of this._activeChannels$.value) {
-      const state = states[plugin.ChannelName];
-      if (typeof state === 'string' && state.length > 0) {
-        try {
-          const restored = plugin.RestoreState(state);
-          if (!restored) {
-            console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
-          }
-        } catch (error) {
-          console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' restore threw — starting fresh`, error);
-        }
+      this.restorePriorChannelState(plugin);
+    }
+  }
+
+  /** Offers one plugin its prior-session state, if there is one. Rejections and throws are logged, never fatal. */
+  private restorePriorChannelState(plugin: BaseRealtimeChannelClient): void {
+    const state = this.priorChannelStates[plugin.ChannelName];
+    if (typeof state !== 'string' || state.length === 0) {
+      return;
+    }
+    try {
+      if (!plugin.RestoreState(state)) {
+        console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' declined its prior-session state — starting fresh`);
       }
+    } catch (error) {
+      console.warn(`[RealtimeSession] Channel '${plugin.ChannelName}' restore threw — starting fresh`, error);
     }
   }
 
@@ -1846,6 +2252,13 @@ export class RealtimeSessionRuntime {
       this._activeChannels$.next([]);
     }
     this.usedChannelNames.clear();
+    // Channels that were prepared or advertised but never mounted were never initialized, so there is
+    // nothing to dispose — only the bookkeeping to forget.
+    this.discardUnmountedChannels();
+    this.catalogNotePending = false;
+    this.resolvedChannels.clear();
+    this.priorChannelStates = {};
+    this.sessionClientTools = null;
   }
 
   // ── Realtime client resolution + wiring ────────────────────────────────────
@@ -1968,6 +2381,7 @@ export class RealtimeSessionRuntime {
     const mapped = this.mapClientState(state);
     if (mapped) {
       this._connectionState$.next(mapped);
+      this.flushChannelCatalogNote();
     }
   }
 
@@ -2399,24 +2813,9 @@ export class RealtimeSessionRuntime {
     recordingStartedAt?: string | null,
     mediaCollectionId?: string | null,
     applicationId?: string | null,
-    appContext?: AppContextSnapshot | null
+    appContext?: AppContextSnapshot | null,
+    channelCandidatesJson?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
-    const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson) {
-          AgentSessionId
-          ConversationId
-          Provider
-          Model
-          EphemeralToken
-          ExpiresAt
-          SessionConfigJson
-          ModelName
-          NarrationInstructionsTemplate
-          PriorChannelStatesJson
-        }
-      }
-    `;
     const variables = {
       targetAgentId,
       conversationId: conversationId ?? null,
@@ -2431,12 +2830,65 @@ export class RealtimeSessionRuntime {
       applicationId: applicationId ?? null,
       appContextJson: appContext ? JSON.stringify(appContext) : null
     };
-    const result = await this.gql().ExecuteGQL(mutation, variables);
+    const result = await this.executeMintMutation(variables, channelCandidatesJson ?? null);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
     if (!payload?.EphemeralToken) {
       throw new Error('StartRealtimeClientSession returned no ephemeral token');
     }
     return payload;
+  }
+
+  /**
+   * Runs the mint mutation. When the session has channel candidates it asks the server to scope them
+   * (`channelCandidatesJson`) and to return the resolved policy (`ClientPolicyJson`); a server that
+   * predates channel scoping rejects that argument/field at validation, in which case the runtime
+   * mints with the original mutation instead and resolves the scope locally — a new client must keep
+   * working against an older server, and a failed mint over an optional extension would be the worst
+   * way to find out they differ. The fallback is remembered so a long-lived runtime asks once.
+   */
+  private async executeMintMutation(
+    variables: Record<string, JSONValue>,
+    channelCandidatesJson: string | null
+  ): Promise<Record<string, JSONValue> | undefined> {
+    if (channelCandidatesJson === null || this.serverLacksChannelScoping) {
+      return this.gql().ExecuteGQL(this.buildMintMutation(false), variables);
+    }
+    try {
+      return await this.gql().ExecuteGQL(this.buildMintMutation(true), { ...variables, channelCandidatesJson });
+    } catch (error) {
+      if (!isUnsupportedChannelScopingError(error)) {
+        throw error;
+      }
+      console.warn('[RealtimeSession] The server does not support channel scoping — minting without it and resolving channels locally.');
+      this.serverLacksChannelScoping = true;
+      return this.gql().ExecuteGQL(this.buildMintMutation(false), variables);
+    }
+  }
+
+  /** Whether the server rejected the channel-scoping extension of the mint; set once and kept. */
+  private serverLacksChannelScoping = false;
+
+  /** The `StartRealtimeClientSession` document, with or without the channel-scoping extension. */
+  private buildMintMutation(withChannelScoping: boolean): string {
+    const extraVariable = withChannelScoping ? ', $channelCandidatesJson: String' : '';
+    const extraArgument = withChannelScoping ? ', channelCandidatesJson: $channelCandidatesJson' : '';
+    const extraField = withChannelScoping ? '\n          ClientPolicyJson' : '';
+    return `
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String${extraVariable}) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson${extraArgument}) {
+          AgentSessionId
+          ConversationId
+          Provider
+          Model
+          EphemeralToken
+          ExpiresAt
+          SessionConfigJson
+          ModelName
+          NarrationInstructionsTemplate
+          PriorChannelStatesJson${extraField}
+        }
+      }
+    `;
   }
 
   /** Calls the `ExecuteRealtimeSessionTool` mutation; returns the ResultJson string. */

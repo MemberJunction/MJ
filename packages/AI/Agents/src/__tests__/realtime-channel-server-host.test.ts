@@ -548,3 +548,38 @@ describe('RealtimeChannelServerHost — server-channel tool aggregation', () => 
         expect(unknownSession.Success).toBe(false);
     });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Pruning by resolved channel scope
+// ---------------------------------------------------------------------------------------------
+
+describe('RealtimeChannelServerHost — PruneSessionChannels (scope resolved after the session row exists)', () => {
+    it('disposes and forgets only the named channels, leaving siblings live', async () => {
+        setRegistryRows([ALPHA_ROW, BETA_ROW]);
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+        const alpha = host.GetSessionPlugin('session-1', 'Alpha')!;
+
+        const dropped = host.PruneSessionChannels('session-1', ['alpha']);
+
+        expect(dropped).toEqual(['alpha']);
+        expect(host.GetSessionPlugin('session-1', 'Alpha')).toBeNull();
+        expect(host.GetSessionPlugin('session-1', 'Beta')).toBeInstanceOf(BetaChannelServer);
+        expect(journalOf(alpha).events).toContain('dispose');
+    });
+
+    it('ignores names with no plugin (a server-only channel the browser never reported keeps running) and unknown sessions', async () => {
+        setRegistryRows([ALPHA_ROW]);
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+        expect(host.PruneSessionChannels('session-1', ['NotAServerChannel'])).toEqual([]);
+        expect(host.GetSessionPlugin('session-1', 'Alpha')).toBeInstanceOf(AlphaChannelServer);
+        expect(host.PruneSessionChannels('no-such-session', ['Alpha'])).toEqual([]);
+    });
+
+    it('a pruned channel no longer routes state saves through its plugin', async () => {
+        setRegistryRows([ALPHA_ROW]);
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+        host.PruneSessionChannels('session-1', ['Alpha']);
+        behavior.stateReplacement = 'REPLACED';
+        expect(await host.OnChannelStateSave('session-1', 'Alpha', '{"v":1}')).toBe('{"v":1}');
+    });
+});
