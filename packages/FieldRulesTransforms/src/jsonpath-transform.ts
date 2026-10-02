@@ -8,7 +8,7 @@ import type { FieldTransformPlugin, JsonPathConfig } from '@memberjunction/globa
  * FIRST match is returned (the common "grab one value" case); set `First: false` to get the full array
  * of matches. Lives here, not in `@memberjunction/global`, because it needs `jsonpath-plus`.
  */
-export const jsonPathTransform: FieldTransformPlugin = (value, _fields, config) => {
+export const JsonPathTransform: FieldTransformPlugin = (value, _fields, config) => {
     const c = config as JsonPathConfig;
     const json: unknown = typeof value === 'string' ? JSON.parse(value) : value;
     const matches = JSONPath({ path: c.Path, json: json as object, wrap: true }) as unknown[];
@@ -17,3 +17,6 @@ export const jsonPathTransform: FieldTransformPlugin = (value, _fields, config) 
     }
     return Array.isArray(matches) && matches.length > 0 ? matches[0] : null;
 };
+
+/** @deprecated Use {@link JsonPathTransform}. */
+export const jsonPathTransform: FieldTransformPlugin = JsonPathTransform;

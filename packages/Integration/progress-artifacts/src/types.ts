@@ -198,6 +198,24 @@ export interface IntegrationRunResult {
     warningCount?: number;
     /** When non-empty, this run is resumable: latest checkpoint event sequence. */
     resumableFromSeq?: number;
+    /**
+     * How many events the run's journal holds, recorded at the moment the run terminated.
+     *
+     * Persisted so a finished run can be summarised WITHOUT opening its journal. Counting the lines
+     * of a 12–13 k-event journal on network storage is one of the four full-file reads that made a
+     * run listing take 73 seconds; this number is free, and it is the same number the emitter
+     * actually wrote.
+     *
+     * Optional only for backward compatibility: a `result.json` written before this field existed
+     * has none, and the reader falls back to a single journal pass for those.
+     */
+    eventCount?: number;
+    /**
+     * The run's final journal event, persisted for the same reason as {@link eventCount} — the
+     * summary surfaces report the latest event type and message, and reading the journal's last line
+     * to recover something the emitter had in hand is a full-file read for one line.
+     */
+    latestEvent?: IntegrationProgressEvent;
 }
 
 /** Snapshot returned by the reader API for a single run. */

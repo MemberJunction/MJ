@@ -29,7 +29,7 @@ vi.mock('@memberjunction/core', () => {
     return { Metadata, RunView };
 });
 
-import { loadArtifact, loadConversationArtifacts } from '@/data/services/artifacts';
+import { LoadArtifact, LoadConversationArtifacts } from '@/data/services/artifacts';
 
 /** Build a fake artifact entity for GetEntityObject. */
 function artifactEntity(opts: { type?: string; loadOk?: boolean; description?: string | null }): unknown {
@@ -42,7 +42,7 @@ function artifactEntity(opts: { type?: string; loadOk?: boolean; description?: s
     };
 }
 
-/** Configure loadArtifact: a single artifact + one version with `content`. */
+/** Configure LoadArtifact: a single artifact + one version with `content`. */
 function setupSingle(opts: { type?: string; content: string; loadOk?: boolean }): void {
     state.entityObject = artifactEntity(opts);
     state.runView = () => ({ Success: true, Results: [{ Version: 2, Content: opts.content }] });
@@ -53,69 +53,69 @@ beforeEach(() => {
     state.runView = () => ({ Success: true, Results: [] });
 });
 
-describe('loadArtifact — classify()', () => {
+describe('LoadArtifact — classify()', () => {
     it('detects a chart from structured chart JSON', async () => {
         setupSingle({ type: 'Chart', content: '{"chartType":"bar","data":[{"label":"A","value":1}]}' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('chart');
-        expect(a?.chart?.kind).toBe('bar');
-        expect(a?.json).toBeDefined();
+        expect(a?.chart?.Kind).toBe('bar');
+        expect(a?.Json).toBeDefined();
     });
 
     it('detects a json-table for an array of objects', async () => {
         setupSingle({ type: 'Data', content: '[{"a":1},{"a":2}]' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('json-table');
-        expect(a?.rows).toHaveLength(2);
+        expect(a?.Rows).toHaveLength(2);
     });
 
     it('detects generic json for a non-chart object', async () => {
         setupSingle({ type: 'Config', content: '{"a":1,"b":2}' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('json');
-        expect(a?.json).toEqual({ a: 1, b: 2 });
+        expect(a?.Json).toEqual({ a: 1, b: 2 });
     });
 
     it('falls through to text when {…} content is not valid JSON', async () => {
         setupSingle({ type: 'Plain', content: '{not valid json' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('text');
     });
 
     it('detects HTML from the artifact type name', async () => {
         setupSingle({ type: 'HTML Report', content: 'Totally not tags' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('html');
     });
 
     it('detects HTML by sniffing tag-like content', async () => {
         setupSingle({ type: 'Report', content: '<table><tr><td>x</td></tr></table>' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('html');
     });
 
     it('detects code and derives a language hint from the type name', async () => {
         setupSingle({ type: 'TypeScript Code', content: 'const x = 1;' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('code');
-        expect(a?.language).toBe('typescript');
+        expect(a?.Language).toBe('typescript');
     });
 
     it('detects markdown from the type name', async () => {
         setupSingle({ type: 'Markdown', content: 'Just some prose.' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('markdown');
     });
 
     it('detects markdown by sniffing markup characters', async () => {
         setupSingle({ type: 'Note', content: '# A heading\n\nwith **bold**' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('markdown');
     });
 
     it('falls back to plain text', async () => {
         setupSingle({ type: 'Whatever', content: 'plain sentence without markup' });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('text');
     });
 
@@ -129,19 +129,19 @@ describe('loadArtifact — classify()', () => {
                 { Version: 1, Content: 'older' },
             ],
         });
-        const a = await loadArtifact('a1');
-        expect(a?.version).toBe(3);
-        expect(a?.versionCount).toBe(3);
+        const a = await LoadArtifact('a1');
+        expect(a?.Version).toBe(3);
+        expect(a?.VersionCount).toBe(3);
     });
 
     it('returns null when the artifact fails to load', async () => {
         setupSingle({ type: 'Markdown', content: '# hi', loadOk: false });
-        const a = await loadArtifact('a1');
+        const a = await LoadArtifact('a1');
         expect(a).toBeNull();
     });
 });
 
-describe('loadConversationArtifacts — categorize + preview + attribution', () => {
+describe('LoadConversationArtifacts — categorize + preview + attribution', () => {
     function routeRunView(routes: {
         artifacts: unknown[];
         versions?: unknown[];
@@ -166,7 +166,7 @@ describe('loadConversationArtifacts — categorize + preview + attribution', () 
 
     it('returns [] when there are no artifacts', async () => {
         state.runView = routeRunView({ artifacts: [] });
-        const result = await loadConversationArtifacts('conv-1');
+        const result = await LoadConversationArtifacts('conv-1');
         expect(result).toEqual([]);
     });
 
@@ -186,20 +186,20 @@ describe('loadConversationArtifacts — categorize + preview + attribution', () 
             agents: [{ ID: 'agent-1', Name: 'Analyst' }],
         });
 
-        const result = await loadConversationArtifacts('conv-1');
+        const result = await LoadConversationArtifacts('conv-1');
         const byId = new Map(result.map((r) => [r.id, r]));
 
-        expect(byId.get('art-chart')?.category).toBe('chart');
-        expect(byId.get('art-table')?.category).toBe('table');
-        expect(byId.get('art-doc')?.category).toBe('document');
+        expect(byId.get('art-chart')?.Category).toBe('chart');
+        expect(byId.get('art-table')?.Category).toBe('table');
+        expect(byId.get('art-doc')?.Category).toBe('document');
 
         // Attribution flows from the referencing conversation detail.
-        expect(byId.get('art-chart')?.agentId).toBe('agent-1');
-        expect(byId.get('art-chart')?.agentName).toBe('Analyst');
-        expect(byId.get('art-table')?.agentId).toBeNull();
+        expect(byId.get('art-chart')?.AgentId).toBe('agent-1');
+        expect(byId.get('art-chart')?.AgentName).toBe('Analyst');
+        expect(byId.get('art-table')?.AgentId).toBeNull();
 
         // Preview prefers the description, else the first content line.
-        expect(byId.get('art-doc')?.preview).toBe('A written memo about Q3');
-        expect(byId.get('art-chart')?.preview.length).toBeGreaterThan(0);
+        expect(byId.get('art-doc')?.Preview).toBe('A written memo about Q3');
+        expect(byId.get('art-chart')?.Preview.length).toBeGreaterThan(0);
     });
 });

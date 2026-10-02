@@ -23,14 +23,23 @@ export interface SystemValidationIssue {
 export class SystemValidationService {
   private _validationIssues = new BehaviorSubject<SystemValidationIssue[]>([]);
   
-  public validationIssues$: Observable<SystemValidationIssue[]> = this._validationIssues.asObservable();
+  public ValidationIssues$: Observable<SystemValidationIssue[]> = this._validationIssues.asObservable();
+
+  /** @deprecated Use {@link ValidationIssues$}. */
+  public get validationIssues$(): Observable<SystemValidationIssue[]> {
+    return this.ValidationIssues$;
+  }
+  /** @deprecated Use {@link ValidationIssues$}. */
+  public set validationIssues$(value: Observable<SystemValidationIssue[]>) {
+    this.ValidationIssues$ = value;
+  }
 
   constructor() { }
 
   /**
    * Adds a new validation issue to the list
    */
-  public addIssue(issue: Omit<SystemValidationIssue, 'timestamp'>): void {
+  public AddIssue(issue: Omit<SystemValidationIssue, 'timestamp'>): void {
     try {
       const newIssue: SystemValidationIssue = {
         ...issue,
@@ -49,10 +58,15 @@ export class SystemValidationService {
     }
   }
 
+  /** @deprecated Use {@link AddIssue}. */
+  public addIssue(issue: Omit<SystemValidationIssue, 'timestamp'>): void {
+    return this.AddIssue(issue);
+  }
+
   /**
    * Removes a validation issue by id
    */
-  public removeIssue(id: string): void {
+  public RemoveIssue(id: string): void {
     try {
       const currentIssues = this._validationIssues.getValue();
       const updatedIssues = currentIssues.filter(issue => issue.id !== id);
@@ -65,17 +79,32 @@ export class SystemValidationService {
     }
   }
 
+  /** @deprecated Use {@link RemoveIssue}. */
+  public removeIssue(id: string): void {
+    return this.RemoveIssue(id);
+  }
+
   /**
    * Clears all validation issues
    */
-  public clearIssues(): void {
+  public ClearIssues(): void {
     this._validationIssues.next([]);
+  }
+
+  /** @deprecated Use {@link ClearIssues}. */
+  public clearIssues(): void {
+    return this.ClearIssues();
   }
 
   /**
    * Checks if there are any validation issues with error severity
    */
-  public hasErrors(): boolean {
+  public HasErrors(): boolean {
     return this._validationIssues.getValue().some(issue => issue.severity === 'error');
+  }
+
+  /** @deprecated Use {@link HasErrors}. */
+  public hasErrors(): boolean {
+    return this.HasErrors();
   }
 }

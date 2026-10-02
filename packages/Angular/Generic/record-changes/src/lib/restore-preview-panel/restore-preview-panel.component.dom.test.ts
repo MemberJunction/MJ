@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ComponentFixture } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -273,5 +273,79 @@ describe('RestorePreviewPanelComponent (DOM)', () => {
     expect(query(f, '.rpp-col-current')).toBeNull();
     const btn = query(f, '.rpp-btn-primary') as HTMLButtonElement;
     expect(btn.textContent).toContain('Re-create');
+  });
+});
+
+// ── Date fields. TZ is pinned west of Greenwich: a SQL `date` arrives as UTC midnight, and at UTC a
+//    local-zone formatter lands on the right day by accident, so none of these could fail there.
+describe('RestorePreviewPanelComponent (DOM) — date fields', () => {
+  const originalTZ = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = 'America/Chicago';
+  });
+  afterEach(() => {
+    process.env.TZ = originalTZ;
+  });
+
+  const DATE_FIELDS = [
+    { ...field('ID', { IsPrimaryKey: true }), Type: 'uniqueidentifier' },
+    { ...field('DueDate', { TSType: EntityFieldTSType.Date }), Type: 'date' },
+    { ...field('ApprovedAt', { TSType: EntityFieldTSType.Date }), Type: 'datetimeoffset' },
+  ];
+
+  function dateLive(values: Record<string, unknown>) {
+    return {
+      EntityInfo: { Fields: DATE_FIELDS },
+      Fields: DATE_FIELDS.map((f) => ({ Name: f.Name, Value: values[f.Name] })),
+    };
+  }
+
+  /** Renders, reveals unchanged rows too, and returns each row's cells keyed by field name. */
+  function rowsByField(snapshot: Record<string, unknown>, live: Record<string, unknown>) {
+    const f = render({ Visible: true, Mode: 'live', RecordChange: recordChange(snapshot), LiveRecord: dateLive(live) });
+    click(f, '.rpp-disclosure');
+    f.detectChanges();
+    const byField = new Map<string, { changed: boolean; current: string; restore: string }>();
+    for (const tr of queryAll(f, 'tbody tr')) {
+      byField.set(tr.querySelector('.rpp-field-name')?.textContent?.trim() ?? '', {
+        changed: tr.classList.contains('rpp-row-changed'),
+        current: tr.querySelector('.rpp-col-current')?.textContent?.trim() ?? '',
+        restore: tr.querySelector('.rpp-col-restore')?.textContent?.trim() ?? '',
+      });
+    }
+    return byField;
+  }
+
+  it('shows a date-only field as its stored day on both sides, with no time', () => {
+    const rows = rowsByField(
+      { ID: 'rec-1', DueDate: '2026-09-15T00:00:00.000Z' },
+      { ID: 'rec-1', DueDate: new Date('2026-10-01T00:00:00.000Z') },
+    );
+    expect(rows.get('DueDate')).toEqual({ changed: true, current: 'Oct 1, 2026', restore: 'Sep 15, 2026' });
+  });
+
+  it('treats a snapshot day and the same live day (a Date at UTC midnight) as unchanged', () => {
+    const rows = rowsByField(
+      { ID: 'rec-1', DueDate: '2026-10-01' },
+      { ID: 'rec-1', DueDate: new Date('2026-10-01T00:00:00.000Z') },
+    );
+    expect(rows.get('DueDate')?.changed).toBe(false);
+  });
+
+  it('flags a timestamp that moved by under a minute as changed', () => {
+    // Both sides display "Oct 1, 2026, 9:00 AM"; only the seconds differ.
+    const rows = rowsByField(
+      { ID: 'rec-1', ApprovedAt: '2026-10-01T14:00:00.000Z' },
+      { ID: 'rec-1', ApprovedAt: new Date('2026-10-01T14:00:30.000Z') },
+    );
+    expect(rows.get('ApprovedAt')).toEqual({ changed: true, current: 'Oct 1, 2026, 9:00 AM', restore: 'Oct 1, 2026, 9:00 AM' });
+  });
+
+  it('treats the same instant in a snapshot string and a live Date as unchanged', () => {
+    const rows = rowsByField(
+      { ID: 'rec-1', ApprovedAt: '2026-10-01T14:00:30.000Z' },
+      { ID: 'rec-1', ApprovedAt: new Date('2026-10-01T14:00:30.000Z') },
+    );
+    expect(rows.get('ApprovedAt')?.changed).toBe(false);
   });
 });

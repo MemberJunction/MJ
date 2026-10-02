@@ -5,7 +5,7 @@ import {
   Metadata,
   UserInfo,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
 import type { Observable } from 'rxjs';
 
@@ -65,7 +65,20 @@ export interface FeaturePipelineSummary {
   LastRunSuccess: number | null;
   /** Records that errored in the most recent run, or null. */
   LastRunErrors: number | null;
+  /**
+   * The pipeline type ('LLM' or 'Decision' or custom). Defaults to 'LLM' when unset. The two built-in
+   * names are given in their canonical case whatever case the spec uses, as the processor matches them.
+   */
+  PipelineType: string;
 }
+
+/** The one DataFeatureSpec property the summary reads from a Record Process `Configuration`. */
+interface ConfigurationPipelineType {
+  PipelineType?: string | null;
+}
+
+/** The built-in pipeline type names, by their lower-case form. */
+const BUILT_IN_PIPELINE_TYPES: Record<string, string> = { llm: 'LLM', decision: 'Decision' };
 
 /**
  * **FeaturePipelineEngine** (Knowledge Hub, Angular) — the discovery + monitoring
@@ -90,8 +103,8 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     return super.getInstance<FeaturePipelineEngine>();
   }
 
-  private _RecordProcesses: MJRecordProcessEntity[] = [];
-  private _ProcessRuns: MJProcessRunEntity[] = [];
+  private _recordProcesses: MJRecordProcessEntity[] = [];
+  private _processRuns: MJProcessRunEntity[] = [];
 
   /**
    * Lazy-load the Record Process + recent Process Run caches. Safe to call from
@@ -105,8 +118,8 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     provider?: IMetadataProvider,
   ): Promise<void> {
     const c: Partial<BaseEnginePropertyConfig>[] = [
-      { Type: 'entity', EntityName: 'MJ: Record Processes', PropertyName: '_RecordProcesses', OrderBy: 'Name' },
-      { Type: 'entity', EntityName: 'MJ: Process Runs', PropertyName: '_ProcessRuns', OrderBy: '__mj_CreatedAt DESC' },
+      { Type: 'entity', EntityName: 'MJ: Record Processes', PropertyName: '_recordProcesses', OrderBy: 'Name' },
+      { Type: 'entity', EntityName: 'MJ: Process Runs', PropertyName: '_processRuns', OrderBy: '__mj_CreatedAt DESC' },
     ];
     await super.Load(c, provider ?? Metadata.Provider, forceRefresh, contextUser);
   }
@@ -115,22 +128,22 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
 
   /** Every cached Record Process categorized as a Feature Pipeline. */
   public get Pipelines(): MJRecordProcessEntity[] {
-    return (this._RecordProcesses ?? []).filter((rp) => FeaturePipelineEngine.isFeaturePipeline(rp));
+    return (this._recordProcesses ?? []).filter((rp) => FeaturePipelineEngine.isFeaturePipeline(rp));
   }
 
   /** All cached Process Run headers (newest first; all entities — callers filter). */
   public get Runs(): MJProcessRunEntity[] {
-    return this._ProcessRuns ?? [];
+    return this._processRuns ?? [];
   }
 
   /** Reactive stream of the raw Record Processes — re-emits on any save/delete/remote-invalidate. */
   public get Pipelines$(): Observable<MJRecordProcessEntity[]> {
-    return this.ObserveProperty<MJRecordProcessEntity>('_RecordProcesses');
+    return this.ObserveProperty<MJRecordProcessEntity>('_recordProcesses');
   }
 
   /** Reactive stream of the Process Run headers. */
   public get Runs$(): Observable<MJProcessRunEntity[]> {
-    return this.ObserveProperty<MJProcessRunEntity>('_ProcessRuns');
+    return this.ObserveProperty<MJProcessRunEntity>('_processRuns');
   }
 
   // ---- Projection ----
@@ -181,6 +194,7 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
       LastRunProcessed: latest?.ProcessedItems ?? null,
       LastRunSuccess: latest?.SuccessCount ?? null,
       LastRunErrors: latest?.ErrorCount ?? null,
+      PipelineType: FeaturePipelineEngine.derivePipelineType(p.Configuration),
     };
   }
 
@@ -256,4 +270,19 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     }
     return [];
   }
+
+  /**
+   * Best-effort pipeline type derived from the Record Process `Configuration` JSON
+   * (which serializes `DataFeatureSpec`). Returns 'LLM' when unset, empty, or unparseable, and a built-in
+   * name ('decision') in its canonical case ('Decision').
+   */
+  private static derivePipelineType(config: string | null): string {
+    const parsed = config ? SafeJSONParse<ConfigurationPipelineType>(config) : null;
+    const typeName = parsed && typeof parsed === 'object' && typeof parsed.PipelineType === 'string' ? parsed.PipelineType.trim() : '';
+    if (typeName.length === 0) {
+      return 'LLM';
+    }
+    return BUILT_IN_PIPELINE_TYPES[typeName.toLowerCase()] ?? typeName;
+  }
 }
+

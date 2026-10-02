@@ -17,7 +17,7 @@ export interface MockEntityOptions {
  * @param options Configuration options for the mock's state
  * @returns A proxy object that behaves like a BaseEntity
  */
-export function createMockEntity<T extends Record<string, unknown>>(
+export function CreateMockEntity<T extends Record<string, unknown>>(
   data: T,
   options: MockEntityOptions = {}
 ): T & MockEntityMethods {
@@ -85,6 +85,14 @@ export function createMockEntity<T extends Record<string, unknown>>(
       return true;
     },
   }) as T & MockEntityMethods;
+}
+
+/** @deprecated Use {@link CreateMockEntity}. */
+export function createMockEntity<T extends Record<string, unknown>>(
+  data: T,
+  options: MockEntityOptions = {}
+): T & MockEntityMethods {
+  return CreateMockEntity(data, options);
 }
 
 export interface MockEntityMethods {

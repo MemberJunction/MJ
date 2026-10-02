@@ -638,15 +638,7 @@ Should I proceed?
     "subAgent": {
       "name": "Database Designer",
       "message": "Create the database entities specified in callerContext.tableSpecs. The user has reviewed and approved this schema as part of the full agent design plan. Proceed directly to validation and creation — do not ask for confirmation.",
-      "terminateAfter": false,
-      "payload": {
-        "mode": "subagent",
-        "callerContext": {
-          "agentName": "Agent Manager",
-          "subagentConfirmedByParent": true,
-          "tableSpecs": "<copy from payload.pendingSchemaChanges>"
-        }
-      }
+      "terminateAfter": false
     }
   }
 }

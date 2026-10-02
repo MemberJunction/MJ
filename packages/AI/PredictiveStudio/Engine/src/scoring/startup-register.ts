@@ -25,8 +25,8 @@
 import { IMetadataProvider, IStartupSink, LogStatusEx, RegisterForStartup, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 
-import { registerMLScoringProcessor } from './register';
-import { buildProductionMLInferenceDeps } from '../operations/delegation';
+import { RegisterMLScoringProcessor } from './register';
+import { BuildProductionMLInferenceDeps } from '../operations/delegation';
 
 /**
  * Startup sink that registers the Predictive Studio `'ML Model'` (and `'MLModelInference'` alias)
@@ -56,7 +56,7 @@ export class PredictiveStudioScoringStartup extends BaseSingleton<PredictiveStud
    * @param _provider unused — see above
    */
   public async HandleStartup(_contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<void> {
-    registerMLScoringProcessor(buildProductionMLInferenceDeps());
+    RegisterMLScoringProcessor(BuildProductionMLInferenceDeps());
     // Routine boot registration — only surface it under verbose logging to keep startup quiet.
     LogStatusEx({
       message: '[PredictiveStudioScoringStartup] Registered ML Model scoring processor for Record Set Processing.',

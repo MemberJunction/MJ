@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo, RegisterForStartup } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type {
     MJIntegrationEntity,
     MJIntegrationSourceTypeEntity,
@@ -13,10 +13,11 @@ import type {
 import {
     CATALOG_FIELD_COLUMNS,
     CATALOG_OBJECT_COLUMNS,
+    CatalogDependencyEdge,
+    CatalogScopeData,
     CompanyIntegrationObjectFieldRow,
     CompanyIntegrationObjectRow,
     ENTITY_COMPANY_INTEGRATION_OBJECTS,
-    ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
     asReadOnlyField,
     asReadOnlyObject,
     projectCatalogFields,
@@ -37,6 +38,9 @@ export interface ResolvedCompanyIntegrationCatalog {
     /** Count of per-connection objects by provenance. Empty when `Source` is `Shared`. */
     Provenance: { Declared: number; Endpoint: number; Sampled: number };
 }
+
+/** The two ends of a dependency edge — all the dependency walk reads of a field. */
+type CatalogEdgeEnds = Pick<CatalogDependencyEdge, 'CompanyIntegrationObjectID' | 'RelatedCompanyIntegrationObjectID'>;
 
 /**
  * IntegrationEngineBase provides cached metadata for the MJ integration subsystem.
@@ -75,21 +79,25 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     private _fieldsByObjectIDScopedSource: CompanyIntegrationObjectFieldRow[] | null = null;
 
     /**
-     * Per-connection catalog rows, loaded as plain `BaseEntity` because no generated subclass
-     * exists for these entities — see CompanyIntegrationCatalog.ts. They are projected on first
-     * read and the projections are what every read site receives.
+     * Per-connection catalog rows that were SEEDED rather than loaded — `SeedForTesting` and the
+     * offline replay tiers. Plain `BaseEntity` because no generated subclass exists for these
+     * entities (see CompanyIntegrationCatalog.ts). Nothing loads them in a live process any more:
+     * there the rows come from the catalog scope in force, through {@link CatalogDataResolver}.
      */
     private _companyIntegrationObjects: BaseEntity[] = [];
     private _companyIntegrationObjectFields: BaseEntity[] = [];
 
     /**
-     * Lazily-built projections, invalidated exactly the way the field index is: by the identity of
-     * the array they were built from. Every load path replaces these arrays rather than mutating
-     * them, so a new array is a new projection with no invalidation hook to forget — which matters
-     * because `RefreshCatalog` bypasses `AdditionalLoading` and would otherwise leave them stale.
+     * Lazily-built projections, keyed by the identity of the row array they were built from, so a
+     * new array is a new projection with no invalidation hook to forget. Weakly held and per array
+     * because two connections' syncs run concurrently and alternate on every await: a single
+     * memo slot would re-project a whole catalog each time the other one read.
      */
-    private _cioProjected: CompanyIntegrationObjectRow[] | null = null;
-    private _cioProjectedSource: BaseEntity[] | null = null;
+    private _objectProjections = new WeakMap<BaseEntity[], CompanyIntegrationObjectRow[]>();
+    private _ownedObjectIDs = new WeakMap<CompanyIntegrationObjectRow[], ReadonlySet<string>>();
+    private _warmFieldProjections = new WeakMap<BaseEntity[], MJIntegrationObjectFieldEntity[]>();
+    private _edgesByOwner = new WeakMap<ReadonlyArray<CatalogEdgeEnds>, ReadonlyMap<string, string[]>>();
+    /** The seeded field rows' projection: one array, so one slot is enough. */
     private _ciofProjected: CompanyIntegrationObjectFieldRow[] | null = null;
     private _ciofProjectedSource: BaseEntity[] | null = null;
 
@@ -139,34 +147,25 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
             },
         ];
 
-        // The per-connection catalog is loaded ONLY when its entities are actually registered.
+        // The per-connection catalog is deliberately NOT among these (MJ-RUN-43).
         //
-        // This is not defensive tidiness — without it the engine cannot start on a workspace that
-        // has the code but not the migration. A configured dataset whose entity does not exist
-        // fails its RunView; BaseEngine treats an unknown entity as readable ("let the normal
-        // not-found handling apply"), so the failure is classified TRANSIENT, the property is left
-        // `loadedSuccessfully: false`, and every Config()/EnsureLoaded() retries it forever. The
-        // whole integration engine would sit permanently not-loaded, and the symptom would point
-        // at the network rather than at a missing table.
+        // It used to be two more CacheLocal datasets, which loaded EVERY connection's objects and
+        // fields as BaseEntity rows into the process and held them for its lifetime. On a NetForum
+        // catalog (888 objects / 97,414 fields) a freshly booted server with nothing running
+        // measured 2.37 GB at 84s and 3.81 GB at 3m against a 4748 MB heap ceiling (2026-09-19).
+        // That is a FLOOR, not a peak: no discovery fits above it, and ordinary traffic ran with
+        // under 1 GB of headroom.
         //
-        // Being conditional also removes an ordering constraint from the rollout: the patch is safe
-        // to deploy before the migration, and safe on a workspace that never receives it — those
-        // read the shared catalog exactly as they do today, which is the default anyway.
-        const md = provider ?? this.ProviderToUse;
-        const registered = (name: string): boolean => {
-            try {
-                return !!md?.EntityByName(name);
-            } catch {
-                return false;
-            }
-        };
-        if (registered(ENTITY_COMPANY_INTEGRATION_OBJECTS) && registered(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS)) {
-            params.push(
-                { PropertyName: '_companyIntegrationObjects', EntityName: ENTITY_COMPANY_INTEGRATION_OBJECTS, CacheLocal: true },
-                { PropertyName: '_companyIntegrationObjectFields', EntityName: ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS, CacheLocal: true },
-            );
-        }
-
+        // The load was whole-tenant while every consumer is per-connection: the scoped getters are
+        // reached through CatalogScopeResolver, which always names one connection. So the rows are
+        // supplied per scope instead, by CatalogDataResolver, which the server-side engine installs
+        // and which loads a connection's rows when its scope is entered. The getters are synchronous
+        // and are called from connectors in another repository, so they cannot become queries; the
+        // load has to happen at the async boundary that opens the scope.
+        //
+        // Not registering them also keeps the property the conditional registration used to buy:
+        // the engine starts on a workspace that has this code but not the migration, because there
+        // is no dataset whose missing entity could fail its load and be retried forever.
         return await this.Load(params, provider, forceRefresh, contextUser);
     }
 
@@ -180,18 +179,12 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
      * ARRAY IDENTITY, so they rebuild lazily on first read after the swap.
      */
     public async RefreshCatalog(contextUser?: UserInfo): Promise<void> {
-        // All FOUR arrays, not just the shared pair. The two-pass discovery heal re-reads the
-        // catalog mid-run and overlays what the first pass persisted; if the per-connection arrays
-        // were left stale the second pass would overlay against rows that no longer exist and the
-        // heal would silently regress for every per-connection row.
-        // The per-connection pair is absent from Configs on a workspace without the migration —
-        // the `if (cfg)` below is what makes that a no-op rather than a crash.
-        for (const prop of [
-            '_integrationObjects',
-            '_integrationObjectFields',
-            '_companyIntegrationObjects',
-            '_companyIntegrationObjectFields',
-        ]) {
+        // The SHARED pair only. A connection's own rows are no longer datasets of this engine (see
+        // Config), so they are not refreshed here: they belong to the catalog scope, which re-reads
+        // them itself. A caller that has just rewritten a connection's catalog inside an open scope
+        // — the two-pass discovery heal — must refresh that scope as well as calling this
+        // (`RefreshCatalogScope` in @memberjunction/integration-engine).
+        for (const prop of ['_integrationObjects', '_integrationObjectFields']) {
             const cfg = this.Configs.find(c => c.PropertyName === prop);
             if (cfg) await this.LoadSingleConfig(cfg, (contextUser ?? this.ContextUser) as UserInfo, /*bypassCache*/ true);
         }
@@ -438,11 +431,22 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
             return this._integrationObjectFields.filter(f => UUIDsEqual(f.IntegrationObjectID, objectID));
         }
 
-        // The index spans BOTH field arrays, so this one method answers for a shared object id and
-        // a per-connection one alike. That is what lets the field side need no scope at all: object
-        // ids are UUIDs from disjoint tables and cannot collide, so the id itself says which
-        // catalog the caller meant. Every read site that resolves fields from an object it already
-        // holds therefore needs no change.
+        // A connection's own fields, inside its catalog scope. They are not resident: the scope's
+        // owner warms them one object at a time into a bounded cache and the scope says which are
+        // warm. Object ids are UUIDs from disjoint tables, so the id alone says which catalog the
+        // caller meant and this lookup needs no other hint.
+        const scoped = IntegrationEngineBase.scopedCatalogData();
+        if (scoped) {
+            const warm = scoped.FieldsByObjectID.get(NormalizeUUID(objectID));
+            if (warm) return this.projectWarmFields(warm).slice();
+            this.assertWarm(scoped, objectID);
+        }
+
+        // Everything else: the resident shared fields, plus any per-connection rows that were
+        // seeded rather than loaded. The index spans both arrays, so this one method answers for a
+        // shared object id and a seeded per-connection one alike, for the same disjoint-ids reason
+        // as above. Every read site that resolves fields from an object it already holds therefore
+        // needs no change.
         const projectedFields = this.CompanyIntegrationObjectFields;
         if (
             this._fieldsByObjectIDSource !== this._integrationObjectFields ||
@@ -610,16 +614,163 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         }
     }
 
-    /** Per-connection objects, projected for reading. See CompanyIntegrationCatalog.ts. */
-    private get CompanyIntegrationObjects(): CompanyIntegrationObjectRow[] {
-        if (this._cioProjectedSource !== this._companyIntegrationObjects || this._cioProjected === null) {
-            this._cioProjected = projectCatalogObjects(this._companyIntegrationObjects);
-            this._cioProjectedSource = this._companyIntegrationObjects;
-        }
-        return this._cioProjected;
+    /**
+     * Supplies the per-connection rows of the catalog scope in force (MJ-RUN-43).
+     *
+     * The same dependency inversion as {@link CatalogScopeResolver}, for the same reason: the rows
+     * are loaded at scope entry by the server-side engine, which owns the scope and the queries,
+     * and this package — bundled into the Angular client too — only reads them. Never set in a
+     * client bundle, where every read stays on the shared catalog and any seeded rows.
+     *
+     * Returns undefined when no scope is in force, or when the scope's catalog has not been loaded:
+     * both read the seeded arrays, which in a live process are empty — the shared catalog's
+     * answer, exactly as before a connection had a catalog of its own.
+     */
+    public static CatalogDataResolver: (() => CatalogScopeData | undefined) | undefined = undefined;
+
+    private static scopedCatalogData(): CatalogScopeData | undefined {
+        return IntegrationEngineBase.CatalogDataResolver?.();
     }
 
-    /** Per-connection fields, projected for reading. */
+    /**
+     * Where per-connection object rows come from: the scope in force, else the seeded array.
+     *
+     * No scope in force is NOT an error. `HasCompanyIntegrationCatalog` is a probe whose whole job
+     * is to answer "no" from outside a scope, and a workspace that never adopted the per-connection
+     * catalog reads unscoped throughout. The loud failure belongs one level down, at an object that
+     * IS in scope whose fields were never warmed — see {@link AssertCatalogObjectWarm}.
+     */
+    private static resolveScopedCatalogRows(seeded: BaseEntity[]): BaseEntity[] {
+        return IntegrationEngineBase.scopedCatalogData()?.Objects ?? seeded;
+    }
+
+    /**
+     * The dependency edges of the scope in force, else of the seeded field rows.
+     *
+     * A scope that carries no edge set is refused rather than walked. Unlike a missing field row,
+     * a missing edge does not empty anything: it silently REORDERS a sync, children before
+     * parents, and surfaces as foreign-key failures far from here.
+     */
+    private static resolveScopedCatalogEdges(seeded: () => ReadonlyArray<CatalogEdgeEnds>): ReadonlyArray<CatalogEdgeEnds> {
+        const scoped = IntegrationEngineBase.scopedCatalogData();
+        if (!scoped) return seeded();
+        if (!scoped.Edges) {
+            throw new Error(
+                'PER_CONNECTION_CATALOG_NO_EDGES: a catalog scope is in force but carries no edge set. '
+                + 'Dependency ordering would degrade SILENTLY to Sequence order without it — children '
+                + 'before parents, which surfaces as foreign-key failures far from here — so this '
+                + 'refuses rather than guesses.'
+            );
+        }
+        return scoped.Edges;
+    }
+
+    /**
+     * Throw when `objectID` belongs to the scope in force, its field rows were never warmed, and
+     * the scope's owner is one that warms what it reads.
+     *
+     * Field rows are fetched per object now, so an owned object with no warm rows means a warm
+     * site was missed. Answering `[]` there would show a connector a table with no columns and a
+     * sync would write nothing, on a run that reports success. An id the scope does not own — a
+     * shared object, another connection's object — is silence by design and reads as it always did.
+     */
+    public AssertCatalogObjectWarm(objectID: string): void {
+        const scoped = IntegrationEngineBase.scopedCatalogData();
+        if (scoped) this.assertWarm(scoped, objectID);
+    }
+
+    private assertWarm(scoped: CatalogScopeData, objectID: string): void {
+        if (!scoped.RequireWarmFields || objectID == null) return;
+        const key = NormalizeUUID(objectID);
+        if (scoped.FieldsByObjectID.has(key)) return;
+        // Ownership is read off the PROJECTED rows. A loaded row has no `ID` property — these
+        // entities have no generated subclass, so the value is reachable only through Get() —
+        // and a check reading `row.ID` would find no owned object, ever, and never fire.
+        if (!this.ownedObjectIDs(this.projectObjects(scoped.Objects)).has(key)) return;
+        throw new Error(
+            `PER_CONNECTION_CATALOG_OBJECT_COLD: fields for object ${objectID} were read before they were `
+            + `warmed. Field rows are no longer resident: the async orchestration point must await `
+            + `WarmCatalogObject(objectID) before any synchronous read of that object's fields.`
+        );
+    }
+
+    /** Per-connection objects, projected for reading. See CompanyIntegrationCatalog.ts. */
+    private get CompanyIntegrationObjects(): CompanyIntegrationObjectRow[] {
+        return this.projectObjects(IntegrationEngineBase.resolveScopedCatalogRows(this._companyIntegrationObjects));
+    }
+
+    private projectObjects(rows: BaseEntity[]): CompanyIntegrationObjectRow[] {
+        let projected = this._objectProjections.get(rows);
+        if (!projected) {
+            projected = projectCatalogObjects(rows);
+            this._objectProjections.set(rows, projected);
+        }
+        return projected;
+    }
+
+    /** Lowercased ids of a projected object array, so an ownership test is a lookup, not a scan. */
+    private ownedObjectIDs(objects: CompanyIntegrationObjectRow[]): ReadonlySet<string> {
+        let ids = this._ownedObjectIDs.get(objects);
+        if (!ids) {
+            ids = new Set(objects.map(o => NormalizeUUID(o.ID)));
+            this._ownedObjectIDs.set(objects, ids);
+        }
+        return ids;
+    }
+
+    /** One warm object's field rows, projected once per loaded array. */
+    private projectWarmFields(rows: BaseEntity[]): MJIntegrationObjectFieldEntity[] {
+        let projected = this._warmFieldProjections.get(rows);
+        if (!projected) {
+            projected = projectCatalogFields(rows).map(asReadOnlyField);
+            this._warmFieldProjections.set(rows, projected);
+        }
+        return projected;
+    }
+
+    /** Related object ids per owning object, built once per edge array. */
+    private edgesByOwner(edges: ReadonlyArray<CatalogEdgeEnds>): ReadonlyMap<string, string[]> {
+        let byOwner = this._edgesByOwner.get(edges);
+        if (!byOwner) {
+            const built = new Map<string, string[]>();
+            for (const edge of edges) {
+                const related = edge.RelatedCompanyIntegrationObjectID;
+                if (!related) continue;
+                const owner = NormalizeUUID(edge.CompanyIntegrationObjectID);
+                const list = built.get(owner);
+                if (!list) built.set(owner, [related]);
+                else if (!list.some(r => UUIDsEqual(r, related))) list.push(related);
+            }
+            byOwner = built;
+            this._edgesByOwner.set(edges, byOwner);
+        }
+        return byOwner;
+    }
+
+    /**
+     * The ids of the objects this object's fields point at — its foreign-key parents.
+     *
+     * The dependency graph a sync builds needs exactly this and nothing else of a field, so a
+     * per-connection object of the scope in force answers from the scope's narrow edge set and
+     * never needs its full field rows warm — the graph is built before any of them are. Every other
+     * object (shared, or seeded without a scope) answers from its resident field rows.
+     */
+    public GetRelatedIntegrationObjectIDs(objectID: string): string[] {
+        if (objectID == null) return [];
+        const scoped = IntegrationEngineBase.scopedCatalogData();
+        if (scoped && this.ownedObjectIDs(this.projectObjects(scoped.Objects)).has(NormalizeUUID(objectID))) {
+            const edges = IntegrationEngineBase.resolveScopedCatalogEdges(() => this.CompanyIntegrationObjectFields);
+            return this.edgesByOwner(edges).get(NormalizeUUID(objectID))?.slice() ?? [];
+        }
+        const related: string[] = [];
+        for (const field of this.GetIntegrationObjectFields(objectID)) {
+            const id = field.RelatedIntegrationObjectID;
+            if (id && !related.some(r => UUIDsEqual(r, id))) related.push(id);
+        }
+        return related;
+    }
+
+    /** Per-connection fields that were SEEDED (see `_companyIntegrationObjectFields`), projected for reading. */
     private get CompanyIntegrationObjectFields(): CompanyIntegrationObjectFieldRow[] {
         if (this._ciofProjectedSource !== this._companyIntegrationObjectFields || this._ciofProjected === null) {
             this._ciofProjected = projectCatalogFields(this._companyIntegrationObjectFields);
@@ -682,7 +833,10 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         const deps = new Map<string, Set<string>>();
         for (const obj of objects) deps.set(obj.ID.toUpperCase(), new Set());
 
-        for (const field of this.CompanyIntegrationObjectFields) {
+        // Edges from the NARROW edge set, not from full field rows. This walk needs every field of
+        // the connection (97,414 on a NetForum catalog) but reads two columns of each; holding full
+        // rows to answer it is what made the catalog a multi-gigabyte resident cost.
+        for (const field of IntegrationEngineBase.resolveScopedCatalogEdges(() => this.CompanyIntegrationObjectFields)) {
             if (!field.RelatedCompanyIntegrationObjectID) continue;
             const parentKey = field.CompanyIntegrationObjectID.toUpperCase();
             const depKey = field.RelatedCompanyIntegrationObjectID.toUpperCase();
@@ -702,6 +856,10 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
      * With `preferPerConnection` false — the default at deploy — the answer is byte-for-byte what
      * the shared catalog returns today, so the tables can exist, be backfilled and be verified
      * against production traffic before anything reads them.
+     *
+     * Per-connection field rows are not resident, so `FieldsByObjectID` carries what is warm in the
+     * scope in force; in a scope whose owner warms what it reads, a cold object throws rather than
+     * reporting no fields (see {@link AssertCatalogObjectWarm}).
      *
      * @param opts.preferPerConnection  Read per-connection rows when they exist.
      * @param opts.requirePerConnection Refuse rather than fall back. Set it wherever a silent

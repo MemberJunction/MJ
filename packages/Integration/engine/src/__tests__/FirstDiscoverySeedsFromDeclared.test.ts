@@ -39,8 +39,8 @@ function writer(): PerConnectionCatalogWriter {
 }
 
 type Upserts = {
-  UpsertObject: (...a: unknown[]) => Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean }>;
-  UpsertField: (...a: unknown[]) => Promise<{ Created: boolean; Updated: boolean }>;
+  upsertObject: (...a: unknown[]) => Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean }>;
+  upsertField: (...a: unknown[]) => Promise<{ Created: boolean; Updated: boolean }>;
 };
 const sync = IntegrationSchemaSync as unknown as Upserts;
 
@@ -55,7 +55,7 @@ describe('first discovery seeds a declared object from the declaration (MJ-CAT-1
   it('a declared object with no per-connection row yet keeps its declared APIPath, paging and watermark', async () => {
     rows.length = 0;
     const srcObj = { ExternalName: 'Tags', ExternalLabel: 'Tags', Fields: [] };
-    const r = await sync.UpsertObject(writer(), srcObj, [] /* nothing in this connection's scope */, declaredObject, false);
+    const r = await sync.upsertObject(writer(), srcObj, [] /* nothing in this connection's scope */, declaredObject, false);
     expect(r.Created).toBe(true);
     const row = rows[0];
     expect(row.saved).toBe(1);
@@ -74,7 +74,7 @@ describe('first discovery seeds a declared object from the declaration (MJ-CAT-1
   it('an object with NO declared match still defaults APIPath to its name (unchanged behaviour)', async () => {
     rows.length = 0;
     const srcObj = { ExternalName: 'CustomThing', ExternalLabel: 'Custom Thing', Fields: [] };
-    const r = await sync.UpsertObject(writer(), srcObj, [], null, false);
+    const r = await sync.upsertObject(writer(), srcObj, [], null, false);
     expect(r.Created).toBe(true);
     expect(rows[0].Get('APIPath')).toBe('CustomThing');
     expect(rows[0].Get('IsCustom')).toBe(true);
@@ -90,7 +90,7 @@ describe('first discovery seeds a declared object from the declaration (MJ-CAT-1
     };
     // The sample is silent on type and key — exactly what a REST sample of an id looks like.
     const srcField = { Name: 'id', Label: 'id', SourceType: undefined, IsPrimaryKey: undefined, IsRequired: false };
-    const r = await sync.UpsertField(writer(), 'obj-1', srcField, [], undefined, /* objectHasDeclaredPK */ true, false, 'decl-fld-1', declaredField);
+    const r = await sync.upsertField(writer(), 'obj-1', srcField, [], undefined, /* objectHasDeclaredPK */ true, false, 'decl-fld-1', declaredField);
     expect(r.Created).toBe(true);
     const row = rows[0];
     expect(row.saved).toBe(1);

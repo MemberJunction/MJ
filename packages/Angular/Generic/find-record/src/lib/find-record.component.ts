@@ -47,11 +47,38 @@ export class FindRecordComponent extends BaseAngularComponent implements OnInit,
    */
   @Output() OnRecordSelected = new EventEmitter<BaseEntity>();
 
-  public searchTerm: string = ''; // User search term
+  public SearchTerm: string = '';
+
+  /** @deprecated Use {@link SearchTerm}. */
+  public get searchTerm(): string {
+    return this.SearchTerm;
+  }
+  /** @deprecated Use {@link SearchTerm}. */
+  public set searchTerm(value: string) {
+    this.SearchTerm = value;
+  } // User search term
   public records: BaseEntity[] = []; // Store search results
 
-  public loading = false; // Loading state for search
-  public searchHasRun: boolean = false; // has a search been run
+  public Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  } // Loading state for search
+  public SearchHasRun: boolean = false;
+
+  /** @deprecated Use {@link SearchHasRun}. */
+  public get searchHasRun(): boolean {
+    return this.SearchHasRun;
+  }
+  /** @deprecated Use {@link SearchHasRun}. */
+  public set searchHasRun(value: boolean) {
+    this.SearchHasRun = value;
+  } // has a search been run
   private entityInfo: EntityInfo | undefined; // Entity metadata
 
   private searchSubject = new Subject<string>(); // Subject to emit search term changes
@@ -99,19 +126,19 @@ export class FindRecordComponent extends BaseAngularComponent implements OnInit,
       debounceTime(this.SearchDebounceTime), // Delay search execution by 300ms
       distinctUntilChanged(), // Only proceed if the search term has changed
       switchMap(term => {
-        this.loading = true;
+        this.Loading = true;
         return this.doSearch(term);
       })
     ).subscribe({
       next: (results: BaseEntity[]) => {
         this.records = results;
-        this.loading = false;
-        this.searchHasRun = true;
+        this.Loading = false;
+        this.SearchHasRun = true;
       },
       error: (error) => {
         LogError(error.message);
-        this.loading = false;
-        this.searchHasRun = true;
+        this.Loading = false;
+        this.SearchHasRun = true;
       }
     });    
   }
@@ -124,24 +151,44 @@ export class FindRecordComponent extends BaseAngularComponent implements OnInit,
   }
 
 
+  OnFind() {
+    this.searchSubject.next(this.SearchTerm); // Trigger the debounced search
+  }
+
+  /** @deprecated Use {@link OnFind}. */
   onFind() {
-    this.searchSubject.next(this.searchTerm); // Trigger the debounced search
+    return this.OnFind();
   }  
 
-  onSearchTermChange(term: string) {
-    this.searchTerm = term;
+  OnSearchTermChange(term: string) {
+    this.SearchTerm = term;
     this.searchSubject.next(term); // Emit the new search term
   }
 
-  public onSelectionChange(event: SelectionChangedEvent) {
+  /** @deprecated Use {@link OnSearchTermChange}. */
+  onSearchTermChange(term: string) {
+    return this.OnSearchTermChange(term);
+  }
+
+  public OnSelectionChange(event: SelectionChangedEvent) {
     const selectedRows = event.api.getSelectedRows();
     if (selectedRows.length > 0) {
       this.OnRecordSelected.emit(selectedRows[0]);
     }
   }
 
-  public onGridReady(event: GridReadyEvent) {
+  /** @deprecated Use {@link OnSelectionChange}. */
+  public onSelectionChange(event: SelectionChangedEvent) {
+    return this.OnSelectionChange(event);
+  }
+
+  public OnGridReady(event: GridReadyEvent) {
     this.gridApi = event.api;
+  }
+
+  /** @deprecated Use {@link OnGridReady}. */
+  public onGridReady(event: GridReadyEvent) {
+    return this.OnGridReady(event);
   }
 
   private buildColumnDefs(): ColDef[] {
@@ -161,7 +208,7 @@ export class FindRecordComponent extends BaseAngularComponent implements OnInit,
     });
     if (result && result.Success) {
       return result.Results;
-      this.searchHasRun = true;
+      this.SearchHasRun = true;
     }
     else  {
       const errorMessage = `Error searching for ${this.EntityName}: ${result.ErrorMessage}`;

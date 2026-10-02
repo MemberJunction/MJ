@@ -39,11 +39,11 @@ export interface PipelineStepResult {
  * passed too for providers that want it.
  */
 export interface PipelineInvocable {
-    readonly toolName: string;
-    readonly providerKind: PipelineProviderKind;
+    readonly toolName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    readonly providerKind: PipelineProviderKind;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Whether this can be a pipeline's first stage (produces data without upstream). */
-    readonly isSource: boolean;
-    invoke(input: PipeValue, params: Record<string, unknown>): Promise<PipelineStepResult>;
+    readonly isSource: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    invoke(input: PipeValue, params: Record<string, unknown>): Promise<PipelineStepResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** A pure operator — value in, value out. May throw (executor catches and reports the stage). */

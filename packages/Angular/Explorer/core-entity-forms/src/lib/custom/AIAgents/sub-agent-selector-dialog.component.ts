@@ -8,21 +8,21 @@ import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface SubAgentSelectorResult {
-  selectedAgents: MJAIAgentEntityExtended[];
-  createNew: boolean;
+  SelectedAgents: MJAIAgentEntityExtended[];
+  CreateNew: boolean;
 }
 
 export interface SubAgentSelectorConfig {
-  title: string;
-  multiSelect: boolean;
-  selectedAgentIds: string[];
-  showCreateNew: boolean;
-  parentAgentId: string; // To exclude from selection
+  Title: string;
+  MultiSelect: boolean;
+  SelectedAgentIds: string[];
+  ShowCreateNew: boolean;
+  ParentAgentId: string; // To exclude from selection
 }
 
 export interface AgentDisplayItem extends MJAIAgentEntityExtended {
-  selected: boolean;
-  typeName?: string;
+  Selected: boolean;
+  TypeName?: string;
 }
 
 /**
@@ -42,35 +42,122 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
   
   // Reactive state management
   private destroy$ = new Subject<void>();
-  public result = new Subject<SubAgentSelectorResult | null>();
+  public Result = new Subject<SubAgentSelectorResult | null>();
+
+  /** @deprecated Use {@link Result}. */
+  public get result() {
+    return this.Result;
+  }
+  /** @deprecated Use {@link Result}. */
+  public set result(value) {
+    this.Result = value;
+  }
   
   // Data streams
-  allAgents$ = new BehaviorSubject<AgentDisplayItem[]>([]);
-  agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
-  filteredAgents$ = new BehaviorSubject<AgentDisplayItem[]>([]);
-  selectedAgents$ = new BehaviorSubject<Set<string>>(new Set());
-  isLoading$ = new BehaviorSubject<boolean>(false);
+  AllAgents$ = new BehaviorSubject<AgentDisplayItem[]>([]);
+
+  /** @deprecated Use {@link AllAgents$}. */
+  get allAgents$() {
+    return this.AllAgents$;
+  }
+  /** @deprecated Use {@link AllAgents$}. */
+  set allAgents$(value) {
+    this.AllAgents$ = value;
+  }
+  AgentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
+
+  /** @deprecated Use {@link AgentTypes$}. */
+  get agentTypes$() {
+    return this.AgentTypes$;
+  }
+  /** @deprecated Use {@link AgentTypes$}. */
+  set agentTypes$(value) {
+    this.AgentTypes$ = value;
+  }
+  FilteredAgents$ = new BehaviorSubject<AgentDisplayItem[]>([]);
+
+  /** @deprecated Use {@link FilteredAgents$}. */
+  get filteredAgents$() {
+    return this.FilteredAgents$;
+  }
+  /** @deprecated Use {@link FilteredAgents$}. */
+  set filteredAgents$(value) {
+    this.FilteredAgents$ = value;
+  }
+  SelectedAgents$ = new BehaviorSubject<Set<string>>(new Set());
+
+  /** @deprecated Use {@link SelectedAgents$}. */
+  get selectedAgents$() {
+    return this.SelectedAgents$;
+  }
+  /** @deprecated Use {@link SelectedAgents$}. */
+  set selectedAgents$(value) {
+    this.SelectedAgents$ = value;
+  }
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
   
   // UI state
-  searchControl = new FormControl('');
-  selectedTypeId$ = new BehaviorSubject<string>('all');
+  SearchControl = new FormControl('');
+
+  /** @deprecated Use {@link SearchControl}. */
+  get searchControl() {
+    return this.SearchControl;
+  }
+  /** @deprecated Use {@link SearchControl}. */
+  set searchControl(value) {
+    this.SearchControl = value;
+  }
+  SelectedTypeId$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedTypeId$}. */
+  get selectedTypeId$() {
+    return this.SelectedTypeId$;
+  }
+  /** @deprecated Use {@link SelectedTypeId$}. */
+  set selectedTypeId$(value) {
+    this.SelectedTypeId$ = value;
+  }
   
   // Computed values
+  get SelectedCount(): number {
+    return this.SelectedAgents$.value.size;
+  }
+
+  /** @deprecated Use {@link SelectedCount}. */
   get selectedCount(): number {
-    return this.selectedAgents$.value.size;
+    return this.SelectedCount;
   }
 
+  get TotalAgentCount(): number {
+    return this.AllAgents$.value.length;
+  }
+
+  /** @deprecated Use {@link TotalAgentCount}. */
   get totalAgentCount(): number {
-    return this.allAgents$.value.length;
+    return this.TotalAgentCount;
   }
 
+  get FilteredCount(): number {
+    return this.FilteredAgents$.value.length;
+  }
+
+  /** @deprecated Use {@link FilteredCount}. */
   get filteredCount(): number {
-    return this.filteredAgents$.value.length;
+    return this.FilteredCount;
   }
 
   /** True when the empty list is the result of search/type filtering (vs. no eligible agents at all). */
   get IsAgentListNarrowed(): boolean {
-    return this.totalAgentCount > 0;
+    return this.TotalAgentCount > 0;
   }
 
   /** Supporting copy for the no-agents empty state. */
@@ -99,14 +186,14 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
   }
 
   private async initializeData() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       await this.loadAgentsAndTypes();
     } catch (error) {
       console.error('Error loading dialog data:', error);
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
 
@@ -118,7 +205,7 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
       // Root agents (index 0)
       {
         EntityName: 'MJ: AI Agents',
-        ExtraFilter: `ParentID IS NULL AND ID != '${this.config.parentAgentId}' AND Status = 'Active' AND (ExposeAsAction = 0 OR ExposeAsAction IS NULL)`,
+        ExtraFilter: `ParentID IS NULL AND ID != '${this.config.ParentAgentId}' AND Status = 'Active' AND (ExposeAsAction = 0 OR ExposeAsAction IS NULL)`,
         OrderBy: 'Name',
         ResultType: 'entity_object',
         MaxRows: 1000
@@ -137,28 +224,28 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
     if (results[0].Success) {
       const agents: AgentDisplayItem[] = (results[0].Results || []).map(agent => ({
         ...agent.GetAll(),
-        selected: false,
-        typeName: agent.Type || 'Default'
+        Selected: false,
+        TypeName: agent.Type || 'Default'
       } as AgentDisplayItem));
       
-      this.allAgents$.next(agents);
+      this.AllAgents$.next(agents);
     }
 
     // Process agent types (index 1)
     if (results[1].Success) {
-      this.agentTypes$.next(results[1].Results || []);
+      this.AgentTypes$.next(results[1].Results || []);
     }
   }
 
   private setupFiltering() {
     combineLatest([
-      this.allAgents$,
-      this.searchControl.valueChanges.pipe(
+      this.AllAgents$,
+      this.SearchControl.valueChanges.pipe(
         debounceTime(300),
         distinctUntilChanged(),
         startWith('')
       ),
-      this.selectedTypeId$
+      this.SelectedTypeId$
     ]).pipe(
       takeUntil(this.destroy$)
     ).subscribe(([agents, searchTerm, typeId]) => {
@@ -180,49 +267,54 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
       filtered = filtered.filter(agent =>
         (agent.Name && agent.Name.toLowerCase().includes(term)) ||
         (agent.Description && agent.Description.toLowerCase().includes(term)) ||
-        (agent.typeName && agent.typeName.toLowerCase().includes(term))
+        (agent.TypeName && agent.TypeName.toLowerCase().includes(term))
       );
     }
 
-    this.filteredAgents$.next(filtered);
+    this.FilteredAgents$.next(filtered);
   }
 
   private preselectExistingAgents() {
-    if (this.config.selectedAgentIds.length > 0) {
-      const selected = new Set(this.config.selectedAgentIds);
-      this.selectedAgents$.next(selected);
+    if (this.config.SelectedAgentIds.length > 0) {
+      const selected = new Set(this.config.SelectedAgentIds);
+      this.SelectedAgents$.next(selected);
       
       // Update agent selection state
-      const agents = this.allAgents$.value;
+      const agents = this.AllAgents$.value;
       agents.forEach(agent => {
-        agent.selected = selected.has(agent.ID);
+        agent.Selected = selected.has(agent.ID);
       });
-      this.allAgents$.next(agents);
+      this.AllAgents$.next(agents);
     }
   }
 
   // === UI Event Handlers ===
 
-  selectType(typeId: string) {
-    this.selectedTypeId$.next(typeId);
+  SelectType(typeId: string) {
+    this.SelectedTypeId$.next(typeId);
   }
 
-  toggleAgentSelection(agent: AgentDisplayItem) {
-    const selected = this.selectedAgents$.value;
-    const agents = this.allAgents$.value;
+  /** @deprecated Use {@link SelectType}. */
+  selectType(typeId: string) {
+    return this.SelectType(typeId);
+  }
+
+  ToggleAgentSelection(agent: AgentDisplayItem) {
+    const selected = this.SelectedAgents$.value;
+    const agents = this.AllAgents$.value;
     
     // Find the agent and toggle its selection
     const agentToUpdate = agents.find(a => UUIDsEqual(a.ID, agent.ID));
     if (agentToUpdate) {
-      agentToUpdate.selected = !agentToUpdate.selected;
+      agentToUpdate.Selected = !agentToUpdate.Selected;
       
-      if (agentToUpdate.selected) {
-        if (!this.config.multiSelect) {
+      if (agentToUpdate.Selected) {
+        if (!this.config.MultiSelect) {
           // Single select mode - clear other selections
           selected.clear();
           agents.forEach(a => {
             if (!UUIDsEqual(a.ID, agent.ID)) {
-              a.selected = false;
+              a.Selected = false;
             }
           });
         }
@@ -231,21 +323,31 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
         selected.delete(agent.ID);
       }
       
-      this.selectedAgents$.next(new Set(selected));
-      this.allAgents$.next(agents);
+      this.SelectedAgents$.next(new Set(selected));
+      this.AllAgents$.next(agents);
       
       // Update filtered agents to reflect selection state
-      const filtered = this.filteredAgents$.value;
+      const filtered = this.FilteredAgents$.value;
       const filteredAgent = filtered.find(a => UUIDsEqual(a.ID, agent.ID));
       if (filteredAgent) {
-        filteredAgent.selected = agentToUpdate.selected;
-        this.filteredAgents$.next(filtered);
+        filteredAgent.Selected = agentToUpdate.Selected;
+        this.FilteredAgents$.next(filtered);
       }
     }
   }
 
+  /** @deprecated Use {@link ToggleAgentSelection}. */
+  toggleAgentSelection(agent: AgentDisplayItem) {
+    return this.ToggleAgentSelection(agent);
+  }
+
+  ClearSearch() {
+    this.SearchControl.reset();
+  }
+
+  /** @deprecated Use {@link ClearSearch}. */
   clearSearch() {
-    this.searchControl.reset();
+    return this.ClearSearch();
   }
 
   /**
@@ -254,19 +356,29 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
    * dimension the list narrows on — search AND the agent-type filter — so the CTA
    * actually returns results instead of appearing to do nothing.
    */
-  clearFilters() {
-    this.searchControl.reset();
-    this.selectedTypeId$.next('all');
+  ClearFilters() {
+    this.SearchControl.reset();
+    this.SelectedTypeId$.next('all');
   }
 
-  getAgentIcon(agent: AgentDisplayItem): string {
+  /** @deprecated Use {@link ClearFilters}. */
+  clearFilters() {
+    return this.ClearFilters();
+  }
+
+  GetAgentIcon(agent: AgentDisplayItem): string {
     if (agent.IconClass) {
       return agent.IconClass;
     }
     return 'fa-solid fa-robot';
   }
 
-  getAgentStatusColor(agent: AgentDisplayItem): string {
+  /** @deprecated Use {@link GetAgentIcon}. */
+  getAgentIcon(agent: AgentDisplayItem): string {
+    return this.GetAgentIcon(agent);
+  }
+
+  GetAgentStatusColor(agent: AgentDisplayItem): string {
     switch (agent.Status) {
       case 'Active': return 'var(--mj-status-success)';
       case 'Disabled': return 'var(--mj-text-muted)';
@@ -275,24 +387,34 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
     }
   }
 
+  /** @deprecated Use {@link GetAgentStatusColor}. */
+  getAgentStatusColor(agent: AgentDisplayItem): string {
+    return this.GetAgentStatusColor(agent);
+  }
+
   // === Dialog Actions ===
 
   cancel() {
-    this.result.next(null);
+    this.Result.next(null);
     this.DialogClose.emit();
   }
 
-  createNew() {
-    this.result.next({
-      selectedAgents: [],
-      createNew: true
+  CreateNew() {
+    this.Result.next({
+      SelectedAgents: [],
+      CreateNew: true
     });
     this.DialogClose.emit();
   }
 
-  async addSelectedAgents() {
-    const selectedIds = this.selectedAgents$.value;
-    const allAgents = this.allAgents$.value;
+  /** @deprecated Use {@link CreateNew}. */
+  createNew() {
+    return this.CreateNew();
+  }
+
+  async AddSelectedAgents() {
+    const selectedIds = this.SelectedAgents$.value;
+    const allAgents = this.AllAgents$.value;
     
     // Get the selected agent display items
     const selectedDisplayItems = allAgents
@@ -301,10 +423,15 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
     // Convert AgentDisplayItem to MJAIAgentEntityExtended by casting (they have the same structure)
     const selectedAgents: MJAIAgentEntityExtended[] = selectedDisplayItems.map(item => item as MJAIAgentEntityExtended);
     
-    this.result.next({
-      selectedAgents,
-      createNew: false
+    this.Result.next({
+      SelectedAgents: selectedAgents,
+      CreateNew: false
     });
     this.DialogClose.emit();
+  }
+
+  /** @deprecated Use {@link AddSelectedAgents}. */
+  async addSelectedAgents() {
+    return this.AddSelectedAgents();
   }
 }

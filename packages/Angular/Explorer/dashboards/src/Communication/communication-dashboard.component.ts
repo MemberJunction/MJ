@@ -7,11 +7,11 @@ import { debounceTime } from 'rxjs/operators';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import {
-    buildCommunicationAgentContext,
-    isValidCommunicationTab,
-    communicationTabLabel,
-    resolveCommunicationItem,
-    capCommunicationList,
+    BuildCommunicationAgentContext,
+    IsValidCommunicationTab,
+    CommunicationTabLabel,
+    ResolveCommunicationItem,
+    CapCommunicationList,
     COMMUNICATION_TABS,
     COMMUNICATION_LOG_STATUSES,
     CommunicationTab,
@@ -19,7 +19,7 @@ import {
     CommunicationSurfaceContext,
     CommunicationItemCandidate,
 } from './communication-agent-context';
-import { validateEnumParam, validateStringParam } from '../shared/agent-tool-validation';
+import { ValidateEnumParam, ValidateStringParam } from '../shared/agent-tool-validation';
 import { CommunicationLogsResourceComponent } from './communication-logs-resource.component';
 import { CommunicationProvidersResourceComponent } from './communication-providers-resource.component';
 import { CommunicationTemplatesResourceComponent } from './communication-templates-resource.component';
@@ -60,12 +60,48 @@ interface SelectedCommunicationItem {
 @RegisterClass(BaseDashboard, 'CommunicationDashboard')
 export class CommunicationDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
     public isLoading = false;
-    public isRefreshing = false;
-    public activeTab = 'monitor';
-    public selectedIndex = 0;
+    public IsRefreshing = false;
+
+    /** @deprecated Use {@link IsRefreshing}. */
+    public get isRefreshing() {
+      return this.IsRefreshing;
+    }
+    /** @deprecated Use {@link IsRefreshing}. */
+    public set isRefreshing(value) {
+      this.IsRefreshing = value;
+    }
+    public ActiveTab = 'monitor';
+
+    /** @deprecated Use {@link ActiveTab}. */
+    public get activeTab() {
+      return this.ActiveTab;
+    }
+    /** @deprecated Use {@link ActiveTab}. */
+    public set activeTab(value) {
+      this.ActiveTab = value;
+    }
+    public SelectedIndex = 0;
+
+    /** @deprecated Use {@link SelectedIndex}. */
+    public get selectedIndex() {
+      return this.SelectedIndex;
+    }
+    /** @deprecated Use {@link SelectedIndex}. */
+    public set selectedIndex(value) {
+      this.SelectedIndex = value;
+    }
 
     private visitedTabs = new Set<string>();
-    public navigationItems: string[] = [...COMMUNICATION_TABS];
+    public NavigationItems: string[] = [...COMMUNICATION_TABS];
+
+    /** @deprecated Use {@link NavigationItems}. */
+    public get navigationItems(): string[] {
+      return this.NavigationItems;
+    }
+    /** @deprecated Use {@link NavigationItems}. */
+    public set navigationItems(value: string[]) {
+      this.NavigationItems = value;
+    }
 
     private stateChangeSubject = new Subject<CommunicationDashboardState>();
 
@@ -97,7 +133,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     }
 
     ngAfterViewInit(): void {
-        this.visitedTabs.add(this.activeTab);
+        this.visitedTabs.add(this.ActiveTab);
         this.emitStateChange();
         // Wire the agent context + client tools (see SAFETY BOUNDARY below).
         this.registerAgentClientTools();
@@ -110,10 +146,10 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         this.stateChangeSubject.complete();
     }
 
-    public onTabChange(tabId: string): void {
-        this.activeTab = tabId;
-        const index = this.navigationItems.indexOf(tabId);
-        this.selectedIndex = index >= 0 ? index : 0;
+    public OnTabChange(tabId: string): void {
+        this.ActiveTab = tabId;
+        const index = this.NavigationItems.indexOf(tabId);
+        this.SelectedIndex = index >= 0 ? index : 0;
 
         setTimeout(() => {
             SharedService.Instance.InvokeManualResize();
@@ -129,19 +165,34 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         this.cdr.markForCheck();
     }
 
-    public hasVisited(tabId: string): boolean {
+    /** @deprecated Use {@link OnTabChange}. */
+    public onTabChange(tabId: string): void {
+      return this.OnTabChange(tabId);
+    }
+
+    public HasVisited(tabId: string): boolean {
         return this.visitedTabs.has(tabId);
     }
 
-    public onRefresh(): void {
-        this.isRefreshing = true;
+    /** @deprecated Use {@link HasVisited}. */
+    public hasVisited(tabId: string): boolean {
+      return this.HasVisited(tabId);
+    }
+
+    public OnRefresh(): void {
+        this.IsRefreshing = true;
         this.cdr.markForCheck();
         this.publishAgentContext();
         setTimeout(() => {
-            this.isRefreshing = false;
+            this.IsRefreshing = false;
             this.cdr.markForCheck();
             this.publishAgentContext();
         }, 1000);
+    }
+
+    /** @deprecated Use {@link OnRefresh}. */
+    public onRefresh(): void {
+      return this.OnRefresh();
     }
 
     private setupStateManagement(): void {
@@ -154,19 +205,24 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
 
     private emitStateChange(): void {
         const state: CommunicationDashboardState = {
-            activeTab: this.activeTab
+            activeTab: this.ActiveTab
         };
         this.stateChangeSubject.next(state);
     }
 
-    public loadUserState(state: Partial<CommunicationDashboardState>): void {
+    public LoadUserState(state: Partial<CommunicationDashboardState>): void {
         if (state.activeTab) {
-            this.activeTab = state.activeTab;
-            const index = this.navigationItems.indexOf(state.activeTab);
-            this.selectedIndex = index >= 0 ? index : 0;
+            this.ActiveTab = state.activeTab;
+            const index = this.NavigationItems.indexOf(state.activeTab);
+            this.SelectedIndex = index >= 0 ? index : 0;
             this.visitedTabs.add(state.activeTab);
         }
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link LoadUserState}. */
+    public loadUserState(state: Partial<CommunicationDashboardState>): void {
+      return this.LoadUserState(state);
     }
 
     initDashboard(): void {
@@ -184,15 +240,20 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         if (this.Config?.userState) {
             setTimeout(() => {
                 if (this.Config?.userState) {
-                    this.loadUserState(this.Config.userState);
+                    this.LoadUserState(this.Config.userState);
                 }
             }, 0);
         }
         this.NotifyLoadComplete();
     }
 
+    public GetCurrentTabLabel(): string {
+        return CommunicationTabLabel(this.ActiveTab);
+    }
+
+    /** @deprecated Use {@link GetCurrentTabLabel}. */
     public getCurrentTabLabel(): string {
-        return communicationTabLabel(this.activeTab);
+      return this.GetCurrentTabLabel();
     }
 
     // ================================================================
@@ -226,11 +287,11 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
      * to whatever tab is open, mirroring the Data Explorer pattern.
      */
     private publishAgentContext(): void {
-        const context = buildCommunicationAgentContext({
-            ActiveTab: isValidCommunicationTab(this.activeTab) ? this.activeTab : 'monitor',
-            ActiveTabLabel: this.getCurrentTabLabel(),
+        const context = BuildCommunicationAgentContext({
+            ActiveTab: IsValidCommunicationTab(this.ActiveTab) ? this.ActiveTab : 'monitor',
+            ActiveTabLabel: this.GetCurrentTabLabel(),
             VisitedTabs: Array.from(this.visitedTabs),
-            IsRefreshing: this.isRefreshing,
+            IsRefreshing: this.IsRefreshing,
             Surface: this.harvestActiveSurface(),
         });
         this.navigationService.SetAgentContext(this, context);
@@ -245,7 +306,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
      * fabricating zeros.
      */
     private harvestActiveSurface(): CommunicationSurfaceContext {
-        switch (this.activeTab) {
+        switch (this.ActiveTab) {
             case 'monitor':
                 return this.harvestMonitorSurface();
             case 'logs':
@@ -272,10 +333,10 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             DeliveryRate: c.stats.deliveryRate,
             Pending: c.stats.pending,
             Failed: c.stats.failed,
-            ProviderHealthNames: capCommunicationList(c.providerHealth.map(p => p.Name)),
+            ProviderHealthNames: CapCommunicationList(c.providerHealth.map(p => p.Name)),
             ProviderHealthCount: c.providerHealth.length,
             ChannelNames: c.channelBreakdown.map(ch => ch.Name),
-            RecentActivityNames: capCommunicationList(
+            RecentActivityNames: CapCommunicationList(
                 c.recentLogs.map(l => `${l.CommunicationProviderMessageType || 'Message'} · ${l.CommunicationProvider || 'Unknown'} · ${l.Status}`),
             ),
         };
@@ -292,7 +353,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             FilteredLogCount: c.filteredLogs.length,
             StatusFilter: c.statusFilter as CommunicationLogStatus,
             SearchText: c.SearchText,
-            VisibleLogSummaries: capCommunicationList(c.filteredLogs.map(l => this.logDisplayName(l))),
+            VisibleLogSummaries: CapCommunicationList(c.filteredLogs.map(l => this.logDisplayName(l))),
             SelectedItemId: this.selectedLog?.id ?? null,
             SelectedItemName: this.selectedLog?.name ?? null,
         };
@@ -307,7 +368,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             Surface: 'providers',
             ProviderCount: c.providerCards.length,
             ActiveProviderCount: c.providerCards.filter(p => p.Entity.Status === 'Active').length,
-            ProviderNames: capCommunicationList(c.providerCards.map(p => p.Entity.Name)),
+            ProviderNames: CapCommunicationList(c.providerCards.map(p => p.Entity.Name)),
             SelectedItemId: this.selectedProvider?.id ?? null,
             SelectedItemName: this.selectedProvider?.name ?? null,
         };
@@ -324,8 +385,8 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             FilteredTemplateCount: c.filteredTemplates.length,
             CategoryFilter: c.categoryFilter,
             SearchText: c.SearchText,
-            AvailableCategories: capCommunicationList(c.categories),
-            VisibleTemplateNames: capCommunicationList(c.filteredTemplates.map(t => t.Entity.Name)),
+            AvailableCategories: CapCommunicationList(c.categories),
+            VisibleTemplateNames: CapCommunicationList(c.filteredTemplates.map(t => t.Entity.Name)),
             SelectedItemId: this.selectedTemplate?.id ?? null,
             SelectedItemName: this.selectedTemplate?.name ?? null,
         };
@@ -342,7 +403,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             ActiveRunCount: c.summary.active,
             CompletedRunCount: c.summary.completed,
             SuccessRate: c.summary.successRate,
-            VisibleRunSummaries: capCommunicationList(c.runs.map(r => `${this.runDisplayName(r.ID)} · ${r.Status}`)),
+            VisibleRunSummaries: CapCommunicationList(c.runs.map(r => `${this.runDisplayName(r.ID)} · ${r.Status}`)),
             SelectedItemId: this.selectedRun?.id ?? null,
             SelectedItemName: this.selectedRun?.name ?? null,
         };
@@ -389,7 +450,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
      * tab actually changes.
      */
     private syncAgentToolsForMode(): void {
-        const mode = isValidCommunicationTab(this.activeTab) ? this.activeTab : 'monitor';
+        const mode = IsValidCommunicationTab(this.ActiveTab) ? this.ActiveTab : 'monitor';
         if (mode === this.lastRegisteredToolMode) {
             return;
         }
@@ -438,7 +499,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
                 'Refresh the currently-displayed Communication data. Read-only — re-loads existing data, sends nothing.',
                 { type: 'object', properties: {} },
                 async () => {
-                    this.onRefresh();
+                    this.OnRefresh();
                     return { Success: true };
                 },
             ),
@@ -562,16 +623,16 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     // -- Tolerant tool handlers ---------------------------------------------------
 
     private handleSwitchTabTool(params: Record<string, unknown>): CommunicationToolResult {
-        const v = validateEnumParam(params?.['tab'], this.navigationItems as readonly string[], 'tab');
+        const v = ValidateEnumParam(params?.['tab'], this.NavigationItems as readonly string[], 'tab');
         if (!v.ok) {
             return v.result;
         }
-        this.onTabChange(v.value);
+        this.OnTabChange(v.value);
         return { Success: true };
     }
 
     private handleFilterLogsTool(params: Record<string, unknown>): CommunicationToolResult {
-        const v = validateEnumParam(params?.['status'], COMMUNICATION_LOG_STATUSES, 'status');
+        const v = ValidateEnumParam(params?.['status'], COMMUNICATION_LOG_STATUSES, 'status');
         if (!v.ok) {
             return v.result;
         }
@@ -584,7 +645,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     }
 
     private handleSearchLogsTool(params: Record<string, unknown>): CommunicationToolResult {
-        const v = validateStringParam(params?.['query'], 'query');
+        const v = ValidateStringParam(params?.['query'], 'query');
         if (!v.ok) {
             return v.result;
         }
@@ -597,14 +658,14 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     }
 
     private handleSelectLogTool(params: Record<string, unknown>): CommunicationToolResult {
-        const v = validateStringParam(params?.['log'], 'log');
+        const v = ValidateStringParam(params?.['log'], 'log');
         if (!v.ok) {
             return v.result;
         }
         if (!this.logsChild) {
             return { Success: false, ErrorMessage: 'The Logs tab is not open. Switch to the Logs tab first.' };
         }
-        const match = resolveCommunicationItem(v.value, this.logCandidates());
+        const match = ResolveCommunicationItem(v.value, this.logCandidates());
         if (!match) {
             return { Success: false, ErrorMessage: `No visible log matches "${v.value}".` };
         }
@@ -616,7 +677,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     private handleOpenLogTool(params: Record<string, unknown>): CommunicationToolResult {
         const ref = typeof params?.['log'] === 'string' ? (params['log'] as string) : '';
         if (ref && this.logsChild) {
-            const match = resolveCommunicationItem(ref, this.logCandidates());
+            const match = ResolveCommunicationItem(ref, this.logCandidates());
             if (match) {
                 this.selectedLog = { id: match.ID, name: match.Name };
             }
@@ -629,7 +690,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     }
 
     private handleSelectProviderTool(params: Record<string, unknown>): CommunicationToolResult {
-        const v = validateStringParam(params?.['provider'], 'provider');
+        const v = ValidateStringParam(params?.['provider'], 'provider');
         if (!v.ok) {
             return v.result;
         }
@@ -637,7 +698,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             return { Success: false, ErrorMessage: 'The Providers tab is not open. Switch to the Providers tab first.' };
         }
         const candidates: CommunicationItemCandidate[] = this.providersChild.providerCards.map(p => ({ ID: p.Entity.ID, Name: p.Entity.Name }));
-        const match = resolveCommunicationItem(v.value, candidates);
+        const match = ResolveCommunicationItem(v.value, candidates);
         if (!match) {
             return { Success: false, ErrorMessage: `No provider matches "${v.value}".` };
         }
@@ -650,7 +711,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         const ref = typeof params?.['provider'] === 'string' ? (params['provider'] as string) : '';
         if (ref && this.providersChild) {
             const candidates: CommunicationItemCandidate[] = this.providersChild.providerCards.map(p => ({ ID: p.Entity.ID, Name: p.Entity.Name }));
-            const match = resolveCommunicationItem(ref, candidates);
+            const match = ResolveCommunicationItem(ref, candidates);
             if (match) {
                 this.selectedProvider = { id: match.ID, name: match.Name };
             }
@@ -663,7 +724,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     }
 
     private handleFilterTemplatesTool(params: Record<string, unknown>): CommunicationToolResult {
-        const v = validateStringParam(params?.['category'], 'category');
+        const v = ValidateStringParam(params?.['category'], 'category');
         if (!v.ok) {
             return v.result;
         }
@@ -676,7 +737,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     }
 
     private handleSearchTemplatesTool(params: Record<string, unknown>): CommunicationToolResult {
-        const v = validateStringParam(params?.['query'], 'query');
+        const v = ValidateStringParam(params?.['query'], 'query');
         if (!v.ok) {
             return v.result;
         }
@@ -689,7 +750,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     }
 
     private handleSelectTemplateTool(params: Record<string, unknown>): CommunicationToolResult {
-        const v = validateStringParam(params?.['template'], 'template');
+        const v = ValidateStringParam(params?.['template'], 'template');
         if (!v.ok) {
             return v.result;
         }
@@ -697,7 +758,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             return { Success: false, ErrorMessage: 'The Templates tab is not open. Switch to the Templates tab first.' };
         }
         const candidates: CommunicationItemCandidate[] = this.templatesChild.filteredTemplates.map(t => ({ ID: t.Entity.ID, Name: t.Entity.Name }));
-        const match = resolveCommunicationItem(v.value, candidates);
+        const match = ResolveCommunicationItem(v.value, candidates);
         if (!match) {
             return { Success: false, ErrorMessage: `No visible template matches "${v.value}".` };
         }
@@ -710,7 +771,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         const ref = typeof params?.['template'] === 'string' ? (params['template'] as string) : '';
         if (ref && this.templatesChild) {
             const candidates: CommunicationItemCandidate[] = this.templatesChild.filteredTemplates.map(t => ({ ID: t.Entity.ID, Name: t.Entity.Name }));
-            const match = resolveCommunicationItem(ref, candidates);
+            const match = ResolveCommunicationItem(ref, candidates);
             if (match) {
                 this.selectedTemplate = { id: match.ID, name: match.Name };
             }
@@ -723,7 +784,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     }
 
     private handleSelectRunTool(params: Record<string, unknown>): CommunicationToolResult {
-        const v = validateStringParam(params?.['run'], 'run');
+        const v = ValidateStringParam(params?.['run'], 'run');
         if (!v.ok) {
             return v.result;
         }
@@ -731,7 +792,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
             return { Success: false, ErrorMessage: 'The Runs tab is not open. Switch to the Runs tab first.' };
         }
         const candidates: CommunicationItemCandidate[] = this.runsChild.runs.map(r => ({ ID: r.ID, Name: this.runDisplayName(r.ID) }));
-        const match = resolveCommunicationItem(v.value, candidates);
+        const match = ResolveCommunicationItem(v.value, candidates);
         if (!match) {
             return { Success: false, ErrorMessage: `No visible run matches "${v.value}".` };
         }
@@ -744,7 +805,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
         const ref = typeof params?.['run'] === 'string' ? (params['run'] as string) : '';
         if (ref && this.runsChild) {
             const candidates: CommunicationItemCandidate[] = this.runsChild.runs.map(r => ({ ID: r.ID, Name: this.runDisplayName(r.ID) }));
-            const match = resolveCommunicationItem(ref, candidates);
+            const match = ResolveCommunicationItem(ref, candidates);
             if (match) {
                 this.selectedRun = { id: match.ID, name: match.Name };
             }

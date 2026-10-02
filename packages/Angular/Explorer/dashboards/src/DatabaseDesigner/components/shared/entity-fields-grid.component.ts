@@ -54,7 +54,7 @@ export class EntityFieldsGridComponent {
     // ─── Inputs ────────────────────────────────────────────────────────────
 
     @Input() public set Columns(v: ColumnSpec[]) {
-        this.rows = v.map((c, i) => ({
+        this.Rows = v.map((c, i) => ({
             ...c,
             isExisting: false,
             isHidden: false,
@@ -72,7 +72,16 @@ export class EntityFieldsGridComponent {
 
     // ─── View state ────────────────────────────────────────────────────────
 
-    public rows: FieldRow[] = [];
+    public Rows: FieldRow[] = [];
+
+    /** @deprecated Use {@link Rows}. */
+    public get rows(): FieldRow[] {
+        return this.Rows;
+    }
+    /** @deprecated Use {@link Rows}. */
+    public set rows(value: FieldRow[]) {
+        this.Rows = value;
+    }
 
     /** Index of the row currently being actively edited (-1 = none). */
     public ActiveRowIndex = -1;
@@ -84,7 +93,7 @@ export class EntityFieldsGridComponent {
 
     /** True when any row has a reserved-name validation error. */
     public get HasErrors(): boolean {
-        return this.rows.some(r => this.isReservedName(r.Name));
+        return this.Rows.some(r => this.isReservedName(r.Name));
     }
 
     /** True when any row has an error (exposed for parent template). */
@@ -103,7 +112,7 @@ export class EntityFieldsGridComponent {
     }
 
     public TypeLabel(type: ColumnSpec['Type']): string {
-        return FIELD_TYPE_OPTIONS.find(o => o.value === type)?.label ?? (type ?? 'String (NVARCHAR)');
+        return FIELD_TYPE_OPTIONS.find(o => o.Value === type)?.Label ?? (type ?? 'String (NVARCHAR)');
     }
 
     /** True when the selected type supports a Max Length field. */
@@ -126,16 +135,16 @@ export class EntityFieldsGridComponent {
             IsNullable: true,
             isExisting: false,
             isHidden: false,
-            rowIndex: this.rows.length,
+            rowIndex: this.Rows.length,
         };
-        this.rows = [...this.rows, newRow];
+        this.Rows = [...this.Rows, newRow];
         this.ActiveRowIndex = newRow.rowIndex;
         this.emit();
     }
 
     /** Remove a new (non-existing) row outright. */
     public DeleteRow(index: number): void {
-        this.rows = this.rows
+        this.Rows = this.Rows
             .filter(r => r.rowIndex !== index)
             .map((r, i) => ({ ...r, rowIndex: i }));
         this.ActiveRowIndex = -1;
@@ -148,7 +157,7 @@ export class EntityFieldsGridComponent {
      * data in the column is preserved.
      */
     public ToggleHide(index: number): void {
-        this.rows = this.rows.map(r =>
+        this.Rows = this.Rows.map(r =>
             r.rowIndex === index ? { ...r, isHidden: !r.isHidden } : r
         );
         this.emit();
@@ -156,7 +165,7 @@ export class EntityFieldsGridComponent {
 
     /** Update a field's Name. */
     public OnNameChange(index: number, value: string): void {
-        this.updateRow(index, { Name: value });
+        this.UpdateRow(index, { Name: value });
     }
 
     /** Update a field's Type. */
@@ -165,29 +174,29 @@ export class EntityFieldsGridComponent {
         const extra: Partial<FieldRow> = {};
         if (value !== 'string')  extra.MaxLength = undefined;
         if (value !== 'decimal') { extra.Precision = undefined; extra.Scale = undefined; }
-        this.updateRow(index, { Type: value, ...extra });
+        this.UpdateRow(index, { Type: value, ...extra });
     }
 
     /** Toggle the "Required" (not-nullable) flag. */
     public OnRequiredToggle(index: number): void {
-        const row = this.rows.find(r => r.rowIndex === index);
-        if (row) this.updateRow(index, { IsNullable: !row.IsNullable });
+        const row = this.Rows.find(r => r.rowIndex === index);
+        if (row) this.UpdateRow(index, { IsNullable: !row.IsNullable });
     }
 
     /** Update MaxLength for string columns. */
     public OnMaxLengthChange(index: number, value: string): void {
         const n = parseInt(value, 10);
-        this.updateRow(index, { MaxLength: isNaN(n) ? undefined : n });
+        this.UpdateRow(index, { MaxLength: isNaN(n) ? undefined : n });
     }
 
     /** Update the Default Value string. */
     public OnDefaultValueChange(index: number, value: string): void {
-        this.updateRow(index, { DefaultValue: value || undefined });
+        this.UpdateRow(index, { DefaultValue: value || undefined });
     }
 
     /** Update the Description string. */
     public OnDescriptionChange(index: number, value: string): void {
-        this.updateRow(index, { Description: value || undefined });
+        this.UpdateRow(index, { Description: value || undefined });
     }
 
     // ─── Public & private helpers ──────────────────────────────────────────
@@ -197,16 +206,21 @@ export class EntityFieldsGridComponent {
     }
 
     /** Called directly from the template for precision/scale inline updates. */
-    public updateRow(index: number, patch: Partial<FieldRow>): void {
-        this.rows = this.rows.map(r =>
+    public UpdateRow(index: number, patch: Partial<FieldRow>): void {
+        this.Rows = this.Rows.map(r =>
             r.rowIndex === index ? { ...r, ...patch } : r
         );
         this.emit();
     }
 
+    /** @deprecated Use {@link UpdateRow}. */
+    public updateRow(index: number, patch: Partial<FieldRow>): void {
+        return this.UpdateRow(index, patch);
+    }
+
     /** Emit the current non-hidden rows as `ColumnSpec[]` to the parent. */
     private emit(): void {
-        const cols: ColumnSpec[] = this.rows
+        const cols: ColumnSpec[] = this.Rows
             .filter(r => !r.isHidden)
             .map(({ isExisting: _e, isHidden: _h, rowIndex: _i, ...col }) => col);
         this.ColumnsChanged.emit(cols);

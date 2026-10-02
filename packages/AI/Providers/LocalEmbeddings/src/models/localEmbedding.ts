@@ -115,6 +115,15 @@ export class LocalEmbedding extends BaseEmbeddings {
     }
 
     /**
+     * Runs ONNX models in-process, so it needs no API key. Lets credential checks (e.g.
+     * `AIEmbeddingRunner`) accept a local model on an install with no
+     * `AI_VENDOR_API_KEY__LocalEmbedding` set.
+     */
+    public override get RequiresAPIKey(): boolean {
+        return false;
+    }
+
+    /**
      * Get or create a pipeline for the specified model
      */
     private async getPipeline(modelName: string): Promise<any> {
@@ -433,25 +442,40 @@ export class LocalEmbedding extends BaseEmbeddings {
     /**
      * Clear loaded pipelines to free memory
      */
-    public clearCache(): void {
+    public ClearCache(): void {
         LocalEmbedding.pipelines.clear();
         LocalEmbedding.loadingPromises.clear();
         console.log('Cleared local embedding model cache');
+    }
+
+    /** @deprecated Use {@link ClearCache}. */
+    public clearCache(): void {
+        return this.ClearCache();
     }
     
     /**
      * Static method to clear the shared cache
      */
-    public static clearSharedCache(): void {
+    public static ClearSharedCache(): void {
         LocalEmbedding.pipelines.clear();
         LocalEmbedding.loadingPromises.clear();
         console.log('Cleared shared local embedding model cache');
     }
 
+    /** @deprecated Use {@link ClearSharedCache}. */
+    public static clearSharedCache(): void {
+        return this.ClearSharedCache();
+    }
+
     /**
      * Preload a specific model for faster first inference
      */
-    public async preloadModel(modelName: string): Promise<void> {
+    public async PreloadModel(modelName: string): Promise<void> {
         await this.getPipeline(modelName);
+    }
+
+    /** @deprecated Use {@link PreloadModel}. */
+    public async preloadModel(modelName: string): Promise<void> {
+        return this.PreloadModel(modelName);
     }
 }

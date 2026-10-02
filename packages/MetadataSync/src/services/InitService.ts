@@ -15,7 +15,7 @@ export interface InitCallbacks {
 }
 
 export class InitService {
-  async initialize(options: InitOptions = {}, callbacks?: InitCallbacks): Promise<void> {
+  async Initialize(options: InitOptions = {}, callbacks?: InitCallbacks): Promise<void> {
     try {
       // Check if already initialized
       if (await fs.pathExists('.mj-sync.json')) {
@@ -77,6 +77,11 @@ export class InitService {
       throw error;
     }
   }
+
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(options: InitOptions = {}, callbacks?: InitCallbacks): Promise<void> {
+    return this.Initialize(options, callbacks);
+  }
   
   private async createAIPromptsExample(dirName: string): Promise<void> {
     const exampleDir = path.join(dirName, 'examples');
@@ -124,15 +129,20 @@ Be conversational and welcoming in your tone.`;
     );
   }
   
-  getNextSteps(): string[] {
+  GetNextSteps(): string[] {
     return [
       'Run "mj sync pull --entity=\'AI Prompts\'" to pull existing data',
       'Edit files locally',
       'Run "mj sync push" to sync changes back to the database'
     ];
   }
+
+  /** @deprecated Use {@link GetNextSteps}. */
+  getNextSteps(): string[] {
+    return this.GetNextSteps();
+  }
   
-  getErrorHint(error: Error | string): string | null {
+  GetErrorHint(error: Error | string): string | null {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
     if (errorMessage.includes('permission') || errorMessage.includes('EACCES')) {
@@ -144,5 +154,10 @@ Be conversational and welcoming in your tone.`;
     }
     
     return null;
+  }
+
+  /** @deprecated Use {@link GetErrorHint}. */
+  getErrorHint(error: Error | string): string | null {
+    return this.GetErrorHint(error);
   }
 }

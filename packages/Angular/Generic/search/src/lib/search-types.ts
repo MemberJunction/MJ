@@ -15,6 +15,8 @@ export interface SearchResultItem {
     Snippet: string;
     /** The entity name this result belongs to */
     EntityName: string;
+    /** Human-readable display name for the entity (e.g., "People" instead of "MJ_BizApps_Common: People") */
+    EntityDisplayName?: string;
     /** The primary key of the source record */
     RecordID: string;
     /** Classification of the result source */
@@ -197,6 +199,8 @@ export interface SearchExecutedEvent {
 export interface RecentRecordItem {
     /** Entity name (e.g. 'MJ: AI Prompt Runs') */
     EntityName: string;
+    /** Human-readable display name for the entity (e.g., 'AI Prompt Runs') */
+    EntityDisplayName?: string;
     /** Record primary key value */
     RecordID: string;
     /** Resolved display name (falls back to the ID when resolution fails) */

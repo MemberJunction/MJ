@@ -22,7 +22,7 @@ import type { AgentToolResult } from '../shared/agent-tool-validation';
  * @param collection - The loaded records to search (each must expose `ID`).
  * @param entityLabel - Human label for the error message (e.g. "action").
  */
-export function findByIdOrError<T extends { ID: string }>(
+export function FindByIdOrError<T extends { ID: string }>(
     rawId: unknown,
     collection: readonly T[],
     entityLabel: string,
@@ -36,6 +36,15 @@ export function findByIdOrError<T extends { ID: string }>(
         return { ok: false, result: { Success: false, ErrorMessage: `No ${entityLabel} found with id "${rawId}".` } };
     }
     return { ok: true, value: match };
+}
+
+/** @deprecated Use {@link FindByIdOrError}. */
+export function findByIdOrError<T extends { ID: string }>(
+    rawId: unknown,
+    collection: readonly T[],
+    entityLabel: string,
+): { ok: true; value: T } | { ok: false; result: AgentToolResult } {
+    return FindByIdOrError(rawId, collection, entityLabel);
 }
 
 /**
@@ -53,7 +62,7 @@ export function findByIdOrError<T extends { ID: string }>(
  * @param entityLabel - Human label for the error message (e.g. "action").
  * @param sampleCap - How many names to surface in the not-found message (default 8).
  */
-export function findByNameOrError<T extends { Name: string }>(
+export function FindByNameOrError<T extends { Name: string }>(
     rawName: unknown,
     collection: readonly T[],
     entityLabel: string,
@@ -76,6 +85,16 @@ export function findByNameOrError<T extends { Name: string }>(
     return { ok: false, result: { Success: false, ErrorMessage: `No ${entityLabel} found matching "${rawName}".${suffix}` } };
 }
 
+/** @deprecated Use {@link FindByNameOrError}. */
+export function findByNameOrError<T extends { Name: string }>(
+    rawName: unknown,
+    collection: readonly T[],
+    entityLabel: string,
+    sampleCap = 8,
+): { ok: true; value: T } | { ok: false; result: AgentToolResult } {
+    return FindByNameOrError(rawName, collection, entityLabel, sampleCap);
+}
+
 /**
  * Resolve a record by EITHER an exact id OR a case-insensitive name (id wins when
  * it resolves; otherwise falls back to name resolution). Lets a single tool accept
@@ -85,7 +104,7 @@ export function findByNameOrError<T extends { Name: string }>(
  * @param collection - The loaded records to search (each must expose `ID` and `Name`).
  * @param entityLabel - Human label for the error message (e.g. "action").
  */
-export function findByIdOrNameOrError<T extends { ID: string; Name: string }>(
+export function FindByIdOrNameOrError<T extends { ID: string; Name: string }>(
     rawValue: unknown,
     collection: readonly T[],
     entityLabel: string,
@@ -93,9 +112,18 @@ export function findByIdOrNameOrError<T extends { ID: string; Name: string }>(
     if (typeof rawValue !== 'string' || rawValue.trim() === '') {
         return { ok: false, result: { Success: false, ErrorMessage: `A non-empty ${entityLabel} id or name is required.` } };
     }
-    const byId = findByIdOrError(rawValue, collection, entityLabel);
+    const byId = FindByIdOrError(rawValue, collection, entityLabel);
     if (byId.ok) {
         return byId;
     }
-    return findByNameOrError(rawValue, collection, entityLabel);
+    return FindByNameOrError(rawValue, collection, entityLabel);
+}
+
+/** @deprecated Use {@link FindByIdOrNameOrError}. */
+export function findByIdOrNameOrError<T extends { ID: string; Name: string }>(
+    rawValue: unknown,
+    collection: readonly T[],
+    entityLabel: string,
+): { ok: true; value: T } | { ok: false; result: AgentToolResult } {
+    return FindByIdOrNameOrError(rawValue, collection, entityLabel);
 }

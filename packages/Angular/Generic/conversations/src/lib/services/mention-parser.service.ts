@@ -29,7 +29,7 @@ export class MentionParserService {
     }
 
     /** Pass-through to {@link ConversationsRuntime.Instance.Mentions.parseMentions}. */
-    parseMentions(
+    ParseMentions(
         text: string,
         availableAgents: MJAIAgentEntityExtended[],
         availableUsers?: UserInfo[]
@@ -41,8 +41,17 @@ export class MentionParserService {
         );
     }
 
+    /** @deprecated Use {@link ParseMentions}. */
+    parseMentions(
+        text: string,
+        availableAgents: MJAIAgentEntityExtended[],
+        availableUsers?: UserInfo[]
+    ): MentionParseResult {
+        return this.ParseMentions(text, availableAgents, availableUsers);
+    }
+
     /** Pass-through to {@link ConversationsRuntime.Instance.Mentions.validateMentions}. */
-    validateMentions(
+    ValidateMentions(
         text: string,
         availableAgents: MJAIAgentEntityExtended[],
         availableUsers?: UserInfo[]
@@ -54,22 +63,50 @@ export class MentionParserService {
         );
     }
 
+    /** @deprecated Use {@link ValidateMentions}. */
+    validateMentions(
+        text: string,
+        availableAgents: MJAIAgentEntityExtended[],
+        availableUsers?: UserInfo[]
+    ): string[] {
+        return this.ValidateMentions(text, availableAgents, availableUsers);
+    }
+
     /** Pass-through to {@link ConversationsRuntime.Instance.Mentions.extractMentionNames}. */
-    extractMentionNames(text: string): string[] {
+    ExtractMentionNames(text: string): string[] {
         return ConversationsRuntime.Instance.Mentions.extractMentionNames(text);
     }
 
+    /** @deprecated Use {@link ExtractMentionNames}. */
+    extractMentionNames(text: string): string[] {
+        return this.ExtractMentionNames(text);
+    }
+
     /** Pass-through to {@link ConversationsRuntime.Instance.Mentions.formatMentions}. */
-    formatMentions(text: string, mentions: Mention[]): string {
+    FormatMentions(text: string, mentions: Mention[]): string {
         return ConversationsRuntime.Instance.Mentions.formatMentions(text, mentions);
     }
 
+    /** @deprecated Use {@link FormatMentions}. */
+    formatMentions(text: string, mentions: Mention[]): string {
+        return this.FormatMentions(text, mentions);
+    }
+
     /** Pass-through to {@link ConversationsRuntime.Instance.Mentions.toPlainText}. */
-    toPlainText(
+    ToPlainText(
         text: string,
         agents?: MJAIAgentEntityExtended[],
         users?: UserInfo[]
     ): string {
         return ConversationsRuntime.Instance.Mentions.toPlainText(text, agents, users);
+    }
+
+    /** @deprecated Use {@link ToPlainText}. */
+    toPlainText(
+        text: string,
+        agents?: MJAIAgentEntityExtended[],
+        users?: UserInfo[]
+    ): string {
+        return this.ToPlainText(text, agents, users);
     }
 }

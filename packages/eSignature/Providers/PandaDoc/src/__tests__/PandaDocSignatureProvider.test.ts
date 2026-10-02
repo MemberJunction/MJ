@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { PandaDocSignatureProvider, mapPandaDocStatus } from '../PandaDocSignatureProvider';
+import { PandaDocSignatureProvider, MapPandaDocStatus } from '../PandaDocSignatureProvider';
 import type { SignatureProviderConfig } from '@memberjunction/esignature';
 
 const VALID_CONFIG: SignatureProviderConfig = {
@@ -39,7 +39,7 @@ describe('mapPandaDocStatus', () => {
         ['document.voided', 'Voided'],
         ['nonsense', 'Unknown'],
     ] as const)('maps %s -> %s', (input, expected) => {
-        expect(mapPandaDocStatus(input)).toBe(expected);
+        expect(MapPandaDocStatus(input)).toBe(expected);
     });
 });
 
