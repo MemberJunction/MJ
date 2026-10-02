@@ -39,29 +39,23 @@ export class RubricBuilderComponent implements OnChanges {
     public MoveProblem: string | null = null;
     public Preview: RubricScoreResult | null = null;
 
+    private previewAnswers: RubricFormAnswer[] = [];
+
     ngOnChanges(): void {
         this.Shares = WeightShares(this.Nodes);
         this.Problems = DraftProblems(this.Nodes, this.Scales);
-        if (!SampleMatchesTree(this.Nodes, this.SampleAnswers) && this.Nodes.some(node => node.nodeType === 'Criterion' && node.scaleId)) {
-            this.SampleAnswers = this.sample(true);
-        }
-        this.Preview = this.Version ? PreviewScore({ ...this.Version, nodes: this.Nodes, scales: this.Scales }, this.SampleAnswers) : null;
-        this.selectLoadedScales();
+        this.previewAnswers = SampleMatchesTree(this.Nodes, this.SampleAnswers)
+            ? this.SampleAnswers
+            : this.Nodes.some(node => node.nodeType === 'Criterion' && node.scaleId)
+                ? this.sample(true)
+                : this.SampleAnswers;
+        this.Preview = this.Version ? PreviewScore({ ...this.Version, nodes: this.Nodes, scales: this.Scales }, this.previewAnswers) : null;
     }
 
-    /** The select's value is applied before its options exist, so re-apply after render. */
-    private selectLoadedScales(): void {
-        queueMicrotask(() => {
-            const selects = Array.from(document.querySelectorAll('mj-rubric-builder select')).map(element => element as HTMLSelectElement).filter(select =>
-                Array.from(select.options).some(option => this.Scales.some(scale => option.value.toLowerCase() === scale.id.toLowerCase())));
-            const criteria = this.Nodes.filter(node => node.nodeType === 'Criterion');
-            selects.forEach((select, index) => {
-                const scaleId = criteria[index]?.scaleId;
-                if (!scaleId) return;
-                const match = Array.from(select.options).find(option => option.value.toLowerCase() === scaleId.toLowerCase());
-                if (match) select.value = match.value;
-            });
-        });
+    /** The option value that matches this node's scale, including a case difference. */
+    public ScaleValue(node: RubricNodeSnapshot): string {
+        const id = (node.scaleId ?? '').toLowerCase();
+        return this.Scales.find(scale => scale.id.toLowerCase() === id)?.id ?? '';
     }
 
     public Share(id: string): number {
@@ -82,8 +76,8 @@ export class RubricBuilderComponent implements OnChanges {
     }
 
     public Simulate(meets: boolean): void {
-        this.SampleAnswers = this.sample(meets);
-        this.ngOnChanges();
+        this.previewAnswers = this.sample(meets);
+        this.Preview = this.Version ? PreviewScore({ ...this.Version, nodes: this.Nodes, scales: this.Scales }, this.previewAnswers) : null;
     }
 
     private sample(meets: boolean): RubricFormAnswer[] {

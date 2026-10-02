@@ -28,6 +28,35 @@ describe('RubricVersionDiffComponent (DOM)', () => {
         expect(host.querySelector('.mark')?.textContent).toContain('The weight changed');
     });
 
+    it('shows version, group, band-range, and added-band rows', () => {
+        const base = draft();
+        base.passThreshold = 0.5;
+        base.nodes = [
+            { id: 'quality', key: 'quality', name: 'Quality', nodeType: 'Group', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
+            { ...base.nodes[0], parentId: 'quality' },
+        ];
+        const next = draft();
+        next.passThreshold = 0.8;
+        next.nodes = [
+            { id: 'quality', key: 'quality', name: 'Quality', nodeType: 'Group', weight: 2, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
+            { ...next.nodes[0], parentId: 'quality' },
+        ];
+        next.bands = [
+            { ...next.bands[0], maxScore: 0.8 },
+            { id: 'ok', label: 'Okay', minScore: 0, maxScore: 0.4, displayTone: 'Warning', sequence: 1 },
+        ];
+        const host = render(component => {
+            component.Base = base;
+            component.Draft = next;
+        });
+        expect(host.querySelector('[aria-label="Version"]')?.textContent).toContain('The pass threshold changed');
+        expect(host.querySelector('[aria-label="Group"]')?.textContent).toContain('Group: Quality');
+        expect(host.querySelector('[aria-label="Group"]')?.textContent).toContain('The weight changed');
+        expect(host.querySelector('[aria-label="Band range"]')?.textContent).toContain('The band range changed');
+        expect(host.querySelector('[aria-label="Added band"]')?.textContent).toContain('Okay');
+        expect(host.querySelector('[aria-label="Added band"]')?.textContent).toContain('Added in draft');
+    });
+
     it('says a band that is only on the base was removed', () => {
         const base = draft();
         const next = draft();

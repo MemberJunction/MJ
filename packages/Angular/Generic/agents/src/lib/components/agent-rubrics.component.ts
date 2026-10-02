@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJAIAgentRubricEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DisableLink, LinkDraft, MakeDefaultLink, SortAgentRubrics, type AgentRubricLink } from './agent-rubrics.model';
 
@@ -113,7 +113,7 @@ export class AgentRubricsComponent extends BaseAngularComponent {
         this.Error = '';
         try {
             const view = RunView.FromMetadataProvider(this.ProviderToUse);
-            const escaped = this.agentID.replace(/'/g, "''");
+            const escaped = EscapeSQLString(this.agentID);
             const links = await view.RunView({
                 EntityName: 'MJ: AI Agent Rubrics',
                 ExtraFilter: `AgentID='${escaped}'`,

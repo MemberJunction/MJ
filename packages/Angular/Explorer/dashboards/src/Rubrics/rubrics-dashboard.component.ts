@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, AfterViewInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, AfterViewInit, inject } from '@angular/core';
+import { ColDef, GridOptions, RowClickedEvent } from 'ag-grid-community';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { CatalogRow, type CatalogRowView, type CatalogRubricInput } from '@memberjunction/ng-rubrics';
+import { CatalogGridTheme } from './catalog-grid';
 
 type Row = Record<string, unknown>;
 
@@ -17,12 +19,21 @@ type Row = Record<string, unknown>;
 })
 export class RubricsDashboardComponent extends BaseDashboard implements AfterViewInit {
     public Loading = true;
+    public LoadError = '';
     public Search = '';
     public Rows: CatalogRowView[] = [];
-
-    public constructor(private changeDetector: ChangeDetectorRef) {
-        super();
-    }
+    public readonly Theme = CatalogGridTheme();
+    public readonly GridOptions: GridOptions<CatalogRowView> = { domLayout: 'autoHeight', suppressCellFocus: true, animateRows: true };
+    public readonly ColumnDefs: ColDef<CatalogRowView>[] = [
+        { field: 'name', headerName: 'Name', flex: 2 },
+        { field: 'description', headerName: 'Description', flex: 2 },
+        { field: 'categoryName', headerName: 'Category', flex: 1 },
+        { field: 'publishedLabel', headerName: 'Published', flex: 1 },
+        { field: 'draftLabel', headerName: 'Draft', flex: 1 },
+        { field: 'criteriaCount', headerName: 'Criteria', width: 120 },
+        { field: 'scaleName', headerName: 'Scale', flex: 1 },
+    ];
+    private readonly changeDetector = inject(ChangeDetectorRef);
 
     protected initDashboard(): void {}
 
@@ -36,13 +47,20 @@ export class RubricsDashboardComponent extends BaseDashboard implements AfterVie
         try {
             const view = RunView.FromMetadataProvider(this.ProviderToUse);
             const user = this.ProviderToUse.CurrentUser;
-            const [rubrics, versions, criteria, categories, scales] = await Promise.all([
-                view.RunView({ EntityName: 'MJ: Rubrics', ResultType: 'simple', MaxRows: 300, OrderBy: 'Name' }, user),
-                view.RunView({ EntityName: 'MJ: Rubric Versions', ResultType: 'simple', MaxRows: 800 }, user),
-                view.RunView({ EntityName: 'MJ: Rubric Criteria', ResultType: 'simple', MaxRows: 2000 }, user),
-                view.RunView({ EntityName: 'MJ: Rubric Categories', ResultType: 'simple', MaxRows: 300 }, user),
-                view.RunView({ EntityName: 'MJ: Rubric Scales', ResultType: 'simple', MaxRows: 300 }, user),
-            ]);
+            const [rubrics, versions, criteria, categories, scales] = await view.RunViews([
+                { EntityName: 'MJ: Rubrics', ResultType: 'simple', MaxRows: 300, OrderBy: 'Name' },
+                { EntityName: 'MJ: Rubric Versions', ResultType: 'simple', MaxRows: 800 },
+                { EntityName: 'MJ: Rubric Criteria', ResultType: 'simple', MaxRows: 2000 },
+                { EntityName: 'MJ: Rubric Categories', ResultType: 'simple', MaxRows: 300 },
+                { EntityName: 'MJ: Rubric Scales', ResultType: 'simple', MaxRows: 300 },
+            ], user);
+            const failed = [rubrics, versions, criteria, categories, scales].find(result => !result.Success);
+            if (failed) {
+                this.LoadError = failed.ErrorMessage || 'Could not load rubrics.';
+                this.Rows = [];
+                return;
+            }
+            this.LoadError = '';
             const categoryNames = new Map((categories.Results as Row[] ?? []).map(row => [String(row.ID).toLowerCase(), String(row.Name ?? '')]));
             const scaleNames: Record<string, string> = {};
             for (const row of (scales.Results as Row[] ?? [])) scaleNames[String(row.ID).toLowerCase()] = String(row.Name ?? '');
@@ -90,6 +108,10 @@ export class RubricsDashboardComponent extends BaseDashboard implements AfterVie
 
     public Open(id: string): void {
         this.navigationService.OpenEntityRecord('MJ: Rubrics', CompositeKey.FromID(id));
+    }
+
+    public OnRow(event: RowClickedEvent<CatalogRowView>): void {
+        if (event.data) this.Open(event.data.id);
     }
 
     public NewRubric(): void {

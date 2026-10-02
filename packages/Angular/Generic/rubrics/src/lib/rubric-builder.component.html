@@ -12,9 +12,9 @@
         <span class="eyebrow">Select version</span>
         <div class="segmented">
           @if (PublishedLabel) {
-            <button type="button" [attr.aria-pressed]="Viewing === 'published'" (click)="ViewingChange.emit('published')">Published {{ PublishedLabel }}</button>
+            <button mjButton variant="outline" size="sm" type="button" [attr.aria-pressed]="Viewing === 'published'" (click)="ViewingChange.emit('published')">Published {{ PublishedLabel }}</button>
           }
-          <button type="button" [attr.aria-pressed]="Viewing === 'draft'" (click)="ViewingChange.emit('draft')">Draft (next {{ NextVersion }})</button>
+          <button mjButton variant="outline" size="sm" type="button" [attr.aria-pressed]="Viewing === 'draft'" (click)="ViewingChange.emit('draft')">Draft (next {{ NextVersion }})</button>
         </div>
         @if (ComputedBump) { <span class="pill-major"><i class="fa-solid fa-triangle-exclamation"></i> {{ ComputedBump }}</span> }
       </div>
@@ -71,10 +71,10 @@
                 </label>
                 @if (node.nodeType === 'Criterion') {
                   <label>Scale
-                    <select [value]="node.scaleId ?? ''" (change)="OnScale(node, $event)">
+                    <select [value]="ScaleValue(node)" (change)="OnScale(node, $event)">
                       <option value="">None</option>
                       @for (scale of Scales; track scale.id) {
-                        <option [value]="scale.id" [selected]="scale.id.toLowerCase() === (node.scaleId ?? '').toLowerCase()">{{ scale.name || scale.id }}</option>
+                        <option [value]="scale.id">{{ scale.name || scale.id }}</option>
                       }
                     </select>
                   </label>
@@ -186,7 +186,7 @@
       </div>
       <div class="rubric-actions">
         <button mjButton variant="primary" size="sm" type="button" (click)="Simulate(true)">Simulate Meets</button>
-        <button class="miss" type="button" (click)="Simulate(false)">Simulate Miss</button>
+        <button mjButton variant="outline" size="sm" type="button" (click)="Simulate(false)">Simulate Miss</button>
       </div>
     </div>
   </div>

@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, AfterViewInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, AfterViewInit, inject } from '@angular/core';
+import { ColDef, GridOptions, RowClickedEvent } from 'ag-grid-community';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboard } from '@memberjunction/ng-shared';
+import { CatalogGridTheme } from './catalog-grid';
 
 type Row = Record<string, unknown>;
 
@@ -23,12 +25,17 @@ export interface ScaleCatalogRow {
 })
 export class RubricScalesDashboardComponent extends BaseDashboard implements AfterViewInit {
     public Loading = true;
+    public LoadError = '';
     public Search = '';
     public Rows: ScaleCatalogRow[] = [];
-
-    public constructor(private changeDetector: ChangeDetectorRef) {
-        super();
-    }
+    public readonly Theme = CatalogGridTheme();
+    public readonly GridOptions: GridOptions<ScaleCatalogRow> = { domLayout: 'autoHeight', suppressCellFocus: true, animateRows: true };
+    public readonly ColumnDefs: ColDef<ScaleCatalogRow>[] = [
+        { field: 'Name', headerName: 'Name', flex: 2 },
+        { field: 'Type', headerName: 'Type', flex: 1 },
+        { field: 'Frozen', headerName: 'Published use', flex: 1, valueFormatter: params => params.value ? 'Locked by a published rubric' : 'Editable' },
+    ];
+    private readonly changeDetector = inject(ChangeDetectorRef);
 
     protected initDashboard(): void {}
 
@@ -42,11 +49,18 @@ export class RubricScalesDashboardComponent extends BaseDashboard implements Aft
         try {
             const view = RunView.FromMetadataProvider(this.ProviderToUse);
             const user = this.ProviderToUse.CurrentUser;
-            const [scales, criteria, versions] = await Promise.all([
-                view.RunView({ EntityName: 'MJ: Rubric Scales', ResultType: 'simple', MaxRows: 300, OrderBy: 'Name' }, user),
-                view.RunView({ EntityName: 'MJ: Rubric Criteria', ResultType: 'simple', MaxRows: 2000 }, user),
-                view.RunView({ EntityName: 'MJ: Rubric Versions', ExtraFilter: "Status='Published'", ResultType: 'simple', MaxRows: 500 }, user),
-            ]);
+            const [scales, criteria, versions] = await view.RunViews([
+                { EntityName: 'MJ: Rubric Scales', ResultType: 'simple', MaxRows: 300, OrderBy: 'Name' },
+                { EntityName: 'MJ: Rubric Criteria', ResultType: 'simple', MaxRows: 2000 },
+                { EntityName: 'MJ: Rubric Versions', ExtraFilter: "Status='Published'", ResultType: 'simple', MaxRows: 500 },
+            ], user);
+            const failed = [scales, criteria, versions].find(result => !result.Success);
+            if (failed) {
+                this.LoadError = failed.ErrorMessage || 'Could not load scales.';
+                this.Rows = [];
+                return;
+            }
+            this.LoadError = '';
             const published = new Set(((versions.Results as Row[] ?? [])).map(row => String(row.ID).toLowerCase()));
             const frozenScales = new Set(((criteria.Results as Row[] ?? []))
                 .filter(row => published.has(String(row.RubricVersionID ?? '').toLowerCase()) && row.ScaleID)
@@ -76,11 +90,16 @@ export class RubricScalesDashboardComponent extends BaseDashboard implements Aft
 
     public OnSearch(value: string): void {
         this.Search = value;
+        this.publishAgent();
         this.changeDetector.markForCheck();
     }
 
     public Open(id: string): void {
         this.navigationService.OpenEntityRecord('MJ: Rubric Scales', CompositeKey.FromID(id));
+    }
+
+    public OnRow(event: RowClickedEvent<ScaleCatalogRow>): void {
+        if (event.data) this.Open(event.data.Id);
     }
 
     public NewScale(): void {

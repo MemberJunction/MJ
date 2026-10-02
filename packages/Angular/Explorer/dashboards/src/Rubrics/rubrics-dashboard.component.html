@@ -10,37 +10,20 @@
   </mj-page-header>
   <mj-page-body>
     @if (Loading) {
-      <p>Loading rubrics...</p>
+      <mj-loading text="Loading rubrics..."></mj-loading>
+    } @else if (LoadError) {
+      <p role="alert">{{ LoadError }}</p>
     } @else if (Visible.length === 0) {
       <mj-empty-state Icon="fa-solid fa-scale-balanced" Title="No rubrics" Message="Create a rubric to start a catalog."></mj-empty-state>
     } @else {
-      <table class="catalog-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Category</th>
-            <th>Published</th>
-            <th>Draft</th>
-            <th>Criteria</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of Visible; track row.id) {
-            <tr>
-              <td>
-                <strong>{{ row.name }}</strong>
-                @if (row.description) { <span class="catalog-note">{{ row.description }}</span> }
-              </td>
-              <td>{{ row.categoryName }}</td>
-              <td>{{ row.publishedLabel }}</td>
-              <td>{{ row.draftLabel }}</td>
-              <td>{{ row.criteriaCount }}@if (row.scaleName) { <span class="catalog-note">{{ row.scaleName }}</span> }</td>
-              <td><button mjButton variant="outline" size="sm" type="button" (click)="Open(row.id)">Open</button></td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <ag-grid-angular
+        class="catalog-grid"
+        [theme]="Theme"
+        [columnDefs]="ColumnDefs"
+        [gridOptions]="GridOptions"
+        [rowData]="Visible"
+        (rowClicked)="OnRow($event)">
+      </ag-grid-angular>
       <div class="catalog-cards">
         @for (row of Visible; track row.id) {
           <article class="catalog-card">

@@ -54,4 +54,14 @@ describe('rubric author draft', () => {
         expect(scale).toContain('result.Success');
         expect(scale).toContain('row.Save()');
     });
+
+    it('loads the author with mj-loading and escapes version ids', () => {
+        const directory = dirname(fileURLToPath(import.meta.url));
+        const form = readFileSync(join(directory, 'rubric-form.component.ts'), 'utf8');
+        const panel = readFileSync(join(directory, 'rubric-form.panels.ts'), 'utf8');
+        expect(panel).toContain('<mj-loading');
+        expect(panel).not.toContain('<p>Loading');
+        expect(form).toContain('EscapeSQLString');
+        expect(form).not.toContain(".replace(/'/g");
+    });
 });

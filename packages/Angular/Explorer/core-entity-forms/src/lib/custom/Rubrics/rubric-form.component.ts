@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { ActionParam } from '@memberjunction/actions-base';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { RegisterClass, RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPolicy, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { BandFromRow, NodeFields, NodeFromRow, PlanNodeSave, PlanBandSave, QueueNodeSave, PublishPreview, ScaleFromRow, VersionShownWithoutDraft, type RubricVersionCard } from '@memberjunction/ng-rubrics';
@@ -104,7 +104,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
 
     private async buildVersionCards(versions: Record<string, unknown>[]): Promise<RubricVersionCard[]> {
         if (versions.length === 0) return [];
-        const ids = versions.map(row => `'${String(row.ID).replace(/'/g, "''")}'`).join(', ');
+        const ids = versions.map(row => `'${EscapeSQLString(String(row.ID))}'`).join(', ');
         const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID IN (${ids})`);
         const bands = await this.rows('MJ: Rubric Bands', `RubricVersionID IN (${ids})`);
         return versions.map(row => {

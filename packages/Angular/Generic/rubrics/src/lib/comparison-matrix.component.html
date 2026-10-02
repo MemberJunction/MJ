@@ -1,7 +1,7 @@
 <section class="card" aria-label="Comparison matrix">
   <h3><i class="fa-solid fa-columns"></i> Evaluator comparison</h3>
   @if (ShowCohort) {
-    <p class="matrix-means">Human mean {{ Model.humanMean ?? '—' }}. AI mean {{ Model.aiMean ?? '—' }}. Cohort mean {{ CohortMean ?? '—' }}.</p>
+    <p class="matrix-means">Human mean {{ Model.humanMean ?? '—' }}. AI mean {{ Model.aiMean ?? '—' }}. Self mean {{ Model.selfScore ?? '—' }}. Cohort mean {{ CohortMean ?? '—' }}.</p>
   }
   <div class="matrix" [style.grid-template-columns]="'minmax(8rem, 1.1fr) repeat(' + Shown.length + ', minmax(0, 1fr))'">
     <div class="matrix-head">Criterion</div>

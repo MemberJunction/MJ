@@ -90,6 +90,12 @@ export class RubricDriftResourceComponent extends BaseResourceComponent implemen
             this.Previous = [];
             this.LoadError = error instanceof Error ? error.message : 'Could not load drift.';
         }
+        this.navigationService.SetAgentContext(this, {
+            Threshold: this.Threshold,
+            CurrentCount: this.Current.length,
+            PreviousCount: this.Previous.length,
+            LoadError: this.LoadError,
+        });
     }
 
     private async loadPeriods(): Promise<{ current: { key: string; mean: number }[]; previous: { key: string; mean: number }[] }> {

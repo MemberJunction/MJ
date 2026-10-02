@@ -11,6 +11,9 @@ describe('testing rubric UI', () => {
         expect(source).not.toContain('export function scoreTrend');
         expect(source).not.toContain('export function criterionFailureRates');
         expect(source).not.toContain('export function rubricPickerOptions');
+        const result = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../lib/components/testing-rubric-result.component.ts'), 'utf8');
+        expect(result).toContain('EscapeSQLString');
+        expect(result).not.toContain(".replace(/'/g");
     });
 
     it('orders the review queue by the largest human–AI gap', () => {

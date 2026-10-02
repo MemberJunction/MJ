@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { CompositeKey, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { MJRubricCriterionLevelEntity } from '@memberjunction/core-entities';
 import { Frozen, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { CategoryParentChoices, HostSnapshot, PriorPublishedVersion } from './form-hosts.model';
@@ -245,7 +246,7 @@ async function snapshot(provider: IMetadataProvider, version: Row | undefined): 
 }
 
 function quote(value: string): string {
-    return value.replace(/'/g, "''");
+    return EscapeSQLString(value);
 }
 
 async function saveLevel(provider: IMetadataProvider, id: string, isNew: boolean, fields: { CriterionID?: string; Descriptor: string; ScaleLevelID: string | null }): Promise<void> {

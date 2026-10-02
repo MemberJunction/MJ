@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy } from '@memberjunction/rubrics-base';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { ScoringShortcutApplies } from './model.js';
 import { AnchorsForLevel, AnswerLevel, CanSubmit, EffectivePolicy, IncompleteAnswers, ScoringCompleteness, type RubricFormAnswer } from './model.js';
 
@@ -13,7 +14,7 @@ import { AnchorsForLevel, AnswerLevel, CanSubmit, EffectivePolicy, IncompleteAns
 @Component({
     standalone: true,
     selector: 'mj-rubric-scoring-form',
-    imports: [CommonModule],
+    imports: [CommonModule, MJButtonDirective],
     templateUrl: './rubric-scoring-form.component.html',
     styleUrls: ['./rubric-scoring-form.component.css'],
 })

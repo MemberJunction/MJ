@@ -1,4 +1,5 @@
-import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 
 /** One criterion: parent, weight, a named scale, anchors for that scale, gate, and not-applicable policy. */
 @Component({
@@ -19,9 +20,9 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
             <input type="number" [value]="Weight" (change)="WeightChange.emit(numberOf($event))">
           </label>
           <label>Scale
-            <select [value]="ScaleId ?? ''" (change)="ScaleIdChange.emit(valueOf($event) || null)">
+            <select [value]="MatchedScaleId" (change)="ScaleIdChange.emit(valueOf($event) || null)">
               <option value="">None</option>
-              @for (scale of Scales; track scale.id) { <option [value]="scale.id" [selected]="scale.id.toLowerCase() === (ScaleId ?? '').toLowerCase()">{{ scale.name }}</option> }
+              @for (scale of Scales; track scale.id) { <option [value]="scale.id">{{ scale.name }}</option> }
             </select>
           </label>
         </div>
@@ -79,7 +80,7 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
       </section>
     `,
 })
-export class RubricCriterionEditorComponent implements OnChanges {
+export class RubricCriterionEditorComponent {
     @Input() ParentId: string | null = null;
     @Input() Parents: { id: string; name: string }[] = [];
     @Input() Weight = 1;
@@ -115,14 +116,9 @@ export class RubricCriterionEditorComponent implements OnChanges {
     @Output() AnchorsChange = new EventEmitter<{ scaleLevelId: string | null; descriptor: string }[]>();
     @Output() GateMinimumScoreChange = new EventEmitter<number | null>();
     @Output() NotApplicablePolicyChange = new EventEmitter<string | null>();
-    public ngOnChanges(): void {
-        queueMicrotask(() => {
-            const selects = Array.from(document.querySelectorAll('mj-rubric-criterion-editor select')) as HTMLSelectElement[];
-            const scaleSelect = selects.find(select => Array.from(select.options).some(option => this.Scales.some(scale => option.value.toLowerCase() === scale.id.toLowerCase())));
-            if (!scaleSelect || !this.ScaleId) return;
-            const match = Array.from(scaleSelect.options).find(option => option.value.toLowerCase() === this.ScaleId!.toLowerCase());
-            if (match) scaleSelect.value = match.value;
-        });
+    protected get MatchedScaleId(): string {
+        const id = (this.ScaleId ?? '').toLowerCase();
+        return this.Scales.find(scale => scale.id.toLowerCase() === id)?.id ?? '';
     }
     protected get Levels(): { id: string; label: string }[] {
         return this.Scales.find(scale => scale.id.toLowerCase() === (this.ScaleId ?? '').toLowerCase())?.levels ?? [];
@@ -144,6 +140,7 @@ export class RubricCriterionEditorComponent implements OnChanges {
 @Component({
     standalone: true,
     selector: 'mj-rubric-score-editor',
+    imports: [MJButtonDirective],
     styleUrls: ['./rubric-builder.component.css'],
     template: `<section class="card" aria-label="Score">
       <h3><i class="fa-solid fa-list-check"></i> Score</h3>
@@ -151,7 +148,7 @@ export class RubricCriterionEditorComponent implements OnChanges {
         <div class="box-title">Choose a level</div>
         <div class="rubric-split">
           @for (level of Levels; track level.id) {
-            <button type="button" class="anchor" [class.filled]="ScaleLevelId === level.id" [attr.aria-pressed]="ScaleLevelId === level.id" (click)="ScaleLevelIdChange.emit(level.id)">
+            <button mjButton variant="outline" size="sm" type="button" class="anchor" [class.filled]="ScaleLevelId === level.id" [attr.aria-pressed]="ScaleLevelId === level.id" (click)="ScaleLevelIdChange.emit(level.id)">
               <strong>{{ level.label }}</strong>
               <span>{{ level.normalizedValue }}</span>
               <span>{{ level.anchor }}</span>

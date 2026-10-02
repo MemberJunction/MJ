@@ -10,6 +10,9 @@ describe('agent rubric links', () => {
         expect(source).not.toContain('export function sortAgentRubrics');
         expect(source).not.toContain('export function makeDefaultLink');
         expect(source).not.toContain('export function disableLink');
+        const component = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'agent-rubrics.component.ts'), 'utf8');
+        expect(component).toContain('EscapeSQLString');
+        expect(component).not.toContain(".replace(/'/g");
     });
 
     it('leaves only the newly saved Evaluation link as the default', () => {

@@ -1,4 +1,4 @@
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BandFor, DraftProblems, EvidenceJson, NodeSnapshotFromRecord, RubricScoring, RubricVersionDiff, SnapshotFromRows, WeightShares, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type SnapshotRows, type VersionChange } from '@memberjunction/rubrics-base';
 
 export { BandFor, DraftProblems, EvidenceJson, WeightShares };
@@ -441,7 +441,7 @@ export function VersionShownWithoutDraft<T extends { Status?: unknown; MajorVers
 
 /** Submitted evaluations for one subject, one rubric, and one major. */
 export function ComparisonCohortFilter(rubricId: string, major: number, subjectEntityId: string): string {
-    const quote = (value: string) => value.replace(/'/g, "''");
+    const quote = (value: string) => EscapeSQLString(value);
     return `RubricID='${quote(rubricId)}' AND RubricMajorVersion=${Number(major)} AND SubjectEntityID='${quote(subjectEntityId)}' AND Status='Submitted'`;
 }
 

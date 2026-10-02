@@ -38,13 +38,13 @@ describe('RubricCriterionEditorComponent (DOM)', () => {
 
     it('shows the gate minimum only while the gate is on', () => {
         const off = render(component => { component.IsGate = false; });
-        expect(off.host.textContent).not.toContain('Minimum');
+        expect(off.host.querySelector('.gate-min')).toBeNull();
         off.fixture.destroy();
         const on = render(component => {
             component.IsGate = true;
             component.GateMinimumScore = 0.6;
         });
-        expect(on.host.textContent).toContain('Minimum');
+        expect(on.host.querySelector('.gate-min')).not.toBeNull();
         expect((on.host.querySelector('.gate-min input') as HTMLInputElement).value).toBe('0.6');
     });
 

@@ -51,7 +51,7 @@ export class RubricPublishDialogComponent {
         if (this.Preview?.identical) return 'This draft matches the published version, so there is nothing to publish.';
         if (!bump || bump === 'Initial') return 'This is the first publish. The next version is 1.0.0.';
         if (bump === 'Major') return 'A scoring change breaks comparison with the published version.';
-        if (bump === 'Minor') return 'The structure changed. Scores still compare with the published version.';
+        if (bump === 'Minor') return 'The pass threshold or minimum completeness changed. A band was added or removed, or its range or tone changed. An advisory node changed, or evidence or rationale requirements changed. Scores still compare with the published version.';
         return 'Wording changed. Scores still compare with the published version.';
     }
 

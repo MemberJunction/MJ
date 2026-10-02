@@ -1,5 +1,6 @@
 import { Component, Input, OnChanges } from '@angular/core';
 import { RunView, type IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { RubricResultComponent } from '@memberjunction/ng-rubrics';
 import { RubricEvaluationId, RubricRunView, StoredRubricView, type RubricRunView as RubricRun } from '../models/testing-rubrics';
 
@@ -45,14 +46,14 @@ export class TestingRubricResultComponent implements OnChanges {
             return;
         }
         try {
-            const quoted = id.replace(/'/g, "''");
+            const quoted = EscapeSQLString(id);
             const evaluations = await rows(provider, 'MJ: Rubric Evaluations', `ID='${quoted}'`);
             const evaluation = evaluations[0];
             if (!evaluation) throw new Error('The stored evaluation was not found.');
             const scores = await rows(provider, 'MJ: Rubric Evaluation Scores', `EvaluationID='${quoted}'`);
             const criterionIds = scores.map(row => String(row.CriterionID ?? '')).filter(value => value.length > 0);
-            const criteria = criterionIds.length === 0 ? [] : await rows(provider, 'MJ: Rubric Criteria', `ID IN (${criterionIds.map(value => `'${value.replace(/'/g, "''")}'`).join(', ')})`);
-            const versionId = String(evaluation.RubricVersionID ?? '').replace(/'/g, "''");
+            const criteria = criterionIds.length === 0 ? [] : await rows(provider, 'MJ: Rubric Criteria', `ID IN (${criterionIds.map(value => `'${EscapeSQLString(value)}'`).join(', ')})`);
+            const versionId = EscapeSQLString(String(evaluation.RubricVersionID ?? ''));
             const bands = versionId ? await rows(provider, 'MJ: Rubric Bands', `RubricVersionID='${versionId}'`) : [];
             this.Stored = StoredRubricView(evaluation, scores, criteria, bands);
             this.LoadError = '';

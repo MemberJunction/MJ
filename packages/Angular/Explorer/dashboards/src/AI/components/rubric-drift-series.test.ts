@@ -15,9 +15,10 @@ describe('drift screen criterion keys', () => {
         expect(input.criteria).toEqual([{ id: '11111111-1111-4111-8111-111111111111', key: 'facts' }]);
     });
 
-    it('loads criteria for the drift screen', () => {
+    it('loads period means for the drift screen and reports them to the agent', () => {
         const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'rubric-drift.component.ts'), 'utf8');
-        expect(source).toContain("readByIds(view, user, 'MJ: Rubric Criteria', criterionIds)");
-        expect(source).toContain('criteria: series.criteria');
+        expect(source).toContain("QueryName: 'RubricDriftPeriodMeans'");
+        expect(source).toContain('DriftPeriodRows');
+        expect(source).toContain('SetAgentContext');
     });
 });

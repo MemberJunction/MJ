@@ -22,6 +22,8 @@ export class RubricComparisonMatrixComponent implements OnChanges {
     @Input() ViewerStatus = '';
     @Input() ViewerEvaluationId = '';
     public CohortMean: number | null = null;
+    private loadedColumns: MatrixColumn[] | null = null;
+    private loadedKeys: string[] | null = null;
 
     public get ShowCohort(): boolean {
         return this.ViewerStatus !== 'Draft';
@@ -29,11 +31,15 @@ export class RubricComparisonMatrixComponent implements OnChanges {
 
     /** One column per submitted evaluation. AIPrompt and Agent stay separate columns. */
     public get Shown(): MatrixColumn[] {
-        return this.Columns;
+        return this.loadedColumns ?? this.Columns;
     }
 
     public async ngOnChanges(): Promise<void> {
-        if (!this.Provider || !this.RubricId || this.Major == null || !this.SubjectEntityId) return;
+        if (!this.Provider || !this.RubricId || this.Major == null || !this.SubjectEntityId) {
+            this.loadedColumns = null;
+            this.loadedKeys = null;
+            return;
+        }
         const filter = ComparisonCohortFilter(this.RubricId, this.Major, this.SubjectEntityId);
         const view = RunView.FromMetadataProvider(this.Provider);
         const [evaluations, scores] = await view.RunViews([
@@ -43,8 +49,9 @@ export class RubricComparisonMatrixComponent implements OnChanges {
         if (!evaluations.Success) throw new Error(evaluations.ErrorMessage || 'Could not read rubric evaluations.');
         if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not read rubric evaluation scores.');
         const rows = (evaluations.Results ?? []) as Record<string, unknown>[];
-        this.Columns = MatrixColumnsFromRows(rows, (scores.Results ?? []) as Record<string, unknown>[]);
-        if (this.Keys.length === 0) this.Keys = [...new Set(this.Columns.flatMap(column => column.scores.map(score => score.key)))];
+        const columns = MatrixColumnsFromRows(rows, (scores.Results ?? []) as Record<string, unknown>[]);
+        this.loadedColumns = columns;
+        this.loadedKeys = this.Keys.length === 0 ? [...new Set(columns.flatMap(column => column.scores.map(score => score.key)))] : null;
         const cohort = rows.find(row => row.CohortMeanScore != null);
         this.CohortMean = cohort == null ? null : Number(cohort.CohortMeanScore);
     }
@@ -61,7 +68,7 @@ export class RubricComparisonMatrixComponent implements OnChanges {
     }
 
     public get Model(): MatrixModel {
-        return ComparisonMatrix(this.Keys, this.Shown);
+        return ComparisonMatrix(this.loadedKeys ?? this.Keys, this.Shown);
     }
 
     public Cell(row: { cells: { columnId: string; score: number | null; disagree: boolean }[] }, columnId: string): { columnId: string; score: number | null; disagree: boolean } | null {

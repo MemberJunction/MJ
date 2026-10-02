@@ -35,6 +35,20 @@ describe('RubricPublishDialogComponent (DOM)', () => {
         expect(events).toEqual([]);
     });
 
+    it('describes a minor bump the way the bump table does', () => {
+        const base = draft();
+        base.passThreshold = 0.5;
+        const next = draft();
+        next.passThreshold = 0.8;
+        const { host } = render(component => {
+            component.Base = base;
+            component.Draft = next;
+        });
+        expect(host.textContent).toContain('pass threshold');
+        expect(host.textContent).toContain('minimum completeness');
+        expect(host.textContent).not.toContain('The structure changed');
+    });
+
     it('emits the higher bump the author picked and the summary they typed', () => {
         const bumps: (string | null)[] = [];
         const summaries: string[] = [];

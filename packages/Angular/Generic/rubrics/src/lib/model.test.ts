@@ -253,6 +253,7 @@ describe('publish, diff, and comparison', () => {
         expect(stored.map(column => column.evaluatorType)).toEqual(['AIPrompt', 'Agent']);
         expect(ComparisonMatrix(['clarity'], stored).aiMean).toBe(1);
         expect(ComparisonCohortFilter("rubric", 2, "subject")).toBe("RubricID='rubric' AND RubricMajorVersion=2 AND SubjectEntityID='subject' AND Status='Submitted'");
+        expect(ComparisonCohortFilter("o'brien", 2, "a'b")).toBe("RubricID='o''brien' AND RubricMajorVersion=2 AND SubjectEntityID='a''b' AND Status='Submitted'");
         const shown = VersionShownWithoutDraft([
             { ID: 'old', Status: 'Retired', MajorVersion: 1, MinorVersion: 0, PatchVersion: 0 },
             { ID: 'live', Status: 'Published', MajorVersion: 1, MinorVersion: 2, PatchVersion: 0 },

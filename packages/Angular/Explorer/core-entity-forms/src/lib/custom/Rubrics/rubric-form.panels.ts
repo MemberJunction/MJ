@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel, BaseFormsModule } from '@memberjunction/ng-base-forms';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJRubricEntity } from '@memberjunction/core-entities';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RubricBuilderComponent, RubricPublishDialogComponent, RubricVersionBoardComponent, RubricVersionDiffComponent } from '@memberjunction/ng-rubrics';
@@ -25,11 +26,11 @@ function host(panel: BaseFormPanel<MJRubricEntity>): MJRubricFormComponentExtend
 @Component({
     selector: 'mj-rubric-author-panel',
     standalone: true,
-    imports: [BaseFormsModule, MJButtonDirective, RubricBuilderComponent],
+    imports: [BaseFormsModule, SharedGenericModule, MJButtonDirective, RubricBuilderComponent],
     template: `
       <mj-collapsible-panel SectionKey="rubric-author" SectionName="Author" Icon="fa-solid fa-pen" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
         @if (Form.Loading) {
-          <p>Loading the rubric...</p>
+          <mj-loading text="Loading the rubric..."></mj-loading>
         } @else {
           @if (!Form.DraftId) {
             <button mjButton variant="outline" size="sm" type="button" (click)="Form.StartDraft()">Start new draft</button>

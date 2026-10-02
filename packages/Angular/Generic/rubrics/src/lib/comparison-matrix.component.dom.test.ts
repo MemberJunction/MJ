@@ -23,6 +23,7 @@ describe('RubricComparisonMatrixComponent (DOM)', () => {
         expect(host.textContent).not.toContain('AI Evaluator');
         expect(host.querySelectorAll('.matrix-disagree')).toHaveLength(2);
         expect(host.textContent).toContain('AI mean 0.5');
+        expect(host.textContent).toContain('Self mean');
     });
 
     it('shows a human score and its rationale', () => {

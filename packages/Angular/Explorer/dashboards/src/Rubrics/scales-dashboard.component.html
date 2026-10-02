@@ -10,25 +10,20 @@
   </mj-page-header>
   <mj-page-body>
     @if (Loading) {
-      <p>Loading scales...</p>
+      <mj-loading text="Loading scales..."></mj-loading>
+    } @else if (LoadError) {
+      <p role="alert">{{ LoadError }}</p>
     } @else if (Visible.length === 0) {
       <mj-empty-state Icon="fa-solid fa-sliders" Title="No scales" Message="Create a scale before a criterion can use it."></mj-empty-state>
     } @else {
-      <table class="catalog-table">
-        <thead>
-          <tr><th>Name</th><th>Type</th><th>Published use</th><th></th></tr>
-        </thead>
-        <tbody>
-          @for (row of Visible; track row.Id) {
-            <tr>
-              <td><strong>{{ row.Name }}</strong></td>
-              <td>{{ row.Type }}</td>
-              <td>{{ row.Frozen ? 'Locked by a published rubric' : 'Editable' }}</td>
-              <td><button mjButton variant="outline" size="sm" type="button" (click)="Open(row.Id)">Open</button></td>
-            </tr>
-          }
-        </tbody>
-      </table>
+      <ag-grid-angular
+        class="catalog-grid"
+        [theme]="Theme"
+        [columnDefs]="ColumnDefs"
+        [gridOptions]="GridOptions"
+        [rowData]="Visible"
+        (rowClicked)="OnRow($event)">
+      </ag-grid-angular>
       <div class="catalog-cards">
         @for (row of Visible; track row.Id) {
           <article class="catalog-card">

@@ -1,12 +1,4 @@
-.catalog-table { width: 100%; border-collapse: collapse; }
-.catalog-table th,
-.catalog-table td {
-  text-align: left;
-  vertical-align: top;
-  padding: var(--mj-space-2, 0.5rem);
-  border-bottom: 1px solid var(--mj-border-default);
-  color: var(--mj-text-primary);
-}
+.catalog-grid { width: 100%; }
 .catalog-note { display: block; color: var(--mj-text-secondary); font-size: 0.85rem; }
 .catalog-cards { display: none; }
 .catalog-card {
@@ -21,6 +13,6 @@
 }
 
 @media (max-width: 520px) {
-  .catalog-table { display: none; }
+  .catalog-grid { display: none; }
   .catalog-cards { display: flex; flex-direction: column; gap: var(--mj-space-3, 0.75rem); }
 }

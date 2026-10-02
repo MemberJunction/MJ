@@ -1,5 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { AgGridModule } from 'ag-grid-angular';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import {
     MJButtonDirective,
     MJEmptyStateComponent,
@@ -25,6 +27,8 @@ import { RubricScalesResourceComponent } from './Rubrics/scales-resource.compone
     ],
     imports: [
         CommonModule,
+        AgGridModule,
+        SharedGenericModule,
         MJButtonDirective,
         MJEmptyStateComponent,
         MJPageBodyComponent,
