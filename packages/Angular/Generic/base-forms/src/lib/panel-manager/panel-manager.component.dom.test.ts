@@ -7,7 +7,7 @@ import { MjPanelManagerComponent } from './panel-manager.component';
 import { FormPanelAdminService } from './form-panel-admin.service';
 import { FormSlotProbeService } from '../apply/form-slot-probe.service';
 import type { FormOverrideRow, FormPanelContributionRow, FormPanelRendering } from './form-panel-inventory';
-import type { FormPlacementState } from '../apply/form-placement';
+import { PlacementStateFromContribution, ResolvePlacementDecision, type FormPlacementState } from '../apply/form-placement';
 
 /**
  * The drawer is the only way back out of applying a panel, so the thing it must never do
@@ -342,6 +342,58 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
         f.componentInstance.SeedEdit(dialog);
         expect(dialog.State.ReplaceMode).toBe('section');
         expect(dialog.State.ReplaceSectionKey).toBe('details');
+    });
+});
+
+/**
+ * The dialog writes only placement and `configuration.fields`. Every other configuration key
+ * belongs to the component and must survive an edit.
+ */
+describe('MjPanelManagerComponent (DOM) — an edit keeps the row\'s configuration', () => {
+    const fieldRow = () => row({
+        ReplacesSectionKey: null, ReplacesFieldNames: ['A'], Configuration: '{"fields":["A"],"palette":"warm"}',
+    });
+
+    /** What the real dialog would send for `state`, from the proposal the drawer opened it on. */
+    async function applyEdit(f: ReturnType<typeof render>, change: Partial<FormPlacementState>): Promise<void> {
+        const proposal = f.componentInstance.EditProposal!;
+        const context = f.componentInstance.EditContext!;
+        const state = { ...PlacementStateFromContribution(proposal, context, true), ...change };
+        await f.componentInstance.OnEditApplied(ResolvePlacementDecision(state, context, proposal));
+    }
+
+    it('opens the dialog on the row\'s configuration', () => {
+        admin.RowsForEntity.mockReturnValue([fieldRow()]);
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        expect(f.componentInstance.EditProposal?.configuration).toEqual({ fields: ['A'], palette: 'warm' });
+    });
+
+    it.each([[null], [''], ['[1,2]'], ['not json']])('opens with no configuration when the row holds %j', (Configuration) => {
+        admin.RowsForEntity.mockReturnValue([row({ Configuration })]);
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        expect(f.componentInstance.EditProposal).not.toHaveProperty('configuration');
+    });
+
+    it('saves the new field list with the other keys when the claim moves to other fields', async () => {
+        admin.RowsForEntity.mockReturnValue([fieldRow()]);
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        await applyEdit(f, { ReplaceMode: 'field', ReplaceFieldNames: ['B'] });
+        const saved = admin.SetPlacement.mock.calls[0] as unknown as [string, { replacesFieldNames?: string[]; configuration?: unknown }];
+        expect(saved[1].replacesFieldNames).toEqual(['B']);
+        expect(saved[1].configuration).toEqual({ fields: ['B'], palette: 'warm' });
+    });
+
+    it('keeps the whole configuration when the panel moves to a section claim', async () => {
+        admin.RowsForEntity.mockReturnValue([fieldRow()]);
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        await applyEdit(f, { ReplaceMode: 'section', ReplaceSectionKey: 'details' });
+        const saved = admin.SetPlacement.mock.calls[0] as unknown as [string, { replacesSectionKey?: string; configuration?: unknown }];
+        expect(saved[1].replacesSectionKey).toBe('details');
+        expect(saved[1].configuration).toEqual({ fields: ['A'], palette: 'warm' });
     });
 });
 

@@ -413,10 +413,8 @@ What a panel author should know:
 
 A generated panel may propose its placement in `formContribution` (slot, a section key, field names,
 a related entity, or a section to sit inside). The apply dialog starts from every claim the open
-form can honour and from its default for the rest; the user confirms placement. For a field claim the
-dialog writes the chosen names to both `replacesFieldNames` and `configuration.fields`, so a field
-panel that reads `configuration.fields` draws exactly the fields the host hides; any other placement
-writes no `configuration.fields`.
+form can honour and from its default for the rest; the user confirms placement. A field claim writes
+the chosen field names into `configuration.fields`; `fields` is reserved for that use on a field panel.
 
 Rows are authored by an OpenApp under `metadata/entity-form-contributions/`, or by an agent through
 the `Create` / `Modify` / `Activate Form Contribution Version` actions. The actions change only the

@@ -17,6 +17,7 @@ import {
   BuildPanelInventory,
   DescribeAudience,
   GroupPanelInventory,
+  ParseContributionConfiguration,
   SummarizeInventory,
   type FormPanelFormItem,
   type FormPanelCompiledRow,
@@ -227,22 +228,7 @@ export class MjPanelManagerComponent implements OnChanges {
     const row = this.rows.find((candidate) => UUIDsEqual(candidate.ID, item.ID));
     if (!row) return;
 
-    const spec: FormContributionSpec = {
-      slot: row.Slot as FormContributionSpec['slot'],
-      presentation: row.Presentation === 'bare' ? 'bare' : 'panel',
-      title: (row.Title ?? row.Name ?? '').trim(),
-    };
-    if (row.Icon) spec.icon = row.Icon;
-    if (row.ReplacesSectionKey) spec.replacesSectionKey = row.ReplacesSectionKey;
-    if (row.ReplacesSectionKeys.length > 0) spec.replacesSectionKeys = [...row.ReplacesSectionKeys];
-    if (row.ReplacesFieldNames.length > 0) spec.replacesFieldNames = [...row.ReplacesFieldNames];
-    if (row.InSectionKey) spec.inSectionKey = row.InSectionKey;
-    if (row.SectionPosition) spec.sectionPosition = row.SectionPosition;
-    if (row.RelatedEntity) spec.relatedEntity = row.RelatedEntity;
-    if (row.RelatedEntity && row.RelatedJoinField) spec.relatedJoinField = row.RelatedJoinField;
-    if (row.ContributionKey) spec.contributionKey = row.ContributionKey;
-    spec.sortKey = row.SortKey;
-
+    const spec = proposalFromRow(row);
     const context: FormPlacementContext = {
       EntityName: this.Entity?.Name ?? '',
       Sections: [],
@@ -704,6 +690,28 @@ function isNamedRadio(el: Element): el is HTMLInputElement {
 function isDisabled(el: Element): boolean {
   return (el instanceof HTMLButtonElement || el instanceof HTMLInputElement
     || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) && el.disabled;
+}
+
+/** The row's placement, claims and configuration as the proposal the edit dialog opens on. */
+function proposalFromRow(row: FormPanelContributionRow): FormContributionSpec {
+  const spec: FormContributionSpec = {
+    slot: row.Slot as FormContributionSpec['slot'],
+    presentation: row.Presentation === 'bare' ? 'bare' : 'panel',
+    title: (row.Title ?? row.Name ?? '').trim(),
+  };
+  if (row.Icon) spec.icon = row.Icon;
+  if (row.ReplacesSectionKey) spec.replacesSectionKey = row.ReplacesSectionKey;
+  if (row.ReplacesSectionKeys.length > 0) spec.replacesSectionKeys = [...row.ReplacesSectionKeys];
+  if (row.ReplacesFieldNames.length > 0) spec.replacesFieldNames = [...row.ReplacesFieldNames];
+  if (row.InSectionKey) spec.inSectionKey = row.InSectionKey;
+  if (row.SectionPosition) spec.sectionPosition = row.SectionPosition;
+  if (row.RelatedEntity) spec.relatedEntity = row.RelatedEntity;
+  if (row.RelatedEntity && row.RelatedJoinField) spec.relatedJoinField = row.RelatedJoinField;
+  if (row.ContributionKey) spec.contributionKey = row.ContributionKey;
+  const configuration = ParseContributionConfiguration(row.Configuration);
+  if (configuration) spec.configuration = configuration;
+  spec.sortKey = row.SortKey;
+  return spec;
 }
 
 /** A row's status as a lifecycle status. Anything unknown reads as off. */

@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import {
     LogError, Metadata, type BaseEntity, type EntityInfo, type IMetadataProvider, type TransactionGroupBase,
 } from '@memberjunction/core';
-import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     ActiveContributionSiblings,
     ApplyContributionSpecToRow,
@@ -21,7 +21,7 @@ import {
 } from '../panel-slot/collect-form-contribution-registrations';
 import { ResolveFormContributionWinners } from '../panel-slot/form-contribution';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
-import type { FormOverrideRow, FormPanelContributionRow, FormPanelRendering } from './form-panel-inventory';
+import { ParseContributionConfiguration, type FormOverrideRow, type FormPanelContributionRow, type FormPanelRendering } from './form-panel-inventory';
 import { PanelHideKey, SetPanelHidden } from '../panel-slot/panel-hides';
 import {
     AudienceColumns,
@@ -49,6 +49,15 @@ interface PendingWrite {
     Group: TransactionGroupBase;
     Changing: ReadonlySet<string>;
     Queued: BaseEntity[];
+}
+
+/**
+ * The row's stored configuration with the decision's keys over it, so a key the placement
+ * dialog does not write survives an edit. Undefined when both are empty.
+ */
+function mergeConfiguration(stored: string | null, decided: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+    const merged = { ...(ParseContributionConfiguration(stored) ?? {}), ...(decided ?? {}) };
+    return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 /**
@@ -470,9 +479,7 @@ export class FormPanelAdminService {
             ...contribution,
             sortKey: contribution.sortKey ?? row.SortKey,
             inclusion: contribution.inclusion ?? row.Inclusion ?? undefined,
-            configuration: contribution.configuration
-                ?? SafeJSONParse<Record<string, unknown>>(row.Configuration ?? '', false)
-                ?? undefined,
+            configuration: mergeConfiguration(row.Configuration, contribution.configuration),
         };
     }
 
@@ -500,6 +507,7 @@ export class FormPanelAdminService {
             ContributionKey: row.ContributionKey,
             ComponentID: row.ComponentID,
             SortKey: row.SortKey ?? 0,
+            Configuration: row.Configuration,
         };
     }
 

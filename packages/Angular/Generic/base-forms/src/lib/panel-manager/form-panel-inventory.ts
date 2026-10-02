@@ -9,6 +9,7 @@
  * Everything here is pure. The service loads and writes; this decides what the list says.
  */
 
+import { SafeJSONParse } from '@memberjunction/global';
 import { DETAILS_SECTION_KEY, MORE_SECTION_KEY } from '../chrome/form-chrome';
 
 /** Where an item came from, which decides what can be done to it. */
@@ -118,6 +119,8 @@ export interface FormPanelContributionRow {
     ComponentID: string;
     /** Order among panels in the same slot, higher first. */
     SortKey: number;
+    /** The row's `Configuration` column, as stored (JSON text), when it was read. */
+    Configuration?: string | null;
 }
 
 /** A full custom form registered on the entity, for the drawer's Form group. */
@@ -168,6 +171,15 @@ export interface FormPanelInventoryInput {
     HiddenKeys: readonly string[];
     /** Which items draw for this user. Without it, every item that is on is taken to draw. */
     Rendering?: FormPanelRendering;
+}
+
+/**
+ * A row's `Configuration` text as an object, or undefined when it is empty, not JSON, or not
+ * a JSON object.
+ */
+export function ParseContributionConfiguration(text: string | null | undefined): Record<string, unknown> | undefined {
+    const parsed = SafeJSONParse<unknown>(text ?? '', false);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
 }
 
 /**

@@ -546,8 +546,8 @@ export function KeepEditedRowKey(
  * take over a named panel. A key is what makes one contribution replace another, so it is
  * written when a replacement is meant and left for the write path to derive otherwise — the
  * duplicate check compares those strings literally, and two algorithms would not agree.
- * The proposal's `configuration` is carried through, with `fields` set to the chosen fields
- * for a field claim and removed for any other placement.
+ * The proposal's `configuration` is carried through; a field claim also writes the chosen
+ * fields into `configuration.fields`.
  */
 export function ResolvePlacementDecision(
     state: FormPlacementState,
@@ -588,9 +588,7 @@ export function ResolvePlacementDecision(
         // slot sorts them by `sortKey`, as the order list does.
         if (keys.length > 0 && SlotIsOnForm(context, 'before-fields')) contribution.slot = 'before-fields';
     } else if (state.ReplaceMode === 'field') {
-        const names = ChosenFieldNames(state, context);
-        if (names.length > 0) contribution.replacesFieldNames = names;
-        if (names.length > 0 && state.SectionPosition === 'end') contribution.sectionPosition = 'end';
+        writeFieldClaim(contribution, ChosenFieldNames(state, context), state.SectionPosition);
     } else if (state.ReplaceMode === 'related') {
         const target = context.Related[state.ReplaceRelatedIndex];
         if (target) {
@@ -605,24 +603,19 @@ export function ResolvePlacementDecision(
         contribution.sectionPosition = state.SectionPosition;
     }
 
-    syncConfigurationFields(contribution);
     return { Contribution: contribution, ActivateNow: state.ActivateNow, KeepOff: !state.ActivateNow && state.KeepOff };
 }
 
 /**
- * Keeps `configuration.fields` equal to the field claim. A field panel reads its fields from
- * `configuration.fields`, and the host applies edits only for the claimed fields, so a claim
- * lists exactly the chosen fields and any other placement lists none. A `configuration` left
- * empty is removed.
+ * A claim on the chosen fields: `replacesFieldNames`, the same names in `configuration.fields`
+ * (the list a field panel draws, while the host applies edits only for claimed fields), and
+ * the position when it is the end. With no names it writes nothing.
  */
-function syncConfigurationFields(contribution: FormContributionSpec): void {
-    if (contribution.replacesFieldNames) {
-        contribution.configuration = { ...(contribution.configuration ?? {}), fields: [...contribution.replacesFieldNames] };
-        return;
-    }
-    if (!contribution.configuration || !('fields' in contribution.configuration)) return;
-    delete contribution.configuration.fields;
-    if (Object.keys(contribution.configuration).length === 0) delete contribution.configuration;
+function writeFieldClaim(contribution: FormContributionSpec, names: string[], position: FormPlacementState['SectionPosition']): void {
+    if (names.length === 0) return;
+    contribution.replacesFieldNames = names;
+    contribution.configuration = { ...(contribution.configuration ?? {}), fields: [...names] };
+    if (position === 'end') contribution.sectionPosition = 'end';
 }
 
 /**

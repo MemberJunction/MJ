@@ -1136,7 +1136,7 @@ describe('DescribePlacementLine', () => {
     });
 });
 
-describe('ResolvePlacementDecision — configuration.fields follows the field claim', () => {
+describe('ResolvePlacementDecision — a field claim writes configuration.fields', () => {
     const fieldProposal: FormContributionSpec = {
         slot: 'after-fields', presentation: 'bare', title: 'Course stepper',
         replacesFieldNames: ['Name', 'Description'],
@@ -1157,28 +1157,22 @@ describe('ResolvePlacementDecision — configuration.fields follows the field cl
         expect(out.configuration).toEqual({ fields: ['SeatLimit'] });
     });
 
-    it('drops a stray fields list from a section decision', () => {
+    it('leaves fields as the proposal had it for a section decision', () => {
         const state = { ...base(), ReplaceMode: 'section' as const, ReplaceSectionKey: 'scheduleCapacity' };
         const out = ResolvePlacementDecision(state, CONTEXT, fieldProposal).Contribution;
         expect(out.replacesSectionKey).toBe('scheduleCapacity');
-        expect(out.configuration).toEqual({ tone: 'compact' });
+        expect(out.configuration).toEqual({ fields: ['Name', 'Description'], tone: 'compact' });
     });
 
-    it('drops the configuration when fields was all it held', () => {
-        const proposal = { ...fieldProposal, configuration: { fields: ['Name'] } };
-        const out = ResolvePlacementDecision({ ...base(), ReplaceMode: 'none' as const }, CONTEXT, proposal).Contribution;
-        expect(out).not.toHaveProperty('configuration');
-    });
-
-    it('drops fields when a field claim ends up naming no field', () => {
+    it('leaves fields as the proposal had it when a field claim names no field', () => {
         const state = { ...base(), ReplaceMode: 'field' as const, ReplaceFieldSectionKey: 'details', ReplaceFieldNames: [] };
         const out = ResolvePlacementDecision(state, CONTEXT, fieldProposal).Contribution;
         expect(out.replacesFieldNames).toBeUndefined();
-        expect(out.configuration).toEqual({ tone: 'compact' });
+        expect(out.configuration).toEqual({ fields: ['Name', 'Description'], tone: 'compact' });
     });
 
     it('leaves the proposal unchanged', () => {
-        const state = { ...base(), ReplaceMode: 'section' as const, ReplaceSectionKey: 'scheduleCapacity' };
+        const state = { ...base(), ReplaceMode: 'field' as const, ReplaceFieldSectionKey: 'details', ReplaceFieldNames: ['Name'] };
         ResolvePlacementDecision(state, CONTEXT, fieldProposal);
         expect(fieldProposal.configuration).toEqual({ fields: ['Name', 'Description'], tone: 'compact' });
     });

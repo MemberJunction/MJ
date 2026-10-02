@@ -283,6 +283,35 @@ describe('FormPanelAdminService.SetPlacement — section claims', () => {
 });
 
 /**
+ * The placement dialog writes only `configuration.fields`. The row's other configuration keys
+ * belong to the component, so a placement change keeps them.
+ */
+describe('FormPanelAdminService.SetPlacement — configuration', () => {
+    const P = { slot: 'after-fields' as const, presentation: 'panel' as const, title: 'P' };
+    const STORED = '{"fields":["A"],"palette":"warm"}';
+
+    it('writes the new field list over the stored one and keeps every other key', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, ReplacesFieldNames: '["A"]', Configuration: STORED })];
+        await new FormPanelAdminService().SetPlacement('mine', { ...P, replacesFieldNames: ['B'], configuration: { fields: ['B'] } }, 'Active');
+        expect(lastRow?.Configuration).toBe('{"fields":["B"],"palette":"warm"}');
+        expect(lastRow?.ReplacesFieldNames).toBe('["B"]');
+    });
+
+    it('keeps the stored configuration, fields included, when the panel moves to a section claim', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, ReplacesFieldNames: '["A"]', Configuration: STORED })];
+        await new FormPanelAdminService().SetPlacement('mine', { ...P, replacesSectionKey: 'details' }, 'Active');
+        expect(lastRow?.Configuration).toBe(STORED);
+        expect(lastRow?.ReplacesSectionKey).toBe('details');
+    });
+
+    it('writes no configuration when neither the row nor the decision has one', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, Configuration: 'not json' })];
+        await new FormPanelAdminService().SetPlacement('mine', P, 'Active');
+        expect(lastRow?.Configuration).toBeNull();
+    });
+});
+
+/**
  * A placement change rewrites every claim column through the shared row mapper, so the row
  * keeps nothing of the claim it had and satisfies the table's CHECK constraints.
  */
