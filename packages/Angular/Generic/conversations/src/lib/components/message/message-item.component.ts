@@ -31,7 +31,6 @@ import {
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
-import { CloseOpenCodeFence } from '../../util/open-code-fence';
 
 /**
  * Represents an attachment on a message for display
@@ -668,9 +667,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   // Memoization for mention parsing to prevent repeated parsing on change detection
   private _cachedDisplayMessage: string = '';
-  /** The raw Message and the fence decision the cached display text was computed from. */
+  /** The raw Message the cached display text was computed from. */
   private _cachedRawText: string = '';
-  private _cachedFenceClosed: boolean = false;
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocomplete = MentionAutocompleteService.Instance;
@@ -1196,16 +1194,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private computeDisplayMessage(): string {
     const raw = this.message.Message || '';
-    const closeFence = this.message.Status === 'In-Progress';
 
     // ngDoCheck calls this every pass; an unchanged Message is the same string object, so this
-    // compare is a pointer check and nothing below runs until the text or the status changes.
-    if (raw === this._cachedRawText && closeFence === this._cachedFenceClosed && this._cachedDisplayMessage) {
+    // compare is a pointer check and nothing below runs until the text changes.
+    if (raw === this._cachedRawText && this._cachedDisplayMessage) {
       return this._cachedDisplayMessage;
     }
 
-    // A reply still streaming in may end inside an open code fence; close it for display only.
-    let text = closeFence && raw ? CloseOpenCodeFence(raw) : raw;
+    let text = raw;
 
     // For Sage, only show the delegation line (starts with emoji)
     if (this.IsConversationManager && text) {
@@ -1219,7 +1215,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const transformed = this.transformMentionsToHTML(text);
 
     this._cachedRawText = raw;
-    this._cachedFenceClosed = closeFence;
     this._cachedDisplayMessage = transformed;
 
     return transformed;
