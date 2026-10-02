@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
@@ -278,5 +278,76 @@ describe('RecordChangesComponent (DOM, data-bound)', () => {
     // half is what we assert deterministically.
     expect(f.componentInstance.IsVisible).toBe(false);
     expect(closed.length).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ── Date fields in the change history. TZ is pinned west of Greenwich: a SQL `date` arrives as UTC
+//    midnight, and at UTC a local-zone formatter lands on the right day by accident.
+describe('RecordChangesComponent (DOM) — date fields', () => {
+  const originalTZ = process.env.TZ;
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+    process.env.TZ = 'America/Chicago';
+  });
+  afterEach(() => {
+    process.env.TZ = originalTZ;
+  });
+
+  const DATE_FIELDS = [
+    { Name: 'ID', DisplayNameOrName: 'ID', TSType: EntityFieldTSType.String, Type: 'uniqueidentifier' },
+    { Name: 'DueDate', DisplayNameOrName: 'Due Date', TSType: EntityFieldTSType.Date, Type: 'date' },
+    { Name: 'ApprovedAt', DisplayNameOrName: 'Approved At', TSType: EntityFieldTSType.Date, Type: 'datetimeoffset' },
+  ];
+
+  function dateRecord() {
+    const r = fakeRecord();
+    return { ...r, EntityInfo: { ...r.EntityInfo, Fields: DATE_FIELDS } };
+  }
+
+  /** Renders the given changes with every card expanded; returns the fixture. */
+  async function renderExpanded(changes: RecordChangeDouble[]) {
+    const f = await render({ record: dateRecord(), Provider: provider(changes) });
+    f.componentInstance.expandedItems = new Set(changes.map((c) => c.ID));
+    f.detectChanges();
+    return f;
+  }
+
+  it('shows an updated date-only field as its stored days, with no invented time', async () => {
+    const f = await renderExpanded([
+      change({
+        ID: 'u1',
+        ChangesJSON: JSON.stringify({
+          DueDate: { field: 'DueDate', oldValue: '2026-09-15T00:00:00.000Z', newValue: '2026-10-01T00:00:00.000Z' },
+        }),
+      }),
+    ]);
+    expect(text(f, '.rc-val-old')).toBe('Sep 15, 2026');
+    expect(text(f, '.rc-val-new')).toBe('Oct 1, 2026');
+  });
+
+  it('keeps an updated timestamp in the reader zone, with its time', async () => {
+    const f = await renderExpanded([
+      change({
+        ID: 'u2',
+        ChangesJSON: JSON.stringify({
+          ApprovedAt: { field: 'ApprovedAt', oldValue: '2026-10-01T02:30:00.000Z', newValue: '2026-10-01T14:00:00.000Z' },
+        }),
+      }),
+    ]);
+    expect(text(f, '.rc-val-old')).toBe('Sep 30, 2026, 9:30 PM');
+    expect(text(f, '.rc-val-new')).toBe('Oct 1, 2026, 9:00 AM');
+  });
+
+  it("shows a created record's date-only field as its stored day", async () => {
+    const f = await renderExpanded([
+      change({
+        ID: 'c1',
+        Type: 'Create',
+        ChangesJSON: '{}',
+        FullRecordJSON: JSON.stringify({ ID: 'rec-1', DueDate: '2026-10-01T00:00:00.000Z' }),
+      }),
+    ]);
+    const values = queryAll(f, '.rc-val-new').map((e) => e.textContent?.trim());
+    expect(values).toEqual(['rec-1', 'Oct 1, 2026']);
   });
 });

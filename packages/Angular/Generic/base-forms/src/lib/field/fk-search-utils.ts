@@ -7,16 +7,20 @@
  * the Angular component means they can be tested without TestBed / DI.
  */
 
+import { IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+
 /**
  * Format a raw entity cell value for display in the dropdown.
- * - `Date` → locale date string
+ * - `Date` → locale date string; a SQL `date` column (pass its `sqlType`) is a calendar day that
+ *   arrives as UTC midnight and is rendered as its stored day rather than shifted into the
+ *   reader's zone (MJ#4210); a timestamp names an instant and stays in local time
  * - `null` / `undefined` → empty string
  * - `boolean` → `Yes` / `No`
  * - everything else → `String(value)`
  */
-export function FormatFKCell(val: unknown): string {
+export function FormatFKCell(val: unknown, sqlType?: string | null): string {
   if (val === null || val === undefined) return '';
-  if (val instanceof Date) return val.toLocaleDateString();
+  if (val instanceof Date) return IsDateOnlySQLType(sqlType) ? FormatDateOnly(val) : val.toLocaleDateString();
   if (typeof val === 'boolean') return val ? 'Yes' : 'No';
   return String(val);
 }
