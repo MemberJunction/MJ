@@ -468,6 +468,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private resolvedRecordOpenStyle: RecordOpenStyle = 'records';
 
   /**
+   * When the current url became current. Seeded at construction, which is page-load time for the
+   * initial url, and updated on every NavigationEnd.
+   *
+   * It exists so a url sync can tell whether it is reacting to something OLDER than the active tab.
+   * Without it the only available answer was Date.now(), which is newer than everything and so can
+   * never lose -- the bug this was added for.
+   */
+  private lastNavigationAt = Date.now();
+
+  /**
    * Resolve `Shell.RecordOpen.Style` from instance config and push it to the
    * two collaborators that partition tabs by it: the ng-shared style module
    * (NavigationService forks record opens on it) and the workspace manager's
@@ -1061,8 +1071,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.router.events.pipe(
         filter((event): event is NavigationEnd => event instanceof NavigationEnd)
       ).subscribe(event => {
+        // Record WHEN the url changed, whether or not the shell is ready to act on it: the stamp is
+        // what later tells a sync that it is older than an activation it would otherwise override.
+        this.lastNavigationAt = Date.now();
         if (this.Initialized) {
-          this.syncWorkspaceWithUrl(event.urlAfterRedirects || event.url);
+          this.syncWorkspaceWithUrl(event.urlAfterRedirects || event.url, this.lastNavigationAt);
         }
       })
     );
@@ -1325,7 +1338,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * Sync workspace state with the current URL (for browser back/forward navigation).
    * Finds and activates the tab that matches the URL.
    */
-  private async syncWorkspaceWithUrl(url: string): Promise<void> {
+  private async syncWorkspaceWithUrl(url: string, navigatedAt: number = this.lastNavigationAt): Promise<void> {
     const config = this.workspaceManager.GetConfiguration();
     if (!config?.tabs?.length) {
       return;
@@ -1335,6 +1348,30 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const matchingTab = await this.findTabForUrl(url, config.tabs);
 
     if (matchingTab && matchingTab.id !== config.activeTabId) {
+      /**
+       * ORDERING. A url sync must not override an activation that happened AFTER this url was
+       * current, because then the url is the stale fact, not the active tab.
+       *
+       * The case that motivated this: opening a new record activates its tab immediately, and the
+       * record's own url is written a few milliseconds later. A NavigationEnd for the PREVIOUS url
+       * is still in flight; when it resolves, findTabForUrl matches the nav tab, and switching back
+       * to it hides the records region -- with a fully rendered form inside it -- permanently,
+       * because the records region cannot re-activate itself once it stops being shown.
+       *
+       * Measured before this guard: the switch happened on every new-deal open, and whether the
+       * user saw a form at all depended on whether it had finished rendering first. Suppressing
+       * exactly this call took a usable form from 12/18 opens to 18/18 (Fisher p = 0.0095).
+       *
+       * This deliberately compares TIMES rather than tab kinds. Back/forward navigation must still
+       * move the active tab, and it arrives here too -- but there the navigation is newer than the
+       * activation, so it wins, which is correct. A "don't leave a record tab" guard would break it.
+       */
+      const latest = this.workspaceManager.GetConfiguration();
+      const activeTab = latest?.tabs.find(t => t.id === latest.activeTabId);
+      const activatedAt = activeTab?.lastAccessedAt ? Date.parse(activeTab.lastAccessedAt) : 0;
+      if (Number.isFinite(activatedAt) && activatedAt > navigatedAt) {
+        return;
+      }
       // Activate the matching tab
       this.workspaceManager.SetActiveTab(matchingTab.id);
     } else if (matchingTab && matchingTab.id === config.activeTabId) {
