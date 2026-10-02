@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MoveNode, MoveProblem, NodeFields, NodeFromRow, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, WeightShares } from './model.js';
+import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, WeightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -200,6 +200,16 @@ describe('publish, diff, and comparison', () => {
         expect(matrix.humanMean).toBe(0.5);
         expect(matrix.aiMean).toBe(1);
         expect(matrix.selfScore).toBe(0);
+        const stored = MatrixColumnsFromRows(
+            [
+                { ID: 'p', EvaluatorType: 'AIPrompt', Status: 'Submitted', EvaluatorUser: null, CohortMeanScore: 0.4 },
+                { ID: 'a', EvaluatorType: 'Agent', Status: 'Submitted', EvaluatorUser: null },
+            ],
+            [{ EvaluationID: 'p', Criterion: 'clarity', NormalizedScore: 1, IsComputed: 0 }],
+        );
+        expect(stored.map(column => column.evaluatorType)).toEqual(['AIPrompt', 'Agent']);
+        expect(ComparisonMatrix(['clarity'], stored).aiMean).toBe(1);
+        expect(ComparisonCohortFilter("rubric", 2, "subject")).toBe("RubricID='rubric' AND RubricMajorVersion=2 AND SubjectEntityID='subject' AND Status='Submitted'");
     });
 });
 

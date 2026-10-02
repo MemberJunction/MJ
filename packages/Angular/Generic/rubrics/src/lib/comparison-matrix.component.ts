@@ -1,6 +1,7 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, OnChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ComparisonMatrix, type MatrixColumn, type MatrixModel } from './model.js';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { ComparisonCohortFilter, ComparisonMatrix, MatrixColumnsFromRows, type MatrixColumn, type MatrixModel } from './model.js';
 
 /** Evaluators across, criteria down. Disagreeing cells are marked. Self is its own column. */
 @Component({
@@ -10,19 +11,35 @@ import { ComparisonMatrix, type MatrixColumn, type MatrixModel } from './model.j
     templateUrl: './comparison-matrix.component.html',
     styleUrls: ['./rubric-builder.component.css'],
 })
-export class RubricComparisonMatrixComponent {
+export class RubricComparisonMatrixComponent implements OnChanges {
     @Input() Keys: string[] = [];
     @Input() Columns: MatrixColumn[] = [];
+    @Input() Provider: IMetadataProvider | null = null;
+    @Input() RubricId = '';
+    @Input() Major: number | null = null;
+    @Input() SubjectEntityId = '';
+    public CohortMean: number | null = null;
 
+    /** One column per submitted evaluation. AIPrompt and Agent stay separate columns. */
     public get Shown(): MatrixColumn[] {
-        const labels: Record<string, string> = { Human: 'Human', AI: 'AI Evaluator', Self: 'Agent Self-Check' };
-        return (['Human', 'AI', 'Self'] as const).map(type => this.Columns.find(column => column.evaluatorType === type) ?? {
-            id: type,
-            name: labels[type],
-            evaluatorType: type,
-            status: type === 'Self' ? 'Disabled' : 'Empty',
-            scores: [] as { key: string; normalizedScore: number | null; rationale?: string }[],
-        });
+        return this.Columns;
+    }
+
+    public async ngOnChanges(): Promise<void> {
+        if (!this.Provider || !this.RubricId || this.Major == null || !this.SubjectEntityId) return;
+        const filter = ComparisonCohortFilter(this.RubricId, this.Major, this.SubjectEntityId);
+        const view = RunView.FromMetadataProvider(this.Provider);
+        const [evaluations, scores] = await view.RunViews([
+            { EntityName: 'MJ: Rubric Evaluations', ExtraFilter: filter, ResultType: 'simple', MaxRows: 200 },
+            { EntityName: 'MJ: Rubric Evaluation Scores', ExtraFilter: `IsComputed=0 AND EvaluationID IN (SELECT ID FROM vwRubricEvaluations WHERE ${filter})`, ResultType: 'simple', MaxRows: 2000 },
+        ], this.Provider.CurrentUser as UserInfo);
+        if (!evaluations.Success) throw new Error(evaluations.ErrorMessage || 'Could not read rubric evaluations.');
+        if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not read rubric evaluation scores.');
+        const rows = (evaluations.Results ?? []) as Record<string, unknown>[];
+        this.Columns = MatrixColumnsFromRows(rows, (scores.Results ?? []) as Record<string, unknown>[]);
+        if (this.Keys.length === 0) this.Keys = [...new Set(this.Columns.flatMap(column => column.scores.map(score => score.key)))];
+        const cohort = rows.find(row => row.CohortMeanScore != null);
+        this.CohortMean = cohort == null ? null : Number(cohort.CohortMeanScore);
     }
 
     public ScoreText(column: MatrixColumn, key: string): string {
@@ -39,7 +56,7 @@ export class RubricComparisonMatrixComponent {
         return ComparisonMatrix(this.Keys, this.Shown);
     }
 
-    public Cell(row: { cells: { columnId: string; score: number | null }[] }, columnId: string): { columnId: string; score: number | null } | null {
+    public Cell(row: { cells: { columnId: string; score: number | null; disagree: boolean }[] }, columnId: string): { columnId: string; score: number | null; disagree: boolean } | null {
         return row.cells.find(cell => cell.columnId === columnId) ?? null;
     }
 }

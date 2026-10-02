@@ -437,7 +437,7 @@ function sideText(version: RubricVersionSnapshot, subject: string): string | nul
 export interface MatrixColumn {
     id: string;
     name: string;
-    evaluatorType: 'Human' | 'AI' | 'Self' | 'Deterministic';
+    evaluatorType: 'Human' | 'AI' | 'AIPrompt' | 'Agent' | 'Self' | 'Deterministic' | 'External';
     status: string;
     scores: { key: string; normalizedScore: number | null; rationale?: string }[];
 }
@@ -467,9 +467,48 @@ export function ComparisonMatrix(keys: string[], columns: MatrixColumn[]): Matri
     return {
         rows,
         humanMean: meanOf(columns.filter(column => column.evaluatorType === 'Human' && column.status !== 'Withdrawn')),
-        aiMean: meanOf(columns.filter(column => column.evaluatorType === 'AI' && column.status !== 'Withdrawn')),
+        aiMean: meanOf(columns.filter(column => IsAiEvaluator(column.evaluatorType) && column.status !== 'Withdrawn')),
         selfScore: meanOf(columns.filter(column => column.evaluatorType === 'Self' && column.status !== 'Withdrawn')),
     };
+}
+
+/** Stored evaluator types. `AIPrompt` and `Agent` are the AI columns. `AI` is not a stored type. */
+export function IsAiEvaluator(type: string): boolean {
+    return type === 'AIPrompt' || type === 'Agent' || type === 'AI';
+}
+
+/** Submitted evaluations for one subject, one rubric, and one major. */
+export function ComparisonCohortFilter(rubricId: string, major: number, subjectEntityId: string): string {
+    const quote = (value: string) => value.replace(/'/g, "''");
+    return `RubricID='${quote(rubricId)}' AND RubricMajorVersion=${Number(major)} AND SubjectEntityID='${quote(subjectEntityId)}' AND Status='Submitted'`;
+}
+
+/** One column per evaluation. Scores join on the evaluation id. */
+export function MatrixColumnsFromRows(evaluations: Record<string, unknown>[], scores: Record<string, unknown>[]): MatrixColumn[] {
+    return evaluations.map(row => {
+        const id = String(row.ID ?? '');
+        const evaluatorType = String(row.EvaluatorType ?? 'Human') as MatrixColumn['evaluatorType'];
+        return {
+            id,
+            name: MatrixColumnName(row),
+            evaluatorType,
+            status: String(row.Status ?? 'Submitted'),
+            scores: scores.filter(score => String(score.EvaluationID ?? '') === id && score.IsComputed !== true && score.IsComputed !== 1).map(score => ({
+                key: String(score.CriterionKey ?? score.Criterion ?? ''),
+                normalizedScore: score.NormalizedScore == null ? null : Number(score.NormalizedScore),
+                rationale: score.Rationale == null ? undefined : String(score.Rationale),
+            })),
+        };
+    });
+}
+
+function MatrixColumnName(row: Record<string, unknown>): string {
+    const type = String(row.EvaluatorType ?? '');
+    if (type === 'Human') return String(row.EvaluatorUser ?? 'Human');
+    if (type === 'AIPrompt') return 'AI Prompt';
+    if (type === 'Agent') return 'Agent';
+    if (type === 'Self') return 'Agent Self-Check';
+    return type || 'Evaluation';
 }
 
 /** @deprecated Use {@link ComparisonMatrix}. */

@@ -10,12 +10,19 @@ describe('RubricComparisonMatrixComponent (DOM)', () => {
         return fixture.nativeElement as HTMLElement;
     }
 
-    it('keeps Human, AI, and Self columns when nobody has scored', () => {
-        const host = render(component => { component.Keys = ['clarity']; });
+    it('shows one column per evaluation, including AIPrompt and Agent', () => {
+        const host = render(component => {
+            component.Keys = ['clarity'];
+            component.Columns = [
+                { id: 'prompt', name: 'AI Prompt', evaluatorType: 'AIPrompt', status: 'Submitted', scores: [{ key: 'clarity', normalizedScore: 1 }] },
+                { id: 'agent', name: 'Agent', evaluatorType: 'Agent', status: 'Submitted', scores: [{ key: 'clarity', normalizedScore: 0 }] },
+            ];
+        });
         const heads = [...host.querySelectorAll('.matrix-head')].map(cell => cell.textContent?.trim());
-        expect(heads).toEqual(['Criterion', 'Human', 'AI Evaluator', 'Agent Self-Check']);
-        expect(host.textContent).toContain('No score yet');
-        expect(host.textContent).toContain('Disabled');
+        expect(heads).toEqual(['Criterion', 'AI Prompt', 'Agent']);
+        expect(host.textContent).not.toContain('AI Evaluator');
+        expect(host.querySelectorAll('.matrix-disagree')).toHaveLength(2);
+        expect(host.textContent).toContain('AI mean 0.5');
     });
 
     it('shows a human score and its rationale', () => {

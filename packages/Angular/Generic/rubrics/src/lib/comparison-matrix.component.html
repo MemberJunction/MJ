@@ -1,6 +1,7 @@
 <section class="card" aria-label="Comparison matrix">
   <h3><i class="fa-solid fa-columns"></i> Evaluator comparison</h3>
-  <div class="matrix">
+  <p class="matrix-means">Human mean {{ Model.humanMean ?? '—' }}. AI mean {{ Model.aiMean ?? '—' }}. Cohort mean {{ CohortMean ?? '—' }}.</p>
+  <div class="matrix" [style.grid-template-columns]="'minmax(8rem, 1.1fr) repeat(' + Shown.length + ', minmax(0, 1fr))'">
     <div class="matrix-head">Criterion</div>
     @for (column of Shown; track column.id) {
       <div class="matrix-head">{{ column.name }}</div>
@@ -8,7 +9,7 @@
     @for (row of Model.rows; track row.key) {
       <div class="matrix-cell"><strong>{{ row.key }}</strong></div>
       @for (column of Shown; track column.id) {
-        <div class="matrix-cell" [class.matrix-empty]="ScoreText(column, row.key) === 'No score yet' || ScoreText(column, row.key) === 'Disabled'">
+        <div class="matrix-cell" [class.matrix-disagree]="Cell(row, column.id)?.disagree" [class.matrix-empty]="ScoreText(column, row.key) === 'No score yet' || ScoreText(column, row.key) === 'Disabled'">
           <strong>{{ ScoreText(column, row.key) }}</strong>
           @if (RationaleText(column, row.key)) { <p>{{ RationaleText(column, row.key) }}</p> }
         </div>
