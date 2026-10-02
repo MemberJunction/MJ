@@ -3,7 +3,7 @@ import { RunQuery, type IRunQueryProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJEmptyStateComponent, MJPageBodyComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
-import { driftDeltas } from '@memberjunction/rubrics-base';
+import { DriftDeltas } from '@memberjunction/rubrics-base';
 import { DriftPeriodRows } from './rubric-drift-series';
 
 /** A criterion whose mean dropped past the threshold between the two periods. */
@@ -61,7 +61,7 @@ export class RubricDriftComponent {
         return this.Threshold;
     }
     public get Rows() {
-        return driftDeltas(this.Current, this.Previous, this.Threshold).filter(row => row.alert);
+        return DriftDeltas(this.Current, this.Previous, this.Threshold).filter(row => row.alert);
     }
 }
 

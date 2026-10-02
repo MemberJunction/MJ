@@ -4,7 +4,7 @@ const evaluateRecord = vi.hoisted(() => vi.fn(async () => ({
     evaluationId: 'eval-1', score: 0.75, displayScore: 75, outcome: 'Passed', criteria: [],
 })));
 vi.mock('@memberjunction/rubrics', () => ({
-    providerRubricEngine: () => ({ EvaluateRecord: evaluateRecord, evaluateRecord }),
+    ProviderRubricEngine: () => ({ EvaluateRecord: evaluateRecord, evaluateRecord }),
 }));
 
 import { readFileSync } from 'node:fs';
@@ -58,12 +58,12 @@ describe('rubric resolution', () => {
         const pin = new PublishedVersionPin();
         let latest = 'v1';
         const lookup = async () => latest;
-        expect(await pin.remember('suite-run', 'rubric', undefined, lookup)).toBe('v1');
+        expect(await pin.Remember('suite-run', 'rubric', undefined, lookup)).toBe('v1');
         latest = 'v2';
-        expect(await pin.remember('suite-run', 'rubric', undefined, lookup)).toBe('v1');
-        expect(await pin.remember('suite-run', 'rubric', 'v9', lookup)).toBe('v9');
-        expect(await pin.remember('suite-run', 'rubric', undefined, lookup)).toBe('v1');
-        expect(await pin.remember('other-run', 'rubric', undefined, lookup)).toBe('v2');
+        expect(await pin.Remember('suite-run', 'rubric', undefined, lookup)).toBe('v1');
+        expect(await pin.Remember('suite-run', 'rubric', 'v9', lookup)).toBe('v9');
+        expect(await pin.Remember('suite-run', 'rubric', undefined, lookup)).toBe('v1');
+        expect(await pin.Remember('other-run', 'rubric', undefined, lookup)).toBe('v2');
     });
 
     it('adds a rubric oracle only when the test did not name one', () => {

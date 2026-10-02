@@ -4,7 +4,7 @@ const evaluateRecord = vi.hoisted(() => vi.fn(async () => ({ evaluationId: 'new-
 const views = vi.hoisted(() => [] as { EntityName: string }[]);
 
 vi.mock('@memberjunction/rubrics', () => ({
-    providerRubricEngine: () => ({ evaluateRecord, EvaluateRecord: evaluateRecord }),
+    ProviderRubricEngine: () => ({ evaluateRecord, EvaluateRecord: evaluateRecord }),
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {

@@ -60,20 +60,10 @@ export function FormatCriterionReport(oracleResults: { oracleType?: string; type
     }).join('\n');
 }
 
-/** @deprecated Use {@link FormatCriterionReport}. */
-export function formatCriterionReport(oracleResults: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null | undefined): string {
-    return FormatCriterionReport(oracleResults);
-}
-
 export function FormatVersionDiff(result: { computedBump: string | null; changes: { bump: string; subject: string; property: string }[] }): string {
     const lines = [result.computedBump ?? 'none'];
     for (const change of result.changes) lines.push(`${change.bump}  ${change.subject}  ${change.property}`);
     return lines.join('\n');
-}
-
-/** @deprecated Use {@link FormatVersionDiff}. */
-export function formatVersionDiff(result: { computedBump: string | null; changes: { bump: string; subject: string; property: string }[] }): string {
-    return FormatVersionDiff(result);
 }
 
 export function ValidateSnapshot(version: { nodes?: { id?: string; key?: string; parentId?: string | null; weight?: number; isGate?: boolean; gateMinimumScore?: number | null; scaleId?: string | null; nodeType?: string }[]; scales?: { id: string }[] }): string[] {
@@ -99,11 +89,6 @@ export function ValidateSnapshot(version: { nodes?: { id?: string; key?: string;
         else if (node.parentId && parentIsDescendant(nodes, node)) errors.push(`${key}: parent is its own descendant.`);
     }
     return errors;
-}
-
-/** @deprecated Use {@link ValidateSnapshot}. */
-export function validateSnapshot(version: { nodes?: { id?: string; key?: string; parentId?: string | null; weight?: number; isGate?: boolean; gateMinimumScore?: number | null; scaleId?: string | null; nodeType?: string }[]; scales?: { id: string }[] }): string[] {
-    return ValidateSnapshot(version);
 }
 
 function parentIsDescendant(nodes: { id?: string; parentId?: string | null }[], node: { id?: string; parentId?: string | null }): boolean {
@@ -175,17 +160,6 @@ export function SnapshotFromRows(
             sequence: Number(band.Sequence ?? 0),
         })),
     };
-}
-
-/** @deprecated Use {@link SnapshotFromRows}. */
-export function snapshotFromRows(
-    version: Record<string, unknown>,
-    criteria: Record<string, unknown>[],
-    scales: Record<string, unknown>[],
-    levels: Record<string, unknown>[],
-    bands: Record<string, unknown>[],
-): RubricVersionSnapshot {
-    return SnapshotFromRows(version, criteria, scales, levels, bands);
 }
 
 /** A name is compared to Name. A uuid is compared to ID. One predicate, so a name is never cast to uniqueidentifier. */

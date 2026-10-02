@@ -30,11 +30,6 @@ export function CriterionConsensus(criteria: { key: string; scores: (number | nu
     });
 }
 
-/** @deprecated Use {@link CriterionConsensus}. */
-export function criterionConsensus(criteria: { key: string; scores: (number | null)[] }[]): CriterionConsensus[] {
-    return CriterionConsensus(criteria);
-}
-
 export function GetConsensus(scores: number[], method: ConsensusResult['Method'] = 'Mean', trim = 0.1, criteria?: { key: string; scores: (number | null)[] }[]): ConsensusResult {
     const sample = [...scores].sort((a, b) => a - b);
     const n = sample.length;
@@ -49,11 +44,6 @@ export function GetConsensus(scores: number[], method: ConsensusResult['Method']
         SampleSize: n,
         Criteria: criteria ? CriterionConsensus(criteria) : undefined,
     };
-}
-
-/** @deprecated Use {@link GetConsensus}. */
-export function getConsensus(scores: number[], method: ConsensusResult['Method'] = 'Mean', trim = 0.1, criteria?: { key: string; scores: (number | null)[] }[]): ConsensusResult {
-    return GetConsensus(scores, method, trim, criteria);
 }
 
 export interface AgreementResult {
@@ -81,11 +71,6 @@ export function GetAgreement(ratings: number[][], minimumSample = 20): Agreement
         Kappa: pairs.length > 0 ? QuadraticKappa(pairs) : undefined,
         Alpha: KrippendorffAlpha(ratings),
     };
-}
-
-/** @deprecated Use {@link GetAgreement}. */
-export function getAgreement(ratings: number[][], minimumSample = 20): AgreementResult {
-    return GetAgreement(ratings, minimumSample);
 }
 
 export interface DiagnosticFlag {
@@ -124,11 +109,6 @@ export function GetDiagnostics(criteria: { key: string; scores: (number | null)[
     return flags;
 }
 
-/** @deprecated Use {@link GetDiagnostics}. */
-export function getDiagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
-    return GetDiagnostics(criteria);
-}
-
 /**
  * Quadratic-weighted Cohen's kappa on the full scale.
  * A level value is its index. Unobserved levels stay in the scale, so 0 and 2
@@ -161,11 +141,6 @@ export function QuadraticKappa(pairs: readonly (readonly [number, number])[], ca
     }
     if (expected === 0) return 1;
     return 1 - observed / expected;
-}
-
-/** @deprecated Use {@link QuadraticKappa}. */
-export function quadraticKappa(pairs: readonly (readonly [number, number])[]): number {
-    return QuadraticKappa(pairs);
 }
 
 /** Ordinal Krippendorff's alpha. Each inner array is one subject's ratings. */
@@ -205,11 +180,6 @@ export function KrippendorffAlpha(units: number[][]): number {
     }
     if (expected === 0) return 1;
     return 1 - (observed / n) / (expected / (n * (n - 1)));
-}
-
-/** @deprecated Use {@link KrippendorffAlpha}. */
-export function krippendorffAlpha(units: number[][]): number {
-    return KrippendorffAlpha(units);
 }
 
 function mean(values: number[]): number {

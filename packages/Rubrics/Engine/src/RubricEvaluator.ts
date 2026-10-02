@@ -57,7 +57,7 @@ export class RubricEvaluator {
             rationale: candidate.rationale || undefined,
             evidence: candidate.evidence.length > 0 ? candidate.evidence : undefined,
         }));
-        const result = RubricScoring.compute({ version, answers });
+        const result = RubricScoring.Compute({ version, answers });
         return {
             normalizedScore: result.normalizedScore,
             rationale: candidates.map(candidate => candidate.rationale).filter(text => text.length > 0).join('\n'),
@@ -67,11 +67,7 @@ export class RubricEvaluator {
         };
     }
 
-    /** @deprecated Use {@link Evaluate}. */
-    public evaluate(version: RubricVersionSnapshot, candidates: RubricCandidate[]): RubricEvaluatorOutput {
-        return this.Evaluate(version, candidates);
     }
-}
 
 /**
  * ClassFactory root for rubric evaluators. Concrete evaluators register under

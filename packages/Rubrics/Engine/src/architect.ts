@@ -57,11 +57,6 @@ function csvCells(line: string): string[] {
     return cells;
 }
 
-/** @deprecated Use {@link ImportMatrix}. */
-export function importMatrix(csv: string): ImportedCriterion[] {
-    return ImportMatrix(csv);
-}
-
 /** Vague names, missing anchors, unbalanced weights, and a gate that allows not-applicable. */
 export function CritiqueRubric(version: RubricVersionSnapshot): string[] {
     const notes: string[] = [];
@@ -83,11 +78,6 @@ export function CritiqueRubric(version: RubricVersionSnapshot): string[] {
     return notes;
 }
 
-/** @deprecated Use {@link CritiqueRubric}. */
-export function critiqueRubric(version: RubricVersionSnapshot): string[] {
-    return CritiqueRubric(version);
-}
-
 export interface DraftVersionStore {
     SaveVersion(fields: { name: string; status: 'Draft'; nodes: ImportedCriterion[] }): Promise<string>;
     SaveCriteria(versionId: string, nodes: ImportedCriterion[]): Promise<void>;
@@ -101,11 +91,6 @@ export async function SaveImportedDraft(store: DraftVersionStore, name: string, 
     return { id, status: 'Draft' };
 }
 
-/** @deprecated Use {@link SaveImportedDraft}. */
-export async function saveImportedDraft(store: DraftVersionStore, name: string, csv: string): Promise<{ id: string; status: 'Draft' }> {
-    return SaveImportedDraft(store, name, csv);
-}
-
 /** Notes from item analysis and agreement. A withheld agreement adds no kappa note. */
 export function ImproveFromData(diagnostics: { criterionKey: string; flag: string }[], agreement: { withheld: boolean; kappa?: number }): string[] {
     const notes = diagnostics.map(flag => `${flag.criterionKey}: ${flag.flag}`);
@@ -113,19 +98,9 @@ export function ImproveFromData(diagnostics: { criterionKey: string; flag: strin
     return notes;
 }
 
-/** @deprecated Use {@link ImproveFromData}. */
-export function improveFromData(diagnostics: { criterionKey: string; flag: string }[], agreement: { withheld: boolean; kappa?: number }): string[] {
-    return ImproveFromData(diagnostics, agreement);
-}
-
 /** The imported tree is a Draft. This path does not publish. */
 export function DraftFromImport(name: string, csv: string): { name: string; status: 'Draft'; nodes: ImportedCriterion[] } {
     return { name, status: 'Draft', nodes: ImportMatrix(csv) };
-}
-
-/** @deprecated Use {@link DraftFromImport}. */
-export function draftFromImport(name: string, csv: string): { name: string; status: 'Draft'; nodes: ImportedCriterion[] } {
-    return DraftFromImport(name, csv);
 }
 
 /** A description becomes a Draft version. This path does not publish. */
@@ -136,11 +111,6 @@ export function DraftTitle(description: string): string {
 export async function DraftFromDescription(store: DraftVersionStore, description: string): Promise<{ id: string; status: 'Draft' }> {
     const title = DraftTitle(description);
     return SaveImportedDraft(store, title, `1,${title},1,no`);
-}
-
-/** @deprecated Use {@link DraftFromDescription}. */
-export async function draftFromDescription(store: DraftVersionStore, description: string): Promise<{ id: string; status: 'Draft' }> {
-    return DraftFromDescription(store, description);
 }
 
 /** Numbered-matrix rows as criterion snapshots. A row that has children is a group. */
@@ -169,29 +139,14 @@ export function NodesFromMatrix(csv: string): RubricNodeSnapshot[] {
     });
 }
 
-/** @deprecated Use {@link NodesFromMatrix}. */
-export function nodesFromMatrix(csv: string): RubricNodeSnapshot[] {
-    return NodesFromMatrix(csv);
-}
-
 /** One criterion whose name is the description. This path does not publish. */
 export function NodesFromDescription(description: string): RubricNodeSnapshot[] {
     const title = DraftTitle(description);
     return NodesFromMatrix(`1,${title},1,no`);
 }
 
-/** @deprecated Use {@link NodesFromDescription}. */
-export function nodesFromDescription(description: string): RubricNodeSnapshot[] {
-    return NodesFromDescription(description);
-}
-
 export function PublishImportedDraft(): { ok: false; message: string } {
     return { ok: false, message: 'The architect does not publish.' };
-}
-
-/** @deprecated Use {@link PublishImportedDraft}. */
-export function publishImportedDraft(): { ok: false; message: string } {
-    return PublishImportedDraft();
 }
 
 function slug(value: string): string {

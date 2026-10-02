@@ -27,11 +27,6 @@ export function RubricWorldCriteria(): WorldCriterion[] {
     ];
 }
 
-/** @deprecated Use {@link RubricWorldCriteria}. */
-export function rubricWorldCriteria(): WorldCriterion[] {
-    return RubricWorldCriteria();
-}
-
 function version(weightOf: (criterion: WorldCriterion) => number, ids: { version: string; rubric: string; scale: string; met: string }): RubricVersionSnapshot {
     return {
         id: ids.version,
@@ -78,30 +73,20 @@ export function PublishedWorld(): RubricVersionSnapshot {
     return version(criterion => criterion.PublishedWeight, { ...ids, version: 'published' });
 }
 
-/** @deprecated Use {@link PublishedWorld}. */
-export function publishedWorld(): RubricVersionSnapshot {
-    return PublishedWorld();
-}
-
 /** Draft based on that publish. Accuracy weighs 2, so the bump is Major and the next version is 2.0.0. */
 export function DraftWorld(): RubricVersionSnapshot {
     return version(criterion => criterion.DraftWeight, { ...ids, version: 'draft' });
-}
-
-/** @deprecated Use {@link DraftWorld}. */
-export function draftWorld(): RubricVersionSnapshot {
-    return DraftWorld();
 }
 
 /** A human who marks every leaf Met passes the published tree. */
 export function ScorePublishedMet(): { outcome: string; normalizedScore: number | null; bump: string | null; nextVersion: string | null } {
     const published = PublishedWorld();
     const draft = DraftWorld();
-    const score = RubricScoring.compute({
+    const score = RubricScoring.Compute({
         version: published,
         answers: published.nodes.map(node => ({ criterionId: node.id, scaleLevelId: 'met', rationale: 'Met in the world model.' })),
     });
-    const preview = RubricVersionDiff.diff(published, draft, null);
+    const preview = RubricVersionDiff.Diff(published, draft, null);
     const next = preview.nextVersion;
     return {
         outcome: score.outcome,
@@ -111,7 +96,4 @@ export function ScorePublishedMet(): { outcome: string; normalizedScore: number 
     };
 }
 
-/** @deprecated Use {@link ScorePublishedMet}. */
-export function scorePublishedMet(): { outcome: string; normalizedScore: number | null; bump: string | null; nextVersion: string | null } {
-    return ScorePublishedMet();
-}
+

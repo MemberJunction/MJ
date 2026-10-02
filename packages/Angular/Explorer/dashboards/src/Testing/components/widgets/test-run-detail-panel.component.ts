@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, inject } from '@angular/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { TestRunSummary, TestingInstrumentationService } from '../../services/testing-instrumentation.service';
 import { OracleResult } from './oracle-breakdown-table.component';
-import { rubricRunView } from '@memberjunction/ng-testing';
+import { RubricRunView } from '@memberjunction/ng-testing';
 
 @Component({
   standalone: false,
@@ -407,7 +407,7 @@ export class TestRunDetailPanelComponent {
     this.OracleResults = value;
   }
   get RubricView() {
-    return rubricRunView(this.oracleResults);
+    return RubricRunView(this.oracleResults);
   }
 
   /** @deprecated Use {@link RubricView}. */

@@ -37,11 +37,6 @@ export function ProviderRecords(provider: RubricProvider, user: unknown): Rubric
     };
 }
 
-/** @deprecated Use {@link ProviderRecords}. */
-export function providerRecords(provider: RubricProvider, user: unknown): RubricRecords {
-    return ProviderRecords(provider, user);
-}
-
 /**
  * Inserts a Draft version and its criteria. The status written is Draft.
  * BasedOnVersionID is the highest Published or Retired version of this rubric.
@@ -129,11 +124,6 @@ function assertParentsPresent(nodes: RubricNodeSnapshot[]): void {
             throw new Error(`Criterion ${node.key} names a parent that is not in this draft.`);
         }
     }
-}
-
-/** @deprecated Use {@link CreateDraftVersion}. */
-export async function createDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
-    return CreateDraftVersion(provider, user, input);
 }
 
 interface ListedRows {
@@ -318,11 +308,6 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
     };
 }
 
-/** @deprecated Use {@link ProviderEvaluationStore}. */
-export function providerEvaluationStore(provider: RubricProvider, user: unknown): RubricEvaluationStore {
-    return ProviderEvaluationStore(provider, user);
-}
-
 function evaluatorType(evaluator: string | undefined): MJRubricEvaluationEntity['EvaluatorType'] {
     if (evaluator === 'AI') return 'Agent';
     if (evaluator === 'Deterministic') return 'Deterministic';
@@ -402,11 +387,6 @@ export function RubricEvaluatorPromptRun(provider: RubricProvider, user: unknown
     };
 }
 
-/** @deprecated Use {@link RubricEvaluatorPromptRun}. */
-export function rubricEvaluatorPromptRun(provider: RubricProvider, user: unknown): RubricPromptRun {
-    return RubricEvaluatorPromptRun(provider, user);
-}
-
 /** A RubricEngine whose catalog, evaluations, and Rubric Evaluator prompt use the caller's provider. */
 /** PerCriterion asks AIDecisionRunner for a ScoreQuestion instead of sending the whole rubric. */
 export function PromptDecisionRunner(provider: unknown, user: unknown): RubricDecisionRunner {
@@ -445,11 +425,6 @@ export function ProviderRubricEngine(provider: unknown, user: unknown): RubricEn
         PromptDecisionRunner(data, user),
         new RubricEvaluationAgentRunner(data, user),
     );
-}
-
-/** @deprecated Use {@link ProviderRubricEngine}. */
-export function providerRubricEngine(provider: unknown, user: unknown): RubricEngine {
-    return ProviderRubricEngine(provider, user);
 }
 
 export interface HumanScoreAnswer {

@@ -848,16 +848,16 @@ export class AgentEvalDriver extends BaseTestDriver {
     private readonly versionPins = new PublishedVersionPin();
     private readonly versionLabels = new Map<string, string>();
 
-    protected async withResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
+    protected async WithResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
         const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string } | undefined;
-        const loaded = await this.loadSuites(context);
+        const loaded = await this.LoadSuites(context);
         const choice = ResolveRubric({
             run: context.options.rubricId ? { rubricId: context.options.rubricId, versionId: context.options.rubricVersionId } : undefined,
             oracle: named,
             testRubricId: context.test.RubricID,
             suites: loaded.suites,
             suiteId: loaded.suiteId,
-            agentRubricId: context.options.agentEvaluationRubricId ?? await this.loadAgentEvaluationRubric(context, config.agentId),
+            agentRubricId: context.options.agentEvaluationRubricId ?? await this.LoadAgentEvaluationRubric(context, config.agentId),
         });
         const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
         const suiteRunId = (context.testRun as { TestSuiteRunID?: string }).TestSuiteRunID || context.testRun.ID;
@@ -866,10 +866,10 @@ export class AgentEvalDriver extends BaseTestDriver {
         let versionLabel: string | undefined;
         if (choice.RubricId && choice.ExplicitVersion && choice.VersionId) {
             versionId = choice.VersionId;
-            versionLabel = await this.lookupVersionLabel(context, choice.VersionId);
+            versionLabel = await this.LookupVersionLabel(context, choice.VersionId);
         } else if (choice.RubricId) {
-            versionId = await this.versionPins.remember(suiteRunId, choice.RubricId, undefined, async () => {
-                const found = await this.lookupLatestPublished(context, choice.RubricId!);
+            versionId = await this.versionPins.Remember(suiteRunId, choice.RubricId, undefined, async () => {
+                const found = await this.LookupLatestPublished(context, choice.RubricId!);
                 if (found) this.versionLabels.set(labelKey, found.label);
                 return found?.id;
             });
@@ -884,13 +884,13 @@ export class AgentEvalDriver extends BaseTestDriver {
      * Test Suite Run. MJ: Tests has no suite id. ResolveRubric walks ParentID
      * on these rows in memory. A test subclass can supply this without a database.
      */
-    protected async loadSuites(context: DriverExecutionContext): Promise<{ suiteId?: string; suites: RubricSuiteRow[] }> {
+    protected async LoadSuites(context: DriverExecutionContext): Promise<{ suiteId?: string; suites: RubricSuiteRow[] }> {
         const suiteRunId = context.testRun.TestSuiteRunID;
         if (!suiteRunId) return { suites: [] };
-        const suiteRun = await this.readOne(context, 'MJ: Test Suite Runs', `ID='${suiteRunId.replace(/'/g, "''")}'`);
+        const suiteRun = await this.ReadOne(context, 'MJ: Test Suite Runs', `ID='${suiteRunId.replace(/'/g, "''")}'`);
         const suiteId = suiteRun?.SuiteID == null || suiteRun.SuiteID === '' ? undefined : String(suiteRun.SuiteID);
         if (!suiteId) return { suites: [] };
-        const rows = await this.readMany(context, 'MJ: Test Suites', '', 5000);
+        const rows = await this.ReadMany(context, 'MJ: Test Suites', '', 5000);
         return {
             suiteId,
             suites: rows.map(row => ({
@@ -902,33 +902,33 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /** The agent's Active default Evaluation rubric, when this test is an agent eval. */
-    protected async loadAgentEvaluationRubric(context: DriverExecutionContext, agentId: string): Promise<string | undefined> {
-        const rows = await this.readMany(context, 'MJ: AI Agent Rubrics', `AgentID='${agentId}' AND Purpose='Evaluation' AND Status='Active'`);
+    protected async LoadAgentEvaluationRubric(context: DriverExecutionContext, agentId: string): Promise<string | undefined> {
+        const rows = await this.ReadMany(context, 'MJ: AI Agent Rubrics', `AgentID='${agentId}' AND Purpose='Evaluation' AND Status='Active'`);
         const chosen = rows.find(row => row.IsDefault === true || row.IsDefault === 1) ?? rows[0];
         return chosen?.RubricID == null ? undefined : String(chosen.RubricID);
     }
 
     /** Latest Published version of the chosen rubric. The suite pin stores the first answer. */
-    protected async lookupLatestPublished(context: DriverExecutionContext, rubricId: string): Promise<{ id: string; label: string } | undefined> {
-        const rows = await this.readMany(context, 'MJ: Rubric Versions', `RubricID='${rubricId}' AND Status='Published'`);
+    protected async LookupLatestPublished(context: DriverExecutionContext, rubricId: string): Promise<{ id: string; label: string } | undefined> {
+        const rows = await this.ReadMany(context, 'MJ: Rubric Versions', `RubricID='${rubricId}' AND Status='Published'`);
         const best = [...rows].sort((a, b) => Number(b.MajorVersion ?? 0) - Number(a.MajorVersion ?? 0) || Number(b.MinorVersion ?? 0) - Number(a.MinorVersion ?? 0) || Number(b.PatchVersion ?? 0) - Number(a.PatchVersion ?? 0))[0];
         if (!best) return undefined;
         return { id: String(best.ID), label: `${best.MajorVersion ?? 0}.${best.MinorVersion ?? 0}.${best.PatchVersion ?? 0}` };
     }
 
     /** Major.Minor.Patch for an explicitly named version. This does not change the suite pin. */
-    protected async lookupVersionLabel(context: DriverExecutionContext, versionId: string): Promise<string | undefined> {
-        const row = await this.readOne(context, 'MJ: Rubric Versions', `ID='${versionId}'`);
+    protected async LookupVersionLabel(context: DriverExecutionContext, versionId: string): Promise<string | undefined> {
+        const row = await this.ReadOne(context, 'MJ: Rubric Versions', `ID='${versionId}'`);
         if (!row) return undefined;
         return `${row.MajorVersion ?? 0}.${row.MinorVersion ?? 0}.${row.PatchVersion ?? 0}`;
     }
 
-    protected async readOne(context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
-        const rows = await this.readMany(context, entityName, filter);
+    protected async ReadOne(context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
+        const rows = await this.ReadMany(context, entityName, filter);
         return rows[0];
     }
 
-    protected async readMany(context: DriverExecutionContext, entityName: string, filter: string, maxRows = 100): Promise<Record<string, unknown>[]> {
+    protected async ReadMany(context: DriverExecutionContext, entityName: string, filter: string, maxRows = 100): Promise<Record<string, unknown>[]> {
         const provider = this.Provider;
         if (!provider) throw new Error(`Could not read ${entityName}.`);
         const view = RunView.FromMetadataProvider(provider);
@@ -944,7 +944,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         expected: AgentEvalExpectedOutcomes,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
-        config = await this.withResolvedRubric(config, context);
+        config = await this.WithResolvedRubric(config, context);
         const strategy = config.evaluationStrategy || 'final-turn-only';
 
         switch (strategy) {

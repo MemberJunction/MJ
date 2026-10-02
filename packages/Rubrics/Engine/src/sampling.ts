@@ -1,6 +1,6 @@
 export {
-    DriftDeltas, driftDeltas, DriftSeries, driftSeries, KeepSample, keepSample, PeriodMeans, periodMeans,
-    RubricIdFromVersion, rubricIdFromVersion, SampleBucket, sampleBucket,
+    DriftDeltas, DriftSeries, KeepSample, PeriodMeans,
+    RubricIdFromVersion, SampleBucket,
     type DriftEvaluationRow, type DriftRunRow, type DriftScoreRow,
 } from '@memberjunction/rubrics-base';
 import { KeepSample, RubricIdFromVersion } from '@memberjunction/rubrics-base';
@@ -65,15 +65,6 @@ export function SelectSampledRuns(input: {
     return chosen;
 }
 
-/** @deprecated Use {@link SelectSampledRuns}. */
-export function selectSampledRuns(input: {
-    links: SamplingLink[];
-    runs: { id: string; agentId: string }[];
-    evaluated: { runId: string; rubricId: string }[];
-}): SampledRun[] {
-    return SelectSampledRuns(input);
-}
-
 export interface SamplingLoader {
     Load(): Promise<Parameters<typeof SelectSampledRuns>[0]>;
 }
@@ -107,12 +98,7 @@ export class EvaluateSampledAgentRuns {
         return SelectSampledRuns(input);
     }
 
-    /** @deprecated Use {@link Plan}. */
-    public plan(input: Parameters<typeof selectSampledRuns>[0]): ReturnType<typeof selectSampledRuns> {
-        return this.Plan(input);
-    }
-
-    public async Run(): Promise<ReturnType<typeof SelectSampledRuns>> {
+        public async Run(): Promise<ReturnType<typeof SelectSampledRuns>> {
         const chosen = this.Plan(await this.loader.Load()).slice(0, Math.max(0, this.volumeCap));
         this.failures = [];
         for (const item of chosen) {
@@ -132,11 +118,7 @@ export class EvaluateSampledAgentRuns {
         return chosen;
     }
 
-    /** @deprecated Use {@link Run}. */
-    public async run(): Promise<ReturnType<typeof selectSampledRuns>> {
-        return this.Run();
     }
-}
 
 export interface AgentRubricLinkRow {
     agentId: string;
@@ -217,14 +199,6 @@ export function EvaluatedRubricRuns(
     });
 }
 
-/** @deprecated Use {@link EvaluatedRubricRuns}. */
-export function evaluatedRubricRuns(
-    evaluations: { runId: string; rubricVersionId: string }[],
-    versions: { id: string; rubricId: string }[],
-): { runId: string; rubricId: string }[] {
-    return EvaluatedRubricRuns(evaluations, versions);
-}
-
 /** Active links whose purpose is ProductionSampling. Evaluation and SelfCheck are not sampled. */
 export function ProductionSamplingLinks(links: AgentRubricLinkRow[]): SamplingLink[] {
     return links
@@ -236,11 +210,6 @@ export function ProductionSamplingLinks(links: AgentRubricLinkRow[]): SamplingLi
             status: link.status,
             evaluatorConfig: link.evaluatorConfig,
         }));
-}
-
-/** @deprecated Use {@link ProductionSamplingLinks}. */
-export function productionSamplingLinks(links: AgentRubricLinkRow[]): SamplingLink[] {
-    return ProductionSamplingLinks(links);
 }
 
 /** Loader for the scheduled job. Completed runs only, and only ProductionSampling links. */
@@ -262,11 +231,6 @@ export function ProductionSamplingLoader(catalog: ProductionSamplingCatalog, opt
     };
 }
 
-/** @deprecated Use {@link ProductionSamplingLoader}. */
-export function productionSamplingLoader(catalog: ProductionSamplingCatalog): SamplingLoader {
-    return ProductionSamplingLoader(catalog);
-}
-
 /** The scheduled job, built with a catalog that can see purpose. */
 export function ProductionSamplingJob(catalog: ProductionSamplingCatalog, engine: SamplingEvaluator, options: SamplingJobOptions = {}): EvaluateSampledAgentRuns {
     return new EvaluateSampledAgentRuns(
@@ -276,10 +240,4 @@ export function ProductionSamplingJob(catalog: ProductionSamplingCatalog, engine
         options.agent,
     );
 }
-
-/** @deprecated Use {@link ProductionSamplingJob}. */
-export function productionSamplingJob(catalog: ProductionSamplingCatalog, engine: SamplingEvaluator): EvaluateSampledAgentRuns {
-    return ProductionSamplingJob(catalog, engine);
-}
-
 

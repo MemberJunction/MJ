@@ -122,16 +122,11 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
                 confidence,
             });
         }
-        const scored = this.evaluate(version, candidates);
+        const scored = this.Evaluate(version, candidates);
         return { ...scored, droppedUnknownKeys, droppedQuotes };
     }
 
-    /** @deprecated Use {@link EvaluateContent}. */
-    public async evaluateContent(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMRubricResult> {
-        return this.EvaluateContent(version, content);
-    }
-
-    /**
+        /**
      * Runs the rubric n times. Each criterion keeps the median level by normalized
      * value, and the result records every level that appeared. Scoring runs once,
      * on those median answers.
@@ -191,16 +186,11 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
             chosen.push({ ...sample, key: node.key, value: medianValue });
         }
         const once = new LLMRubricEvaluator({ async run() { return JSON.stringify({ decisions: chosen }); } }, 'SinglePass');
-        const scored = await once.evaluateContent(version, content);
+        const scored = await once.EvaluateContent(version, content);
         return { ...scored, droppedUnknownKeys: scored.droppedUnknownKeys + droppedUnknownKeys, sampleSpread };
     }
 
-    /** @deprecated Use {@link EvaluateSamples}. */
-    public async evaluateSamples(version: RubricVersionSnapshot, content: RubricSubjectContent, samples: number): Promise<LLMRubricResult> {
-        return this.EvaluateSamples(version, content, samples);
-    }
-
-    private async singlePass(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
+        private async singlePass(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
         const raw = await this.runner.run(BuildRubricEvaluatorMessages(version, content, 'SinglePass'));
         const parsed = JSON.parse(raw) as { decisions?: LLMDecision[] } | LLMDecision[];
         return Array.isArray(parsed) ? parsed : parsed.decisions ?? [];
@@ -266,16 +256,6 @@ export function RenderRubricEvaluatorPrompt(
     return FillRubricEvaluatorTemplate(readFileSync(TEMPLATE_URL, 'utf8'), version, content, mode, only);
 }
 
-/** @deprecated Use {@link RenderRubricEvaluatorPrompt}. */
-export function renderRubricEvaluatorPrompt(
-    version: RubricVersionSnapshot,
-    content: RubricSubjectContent,
-    mode: RubricPromptMode,
-    only?: RubricNodeSnapshot,
-): string {
-    return RenderRubricEvaluatorPrompt(version, content, mode, only);
-}
-
 /** Fills {{instructions}}, {{criteria}}, and {{content}} in one pass. The subject is inside a nonce delimiter. */
 export function FillRubricEvaluatorTemplate(
     template: string,
@@ -316,17 +296,6 @@ function UniqueNonce(body: string): string {
         if (!body.includes(nonce)) return nonce;
     }
     throw new Error('Could not delimit the subject.');
-}
-
-/** @deprecated Use {@link FillRubricEvaluatorTemplate}. */
-export function fillRubricEvaluatorTemplate(
-    template: string,
-    version: RubricVersionSnapshot,
-    content: RubricSubjectContent,
-    mode: RubricPromptMode,
-    only?: RubricNodeSnapshot,
-): string {
-    return FillRubricEvaluatorTemplate(template, version, content, mode, only);
 }
 
 function perCriterionConfidence(decision: LLMDecision, chosen: string | undefined): number | null {

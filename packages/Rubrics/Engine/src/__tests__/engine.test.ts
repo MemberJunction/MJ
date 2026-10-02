@@ -32,7 +32,7 @@ describe('DeterministicRubricEvaluator', () => {
             { ...tree.nodes[0], id: 'open', key: 'open', evaluatorConfig: { Deterministic: { Path: 'status' } } },
         ];
         tree.scales[0].levels.push({ id: 'low', label: 'Low', value: 0, normalizedValue: 0, sequence: 1 });
-        const output = new DeterministicRubricEvaluator().evaluateData(tree, { data: { status: 'shipped' } });
+        const output = new DeterministicRubricEvaluator().EvaluateData(tree, { data: { status: 'shipped' } });
         const byId = new Map(output.answers.map(answer => [answer.criterionId, answer]));
         expect(byId.get('true')?.scaleLevelId).toBe('high');
         expect(byId.get('false')?.scaleLevelId).toBe('low');
@@ -41,7 +41,7 @@ describe('DeterministicRubricEvaluator', () => {
     });
 
     it('leaves a leaf with no rule unanswered and does not call a model', () => {
-        const output = new DeterministicRubricEvaluator().evaluateData(version(), { data: { score: 1 } });
+        const output = new DeterministicRubricEvaluator().EvaluateData(version(), { data: { score: 1 } });
         expect(output.answers).toHaveLength(1);
         expect(output.answers[0].criterionId).toBe('a');
         expect(output.normalizedScore).toBe(1);
@@ -86,7 +86,7 @@ describe('RubricEngine', () => {
             async fail() { throw new Error('should not fail'); },
         };
         const engine = new RubricEngine(store);
-        const done = await engine.evaluate({
+        const done = await engine.Evaluate({
             version: version(),
             subject: { entityName: 'MJ: Test Runs', recordId: '1', entityId: 'entity' },
             content: { data: { score: 1 } },
@@ -105,7 +105,7 @@ describe('RubricEngine', () => {
             async submit() { return { normalizedScore: 1, completeness: 0.5, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' }; },
             async fail() { throw new Error('should not fail'); },
         };
-        const done = await new RubricEngine(store).evaluate({
+        const done = await new RubricEngine(store).Evaluate({
             version: tree,
             subject: { entityName: 'MJ: Test Runs', recordId: 'run-1', entityId: 'entity' },
             loadRecord: async () => ({ ActualOutputData: 'shipped', InputData: 'q' }),
@@ -123,7 +123,7 @@ describe('RubricEngine', () => {
             async fail(id, message) { failed.push(`${id}:${message}`); return { id, status: 'Failed', errorMessage: message }; },
         };
         const engine = new RubricEngine(store);
-        const done = await engine.evaluate({
+        const done = await engine.Evaluate({
             version: version(),
             subject: { entityName: 'MJ: Test Runs', recordId: '1', entityId: 'entity' },
             content: { data: { score: 1 } },
@@ -143,7 +143,7 @@ describe('RubricEngine', () => {
         };
         const tree = version();
         tree.nodes = [tree.nodes[0]];
-        const done = await new RubricEngine(store).evaluate({
+        const done = await new RubricEngine(store).Evaluate({
             version: tree,
             subject: { entityName: 'MJ: Documents', recordId: '1', entityId: 'entity' },
             content: { text: 'Easy to read.' },
@@ -195,7 +195,7 @@ describe('RubricEngine', () => {
                 return JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [] }] });
             },
         });
-        await engine.evaluateRecord({
+        await engine.EvaluateRecord({
             rubricId: 'rubric',
             subjectEntityName: 'MJ: Documents',
             subjectRecordId: 'record-1',
@@ -205,7 +205,7 @@ describe('RubricEngine', () => {
         expect(prompts).toHaveLength(1);
 
         const agentCalls: string[] = [];
-        await engine.evaluateRecord({
+        await engine.EvaluateRecord({
             rubricId: 'rubric',
             subjectEntityName: 'MJ: Documents',
             subjectRecordId: 'record-1',
@@ -234,7 +234,7 @@ describe('RubricEngine', () => {
         });
         const first = new RubricEngine(store('first'));
         const second = new RubricEngine(store('second'));
-        await first.evaluate({
+        await first.Evaluate({
             version: version(),
             subject: { entityName: 'MJ: Documents', recordId: '1', entityId: 'entity' },
             content: { data: { score: 1 } },
@@ -264,7 +264,7 @@ describe('consensus cohort', () => {
             async submit() { throw new Error('no'); },
             async fail() { throw new Error('no'); },
         }, records);
-        await engine.consensusForSubject({
+        await engine.ConsensusForSubject({
             rubricId: 'rubric',
             subjectEntityName: 'MJ: Documents',
             subjectRecordId: 'record-1',
@@ -274,7 +274,7 @@ describe('consensus cohort', () => {
         expect(open).toContain("EvaluatorType<>'Self'");
         expect(open).toContain('ContextEntityID IS NULL');
         expect(open).toContain('ContextRecordID IS NULL');
-        await engine.consensusForSubject({
+        await engine.ConsensusForSubject({
             rubricId: 'rubric',
             subjectEntityName: 'MJ: Documents',
             subjectRecordId: 'record-1',

@@ -51,7 +51,7 @@ function version(nodes: RubricNodeSnapshot[], extra: Partial<RubricVersionSnapsh
 }
 
 function score(nodes: RubricNodeSnapshot[], answers: RubricAnswer[], extra: Partial<RubricScoreInput> = {}) {
-    return RubricScoring.compute({ answers, ...extra, version: extra.version ?? version(nodes) });
+    return RubricScoring.Compute({ answers, ...extra, version: extra.version ?? version(nodes) });
 }
 
 describe('RubricScoring', () => {

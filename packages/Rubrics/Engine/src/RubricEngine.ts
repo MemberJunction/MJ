@@ -153,11 +153,6 @@ export class RubricEngine {
         }
     }
 
-    /** @deprecated Use {@link Evaluate}. */
-    public async evaluate(params: EvaluateParams): Promise<{ evaluation: RubricEvaluationRecord; output?: RubricEvaluatorOutput }> {
-        return this.Evaluate(params);
-    }
-
     /**
      * Creates a Draft and a task for the assignee. Does not score.
      * The human fills the draft in and submits it later.
@@ -172,7 +167,7 @@ export class RubricEngine {
         drafts: EvaluationDraftStore;
         tasks: RubricTaskStore;
     }): Promise<{ evaluationId: string; taskId: string }> {
-        return new HumanRubricEvaluator(input.drafts, input.tasks).start({
+        return new HumanRubricEvaluator(input.drafts, input.tasks).Start({
             versionId: input.versionId,
             rubricId: input.rubricId,
             rubricName: input.rubricName,
@@ -182,31 +177,17 @@ export class RubricEngine {
         });
     }
 
-    /** @deprecated Use {@link StartHumanEvaluation}. */
-    public async startHumanEvaluation(input: {
-        versionId: string;
-        rubricId: string;
-        rubricName: string;
-        subjectEntityId: string;
-        subjectRecordId: string;
-        assigneeId: string;
-        drafts: EvaluationDraftStore;
-        tasks: RubricTaskStore;
-    }): Promise<{ evaluationId: string; taskId: string }> {
-        return this.StartHumanEvaluation(input);
-    }
-
     private async runEvaluator(params: EvaluateParams, content: RubricSubjectContent): Promise<RubricEvaluatorOutput> {
         const subject = { entityName: params.subject.entityName, recordId: params.subject.recordId };
         if (params.evaluator === 'AI') {
             if (!params.agent) throw new Error('An AI evaluation requires an agent.');
-            return new AgentRubricEvaluator(params.agent).evaluateContent(params.version, content, subject);
+            return new AgentRubricEvaluator(params.agent).EvaluateContent(params.version, content, subject);
         }
         if (params.evaluator === 'LLM') {
             if (!params.promptRunner) throw new Error('An LLM evaluation requires a prompt runner.');
-            return new LLMRubricEvaluator(params.promptRunner, params.promptMode ?? 'SinglePass', params.decisionRunner).evaluateContent(params.version, content);
+            return new LLMRubricEvaluator(params.promptRunner, params.promptMode ?? 'SinglePass', params.decisionRunner).EvaluateContent(params.version, content);
         }
-        return new DeterministicRubricEvaluator().evaluateData(params.version, content);
+        return new DeterministicRubricEvaluator().EvaluateData(params.version, content);
     }
 
     private async resolveContent(params: EvaluateParams): Promise<RubricSubjectContent> {
@@ -276,12 +257,7 @@ export class RubricEngine {
         };
     }
 
-    /** @deprecated Use {@link EvaluateRecord}. */
-    public async evaluateRecord(input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
-        return this.EvaluateRecord(input);
-    }
-
-    /**
+        /**
      * The version tree for a name, id, or a specific version. Does not score.
      * A version id returns that version. Otherwise this is the latest Published version.
      */
@@ -294,12 +270,7 @@ export class RubricEngine {
         return this.latestPublished(input);
     }
 
-    /** @deprecated Use {@link GetRubric}. */
-    public async getRubric(input: { rubricId?: string; rubricName?: string; versionId?: string }): Promise<RubricVersionSnapshot | null> {
-        return this.GetRubric(input);
-    }
-
-    /**
+        /**
      * Loads the subject's Submitted scores and returns the consensus.
      * The caller does not pass the scores.
      */
@@ -337,24 +308,7 @@ export class RubricEngine {
         return this.Consensus(values, input.method);
     }
 
-    /** @deprecated Use {@link ConsensusForSubject}. */
-    public async consensusForSubject(input: {
-        rubricId?: string;
-        rubricName?: string;
-        subjectEntityName?: string;
-        subjectEntityId?: string;
-        subjectRecordId: string;
-        contextEntityName?: string;
-        contextEntityId?: string;
-        contextRecordId?: string;
-        /** When omitted, the latest Published major. Scores from other majors are left out. */
-        major?: number;
-        method?: ConsensusResult['Method'];
-    }): Promise<ConsensusResult> {
-        return this.ConsensusForSubject(input);
-    }
-
-    /**
+        /**
      * Stores the payload as a Draft version. Throws when the stored status is
      * anything else. Publishing stays a human action.
      */
@@ -364,42 +318,22 @@ export class RubricEngine {
         return { id: draft.id, status: 'Draft' };
     }
 
-    /** @deprecated Use {@link CreateDraft}. */
-    public async createDraft(input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
-        return this.CreateDraft(input);
-    }
-
     /** Mean, median, or trimmed mean of normalized scores, with spread. */
     public Consensus(scores: number[], method?: ConsensusResult['Method'], trim?: number): ConsensusResult {
         return GetConsensus(scores, method, trim);
     }
 
-    /** @deprecated Use {@link Consensus}. */
-    public consensus(scores: number[], method?: ConsensusResult['Method'], trim?: number): ConsensusResult {
-        return this.Consensus(scores, method, trim);
-    }
-
-    /** Kappa and alpha, withheld below the sample floor. */
+        /** Kappa and alpha, withheld below the sample floor. */
     public Agreement(ratings: number[][], minimumSample?: number): AgreementResult {
         return GetAgreement(ratings, minimumSample);
     }
 
-    /** @deprecated Use {@link Agreement}. */
-    public agreement(ratings: number[][], minimumSample?: number): AgreementResult {
-        return this.Agreement(ratings, minimumSample);
-    }
-
-    /** Item-analysis flags for a published major version's criteria. */
+        /** Item-analysis flags for a published major version's criteria. */
     public Diagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
         return GetDiagnostics(criteria);
     }
 
-    /** @deprecated Use {@link Diagnostics}. */
-    public diagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
-        return this.Diagnostics(criteria);
-    }
-
-    /** The catalog does not pass a runner. This one executes the Rubric Evaluator prompt. */
+        /** The catalog does not pass a runner. This one executes the Rubric Evaluator prompt. */
     private rubricEvaluatorRunner(): RubricPromptRunner {
         const prompts = this.promptRun;
         return {
@@ -480,11 +414,7 @@ export class RubricEngine {
         return ShapeContent(input.subjectEntityName, record);
     }
 
-    /** @deprecated Use {@link SubjectContent}. */
-    public async subjectContent(input: { subjectEntityName: string; subjectRecordId: string }): Promise<RubricSubjectContent> {
-        return this.SubjectContent(input);
     }
-}
 
 function latestPublishedMajor(versions: Record<string, unknown>[]): number | null {
     const majors = versions

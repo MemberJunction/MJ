@@ -77,7 +77,3 @@ export function ProviderProductionCatalog(provider: unknown, user: unknown): Pro
     };
 }
 
-/** @deprecated Use {@link ProviderProductionCatalog}. */
-export function providerProductionCatalog(provider: unknown, user: unknown): ProductionSamplingCatalog {
-    return ProviderProductionCatalog(provider, user);
-}

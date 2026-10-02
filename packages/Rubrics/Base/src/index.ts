@@ -14,11 +14,11 @@ export { RubricScoring, RubricValidationError, SCORING_ENGINE_VERSION } from './
 export { HighestNonDraftVersion, RubricVersionDiff } from './RubricVersionDiff.js';
 export type { VersionNumberRow } from './RubricVersionDiff.js';
 export {
-    DriftDeltas, driftDeltas, DriftSeries, driftSeries, KeepSample, keepSample, PeriodMeans, periodMeans,
-    RubricIdFromVersion, rubricIdFromVersion, SampleBucket, sampleBucket,
+    DriftDeltas, DriftSeries, KeepSample, PeriodMeans,
+    RubricIdFromVersion, SampleBucket,
     type DriftEvaluationRow, type DriftRunRow, type DriftScoreRow,
 } from './sampling.js';
-export { CanonicalJson, canonicalJson, ContentProjection, contentProjection, ScoringProjection, scoringProjection, Sha256Hex, sha256Hex } from './canonical.js';
+export { CanonicalJson, ContentProjection, ScoringProjection, Sha256Hex } from './canonical.js';
 export { NodeSnapshotFromRecord, SnapshotFromRows, type SnapshotRows } from './snapshot.js';
 export type {
     NotApplicablePolicy,

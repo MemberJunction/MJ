@@ -9,16 +9,16 @@ class SuiteProbe extends AgentEvalDriver {
     public readonly reads: { entity: string; filter: string }[] = [];
 
     public async resolve(config: AgentEvalConfig, context: DriverExecutionContext) {
-        return this.withResolvedRubric(config, context);
+        return this.WithResolvedRubric(config, context);
     }
 
-    protected override async readOne(_context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
+    protected override async ReadOne(_context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
         this.reads.push({ entity: entityName, filter });
         if (entityName === 'MJ: Test Suite Runs') return { ID: 'suite-run', SuiteID: 'child' };
         return undefined;
     }
 
-    protected override async readMany(_context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown>[]> {
+    protected override async ReadMany(_context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown>[]> {
         this.reads.push({ entity: entityName, filter });
         if (entityName === 'MJ: Test Suites') {
             return [
@@ -29,11 +29,11 @@ class SuiteProbe extends AgentEvalDriver {
         return [];
     }
 
-    protected override async loadAgentEvaluationRubric(): Promise<string | undefined> {
+    protected override async LoadAgentEvaluationRubric(): Promise<string | undefined> {
         return undefined;
     }
 
-    protected override async lookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
+    protected override async LookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
         return { id: 'version-4', label: '1.2.0' };
     }
 }
@@ -68,22 +68,22 @@ describe('agent eval rubric driver', () => {
         const latest: { id: string; label: string } = { id: 'version-9', label: '9.0.0' };
         class ExplicitProbe extends AgentEvalDriver {
             public async resolve(config: AgentEvalConfig, context: DriverExecutionContext) {
-                return this.withResolvedRubric(config, context);
+                return this.WithResolvedRubric(config, context);
             }
 
-            protected override async loadSuites(): Promise<{ suiteId?: string; suites: [] }> {
+            protected override async LoadSuites(): Promise<{ suiteId?: string; suites: [] }> {
                 return { suites: [] };
             }
 
-            protected override async loadAgentEvaluationRubric(): Promise<string | undefined> {
+            protected override async LoadAgentEvaluationRubric(): Promise<string | undefined> {
                 return undefined;
             }
 
-            protected override async lookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
+            protected override async LookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
                 return latest;
             }
 
-            protected override async lookupVersionLabel(): Promise<string | undefined> {
+            protected override async LookupVersionLabel(): Promise<string | undefined> {
                 return '1.2.0';
             }
         }
@@ -103,7 +103,7 @@ describe('agent eval rubric driver', () => {
 
     it('keeps the inline judge when the resolved rubric has no published version', async () => {
         class DraftProbe extends SuiteProbe {
-            protected override async lookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
+            protected override async LookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
                 return undefined;
             }
         }

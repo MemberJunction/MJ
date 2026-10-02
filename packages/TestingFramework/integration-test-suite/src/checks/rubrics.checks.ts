@@ -763,7 +763,7 @@ export const RubricsChecks: NamedCheck[] = [
                 await saveRow(score);
                 evaluation.Status = 'Submitted';
                 await saveRow(evaluation);
-                const expected = RubricScoring.compute({
+                const expected = RubricScoring.Compute({
                     version: scoringVersion({
                         versionId: version.ID,
                         rubricId: rubric.ID,

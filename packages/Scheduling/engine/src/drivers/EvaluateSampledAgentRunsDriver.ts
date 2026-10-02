@@ -6,12 +6,12 @@
 import { RegisterClass } from '@memberjunction/global';
 import { DatabaseProviderBase, Metadata, ValidationResult } from '@memberjunction/core';
 import { MJScheduledJobEntity } from '@memberjunction/core-entities';
-import { providerProductionCatalog, providerRubricEngine, productionSamplingJob } from '@memberjunction/rubrics';
+import { ProviderProductionCatalog, ProviderRubricEngine, ProductionSamplingJob } from '@memberjunction/rubrics';
 import { ScheduledJobResult, NotificationContent } from '@memberjunction/scheduling-base-types';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
 
 /**
- * Runs {@link productionSamplingJob} off the agent response path.
+ * Runs {@link ProductionSamplingJob} off the agent response path.
  * Configuration is unused. The catalog keeps Active ProductionSampling links only.
  */
 @RegisterClass(BaseScheduledJob, 'EvaluateSampledAgentRunsDriver')
@@ -22,8 +22,8 @@ export class EvaluateSampledAgentRunsDriver extends BaseScheduledJob {
             return { Success: false, ErrorMessage: 'Evaluate Sampled Agent Runs: no database provider available' };
         }
         void context.heartbeat?.();
-        const engine = providerRubricEngine(provider, context.ContextUser);
-        const chosen = await productionSamplingJob(providerProductionCatalog(provider, context.ContextUser), {
+        const engine = ProviderRubricEngine(provider, context.ContextUser);
+        const chosen = await ProductionSamplingJob(ProviderProductionCatalog(provider, context.ContextUser), {
             EvaluateRecord: async (input) => {
                 void context.heartbeat?.();
                 await engine.EvaluateRecord(input);

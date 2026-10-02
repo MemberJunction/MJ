@@ -32,11 +32,11 @@ function version(): RubricVersionSnapshot {
 describe('RubricEvaluator', () => {
     it('returns the RubricScoring score, the rationale, and the evidence refs', () => {
         const tree = version();
-        const output = new RubricEvaluator().evaluate(tree, [
+        const output = new RubricEvaluator().Evaluate(tree, [
             { criterionId: 'a', scaleLevelId: 'high', rationale: 'Clear.', evidence: [{ ref: 'doc:1' }] },
             { criterionId: 'b', scaleLevelId: 'low', rationale: 'Thin.', evidence: [{ ref: 'doc:2' }] },
         ]);
-        const direct = RubricScoring.compute({
+        const direct = RubricScoring.Compute({
             version: tree,
             answers: [
                 { criterionId: 'a', scaleLevelId: 'high' },
@@ -70,11 +70,11 @@ describe('AIRubricEvaluator', () => {
                 };
             },
         };
-        const output = await new AIRubricEvaluator(agent).evaluateVersion(
+        const output = await new AIRubricEvaluator(agent).EvaluateVersion(
             { version: version(), subject: { entityName: 'MJ: Documents', recordId: '1' }, content: { text: 'The text.' } },
         );
         expect(calls).toEqual(['clarity', 'accuracy']);
-        const direct = RubricScoring.compute({
+        const direct = RubricScoring.Compute({
             version: version(),
             answers: [
                 { criterionId: 'a', scaleLevelId: 'high' },
@@ -92,7 +92,7 @@ describe('AIRubricEvaluator', () => {
                 return { level: 'Outstanding', rationale: 'No such level.', evidence: [{ ref: 'ev:1', quote: 'text' }] };
             },
         };
-        await expect(new AIRubricEvaluator(agent).evaluateVersion({
+        await expect(new AIRubricEvaluator(agent).EvaluateVersion({
             version: version(),
             subject: { entityName: 'MJ: Documents', recordId: '1' },
             content: { text: 'The text.' },
@@ -110,7 +110,7 @@ describe('AIRubricEvaluator', () => {
                 return { level: 'High', rationale: 'Clear.', evidence: [{ ref: 'ev:1' }] };
             },
         };
-        await expect(new AIRubricEvaluator(agent).evaluateVersion({
+        await expect(new AIRubricEvaluator(agent).EvaluateVersion({
             version: tree,
             subject: { entityName: 'MJ: Documents', recordId: '1' },
             content: { text: 'The text.' },
@@ -128,7 +128,7 @@ describe('HumanRubricEvaluator', () => {
             { async createDraft(input) { drafts.push(input); return { id: 'eval-1' }; } },
             { async create(input) { tasks.push(input); return { id: 'task-1' }; } },
         );
-        const started = await human.start({
+        const started = await human.Start({
             versionId: 'version',
             rubricId: 'rubric',
             rubricName: 'Writing',

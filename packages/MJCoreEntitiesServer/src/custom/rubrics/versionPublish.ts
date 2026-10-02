@@ -1,5 +1,5 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { HighestNonDraftVersion, RubricVersionDiff, SnapshotFromRows, sha256Hex, type RubricNodeSnapshot, type RubricVersionSnapshot, type VersionBump } from '@memberjunction/rubrics-base';
+import { HighestNonDraftVersion, RubricVersionDiff, SnapshotFromRows, Sha256Hex, type RubricNodeSnapshot, type RubricVersionSnapshot, type VersionBump } from '@memberjunction/rubrics-base';
 
 export class RubricPublishError extends Error {
     public readonly details: string[];
@@ -130,7 +130,7 @@ export async function PublishRubricVersion(
 ): Promise<PublishResult> {
     const validation = ValidateRubricTree(draft);
     if (validation.errors.length > 0) throw new RubricPublishError(validation.errors);
-    const diff = RubricVersionDiff.diff(base, draft, requestedBump);
+    const diff = RubricVersionDiff.Diff(base, draft, requestedBump);
     if (!diff.appliedBump || !diff.nextVersion) {
         throw new RubricPublishError(['This draft is identical to its base and cannot be published.']);
     }
@@ -150,8 +150,8 @@ export async function PublishRubricVersion(
                 Bump: change.bump,
             })),
         },
-        contentHash: await sha256Hex(RubricVersionDiff.contentCanonical(draft)),
-        scoringHash: await sha256Hex(RubricVersionDiff.scoringCanonical(draft)),
+        contentHash: await Sha256Hex(RubricVersionDiff.contentCanonical(draft)),
+        scoringHash: await Sha256Hex(RubricVersionDiff.ScoringCanonical(draft)),
         warnings: validation.warnings,
         publishedAt: new Date(),
     };

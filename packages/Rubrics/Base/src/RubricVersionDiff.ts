@@ -82,36 +82,17 @@ export class RubricVersionDiff {
         };
     }
 
-    /** @deprecated Use {@link Diff}. */
-    public static diff(
-        base: RubricVersionSnapshot | null,
-        draft: RubricVersionSnapshot,
-        requestedBump?: 'Major' | 'Minor' | 'Patch' | null,
-    ): VersionDiffResult {
-        return this.Diff(base, draft, requestedBump);
-    }
-
-    /** Canonical major-row projection. Hash this for ScoringHash. */
+        /** Canonical major-row projection. Hash this for ScoringHash. */
     public static ScoringCanonical(version: RubricVersionSnapshot): string {
         return CanonicalJson(ScoringProjection(version));
     }
 
-    /** @deprecated Use {@link ScoringCanonical}. */
-    public static scoringCanonical(version: RubricVersionSnapshot): string {
-        return this.ScoringCanonical(version);
-    }
-
-    /** Canonical full projection. Hash this for ContentHash. */
+        /** Canonical full projection. Hash this for ContentHash. */
     public static ContentCanonical(version: RubricVersionSnapshot): string {
         return CanonicalJson(ContentProjection(version));
     }
 
-    /** @deprecated Use {@link ContentCanonical}. */
-    public static contentCanonical(version: RubricVersionSnapshot): string {
-        return this.ContentCanonical(version);
-    }
-
-    private static collect(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): VersionChange[] {
+        private static collect(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): VersionChange[] {
         const changes: VersionChange[] = [];
         if (base.notApplicablePolicy !== draft.notApplicablePolicy) {
             changes.push({ bump: 'Major', subject: 'version', property: 'NotApplicablePolicy', from: base.notApplicablePolicy, to: draft.notApplicablePolicy });

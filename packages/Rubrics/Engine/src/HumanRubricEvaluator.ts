@@ -52,8 +52,4 @@ export class HumanRubricEvaluator extends BaseRubricEvaluator {
         return { evaluationId: draft.id, taskId: task.id };
     }
 
-    /** @deprecated Use {@link Start}. */
-    public async start(input: DraftEvaluationInput & { rubricName: string }): Promise<{ evaluationId: string; taskId: string }> {
-        return this.Start(input);
-    }
 }

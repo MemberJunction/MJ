@@ -25,11 +25,6 @@ export function CanonicalNumber(value: number): string {
     return value.toFixed(6);
 }
 
-/** @deprecated Use {@link CanonicalNumber}. */
-export function canonicalNumber(value: number): string {
-    return CanonicalNumber(value);
-}
-
 function parentKey(version: RubricVersionSnapshot, node: RubricNodeSnapshot): string | null {
     if (!node.parentId) return null;
     return version.nodes.find(item => item.id === node.parentId)?.key ?? null;
@@ -79,11 +74,6 @@ export function ScoringProjection(version: RubricVersionSnapshot): unknown {
         nodes,
         notApplicablePolicy: version.notApplicablePolicy,
     };
-}
-
-/** @deprecated Use {@link ScoringProjection}. */
-export function scoringProjection(version: RubricVersionSnapshot): unknown {
-    return ScoringProjection(version);
 }
 
 /** Everything, including wording. Nodes sorted by key, properties sorted by the JSON serializer below. */
@@ -142,19 +132,9 @@ export function ContentProjection(version: RubricVersionSnapshot): unknown {
     };
 }
 
-/** @deprecated Use {@link ContentProjection}. */
-export function contentProjection(version: RubricVersionSnapshot): unknown {
-    return ContentProjection(version);
-}
-
 /** Stable JSON: object keys sorted, no undefined. */
 export function CanonicalJson(value: unknown): string {
     return JSON.stringify(sortValue(value));
-}
-
-/** @deprecated Use {@link CanonicalJson}. */
-export function canonicalJson(value: unknown): string {
-    return CanonicalJson(value);
 }
 
 function sortValue(value: unknown): unknown {
@@ -174,7 +154,3 @@ export async function Sha256Hex(text: string): Promise<string> {
     return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-/** @deprecated Use {@link Sha256Hex}. */
-export async function sha256Hex(text: string): Promise<string> {
-    return Sha256Hex(text);
-}

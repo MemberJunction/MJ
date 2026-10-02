@@ -30,7 +30,7 @@ describe('LoadDraftForPublish', () => {
         expect(group?.description).toBe('The weaker child decides.');
         expect(group?.guidance).toBe('Do not average.');
         expect(loaded.draft.nodes.find(node => node.id === 'a')?.evaluatorConfig).toEqual({ Deterministic: { path: 'a' } });
-        const score = RubricScoring.compute({
+        const score = RubricScoring.Compute({
             version: loaded.draft,
             answers: [
                 { criterionId: 'a', scaleLevelId: 'high' },

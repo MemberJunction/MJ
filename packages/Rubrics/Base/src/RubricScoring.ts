@@ -115,12 +115,7 @@ export class RubricScoring {
         };
     }
 
-    /** @deprecated Use {@link Compute}. */
-    public static compute(input: RubricScoreInput): RubricScoreResult {
-        return this.Compute(input);
-    }
-
-    private static scoreNode(
+        private static scoreNode(
         node: RubricNodeSnapshot,
         byParent: Map<string | null, RubricNodeSnapshot[]>,
         answers: Map<string, RubricAnswer>,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CohortDisagreement, CriterionFailureRates, CriterionIdentity, DisagreementFromScores, RubricPickerOptions, RubricScoreTrend, rubricRunView, ScoreTrend } from '../lib/models/testing-rubrics';
+import { CohortDisagreement, CriterionFailureRates, CriterionIdentity, DisagreementFromScores, RubricPickerOptions, RubricScoreTrend, RubricRunView, ScoreTrend } from '../lib/models/testing-rubrics';
 
 describe('testing rubric UI', () => {
     it('orders the review queue by the largest human–AI gap', () => {
@@ -91,7 +91,7 @@ describe('testing rubric UI', () => {
             { ID: 'a', Name: 'Alpha', Status: 'Disabled' },
             { ID: 'c', Name: 'Caret', Status: 'Active' },
         ]).map(row => row.name)).toEqual(['Beta', 'Caret']);
-        const view = rubricRunView([{
+        const view = RubricRunView([{
             oracleType: 'rubric',
             details: { Outcome: 'Passed', Criteria: [{ Key: 'facts', Name: 'Facts', NormalizedScore: 1, Rationale: 'Cited.', Evidence: 'Page 2.' }] },
         }]);
@@ -101,7 +101,7 @@ describe('testing rubric UI', () => {
             { Key: 'heavy', Name: 'Heavy', NormalizedScore: 1, Weight: 2, Rationale: 'Yes.' },
             { Key: 'light', Name: 'Light', NormalizedScore: 0, Weight: 1, Evidence: 'No.' },
         ];
-        expect(rubricRunView([{ oracleType: 'rubric', details: { Criteria: weighted } }])?.result.normalizedScore).toBeNull();
-        expect(rubricRunView([{ oracleType: 'rubric', details: { NormalizedScore: 2 / 3, Criteria: weighted } }])?.result.normalizedScore).toBeCloseTo(2 / 3);
+        expect(RubricRunView([{ oracleType: 'rubric', details: { Criteria: weighted } }])?.result.normalizedScore).toBeNull();
+        expect(RubricRunView([{ oracleType: 'rubric', details: { NormalizedScore: 2 / 3, Criteria: weighted } }])?.result.normalizedScore).toBeCloseTo(2 / 3);
     });
 });

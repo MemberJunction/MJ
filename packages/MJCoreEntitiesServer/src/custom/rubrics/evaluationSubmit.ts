@@ -168,7 +168,7 @@ export function SubmitEvaluation(input: SubmitEvaluationInput): { evaluation: Pe
         isNotApplicable: score.isNotApplicable,
         confidence: score.confidence,
     }));
-    const result = RubricScoring.compute({
+    const result = RubricScoring.Compute({
         version: input.version,
         answers,
         passThresholdOverride: input.passThresholdOverride,

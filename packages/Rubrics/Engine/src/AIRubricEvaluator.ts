@@ -92,14 +92,10 @@ export class AIRubricEvaluator extends RubricEvaluator {
                 confidence: raw.confidence ?? null,
             });
         }
-        return this.evaluate(request.version, candidates);
+        return this.Evaluate(request.version, candidates);
     }
 
-    /** @deprecated Use {@link EvaluateVersion}. */
-    public async evaluateVersion(request: RubricEvaluatorRequest, configs: Map<string, RubricEvaluatorConfig> = new Map()): Promise<RubricEvaluatorOutput> {
-        return this.EvaluateVersion(request, configs);
     }
-}
 
 function asConfig(value: unknown): RubricEvaluatorConfig | undefined {
     if (!value || typeof value !== 'object') return undefined;

@@ -7,21 +7,11 @@ export function SampleBucket(runId: string): number {
     return (hash >>> 0) % 10000;
 }
 
-/** @deprecated Use {@link SampleBucket}. */
-export function sampleBucket(runId: string): number {
-    return SampleBucket(runId);
-}
-
 /** True when the run falls inside the link's sample rate. Rate is 0..1. */
 export function KeepSample(runId: string, sampleRate: number): boolean {
     if (sampleRate <= 0) return false;
     if (sampleRate >= 1) return true;
     return SampleBucket(runId) < sampleRate * 10000;
-}
-
-/** @deprecated Use {@link KeepSample}. */
-export function keepSample(runId: string, sampleRate: number): boolean {
-    return KeepSample(runId, sampleRate);
 }
 
 export interface DriftScoreRow {
@@ -48,11 +38,6 @@ export interface DriftRunRow {
 /** Rubric id stored on the version. An unknown version resolves to an empty string. */
 export function RubricIdFromVersion(versionId: string, versions: { id: string; rubricId: string }[]): string {
     return versions.find(row => UUIDsEqual(row.id, versionId))?.rubricId ?? '';
-}
-
-/** @deprecated Use {@link RubricIdFromVersion}. */
-export function rubricIdFromVersion(versionId: string, versions: { id: string; rubricId: string }[]): string {
-    return RubricIdFromVersion(versionId, versions);
 }
 
 /**
@@ -83,16 +68,6 @@ export function DriftSeries(input: {
     return rows;
 }
 
-/** @deprecated Use {@link DriftSeries}. */
-export function driftSeries(input: {
-    scores: DriftScoreRow[];
-    evaluations: DriftEvaluationRow[];
-    runs: DriftRunRow[];
-    versions: { id: string; rubricId: string }[];
-}): { key: string; score: number; at: string }[] {
-    return DriftSeries(input);
-}
-
 /** Mean score of each key whose timestamp falls in [start, end). */
 export function PeriodMeans(rows: { key: string; score: number; at: string }[], start: string, end: string): { key: string; mean: number }[] {
     const buckets = new Map<string, number[]>();
@@ -105,11 +80,6 @@ export function PeriodMeans(rows: { key: string; score: number; at: string }[], 
     return [...buckets.entries()].map(([key, scores]) => ({ key, mean: scores.reduce((sum, score) => sum + score, 0) / scores.length }));
 }
 
-/** @deprecated Use {@link PeriodMeans}. */
-export function periodMeans(rows: { key: string; score: number; at: string }[], start: string, end: string): { key: string; mean: number }[] {
-    return PeriodMeans(rows, start, end);
-}
-
 /** Drop of the current period's mean below the previous period. A drop past the threshold alerts. */
 export function DriftDeltas(current: { key: string; mean: number }[], previous: { key: string; mean: number }[], threshold: number): { key: string; drop: number; alert: boolean }[] {
     return current.map(row => {
@@ -119,7 +89,4 @@ export function DriftDeltas(current: { key: string; mean: number }[], previous: 
     });
 }
 
-/** @deprecated Use {@link DriftDeltas}. */
-export function driftDeltas(current: { key: string; mean: number }[], previous: { key: string; mean: number }[], threshold: number): { key: string; drop: number; alert: boolean }[] {
-    return DriftDeltas(current, previous, threshold);
-}
+

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { driftDeltas } from '@memberjunction/rubrics-base';
+import { DriftDeltas } from '@memberjunction/rubrics-base';
 import { DriftPeriodRows } from './rubric-drift-series';
 
 describe('drift period means', () => {
@@ -22,7 +22,7 @@ describe('drift period means', () => {
             'Researcher · Answer quality · complete',
         ]);
         expect(periods.current[0].key).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/i);
-        const alerts = driftDeltas(periods.current, periods.previous, 0.2).filter(row => row.alert);
+        const alerts = DriftDeltas(periods.current, periods.previous, 0.2).filter(row => row.alert);
         expect(alerts.map(row => row.key)).toEqual(['Researcher · Answer quality · cites-sources']);
         const screen = readFileSync(join(directory, 'rubric-drift.component.ts'), 'utf8');
         expect(screen).toContain('role="alert"');

@@ -19,11 +19,6 @@ export function EngineForAction(params: RunActionParams): RubricEngine {
     return ProviderRubricEngine(params.Provider, params.ContextUser);
 }
 
-/** @deprecated Use {@link EngineForAction}. */
-export function engineForAction(params: RunActionParams): RubricEngine {
-    return EngineForAction(params);
-}
-
 function inputValue(params: RunActionParams, name: string): unknown {
     return params.Params?.find(item => item.Name.trim().toLowerCase() === name.toLowerCase())?.Value;
 }
@@ -69,7 +64,7 @@ function failed(error: unknown): ActionResultSimple {
 @RegisterClass(BaseAction, 'Evaluate Record Against Rubric')
 export class EvaluateRecordAgainstRubricAction extends BaseAction {
     public async Invoke(engine: RubricEngine, input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
-        return engine.evaluateRecord(input);
+        return engine.EvaluateRecord(input);
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
@@ -116,7 +111,7 @@ export class GetRubricConsensusAction extends BaseAction {
         major?: number;
         method?: ConsensusResult['Method'];
     }): Promise<ConsensusResult> {
-        return engine.consensusForSubject(input);
+        return engine.ConsensusForSubject(input);
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
@@ -147,7 +142,7 @@ export class GetRubricConsensusAction extends BaseAction {
 @RegisterClass(BaseAction, 'Get Rubric Subject')
 export class GetRubricSubjectAction extends BaseAction {
     public async Invoke(engine: RubricEngine, input: { subjectEntityName: string; subjectRecordId: string }): Promise<RubricSubjectContent> {
-        return engine.subjectContent(input);
+        return engine.SubjectContent(input);
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
@@ -168,7 +163,7 @@ export class GetRubricSubjectAction extends BaseAction {
 @RegisterClass(BaseAction, 'Get Rubric')
 export class GetRubricAction extends BaseAction {
     public async Invoke(engine: RubricEngine, input: { rubricId?: string; rubricName?: string; versionId?: string }): Promise<RubricVersionSnapshot | null> {
-        return engine.getRubric(input);
+        return engine.GetRubric(input);
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
@@ -202,7 +197,7 @@ export class CreateRubricDraftAction extends BaseAction {
         const rubricId = input.rubricId?.trim() || undefined;
         const rubricName = input.rubricName?.trim() || (!rubricId && input.description ? DraftTitle(input.description) : undefined);
         if (!rubricId && !rubricName) throw new Error('A rubric id or name is required.');
-        return engine.createDraft({ rubricId, rubricName, nodes });
+        return engine.CreateDraft({ rubricId, rubricName, nodes });
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

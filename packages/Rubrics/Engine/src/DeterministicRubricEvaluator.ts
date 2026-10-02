@@ -74,14 +74,10 @@ export class DeterministicRubricEvaluator extends BaseRubricEvaluator {
                 evidence: [],
             });
         }
-        return this.evaluate(version, candidates);
+        return this.Evaluate(version, candidates);
     }
 
-    /** @deprecated Use {@link EvaluateData}. */
-    public evaluateData(version: RubricVersionSnapshot, content: RubricSubjectContent): RubricEvaluatorOutput {
-        return this.EvaluateData(version, content);
     }
-}
 
 interface NormalizedRule {
     path: string;

@@ -57,17 +57,6 @@ export function HostSnapshot(
     };
 }
 
-/** @deprecated Use {@link HostSnapshot}. */
-export function hostSnapshot(
-    version: Record<string, unknown>,
-    criteria: Record<string, unknown>[],
-    scales: Record<string, unknown>[],
-    levels: Record<string, unknown>[],
-    bands: Record<string, unknown>[],
-): RubricVersionSnapshot {
-    return HostSnapshot(version, criteria, scales, levels, bands);
-}
-
 export interface VersionRow {
     Id: string;
     Status: string;
@@ -85,11 +74,6 @@ export function PriorPublishedVersion(versions: VersionRow[], currentId: string)
         .filter(version => version.Id !== currentId && version.Status === 'Published')
         .sort((left, right) => right.Major - left.Major || right.Minor - left.Minor || right.Patch - left.Patch);
     return published[0]?.Id ?? null;
-}
-
-/** @deprecated Use {@link PriorPublishedVersion}. */
-export function priorPublishedVersion(versions: VersionRow[], currentId: string): string | null {
-    return PriorPublishedVersion(versions, currentId);
 }
 
 export interface CategoryRow {
@@ -134,7 +118,3 @@ export function ScaleIsFrozen(publishedScaleIds: Iterable<string>, scaleId: stri
     return false;
 }
 
-/** @deprecated Use {@link ScaleIsFrozen}. */
-export function scaleIsFrozen(publishedScaleIds: Iterable<string>, scaleId: string | null): boolean {
-    return ScaleIsFrozen(publishedScaleIds, scaleId);
-}

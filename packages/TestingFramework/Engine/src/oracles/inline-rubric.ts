@@ -46,14 +46,9 @@ export function InlineVersion(criteria: Array<string | InlineCriterion>, strict:
     };
 }
 
-/** @deprecated Use {@link InlineVersion}. */
-export function inlineVersion(criteria: Array<string | InlineCriterion>, strict: boolean, passThreshold: number): RubricVersionSnapshot {
-    return InlineVersion(criteria, strict, passThreshold);
-}
-
 export function ScoreInline(criteria: Array<string | InlineCriterion>, answers: { index: number; met: boolean; rationale?: string }[], options: { strict?: boolean; passThreshold?: number }): RubricScoreResult {
     const version = InlineVersion(criteria, options.strict === true, options.passThreshold ?? 0.7);
-    return RubricScoring.compute({
+    return RubricScoring.Compute({
         version,
         answers: answers.map(answer => ({
             criterionId: `c${answer.index}`,
@@ -61,11 +56,6 @@ export function ScoreInline(criteria: Array<string | InlineCriterion>, answers: 
             rationale: answer.rationale,
         })),
     });
-}
-
-/** @deprecated Use {@link ScoreInline}. */
-export function scoreInline(criteria: Array<string | InlineCriterion>, answers: { index: number; met: boolean; rationale?: string }[], options: { strict?: boolean; passThreshold?: number }): RubricScoreResult {
-    return ScoreInline(criteria, answers, options);
 }
 
 /** Computer Use verdicts, reported in the same inline details shape. Not stored as a RubricEvaluation. */
@@ -76,11 +66,6 @@ export function InlineOracleFromVerdicts(verdicts: { criterion: string; met: boo
         rationale: verdict.evidence,
     })), { passThreshold });
     return InlineOracleResult(verdicts.map(verdict => verdict.criterion), scored, verdicts.map(verdict => verdict.evidence));
-}
-
-/** @deprecated Use {@link InlineOracleFromVerdicts}. */
-export function inlineOracleFromVerdicts(verdicts: { criterion: string; met: boolean; evidence?: string }[], passThreshold = 0.7): OracleResult {
-    return InlineOracleFromVerdicts(verdicts, passThreshold);
 }
 
 export function InlineOracleResult(criteria: string[], scored: RubricScoreResult, evidence: (string | undefined)[] = []): OracleResult {
@@ -104,7 +89,3 @@ export function InlineOracleResult(criteria: string[], scored: RubricScoreResult
     };
 }
 
-/** @deprecated Use {@link InlineOracleResult}. */
-export function inlineOracleResult(criteria: string[], scored: RubricScoreResult, evidence: (string | undefined)[] = []): OracleResult {
-    return InlineOracleResult(criteria, scored, evidence);
-}

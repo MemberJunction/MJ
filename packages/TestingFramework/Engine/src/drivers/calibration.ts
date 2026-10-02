@@ -71,17 +71,6 @@ export function CalibrationPairs(input: {
     return pairs;
 }
 
-/** @deprecated Use {@link CalibrationPairs}. */
-export function calibrationPairs(input: {
-    evaluations: { id: string; subjectId: string; versionId: string; evaluatorType: string; status: string }[];
-    versions: { id: string; major: number }[];
-    scores: { evaluationId: string; criterionId: string; normalizedScore: number | null; scaleLevelId: string | null }[];
-    levels: { id: string; scaleId: string; sequence: number }[];
-    criteria: { id: string; key: string }[];
-}): CalibrationPair[] {
-    return CalibrationPairs(input);
-}
-
 export interface CalibrationPair {
     subjectId: string;
     criterionId: string;
@@ -147,11 +136,6 @@ export function QuadraticWeightedKappa(humanLevels: number[], aiLevels: number[]
     return 1 - weightedObserved / weightedExpected;
 }
 
-/** @deprecated Use {@link QuadraticWeightedKappa}. */
-export function quadraticWeightedKappa(humanLevels: number[], aiLevels: number[], categoryCount: number): number | null {
-    return QuadraticWeightedKappa(humanLevels, aiLevels, categoryCount);
-}
-
 /** One agreement record per criterion. Subjects that do not have both a human and an AI score are left out. */
 export function AgreementByCriterion(pairs: CalibrationPair[]): CriterionAgreement[] {
     const groups = new Map<string, CalibrationPair[]>();
@@ -170,19 +154,9 @@ export function AgreementByCriterion(pairs: CalibrationPair[]): CriterionAgreeme
     }).sort((left, right) => left.criterionId.localeCompare(right.criterionId));
 }
 
-/** @deprecated Use {@link AgreementByCriterion}. */
-export function agreementByCriterion(pairs: CalibrationPair[]): CriterionAgreement[] {
-    return AgreementByCriterion(pairs);
-}
-
 export function ClampScore(kappa: number): number {
     if (!Number.isFinite(kappa)) return 0;
     return Math.min(1, Math.max(0, kappa));
-}
-
-/** @deprecated Use {@link ClampScore}. */
-export function clampScore(kappa: number): number {
-    return ClampScore(kappa);
 }
 
 /**

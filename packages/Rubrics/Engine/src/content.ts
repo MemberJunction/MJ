@@ -22,17 +22,6 @@ export function TestRunContent(record: {
     };
 }
 
-/** @deprecated Use {@link TestRunContent}. */
-export function testRunContent(record: {
-    input?: unknown;
-    expectedOutcomes?: unknown;
-    actualOutput?: unknown;
-    trace?: string;
-    files?: { fileId: string; name: string }[];
-}): RubricSubjectContent {
-    return TestRunContent(record);
-}
-
 /** MJ: AI Agent Runs. The final payload, and the in-memory message when the run has not stored it yet. There is no Turns column. */
 export function AgentRunContent(record: { finalPayload?: unknown; message?: unknown; steps?: unknown }): RubricSubjectContent {
     const data: Record<string, unknown> = { finalPayload: record.finalPayload };
@@ -41,19 +30,9 @@ export function AgentRunContent(record: { finalPayload?: unknown; message?: unkn
     return { text: typeof record.message === 'string' ? record.message : undefined, data };
 }
 
-/** @deprecated Use {@link AgentRunContent}. */
-export function agentRunContent(record: { turns?: unknown; finalPayload?: unknown }): RubricSubjectContent {
-    return AgentRunContent(record);
-}
-
 /** MJ: AI Prompt Runs. Rendered messages and the result. */
 export function PromptRunContent(record: { messages?: unknown; result?: unknown }): RubricSubjectContent {
     return { data: { messages: record.messages, result: record.result } };
-}
-
-/** @deprecated Use {@link PromptRunContent}. */
-export function promptRunContent(record: { messages?: unknown; result?: unknown }): RubricSubjectContent {
-    return PromptRunContent(record);
 }
 
 /** MJ: Conversations. Name and Description. There is no Transcript column. */
@@ -66,11 +45,6 @@ export function ConversationContent(record: { name?: unknown; description?: unkn
         text: [name, description].filter(part => part.length > 0).join('\n'),
         data,
     };
-}
-
-/** @deprecated Use {@link ConversationContent}. There is no transcript column. */
-export function conversationContent(record: { name?: unknown; description?: unknown }): RubricSubjectContent {
-    return ConversationContent(record);
 }
 
 /**
@@ -132,11 +106,6 @@ export function ShapeContent(entityName: string, record: Record<string, unknown>
     return RubricContentRegistry.Instance.Shape(entityName, record, canRead);
 }
 
-/** @deprecated Use {@link ShapeContent}. */
-export function shapeContent(entityName: string, record: Record<string, unknown>, canRead?: (fieldName: string) => boolean): RubricSubjectContent {
-    return ShapeContent(entityName, record, canRead);
-}
-
 export function FallbackContent(fields: Record<string, unknown>, canRead: (fieldName: string) => boolean): RubricSubjectContent {
     const data: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(fields)) {
@@ -145,7 +114,3 @@ export function FallbackContent(fields: Record<string, unknown>, canRead: (field
     return { data };
 }
 
-/** @deprecated Use {@link FallbackContent}. */
-export function fallbackContent(fields: Record<string, unknown>, canRead: (fieldName: string) => boolean): RubricSubjectContent {
-    return FallbackContent(fields, canRead);
-}

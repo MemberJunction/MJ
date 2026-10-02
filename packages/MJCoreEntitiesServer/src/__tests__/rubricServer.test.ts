@@ -179,7 +179,7 @@ describe('rubric evaluation submit', () => {
             versionStatus: 'Published',
             scores: [{ criterionId: 'a', scaleLevelId: 'high' }],
         });
-        const direct = RubricScoring.compute({
+        const direct = RubricScoring.Compute({
             version: draft,
             answers: [{ criterionId: 'a', scaleLevelId: 'high' }],
         });

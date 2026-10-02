@@ -1,6 +1,6 @@
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
-import { providerRubricEngine } from '@memberjunction/rubrics';
+import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { BaseTestDriver } from './BaseTestDriver';
 import { CalibrationOracles, CalibrationPairs, type CalibrationExpectation, type CalibrationPair } from './calibration';
 import type { DriverExecutionContext, DriverExecutionResult } from '../types';
@@ -37,7 +37,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
     public async Execute(context: DriverExecutionContext): Promise<DriverExecutionResult> {
         const input = this.parseInputDefinition<CalibrationInput>(context.test);
         const expected = this.parseExpectedOutcomes<CalibrationExpectation>(context.test) ?? {};
-        const pairs = await this.loadPairs(input, context);
+        const pairs = await this.LoadPairs(input, context);
         const judged = CalibrationOracles(pairs, expected);
         const passedChecks = judged.oracles.filter(oracle => oracle.passed).length;
         return {
@@ -58,7 +58,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
     }
 
     /** Human and AI scores for the gold subjects, paired on the same major and criterion. */
-    protected async loadPairs(input: CalibrationInput, context: DriverExecutionContext): Promise<CalibrationPair[]> {
+    protected async LoadPairs(input: CalibrationInput, context: DriverExecutionContext): Promise<CalibrationPair[]> {
         const subjects = await this.goldSubjects(input, context);
         if (subjects.length === 0 || !input.rubricId) return [];
         const provider = this.Provider;
@@ -89,7 +89,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
         }
         const freshIds = new Set<string>();
         for (const [subjectId, major] of needed) {
-            const created = await this.scoreSubject(input, subjectId, subjects.find(subject => UUIDsEqual(subject.recordID, subjectId))?.entity ?? '', versionRows, major, context);
+            const created = await this.ScoreSubject(input, subjectId, subjects.find(subject => UUIDsEqual(subject.recordID, subjectId))?.entity ?? '', versionRows, major, context);
             if (created) freshIds.add(created);
         }
         const refreshed = await ReadRows(view, {
@@ -120,7 +120,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
     }
 
     /** Runs the named evaluator for one gold subject, in this test's context. A subclass can replace this in a test. */
-    protected async scoreSubject(
+    protected async ScoreSubject(
         input: CalibrationInput,
         subjectId: string,
         entityName: string,
@@ -131,8 +131,8 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
         const published = versions
             .filter(row => Number(row.MajorVersion ?? 0) === major && String(row.Status) === 'Published')
             .sort((left, right) => Number(right.MinorVersion ?? 0) - Number(left.MinorVersion ?? 0) || Number(right.PatchVersion ?? 0) - Number(left.PatchVersion ?? 0))[0];
-        const engine = providerRubricEngine(this.Provider, context.contextUser);
-        const result = await engine.evaluateRecord({
+        const engine = ProviderRubricEngine(this.Provider, context.contextUser);
+        const result = await engine.EvaluateRecord({
             rubricId: input.rubricId,
             versionId: published ? String(published.ID) : undefined,
             subjectEntityName: entityName,

@@ -106,14 +106,6 @@ export function DisagreementFromScores(input: {
     })));
 }
 
-/** @deprecated Use {@link DisagreementFromScores}. */
-export function disagreementFromScores(input: {
-    evaluations: { id: string; subjectId: string; versionId: string; evaluatorType: string; status: string }[];
-    scores: { evaluationId: string; key: string; name?: string | null; normalizedScore: number | null }[];
-}): DisagreementItem[] {
-    return DisagreementFromScores(input);
-}
-
 /** Largest |human mean − AI mean| first. A criterion with either mean missing is left out. */
 export function DisagreementQueue(rows: { key: string; name?: string | null; humanMean: number | null; aiMean: number | null }[]): DisagreementItem[] {
     return rows
@@ -126,11 +118,6 @@ export function DisagreementQueue(rows: { key: string; name?: string | null; hum
             gap: Math.abs((row.humanMean as number) - (row.aiMean as number)),
         }))
         .sort((left, right) => right.gap - left.gap || left.key.localeCompare(right.key));
-}
-
-/** @deprecated Use {@link DisagreementQueue}. */
-export function disagreementQueue(rows: { key: string; name?: string | null; humanMean: number | null; aiMean: number | null }[]): DisagreementItem[] {
-    return DisagreementQueue(rows);
 }
 
 /** Scores for one test or suite, oldest first. Runs with no score are left out. */
@@ -312,11 +299,6 @@ export function StoredRubricView(
         },
         answers: nodes.map(node => ({ criterionId: node.id, rationale: node.rationale, evidence: node.evidence })),
     };
-}
-
-/** @deprecated Use {@link RubricRunView}. */
-export function rubricRunView(oracleResults: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null | undefined): RubricRunView | null {
-    return RubricRunView(oracleResults);
 }
 
 function kind(item: { oracleType?: string; type?: string; Name?: string }): string {

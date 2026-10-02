@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RubricVersionDiff, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { providerRubricEngine } from '@memberjunction/rubrics';
+import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { CloseMJProvider, InitializeMJProvider, GetContextUser, GetMJProvider } from '../lib/mj-provider';
 import { FormatVersionDiff, ParseRubricRef, RequireViewSuccess, RubricIdentityFilter, SnapshotFromRows, ValidateSnapshot } from './rubric-cli';
 
@@ -40,7 +40,7 @@ export class RubricCommands {
             const parsed = ParseRubricRef(ref);
             const left = await this.snapshot(parsed.rubric, from, user);
             const right = await this.snapshot(parsed.rubric, to, user);
-            console.log(FormatVersionDiff(RubricVersionDiff.diff(left, right)));
+            console.log(FormatVersionDiff(RubricVersionDiff.Diff(left, right)));
         } finally {
             await CloseMJProvider();
         }
@@ -61,7 +61,7 @@ export class RubricCommands {
         try {
             const { user, provider } = await this.context();
             const { rubric, version } = await this.version(ref, user);
-            const engine = providerRubricEngine(provider, user);
+            const engine = ProviderRubricEngine(provider, user);
             const result = await engine.EvaluateRecord({
                 rubricId: String(rubric.ID),
                 versionId: String(version.ID),

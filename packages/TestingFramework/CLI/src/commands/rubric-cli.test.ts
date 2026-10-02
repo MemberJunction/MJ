@@ -95,7 +95,7 @@ describe('rubric CLI', () => {
         const base = SnapshotFromRows(version, [criterion], [scale], [level], []);
         const heavier = SnapshotFromRows(version, [{ ...criterion, Weight: 2 }], [scale], [level], []);
         const shifted = SnapshotFromRows(version, [criterion], [scale], [{ ...level, NormalizedValue: 0.5 }], []);
-        expect(FormatVersionDiff(RubricVersionDiff.diff(base, heavier)).startsWith('Major')).toBe(true);
-        expect(FormatVersionDiff(RubricVersionDiff.diff(base, shifted)).startsWith('Major')).toBe(true);
+        expect(FormatVersionDiff(RubricVersionDiff.Diff(base, heavier)).startsWith('Major')).toBe(true);
+        expect(FormatVersionDiff(RubricVersionDiff.Diff(base, shifted)).startsWith('Major')).toBe(true);
     });
 });

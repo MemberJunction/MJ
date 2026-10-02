@@ -39,18 +39,6 @@ export function ResolveRubric(input: {
     return { ExplicitVersion: false, Source: 'none' };
 }
 
-/** @deprecated Use {@link ResolveRubric}. */
-export function resolveRubric(input: {
-    run?: { rubricId?: string; versionId?: string };
-    oracle?: { rubricId?: string; rubricVersionId?: string };
-    testRubricId?: string | null;
-    suites?: RubricSuiteRow[];
-    suiteId?: string;
-    agentRubricId?: string | null;
-}): RubricChoice {
-    return ResolveRubric(input);
-}
-
 function walkSuites(suites: RubricSuiteRow[], start?: string): string | undefined {
     const byId = new Map(suites.map(suite => [suite.Id, suite]));
     const seen = new Set<string>();
@@ -82,11 +70,7 @@ export class PublishedVersionPin {
         return latest;
     }
 
-    /** @deprecated Use {@link Remember}. */
-    public async remember(suiteRunId: string, rubricId: string, explicitVersionId: string | undefined, lookupLatest: () => Promise<string | undefined>): Promise<string | undefined> {
-        return this.Remember(suiteRunId, rubricId, explicitVersionId, lookupLatest);
     }
-}
 
 export interface OracleConfigLike {
     /** Same field as IOracle.type. Test configuration stores it as `type`. */
@@ -137,11 +121,6 @@ export function OraclesWithNamedRubric<T extends OracleConfigLike>(
     return EnsureImplicitRubricOracle(list, choice, choice.VersionId) as T[];
 }
 
-/** @deprecated Use {@link EnsureImplicitRubricOracle}. */
-export function ensureImplicitRubricOracle(oracles: OracleConfigLike[] | undefined, choice: RubricChoice, versionId?: string, versionLabel?: string): OracleConfigLike[] {
-    return EnsureImplicitRubricOracle(oracles, choice, versionId, versionLabel);
-}
-
 /**
  * The implicit rubric always gates status. It contributes to the score when
  * weights are absent, or when the weights already name `rubric`.
@@ -152,7 +131,3 @@ export function WeightsForImplicitRubric(weights: Record<string, number> | undef
     return weights;
 }
 
-/** @deprecated Use {@link WeightsForImplicitRubric}. */
-export function weightsForImplicitRubric(weights: Record<string, number> | undefined, addedImplicit: boolean): Record<string, number> | undefined {
-    return WeightsForImplicitRubric(weights, addedImplicit);
-}

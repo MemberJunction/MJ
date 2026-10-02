@@ -56,15 +56,7 @@ export class AgentRubricEvaluator extends BaseRubricEvaluator {
         const decisions = decisionsFrom(payload);
         return new LLMRubricEvaluator({
             async run() { return JSON.stringify({ decisions }); },
-        }).evaluateContent(version, content);
+        }).EvaluateContent(version, content);
     }
 
-    /** @deprecated Use {@link EvaluateContent}. */
-    public async evaluateContent(
-        version: RubricVersionSnapshot,
-        content: RubricSubjectContent,
-        subject?: { entityName: string; recordId: string },
-    ): Promise<LLMRubricResult> {
-        return this.EvaluateContent(version, content, subject);
     }
-}
