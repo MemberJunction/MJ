@@ -1,11 +1,11 @@
 import {
   Component, Input, Output, EventEmitter,
-  ChangeDetectionStrategy, ChangeDetectorRef, inject,
+  ChangeDetectionStrategy, ChangeDetectorRef, inject, forwardRef, signal,
   OnChanges, SimpleChanges, OnInit, AfterContentInit, AfterViewInit, OnDestroy,
   ContentChildren, QueryList, HostBinding, HostListener, ElementRef,
   ViewChild, NgZone, ViewEncapsulation
 } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormContext, PanelVariant, PanelDragStartEvent, PanelDropEvent } from '../types/form-types';
 import { IsFormSectionHidden } from '../types/entity-form-config';
@@ -15,6 +15,7 @@ import { CompositeKey } from '@memberjunction/core';
 import { EscapeHTML, HighlightSearchMatches, type ValidationErrorInfo } from '@memberjunction/global';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { FormSectionIndicatorCoordinator, type FormSectionIndicatorSource } from '../section-indicators/form-section-indicator-coordinator.service';
+import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
 import {
   ClaimedCollectionErrors,
   DescribeSectionDirty,
@@ -43,9 +44,20 @@ import {
  * - Inheritable "Inherited from X" badge with navigation event
  * - Row count badge for related entity sections
  * - Section indicators: an unsaved-changes dot and an invalid-field count derived
- *   live from the projected `mj-form-field`s (plus anything a custom section
+ *   live from the section's `mj-form-field`s (plus anything a custom section
  *   supplies through `[Indicators]`), published to the form's chrome rail
  *   through {@link FormSectionIndicatorCoordinator}
+ *
+ * **Which fields belong to the section.** Two sources, unioned: the `@ContentChildren`
+ * query over projected content, and fields that registered themselves through
+ * {@link FORM_SECTION_FIELD_HOST}, which this panel provides. The content query
+ * cannot see a field declared inside a child component's own template (a widget
+ * projected into the panel), and a section that saw none of its fields reported no
+ * required-and-empty count, claimed none of the failed save's field errors, and so
+ * never badged on the rail. The injector follows the element tree across view
+ * boundaries, so the registered set covers exactly those fields. A registered field
+ * counts only while its element is physically inside this panel, which keeps a field
+ * created in an overlay that happened to inherit this injector from being counted.
  *
  * @example
  * ```html
@@ -68,9 +80,12 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None, // Required to style projected content (grids, etc.)
   templateUrl: './collapsible-panel.component.html',
-  styleUrls: ['./collapsible-panel.component.css']
+  styleUrls: ['./collapsible-panel.component.css'],
+  // `providers`, not `viewProviders`: the fields that need to reach this panel sit in its
+  // projected CONTENT (and in component views nested inside that content).
+  providers: [{ provide: FORM_SECTION_FIELD_HOST, useExisting: forwardRef(() => MjCollapsiblePanelComponent) }],
 })
-export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterContentInit, AfterViewInit, OnDestroy, FormSectionIndicatorSource {
+export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterContentInit, AfterViewInit, OnDestroy, FormSectionIndicatorSource, FormSectionFieldHost {
   private cdr = inject(ChangeDetectorRef);
   private elementRef = inject(ElementRef);
   private ngZone = inject(NgZone);
@@ -155,7 +170,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
       this._hidden = value;
       // Recompute visibility if content has initialized (FieldComponents present).
       if (this.FieldComponents) {
-        this.UpdateVisibilityAndHighlighting();
+        this.updateVisibilityAndHighlighting();
       }
     }
   }
@@ -191,6 +206,31 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   // ---- Content Children ----
 
   @ContentChildren(MjFormFieldComponent, { descendants: true }) FieldComponents!: QueryList<MjFormFieldComponent>;
+
+  /**
+   * Fields that found this panel through {@link FORM_SECTION_FIELD_HOST} — those the content
+   * query cannot see because a component view sits between them and the panel. Keyed by
+   * instance; the value is the edit subscription that keeps the rail live for that field.
+   */
+  private readonly hostedFields = new Map<MjFormFieldComponent, Subscription>();
+
+  /**
+   * Bumped whenever the hosted set changes or a hosted field reports an input change. Every
+   * reader of the field set touches it, so the views that read this section (its own host
+   * bindings, the rail) become dependents Angular re-runs before its no-changes check when a
+   * hosted field — refreshed AFTER those views in the same pass — changes underneath them. See
+   * {@link FormSectionFieldHost.NotifyFieldChanged}.
+   */
+  private readonly hostedFieldsVersion = signal(0);
+
+  /**
+   * Memo behind {@link allFields}. Every real `mj-form-field` reaches this panel through the
+   * injector — projected ones included — so the hosted set is the section's whole field list, and
+   * the union is read several times per change-detection pass (three host bindings, the header,
+   * hide-when-empty, the rail). Recomputed only when the hosted set or a hosted field's inputs
+   * change (the signal) or the content query is replaced or resized.
+   */
+  private fieldsMemo: { version: number; content: QueryList<MjFormFieldComponent> | undefined; contentLength: number; fields: MjFormFieldComponent[] } | null = null;
 
   // ---- State ----
 
@@ -318,6 +358,94 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return formRef?.IsSectionExpanded ? formRef.IsSectionExpanded(this.SectionKey, this.DefaultExpanded) : true;
   }
 
+  // ---- Fields (content query ∪ injector-registered) ----
+
+  /** {@link FormSectionFieldHost} — a field rendered inside this section, at any view depth. */
+  public RegisterField(field: MjFormFieldComponent): void {
+    if (this.hostedFields.has(field)) return;
+    // Same contract as a projected field: an edit refreshes the section's counts (and the
+    // rail reading them) on the same tick as the keystroke.
+    const edits = field.ValueChange.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cdr.markForCheck();
+      this.indicators?.NotifyChanged();
+    });
+    this.hostedFields.set(field, edits);
+    this.onFieldSetChanged();
+  }
+
+  /** {@link FormSectionFieldHost} */
+  public UnregisterField(field: MjFormFieldComponent): void {
+    const edits = this.hostedFields.get(field);
+    if (!edits) return;
+    edits.unsubscribe();
+    this.hostedFields.delete(field);
+    this.onFieldSetChanged();
+  }
+
+  /** {@link FormSectionFieldHost} */
+  public NotifyFieldChanged(field: MjFormFieldComponent): void {
+    if (!this.hostedFields.has(field)) return;
+    this.onFieldSetChanged();
+  }
+
+  private onFieldSetChanged(): void {
+    this.hostedFieldsVersion.update((v) => v + 1);
+    // Visibility is latched, not derived: hide-when-empty and the all-denied check are computed
+    // into IsVisible when the field set changes, so they have to be recomputed here too — a
+    // hosted field binds its inputs after content init, and a section evaluated before that
+    // would otherwise stay hidden (or visible) on the pre-binding answer.
+    if (this.FieldComponents) {
+      this.updateVisibilityAndHighlighting();
+    }
+    this.cdr.markForCheck();
+    this.indicators?.NotifyChanged();
+  }
+
+  /**
+   * Searchable display names of every field, read live rather than from the {@link FieldNames}
+   * cache — only needed once a hosted field exists, because its name lands after registration
+   * (see {@link refreshFieldNames}).
+   */
+  private liveFieldNames(): string {
+    if (this.hostedFields.size === 0) return '';
+    const names: string[] = [];
+    for (const field of this.allFields()) {
+      if (field.DisplayName) names.push(field.DisplayName.toLowerCase());
+    }
+    return names.join(' ');
+  }
+
+  /**
+   * Every `mj-form-field` this section fronts: the projected ones the content query found, plus
+   * the injector-registered ones that have bound their inputs and whose element is inside this
+   * panel. Unbound fields are left out because a field with no inputs reports itself hidden and
+   * not required-and-empty, which is not information about the section. The containment check
+   * is what stops a field created in an overlay, with this panel's injector as its ancestor, from
+   * counting against a section it is not displayed in. Memoized — see {@link fieldsMemo}.
+   */
+  private allFields(): MjFormFieldComponent[] {
+    const version = this.hostedFieldsVersion(); // dependency, see the field's doc
+    const content = this.FieldComponents;
+    const contentLength = content?.length ?? 0;
+    const memo = this.fieldsMemo;
+    if (memo && memo.version === version && memo.content === content && memo.contentLength === contentLength) {
+      return memo.fields;
+    }
+    const fields: MjFormFieldComponent[] = content ? content.toArray() : [];
+    if (this.hostedFields.size > 0) {
+      const host = this.elementRef.nativeElement as HTMLElement | undefined;
+      const seen = new Set(fields);
+      for (const field of this.hostedFields.keys()) {
+        if (seen.has(field)) continue;
+        if (!field.InputsBound) continue;
+        if (host && !host.contains(field.HostElement)) continue;
+        fields.push(field);
+      }
+    }
+    this.fieldsMemo = { version, content, contentLength, fields };
+    return fields;
+  }
+
   // ---- Section indicators (unsaved-changes dot + invalid-field count) ----
 
   /**
@@ -383,9 +511,9 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   /** Field names this panel renders — the join between a plain-field error and this section. */
   private renderedFieldNames(): string[] {
     const names: string[] = [];
-    this.FieldComponents?.forEach((field) => {
+    for (const field of this.allFields()) {
       if (field.FieldName) names.push(field.FieldName);
-    });
+    }
     return names;
   }
 
@@ -403,18 +531,18 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     let DirtyCount = 0;
     let ErrorCount = 0;
     let WarningCount = 0;
-    this.FieldComponents?.forEach((field) => {
+    for (const field of this.allFields()) {
       if (field.IsDirty) DirtyCount++;
       // Only a field that renders an EDITOR can be invalid: a read-only field renders its
       // value as text and never paints an underline, so it is skipped even when
       // `IsRequiredEmpty` would say otherwise (a NOT NULL `__mj_CreatedAt` on a new record
       // is empty and read-only — the user cannot fix it, and it fills itself on save).
-      if (!field.EditMode || field.IsFieldReadOnly) return;
+      if (!field.EditMode || field.IsFieldReadOnly) continue;
       if (field.ShowErrors || field.IsRequiredEmpty) ErrorCount++;
       // The field paints its amber underline on EITHER of these — a stored date the input
       // cannot parse warns on its own, outside the validation pipeline.
       else if (field.ShowWarnings || field.StoredDateIsUnreadable) WarningCount++;
-    });
+    }
     return { DirtyCount, ErrorCount, WarningCount };
   }
 
@@ -443,17 +571,20 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   ngOnInit(): void {
     this.DisplayName = this.SectionName;
     this.chrome?.Changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      this.UpdateVisibilityAndHighlighting();
+      this.updateVisibilityAndHighlighting();
     });
     this.registerIndicatorSource();
   }
 
   ngAfterContentInit(): void {
-    this.UpdateFieldNames();
-    this.SubscribeToFieldNavigateEvents();
+    this.updateFieldNames();
+    this.subscribeToFieldNavigateEvents();
     this.FieldComponents.changes.subscribe(() => {
-      this.UpdateFieldNames();
-      this.SubscribeToFieldNavigateEvents();
+      // Drop the field memo before anything below reads it: a replaced QueryList with the same
+      // length would otherwise be served from the previous result.
+      this.hostedFieldsVersion.update((v) => v + 1);
+      this.updateFieldNames();
+      this.subscribeToFieldNavigateEvents();
       // The set of fields changed, so the section's counts (and which errors it
       // claims) may have too — let the rail re-read.
       this.indicators?.NotifyChanged();
@@ -468,7 +599,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
       this.registerIndicatorSource(changes['SectionKey'].previousValue as string | undefined);
     }
     if (changes['SectionName'] || changes['FormContext']) {
-      this.UpdateVisibilityAndHighlighting();
+      this.updateVisibilityAndHighlighting();
     }
     if (changes['FormContext'] && this.FieldComponents) {
       this.FieldComponents.forEach(field => {
@@ -478,11 +609,13 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   }
 
   ngAfterViewInit(): void {
-    this.SetupResizeObserver();
+    this.setupResizeObserver();
   }
 
   ngOnDestroy(): void {
     this.indicators?.Unregister(this);
+    for (const edits of this.hostedFields.values()) edits.unsubscribe();
+    this.hostedFields.clear();
     this.fieldNavReset$.next();
     this.fieldNavReset$.complete();
     this.destroy$.next();
@@ -557,7 +690,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
         SourceSectionKey: sourceSectionKey,
         TargetSectionKey: this.SectionKey
       });
-      this.ReorderSections(sourceSectionKey, this.SectionKey);
+      this.reorderSections(sourceSectionKey, this.SectionKey);
     }
   }
 
@@ -578,7 +711,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   // ---- Private Methods ----
 
-  private ReorderSections(sourceSectionKey: string, targetSectionKey: string): void {
+  private reorderSections(sourceSectionKey: string, targetSectionKey: string): void {
     const formRef = this.Form as {
       getSectionOrder?: () => string[];
       setSectionOrder?: (order: string[]) => void;
@@ -612,13 +745,14 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     if (!filter) return true;
     if (this.SectionName.toLowerCase().includes(filter)) return true;
     if (this.SectionKey.toLowerCase().includes(filter)) return true;
-    return this.FieldNames.includes(filter);
+    return this.FieldNames.includes(filter) || this.liveFieldNames().includes(filter);
   }
 
   private hasRenderableContent(): boolean {
     if (this.Variant === 'related-entity') return true;
-    if (!this.FieldComponents || this.FieldComponents.length === 0) return true;
-    return this.FieldComponents.some((field) => !field.ShouldHideField);
+    const fields = this.allFields();
+    if (fields.length === 0) return true;
+    return fields.some((field) => !field.ShouldHideField);
   }
 
   private isHiddenByChrome(): boolean {
@@ -629,17 +763,27 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return !this.chrome.IsFirstClassSectionVisible(this.SectionKey);
   }
 
-  private UpdateFieldNames(): void {
+  private updateFieldNames(): void {
     if (this.FieldComponents) {
-      const names: string[] = [];
-      this.FieldComponents.forEach(field => {
-        if (field.DisplayName) {
-          names.push(field.DisplayName.toLowerCase());
-        }
-      });
-      this.FieldNames = names.join(' ');
-      this.UpdateVisibilityAndHighlighting();
+      this.refreshFieldNames();
+      this.updateVisibilityAndHighlighting();
     }
+  }
+
+  /**
+   * Rebuild the searchable field-name string from the current field set. Rebuilt on structural
+   * changes only; a hosted field's DisplayName is bound after it registers (its inputs land on its
+   * own view's first pass), so search also reads names live through {@link liveFieldNames}
+   * rather than relying on this cache alone.
+   */
+  private refreshFieldNames(): void {
+    const names: string[] = [];
+    for (const field of this.allFields()) {
+      if (field.DisplayName) {
+        names.push(field.DisplayName.toLowerCase());
+      }
+    }
+    this.FieldNames = names.join(' ');
   }
 
   /**
@@ -648,12 +792,15 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * value edits so the section indicators (and the rail reading them) refresh
    * on the same tick as the keystroke rather than on the container's next poll.
    */
-  private SubscribeToFieldNavigateEvents(): void {
+  private subscribeToFieldNavigateEvents(): void {
     this.fieldNavReset$.next(); // tear down previous subscriptions
     this.FieldComponents.forEach(field => {
       field.Navigate.pipe(takeUntil(this.fieldNavReset$)).subscribe((event: FormNavigationEvent) => {
         this.Navigate.emit(event);
       });
+      // A real projected field also reached this panel through the injector and already has
+      // this subscription from RegisterField; a second one would notify the rail twice per edit.
+      if (this.hostedFields.has(field)) return;
       field.ValueChange.pipe(takeUntil(this.fieldNavReset$)).subscribe(() => {
         this.cdr.markForCheck();
         this.indicators?.NotifyChanged();
@@ -665,7 +812,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * Sets up a ResizeObserver on the panel content div for related-entity panels.
    * When the user drags the CSS resize handle, we persist the new height.
    */
-  private SetupResizeObserver(): void {
+  private setupResizeObserver(): void {
     if (this.Variant !== 'related-entity' || !this.panelContentRef) return;
 
     const el = this.panelContentRef.nativeElement;
@@ -689,7 +836,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
         if (!entry) return;
         const newHeight = Math.round(entry.contentRect.height);
         if (newHeight < 120) return;
-        this.DebouncePersistHeight(newHeight);
+        this.debouncePersistHeight(newHeight);
       });
       this.resizeObserver.observe(el);
     });
@@ -698,7 +845,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   /**
    * Debounces height persistence so we don't write to DB on every resize frame.
    */
-  private DebouncePersistHeight(height: number): void {
+  private debouncePersistHeight(height: number): void {
     if (this.resizeDebounceTimer) {
       clearTimeout(this.resizeDebounceTimer);
     }
@@ -717,15 +864,15 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * sections field security has nothing to say about. "No fields" and "no readable fields" are
    * different states and only the second one should hide the section.
    */
-  private get AllProjectedFieldsDenied(): boolean {
-    const fields = this.FieldComponents;
-    if (!fields || fields.length === 0) {
+  private get allProjectedFieldsDenied(): boolean {
+    const fields = this.allFields();
+    if (fields.length === 0) {
       return false;
     }
-    return fields.toArray().every(f => !f.IsFieldReadableByUser);
+    return fields.every(f => !f.IsFieldReadableByUser);
   }
 
-  private UpdateVisibilityAndHighlighting(): void {
+  private updateVisibilityAndHighlighting(): void {
     // Hard hide takes precedence over search state. Driven by an explicit
     // `Hidden` input OR the form config's section-visibility rules carried on
     // FormContext (which also reach slot-injected BaseFormPanels, since every
@@ -740,7 +887,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     // A section whose every field is denied by field-level security renders as a heading over
     // nothing — the fields hide themselves individually, leaving an empty card that reads like a
     // broken screen rather than a permissions boundary. Hide the section instead.
-    if (this.AllProjectedFieldsDenied) {
+    if (this.allProjectedFieldsDenied) {
       this.IsVisible = false;
       this.DisplayName = EscapeHTML(this.SectionName);
       this.cdr.markForCheck();
@@ -757,7 +904,6 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     }
 
     const sectionMatches = this.SectionName.toLowerCase().includes(searchTerm);
-    const fieldsMatch = this.FieldNames.includes(searchTerm);
     this.IsVisible = this.MatchesSearch(searchTerm);
 
     // DisplayName is bound to `[innerHTML]` in the template — must always be HTML-safe.

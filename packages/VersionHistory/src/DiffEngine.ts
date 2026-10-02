@@ -20,9 +20,9 @@ import {
     ENTITY_VERSION_LABEL_ITEMS,
     ENTITY_VERSION_LABELS,
     ENTITY_RECORD_CHANGES,
-    sqlEquals,
-    loadRecordChangeSnapshot,
-    loadEntityById,
+    SqlEquals,
+    LoadRecordChangeSnapshot,
+    LoadEntityById,
 } from './constants';
 
 /**
@@ -53,7 +53,7 @@ export class DiffEngine {
     ): Promise<DiffResult> {
         // Short-circuit: identical labels produce an empty diff
         if (UUIDsEqual(fromLabelId, toLabelId)) {
-            const label = await loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser);
+            const label = await LoadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser);
             const labelName = label ? label.Name : fromLabelId;
             return {
                 FromLabelID: fromLabelId,
@@ -66,8 +66,8 @@ export class DiffEngine {
         }
 
         const [fromLabel, toLabel] = await Promise.all([
-            loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser),
-            loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, toLabelId, contextUser),
+            LoadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser),
+            LoadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, toLabelId, contextUser),
         ]);
         if (!fromLabel) throw new Error(`Version label '${fromLabelId}' not found`);
         if (!toLabel) throw new Error(`Version label '${toLabelId}' not found`);
@@ -102,7 +102,7 @@ export class DiffEngine {
         labelId: string,
         contextUser: UserInfo
     ): Promise<DiffResult> {
-        const label = await loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
+        const label = await LoadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
         if (!label) throw new Error(`Version label '${labelId}' not found`);
 
         const fromIndex = await this.buildSnapshotIndex(labelId, contextUser);
@@ -139,9 +139,9 @@ export class DiffEngine {
 
         const rv = new RunView();
         const filter = [
-            sqlEquals('VersionLabelID', labelId),
-            sqlEquals('EntityID', entityInfo.ID),
-            sqlEquals('RecordID', recordId),
+            SqlEquals('VersionLabelID', labelId),
+            SqlEquals('EntityID', entityInfo.ID),
+            SqlEquals('RecordID', recordId),
         ].join(' AND ');
 
         const result = await rv.RunView<MJVersionLabelItemEntityType>({
@@ -175,7 +175,7 @@ export class DiffEngine {
         const rv = new RunView();
         const result = await rv.RunView<MJVersionLabelItemEntityType>({
             EntityName: ENTITY_VERSION_LABEL_ITEMS,
-            ExtraFilter: sqlEquals('VersionLabelID', labelId),
+            ExtraFilter: SqlEquals('VersionLabelID', labelId),
             Fields: ['ID', 'RecordChangeID', 'EntityID', 'RecordID'],
             ResultType: 'simple',
         }, contextUser);
@@ -242,8 +242,8 @@ export class DiffEngine {
         contextUser: UserInfo
     ): Promise<string | null> {
         const filter = [
-            sqlEquals('EntityID', entityId),
-            sqlEquals('RecordID', recordId),
+            SqlEquals('EntityID', entityId),
+            SqlEquals('RecordID', recordId),
         ].join(' AND ');
 
         const result = await rv.RunView<{ ID: string }>({
@@ -373,7 +373,7 @@ export class DiffEngine {
         toChangeId: string,
         contextUser: UserInfo
     ): Promise<RecordDiff> {
-        const toSnapshot = await loadRecordChangeSnapshot(toChangeId, contextUser);
+        const toSnapshot = await LoadRecordChangeSnapshot(toChangeId, contextUser);
         return {
             RecordID: recordId,
             EntityName: entityName,
@@ -393,7 +393,7 @@ export class DiffEngine {
         fromChangeId: string,
         contextUser: UserInfo
     ): Promise<RecordDiff> {
-        const fromSnapshot = await loadRecordChangeSnapshot(fromChangeId, contextUser);
+        const fromSnapshot = await LoadRecordChangeSnapshot(fromChangeId, contextUser);
         return {
             RecordID: recordId,
             EntityName: entityName,
@@ -429,8 +429,8 @@ export class DiffEngine {
         contextUser: UserInfo
     ): Promise<RecordDiff> {
         const [fromSnapshot, toSnapshot] = await Promise.all([
-            loadRecordChangeSnapshot(fromChangeId, contextUser),
-            loadRecordChangeSnapshot(toChangeId, contextUser),
+            LoadRecordChangeSnapshot(fromChangeId, contextUser),
+            LoadRecordChangeSnapshot(toChangeId, contextUser),
         ]);
 
         const fieldChanges = this.compareSnapshots(fromSnapshot, toSnapshot);
@@ -460,7 +460,7 @@ export class DiffEngine {
         const rv = new RunView();
         const result = await rv.RunView<{ ID: string; ChangedAt: string }>({
             EntityName: ENTITY_RECORD_CHANGES,
-            ExtraFilter: sqlEquals('ID', recordChangeId),
+            ExtraFilter: SqlEquals('ID', recordChangeId),
             Fields: ['ID', 'ChangedAt'],
             MaxRows: 1,
             ResultType: 'simple',
@@ -469,7 +469,7 @@ export class DiffEngine {
         if (!result.Success || result.Results.length === 0) return null;
 
         const changedAt = result.Results[0].ChangedAt;
-        const parsed = await loadRecordChangeSnapshot(recordChangeId, contextUser);
+        const parsed = await LoadRecordChangeSnapshot(recordChangeId, contextUser);
         if (!parsed) return null;
 
         return {

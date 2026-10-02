@@ -24,10 +24,10 @@
  * the `TSQLToPGTranspiler` interface so classification stays unit-testable without
  * a Python runtime.
  */
-import { splitMigration, type MigrationSplitResult, type MigrationRegionKind } from './MigrationSplitter.js';
-import { splitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
-import { castBooleanInsertValues, convertBooleanLiteralComparisons } from './rules/ExpressionHelpers.js';
-import { seedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
+import { SplitMigration, type MigrationSplitResult, type MigrationRegionKind } from './MigrationSplitter.js';
+import { SplitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
+import { CastBooleanInsertValues, ConvertBooleanLiteralComparisons } from './rules/ExpressionHelpers.js';
+import { SeedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
 
 export type ConversionStatus =
   /** Category-B content was transpiled into `pgSQL`. */
@@ -101,19 +101,19 @@ export interface KeptTSQL {
  */
 export interface ConversionReconciliation {
   /** Content (non-noise) source statements in the whole file, GO-batch granularity. */
-  sourceStatements: number;
+  sourceStatements: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Content statements in the emitted PG body (coarse chunk count; 0 for a marker). */
-  emittedStatements: number;
+  emittedStatements: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Statements surfaced as gaps for a human: `unhandled.length + handProcedural.length`. */
-  gaps: number;
+  gaps: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The dialect's own per-call self-check reported an ACCOUNTING-LEAK (a missed drop site). */
-  accountingLeak: boolean;
+  accountingLeak: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * The classifier fed SUBSTANTIVE T-SQL to the dialect, yet the dialect emitted nothing AND
    * reported no gap — content vanished without a trace. Belt-and-suspenders beyond the dialect's
    * own EMPTY-EMISSION guard; when true the caller appends a `RECONCILIATION-EMPTY-OUTPUT` gap.
    */
-  suspiciousEmptyOutput: boolean;
+  suspiciousEmptyOutput: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface MigrationConversionResult {
@@ -184,8 +184,8 @@ const STATEMENT_MODE_KEEP: ReadonlySet<StatementKind> = new Set<StatementKind>([
 const SNAPSHOT_CODEGEN_OBJECT = /^(?:VIEW|PROCEDURE|PROC|FUNCTION)\b/i;
 
 /** Classify a migration and return the kept T-SQL to transpile — the single classification entry point. */
-export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
-  const split = splitMigration(sql, fileName);
+export function ExtractKeptTSQL(sql: string, fileName: string): KeptTSQL {
+  const split = SplitMigration(sql, fileName);
   const droppedCodeGenLines = split.codeGenBlock ? split.codeGenBlock.split('\n').length : 0;
 
   // Baselines and old-style migrations have NO banner but DO contain generated
@@ -199,7 +199,7 @@ export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   // hand-authored file from flipping the whole file into statement-mode, where its other
   // batches would be dropped (issue #3252 RC2 defense-in-depth). Such a file stays banner-mode,
   // where a stray hand routine is flagged needs-hand-authoring instead of silently dropped.
-  const stmts = splitByStatement(sql);
+  const stmts = SplitByStatement(sql);
   const isUnbanneredSnapshot =
     split.boundaryMethod === 'no-codegen-block' &&
     stmts.some((s) => s.kind === 'codegen-object' && SNAPSHOT_CODEGEN_OBJECT.test(s.evidence));
@@ -208,6 +208,11 @@ export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   }
 
   return classifyBannerMode(split, droppedCodeGenLines);
+}
+
+/** @deprecated Use {@link ExtractKeptTSQL}. */
+export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
+  return ExtractKeptTSQL(sql, fileName);
 }
 
 /** Banner-split path: feature migrations with (or without) a CodeGen block. */
@@ -313,13 +318,13 @@ function classifyStatementMode(
  * kept T-SQL exists but no transpiler was provided — content is never dropped
  * because a backend was missing.
  */
-export async function convertMigration(
+export async function ConvertMigration(
   sql: string,
   fileName: string,
   options: ConvertMigrationOptions = {},
 ): Promise<MigrationConversionResult> {
-  const kept = extractKeptTSQL(sql, fileName);
-  const stmts = splitByStatement(sql);
+  const kept = ExtractKeptTSQL(sql, fileName);
+  const stmts = SplitByStatement(sql);
   const sourceStatements = stmts.filter((s) => s.kind !== 'noise').length;
 
   if (!kept.tsql.trim()) {
@@ -470,6 +475,15 @@ export async function convertMigration(
   };
 }
 
+/** @deprecated Use {@link ConvertMigration}. */
+export async function convertMigration(
+  sql: string,
+  fileName: string,
+  options: ConvertMigrationOptions = {},
+): Promise<MigrationConversionResult> {
+  return ConvertMigration(sql, fileName, options);
+}
+
 /** Assemble the final `.pg.sql` text: header, gap comments, transpiled body. */
 function assemblePgSQL(
   kept: KeptTSQL,
@@ -534,15 +548,15 @@ function assemblePgSQL(
  */
 function castCoreMetadataBooleans(body: string): string {
   const coreMetadataColumns = new Map<string, Map<string, string>>();
-  seedCoreMetadataBooleanColumns(coreMetadataColumns);
+  SeedCoreMetadataBooleanColumns(coreMetadataColumns);
   // Two distinct shapes, both of which reach PostgreSQL as `boolean` vs `integer`:
   //   INSERT … VALUES (…, 1, 0, …)        → castBooleanInsertValues  (by ordinal position)
   //   UPDATE … SET "Col" = 1 / WHERE = 0  → convertBooleanLiteralComparisons  (by column name)
   // The rule-based path applies both; this path applied only the first, so a CodeGen UPDATE against
   // a core-metadata table still failed at apply time with `operator does not exist: boolean =
   // integer` — the same class of defect as the INSERT case, at a different syntactic site.
-  return convertBooleanLiteralComparisons(
-    castBooleanInsertValues(body, coreMetadataColumns),
+  return ConvertBooleanLiteralComparisons(
+    CastBooleanInsertValues(body, coreMetadataColumns),
     coreMetadataColumns,
   );
 }
@@ -652,7 +666,7 @@ function recoverEntityRegistrationInserts(codeGenBlock: string): string {
   // EntityField registrations and EntitySettings with it). CodeGen does, however,
   // prefix every emitted item with a `/* … */` provenance comment at line start —
   // segment on those so each item is classified independently of its batch-mates.
-  return splitByStatement(codeGenBlock)
+  return SplitByStatement(codeGenBlock)
     .flatMap((s) => s.sql.split(/\n(?=\s*\/\*)/))
     .filter((seg) => headRe.test(stripLeadingCommentsAndNoise(seg)) || specialDateField.test(afterLineComments(seg)))
     .map((seg) => truncateAtGeneratedObject(seg))

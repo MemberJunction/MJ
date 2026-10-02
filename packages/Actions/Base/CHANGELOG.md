@@ -1,5 +1,77 @@
 # Change Log - @memberjunction/actions-base
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 520bd09: Durable entity actions (`EntityAction.RunMode = 'Durable'`) now receive their declared parameters by name (#4794).
+
+  `BuildDurableDeferral` stored the redacted parameters in `Task.InputPayload` as a `LoggedParam[]` array, while `TaskGraphActionRunner` reads that payload back as a name → value object. Every released build with durable dispatch (v6.1.0 onward, including 6.1.4) hit the same failure: the dispatcher's `mergedPayload` only merges plain objects, so it silently dropped the array and the action received NONE of its params. Parameters named `0…n` would only appear if the array reached `TaskGraphActionRunner.buildParams` directly, bypassing that drop. Either way every durable binding ran without its inputs, e.g. `Common.LogActivity` failing with `TypeCode is required. | Title is required.`
+  - `@memberjunction/actions-base`: new `RedactParamsToRecord()` beside `RedactParamsToJSON()`. It applies the same redaction rules and returns `{ Name: Value }`, omitting suppressed parameters, which then arrive at the action as absent rather than as a redaction stub.
+  - `@memberjunction/actions`: `BuildDurableDeferral` submits that record.
+  - `@memberjunction/task-graph`: a task whose `InputPayload` is not a name → value object now **fails** with a message naming the task, instead of running with its input silently dropped.
+  - `@memberjunction/server`: round-trip regression test through `TaskGraphActionRunner`.
+  - `@memberjunction/integration-test-suite`: EA6 now rejects an array `RedactedParams` and checks a bound param arrives by name.
+
+  **Upgrade note:** durable tasks queued before this fix still carry array payloads. They now fail loudly (`Task <id> has an InputPayload that is an array; expected a name → value object…`) instead of running with no inputs. Re-trigger the source save if that work matters, or — from the Workflows run view — use the failed step's **Edit input & retry** control to replace the stored array with a name → value object and retry it in place.
+
+  A durable binding never receives a whole record: `Entity Object` / `Entity Object Data` bindings are always stripped from the durable payload. Pass a key (e.g. `Entity Field 'ID'`) and load the record in the action.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/code-execution@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- abf8778: Actions inside an agent run now receive the run's runtime API keys, so a run on a customer's key generates its images on that key too.
+
+  `ExecuteAgentParams.apiKeys` already reaches every prompt (`AIPromptRunner` → `GetAIAPIKey(driverClass, apiKeys)`), but `BaseAgent` never handed it to actions, and `Generate Image` called `GetAIAPIKey(driverClass)` with no second argument — so a run whose prompts used a customer's OpenAI key still generated images on the platform's.
+  - `BaseAgent.ExecuteSingleAction` hands each action a SCOPED RESOLVER on the new `RunActionParams.RuntimeAPIKeyResolver` (a `RuntimeAPIKeyResolver` from `@memberjunction/actions-base`) when the run has runtime keys — one driver class in, one key out. Per dispatch, not on `Context`: the context is one object shared by every action in the run and copied into sub-agent runs, so the resolver is bound to the action it was handed to even under parallel dispatch. The key list itself is never handed to an action, so none can enumerate the run's credentials; a new `actionMayUseRuntimeAPIKey(action, driverClass, params)` hook (default: allow) lets an agent refuse a class to an action, a refusal being the platform key, not an error. Every resolution is logged by action and driver class (never the key). Absent when the run has no keys, so no action has to special-case it.
+  - `Generate Image` asks the resolver for its own driver class and falls back to `GetAIAPIKey(driverClass)` — per driver class, exactly as prompts do. Also fixes the vendor-name fallback, which found a key and then passed the empty one to the generator.
+  - `@memberjunction/actions-base`: `RunActionParams.RuntimeAPIKeyResolver` + the `RuntimeAPIKeyResolver` type; `RunActionParams.Context` documents the well-known keys BaseAgent stamps.
+
+  No behaviour change for a run with no runtime keys.
+
+- ee1f0d9: Add a provider post-commit queue: `DatabaseProviderBase.RunAfterCommit(task, description, token?)` plus `CapturePostCommitToken()`, which returns a `PostCommitToken` naming the transaction frames open at that moment. Inside a transaction a task waits for the outermost commit and is discarded on rollback, failed commit, abandoned (doomed) transaction, or `ResetTransactionState`; a savepoint rollback discards only the tasks registered inside that savepoint. Work dispatched fire-and-forget by a save registers after the transaction may already have settled, so the entity-action and AI-action dispatchers capture a token before their first `await` and pass it along: the task then follows the transaction that caused it rather than whatever is open when it registers. SQL Server's deferred Entity AI Action queueing uses this, and Durable After\* entity actions with no queue submitter (e.g. `mj sync push`) are handed to it instead of polling `TransactionDepth` on every tick — so they no longer busy-spin during a long transaction, and never fire for rows a rollback removed. A savepoint that rolled back keeps that fate after the outer transaction commits, so work caused inside it is still dropped. A token captured with no transaction open says so, and its task runs rather than being attached to an unrelated transaction that opened in the meantime. A task whose own transaction has committed waits for any unrelated transaction on that provider to end, so its writes are never enlisted in — or rolled back with — a transaction it has nothing to do with.
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/code-execution@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

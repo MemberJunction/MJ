@@ -409,6 +409,7 @@ export class AgentClientSession {
                 createNotification: params.CreateNotification,
                 sourceArtifactId: params.SourceArtifactId,
                 sourceArtifactVersionId: params.SourceArtifactVersionId,
+                agentHistoryFrom: params.AgentHistoryFrom ?? undefined,
                 onProgress: params.OnProgress ? (progress) => {
                     const agentProgress: AgentProgress = {
                         StatusMessage: progress.message,

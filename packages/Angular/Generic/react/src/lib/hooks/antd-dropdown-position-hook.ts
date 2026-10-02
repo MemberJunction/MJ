@@ -29,7 +29,7 @@ const TRIGGER_SELECTOR = '.ant-select-open, .ant-picker-focused, .ant-dropdown-o
  * Uses position:absolute (antd's default) rather than position:fixed to
  * preserve antd's virtual scroll behavior inside dropdown panels.
  */
-export function createAntdDropdownPositionHook(): RuntimeHook {
+export function CreateAntdDropdownPositionHook(): RuntimeHook {
   let observer: MutationObserver | null = null;
   let styleElement: HTMLStyleElement | null = null;
 
@@ -107,4 +107,9 @@ export function createAntdDropdownPositionHook(): RuntimeHook {
       }
     }
   };
+}
+
+/** @deprecated Use {@link CreateAntdDropdownPositionHook}. */
+export function createAntdDropdownPositionHook(): RuntimeHook {
+  return CreateAntdDropdownPositionHook();
 }

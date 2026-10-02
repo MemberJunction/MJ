@@ -257,7 +257,16 @@ interface ProviderCardData {
 })
 export class CommunicationProvidersResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = false;
-    public providerCards: ProviderCardData[] = [];
+    public ProviderCards: ProviderCardData[] = [];
+
+    /** @deprecated Use {@link ProviderCards}. */
+    public get providerCards(): ProviderCardData[] {
+      return this.ProviderCards;
+    }
+    /** @deprecated Use {@link ProviderCards}. */
+    public set providerCards(value: ProviderCardData[]) {
+      this.ProviderCards = value;
+    }
 
     constructor(private cdr: ChangeDetectorRef, private navService: NavigationService) {
         super();
@@ -298,7 +307,7 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
 
             if (providersResult.Success) {
                 const logs = logsResult.Success ? logsResult.Results : [];
-                this.providerCards = providersResult.Results.map(p => this.buildProviderCard(p, logs));
+                this.ProviderCards = providersResult.Results.map(p => this.buildProviderCard(p, logs));
             }
         } catch (error) {
             console.error('Error loading providers:', error);
@@ -344,18 +353,33 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
         return '';
     }
 
-    public configureProvider(provider: MJCommunicationProviderEntity): void {
+    public ConfigureProvider(provider: MJCommunicationProviderEntity): void {
         const pk = new CompositeKey();
         pk.LoadFromEntityInfoAndRecord(this.ProviderToUse.Entities.find(e => e.Name === 'MJ: Communication Providers')!, provider);
         this.navService.OpenEntityRecord('MJ: Communication Providers', pk);
     }
 
-    public viewProviderLogs(provider: MJCommunicationProviderEntity): void {
+    /** @deprecated Use {@link ConfigureProvider}. */
+    public configureProvider(provider: MJCommunicationProviderEntity): void {
+      return this.ConfigureProvider(provider);
+    }
+
+    public ViewProviderLogs(provider: MJCommunicationProviderEntity): void {
         console.log('View analytics for provider:', provider.Name);
     }
 
-    public addNewProvider(): void {
+    /** @deprecated Use {@link ViewProviderLogs}. */
+    public viewProviderLogs(provider: MJCommunicationProviderEntity): void {
+      return this.ViewProviderLogs(provider);
+    }
+
+    public AddNewProvider(): void {
         this.navService.OpenEntityRecord('MJ: Communication Providers', new CompositeKey());
+    }
+
+    /** @deprecated Use {@link AddNewProvider}. */
+    public addNewProvider(): void {
+      return this.AddNewProvider();
     }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {

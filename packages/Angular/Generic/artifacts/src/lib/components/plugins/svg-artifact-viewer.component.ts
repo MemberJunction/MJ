@@ -110,9 +110,36 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'SvgArtifactViewerPlugin')
 export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponent {
-  public svgContent = '';
-  public safeSvgContent: SafeHtml = '';
-  public viewMode: 'preview' | 'source' = 'preview';
+  public SvgContent = '';
+
+  /** @deprecated Use {@link SvgContent}. */
+  public get svgContent() {
+    return this.SvgContent;
+  }
+  /** @deprecated Use {@link SvgContent}. */
+  public set svgContent(value) {
+    this.SvgContent = value;
+  }
+  public SafeSvgContent: SafeHtml = '';
+
+  /** @deprecated Use {@link SafeSvgContent}. */
+  public get safeSvgContent(): SafeHtml {
+    return this.SafeSvgContent;
+  }
+  /** @deprecated Use {@link SafeSvgContent}. */
+  public set safeSvgContent(value: SafeHtml) {
+    this.SafeSvgContent = value;
+  }
+  public ViewMode: 'preview' | 'source' = 'preview';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): 'preview' | 'source' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: 'preview' | 'source') {
+    this.ViewMode = value;
+  }
 
   /**
    * SVG artifacts always have content to display
@@ -126,9 +153,9 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   }
 
   ngOnInit(): void {
-    this.svgContent = this.getContent();
+    this.SvgContent = this.getContent();
     // For SVG, we use sanitize with SecurityContext.HTML (1) to allow safe rendering
-    this.safeSvgContent = this.sanitizer.sanitize(1, this.svgContent) || '';
+    this.SafeSvgContent = this.sanitizer.sanitize(1, this.SvgContent) || '';
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
@@ -140,13 +167,18 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     return snap;
   }
 
-  onCopy(): void {
-    if (this.svgContent) {
-      navigator.clipboard.writeText(this.svgContent).then(() => {
+  OnCopy(): void {
+    if (this.SvgContent) {
+      navigator.clipboard.writeText(this.SvgContent).then(() => {
         console.log('✅ Copied SVG to clipboard');
       }).catch(err => {
         console.error('Failed to copy to clipboard:', err);
       });
     }
+  }
+
+  /** @deprecated Use {@link OnCopy}. */
+  onCopy(): void {
+    return this.OnCopy();
   }
 }

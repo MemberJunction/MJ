@@ -73,7 +73,7 @@ export abstract class SemanticValidator {
    * }
    * ```
    */
-  abstract validate(
+  abstract validate(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     context: ValidationContext,
     constraint: PropertyConstraint
   ): ConstraintViolation[];
@@ -86,8 +86,13 @@ export abstract class SemanticValidator {
    *
    * @returns Validator name
    */
-  getName(): string {
+  GetName(): string {
     return this.constructor.name;
+  }
+
+  /** @deprecated Use {@link GetName}. */
+  getName(): string {
+    return this.GetName();
   }
 
   /**
@@ -105,7 +110,7 @@ export abstract class SemanticValidator {
    * }
    * ```
    */
-  abstract getDescription(): string;
+  abstract getDescription(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
   // ============================================================================
   // Protected Helper Methods

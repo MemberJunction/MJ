@@ -2,7 +2,7 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT46 - Agent Loop Stand-In",
-    "Description": "Agent-loop machinery without any LLM: failed-step single-INSERT persistence, two-phase step round-trip incl. non-terminal Plan StepType, pre-aborted cancellation leaves no orphan run, non-Active agent deterministic failure with terminal Validation step, PayloadManager pure guards (applyAgentChangeRequest fence, scope round-trip, path prefixing). 6 checks (ALS1-ALS6), self-cleaning tagged runs/steps. Server-only (BaseAgent internals).",
+    "Description": "Agent-loop machinery without any LLM: failed-step single-INSERT persistence, two-phase step round-trip incl. non-terminal Plan StepType, pre-aborted cancellation leaves no orphan run, non-Active agent deterministic failure with terminal Validation step, PayloadManager pure guards (applyAgentChangeRequest fence, scope round-trip, path prefixing), and the run-scoped action circuit breaker at ExecuteSingleAction against the real action engine: identical-arguments rule blocks before the engine with no log row (ALS7), attempt budget across varied arguments (ALS8), success resets both counters (ALS9), fatal lockout is argument-independent (ALS10), skipCircuitBreaker for ForEach/While/pipeline callers bypasses every rule and leaves the history untouched (ALS11). 11 checks (ALS1-ALS11), self-cleaning tagged runs/steps/action logs. Server-only (BaseAgent internals).",
     "InputDefinition": {},
     "ExpectedOutcomes": {
       "summary": "Agent-loop machinery without any LLM: failed-step single-INSERT persistence, two-phase step round-trip incl. non-terminal Plan StepType, pre-aborted cancellation leaves no orphan run, non-Active agent deterministic failure with terminal Validation step, PayloadManager pure guards (applyAgentChangeRequest fence, scope round-trip, path prefixing). 6 checks (ALS1-ALS6), self-cleaning tagged runs/step"
@@ -22,7 +22,7 @@
     "ID": "FEAA0082-AF39-41B4-854E-1EB3F30A9A34"
   },
   "sync": {
-    "lastModified": "2026-08-08T01:12:44.302Z",
-    "checksum": "1aeab1bfcf52a903ee66c7378dc256aab1b83493269dc3594f2cc0cb14245eea"
+    "lastModified": "2026-09-27T00:45:38.923Z",
+    "checksum": "bef0510209e32c47c8422c70c8693a4438b87f055b394bdeba0404f8ba4dd267"
   }
 }

@@ -34,11 +34,11 @@ import { RegisterClass , UUIDsEqual, NormalizeUUID } from '@memberjunction/globa
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
 import {
-    buildMCPAgentContextFull,
-    isValidMCPTab,
-    isValidToolsViewMode,
-    resolveMCPItem,
-    buildMCPNotFoundError,
+    BuildMCPAgentContextFull,
+    IsValidMCPTab,
+    IsValidToolsViewMode,
+    ResolveMCPItem,
+    BuildMCPNotFoundError,
     MCP_TABS,
     MCP_TOOLS_VIEW_MODES,
     MCP_LOG_SORT_COLUMNS,
@@ -46,7 +46,7 @@ import {
     type MCPTabContextInput,
     type MCPNamedItem,
 } from './mcp-agent-context';
-import { validateEnumParam, validateStringParam } from '../shared/agent-tool-validation';
+import { ValidateEnumParam, ValidateStringParam } from '../shared/agent-tool-validation';
 import type { AgentToolResult } from '../shared/agent-tool-validation';
 
 /**
@@ -142,9 +142,9 @@ export interface MCPToolData {
  * Interface for server group (tools grouped by server)
  */
 export interface MCPServerGroup {
-    server: MCPServerData;
-    tools: MCPToolData[];
-    expanded: boolean;
+    server: MCPServerData;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    tools: MCPToolData[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    expanded: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -268,10 +268,37 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     private metadata = this.ProviderToUse;
 
-    public servers: MCPServerData[] = [];
-    public connections: MCPConnectionData[] = [];
+    public Servers: MCPServerData[] = [];
+
+    /** @deprecated Use {@link Servers}. */
+    public get servers(): MCPServerData[] {
+      return this.Servers;
+    }
+    /** @deprecated Use {@link Servers}. */
+    public set servers(value: MCPServerData[]) {
+      this.Servers = value;
+    }
+    public Connections: MCPConnectionData[] = [];
+
+    /** @deprecated Use {@link Connections}. */
+    public get connections(): MCPConnectionData[] {
+      return this.Connections;
+    }
+    /** @deprecated Use {@link Connections}. */
+    public set connections(value: MCPConnectionData[]) {
+      this.Connections = value;
+    }
     public tools: MCPToolData[] = [];
-    public executionLogs: MCPExecutionLogData[] = [];
+    public ExecutionLogs: MCPExecutionLogData[] = [];
+
+    /** @deprecated Use {@link ExecutionLogs}. */
+    public get executionLogs(): MCPExecutionLogData[] {
+      return this.ExecutionLogs;
+    }
+    /** @deprecated Use {@link ExecutionLogs}. */
+    public set executionLogs(value: MCPExecutionLogData[]) {
+      this.ExecutionLogs = value;
+    }
 
     /**
      * Precomputed tools-by-server index (key = NormalizeUUID(MCPServerID)).
@@ -281,37 +308,172 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      */
     private toolsByServerID = new Map<string, MCPToolData[]>();
 
-    public filteredServers: MCPServerData[] = [];
-    public filteredConnections: MCPConnectionData[] = [];
-    public filteredTools: MCPToolData[] = [];
-    public filteredLogs: MCPExecutionLogData[] = [];
+    public FilteredServers: MCPServerData[] = [];
+
+    /** @deprecated Use {@link FilteredServers}. */
+    public get filteredServers(): MCPServerData[] {
+      return this.FilteredServers;
+    }
+    /** @deprecated Use {@link FilteredServers}. */
+    public set filteredServers(value: MCPServerData[]) {
+      this.FilteredServers = value;
+    }
+    public FilteredConnections: MCPConnectionData[] = [];
+
+    /** @deprecated Use {@link FilteredConnections}. */
+    public get filteredConnections(): MCPConnectionData[] {
+      return this.FilteredConnections;
+    }
+    /** @deprecated Use {@link FilteredConnections}. */
+    public set filteredConnections(value: MCPConnectionData[]) {
+      this.FilteredConnections = value;
+    }
+    public FilteredTools: MCPToolData[] = [];
+
+    /** @deprecated Use {@link FilteredTools}. */
+    public get filteredTools(): MCPToolData[] {
+      return this.FilteredTools;
+    }
+    /** @deprecated Use {@link FilteredTools}. */
+    public set filteredTools(value: MCPToolData[]) {
+      this.FilteredTools = value;
+    }
+    public FilteredLogs: MCPExecutionLogData[] = [];
+
+    /** @deprecated Use {@link FilteredLogs}. */
+    public get filteredLogs(): MCPExecutionLogData[] {
+      return this.FilteredLogs;
+    }
+    /** @deprecated Use {@link FilteredLogs}. */
+    public set filteredLogs(value: MCPExecutionLogData[]) {
+      this.FilteredLogs = value;
+    }
 
     /** Part 3.2 — paginated tools (scales to thousands). Appended as user scrolls. */
-    public pagedTools: MCPToolSummary[] = [];
-    public toolsTotalCount = 0;
-    public toolsLoading = false;
-    public toolsSkip = 0;
-    public toolsPageSize = 50;
-    public useScalablePagination = false;
+    public PagedTools: MCPToolSummary[] = [];
+
+    /** @deprecated Use {@link PagedTools}. */
+    public get pagedTools(): MCPToolSummary[] {
+      return this.PagedTools;
+    }
+    /** @deprecated Use {@link PagedTools}. */
+    public set pagedTools(value: MCPToolSummary[]) {
+      this.PagedTools = value;
+    }
+    public ToolsTotalCount = 0;
+
+    /** @deprecated Use {@link ToolsTotalCount}. */
+    public get toolsTotalCount() {
+      return this.ToolsTotalCount;
+    }
+    /** @deprecated Use {@link ToolsTotalCount}. */
+    public set toolsTotalCount(value) {
+      this.ToolsTotalCount = value;
+    }
+    public ToolsLoading = false;
+
+    /** @deprecated Use {@link ToolsLoading}. */
+    public get toolsLoading() {
+      return this.ToolsLoading;
+    }
+    /** @deprecated Use {@link ToolsLoading}. */
+    public set toolsLoading(value) {
+      this.ToolsLoading = value;
+    }
+    public ToolsSkip = 0;
+
+    /** @deprecated Use {@link ToolsSkip}. */
+    public get toolsSkip() {
+      return this.ToolsSkip;
+    }
+    /** @deprecated Use {@link ToolsSkip}. */
+    public set toolsSkip(value) {
+      this.ToolsSkip = value;
+    }
+    public ToolsPageSize = 50;
+
+    /** @deprecated Use {@link ToolsPageSize}. */
+    public get toolsPageSize() {
+      return this.ToolsPageSize;
+    }
+    /** @deprecated Use {@link ToolsPageSize}. */
+    public set toolsPageSize(value) {
+      this.ToolsPageSize = value;
+    }
+    public UseScalablePagination = false;
+
+    /** @deprecated Use {@link UseScalablePagination}. */
+    public get useScalablePagination() {
+      return this.UseScalablePagination;
+    }
+    /** @deprecated Use {@link UseScalablePagination}. */
+    public set useScalablePagination(value) {
+      this.UseScalablePagination = value;
+    }
 
     /** Part 3.6 — favorited tool IDs for the current user. */
-    public favoritedToolIDs = new Set<string>();
+    public FavoritedToolIDs = new Set<string>();
+
+    /** @deprecated Use {@link FavoritedToolIDs}. */
+    public get favoritedToolIDs() {
+      return this.FavoritedToolIDs;
+    }
+    /** @deprecated Use {@link FavoritedToolIDs}. */
+    public set favoritedToolIDs(value) {
+      this.FavoritedToolIDs = value;
+    }
 
     /** Part 3.5 — Test dialog search string for tool combobox-style filter */
     public TestToolSearch = '';
 
     /** Part 3.3 — derived data for the filter panel */
-    public toolsAvailableServers: Array<{ ID: string; Name: string }> = [];
-    public toolsAvailableCategories: Array<{ category: string; count: number }> = [];
+    public ToolsAvailableServers: Array<{ ID: string; Name: string }> = [];
+
+    /** @deprecated Use {@link ToolsAvailableServers}. */
+    public get toolsAvailableServers(): Array<{ ID: string; Name: string }> {
+      return this.ToolsAvailableServers;
+    }
+    /** @deprecated Use {@link ToolsAvailableServers}. */
+    public set toolsAvailableServers(value: Array<{ ID: string; Name: string }>) {
+      this.ToolsAvailableServers = value;
+    }
+    public ToolsAvailableCategories: Array<{ category: string; count: number }> = [];
+
+    /** @deprecated Use {@link ToolsAvailableCategories}. */
+    public get toolsAvailableCategories(): Array<{ category: string; count: number }> {
+      return this.ToolsAvailableCategories;
+    }
+    /** @deprecated Use {@link ToolsAvailableCategories}. */
+    public set toolsAvailableCategories(value: Array<{ category: string; count: number }>) {
+      this.ToolsAvailableCategories = value;
+    }
 
     /** Part 3.4 — tool counts from GetMCPToolCounts (global, respects search) */
-    public toolsGlobalCount: number = 0;
+    public ToolsGlobalCount: number = 0;
+
+    /** @deprecated Use {@link ToolsGlobalCount}. */
+    public get toolsGlobalCount(): number {
+      return this.ToolsGlobalCount;
+    }
+    /** @deprecated Use {@link ToolsGlobalCount}. */
+    public set toolsGlobalCount(value: number) {
+      this.ToolsGlobalCount = value;
+    }
     /** Per-server tool count map used for "(N tools)" badge on group headers */
-    public toolCountByServer: Record<string, number> = {};
+    public ToolCountByServer: Record<string, number> = {};
+
+    /** @deprecated Use {@link ToolCountByServer}. */
+    public get toolCountByServer(): Record<string, number> {
+      return this.ToolCountByServer;
+    }
+    /** @deprecated Use {@link ToolCountByServer}. */
+    public set toolCountByServer(value: Record<string, number>) {
+      this.ToolCountByServer = value;
+    }
     /** Part 3.4 — auto-collapse threshold for server groups */
     public readonly AUTO_COLLAPSE_THRESHOLD = 100;
 
-    public stats: MCPDashboardStats = {
+    public Stats: MCPDashboardStats = {
         totalServers: 0,
         activeServers: 0,
         totalConnections: 0,
@@ -321,6 +483,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         recentExecutions: 0,
         failedExecutions: 0
     };
+
+    /** @deprecated Use {@link Stats}. */
+    public get stats(): MCPDashboardStats {
+      return this.Stats;
+    }
+    /** @deprecated Use {@link Stats}. */
+    public set stats(value: MCPDashboardStats) {
+      this.Stats = value;
+    }
 
     public ActiveTab: MCPDashboardTab = 'servers';
 
@@ -335,13 +506,22 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public IsLoading = false;
     public ErrorMessage: string | null = null;
 
-    public filters$ = new BehaviorSubject<MCPDashboardFilters>({
+    public Filters$ = new BehaviorSubject<MCPDashboardFilters>({
         searchTerm: '',
         serverStatus: 'all',
         connectionStatus: 'all',
         toolStatus: 'all',
         logStatus: 'all'
     });
+
+    /** @deprecated Use {@link Filters$}. */
+    public get filters$() {
+      return this.Filters$;
+    }
+    /** @deprecated Use {@link Filters$}. */
+    public set filters$(value) {
+      this.Filters$ = value;
+    }
 
     // Dialog state
     public ShowServerDialog = false;
@@ -539,8 +719,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             this.LogsSortAscending = prefs.logsSortAscending;
         }
         // Apply filter preferences
-        const currentFilters = this.filters$.value;
-        this.filters$.next({
+        const currentFilters = this.Filters$.value;
+        this.Filters$.next({
             ...currentFilters,
             searchTerm: prefs.searchTerm || '',
             serverStatus: prefs.serverStatus || 'all',
@@ -558,7 +738,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Get current preferences as an object for saving
      */
     private getCurrentPreferences(): MCPDashboardUserPreferences {
-        const currentFilters = this.filters$.value;
+        const currentFilters = this.Filters$.value;
         return {
             toolsViewMode: this.ToolsViewMode,
             toolsSortBy: this.ToolsSortBy,
@@ -608,7 +788,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     protected loadData(): void {
-        this.loadAllData();
+        this.LoadAllData();
     }
 
     ngAfterViewInit(): void {
@@ -663,31 +843,31 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     private publishAgentContext(): void {
         const top: MCPAgentContextInput = {
             ActiveTab: this.ActiveTab,
-            ServerCount: this.stats.totalServers,
-            ActiveServerCount: this.stats.activeServers,
-            ConnectionCount: this.stats.totalConnections,
-            ToolCount: this.stats.totalTools,
-            RecentExecutionCount: this.stats.recentExecutions,
-            FailedExecutionCount: this.stats.failedExecutions,
-            CurrentSearchTerm: this.filters$.value.searchTerm,
+            ServerCount: this.Stats.totalServers,
+            ActiveServerCount: this.Stats.activeServers,
+            ConnectionCount: this.Stats.totalConnections,
+            ToolCount: this.Stats.totalTools,
+            RecentExecutionCount: this.Stats.recentExecutions,
+            FailedExecutionCount: this.Stats.failedExecutions,
+            CurrentSearchTerm: this.Filters$.value.searchTerm,
             ToolsViewMode: this.ToolsViewMode,
         };
-        this.navigationService.SetAgentContext(this, buildMCPAgentContextFull(top, this.buildActiveTabContext()));
+        this.navigationService.SetAgentContext(this, BuildMCPAgentContextFull(top, this.buildActiveTabContext()));
     }
 
     /** Build the deep per-tab context slice for whichever tab is active. */
     private buildActiveTabContext(): MCPTabContextInput {
-        const f = this.filters$.value;
+        const f = this.Filters$.value;
         switch (this.ActiveTab) {
             case 'connections': {
-                const selected = this.connections.find(c => this.ExpandedConnectionID && UUIDsEqual(c.ID, this.ExpandedConnectionID)) ?? null;
+                const selected = this.Connections.find(c => this.ExpandedConnectionID && UUIDsEqual(c.ID, this.ExpandedConnectionID)) ?? null;
                 return {
                     Tab: 'connections',
                     Data: {
-                        ConnectionCount: this.connections.length,
-                        FilteredConnectionCount: this.filteredConnections.length,
+                        ConnectionCount: this.Connections.length,
+                        FilteredConnectionCount: this.FilteredConnections.length,
                         ConnectionStatusFilter: f.connectionStatus ?? 'all',
-                        VisibleConnectionNames: this.filteredConnections.map(c => c.Name),
+                        VisibleConnectionNames: this.FilteredConnections.map(c => c.Name),
                         SelectedConnectionId: selected?.ID ?? null,
                         SelectedConnectionName: selected?.Name ?? null,
                     },
@@ -697,13 +877,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 const selected = this.tools.find(t => this.ExpandedToolId && UUIDsEqual(t.ID, this.ExpandedToolId)) ?? null;
                 const serverFilter = f.toolsServer ?? 'all';
                 const serverFilterName = serverFilter && serverFilter !== 'all'
-                    ? (this.toolsAvailableServers.find(s => UUIDsEqual(s.ID, serverFilter))?.Name ?? null)
+                    ? (this.ToolsAvailableServers.find(s => UUIDsEqual(s.ID, serverFilter))?.Name ?? null)
                     : null;
                 return {
                     Tab: 'tools',
                     Data: {
                         ToolCount: this.tools.length,
-                        FilteredToolCount: this.filteredTools.length,
+                        FilteredToolCount: this.FilteredTools.length,
                         ToolsViewMode: this.ToolsViewMode,
                         ToolStatusFilter: f.toolStatus ?? 'all',
                         ServerFilter: serverFilter,
@@ -711,10 +891,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                         CategoryFilter: f.toolsCategory ?? 'all',
                         FavoritesOnly: f.favoritesOnly ?? false,
                         RecentOnly: f.recentOnly ?? false,
-                        FavoriteToolCount: this.favoritedToolIDs.size,
-                        VisibleToolNames: this.filteredTools.map(t => t.ToolTitle || t.ToolName),
-                        AvailableServerNames: this.toolsAvailableServers.map(s => s.Name),
-                        AvailableCategoryNames: this.toolsAvailableCategories.map(c => c.category),
+                        FavoriteToolCount: this.FavoritedToolIDs.size,
+                        VisibleToolNames: this.FilteredTools.map(t => t.ToolTitle || t.ToolName),
+                        AvailableServerNames: this.ToolsAvailableServers.map(s => s.Name),
+                        AvailableCategoryNames: this.ToolsAvailableCategories.map(c => c.category),
                         SelectedToolId: selected?.ID ?? null,
                         SelectedToolName: selected ? (selected.ToolTitle || selected.ToolName) : null,
                     },
@@ -724,13 +904,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 return {
                     Tab: 'logs',
                     Data: {
-                        ExecutionCount: this.executionLogs.length,
-                        FilteredExecutionCount: this.filteredLogs.length,
-                        FailedExecutionCount: this.executionLogs.filter(l => l.Status === 'Error').length,
+                        ExecutionCount: this.ExecutionLogs.length,
+                        FilteredExecutionCount: this.FilteredLogs.length,
+                        FailedExecutionCount: this.ExecutionLogs.filter(l => l.Status === 'Error').length,
                         LogStatusFilter: f.logStatus ?? 'all',
                         SortColumn: this.LogsSortColumn,
                         SortDirection: this.LogsSortAscending ? 'asc' : 'desc',
-                        VisibleLogLabels: this.filteredLogs.map(l => this.logLabel(l)),
+                        VisibleLogLabels: this.FilteredLogs.map(l => this.logLabel(l)),
                         SelectedLogId: this.SelectedLog?.ID ?? null,
                         SelectedLogName: this.SelectedLog?.ToolName ?? null,
                         DetailPanelOpen: this.ShowLogDetailPanel,
@@ -739,15 +919,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             }
             case 'servers':
             default: {
-                const selected = this.servers.find(s => this.ExpandedServerID && UUIDsEqual(s.ID, this.ExpandedServerID)) ?? null;
+                const selected = this.Servers.find(s => this.ExpandedServerID && UUIDsEqual(s.ID, this.ExpandedServerID)) ?? null;
                 return {
                     Tab: 'servers',
                     Data: {
-                        ServerCount: this.servers.length,
-                        FilteredServerCount: this.filteredServers.length,
-                        ActiveServerCount: this.stats.activeServers,
+                        ServerCount: this.Servers.length,
+                        FilteredServerCount: this.FilteredServers.length,
+                        ActiveServerCount: this.Stats.activeServers,
                         ServerStatusFilter: f.serverStatus ?? 'all',
-                        VisibleServerNames: this.filteredServers.map(s => s.Name),
+                        VisibleServerNames: this.FilteredServers.map(s => s.Name),
                         SelectedServerId: selected?.ID ?? null,
                         SelectedServerName: selected?.Name ?? null,
                     },
@@ -835,7 +1015,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 Description: 'Reset all MCP dashboard filters (search, status, server, category, favorites, recent) to their defaults.',
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async () => {
-                    this.resetAllFilters();
+                    this.ResetAllFilters();
                     this.publishAgentContext();
                     return { Success: true };
                 },
@@ -987,88 +1167,88 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     /** Switch the active tab after validating it. */
     private toolSwitchTab(params: Record<string, unknown>): AgentToolResult {
-        const v = validateEnumParam(params?.['tab'], MCP_TABS, 'tab');
+        const v = ValidateEnumParam(params?.['tab'], MCP_TABS, 'tab');
         if (!v.ok) return v.result;
-        this.setActiveTab(v.value);
+        this.SetActiveTab(v.value);
         this.publishAgentContext();
         return { Success: true };
     }
 
     /** Set the dashboard search term. */
     private toolSearch(params: Record<string, unknown>): AgentToolResult {
-        const v = validateStringParam(params?.['query'], 'query');
+        const v = ValidateStringParam(params?.['query'], 'query');
         if (!v.ok) return v.result;
-        this.onSearchChange(v.value);
+        this.OnSearchChange(v.value);
         this.publishAgentContext();
         return { Success: true };
     }
 
     /** Set a per-tab status filter ('all' or a status string). Tolerant of any string. */
     private toolFilterByStatus(kind: 'server' | 'connection' | 'tool' | 'log', params: Record<string, unknown>): AgentToolResult {
-        const v = validateStringParam(params?.['status'], 'status');
+        const v = ValidateStringParam(params?.['status'], 'status');
         if (!v.ok) return v.result;
-        this.onStatusFilterChange(kind, v.value || 'all');
+        this.OnStatusFilterChange(kind, v.value || 'all');
         this.publishAgentContext();
         return { Success: true };
     }
 
     /** Restrict the Tools tab to a single server (by ID or name; 'all' to clear). */
     private toolFilterByServer(params: Record<string, unknown>): AgentToolResult {
-        const v = validateStringParam(params?.['server'], 'server');
+        const v = ValidateStringParam(params?.['server'], 'server');
         if (!v.ok) return v.result;
         const raw = v.value;
         // Ensure the Tools tab is active so the filter is meaningful.
-        this.setActiveTab('tools');
+        this.SetActiveTab('tools');
         if (!raw || raw === 'all') {
-            this.onFilterFieldChange('toolsServer', 'all');
+            this.OnFilterFieldChange('toolsServer', 'all');
             this.publishAgentContext();
             return { Success: true };
         }
-        const candidates: MCPNamedItem[] = this.toolsAvailableServers.map(s => ({ ID: s.ID, Name: s.Name }));
-        const match = resolveMCPItem(raw, candidates);
+        const candidates: MCPNamedItem[] = this.ToolsAvailableServers.map(s => ({ ID: s.ID, Name: s.Name }));
+        const match = ResolveMCPItem(raw, candidates);
         if (!match) {
-            return { Success: false, ErrorMessage: buildMCPNotFoundError(raw, candidates, 'server') };
+            return { Success: false, ErrorMessage: BuildMCPNotFoundError(raw, candidates, 'server') };
         }
-        this.onFilterFieldChange('toolsServer', match.ID);
+        this.OnFilterFieldChange('toolsServer', match.ID);
         this.publishAgentContext();
         return { Success: true };
     }
 
     /** Restrict the Tools tab to a category prefix ('all' to clear). Tolerant. */
     private toolFilterByCategory(params: Record<string, unknown>): AgentToolResult {
-        const v = validateStringParam(params?.['category'], 'category');
+        const v = ValidateStringParam(params?.['category'], 'category');
         if (!v.ok) return v.result;
         const cat = v.value || 'all';
-        this.setActiveTab('tools');
-        if (cat !== 'all' && !this.toolsAvailableCategories.some(c => c.category === cat)) {
-            const sample = this.toolsAvailableCategories.slice(0, 6).map(c => c.category).join(', ');
+        this.SetActiveTab('tools');
+        if (cat !== 'all' && !this.ToolsAvailableCategories.some(c => c.category === cat)) {
+            const sample = this.ToolsAvailableCategories.slice(0, 6).map(c => c.category).join(', ');
             return { Success: false, ErrorMessage: `Category "${cat}" is not available. Available categories include: ${sample || '(none)'}.` };
         }
-        this.onFilterFieldChange('toolsCategory', cat);
+        this.OnFilterFieldChange('toolsCategory', cat);
         this.publishAgentContext();
         return { Success: true };
     }
 
     /** Toggle (or explicitly set) the favorites-only filter on the Tools tab. */
     private toolToggleFavoritesOnly(params: Record<string, unknown>): AgentToolResult {
-        this.setActiveTab('tools');
+        this.SetActiveTab('tools');
         const raw = params?.['enabled'];
-        const enabled = typeof raw === 'boolean' ? raw : !(this.filters$.value.favoritesOnly ?? false);
-        this.onFilterFieldChange('favoritesOnly', enabled);
+        const enabled = typeof raw === 'boolean' ? raw : !(this.Filters$.value.favoritesOnly ?? false);
+        this.OnFilterFieldChange('favoritesOnly', enabled);
         this.publishAgentContext();
         return { Success: true };
     }
 
     /** Toggle a tool's favorite flag for the current user (by ID or name). */
     private async toolToggleFavorite(params: Record<string, unknown>): Promise<AgentToolResult> {
-        const v = validateStringParam(params?.['tool'], 'tool');
+        const v = ValidateStringParam(params?.['tool'], 'tool');
         if (!v.ok) return v.result;
-        const match = resolveMCPItem(v.value, this.toolCandidates());
+        const match = ResolveMCPItem(v.value, this.toolCandidates());
         if (!match) {
-            return { Success: false, ErrorMessage: buildMCPNotFoundError(v.value, this.toolCandidates(), 'tool') };
+            return { Success: false, ErrorMessage: BuildMCPNotFoundError(v.value, this.toolCandidates(), 'tool') };
         }
         try {
-            await this.toggleFavorite(match.ID);
+            await this.ToggleFavorite(match.ID);
             this.publishAgentContext();
             return { Success: true };
         } catch (e) {
@@ -1080,7 +1260,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     private async toolRefresh(params: Record<string, unknown>): Promise<AgentToolResult> {
         const forceRefresh = params?.['forceRefresh'] === true;
         try {
-            await this.loadAllData(forceRefresh);
+            await this.LoadAllData(forceRefresh);
             this.publishAgentContext();
             return { Success: true };
         } catch (e) {
@@ -1090,19 +1270,19 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     /** Switch the Tools tab view mode after validating it. */
     private toolSetToolsViewMode(params: Record<string, unknown>): AgentToolResult {
-        const v = validateEnumParam(params?.['mode'], MCP_TOOLS_VIEW_MODES, 'mode');
+        const v = ValidateEnumParam(params?.['mode'], MCP_TOOLS_VIEW_MODES, 'mode');
         if (!v.ok) return v.result;
-        this.setToolsViewMode(v.value);
+        this.SetToolsViewMode(v.value);
         this.publishAgentContext();
         return { Success: true };
     }
 
     /** Sort the logs table by a validated column. */
     private toolSortLogs(params: Record<string, unknown>): AgentToolResult {
-        const v = validateEnumParam(params?.['column'], MCP_LOG_SORT_COLUMNS, 'column');
+        const v = ValidateEnumParam(params?.['column'], MCP_LOG_SORT_COLUMNS, 'column');
         if (!v.ok) return v.result;
-        this.setActiveTab('logs');
-        this.onLogSortColumn(v.value);
+        this.SetActiveTab('logs');
+        this.OnLogSortColumn(v.value);
         this.publishAgentContext();
         return { Success: true };
     }
@@ -1116,35 +1296,35 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     /** Resolve a server reference (ID or name); returns the row or a tolerant error. */
     private resolveServerRef(raw: string): { ok: true; server: MCPServerData } | { ok: false; result: AgentToolResult } {
-        const candidates: MCPNamedItem[] = this.servers.map(s => ({ ID: s.ID, Name: s.Name }));
-        const match = resolveMCPItem(raw, candidates);
+        const candidates: MCPNamedItem[] = this.Servers.map(s => ({ ID: s.ID, Name: s.Name }));
+        const match = ResolveMCPItem(raw, candidates);
         if (!match) {
-            return { ok: false, result: { Success: false, ErrorMessage: buildMCPNotFoundError(raw, candidates, 'server') } };
+            return { ok: false, result: { Success: false, ErrorMessage: BuildMCPNotFoundError(raw, candidates, 'server') } };
         }
-        const server = this.servers.find(s => UUIDsEqual(s.ID, match.ID))!;
+        const server = this.Servers.find(s => UUIDsEqual(s.ID, match.ID))!;
         return { ok: true, server };
     }
 
     /** Resolve a connection reference (ID or name); returns the row or a tolerant error. */
     private resolveConnectionRef(raw: string): { ok: true; connection: MCPConnectionData } | { ok: false; result: AgentToolResult } {
-        const candidates: MCPNamedItem[] = this.connections.map(c => ({ ID: c.ID, Name: c.Name }));
-        const match = resolveMCPItem(raw, candidates);
+        const candidates: MCPNamedItem[] = this.Connections.map(c => ({ ID: c.ID, Name: c.Name }));
+        const match = ResolveMCPItem(raw, candidates);
         if (!match) {
-            return { ok: false, result: { Success: false, ErrorMessage: buildMCPNotFoundError(raw, candidates, 'connection') } };
+            return { ok: false, result: { Success: false, ErrorMessage: BuildMCPNotFoundError(raw, candidates, 'connection') } };
         }
-        const connection = this.connections.find(c => UUIDsEqual(c.ID, match.ID))!;
+        const connection = this.Connections.find(c => UUIDsEqual(c.ID, match.ID))!;
         return { ok: true, connection };
     }
 
     /** Select (expand) a server by ID or name. */
     private toolSelectServer(params: Record<string, unknown>): AgentToolResult {
-        const v = validateStringParam(params?.['server'], 'server');
+        const v = ValidateStringParam(params?.['server'], 'server');
         if (!v.ok) return v.result;
         const r = this.resolveServerRef(v.value);
         if (!r.ok) return r.result;
-        this.setActiveTab('servers');
-        if (!this.isServerExpanded(r.server)) {
-            this.toggleServerExpand(r.server);
+        this.SetActiveTab('servers');
+        if (!this.IsServerExpanded(r.server)) {
+            this.ToggleServerExpand(r.server);
         }
         this.publishAgentContext();
         return { Success: true };
@@ -1159,7 +1339,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             if (!r.ok) return r.result;
             server = r.server;
         } else {
-            server = this.servers.find(s => this.ExpandedServerID && UUIDsEqual(s.ID, this.ExpandedServerID)) ?? null;
+            server = this.Servers.find(s => this.ExpandedServerID && UUIDsEqual(s.ID, this.ExpandedServerID)) ?? null;
             if (!server) return { Success: false, ErrorMessage: 'No server is selected. Pass a server ID or name, or select one first.' };
         }
         this.navigationService.OpenEntityRecord('MJ: MCP Servers', CompositeKey.FromID(server.ID));
@@ -1168,13 +1348,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     /** Select (expand) a connection by ID or name. */
     private toolSelectConnection(params: Record<string, unknown>): AgentToolResult {
-        const v = validateStringParam(params?.['connection'], 'connection');
+        const v = ValidateStringParam(params?.['connection'], 'connection');
         if (!v.ok) return v.result;
         const r = this.resolveConnectionRef(v.value);
         if (!r.ok) return r.result;
-        this.setActiveTab('connections');
-        if (!this.isConnectionExpanded(r.connection)) {
-            this.toggleConnectionExpand(r.connection);
+        this.SetActiveTab('connections');
+        if (!this.IsConnectionExpanded(r.connection)) {
+            this.ToggleConnectionExpand(r.connection);
         }
         this.publishAgentContext();
         return { Success: true };
@@ -1189,7 +1369,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             if (!r.ok) return r.result;
             connection = r.connection;
         } else {
-            connection = this.connections.find(c => this.ExpandedConnectionID && UUIDsEqual(c.ID, this.ExpandedConnectionID)) ?? null;
+            connection = this.Connections.find(c => this.ExpandedConnectionID && UUIDsEqual(c.ID, this.ExpandedConnectionID)) ?? null;
             if (!connection) return { Success: false, ErrorMessage: 'No connection is selected. Pass a connection ID or name, or select one first.' };
         }
         this.navigationService.OpenEntityRecord('MJ: MCP Server Connections', CompositeKey.FromID(connection.ID));
@@ -1205,10 +1385,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             if (!r.ok) return r.result;
             connection = r.connection;
         } else {
-            connection = this.connections.find(c => this.ExpandedConnectionID && UUIDsEqual(c.ID, this.ExpandedConnectionID)) ?? null;
+            connection = this.Connections.find(c => this.ExpandedConnectionID && UUIDsEqual(c.ID, this.ExpandedConnectionID)) ?? null;
             if (!connection) return { Success: false, ErrorMessage: 'No connection is selected. Pass a connection ID or name, or select one first.' };
         }
-        const server = this.servers.find(s => UUIDsEqual(s.ID, connection!.MCPServerID));
+        const server = this.Servers.find(s => UUIDsEqual(s.ID, connection!.MCPServerID));
         if (!server) return { Success: false, ErrorMessage: `The parent server for connection "${connection.Name}" is not loaded.` };
         this.navigationService.OpenEntityRecord('MJ: MCP Servers', CompositeKey.FromID(server.ID));
         return { Success: true };
@@ -1216,14 +1396,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     /** Select (expand) a tool by ID or name. Does NOT execute the tool. */
     private toolSelectTool(params: Record<string, unknown>): AgentToolResult {
-        const v = validateStringParam(params?.['tool'], 'tool');
+        const v = ValidateStringParam(params?.['tool'], 'tool');
         if (!v.ok) return v.result;
-        const match = resolveMCPItem(v.value, this.toolCandidates());
-        if (!match) return { Success: false, ErrorMessage: buildMCPNotFoundError(v.value, this.toolCandidates(), 'tool') };
+        const match = ResolveMCPItem(v.value, this.toolCandidates());
+        if (!match) return { Success: false, ErrorMessage: BuildMCPNotFoundError(v.value, this.toolCandidates(), 'tool') };
         const tool = this.tools.find(t => UUIDsEqual(t.ID, match.ID))!;
-        this.setActiveTab('tools');
-        if (!this.isToolExpanded(tool)) {
-            this.toggleToolExpand(tool);
+        this.SetActiveTab('tools');
+        if (!this.IsToolExpanded(tool)) {
+            this.ToggleToolExpand(tool);
         }
         this.publishAgentContext();
         return { Success: true };
@@ -1234,8 +1414,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         const raw = typeof params?.['tool'] === 'string' ? (params['tool'] as string) : '';
         let tool: MCPToolData | null = null;
         if (raw) {
-            const match = resolveMCPItem(raw, this.toolCandidates());
-            if (!match) return { Success: false, ErrorMessage: buildMCPNotFoundError(raw, this.toolCandidates(), 'tool') };
+            const match = ResolveMCPItem(raw, this.toolCandidates());
+            if (!match) return { Success: false, ErrorMessage: BuildMCPNotFoundError(raw, this.toolCandidates(), 'tool') };
             tool = this.tools.find(t => UUIDsEqual(t.ID, match.ID)) ?? null;
         } else {
             tool = this.tools.find(t => this.ExpandedToolId && UUIDsEqual(t.ID, this.ExpandedToolId)) ?? null;
@@ -1247,15 +1427,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     /** Select a log (open its detail panel) by ID or tool-name match. */
     private async toolSelectLog(params: Record<string, unknown>): Promise<AgentToolResult> {
-        const v = validateStringParam(params?.['log'], 'log');
+        const v = ValidateStringParam(params?.['log'], 'log');
         if (!v.ok) return v.result;
-        const candidates: MCPNamedItem[] = this.filteredLogs.map(l => ({ ID: l.ID, Name: l.ToolName }));
-        const match = resolveMCPItem(v.value, candidates);
-        if (!match) return { Success: false, ErrorMessage: buildMCPNotFoundError(v.value, candidates, 'log') };
-        const log = this.executionLogs.find(l => UUIDsEqual(l.ID, match.ID));
+        const candidates: MCPNamedItem[] = this.FilteredLogs.map(l => ({ ID: l.ID, Name: l.ToolName }));
+        const match = ResolveMCPItem(v.value, candidates);
+        if (!match) return { Success: false, ErrorMessage: BuildMCPNotFoundError(v.value, candidates, 'log') };
+        const log = this.ExecutionLogs.find(l => UUIDsEqual(l.ID, match.ID));
         if (!log) return { Success: false, ErrorMessage: `Log "${v.value}" is no longer loaded.` };
-        this.setActiveTab('logs');
-        await this.onLogClick(log);
+        this.SetActiveTab('logs');
+        await this.OnLogClick(log);
         this.publishAgentContext();
         return { Success: true };
     }
@@ -1265,10 +1445,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         const raw = typeof params?.['log'] === 'string' ? (params['log'] as string) : '';
         let log: MCPExecutionLogData | null = null;
         if (raw) {
-            const candidates: MCPNamedItem[] = this.executionLogs.map(l => ({ ID: l.ID, Name: l.ToolName }));
-            const match = resolveMCPItem(raw, candidates);
-            if (!match) return { Success: false, ErrorMessage: buildMCPNotFoundError(raw, candidates, 'log') };
-            log = this.executionLogs.find(l => UUIDsEqual(l.ID, match.ID)) ?? null;
+            const candidates: MCPNamedItem[] = this.ExecutionLogs.map(l => ({ ID: l.ID, Name: l.ToolName }));
+            const match = ResolveMCPItem(raw, candidates);
+            if (!match) return { Success: false, ErrorMessage: BuildMCPNotFoundError(raw, candidates, 'log') };
+            log = this.ExecutionLogs.find(l => UUIDsEqual(l.ID, match.ID)) ?? null;
         } else {
             log = this.SelectedLog;
             if (!log) return { Success: false, ErrorMessage: 'No log is selected. Pass a log ID, or select one first.' };
@@ -1295,7 +1475,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * and RunView for execution logs (historical data loaded on-demand)
      * @param forceRefresh - If true, forces MCPEngine to reload from database (use after sync operations)
      */
-    public async loadAllData(forceRefresh: boolean = false): Promise<void> {
+    public async LoadAllData(forceRefresh: boolean = false): Promise<void> {
         this.IsLoading = true;
         this.ErrorMessage = null;
         this.cdr.markForCheck();
@@ -1320,7 +1500,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             ]);
 
             // Get cached data from MCPEngine and convert to interface types
-            this.servers = MCPEngine.Instance.Servers.map(s => ({
+            this.Servers = MCPEngine.Instance.Servers.map(s => ({
                 ID: s.ID,
                 Name: s.Name,
                 Description: s.Description,
@@ -1341,7 +1521,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 OAuthRequirePKCE: s.OAuthRequirePKCE
             }));
 
-            this.connections = MCPEngine.Instance.Connections.map(c => ({
+            this.Connections = MCPEngine.Instance.Connections.map(c => ({
                 ID: c.ID,
                 MCPServerID: c.MCPServerID,
                 Name: c.Name,
@@ -1372,7 +1552,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
             if (logsResult.Success) {
                 // Map database column names to UI interface property names
-                this.executionLogs = (logsResult.Results || []).map(log => this.mapLogFromDatabase(log));
+                this.ExecutionLogs = (logsResult.Results || []).map(log => this.mapLogFromDatabase(log));
             }
 
             // Enrich data with counts and names
@@ -1385,17 +1565,17 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             this.calculateStats();
 
             // Populate filter dropdowns from loaded data (needed even outside Scale mode)
-            this.toolsAvailableServers = this.servers.map(s => ({ ID: s.ID, Name: s.Name }));
-            this.toolsAvailableCategories = this.computeCategoriesFromTools();
+            this.ToolsAvailableServers = this.Servers.map(s => ({ ID: s.ID, Name: s.Name }));
+            this.ToolsAvailableCategories = this.ComputeCategoriesFromTools();
 
             // Apply filters
-            this.applyFilters();
+            this.ApplyFilters();
 
             // Refresh the agent context now that counts/stats are recomputed.
             this.publishAgentContext();
 
             // Load user's favorites (Part 3.6) — fire and forget
-            this.loadFavorites();
+            this.LoadFavorites();
 
         } catch (error) {
             this.ErrorMessage = `Failed to load data: ${error instanceof Error ? error.message : String(error)}`;
@@ -1405,41 +1585,46 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
+    /** @deprecated Use {@link LoadAllData}. */
+    public async loadAllData(forceRefresh: boolean = false): Promise<void> {
+      return this.LoadAllData(forceRefresh);
+    }
+
     private enrichServerData(): void {
-        for (const server of this.servers) {
-            server.ConnectionCount = this.connections.filter(c => UUIDsEqual(c.MCPServerID, server.ID)).length
+        for (const server of this.Servers) {
+            server.ConnectionCount = this.Connections.filter(c => UUIDsEqual(c.MCPServerID, server.ID)).length
             server.ToolCount = this.tools.filter(t => UUIDsEqual(t.MCPServerID, server.ID)).length
         }
     }
 
     private enrichConnectionData(): void {
-        for (const conn of this.connections) {
-            const server = this.servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID));
+        for (const conn of this.Connections) {
+            const server = this.Servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID));
             conn.ServerName = server?.Name ?? 'Unknown';
         }
     }
 
     private enrichToolData(): void {
         for (const tool of this.tools) {
-            const server = this.servers.find(s => UUIDsEqual(s.ID, tool.MCPServerID));
+            const server = this.Servers.find(s => UUIDsEqual(s.ID, tool.MCPServerID));
             tool.ServerName = server?.Name ?? 'Unknown';
         }
     }
 
     private enrichLogData(): void {
-        for (const log of this.executionLogs) {
-            const conn = this.connections.find(c => UUIDsEqual(c.ID, log.ConnectionID));
+        for (const log of this.ExecutionLogs) {
+            const conn = this.Connections.find(c => UUIDsEqual(c.ID, log.ConnectionID));
             log.ConnectionName = conn?.Name ?? log.ConnectionName ?? 'Unknown';
             // Add server name via connection
             if (conn) {
-                const server = this.servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID));
+                const server = this.Servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID));
                 log.ServerName = server?.Name ?? 'Unknown';
             } else {
                 log.ServerName = log.ServerName ?? 'Unknown';
             }
         }
         // Sort logs by StartedAt descending (most recent first)
-        this.executionLogs.sort((a, b) => {
+        this.ExecutionLogs.sort((a, b) => {
             const dateA = new Date(a.StartedAt).getTime();
             const dateB = new Date(b.StartedAt).getTime();
             return dateB - dateA;
@@ -1482,15 +1667,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     private calculateStats(): void {
-        this.stats = {
-            totalServers: this.servers.length,
-            activeServers: this.servers.filter(s => s.Status === 'Active').length,
-            totalConnections: this.connections.length,
-            activeConnections: this.connections.filter(c => c.Status === 'Active').length,
+        this.Stats = {
+            totalServers: this.Servers.length,
+            activeServers: this.Servers.filter(s => s.Status === 'Active').length,
+            totalConnections: this.Connections.length,
+            activeConnections: this.Connections.filter(c => c.Status === 'Active').length,
             totalTools: this.tools.length,
             activeTools: this.tools.filter(t => t.Status === 'Active').length,
-            recentExecutions: this.executionLogs.length,
-            failedExecutions: this.executionLogs.filter(l => l.Status === 'Error').length
+            recentExecutions: this.ExecutionLogs.length,
+            failedExecutions: this.ExecutionLogs.filter(l => l.Status === 'Error').length
         };
     }
 
@@ -1499,14 +1684,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     // ========================================
 
     private setupFilterSubscription(): void {
-        this.filters$
+        this.Filters$
             .pipe(
                 debounceTime(300),
                 distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)),
                 takeUntil(this.destroy$)
             )
             .subscribe(() => {
-                this.applyFilters();
+                this.ApplyFilters();
                 // Re-emit agent context so search / filter / tab-clear changes are
                 // reflected in the AI agent's view of this surface.
                 this.publishAgentContext();
@@ -1514,12 +1699,12 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             });
     }
 
-    public applyFilters(): void {
-        const filters = this.filters$.value;
+    public ApplyFilters(): void {
+        const filters = this.Filters$.value;
         const search = filters.searchTerm.toLowerCase();
 
         // Filter servers
-        this.filteredServers = this.servers.filter(s => {
+        this.FilteredServers = this.Servers.filter(s => {
             const matchesSearch = !search ||
                 s.Name.toLowerCase().includes(search) ||
                 (s.Description?.toLowerCase().includes(search) ?? false);
@@ -1528,7 +1713,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         });
 
         // Filter connections
-        this.filteredConnections = this.connections.filter(c => {
+        this.FilteredConnections = this.Connections.filter(c => {
             const matchesSearch = !search ||
                 c.Name.toLowerCase().includes(search) ||
                 (c.ServerName?.toLowerCase().includes(search) ?? false);
@@ -1537,7 +1722,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         });
 
         // Filter tools (legacy grouped view — now also honors Server / Category / Favorites-only filters)
-        this.filteredTools = this.tools.filter(t => {
+        this.FilteredTools = this.tools.filter(t => {
             const matchesSearch = !search ||
                 t.ToolName.toLowerCase().includes(search) ||
                 (t.ToolTitle?.toLowerCase().includes(search) ?? false) ||
@@ -1547,8 +1732,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 UUIDsEqual(t.MCPServerID, filters.toolsServer);
             const cat = t.ToolName.indexOf('_') > 0 ? t.ToolName.substring(0, t.ToolName.indexOf('_')) : t.ToolName;
             const matchesCategory = !filters.toolsCategory || filters.toolsCategory === 'all' || cat === filters.toolsCategory;
-            const matchesFavorite = !filters.favoritesOnly || this.isFavorited(t.ID);
-            const matchesRecent = !filters.recentOnly || this.recentToolIDSet().has(NormalizeUUID(t.ID));
+            const matchesFavorite = !filters.favoritesOnly || this.IsFavorited(t.ID);
+            const matchesRecent = !filters.recentOnly || this.RecentToolIDSet().has(NormalizeUUID(t.ID));
             return matchesSearch && matchesStatus && matchesServer && matchesCategory && matchesFavorite && matchesRecent;
         });
 
@@ -1556,7 +1741,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.buildServerGroups();
 
         // Filter logs
-        this.filteredLogs = this.executionLogs.filter(l => {
+        this.FilteredLogs = this.ExecutionLogs.filter(l => {
             const matchesSearch = !search ||
                 l.ToolName.toLowerCase().includes(search) ||
                 (l.ConnectionName?.toLowerCase().includes(search) ?? false) ||
@@ -1569,29 +1754,44 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.sortFilteredLogs();
     }
 
-    public onSearchChange(term: string): void {
-        const current = this.filters$.value;
-        this.filters$.next({ ...current, searchTerm: term });
+    /** @deprecated Use {@link ApplyFilters}. */
+    public applyFilters(): void {
+      return this.ApplyFilters();
+    }
+
+    public OnSearchChange(term: string): void {
+        const current = this.Filters$.value;
+        this.Filters$.next({ ...current, searchTerm: term });
         this.saveUserPreferencesDebounced();
     }
 
-    public onStatusFilterChange(filterType: string, value: string): void {
-        const current = this.filters$.value;
+    /** @deprecated Use {@link OnSearchChange}. */
+    public onSearchChange(term: string): void {
+      return this.OnSearchChange(term);
+    }
+
+    public OnStatusFilterChange(filterType: string, value: string): void {
+        const current = this.Filters$.value;
         switch (filterType) {
             case 'server':
-                this.filters$.next({ ...current, serverStatus: value });
+                this.Filters$.next({ ...current, serverStatus: value });
                 break;
             case 'connection':
-                this.filters$.next({ ...current, connectionStatus: value });
+                this.Filters$.next({ ...current, connectionStatus: value });
                 break;
             case 'tool':
-                this.filters$.next({ ...current, toolStatus: value });
+                this.Filters$.next({ ...current, toolStatus: value });
                 break;
             case 'log':
-                this.filters$.next({ ...current, logStatus: value });
+                this.Filters$.next({ ...current, logStatus: value });
                 break;
         }
         this.saveUserPreferencesDebounced();
+    }
+
+    /** @deprecated Use {@link OnStatusFilterChange}. */
+    public onStatusFilterChange(filterType: string, value: string): void {
+      return this.OnStatusFilterChange(filterType, value);
     }
 
     // ========================================
@@ -1601,34 +1801,49 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Toggle filter panel visibility
      */
-    public toggleFilterPanel(): void {
+    public ToggleFilterPanel(): void {
         this.FilterPanelVisible = !this.FilterPanelVisible;
         this.saveUserPreferencesDebounced();
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link ToggleFilterPanel}. */
+    public toggleFilterPanel(): void {
+      return this.ToggleFilterPanel();
+    }
+
     /**
      * Handle filter changes from the filter panel component
      */
-    public onFiltersChange(filters: MCPDashboardFilters): void {
-        this.filters$.next(filters);
+    public OnFiltersChange(filters: MCPDashboardFilters): void {
+        this.Filters$.next(filters);
         this.saveUserPreferencesDebounced();
         // Part 3.3/3.4 — when Tools tab is active in scale mode, reload the paginated list + counts
-        if (this.ActiveTab === 'tools' && this.useScalablePagination) {
-            this.loadToolsPage(true);
-            this.loadToolCounts();
+        if (this.ActiveTab === 'tools' && this.UseScalablePagination) {
+            this.LoadToolsPage(true);
+            this.LoadToolCounts();
         }
     }
 
+    /** @deprecated Use {@link OnFiltersChange}. */
+    public onFiltersChange(filters: MCPDashboardFilters): void {
+      return this.OnFiltersChange(filters);
+    }
+
     /** Inlined filter panel — single-field update helper */
+    public OnFilterFieldChange(field: keyof MCPDashboardFilters, value: unknown): void {
+        const updated = { ...this.Filters$.value, [field]: value };
+        this.OnFiltersChange(updated as MCPDashboardFilters);
+    }
+
+    /** @deprecated Use {@link OnFilterFieldChange}. */
     public onFilterFieldChange(field: keyof MCPDashboardFilters, value: unknown): void {
-        const updated = { ...this.filters$.value, [field]: value };
-        this.onFiltersChange(updated as MCPDashboardFilters);
+      return this.OnFilterFieldChange(field, value);
     }
 
     /** Count of non-default filter dimensions, used for "Filters (N)" badge */
-    public activeFilterCount(): number {
-        const f = this.filters$.value;
+    public activeFilterCount(): number {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+        const f = this.Filters$.value;
         let n = 0;
         if (f.searchTerm) n++;
         if (f.serverStatus && f.serverStatus !== 'all') n++;
@@ -1643,7 +1858,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     /** Derive category list (snake_case prefix) + counts from the currently loaded tools. */
-    public computeCategoriesFromTools(): Array<{ category: string; count: number }> {
+    public ComputeCategoriesFromTools(): Array<{ category: string; count: number }> {
         const counts = new Map<string, number>();
         for (const t of this.tools) {
             const idx = t.ToolName.indexOf('_');
@@ -1655,8 +1870,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             .sort((a, b) => a.category.localeCompare(b.category));
     }
 
-    public resetAllFilters(): void {
-        this.onFiltersChange({
+    /** @deprecated Use {@link ComputeCategoriesFromTools}. */
+    public computeCategoriesFromTools(): Array<{ category: string; count: number }> {
+      return this.ComputeCategoriesFromTools();
+    }
+
+    public ResetAllFilters(): void {
+        this.OnFiltersChange({
             searchTerm: '',
             serverStatus: 'all',
             connectionStatus: 'all',
@@ -1669,10 +1889,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         });
     }
 
+    /** @deprecated Use {@link ResetAllFilters}. */
+    public resetAllFilters(): void {
+      return this.ResetAllFilters();
+    }
+
     /** Reset only the popover filters — leave searchTerm (toolbar) untouched. */
-    public resetPopoverFilters(): void {
-        const current = this.filters$.value;
-        this.onFiltersChange({
+    public ResetPopoverFilters(): void {
+        const current = this.Filters$.value;
+        this.OnFiltersChange({
             ...current,
             serverStatus: 'all',
             connectionStatus: 'all',
@@ -1685,25 +1910,40 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         });
     }
 
+    /** @deprecated Use {@link ResetPopoverFilters}. */
+    public resetPopoverFilters(): void {
+      return this.ResetPopoverFilters();
+    }
+
     /** Tools-tab view-mode options for the shared <mj-view-toggle>. */
-    public readonly toolsViewOptions = [
+    public readonly ToolsViewOptions = [
         { key: 'card', icon: 'fa-solid fa-grip', title: 'Card View' },
         { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
     ];
 
+    /** @deprecated Use {@link ToolsViewOptions}. */
+    public get toolsViewOptions() {
+      return this.ToolsViewOptions;
+    }
+
     /** Tab config consumed by the centralized <mj-tab-nav>. */
-    public get mcpTabs(): import('@memberjunction/ng-ui-components').TabConfig[] {
+    public get McpTabs(): import('@memberjunction/ng-ui-components').TabConfig[] {
         return [
-            { key: 'servers',     label: 'Servers',     icon: 'fa-solid fa-server',     badge: this.servers.length },
-            { key: 'connections', label: 'Connections', icon: 'fa-solid fa-link',       badge: this.connections.length },
+            { key: 'servers',     label: 'Servers',     icon: 'fa-solid fa-server',     badge: this.Servers.length },
+            { key: 'connections', label: 'Connections', icon: 'fa-solid fa-link',       badge: this.Connections.length },
             { key: 'tools',       label: 'Tools',       icon: 'fa-solid fa-wrench',     badge: this.tools.length },
-            { key: 'logs',        label: 'Logs',        icon: 'fa-solid fa-list-check', badge: this.executionLogs.length, badgeVariant: this.stats.failedExecutions > 0 ? 'error' : 'default' },
+            { key: 'logs',        label: 'Logs',        icon: 'fa-solid fa-list-check', badge: this.ExecutionLogs.length, badgeVariant: this.Stats.failedExecutions > 0 ? 'error' : 'default' },
         ];
+    }
+
+    /** @deprecated Use {@link McpTabs}. */
+    public get mcpTabs(): import('@memberjunction/ng-ui-components').TabConfig[] {
+      return this.McpTabs;
     }
 
     /** Active filter count excluding searchTerm (surfaced separately via toolbar mj-page-search). */
     public get ActiveFilterCount(): number {
-        const f = this.filters$.value;
+        const f = this.Filters$.value;
         let n = 0;
         if (f.serverStatus && f.serverStatus !== 'all') n++;
         if (f.connectionStatus && f.connectionStatus !== 'all') n++;
@@ -1717,8 +1957,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     /** Values record consumed by the centralized <mj-filter-panel>, scoped to the current tab. */
-    public get mcpFilterValues(): Record<string, unknown> {
-        const f = this.filters$.value;
+    public get McpFilterValues(): Record<string, unknown> {
+        const f = this.Filters$.value;
         return {
             serverStatus:     f.serverStatus,
             connectionStatus: f.connectionStatus,
@@ -1731,8 +1971,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         };
     }
 
+    /** @deprecated Use {@link McpFilterValues}. */
+    public get mcpFilterValues(): Record<string, unknown> {
+      return this.McpFilterValues;
+    }
+
     /** Field config built dynamically based on the active tab. */
-    public get mcpFilterFields(): import('@memberjunction/ng-ui-components').FilterFieldConfig[] {
+    public get McpFilterFields(): import('@memberjunction/ng-ui-components').FilterFieldConfig[] {
         const fields: import('@memberjunction/ng-ui-components').FilterFieldConfig[] = [];
 
         if (this.ActiveTab === 'tools') {
@@ -1741,10 +1986,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 type: 'dropdown',
                 label: 'Server',
                 icon: 'fa-solid fa-server',
-                filterable: this.toolsAvailableServers.length > 10,
+                filterable: this.ToolsAvailableServers.length > 10,
                 options: [
                     { text: 'All Servers', value: 'all' },
-                    ...this.toolsAvailableServers.map(s => ({ text: s.Name, value: s.ID })),
+                    ...this.ToolsAvailableServers.map(s => ({ text: s.Name, value: s.ID })),
                 ],
             });
             fields.push({
@@ -1752,10 +1997,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 type: 'dropdown',
                 label: 'Category',
                 icon: 'fa-solid fa-tags',
-                filterable: this.toolsAvailableCategories.length > 10,
+                filterable: this.ToolsAvailableCategories.length > 10,
                 options: [
                     { text: 'All Categories', value: 'all' },
-                    ...this.toolsAvailableCategories.map(c => ({ text: `${c.category} (${c.count})`, value: c.category })),
+                    ...this.ToolsAvailableCategories.map(c => ({ text: `${c.category} (${c.count})`, value: c.category })),
                 ],
             });
         }
@@ -1837,10 +2082,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         return fields;
     }
 
+    /** @deprecated Use {@link McpFilterFields}. */
+    public get mcpFilterFields(): import('@memberjunction/ng-ui-components').FilterFieldConfig[] {
+      return this.McpFilterFields;
+    }
+
     /** Receive updated values from <mj-filter-panel> and propagate to filters$. */
-    public onFilterValuesChange(values: Record<string, unknown>): void {
-        const current = this.filters$.value;
-        this.onFiltersChange({
+    public OnFilterValuesChange(values: Record<string, unknown>): void {
+        const current = this.Filters$.value;
+        this.OnFiltersChange({
             ...current,
             serverStatus:     (values['serverStatus']     as string) ?? current.serverStatus,
             connectionStatus: (values['connectionStatus'] as string) ?? current.connectionStatus,
@@ -1853,10 +2103,20 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         });
     }
 
+    /** @deprecated Use {@link OnFilterValuesChange}. */
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+      return this.OnFilterValuesChange(values);
+    }
+
     /** Update searchTerm from the toolbar mj-page-search. */
+    public OnSearchTermChange(value: string): void {
+        const current = this.Filters$.value;
+        this.OnFiltersChange({ ...current, searchTerm: value ?? '' });
+    }
+
+    /** @deprecated Use {@link OnSearchTermChange}. */
     public onSearchTermChange(value: string): void {
-        const current = this.filters$.value;
-        this.onFiltersChange({ ...current, searchTerm: value ?? '' });
+      return this.OnSearchTermChange(value);
     }
 
     /**
@@ -1865,13 +2125,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public get CurrentFilteredCount(): number {
         switch (this.ActiveTab) {
             case 'servers':
-                return this.filteredServers.length;
+                return this.FilteredServers.length;
             case 'connections':
-                return this.filteredConnections.length;
+                return this.FilteredConnections.length;
             case 'tools':
-                return this.filteredTools.length;
+                return this.FilteredTools.length;
             case 'logs':
-                return this.filteredLogs.length;
+                return this.FilteredLogs.length;
             default:
                 return 0;
         }
@@ -1883,13 +2143,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public get CurrentTotalCount(): number {
         switch (this.ActiveTab) {
             case 'servers':
-                return this.servers.length;
+                return this.Servers.length;
             case 'connections':
-                return this.connections.length;
+                return this.Connections.length;
             case 'tools':
                 return this.tools.length;
             case 'logs':
-                return this.executionLogs.length;
+                return this.ExecutionLogs.length;
             default:
                 return 0;
         }
@@ -1899,7 +2159,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Get current filters value (non-observable)
      */
     public get CurrentFilters(): MCPDashboardFilters {
-        return this.filters$.value;
+        return this.Filters$.value;
     }
 
     // ========================================
@@ -1909,7 +2169,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Sets the active tab and updates URL for deep linking
      */
-    public setActiveTab(tab: MCPDashboardTab): void {
+    public SetActiveTab(tab: MCPDashboardTab): void {
         if (this.ActiveTab === tab) return;
 
         this.ActiveTab = tab;
@@ -1917,8 +2177,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         // Clear filters that belong to OTHER tabs — they're not applicable here
         // and would otherwise stay stuck in state (counted in the badge, hidden from
         // the popover form). searchTerm is universal and preserved.
-        const current = this.filters$.value;
-        this.onFiltersChange({
+        const current = this.Filters$.value;
+        this.OnFiltersChange({
             ...current,
             serverStatus:     'all',
             connectionStatus: 'all',
@@ -1938,11 +2198,16 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link SetActiveTab}. */
+    public setActiveTab(tab: MCPDashboardTab): void {
+      return this.SetActiveTab(tab);
+    }
+
     // ========================================
     // Server Operations
     // ========================================
 
-    public createServer(): void {
+    public CreateServer(): void {
         this.EditingServer = null;
         this.ServerForm = { Name: '', Description: '', TransportType: 'StreamableHTTP', ServerURL: '', Command: '', DefaultAuthType: 'None', Status: 'Active', RateLimitPerMinute: null, RateLimitPerHour: null, RequestTimeoutMs: 60000 };
         this.ServerFormError = null;
@@ -1950,7 +2215,12 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
-    public editServer(server: MCPServerData): void {
+    /** @deprecated Use {@link CreateServer}. */
+    public createServer(): void {
+      return this.CreateServer();
+    }
+
+    public EditServer(server: MCPServerData): void {
         this.EditingServer = server;
         this.ServerForm = {
             Name: server.Name,
@@ -1969,9 +2239,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
-    public async deleteServer(server: MCPServerData): Promise<void> {
+    /** @deprecated Use {@link EditServer}. */
+    public editServer(server: MCPServerData): void {
+      return this.EditServer(server);
+    }
+
+    public async DeleteServer(server: MCPServerData): Promise<void> {
         // Check for related connections first
-        const relatedConnections = this.connections.filter((c: MCPConnectionData) => UUIDsEqual(c.MCPServerID, server.ID));
+        const relatedConnections = this.Connections.filter((c: MCPConnectionData) => UUIDsEqual(c.MCPServerID, server.ID));
         const relatedTools = this.tools.filter((t: MCPToolData) => UUIDsEqual(t.MCPServerID, server.ID));
 
         if (relatedConnections.length > 0 || relatedTools.length > 0) {
@@ -2041,11 +2316,16 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 return;
             }
 
-            await this.loadAllData();
+            await this.LoadAllData();
         } catch (error) {
             this.ErrorMessage = `Failed to delete server: ${error instanceof Error ? error.message : String(error)}`;
             this.cdr.detectChanges();
         }
+    }
+
+    /** @deprecated Use {@link DeleteServer}. */
+    public async deleteServer(server: MCPServerData): Promise<void> {
+      return this.DeleteServer(server);
     }
 
     /**
@@ -2176,22 +2456,32 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         console.log('[MCPDashboard] Connection and all related records deleted atomically');
     }
 
-    public async onServerDialogClose(result: { saved: boolean }): Promise<void> {
+    public async OnServerDialogClose(result: { saved: boolean }): Promise<void> {
         this.ShowServerDialog = false;
         this.EditingServer = null;
         if (result.saved) {
-            await this.loadAllData();
+            await this.LoadAllData();
         }
         this.cdr.detectChanges();
     }
 
-    public cancelServerForm(): void {
+    /** @deprecated Use {@link OnServerDialogClose}. */
+    public async onServerDialogClose(result: { saved: boolean }): Promise<void> {
+      return this.OnServerDialogClose(result);
+    }
+
+    public CancelServerForm(): void {
         this.ShowServerDialog = false;
         this.ServerFormError = null;
         this.cdr.detectChanges();
     }
 
-    public async saveServerForm(): Promise<void> {
+    /** @deprecated Use {@link CancelServerForm}. */
+    public cancelServerForm(): void {
+      return this.CancelServerForm();
+    }
+
+    public async SaveServerForm(): Promise<void> {
         if (!this.ServerForm.Name?.trim()) {
             this.ServerFormError = 'Name is required';
             this.cdr.detectChanges();
@@ -2228,7 +2518,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 throw new Error(entity.LatestResult?.CompleteMessage ?? 'Save failed');
             }
             this.ShowServerDialog = false;
-            await this.loadAllData();
+            await this.LoadAllData();
         } catch (err) {
             this.ServerFormError = err instanceof Error ? err.message : String(err);
         } finally {
@@ -2237,25 +2527,35 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
+    /** @deprecated Use {@link SaveServerForm}. */
+    public async saveServerForm(): Promise<void> {
+      return this.SaveServerForm();
+    }
+
     // ========================================
     // Connection Operations
     // ========================================
 
     public createConnection(): void {
         this.EditingConnection = null;
-        this.ConnectionForm = { MCPServerID: this.servers[0]?.ID ?? '', Name: '', Description: '', BearerToken: '', Status: 'Active' };
+        this.ConnectionForm = { MCPServerID: this.Servers[0]?.ID ?? '', Name: '', Description: '', BearerToken: '', Status: 'Active' };
         this.ConnectionFormError = null;
         this.ShowConnectionDialog = true;
         this.cdr.detectChanges();
     }
 
-    public cancelConnectionForm(): void {
+    public CancelConnectionForm(): void {
         this.ShowConnectionDialog = false;
         this.ConnectionFormError = null;
         this.cdr.detectChanges();
     }
 
-    public async saveConnectionForm(): Promise<void> {
+    /** @deprecated Use {@link CancelConnectionForm}. */
+    public cancelConnectionForm(): void {
+      return this.CancelConnectionForm();
+    }
+
+    public async SaveConnectionForm(): Promise<void> {
         if (!this.ConnectionForm.MCPServerID) {
             this.ConnectionFormError = 'Please select a server';
             this.cdr.detectChanges();
@@ -2305,7 +2605,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             const saved = await entity.Save();
             if (!saved) throw new Error(entity.LatestResult?.CompleteMessage ?? 'Save failed');
             this.ShowConnectionDialog = false;
-            await this.loadAllData();
+            await this.LoadAllData();
         } catch (err) {
             this.ConnectionFormError = err instanceof Error ? err.message : String(err);
         } finally {
@@ -2314,15 +2614,25 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
-    public editConnection(connection: MCPConnectionData): void {
+    /** @deprecated Use {@link SaveConnectionForm}. */
+    public async saveConnectionForm(): Promise<void> {
+      return this.SaveConnectionForm();
+    }
+
+    public EditConnection(connection: MCPConnectionData): void {
         this.EditingConnection = connection;
         this.ShowConnectionDialog = true;
         this.cdr.detectChanges();
     }
 
-    public async deleteConnection(connection: MCPConnectionData): Promise<void> {
+    /** @deprecated Use {@link EditConnection}. */
+    public editConnection(connection: MCPConnectionData): void {
+      return this.EditConnection(connection);
+    }
+
+    public async DeleteConnection(connection: MCPConnectionData): Promise<void> {
         // Check for related execution logs
-        const relatedLogs = this.executionLogs.filter(l => UUIDsEqual(l.ConnectionID, connection.ID));
+        const relatedLogs = this.ExecutionLogs.filter(l => UUIDsEqual(l.ConnectionID, connection.ID));
 
         if (relatedLogs.length > 0) {
             const confirmed = await this.confirm.ConfirmDelete({
@@ -2346,20 +2656,30 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         try {
             // Use the internal method which handles deleting related records
             await this.deleteConnectionInternal(connection.ID);
-            await this.loadAllData();
+            await this.LoadAllData();
         } catch (error) {
             this.ErrorMessage = `Failed to delete connection: ${error instanceof Error ? error.message : String(error)}`;
             this.cdr.detectChanges();
         }
     }
 
-    public async onConnectionDialogClose(result: { saved: boolean }): Promise<void> {
+    /** @deprecated Use {@link DeleteConnection}. */
+    public async deleteConnection(connection: MCPConnectionData): Promise<void> {
+      return this.DeleteConnection(connection);
+    }
+
+    public async OnConnectionDialogClose(result: { saved: boolean }): Promise<void> {
         this.ShowConnectionDialog = false;
         this.EditingConnection = null;
         if (result.saved) {
-            await this.loadAllData();
+            await this.LoadAllData();
         }
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnConnectionDialogClose}. */
+    public async onConnectionDialogClose(result: { saved: boolean }): Promise<void> {
+      return this.OnConnectionDialogClose(result);
     }
 
     // ========================================
@@ -2369,7 +2689,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Toggle tool card expansion for details view
      */
-    public toggleToolExpand(tool: MCPToolData): void {
+    public ToggleToolExpand(tool: MCPToolData): void {
         if (UUIDsEqual(this.ExpandedToolId, tool.ID)) {
             this.ExpandedToolId = null;
         } else {
@@ -2379,26 +2699,41 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link ToggleToolExpand}. */
+    public toggleToolExpand(tool: MCPToolData): void {
+      return this.ToggleToolExpand(tool);
+    }
+
     /**
      * Check if a tool card is expanded
      */
-    public isToolExpanded(tool: MCPToolData): boolean {
+    public IsToolExpanded(tool: MCPToolData): boolean {
         return UUIDsEqual(this.ExpandedToolId, tool.ID);
+    }
+
+    /** @deprecated Use {@link IsToolExpanded}. */
+    public isToolExpanded(tool: MCPToolData): boolean {
+      return this.IsToolExpanded(tool);
     }
 
     /**
      * Set tools view mode (card or list)
      */
-    public setToolsViewMode(mode: ToolsViewMode): void {
+    public SetToolsViewMode(mode: ToolsViewMode): void {
         this.ToolsViewMode = mode;
         this.cdr.detectChanges();
         this.saveUserPreferencesDebounced();
     }
 
+    /** @deprecated Use {@link SetToolsViewMode}. */
+    public setToolsViewMode(mode: ToolsViewMode): void {
+      return this.SetToolsViewMode(mode);
+    }
+
     /**
      * Set tools sort option
      */
-    public setToolsSort(sortBy: ToolsSortBy): void {
+    public SetToolsSort(sortBy: ToolsSortBy): void {
         if (this.ToolsSortBy === sortBy) {
             // Toggle ascending/descending
             this.ToolsSortAscending = !this.ToolsSortAscending;
@@ -2411,12 +2746,22 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.saveUserPreferencesDebounced();
     }
 
+    /** @deprecated Use {@link SetToolsSort}. */
+    public setToolsSort(sortBy: ToolsSortBy): void {
+      return this.SetToolsSort(sortBy);
+    }
+
     /**
      * Toggle server group expansion
      */
-    public toggleServerGroup(group: MCPServerGroup): void {
+    public ToggleServerGroup(group: MCPServerGroup): void {
         group.expanded = !group.expanded;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link ToggleServerGroup}. */
+    public toggleServerGroup(group: MCPServerGroup): void {
+      return this.ToggleServerGroup(group);
     }
 
     /**
@@ -2426,7 +2771,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         // Group tools by server
         const serverMap = new Map<string, MCPToolData[]>();
 
-        for (const tool of this.filteredTools) {
+        for (const tool of this.FilteredTools) {
             const serverId = tool.MCPServerID;
             if (!serverMap.has(serverId)) {
                 serverMap.set(serverId, []);
@@ -2436,7 +2781,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
         // Build server groups
         this.ServerGroups = [];
-        for (const server of this.servers) {
+        for (const server of this.Servers) {
             const tools = serverMap.get(server.ID) || [];
             if (tools.length > 0) {
                 // Sort tools within group
@@ -2497,7 +2842,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Open Test Tool dialog
      */
-    public openTestToolDialog(tool?: MCPToolData, connection?: MCPConnectionData): void {
+    public OpenTestToolDialog(tool?: MCPToolData, connection?: MCPConnectionData): void {
         if (tool) {
             this.TestToolServerID = tool.MCPServerID;
             this.TestToolID = tool.ID;
@@ -2522,11 +2867,21 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OpenTestToolDialog}. */
+    public openTestToolDialog(tool?: MCPToolData, connection?: MCPConnectionData): void {
+      return this.OpenTestToolDialog(tool, connection);
+    }
+
     /**
      * Close Test Tool dialog
      */
+    public OnTestToolDialogClose(): void {
+        this.TestCloseDialog();
+    }
+
+    /** @deprecated Use {@link OnTestToolDialogClose}. */
     public onTestToolDialogClose(): void {
-        this.testCloseDialog();
+      return this.OnTestToolDialogClose();
     }
 
     // ========================================
@@ -2535,7 +2890,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     private testUpdateFilteredLists(): void {
         if (this.TestToolServerID) {
-            this.TestFilteredConnections = this.connections.filter(
+            this.TestFilteredConnections = this.Connections.filter(
                 c => UUIDsEqual(c.MCPServerID, this.TestToolServerID!) && c.Status === 'Active'
             );
             this.TestFilteredTools = this.tools.filter(
@@ -2550,7 +2905,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
-    public onTestServerChange(value: string): void {
+    public OnTestServerChange(value: string): void {
         this.TestToolServerID = value || null;
         this.TestToolConnectionID = null;
         this.TestToolID = null;
@@ -2558,25 +2913,45 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
-    public onTestConnectionChange(value: string): void {
+    /** @deprecated Use {@link OnTestServerChange}. */
+    public onTestServerChange(value: string): void {
+      return this.OnTestServerChange(value);
+    }
+
+    public OnTestConnectionChange(value: string): void {
         this.TestToolConnectionID = value || null;
     }
 
-    public onTestToolSelectChange(value: string): void {
+    /** @deprecated Use {@link OnTestConnectionChange}. */
+    public onTestConnectionChange(value: string): void {
+      return this.OnTestConnectionChange(value);
+    }
+
+    public OnTestToolSelectChange(value: string): void {
         this.TestToolID = value || null;
+    }
+
+    /** @deprecated Use {@link OnTestToolSelectChange}. */
+    public onTestToolSelectChange(value: string): void {
+      return this.OnTestToolSelectChange(value);
     }
 
     public get TestCanProceed(): boolean {
         return !!this.TestToolServerID && !!this.TestToolConnectionID && !!this.TestToolID;
     }
 
-    public testProceedToConfig(): void {
+    public TestProceedToConfig(): void {
         if (!this.TestCanProceed) return;
         this.TestSelectedTool = this.tools.find(t => UUIDsEqual(t.ID, this.TestToolID!)) ?? null;
         if (!this.TestSelectedTool) return;
         this.testParseSchema();
         this.TestStep = 'configure';
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link TestProceedToConfig}. */
+    public testProceedToConfig(): void {
+      return this.TestProceedToConfig();
     }
 
     private testParseSchema(): void {
@@ -2606,15 +2981,20 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
-    public testSetParam(name: string, value: string): void {
+    public TestSetParam(name: string, value: string): void {
         this.TestParamValues[name] = value;
+    }
+
+    /** @deprecated Use {@link TestSetParam}. */
+    public testSetParam(name: string, value: string): void {
+      return this.TestSetParam(name, value);
     }
 
     public get TestIsValid(): boolean {
         return this.TestParamConfigs.filter(p => p.required).every(p => !!this.TestParamValues[p.name]);
     }
 
-    public async testExecuteTool(): Promise<void> {
+    public async TestExecuteTool(): Promise<void> {
         if (!this.TestIsValid || !this.TestToolConnectionID || !this.TestToolID) return;
         this.TestIsExecuting = true;
         this.cdr.detectChanges();
@@ -2649,18 +3029,33 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
-    public testGoBack(): void {
+    /** @deprecated Use {@link TestExecuteTool}. */
+    public async testExecuteTool(): Promise<void> {
+      return this.TestExecuteTool();
+    }
+
+    public TestGoBack(): void {
         this.TestStep = this.TestStep === 'results' ? 'configure' : 'select';
         this.cdr.detectChanges();
     }
 
-    public testRunAgain(): void {
+    /** @deprecated Use {@link TestGoBack}. */
+    public testGoBack(): void {
+      return this.TestGoBack();
+    }
+
+    public TestRunAgain(): void {
         this.TestExecutionResult = null;
         this.TestStep = 'configure';
         this.cdr.detectChanges();
     }
 
-    public testCloseDialog(): void {
+    /** @deprecated Use {@link TestRunAgain}. */
+    public testRunAgain(): void {
+      return this.TestRunAgain();
+    }
+
+    public TestCloseDialog(): void {
         this.ShowTestToolDialog = false;
         this.TestStep = 'select';
         this.TestSelectedTool = null;
@@ -2670,7 +3065,12 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
-    public formatTestResult(result: unknown): string {
+    /** @deprecated Use {@link TestCloseDialog}. */
+    public testCloseDialog(): void {
+      return this.TestCloseDialog();
+    }
+
+    public FormatTestResult(result: unknown): string {
         if (result == null) return '';
         if (typeof result === 'string') return result;
         try {
@@ -2680,19 +3080,24 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
+    /** @deprecated Use {@link FormatTestResult}. */
+    public formatTestResult(result: unknown): string {
+      return this.FormatTestResult(result);
+    }
+
     /**
      * Part 3.2 — loads a page of tools via the paginated resolver.
      * Uses the same GraphQLDataProvider + gql pattern as testExecuteTool above.
      */
-    public async loadToolsPage(reset: boolean = true): Promise<void> {
-        if (this.toolsLoading) return;
-        this.toolsLoading = true;
+    public async LoadToolsPage(reset: boolean = true): Promise<void> {
+        if (this.ToolsLoading) return;
+        this.ToolsLoading = true;
         if (reset) {
-            this.toolsSkip = 0;
-            this.pagedTools = [];
+            this.ToolsSkip = 0;
+            this.PagedTools = [];
         }
         try {
-            const filters = this.filters$.value;
+            const filters = this.Filters$.value;
             const query = gql`
                 query GetMCPToolsPage($skip: Int!, $take: Int!, $searchText: String, $serverID: String, $category: String) {
                     GetMCPToolsPage(skip: $skip, take: $take, searchText: $searchText, serverID: $serverID, category: $category) {
@@ -2703,60 +3108,80 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 }
             `;
             const result = await GraphQLDataProvider.Instance.ExecuteGQL(query, {
-                skip: this.toolsSkip,
-                take: this.toolsPageSize,
+                skip: this.ToolsSkip,
+                take: this.ToolsPageSize,
                 searchText: filters.searchTerm || null,
                 serverID: (filters.toolsServer && filters.toolsServer !== 'all') ? filters.toolsServer : null,
                 category: (filters.toolsCategory && filters.toolsCategory !== 'all') ? filters.toolsCategory : null
             });
             const page = result?.GetMCPToolsPage;
             if (page) {
-                this.pagedTools = reset ? page.items : [...this.pagedTools, ...page.items];
-                this.toolsTotalCount = page.totalCount;
-                this.toolsSkip = this.pagedTools.length;
+                this.PagedTools = reset ? page.items : [...this.PagedTools, ...page.items];
+                this.ToolsTotalCount = page.totalCount;
+                this.ToolsSkip = this.PagedTools.length;
             }
         } catch (e) {
             console.error('[MCPDashboard] loadToolsPage failed:', e);
         } finally {
-            this.toolsLoading = false;
+            this.ToolsLoading = false;
             this.cdr.detectChanges();
         }
     }
 
-    public onToolsScrolledIndexChange(index: number): void {
-        if (!this.useScalablePagination || this.toolsLoading) return;
-        if (this.pagedTools.length >= this.toolsTotalCount) return;
-        if (index + 20 >= this.pagedTools.length) {
-            this.loadToolsPage(false);
+    /** @deprecated Use {@link LoadToolsPage}. */
+    public async loadToolsPage(reset: boolean = true): Promise<void> {
+      return this.LoadToolsPage(reset);
+    }
+
+    public OnToolsScrolledIndexChange(index: number): void {
+        if (!this.UseScalablePagination || this.ToolsLoading) return;
+        if (this.PagedTools.length >= this.ToolsTotalCount) return;
+        if (index + 20 >= this.PagedTools.length) {
+            this.LoadToolsPage(false);
         }
+    }
+
+    /** @deprecated Use {@link OnToolsScrolledIndexChange}. */
+    public onToolsScrolledIndexChange(index: number): void {
+      return this.OnToolsScrolledIndexChange(index);
     }
 
     /** Native-scroll infinite-load: triggers next page when user nears the bottom */
-    public onToolsScrollNative(event: Event): void {
-        if (!this.useScalablePagination || this.toolsLoading) return;
-        if (this.pagedTools.length >= this.toolsTotalCount) return;
+    public OnToolsScrollNative(event: Event): void {
+        if (!this.UseScalablePagination || this.ToolsLoading) return;
+        if (this.PagedTools.length >= this.ToolsTotalCount) return;
         const el = event.target as HTMLElement;
         if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
-            this.loadToolsPage(false);
+            this.LoadToolsPage(false);
         }
     }
 
-    public toggleScalableMode(enabled: boolean): void {
-        this.useScalablePagination = enabled;
-        if (enabled && this.pagedTools.length === 0) {
-            this.loadToolsPage(true);
-            this.loadToolCounts();
+    /** @deprecated Use {@link OnToolsScrollNative}. */
+    public onToolsScrollNative(event: Event): void {
+      return this.OnToolsScrollNative(event);
+    }
+
+    public ToggleScalableMode(enabled: boolean): void {
+        this.UseScalablePagination = enabled;
+        if (enabled && this.PagedTools.length === 0) {
+            this.LoadToolsPage(true);
+            this.LoadToolCounts();
         }
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link ToggleScalableMode}. */
+    public toggleScalableMode(enabled: boolean): void {
+      return this.ToggleScalableMode(enabled);
     }
 
     /**
      * Part 3.4 — fetch global + per-server + per-category counts (used for badges
      * and to populate the category filter dropdown). Respects current search filter.
      */
-    public async loadToolCounts(): Promise<void> {
+    public async LoadToolCounts(): Promise<void> {
         try {
-            const filters = this.filters$.value;
+            const filters = this.Filters$.value;
             const query = gql`
                 query GetMCPToolCounts($serverID: String, $searchText: String) {
                     GetMCPToolCounts(serverID: $serverID, searchText: $searchText) {
@@ -2772,16 +3197,16 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             });
             const counts = result?.GetMCPToolCounts;
             if (counts) {
-                this.toolsGlobalCount = counts.totalCount;
-                this.toolCountByServer = {};
+                this.ToolsGlobalCount = counts.totalCount;
+                this.ToolCountByServer = {};
                 (counts.countByServer || []).forEach((r: { serverID: string; count: number }) => {
-                    this.toolCountByServer[r.serverID] = r.count;
+                    this.ToolCountByServer[r.serverID] = r.count;
                 });
-                this.toolsAvailableCategories = (counts.countByCategory || [])
+                this.ToolsAvailableCategories = (counts.countByCategory || [])
                     .filter((c: { category: string }) => c.category && c.category.length > 0)
                     .sort((a: { category: string }, b: { category: string }) => a.category.localeCompare(b.category));
                 // Available servers derived from the servers list (already loaded)
-                this.toolsAvailableServers = this.servers.map(s => ({ ID: s.ID, Name: s.Name }));
+                this.ToolsAvailableServers = this.Servers.map(s => ({ ID: s.ID, Name: s.Name }));
                 this.cdr.detectChanges();
             }
         } catch (e) {
@@ -2789,26 +3214,41 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
-    /** Part 3.4 — returns tool count for a server (falls back to ServerGroups length for legacy view) */
-    public getServerToolCount(serverID: string): number {
-        return this.toolCountByServer[serverID] ?? this.tools.filter(t => UUIDsEqual(t.MCPServerID, serverID)).length;
+    /** @deprecated Use {@link LoadToolCounts}. */
+    public async loadToolCounts(): Promise<void> {
+      return this.LoadToolCounts();
     }
 
-    public trackPagedTool(_index: number, tool: MCPToolSummary): string {
+    /** Part 3.4 — returns tool count for a server (falls back to ServerGroups length for legacy view) */
+    public GetServerToolCount(serverID: string): number {
+        return this.ToolCountByServer[serverID] ?? this.tools.filter(t => UUIDsEqual(t.MCPServerID, serverID)).length;
+    }
+
+    /** @deprecated Use {@link GetServerToolCount}. */
+    public getServerToolCount(serverID: string): number {
+      return this.GetServerToolCount(serverID);
+    }
+
+    public TrackPagedTool(_index: number, tool: MCPToolSummary): string {
         return tool.ID;
+    }
+
+    /** @deprecated Use {@link TrackPagedTool}. */
+    public trackPagedTool(_index: number, tool: MCPToolSummary): string {
+      return this.TrackPagedTool(_index, tool);
     }
 
     /** Part 3.6 — Scale mode display. When a client-side filter (Favorites/Recently-used) is active,
      *  bypass server pagination and filter the fully-loaded local `this.tools` list so the filter
      *  considers ALL tools, not just the current 50-row page. */
-    public get visiblePagedTools(): MCPToolSummary[] {
-        const f = this.filters$.value;
+    public get VisiblePagedTools(): MCPToolSummary[] {
+        const f = this.Filters$.value;
         if (f.favoritesOnly || f.recentOnly) {
             const search = (f.searchTerm || '').toLowerCase();
-            const recent = f.recentOnly ? this.recentToolIDSet() : null;
+            const recent = f.recentOnly ? this.RecentToolIDSet() : null;
             return this.tools
                 .filter(t => {
-                    if (f.favoritesOnly && !this.isFavorited(t.ID)) return false;
+                    if (f.favoritesOnly && !this.IsFavorited(t.ID)) return false;
                     if (recent && !recent.has(NormalizeUUID(t.ID))) return false;
                     if (f.toolsServer && f.toolsServer !== 'all' && !UUIDsEqual(t.MCPServerID, f.toolsServer)) return false;
                     if (f.toolsCategory && f.toolsCategory !== 'all') {
@@ -2833,25 +3273,35 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                     ServerName: t.ServerName ?? null
                 }));
         }
-        return this.pagedTools;
+        return this.PagedTools;
+    }
+
+    /** @deprecated Use {@link VisiblePagedTools}. */
+    public get visiblePagedTools(): MCPToolSummary[] {
+      return this.VisiblePagedTools;
     }
 
     /** Scale-mode denominator. In bypass-pagination mode (favorites/recent filters), the user
      *  sees the fully filtered local list, so the "of N" reflects that filtered total.
      *  Otherwise we show the server-side total for the current query. */
-    public scaleDenominator(): number {
-        const f = this.filters$.value;
+    public ScaleDenominator(): number {
+        const f = this.Filters$.value;
         if (f.favoritesOnly || f.recentOnly) {
-            return this.visiblePagedTools.length;
+            return this.VisiblePagedTools.length;
         }
-        return this.toolsTotalCount;
+        return this.ToolsTotalCount;
+    }
+
+    /** @deprecated Use {@link ScaleDenominator}. */
+    public scaleDenominator(): number {
+      return this.ScaleDenominator();
     }
 
     /** Part 3.5 — recently used tool IDs derived from execution logs (dedup, max 5) */
     public get TestRecentToolIDs(): string[] {
         const seen = new Set<string>();
         const out: string[] = [];
-        for (const log of this.executionLogs) {
+        for (const log of this.ExecutionLogs) {
             if (!log.ToolID) continue;
             if (seen.has(log.ToolID)) continue;
             seen.add(log.ToolID);
@@ -2876,24 +3326,39 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         return [...recent, ...rest];
     }
 
-    public isRecentTestTool(toolID: string): boolean {
+    public IsRecentTestTool(toolID: string): boolean {
         return this.TestRecentToolIDs.includes(toolID);
     }
 
-    public onTestToolSearchChange(value: string): void {
+    /** @deprecated Use {@link IsRecentTestTool}. */
+    public isRecentTestTool(toolID: string): boolean {
+      return this.IsRecentTestTool(toolID);
+    }
+
+    public OnTestToolSearchChange(value: string): void {
         this.TestToolSearch = value;
         this.cdr.detectChanges();
     }
 
-    public pickTestTool(toolID: string): void {
+    /** @deprecated Use {@link OnTestToolSearchChange}. */
+    public onTestToolSearchChange(value: string): void {
+      return this.OnTestToolSearchChange(value);
+    }
+
+    public PickTestTool(toolID: string): void {
         this.TestToolID = toolID;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link PickTestTool}. */
+    public pickTestTool(toolID: string): void {
+      return this.PickTestTool(toolID);
     }
 
     /**
      * Part 3.6 — load the current user's favorited tool IDs.
      */
-    public async loadFavorites(): Promise<void> {
+    public async LoadFavorites(): Promise<void> {
         try {
             const md = this.ProviderToUse;
             const currentUserID = md.CurrentUser?.ID;
@@ -2903,27 +3368,42 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // so repeat loads hit the Global Object Store with no DB round-trip.
             await MCPEngine.Instance.Config();
             const userFavorites = MCPEngine.Instance.GetFavoritesByUser(currentUserID);
-            this.favoritedToolIDs = new Set(userFavorites.map(f => NormalizeUUID(f.MCPServerToolID)));
+            this.FavoritedToolIDs = new Set(userFavorites.map(f => NormalizeUUID(f.MCPServerToolID)));
             this.cdr.detectChanges();
         } catch (e) {
             console.warn('[MCPDashboard] loadFavorites failed:', e);
         }
     }
 
+    /** @deprecated Use {@link LoadFavorites}. */
+    public async loadFavorites(): Promise<void> {
+      return this.LoadFavorites();
+    }
+
+    public IsFavorited(toolID: string): boolean {
+        return this.FavoritedToolIDs.has(NormalizeUUID(toolID));
+    }
+
+    /** @deprecated Use {@link IsFavorited}. */
     public isFavorited(toolID: string): boolean {
-        return this.favoritedToolIDs.has(NormalizeUUID(toolID));
+      return this.IsFavorited(toolID);
     }
 
     /** Part 3.3 — set of tool IDs seen in recent execution logs (last N unique). */
-    public recentToolIDSet(): Set<string> {
+    public RecentToolIDSet(): Set<string> {
         const out = new Set<string>();
-        for (const log of this.executionLogs) {
+        for (const log of this.ExecutionLogs) {
             if (log.ToolID) out.add(NormalizeUUID(log.ToolID));
         }
         return out;
     }
 
-    public async toggleFavorite(toolID: string, event?: Event): Promise<void> {
+    /** @deprecated Use {@link RecentToolIDSet}. */
+    public recentToolIDSet(): Set<string> {
+      return this.RecentToolIDSet();
+    }
+
+    public async ToggleFavorite(toolID: string, event?: Event): Promise<void> {
         if (event) event.stopPropagation();
         const md = this.ProviderToUse;
         const currentUserID = md.CurrentUser?.ID;
@@ -2932,7 +3412,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             return;
         }
         const normalizedID = NormalizeUUID(toolID);
-        const isFav = this.favoritedToolIDs.has(normalizedID);
+        const isFav = this.FavoritedToolIDs.has(normalizedID);
         try {
             if (isFav) {
                 // Find the existing favorite in MCPEngine's cache and Delete via the entity —
@@ -2942,14 +3422,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 if (!entity) {
                     // Cache says it's missing but UI thought it was favorited — drop from the
                     // local Set so the UI reconciles.
-                    this.favoritedToolIDs.delete(normalizedID);
+                    this.FavoritedToolIDs.delete(normalizedID);
                 } else {
                     const deleted = await entity.Delete();
                     if (!deleted) {
                         console.warn('[MCPDashboard] Delete favorite failed:', entity.LatestResult?.CompleteMessage);
                         return;
                     }
-                    this.favoritedToolIDs.delete(normalizedID);
+                    this.FavoritedToolIDs.delete(normalizedID);
                 }
             } else {
                 const entity = await md.GetEntityObject<MJMCPToolFavoriteEntity>('MJ: MCP Tool Favorites');
@@ -2961,17 +3441,22 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                     console.warn('[MCPDashboard] Save favorite failed:', entity.LatestResult?.CompleteMessage);
                     return;
                 }
-                this.favoritedToolIDs.add(normalizedID);
+                this.FavoritedToolIDs.add(normalizedID);
             }
             // Force a new Set instance so Angular change detection picks it up
-            this.favoritedToolIDs = new Set(this.favoritedToolIDs);
+            this.FavoritedToolIDs = new Set(this.FavoritedToolIDs);
             this.cdr.detectChanges();
         } catch (e) {
             console.error('[MCPDashboard] toggleFavorite failed:', e);
         }
     }
 
-    public formatLogJson(value: string | null | undefined): string {
+    /** @deprecated Use {@link ToggleFavorite}. */
+    public async toggleFavorite(toolID: string, event?: Event): Promise<void> {
+      return this.ToggleFavorite(toolID, event);
+    }
+
+    public FormatLogJson(value: string | null | undefined): string {
         if (!value) return '';
         try {
             return JSON.stringify(JSON.parse(value), null, 2);
@@ -2980,10 +3465,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
+    /** @deprecated Use {@link FormatLogJson}. */
+    public formatLogJson(value: string | null | undefined): string {
+      return this.FormatLogJson(value);
+    }
+
     /**
      * Parse and return input schema as formatted JSON
      */
-    public getFormattedInputSchema(tool: MCPToolData): string {
+    public GetFormattedInputSchema(tool: MCPToolData): string {
         if (!tool.InputSchema) return 'No input schema';
         try {
             const schema = JSON.parse(tool.InputSchema);
@@ -2993,10 +3483,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
+    /** @deprecated Use {@link GetFormattedInputSchema}. */
+    public getFormattedInputSchema(tool: MCPToolData): string {
+      return this.GetFormattedInputSchema(tool);
+    }
+
     /**
      * Get parameter count from input schema
      */
-    public getParamCount(tool: MCPToolData): number {
+    public GetParamCount(tool: MCPToolData): number {
         if (!tool.InputSchema) return 0;
         try {
             const schema = JSON.parse(tool.InputSchema);
@@ -3006,10 +3501,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
+    /** @deprecated Use {@link GetParamCount}. */
+    public getParamCount(tool: MCPToolData): number {
+      return this.GetParamCount(tool);
+    }
+
     /**
      * Get required parameter count from input schema
      */
-    public getRequiredParamCount(tool: MCPToolData): number {
+    public GetRequiredParamCount(tool: MCPToolData): number {
         if (!tool.InputSchema) return 0;
         try {
             const schema = JSON.parse(tool.InputSchema);
@@ -3019,6 +3519,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
+    /** @deprecated Use {@link GetRequiredParamCount}. */
+    public getRequiredParamCount(tool: MCPToolData): number {
+      return this.GetRequiredParamCount(tool);
+    }
+
     // ========================================
     // Sync Operations
     // ========================================
@@ -3026,7 +3531,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Syncs tools for a specific connection
      */
-    public async syncConnectionTools(connection: MCPConnectionData): Promise<void> {
+    public async SyncConnectionTools(connection: MCPConnectionData): Promise<void> {
         const connectionId = connection.ID;
 
         // Subscribe to sync state updates for this connection
@@ -3045,13 +3550,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
             if (result.Success) {
                 // Force refresh to show updated tools - backend changes don't trigger local events
-                await this.loadAllData(true);
+                await this.LoadAllData(true);
             } else if (result.RequiresOAuth || result.RequiresReauthorization) {
                 // OAuth authorization is required - initiate fresh OAuth flow with frontend callback
                 // Note: We ignore result.AuthorizationUrl because it was built with the server's callback URL
                 // We need to initiate a fresh flow that uses the frontend callback URL
                 console.log(`[MCPDashboard] OAuth ${result.RequiresReauthorization ? 're-' : ''}authorization required, initiating frontend OAuth flow...`);
-                await this.initiateOAuthFlow(connectionId);
+                await this.InitiateOAuthFlow(connectionId);
             } else {
                 this.ErrorMessage = `Sync failed: ${result.ErrorMessage}`;
             }
@@ -3062,27 +3567,47 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link SyncConnectionTools}. */
+    public async syncConnectionTools(connection: MCPConnectionData): Promise<void> {
+      return this.SyncConnectionTools(connection);
+    }
+
     /**
      * Gets the sync state for a connection
      */
-    public getSyncState(connectionId: string): MCPSyncState | undefined {
+    public GetSyncState(connectionId: string): MCPSyncState | undefined {
         return this.SyncStates.get(connectionId);
+    }
+
+    /** @deprecated Use {@link GetSyncState}. */
+    public getSyncState(connectionId: string): MCPSyncState | undefined {
+      return this.GetSyncState(connectionId);
     }
 
     /**
      * Checks if a connection is currently syncing
      */
-    public isSyncing(connectionId: string): boolean {
+    public IsSyncing(connectionId: string): boolean {
         return this.mcpToolsService.isSyncing(connectionId);
+    }
+
+    /** @deprecated Use {@link IsSyncing}. */
+    public isSyncing(connectionId: string): boolean {
+      return this.IsSyncing(connectionId);
     }
 
     /**
      * Gets sync progress message for a connection
      */
-    public getSyncProgressMessage(connectionId: string): string {
+    public GetSyncProgressMessage(connectionId: string): string {
         const state = this.SyncStates.get(connectionId);
         if (!state?.progress) return '';
         return state.progress.message;
+    }
+
+    /** @deprecated Use {@link GetSyncProgressMessage}. */
+    public getSyncProgressMessage(connectionId: string): string {
+      return this.GetSyncProgressMessage(connectionId);
     }
 
     // ========================================
@@ -3107,7 +3632,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             this.UpdateQueryParams({ oauth: null, connectionId: null, error: null, error_description: null });
 
             // Refresh data to pick up new OAuth state
-            this.loadAllData(true);
+            this.LoadAllData(true);
         } else if (params['oauth'] === 'error') {
             // OAuth failed
             const errorMessage = params['error_description'] || 'Authorization failed';
@@ -3138,7 +3663,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      *
      * @param connectionId - The MCP connection ID requiring OAuth
      */
-    public async initiateOAuthFlow(connectionId: string): Promise<void> {
+    public async InitiateOAuthFlow(connectionId: string): Promise<void> {
         // Store current URL for return after OAuth completion
         // Store both full URL and path-only version for cross-origin scenarios
         const currentUrl = window.location.href;
@@ -3162,6 +3687,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             this.ErrorMessage = result.ErrorMessage || 'Failed to initiate OAuth authorization';
             this.cdr.detectChanges();
         }
+    }
+
+    /** @deprecated Use {@link InitiateOAuthFlow}. */
+    public async initiateOAuthFlow(connectionId: string): Promise<void> {
+      return this.InitiateOAuthFlow(connectionId);
     }
 
     /**
@@ -3207,7 +3737,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     // Utility Methods
     // ========================================
 
-    public getStatusClass(status: string): string {
+    public GetStatusClass(status: string): string {
         switch (status) {
             case 'Active':
                 return 'status-active';
@@ -3222,7 +3752,12 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
-    public getTransportIcon(transportType: string): string {
+    /** @deprecated Use {@link GetStatusClass}. */
+    public getStatusClass(status: string): string {
+      return this.GetStatusClass(status);
+    }
+
+    public GetTransportIcon(transportType: string): string {
         switch (transportType) {
             case 'StreamableHTTP':
             case 'SSE':
@@ -3234,6 +3769,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             default:
                 return 'fa-solid fa-question';
         }
+    }
+
+    /** @deprecated Use {@link GetTransportIcon}. */
+    public getTransportIcon(transportType: string): string {
+      return this.GetTransportIcon(transportType);
     }
 
     public formatDate(date: Date | string | null): string {
@@ -3255,7 +3795,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Handles click on a sortable column header
      */
-    public onLogSortColumn(column: typeof this.LogsSortColumn): void {
+    public OnLogSortColumn(column: typeof this.LogsSortColumn): void {
         if (this.LogsSortColumn === column) {
             // Toggle sort direction
             this.LogsSortAscending = !this.LogsSortAscending;
@@ -3269,13 +3809,18 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.saveUserPreferencesDebounced();
     }
 
+    /** @deprecated Use {@link OnLogSortColumn}. */
+    public onLogSortColumn(column: typeof this.LogsSortColumn): void {
+      return this.OnLogSortColumn(column);
+    }
+
     /**
      * Sorts the filtered logs based on current sort settings
      */
     private sortFilteredLogs(): void {
         const direction = this.LogsSortAscending ? 1 : -1;
 
-        this.filteredLogs.sort((a, b) => {
+        this.FilteredLogs.sort((a, b) => {
             let valA: string | number | Date | null;
             let valB: string | number | Date | null;
 
@@ -3324,9 +3869,14 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Gets the sort indicator class for a column header
      */
-    public getLogSortClass(column: typeof this.LogsSortColumn): string {
+    public GetLogSortClass(column: typeof this.LogsSortColumn): string {
         if (this.LogsSortColumn !== column) return '';
         return this.LogsSortAscending ? 'sorted-asc' : 'sorted-desc';
+    }
+
+    /** @deprecated Use {@link GetLogSortClass}. */
+    public getLogSortClass(column: typeof this.LogsSortColumn): string {
+      return this.GetLogSortClass(column);
     }
 
     // ========================================
@@ -3336,7 +3886,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Handles click on a log row to show detail panel
      */
-    public async onLogClick(log: MCPExecutionLogData): Promise<void> {
+    public async OnLogClick(log: MCPExecutionLogData): Promise<void> {
         // Load full log details if needed (InputArgs, Result)
         if (!log.InputArgs && !log.Result) {
             try {
@@ -3359,7 +3909,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
 
         // Enrich with server name
-        const connection = this.connections.find(c => UUIDsEqual(c.ID, log.ConnectionID));
+        const connection = this.Connections.find(c => UUIDsEqual(c.ID, log.ConnectionID));
         if (connection) {
             log.ServerName = connection.ServerName;
         }
@@ -3370,26 +3920,36 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnLogClick}. */
+    public async onLogClick(log: MCPExecutionLogData): Promise<void> {
+      return this.OnLogClick(log);
+    }
+
     /**
      * Closes the log detail panel
      */
-    public onLogDetailClose(): void {
+    public OnLogDetailClose(): void {
         this.ShowLogDetailPanel = false;
         this.SelectedLog = null;
         this.publishAgentContext();
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnLogDetailClose}. */
+    public onLogDetailClose(): void {
+      return this.OnLogDetailClose();
+    }
+
     /**
      * Handles run again from log detail panel
      */
-    public onRunAgainFromLog(event: { toolId: string; connectionId: string }): void {
+    public OnRunAgainFromLog(event: { toolId: string; connectionId: string }): void {
         this.ShowLogDetailPanel = false;
         this.SelectedLog = null;
 
         // Open test tool dialog with pre-selected tool and connection
         const tool = this.tools.find(t => UUIDsEqual(t.ID, event.toolId));
-        const connection = this.connections.find(c => UUIDsEqual(c.ID, event.connectionId));
+        const connection = this.Connections.find(c => UUIDsEqual(c.ID, event.connectionId));
 
         if (tool) {
             this.TestToolServerID = tool.MCPServerID;
@@ -3403,6 +3963,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnRunAgainFromLog}. */
+    public onRunAgainFromLog(event: { toolId: string; connectionId: string }): void {
+      return this.OnRunAgainFromLog(event);
+    }
+
     // ========================================
     // Expandable Server/Connection Cards
     // ========================================
@@ -3410,7 +3975,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Toggles server card expansion
      */
-    public toggleServerExpand(server: MCPServerData): void {
+    public ToggleServerExpand(server: MCPServerData): void {
         if (UUIDsEqual(this.ExpandedServerID, server.ID)) {
             this.ExpandedServerID = null;
         } else {
@@ -3422,10 +3987,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link ToggleServerExpand}. */
+    public toggleServerExpand(server: MCPServerData): void {
+      return this.ToggleServerExpand(server);
+    }
+
     /**
      * Toggles connection card expansion
      */
-    public toggleConnectionExpand(conn: MCPConnectionData): void {
+    public ToggleConnectionExpand(conn: MCPConnectionData): void {
         if (UUIDsEqual(this.ExpandedConnectionID, conn.ID)) {
             this.ExpandedConnectionID = null;
         } else {
@@ -3437,18 +4007,33 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link ToggleConnectionExpand}. */
+    public toggleConnectionExpand(conn: MCPConnectionData): void {
+      return this.ToggleConnectionExpand(conn);
+    }
+
     /**
      * Checks if a server card is expanded
      */
-    public isServerExpanded(server: MCPServerData): boolean {
+    public IsServerExpanded(server: MCPServerData): boolean {
         return UUIDsEqual(this.ExpandedServerID, server.ID);
+    }
+
+    /** @deprecated Use {@link IsServerExpanded}. */
+    public isServerExpanded(server: MCPServerData): boolean {
+      return this.IsServerExpanded(server);
     }
 
     /**
      * Checks if a connection card is expanded
      */
-    public isConnectionExpanded(conn: MCPConnectionData): boolean {
+    public IsConnectionExpanded(conn: MCPConnectionData): boolean {
         return UUIDsEqual(this.ExpandedConnectionID, conn.ID);
+    }
+
+    /** @deprecated Use {@link IsConnectionExpanded}. */
+    public isConnectionExpanded(conn: MCPConnectionData): boolean {
+      return this.IsConnectionExpanded(conn);
     }
 
     /**
@@ -3474,27 +4059,42 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     /**
      * Gets tools for a specific server (O(1) lookup against the precomputed index).
      */
-    public getToolsForServer(serverId: string): MCPToolData[] {
+    public GetToolsForServer(serverId: string): MCPToolData[] {
         return this.toolsByServerID.get(NormalizeUUID(serverId)) ?? [];
+    }
+
+    /** @deprecated Use {@link GetToolsForServer}. */
+    public getToolsForServer(serverId: string): MCPToolData[] {
+      return this.GetToolsForServer(serverId);
     }
 
     /**
      * Gets tools for a specific connection (via its server, O(1) lookup).
      */
-    public getToolsForConnection(connectionId: string): MCPToolData[] {
-        const connection = this.connections.find(c => UUIDsEqual(c.ID, connectionId));
+    public GetToolsForConnection(connectionId: string): MCPToolData[] {
+        const connection = this.Connections.find(c => UUIDsEqual(c.ID, connectionId));
         if (!connection) return [];
         return this.toolsByServerID.get(NormalizeUUID(connection.MCPServerID)) ?? [];
+    }
+
+    /** @deprecated Use {@link GetToolsForConnection}. */
+    public getToolsForConnection(connectionId: string): MCPToolData[] {
+      return this.GetToolsForConnection(connectionId);
     }
 
     /**
      * Opens test tool dialog with a specific tool from expanded card
      */
-    public runToolFromCard(tool: MCPToolData, connection?: MCPConnectionData): void {
+    public RunToolFromCard(tool: MCPToolData, connection?: MCPConnectionData): void {
         this.TestToolServerID = tool.MCPServerID;
         this.TestToolID = tool.ID;
         this.TestToolConnectionID = connection?.ID ?? null;
         this.ShowTestToolDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link RunToolFromCard}. */
+    public runToolFromCard(tool: MCPToolData, connection?: MCPConnectionData): void {
+      return this.RunToolFromCard(tool, connection);
     }
 }

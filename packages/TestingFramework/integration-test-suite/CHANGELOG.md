@@ -1,5 +1,301 @@
 # @memberjunction/integration-test-suite
 
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- 0eeb89d: **AI usage analytics: a trustworthy cost basis, and the dimensions to slice it by (#4396)**
+
+  Cost reporting was wrong in both directions and could not be sliced by the dimensions anyone
+  actually asks about. This settles the basis, gives runs the keys they were missing, and rebuilds
+  the reporting layer on top.
+  - **Cost doctrine.** `guides/AI_USAGE_AND_COST_ANALYTICS_GUIDE.md` states the rules every consumer
+    now follows: the additive basis is own cost at the prompt-run grain, `Cost IS NULL` means
+    unpriced and is never coalesced to zero, rollups are derived from the hierarchy at query time and
+    never summed from stored inclusive columns, and coverage ships beside every cost figure.
+  - **Attribution.** `AIPromptRun` gains `UserID`, written when the run is created. The agent run a
+    prompt run belongs to is not stored on it: the agent layer owns that link as
+    `AIAgentRunStep.TargetLogID`, now indexed, and the fact view resolves it at query time. Cost
+    precision is aligned on `decimal(19,8)` across both run tables, and six analytics indexes are
+    added. Sub-agent runs now inherit `CompanyID`.
+  - **Parallel execution accounting.** The consolidated parent is created before its arms run, so the
+    arms persist as `ParallelChild` rows with their own cost and the parent carries none — previously
+    the losing arms were never recorded at all.
+  - **Semantic layer.** `vwAIUsageFacts` gives one row per prompt run over the base tables, with
+    time buckets, every dimension, and the flags that carry semantics no column expresses
+    (`IsPriced`, `IsParallelParent`, `IsUnmeasured`, `SourceKind`).
+  - **Aggregates.** Eight saved queries in the `AI` category, every cost figure grouped by currency
+    and carried with its priced/unpriced counts. They run live; materializing the hourly and daily
+    grains is a follow-up.
+  - **Honest dashboards.** The seven analytics surfaces read the aggregates instead of pulling
+    unbounded raw rows, unpriced cost renders as an em dash rather than `$0.00`, and coverage is
+    shown beside every total.
+  - **`mj-query-pivot`.** A generic pivot over any saved Query in `@memberjunction/ng-query-viewer`;
+    the AI Usage Explorer is a thin configuration of it. `ColumnLabels` titles columns, and
+    `HiddenColumns` lets a host group by an ID it does not display (so two records that share a name
+    stay apart while only the name shows).
+
+### Patch Changes
+
+- 520bd09: Durable entity actions (`EntityAction.RunMode = 'Durable'`) now receive their declared parameters by name (#4794).
+
+  `BuildDurableDeferral` stored the redacted parameters in `Task.InputPayload` as a `LoggedParam[]` array, while `TaskGraphActionRunner` reads that payload back as a name → value object. Every released build with durable dispatch (v6.1.0 onward, including 6.1.4) hit the same failure: the dispatcher's `mergedPayload` only merges plain objects, so it silently dropped the array and the action received NONE of its params. Parameters named `0…n` would only appear if the array reached `TaskGraphActionRunner.buildParams` directly, bypassing that drop. Either way every durable binding ran without its inputs, e.g. `Common.LogActivity` failing with `TypeCode is required. | Title is required.`
+  - `@memberjunction/actions-base`: new `RedactParamsToRecord()` beside `RedactParamsToJSON()`. It applies the same redaction rules and returns `{ Name: Value }`, omitting suppressed parameters, which then arrive at the action as absent rather than as a redaction stub.
+  - `@memberjunction/actions`: `BuildDurableDeferral` submits that record.
+  - `@memberjunction/task-graph`: a task whose `InputPayload` is not a name → value object now **fails** with a message naming the task, instead of running with its input silently dropped.
+  - `@memberjunction/server`: round-trip regression test through `TaskGraphActionRunner`.
+  - `@memberjunction/integration-test-suite`: EA6 now rejects an array `RedactedParams` and checks a bound param arrives by name.
+
+  **Upgrade note:** durable tasks queued before this fix still carry array payloads. They now fail loudly (`Task <id> has an InputPayload that is an array; expected a name → value object…`) instead of running with no inputs. Re-trigger the source save if that work matters, or — from the Workflows run view — use the failed step's **Edit input & retry** control to replace the stored array with a name → value object and retry it in place.
+
+  A durable binding never receives a whole record: `Entity Object` / `Entity Object Data` bindings are always stripped from the durable payload. Pass a key (e.g. `Entity Field 'ID'`) and load the record in the action.
+
+- d40a8cb: Fix three live-tier false failures left by the naming refactor: IT56 PG2/PG7 read the payload-guard audit through a hand-copied PascalCase mirror of PayloadManager's camelCase `PayloadChangeResultSummary`, so every violation read back empty; IT54 SA4 forwarded a stale `conversationId` option that `RunAgentOverWire` no longer reads, so the run was never linked to its conversation. Checks now read the audit via `ReadPayloadAudit`, typed against the product's own summary type, and `runAndVerify` takes the shared `WireRunOptions`, so either drift now fails to compile.
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [9d4a28a]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [9845c00]
+- Updated dependencies [351ba9f]
+- Updated dependencies [c4993f3]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-agent-harness@6.2.0-edge.1
+  - @memberjunction/ai-agents@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/conversations-runtime@6.2.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/task-graph@6.2.0-edge.1
+  - @memberjunction/communication-engine@6.2.0-edge.1
+  - @memberjunction/storage@6.2.0-edge.1
+  - @memberjunction/auth-providers@6.2.0-edge.1
+  - @memberjunction/ai-anthropic@6.2.0-edge.1
+  - @memberjunction/codegen-lib@6.2.0-edge.1
+  - @memberjunction/ai-bridge-base@6.2.0-edge.1
+  - @memberjunction/ai-bridge-server@6.2.0-edge.1
+  - @memberjunction/api-keys@6.2.0-edge.1
+  - @memberjunction/communication-gmail@6.2.0-edge.1
+  - @memberjunction/communication-ms-graph@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/content-autotagging@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/metadata-sync@6.2.0-edge.1
+  - @memberjunction/notifications@6.2.0-edge.1
+  - @memberjunction/open-app-engine@6.2.0-edge.1
+  - @memberjunction/predictive-studio@6.2.0-edge.1
+  - @memberjunction/predictive-studio-core@6.2.0-edge.1
+  - @memberjunction/query-processor@6.2.0-edge.1
+  - @memberjunction/record-set-processor@6.2.0-edge.1
+  - @memberjunction/record-set-processor-base@6.2.0-edge.1
+  - @memberjunction/search-engine@6.2.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/testing-engine@6.2.0-edge.1
+  - @memberjunction/testing-integration@6.2.0-edge.1
+  - @memberjunction/unit-testing@6.2.0-edge.1
+  - @memberjunction/queue@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/communication-sendgrid@6.2.0-edge.1
+  - @memberjunction/scheduling-engine@6.2.0-edge.1
+  - @memberjunction/templates-base-types@6.2.0-edge.1
+  - @memberjunction/communication-expo-push@6.2.0-edge.1
+  - @memberjunction/communication-twilio@6.2.0-edge.1
+  - @memberjunction/redis-provider@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- af57e8d: A transaction group whose rows are refused server-side no longer reports success.
+
+  Fixes [#4309](https://github.com/MemberJunction/MJ/issues/4309).
+
+  `BaseEntity.Save()` and `Delete()` report a logical refusal by **returning `false`** — they do not throw — and a refused row is never enrolled in the group, because `TransactionGroup.AddTransaction(...)` is reached only from inside `ProviderToUse.Save()`/`Delete()`. `ExecuteTransactionGroup` discarded that boolean, which produced two wrong outcomes:
+  - **Every row refused** — the server's group arrived at `Submit()` empty, took its legitimate "nothing to do" branch and returned `true`, and the resolver reported `Success: true` while serialising each entity's never-persisted **in-memory** state into `ResultsJSON`. The client's per-item test (`resultObject !== null`) could not tell that apart from a real row, so `Submit()` returned `true` to the caller.
+  - **Only some rows refused** — the survivors committed and the caller still saw unqualified success, with the refused rows silently gone.
+
+  Nothing was ever written that should not have been: the guards did their job, and this was a false success report rather than a security bypass. But an administrator performing a bulk operation the server refused in full was told the opposite of what happened, and every server-side `Validate()` guard inherited the behaviour.
+
+  **`@memberjunction/server`** — `ExecuteTransactionGroup` now captures what `Save()`/`Delete()` return and, when any row was refused, logs which ones and returns `PrepareReturnValue(false, …)` **before** `tg.Submit()`. Nothing has been written at that point (enrolment is deferral), so a partially-refused group fails whole rather than committing the survivors.
+
+  The predicate is the **return value**, not whether the group ended up empty: a row that is not dirty also fails to enrol and correctly returns `true`, and an empty group legitimately means "nothing to do" for a caller that enrolled nothing (pinned by `transaction-groups.TG1`). That is also why the fix belongs in the resolver rather than `TransactionGroupBase.Submit()` — the resolver is the only layer that still knows _which_ row was refused and why.
+
+  **`@memberjunction/graphql-dataprovider`** — `GraphQLTransactionGroup.HandleSubmit` now copies the server's own failure result for each item onto that item's entity, so `BaseEntity.LatestResult` carries the reason a UI needs instead of the generic "Transaction group failed". It only ever _upgrades_ the message: every item of a failed group reports `Success: false` (the provider registers an entity's result before enrolling the row and only flips it in the transaction callback), so a result with no message or errors is left alone.
+
+  **`@memberjunction/server`** — a second fix on the same path: `ExecuteTransactionGroup` called the **async** `entity.GetDataObject()` without `await` when assembling a `Delete` item's result, so `PrepareReturnValue` serialised a `Promise` and **every** `Delete` in a transaction group returned `ResultsJSON: ["{}"]` — successful ones included. Neither `tsc` nor a floating-promise lint could see it, because the array is typed `any[]` and pushing a promise is not a floating promise. The empty payload also reached `GraphQLDataProvider`'s own `Delete` transaction callback, which validates a commit with `pk.Value !== results[pk.FieldName]`; against `{}` every key mismatched, so a delete that **did** commit reported `Transaction failed to commit` on its entity. Deletes now report the row they removed.
+
+  **`@memberjunction/ng-explorer-settings`** — the reason now reaches the operator, which is what #4309's _"Verify by"_ asks for: _"step 5 must now show an error naming the refused user(s) and the rule."_ Both Explorer surfaces that submit `MJ: User Roles` transaction groups — bulk **Assign Role** and the single-user dialog — took the `!await tg.Submit()` branch and threw a hardcoded "all changes have been rolled back", never reading the `LatestResult` the provider had just populated. They now keep their enrolled rows and read the server's reason back off them, so the screen names the refused user and the rule it broke. A shared `serverRefusalReasons` helper holds the one piece of knowledge both need, including which messages are the provider's own placeholders rather than a reason worth showing.
+
+  **`@memberjunction/integration-test-suite`** — `transaction-groups.TG6`'s third assertion could never fail. It searched the joined `ErrorMessages` for the substring `name` to prove the refusal reason had travelled, but each entry is a whole serialized `BaseEntityResult`, which always carries `OriginalValues: [{FieldName, …}]` — and `"FieldName"` lowercases to `"fieldname"`, which contains `"name"`. Strip every reason from the payload and the check still passed. It now extracts only the reason-bearing fields (`Message`, `Error`, `Errors[].Message`) and asserts both that a reason exists at all and that it names the offending column.
+
+  No public interface changed. One existing test expectation did change, deliberately: `TransactionGroupResolver.refusals.test.ts`'s fake declared `GetDataObject()` **synchronous**, diverging from the real `Promise<any>` signature — which is exactly why the suite could not see the missing `await`. The fake now matches production.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [ee5c033]
+- Updated dependencies [ce55864]
+- Updated dependencies [662d47e]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [8f23b23]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [e3db74f]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [5df9486]
+- Updated dependencies [c157749]
+- Updated dependencies [f48dffc]
+- Updated dependencies [2771f01]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [58faa68]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [e6c8f53]
+- Updated dependencies [a17a228]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [d61b425]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [7fe994a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [e7a0efe]
+- Updated dependencies [e962151]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai-agents@6.2.0-edge.0
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/codegen-lib@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.0
+  - @memberjunction/testing-engine@6.2.0-edge.0
+  - @memberjunction/metadata-sync@6.2.0-edge.0
+  - @memberjunction/content-autotagging@6.2.0-edge.0
+  - @memberjunction/record-set-processor@6.2.0-edge.0
+  - @memberjunction/open-app-engine@6.2.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/conversations-runtime@6.2.0-edge.0
+  - @memberjunction/predictive-studio-core@6.2.0-edge.0
+  - @memberjunction/predictive-studio@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/unit-testing@6.2.0-edge.0
+  - @memberjunction/search-engine@6.2.0-edge.0
+  - @memberjunction/task-graph@6.2.0-edge.0
+  - @memberjunction/ai-agent-harness@6.2.0-edge.0
+  - @memberjunction/scheduling-engine@6.2.0-edge.0
+  - @memberjunction/ai-bridge-server@6.2.0-edge.0
+  - @memberjunction/communication-ms-graph@6.2.0-edge.0
+  - @memberjunction/queue@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/ai-bridge-base@6.2.0-edge.0
+  - @memberjunction/api-keys@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/communication-engine@6.2.0-edge.0
+  - @memberjunction/notifications@6.2.0-edge.0
+  - @memberjunction/communication-sendgrid@6.2.0-edge.0
+  - @memberjunction/storage@6.2.0-edge.0
+  - @memberjunction/query-processor@6.2.0-edge.0
+  - @memberjunction/templates-base-types@6.2.0-edge.0
+  - @memberjunction/testing-integration@6.2.0-edge.0
+  - @memberjunction/auth-providers@6.2.0-edge.0
+  - @memberjunction/communication-expo-push@6.2.0-edge.0
+  - @memberjunction/communication-gmail@6.2.0-edge.0
+  - @memberjunction/communication-twilio@6.2.0-edge.0
+  - @memberjunction/record-set-processor-base@6.2.0-edge.0
+  - @memberjunction/redis-provider@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

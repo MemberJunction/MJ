@@ -20,19 +20,100 @@ type StatusFilter = '' | 'active' | 'inactive' | 'expired' | 'expiring';
 })
 export class CredentialsListResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = true;
-    public credentials: MJCredentialEntity[] = [];
-    public filteredCredentials: MJCredentialEntity[] = [];
-    public types: MJCredentialTypeEntity[] = [];
+    public Credentials: MJCredentialEntity[] = [];
+
+    /** @deprecated Use {@link Credentials}. */
+    public get credentials(): MJCredentialEntity[] {
+      return this.Credentials;
+    }
+    /** @deprecated Use {@link Credentials}. */
+    public set credentials(value: MJCredentialEntity[]) {
+      this.Credentials = value;
+    }
+    public FilteredCredentials: MJCredentialEntity[] = [];
+
+    /** @deprecated Use {@link FilteredCredentials}. */
+    public get filteredCredentials(): MJCredentialEntity[] {
+      return this.FilteredCredentials;
+    }
+    /** @deprecated Use {@link FilteredCredentials}. */
+    public set filteredCredentials(value: MJCredentialEntity[]) {
+      this.FilteredCredentials = value;
+    }
+    public Types: MJCredentialTypeEntity[] = [];
+
+    /** @deprecated Use {@link Types}. */
+    public get types(): MJCredentialTypeEntity[] {
+      return this.Types;
+    }
+    /** @deprecated Use {@link Types}. */
+    public set types(value: MJCredentialTypeEntity[]) {
+      this.Types = value;
+    }
 
     // View state
-    public viewMode: ViewMode = 'grid';
-    public searchText = '';
-    public selectedTypeFilter = '';
-    public selectedStatusFilter: StatusFilter = '';
-    public showActiveOnly = false;
+    public ViewMode: ViewMode = 'grid';
+
+    /** @deprecated Use {@link ViewMode}. */
+    public get viewMode(): ViewMode {
+      return this.ViewMode;
+    }
+    /** @deprecated Use {@link ViewMode}. */
+    public set viewMode(value: ViewMode) {
+      this.ViewMode = value;
+    }
+    public SearchText = '';
+
+    /** @deprecated Use {@link SearchText}. */
+    public get searchText() {
+      return this.SearchText;
+    }
+    /** @deprecated Use {@link SearchText}. */
+    public set searchText(value) {
+      this.SearchText = value;
+    }
+    public SelectedTypeFilter = '';
+
+    /** @deprecated Use {@link SelectedTypeFilter}. */
+    public get selectedTypeFilter() {
+      return this.SelectedTypeFilter;
+    }
+    /** @deprecated Use {@link SelectedTypeFilter}. */
+    public set selectedTypeFilter(value) {
+      this.SelectedTypeFilter = value;
+    }
+    public SelectedStatusFilter: StatusFilter = '';
+
+    /** @deprecated Use {@link SelectedStatusFilter}. */
+    public get selectedStatusFilter(): StatusFilter {
+      return this.SelectedStatusFilter;
+    }
+    /** @deprecated Use {@link SelectedStatusFilter}. */
+    public set selectedStatusFilter(value: StatusFilter) {
+      this.SelectedStatusFilter = value;
+    }
+    public ShowActiveOnly = false;
+
+    /** @deprecated Use {@link ShowActiveOnly}. */
+    public get showActiveOnly() {
+      return this.ShowActiveOnly;
+    }
+    /** @deprecated Use {@link ShowActiveOnly}. */
+    public set showActiveOnly(value) {
+      this.ShowActiveOnly = value;
+    }
 
     // Selection for bulk operations
-    public selectedCredentials = new Set<string>();
+    public SelectedCredentials = new Set<string>();
+
+    /** @deprecated Use {@link SelectedCredentials}. */
+    public get selectedCredentials() {
+      return this.SelectedCredentials;
+    }
+    /** @deprecated Use {@link SelectedCredentials}. */
+    public set selectedCredentials(value) {
+      this.SelectedCredentials = value;
+    }
     private _isAllSelected = false;
 
     // Permissions
@@ -41,17 +122,31 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
     protected override destroy$ = new Subject<void>();
 
-    @ViewChild('editPanel') editPanel!: CredentialEditPanelComponent;
+    @ViewChild('editPanel') EditPanel!: CredentialEditPanelComponent;
 
-    public readonly viewOptions: ViewToggleOption[] = [
+    /** @deprecated Use {@link EditPanel}. */
+    get editPanel(): CredentialEditPanelComponent {
+      return this.EditPanel;
+    }
+    /** @deprecated Use {@link EditPanel}. */
+    set editPanel(value: CredentialEditPanelComponent) {
+      this.EditPanel = value;
+    }
+
+    public readonly ViewOptions: ViewToggleOption[] = [
         { key: 'grid', icon: 'fa-solid fa-grip', title: 'Grid view' },
         { key: 'list', icon: 'fa-solid fa-list', title: 'List view' }
     ];
 
+    /** @deprecated Use {@link ViewOptions}. */
+    public get viewOptions(): ViewToggleOption[] {
+      return this.ViewOptions;
+    }
+
     public get FilterFields(): FilterFieldConfig[] {
         const typeOptions = [
             { text: 'All Types', value: '' as const },
-            ...this.types.map(t => ({ text: t.Name, value: t.ID as string }))
+            ...this.Types.map(t => ({ text: t.Name, value: t.ID as string }))
         ];
         return [
             {
@@ -80,26 +175,36 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         ];
     }
     public get FilterValues(): Record<string, unknown> {
-        return { typeFilter: this.selectedTypeFilter, statusFilter: this.selectedStatusFilter };
+        return { typeFilter: this.SelectedTypeFilter, statusFilter: this.SelectedStatusFilter };
     }
     public get ActiveFilterCount(): number {
         let n = 0;
-        if (this.selectedTypeFilter) n++;
-        if (this.selectedStatusFilter) n++;
+        if (this.SelectedTypeFilter) n++;
+        if (this.SelectedStatusFilter) n++;
         return n;
     }
-    public onFilterValuesChange(v: Record<string, unknown>): void {
+    public OnFilterValuesChange(v: Record<string, unknown>): void {
         const next = (v ?? {}) as { typeFilter?: string; statusFilter?: StatusFilter };
-        if ((next.typeFilter ?? '') !== this.selectedTypeFilter) {
-            this.onTypeFilterChange(next.typeFilter ?? '');
+        if ((next.typeFilter ?? '') !== this.SelectedTypeFilter) {
+            this.OnTypeFilterChange(next.typeFilter ?? '');
         }
-        if ((next.statusFilter ?? '') !== this.selectedStatusFilter) {
-            this.onStatusFilterChange(next.statusFilter ?? '');
+        if ((next.statusFilter ?? '') !== this.SelectedStatusFilter) {
+            this.OnStatusFilterChange(next.statusFilter ?? '');
         }
     }
+
+    /** @deprecated Use {@link OnFilterValuesChange}. */
+    public onFilterValuesChange(v: Record<string, unknown>): void {
+      return this.OnFilterValuesChange(v);
+    }
+    public ResetFilters(): void {
+        if (this.SelectedTypeFilter) this.OnTypeFilterChange('');
+        if (this.SelectedStatusFilter) this.OnStatusFilterChange('');
+    }
+
+    /** @deprecated Use {@link ResetFilters}. */
     public resetFilters(): void {
-        if (this.selectedTypeFilter) this.onTypeFilterChange('');
-        if (this.selectedStatusFilter) this.onStatusFilterChange('');
+      return this.ResetFilters();
     }
 
     constructor(
@@ -194,11 +299,11 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             ]);
 
             if (credResult.Success) {
-                this.credentials = credResult.Results as MJCredentialEntity[];
+                this.Credentials = credResult.Results as MJCredentialEntity[];
             }
 
             if (typeResult.Success) {
-                this.types = typeResult.Results as MJCredentialTypeEntity[];
+                this.Types = typeResult.Results as MJCredentialTypeEntity[];
             }
 
             this.applyFilters();
@@ -226,7 +331,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
         // Apply filters from navigation config
         if (config.typeId) {
-            this.selectedTypeFilter = config.typeId as string;
+            this.SelectedTypeFilter = config.typeId as string;
             this.applyFilters();
         }
 
@@ -234,11 +339,11 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             // Open create panel (optionally with type/category pre-selected)
             setTimeout(() => {
                 if (config.categoryId) {
-                    this.createNewCredentialWithType(config.typeId as string, config.categoryId as string);
+                    this.CreateNewCredentialWithType(config.typeId as string, config.categoryId as string);
                 } else if (config.typeId) {
-                    this.createNewCredentialWithType(config.typeId as string);
+                    this.CreateNewCredentialWithType(config.typeId as string);
                 } else {
-                    this.createNewCredential();
+                    this.CreateNewCredential();
                 }
             }, 100);
         }
@@ -246,49 +351,74 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
     // === CRUD Operations ===
 
+    public CreateNewCredential(): void {
+        if (this.EditPanel) {
+            this.EditPanel.open(null);
+        }
+    }
+
+    /** @deprecated Use {@link CreateNewCredential}. */
     public createNewCredential(): void {
-        if (this.editPanel) {
-            this.editPanel.open(null);
+      return this.CreateNewCredential();
+    }
+
+    public CreateNewCredentialWithType(typeId?: string, categoryId?: string): void {
+        if (this.EditPanel) {
+            this.EditPanel.open(null, typeId, categoryId);
         }
     }
 
+    /** @deprecated Use {@link CreateNewCredentialWithType}. */
     public createNewCredentialWithType(typeId?: string, categoryId?: string): void {
-        if (this.editPanel) {
-            this.editPanel.open(null, typeId, categoryId);
-        }
+      return this.CreateNewCredentialWithType(typeId, categoryId);
     }
 
-    public editCredential(credential: MJCredentialEntity, event?: Event): void {
+    public EditCredential(credential: MJCredentialEntity, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
-        if (this.editPanel) {
-            this.editPanel.open(credential);
+        if (this.EditPanel) {
+            this.EditPanel.open(credential);
         }
     }
 
-    public onCredentialSaved(credential: MJCredentialEntity): void {
+    /** @deprecated Use {@link EditCredential}. */
+    public editCredential(credential: MJCredentialEntity, event?: Event): void {
+      return this.EditCredential(credential, event);
+    }
+
+    public OnCredentialSaved(credential: MJCredentialEntity): void {
         // Check if it's a new credential or update
-        const existingIndex = this.credentials.findIndex(c => UUIDsEqual(c.ID, credential.ID));
+        const existingIndex = this.Credentials.findIndex(c => UUIDsEqual(c.ID, credential.ID));
         if (existingIndex >= 0) {
             // Update existing
-            this.credentials[existingIndex] = credential;
+            this.Credentials[existingIndex] = credential;
         } else {
             // Add new
-            this.credentials.unshift(credential);
+            this.Credentials.unshift(credential);
         }
         this.applyFilters();
         this.cdr.markForCheck();
     }
 
-    public onCredentialDeleted(credentialId: string): void {
-        this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credentialId));
-        this.selectedCredentials.delete(credentialId);
+    /** @deprecated Use {@link OnCredentialSaved}. */
+    public onCredentialSaved(credential: MJCredentialEntity): void {
+      return this.OnCredentialSaved(credential);
+    }
+
+    public OnCredentialDeleted(credentialId: string): void {
+        this.Credentials = this.Credentials.filter(c => !UUIDsEqual(c.ID, credentialId));
+        this.SelectedCredentials.delete(credentialId);
         this.applyFilters();
         this.cdr.markForCheck();
     }
 
-    public async deleteCredential(credential: MJCredentialEntity, event?: Event): Promise<void> {
+    /** @deprecated Use {@link OnCredentialDeleted}. */
+    public onCredentialDeleted(credentialId: string): void {
+      return this.OnCredentialDeleted(credentialId);
+    }
+
+    public async DeleteCredential(credential: MJCredentialEntity, event?: Event): Promise<void> {
         if (event) {
             event.stopPropagation();
         }
@@ -309,8 +439,8 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             const success = await credential.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Credential "${credential.Name}" deleted successfully`, 'success', 3000);
-                this.credentials = this.credentials.filter(c => !UUIDsEqual(c.ID, credential.ID));
-                this.selectedCredentials.delete(credential.ID);
+                this.Credentials = this.Credentials.filter(c => !UUIDsEqual(c.ID, credential.ID));
+                this.SelectedCredentials.delete(credential.ID);
                 this.applyFilters();
             } else {
                 MJNotificationService.Instance.CreateSimpleNotification('Failed to delete credential', 'error', 3000);
@@ -321,7 +451,12 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         }
     }
 
-    public async toggleCredentialActive(credential: MJCredentialEntity, event?: Event): Promise<void> {
+    /** @deprecated Use {@link DeleteCredential}. */
+    public async deleteCredential(credential: MJCredentialEntity, event?: Event): Promise<void> {
+      return this.DeleteCredential(credential, event);
+    }
+
+    public async ToggleCredentialActive(credential: MJCredentialEntity, event?: Event): Promise<void> {
         if (event) {
             event.stopPropagation();
         }
@@ -352,54 +487,84 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link ToggleCredentialActive}. */
+    public async toggleCredentialActive(credential: MJCredentialEntity, event?: Event): Promise<void> {
+      return this.ToggleCredentialActive(credential, event);
+    }
+
     // === Selection ===
 
-    public toggleSelection(credential: MJCredentialEntity, event?: Event): void {
+    public ToggleSelection(credential: MJCredentialEntity, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
-        if (this.selectedCredentials.has(credential.ID)) {
-            this.selectedCredentials.delete(credential.ID);
+        if (this.SelectedCredentials.has(credential.ID)) {
+            this.SelectedCredentials.delete(credential.ID);
         } else {
-            this.selectedCredentials.add(credential.ID);
+            this.SelectedCredentials.add(credential.ID);
         }
         this.updateAllSelectedState();
         this.cdr.markForCheck();
     }
 
-    public toggleSelectAll(): void {
+    /** @deprecated Use {@link ToggleSelection}. */
+    public toggleSelection(credential: MJCredentialEntity, event?: Event): void {
+      return this.ToggleSelection(credential, event);
+    }
+
+    public ToggleSelectAll(): void {
         if (this._isAllSelected) {
-            this.selectedCredentials.clear();
+            this.SelectedCredentials.clear();
         } else {
-            this.filteredCredentials.forEach(c => this.selectedCredentials.add(c.ID));
+            this.FilteredCredentials.forEach(c => this.SelectedCredentials.add(c.ID));
         }
         this._isAllSelected = !this._isAllSelected;
         this.cdr.markForCheck();
     }
 
-    public isAllSelected(): boolean {
+    /** @deprecated Use {@link ToggleSelectAll}. */
+    public toggleSelectAll(): void {
+      return this.ToggleSelectAll();
+    }
+
+    public IsAllSelected(): boolean {
         return this._isAllSelected;
     }
 
-    public isSelected(credential: MJCredentialEntity): boolean {
-        return this.selectedCredentials.has(credential.ID);
+    /** @deprecated Use {@link IsAllSelected}. */
+    public isAllSelected(): boolean {
+      return this.IsAllSelected();
     }
 
-    public clearSelection(): void {
-        this.selectedCredentials.clear();
+    public IsSelected(credential: MJCredentialEntity): boolean {
+        return this.SelectedCredentials.has(credential.ID);
+    }
+
+    /** @deprecated Use {@link IsSelected}. */
+    public isSelected(credential: MJCredentialEntity): boolean {
+      return this.IsSelected(credential);
+    }
+
+    public ClearSelection(): void {
+        this.SelectedCredentials.clear();
         this._isAllSelected = false;
         this.cdr.markForCheck();
     }
 
-    private updateAllSelectedState(): void {
-        this._isAllSelected = this.filteredCredentials.length > 0 &&
-            this.filteredCredentials.every(c => this.selectedCredentials.has(c.ID));
+    /** @deprecated Use {@link ClearSelection}. */
+    public clearSelection(): void {
+      return this.ClearSelection();
     }
 
-    public async deleteSelected(): Promise<void> {
-        if (!this.UserCanDelete || this.selectedCredentials.size === 0) return;
+    private updateAllSelectedState(): void {
+        this._isAllSelected = this.FilteredCredentials.length > 0 &&
+            this.FilteredCredentials.every(c => this.SelectedCredentials.has(c.ID));
+    }
 
-        const count = this.selectedCredentials.size;
+    public async DeleteSelected(): Promise<void> {
+        if (!this.UserCanDelete || this.SelectedCredentials.size === 0) return;
+
+        const count = this.SelectedCredentials.size;
         const confirmed = await this.confirm.ConfirmDelete({
             title: 'Delete credentials',
             message: `Delete ${count} credential(s)?`,
@@ -407,8 +572,8 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         });
         if (!confirmed) return;
 
-        const toDelete = Array.from(this.selectedCredentials)
-            .map(id => this.credentials.find(c => UUIDsEqual(c.ID, id)))
+        const toDelete = Array.from(this.SelectedCredentials)
+            .map(id => this.Credentials.find(c => UUIDsEqual(c.ID, id)))
             .filter((c): c is MJCredentialEntity => c != null);
 
         if (toDelete.length === 0) return;
@@ -421,8 +586,8 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
         if (await tg.Submit()) {
             const deletedIds = new Set(toDelete.map(c => c.ID));
-            this.credentials = this.credentials.filter(c => !deletedIds.has(c.ID));
-            this.selectedCredentials.clear();
+            this.Credentials = this.Credentials.filter(c => !deletedIds.has(c.ID));
+            this.SelectedCredentials.clear();
             this.applyFilters();
             MJNotificationService.Instance.CreateSimpleNotification(
                 `${toDelete.length} credential(s) deleted`,
@@ -438,73 +603,113 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         }
     }
 
+    /** @deprecated Use {@link DeleteSelected}. */
+    public async deleteSelected(): Promise<void> {
+      return this.DeleteSelected();
+    }
+
     // === Filtering ===
 
+    public OnSearchChange(value: string): void {
+        this.SearchText = value;
+        this.applyFilters();
+    }
+
+    /** @deprecated Use {@link OnSearchChange}. */
     public onSearchChange(value: string): void {
-        this.searchText = value;
+      return this.OnSearchChange(value);
+    }
+
+    public OnTypeFilterChange(typeId: string): void {
+        this.SelectedTypeFilter = typeId;
         this.applyFilters();
     }
 
+    /** @deprecated Use {@link OnTypeFilterChange}. */
     public onTypeFilterChange(typeId: string): void {
-        this.selectedTypeFilter = typeId;
+      return this.OnTypeFilterChange(typeId);
+    }
+
+    public OnStatusFilterChange(status: StatusFilter): void {
+        this.SelectedStatusFilter = status;
         this.applyFilters();
     }
 
+    /** @deprecated Use {@link OnStatusFilterChange}. */
     public onStatusFilterChange(status: StatusFilter): void {
-        this.selectedStatusFilter = status;
+      return this.OnStatusFilterChange(status);
+    }
+
+    public OnActiveFilterChange(showActive: boolean): void {
+        this.ShowActiveOnly = showActive;
         this.applyFilters();
     }
 
+    /** @deprecated Use {@link OnActiveFilterChange}. */
     public onActiveFilterChange(showActive: boolean): void {
-        this.showActiveOnly = showActive;
+      return this.OnActiveFilterChange(showActive);
+    }
+
+    public ClearFilters(): void {
+        this.SearchText = '';
+        this.SelectedTypeFilter = '';
+        this.SelectedStatusFilter = '';
+        this.ShowActiveOnly = false;
         this.applyFilters();
     }
 
+    /** @deprecated Use {@link ClearFilters}. */
     public clearFilters(): void {
-        this.searchText = '';
-        this.selectedTypeFilter = '';
-        this.selectedStatusFilter = '';
-        this.showActiveOnly = false;
-        this.applyFilters();
+      return this.ClearFilters();
     }
 
     /** True when search and/or any filter narrow the list. */
     public get IsListNarrowed(): boolean {
-        return !!(this.searchText || this.selectedTypeFilter || this.selectedStatusFilter);
+        return !!(this.SearchText || this.SelectedTypeFilter || this.SelectedStatusFilter);
     }
 
     /** Empty-state CTA: reset filters when narrowed, otherwise create. */
-    public onEmptyStateAction(): void {
+    public OnEmptyStateAction(): void {
         if (this.IsListNarrowed) {
-            this.clearFilters();
+            this.ClearFilters();
         } else {
-            this.createNewCredential();
+            this.CreateNewCredential();
         }
     }
 
+    /** @deprecated Use {@link OnEmptyStateAction}. */
+    public onEmptyStateAction(): void {
+      return this.OnEmptyStateAction();
+    }
+
+    public get HasActiveFilters(): boolean {
+        return this.SearchText !== '' ||
+            this.SelectedTypeFilter !== '' ||
+            this.SelectedStatusFilter !== '' ||
+            this.ShowActiveOnly;
+    }
+
+    /** @deprecated Use {@link HasActiveFilters}. */
     public get hasActiveFilters(): boolean {
-        return this.searchText !== '' ||
-            this.selectedTypeFilter !== '' ||
-            this.selectedStatusFilter !== '' ||
-            this.showActiveOnly;
+      return this.HasActiveFilters;
     }
 
     private applyFilters(): void {
-        let filtered = [...this.credentials];
+        let filtered = [...this.Credentials];
         const now = new Date();
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
         // Filter by active status
-        if (this.showActiveOnly) {
+        if (this.ShowActiveOnly) {
             filtered = filtered.filter(c => c.IsActive);
         }
 
         // Filter by status
-        if (this.selectedStatusFilter) {
+        if (this.SelectedStatusFilter) {
             filtered = filtered.filter(c => {
-                const statusClass = this.getStatusClass(c);
-                switch (this.selectedStatusFilter) {
+                const statusClass = this.GetStatusClass(c);
+                switch (this.SelectedStatusFilter) {
                     case 'active': return statusClass === 'active';
                     case 'inactive': return statusClass === 'inactive';
                     case 'expired': return statusClass === 'expired';
@@ -515,13 +720,13 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         }
 
         // Filter by type
-        if (this.selectedTypeFilter) {
-            filtered = filtered.filter(c => UUIDsEqual(c.CredentialTypeID, this.selectedTypeFilter));
+        if (this.SelectedTypeFilter) {
+            filtered = filtered.filter(c => UUIDsEqual(c.CredentialTypeID, this.SelectedTypeFilter));
         }
 
         // Filter by search text
-        if (this.searchText.trim()) {
-            const search = this.searchText.toLowerCase().trim();
+        if (this.SearchText.trim()) {
+            const search = this.SearchText.toLowerCase().trim();
             filtered = filtered.filter(c =>
                 c.Name.toLowerCase().includes(search) ||
                 (c.Description && c.Description.toLowerCase().includes(search)) ||
@@ -529,27 +734,37 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             );
         }
 
-        this.filteredCredentials = filtered;
+        this.FilteredCredentials = filtered;
         this.updateAllSelectedState();
         this.cdr.markForCheck();
     }
 
     // === View Mode ===
 
-    public setViewMode(mode: ViewMode): void {
-        this.viewMode = mode;
+    public SetViewMode(mode: ViewMode): void {
+        this.ViewMode = mode;
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link SetViewMode}. */
+    public setViewMode(mode: ViewMode): void {
+      return this.SetViewMode(mode);
     }
 
     // === Helpers ===
 
-    public getTypeById(typeId: string): MJCredentialTypeEntity | undefined {
-        return this.types.find(t => UUIDsEqual(t.ID, typeId));
+    public GetTypeById(typeId: string): MJCredentialTypeEntity | undefined {
+        return this.Types.find(t => UUIDsEqual(t.ID, typeId));
     }
 
-    public getTypesByCategory(): Map<string, MJCredentialTypeEntity[]> {
+    /** @deprecated Use {@link GetTypeById}. */
+    public getTypeById(typeId: string): MJCredentialTypeEntity | undefined {
+      return this.GetTypeById(typeId);
+    }
+
+    public GetTypesByCategory(): Map<string, MJCredentialTypeEntity[]> {
         const grouped = new Map<string, MJCredentialTypeEntity[]>();
-        for (const type of this.types) {
+        for (const type of this.Types) {
             const category = type.Category;
             if (!grouped.has(category)) {
                 grouped.set(category, []);
@@ -559,7 +774,12 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return grouped;
     }
 
-    public getStatusClass(credential: MJCredentialEntity): string {
+    /** @deprecated Use {@link GetTypesByCategory}. */
+    public getTypesByCategory(): Map<string, MJCredentialTypeEntity[]> {
+      return this.GetTypesByCategory();
+    }
+
+    public GetStatusClass(credential: MJCredentialEntity): string {
         if (!credential.IsActive) {
             return 'inactive';
         }
@@ -577,8 +797,13 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return 'active';
     }
 
-    public getStatusLabel(credential: MJCredentialEntity): string {
-        const statusClass = this.getStatusClass(credential);
+    /** @deprecated Use {@link GetStatusClass}. */
+    public getStatusClass(credential: MJCredentialEntity): string {
+      return this.GetStatusClass(credential);
+    }
+
+    public GetStatusLabel(credential: MJCredentialEntity): string {
+        const statusClass = this.GetStatusClass(credential);
         const labels: Record<string, string> = {
             'active': 'Active',
             'inactive': 'Inactive',
@@ -588,8 +813,13 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return labels[statusClass] || 'Unknown';
     }
 
-    public getStatusIcon(credential: MJCredentialEntity): string {
-        const statusClass = this.getStatusClass(credential);
+    /** @deprecated Use {@link GetStatusLabel}. */
+    public getStatusLabel(credential: MJCredentialEntity): string {
+      return this.GetStatusLabel(credential);
+    }
+
+    public GetStatusIcon(credential: MJCredentialEntity): string {
+        const statusClass = this.GetStatusClass(credential);
         const icons: Record<string, string> = {
             'active': 'fa-solid fa-check-circle',
             'inactive': 'fa-solid fa-minus-circle',
@@ -597,6 +827,11 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             'expiring': 'fa-solid fa-clock'
         };
         return icons[statusClass] || 'fa-solid fa-circle';
+    }
+
+    /** @deprecated Use {@link GetStatusIcon}. */
+    public getStatusIcon(credential: MJCredentialEntity): string {
+      return this.GetStatusIcon(credential);
     }
 
     public formatDate(date: Date | null | undefined): string {
@@ -608,7 +843,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         });
     }
 
-    public formatDateTime(date: Date | null | undefined): string {
+    public FormatDateTime(date: Date | null | undefined): string {
         if (!date) return 'Never';
         return new Date(date).toLocaleDateString('en-US', {
             month: 'short',
@@ -619,7 +854,12 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         });
     }
 
-    public getTimeAgo(date: Date | null | undefined): string {
+    /** @deprecated Use {@link FormatDateTime}. */
+    public formatDateTime(date: Date | null | undefined): string {
+      return this.FormatDateTime(date);
+    }
+
+    public GetTimeAgo(date: Date | null | undefined): string {
         if (!date) return 'Never';
         const now = new Date();
         const then = new Date(date);
@@ -635,8 +875,13 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return this.formatDate(date);
     }
 
-    public getTypeIcon(credential: MJCredentialEntity): string {
-        const type = this.getTypeById(credential.CredentialTypeID);
+    /** @deprecated Use {@link GetTimeAgo}. */
+    public getTimeAgo(date: Date | null | undefined): string {
+      return this.GetTimeAgo(date);
+    }
+
+    public GetTypeIcon(credential: MJCredentialEntity): string {
+        const type = this.GetTypeById(credential.CredentialTypeID);
         if (!type) return 'fa-solid fa-key';
 
         const iconMap: Record<string, string> = {
@@ -650,26 +895,46 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return iconMap[type.Category] || 'fa-solid fa-key';
     }
 
-    public refresh(): void {
-        this.selectedCredentials.clear();
+    /** @deprecated Use {@link GetTypeIcon}. */
+    public getTypeIcon(credential: MJCredentialEntity): string {
+      return this.GetTypeIcon(credential);
+    }
+
+    public Refresh(): void {
+        this.SelectedCredentials.clear();
         this.loadData();
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+      return this.Refresh();
     }
 
     // === Stats ===
 
+    public get ActiveCount(): number {
+        return this.Credentials.filter(c => c.IsActive).length;
+    }
+
+    /** @deprecated Use {@link ActiveCount}. */
     public get activeCount(): number {
-        return this.credentials.filter(c => c.IsActive).length;
+      return this.ActiveCount;
     }
 
+    public GetActiveCount(): number {
+        return this.ActiveCount;
+    }
+
+    /** @deprecated Use {@link GetActiveCount}. */
     public getActiveCount(): number {
-        return this.activeCount;
+      return this.GetActiveCount();
     }
 
-    public get expiringCount(): number {
+    public get ExpiringCount(): number {
         const now = new Date();
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-        return this.credentials.filter(c =>
+        return this.Credentials.filter(c =>
             c.ExpiresAt &&
             new Date(c.ExpiresAt) >= now &&
             new Date(c.ExpiresAt) <= thirtyDaysFromNow &&
@@ -677,29 +942,54 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         ).length;
     }
 
-    public getExpiringSoonCount(): number {
-        return this.expiringCount;
+    /** @deprecated Use {@link ExpiringCount}. */
+    public get expiringCount(): number {
+      return this.ExpiringCount;
     }
 
-    public get expiredCount(): number {
+    public GetExpiringSoonCount(): number {
+        return this.ExpiringCount;
+    }
+
+    /** @deprecated Use {@link GetExpiringSoonCount}. */
+    public getExpiringSoonCount(): number {
+      return this.GetExpiringSoonCount();
+    }
+
+    public get ExpiredCount(): number {
         const now = new Date();
-        return this.credentials.filter(c =>
+        return this.Credentials.filter(c =>
             c.ExpiresAt && new Date(c.ExpiresAt) < now
         ).length;
     }
 
+    /** @deprecated Use {@link ExpiredCount}. */
+    public get expiredCount(): number {
+      return this.ExpiredCount;
+    }
+
+    public GetExpiredCount(): number {
+        return this.ExpiredCount;
+    }
+
+    /** @deprecated Use {@link GetExpiredCount}. */
     public getExpiredCount(): number {
-        return this.expiredCount;
+      return this.GetExpiredCount();
     }
 
     // === Status Helpers ===
 
-    public isExpired(credential: MJCredentialEntity): boolean {
+    public IsExpired(credential: MJCredentialEntity): boolean {
         if (!credential.ExpiresAt) return false;
         return new Date(credential.ExpiresAt) < new Date();
     }
 
-    public isExpiringSoon(credential: MJCredentialEntity): boolean {
+    /** @deprecated Use {@link IsExpired}. */
+    public isExpired(credential: MJCredentialEntity): boolean {
+      return this.IsExpired(credential);
+    }
+
+    public IsExpiringSoon(credential: MJCredentialEntity): boolean {
         if (!credential.ExpiresAt) return false;
         const expiresAt = new Date(credential.ExpiresAt);
         const now = new Date();
@@ -708,14 +998,19 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         return expiresAt >= now && expiresAt <= thirtyDaysFromNow;
     }
 
+    /** @deprecated Use {@link IsExpiringSoon}. */
+    public isExpiringSoon(credential: MJCredentialEntity): boolean {
+      return this.IsExpiringSoon(credential);
+    }
+
     // === Bulk Operations ===
 
-    public async bulkToggleActive(active: boolean): Promise<void> {
-        if (!this.UserCanUpdate || this.selectedCredentials.size === 0) return;
+    public async BulkToggleActive(active: boolean): Promise<void> {
+        if (!this.UserCanUpdate || this.SelectedCredentials.size === 0) return;
 
         const toUpdate: MJCredentialEntity[] = [];
-        for (const credId of this.selectedCredentials) {
-            const credential = this.credentials.find(c => UUIDsEqual(c.ID, credId));
+        for (const credId of this.SelectedCredentials) {
+            const credential = this.Credentials.find(c => UUIDsEqual(c.ID, credId));
             if (credential && credential.IsActive !== active) {
                 toUpdate.push(credential);
             }
@@ -724,7 +1019,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         const action = active ? 'activated' : 'deactivated';
 
         if (toUpdate.length === 0) {
-            this.clearSelection();
+            this.ClearSelection();
             return;
         }
 
@@ -736,7 +1031,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         }
 
         if (await tg.Submit()) {
-            this.clearSelection();
+            this.ClearSelection();
             this.applyFilters();
             MJNotificationService.Instance.CreateSimpleNotification(
                 `${toUpdate.length} credential(s) ${action}`,
@@ -748,7 +1043,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             for (const credential of toUpdate) {
                 credential.IsActive = !active;
             }
-            this.clearSelection();
+            this.ClearSelection();
             this.applyFilters();
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Failed to ${action.slice(0, -1)} credentials — all changes have been rolled back`,
@@ -758,10 +1053,15 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         }
     }
 
-    public async bulkDelete(): Promise<void> {
-        if (!this.UserCanDelete || this.selectedCredentials.size === 0) return;
+    /** @deprecated Use {@link BulkToggleActive}. */
+    public async bulkToggleActive(active: boolean): Promise<void> {
+      return this.BulkToggleActive(active);
+    }
 
-        const count = this.selectedCredentials.size;
+    public async BulkDelete(): Promise<void> {
+        if (!this.UserCanDelete || this.SelectedCredentials.size === 0) return;
+
+        const count = this.SelectedCredentials.size;
         const confirmed = await this.confirm.ConfirmDelete({
             title: 'Delete credentials',
             message: `Delete ${count} credential(s)?`,
@@ -769,8 +1069,8 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         });
         if (!confirmed) return;
 
-        const toDelete = Array.from(this.selectedCredentials)
-            .map(id => this.credentials.find(c => UUIDsEqual(c.ID, id)))
+        const toDelete = Array.from(this.SelectedCredentials)
+            .map(id => this.Credentials.find(c => UUIDsEqual(c.ID, id)))
             .filter((c): c is MJCredentialEntity => c != null);
 
         if (toDelete.length === 0) return;
@@ -783,8 +1083,8 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
 
         if (await tg.Submit()) {
             const deletedIds = new Set(toDelete.map(c => c.ID));
-            this.credentials = this.credentials.filter(c => !deletedIds.has(c.ID));
-            this.clearSelection();
+            this.Credentials = this.Credentials.filter(c => !deletedIds.has(c.ID));
+            this.ClearSelection();
             this.applyFilters();
             MJNotificationService.Instance.CreateSimpleNotification(
                 `${toDelete.length} credential(s) deleted`,
@@ -798,5 +1098,10 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
                 3000
             );
         }
+    }
+
+    /** @deprecated Use {@link BulkDelete}. */
+    public async bulkDelete(): Promise<void> {
+      return this.BulkDelete();
     }
 }

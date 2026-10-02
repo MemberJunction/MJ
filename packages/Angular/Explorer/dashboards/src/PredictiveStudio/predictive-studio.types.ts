@@ -10,38 +10,38 @@ export type PSPanelKey = 'home' | 'catalog' | 'pipelines' | 'experiments' | 'reg
 
 /** A kanban iteration card on the Experiments panel. */
 export interface PSIterationCard {
-  algorithm: string;
-  algorithmIcon: string;
-  algorithmColor: string;
-  iteration: string;
-  features: string[];
-  status: 'Running' | 'Best' | 'Completed' | 'AwaitingApproval' | 'Pruned';
+  Algorithm: string;
+  AlgorithmIcon: string;
+  AlgorithmColor: string;
+  Iteration: string;
+  Features: string[];
+  Status: 'Running' | 'Best' | 'Completed' | 'AwaitingApproval' | 'Pruned';
   /** For running cards: 0..100 progress; for completed/pruned: the holdout score. */
-  progress?: number;
-  progressDetail?: string;
-  score?: number;
-  scoreDelta?: string;
-  rationale: string;
+  Progress?: number;
+  ProgressDetail?: string;
+  score?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  ScoreDelta?: string;
+  Rationale: string;
 }
 
 /** A leaderboard pill on the Experiments panel. */
 export interface PSLeaderboardEntry {
-  rank: number;
-  algorithm: string;
-  algorithmIcon: string;
-  algorithmColor: string;
-  features: string;
-  auc: number;
-  best?: boolean;
-  pruned?: boolean;
+  rank: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  algorithm: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  algorithmIcon: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  algorithmColor: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  features: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  auc: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  best?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  pruned?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** A feature-importance bar (registry / compare panels). */
 export interface PSFeatureBar {
-  name: string;
-  pct: number;
-  value: string;
-  warning?: boolean;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  pct: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  value: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  warning?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** Lifecycle steps shared by the registry detail stepper. */

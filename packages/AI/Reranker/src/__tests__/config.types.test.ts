@@ -1,30 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { parseRerankerConfiguration } from '../config.types';
+import { ParseRerankerConfiguration } from '../config.types';
 
 describe('parseRerankerConfiguration', () => {
     describe('null/empty/invalid input', () => {
         it('should return null for null input', () => {
-            expect(parseRerankerConfiguration(null)).toBeNull();
+            expect(ParseRerankerConfiguration(null)).toBeNull();
         });
 
         it('should return null for undefined input', () => {
-            expect(parseRerankerConfiguration(undefined)).toBeNull();
+            expect(ParseRerankerConfiguration(undefined)).toBeNull();
         });
 
         it('should return null for empty string', () => {
-            expect(parseRerankerConfiguration('')).toBeNull();
+            expect(ParseRerankerConfiguration('')).toBeNull();
         });
 
         it('should return null for whitespace-only string', () => {
-            expect(parseRerankerConfiguration('   ')).toBeNull();
+            expect(ParseRerankerConfiguration('   ')).toBeNull();
         });
 
         it('should return null for invalid JSON', () => {
-            expect(parseRerankerConfiguration('not-json')).toBeNull();
+            expect(ParseRerankerConfiguration('not-json')).toBeNull();
         });
 
         it('should return null for JSON without rerankerModelId', () => {
-            expect(parseRerankerConfiguration(JSON.stringify({ enabled: true }))).toBeNull();
+            expect(ParseRerankerConfiguration(JSON.stringify({ enabled: true }))).toBeNull();
         });
     });
 
@@ -34,7 +34,7 @@ describe('parseRerankerConfiguration', () => {
                 enabled: false,
                 rerankerModelId: 'model-1'
             });
-            expect(parseRerankerConfiguration(config)).toBeNull();
+            expect(ParseRerankerConfiguration(config)).toBeNull();
         });
     });
 
@@ -44,7 +44,7 @@ describe('parseRerankerConfiguration', () => {
                 enabled: true,
                 rerankerModelId: 'model-1'
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result).toEqual({
                 enabled: true,
                 rerankerModelId: 'model-1',
@@ -66,7 +66,7 @@ describe('parseRerankerConfiguration', () => {
                 contextFields: ['Keywords', 'Type'],
                 fallbackOnError: false
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result).toEqual({
                 enabled: true,
                 rerankerModelId: 'model-2',
@@ -82,9 +82,43 @@ describe('parseRerankerConfiguration', () => {
             const config = JSON.stringify({
                 rerankerModelId: 'model-1'
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result).not.toBeNull();
             expect(result!.enabled).toBe(true);
+        });
+    });
+
+    describe('rerankExamples', () => {
+        it('should leave rerankExamples unset, so examples are not reranked, when the config omits it', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1' }));
+            expect(result?.rerankExamples).toBeUndefined();
+        });
+
+        it('should pass rerankExamples through when it is set', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', rerankExamples: true }));
+            expect(result?.rerankExamples).toBe(true);
+        });
+    });
+
+    describe('DecisionReranker settings', () => {
+        it('should leave decisionTimeoutMS unset, so the reranker applies its default, when the config omits it', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1' }));
+            expect(result?.decisionTimeoutMS).toBeUndefined();
+        });
+
+        it('should pass decisionTimeoutMS through when it is set', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', decisionTimeoutMS: 5000 }));
+            expect(result?.decisionTimeoutMS).toBe(5000);
+        });
+
+        it('should leave decisionMaxDocumentsPerCall unset, so the reranker applies its default, when the config omits it', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1' }));
+            expect(result?.decisionMaxDocumentsPerCall).toBeUndefined();
+        });
+
+        it('should pass decisionMaxDocumentsPerCall through when it is set', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', decisionMaxDocumentsPerCall: 10 }));
+            expect(result?.decisionMaxDocumentsPerCall).toBe(10);
         });
     });
 });

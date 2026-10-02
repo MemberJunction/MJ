@@ -1,4 +1,4 @@
-import { logError, logMessage } from "../Misc/status_logging";
+import { logError, LogMessage } from "../Misc/status_logging";
 import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
@@ -8,7 +8,7 @@ import { CodeGenDatabaseProvider, CodeGenConnection } from './codeGenDatabasePro
 // `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
 // and the SS code path silently fails.
 import './providers/sqlserver/SQLServerCodeGenProvider';
-import { configInfo, outputDir } from "../Config/config";
+import { configInfo, OutputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
 import { FindTrueCycles } from "./entity-level-tree-cycles";
 import { MJGlobal } from "@memberjunction/global";
@@ -16,7 +16,7 @@ import { SQLCodeGenBase } from './sql_codegen';
 
 import * as crypto from 'crypto';
 import { mkdirSync } from "fs";
-import { attemptDeleteFile, logIf } from "../Misc/util";
+import { AttemptDeleteFile, LogIf } from "../Misc/util";
 
 
 /**
@@ -67,7 +67,7 @@ protected get dbProvider(): CodeGenDatabaseProvider {
  * @param schema 
  * @param objectName 
  */
-public getDBObjectFileName(type: 'view' | 'sp' | 'function' | 'full_text_search_function' | 'index',
+public GetDBObjectFileName(type: 'view' | 'sp' | 'function' | 'full_text_search_function' | 'index',
                                     schema: string,
                                     objectName: string,
                                     isPermissions: boolean,
@@ -81,12 +81,21 @@ public getDBObjectFileName(type: 'view' | 'sp' | 'function' | 'full_text_search_
    return path.join(schema, `${objectName}.${type}${extraText}${isPermissions ? '.permissions' : ''}${isGenerated ? '.generated' : ''}.sql`);
 }
 
+/** @deprecated Use {@link GetDBObjectFileName}. */
+public getDBObjectFileName(type: 'view' | 'sp' | 'function' | 'full_text_search_function' | 'index',
+                                    schema: string,
+                                    objectName: string,
+                                    isPermissions: boolean,
+                                    isGenerated: boolean): string {
+ return this.GetDBObjectFileName(type, schema, objectName, isPermissions, isGenerated);
+}
+
 /**
  * This method will build a two dimensional array of EntityInfo objects. The first dimension of the array is the level of the entity in the dependency tree.
  * The second dimension of the array is the entities at that level. The entities at each level are NOT dependent on any other entity in that level or any level below it.
  * This method uses the foreign key information witin the Entity Fields array to find these dependencies. self-referencing foreign keys are ignored.
  */
-public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
+public BuildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
    const entityLevelTree: EntityInfo[][] = [];
    const entityMap = new Map<string, EntityInfo>();
    const dependencyMap = new Map<string, Set<string>>();
@@ -150,6 +159,11 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
    return entityLevelTree;
  }
 
+/** @deprecated Use {@link BuildEntityLevelsTree}. */
+public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
+ return this.BuildEntityLevelsTree(entities);
+}
+
 /**
  * Emits the cyclical-dependency warning for buildEntityLevelsTree's stuck branch. Rather than dumping every
  * remaining entity's dependency list (most of which are merely downstream of a cycle), this computes the true
@@ -193,12 +207,12 @@ private describeCycleEdges(cycle: string[], entityMap: Map<string, EntityInfo>):
    return edges;
 }
 
-public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
+public async RecompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
    let bSuccess: boolean = true; // start off true
    const md: Metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
 
    // Build the dependency order tree, provide ALL entities for this process
-   const entityLevelTree = this.buildEntityLevelsTree(md.Entities);
+   const entityLevelTree = this.BuildEntityLevelsTree(md.Entities);
    // Process each level sequentially, but entities within a level in parallel
    for (const level of entityLevelTree) {
       // now filter out each LEVEL to only include entities that are not needed for recompilation
@@ -260,14 +274,14 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
       }
 
       // Execute the initial refresh attempts (custom views + generated views together)
-      bSuccess = await this.executeSQLScript(ds, sqlCommand, false) && bSuccess;
+      bSuccess = await this.ExecuteSQLScript(ds, sqlCommand, false) && bSuccess;
 
       // Now check which CodeGen-OWNED views failed to refresh and regenerate them. A fully custom
       // view is not in this list — we can't regenerate one. A layered entity IS, because the view
       // CodeGen writes for it is the inner one, and `GeneratedViewName` resolves to exactly that.
       const failedEntities = await this.identifyFailedViewRefreshes(ds, [...l, ...layeredEntities]);
       if (failedEntities.length > 0) {
-        logMessage(`Detected ${failedEntities.length} views that failed to refresh. Attempting to regenerate view definitions...`, 'Info');
+        LogMessage(`Detected ${failedEntities.length} views that failed to refresh. Attempting to regenerate view definitions...`, 'Info');
         
         // Regenerate the failed views using the SQL CodeGen approach
         const regenerateSuccess = await this.regenerateFailedBaseViews(ds, failedEntities);
@@ -287,16 +301,21 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
    return bSuccess;
  }
 
+/** @deprecated Use {@link RecompileAllBaseViews}. */
+public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
+ return this.RecompileAllBaseViews(ds, excludeSchemas, applyPermissions, excludeEntities);
+}
 
- public getBaseViewFiles(entity: EntityInfo): string[] {
+
+ public GetBaseViewFiles(entity: EntityInfo): string[] {
     const files: string[] = [];
     // The VIEW file holds what CodeGen wrote — the inner view for a layered entity. The PERMISSIONS
     // file targets the PUBLIC view, because that is the object consumers read.
     const isGenerated = entity.BaseViewGenerated || entity.HasLayeredBaseView;
-    const baseViewFile = this.getDBObjectFileName('view', entity.SchemaName, entity.GeneratedViewName, false, isGenerated);
-    const baseViewPermissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, isGenerated);
-    const baseViewFilePath = path.join(outputDir('SQL', true)!, baseViewFile);
-    const baseViewPermissionsFilePath = path.join(outputDir('SQL', true)!, baseViewPermissionsFile);
+    const baseViewFile = this.GetDBObjectFileName('view', entity.SchemaName, entity.GeneratedViewName, false, isGenerated);
+    const baseViewPermissionsFile = this.GetDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, isGenerated);
+    const baseViewFilePath = path.join(OutputDir('SQL', true)!, baseViewFile);
+    const baseViewPermissionsFilePath = path.join(OutputDir('SQL', true)!, baseViewPermissionsFile);
     if (fs.existsSync(baseViewFilePath)) {
       files.push(baseViewFile);
     }
@@ -306,10 +325,15 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
     return files;
  }
 
- public combineMultipleSQLFiles(files: string[]): string {
+ /** @deprecated Use {@link GetBaseViewFiles}. */
+ public getBaseViewFiles(entity: EntityInfo): string[] {
+  return this.GetBaseViewFiles(entity);
+ }
+
+ public CombineMultipleSQLFiles(files: string[]): string {
     let combinedSQL: string = "";
     for (const file of files) {
-      const filePath = path.join(outputDir('SQL', true)!, file);
+      const filePath = path.join(OutputDir('SQL', true)!, file);
       if (fs.existsSync(filePath)) {
         combinedSQL += (combinedSQL.length === 0 ? "" : "\n\nGO\n\n") + fs.readFileSync(filePath, 'utf-8');
       }
@@ -319,20 +343,30 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
     }
     return combinedSQL;
  }
+
+ /** @deprecated Use {@link CombineMultipleSQLFiles}. */
+ public combineMultipleSQLFiles(files: string[]): string {
+  return this.CombineMultipleSQLFiles(files);
+ }
  
- public async recompileSingleBaseView(ds: CodeGenConnection, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
+ public async RecompileSingleBaseView(ds: CodeGenConnection, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
   try {
     if (!this.dbProvider.NeedsViewRefresh) {
       return true;
     }
     const refreshSQL = this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
-    await this.executeSQLScript(ds, refreshSQL, false);
+    await this.ExecuteSQLScript(ds, refreshSQL, false);
     return true;
   }
   catch (e) {
     logError(e as string);
     return false;
   }
+ }
+
+ /** @deprecated Use {@link RecompileSingleBaseView}. */
+ public async recompileSingleBaseView(ds: CodeGenConnection, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
+  return this.RecompileSingleBaseView(ds, entity, applyPermissions);
  }
  
  /**
@@ -352,7 +386,7 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
        const testQuery = this.dbProvider.generateViewTestQuerySQL(entity.SchemaName, entity.GeneratedViewName);
        await ds.query(testQuery);
      } catch (e) {
-       logMessage(`View ${entity.SchemaName}.${entity.GeneratedViewName} is invalid and will be regenerated`, 'Warning');
+       LogMessage(`View ${entity.SchemaName}.${entity.GeneratedViewName} is invalid and will be regenerated`, 'Warning');
        failedEntities.push(entity);
      }
    }
@@ -389,7 +423,7 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
 
    for (const entity of entities) {
      try {
-       logMessage(`Regenerating base view for ${entity.Name}...`, 'Info');
+       LogMessage(`Regenerating base view for ${entity.Name}...`, 'Info');
 
        // Generate the new view definition using the CodeGen approach
        const viewSQL = await sqlCodeGen.generateBaseView(ds, entity);
@@ -400,10 +434,10 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
        if (this.dbProvider.regenerateBaseView) {
          await this.dbProvider.regenerateBaseView(entity, viewSQL, willRegenerate);
        } else {
-         await this.executeSQLScript(ds, viewSQL, false);
+         await this.ExecuteSQLScript(ds, viewSQL, false);
        }
 
-       logMessage(`Successfully regenerated base view for ${entity.Name}`, 'Info');
+       LogMessage(`Successfully regenerated base view for ${entity.Name}`, 'Info');
      } catch (e) {
        logError(`Failed to regenerate base view for ${entity.Name}: ${e}`);
        failures.push({ entity, error: e });
@@ -430,10 +464,10 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
    return failures.length === 0;
  }
  
- public async executeSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {
+ public async ExecuteSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {
     for (const filePath of filePaths) {
        const startTime = Date.now();
-       if (!await this.executeSQLFile(filePath))
+       if (!await this.ExecuteSQLFile(filePath))
           return false;
        const endTime = Date.now();
        if (outputMessages)
@@ -442,12 +476,22 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
     return true;
  }
 
+ /** @deprecated Use {@link ExecuteSQLFiles}. */
+ public async executeSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {
+  return this.ExecuteSQLFiles(filePaths, outputMessages);
+ }
+
  private static _batchScriptCounter: number = 0;
- public async executeSQLFile(filePath: string): Promise<boolean> {
+ public async ExecuteSQLFile(filePath: string): Promise<boolean> {
   return this.dbProvider.executeSQLFileViaShell(filePath);
  }
 
- public async executeBatchSQLScript(scriptText: string): Promise<boolean> {
+ /** @deprecated Use {@link ExecuteSQLFile}. */
+ public async executeSQLFile(filePath: string): Promise<boolean> {
+  return this.ExecuteSQLFile(filePath);
+ }
+
+ public async ExecuteBatchSQLScript(scriptText: string): Promise<boolean> {
   try {
     if (!scriptText || scriptText.length === 0) return true; // nothing to do
 
@@ -458,11 +502,11 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
     const scriptFilePath = path.join(tempDir, uniqueFileName);
     fs.writeFileSync(scriptFilePath, scriptText);
 
-    logIf(configInfo.verboseOutput, `Executing batch SQL script: ${scriptFilePath}`);
-    await this.executeSQLFile(scriptFilePath);
+    LogIf(configInfo.verboseOutput, `Executing batch SQL script: ${scriptFilePath}`);
+    await this.ExecuteSQLFile(scriptFilePath);
 
     // Remove the temporary file
-    attemptDeleteFile(scriptFilePath, 3, 2000); // don't await this, just fire and forget
+    AttemptDeleteFile(scriptFilePath, 3, 2000); // don't await this, just fire and forget
 
     return true;
   } 
@@ -472,21 +516,31 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
   }
 }
 
+ /** @deprecated Use {@link ExecuteBatchSQLScript}. */
+ public async executeBatchSQLScript(scriptText: string): Promise<boolean> {
+  return this.ExecuteBatchSQLScript(scriptText);
+ }
 
 
 
- public async executeSQLScript(ds: CodeGenConnection, scriptText: string, inChunks : boolean): Promise<boolean> {
+
+ public async ExecuteSQLScript(ds: CodeGenConnection, scriptText: string, inChunks : boolean): Promise<boolean> {
     try {
       if (!scriptText || scriptText.length == 0)
          return true; // nothing to do
 
-      logIf(configInfo.verboseOutput, `Executing SQL Script: ${scriptText?.length > 100 ? scriptText.substring(0, 100) + '...' : scriptText}`);
+      LogIf(configInfo.verboseOutput, `Executing SQL Script: ${scriptText?.length > 100 ? scriptText.substring(0, 100) + '...' : scriptText}`);
 
-      return this.executeBatchSQLScript(scriptText);
+      return this.ExecuteBatchSQLScript(scriptText);
     }
     catch (e) {
        logError(e as string);
        return false;
     }
+ }
+
+ /** @deprecated Use {@link ExecuteSQLScript}. */
+ public async executeSQLScript(ds: CodeGenConnection, scriptText: string, inChunks : boolean): Promise<boolean> {
+  return this.ExecuteSQLScript(ds, scriptText, inChunks);
  }
 }

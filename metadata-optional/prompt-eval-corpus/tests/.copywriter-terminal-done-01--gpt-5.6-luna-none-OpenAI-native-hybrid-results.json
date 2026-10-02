@@ -33,8 +33,7 @@
           {
             "kind": "taskComplete",
             "forbiddenActions": [
-              "Google Custom Search",
-              "Perplexity Search",
+              "Web Search",
               "Web Page Content",
               "Census Data Lookup"
             ]
@@ -42,8 +41,7 @@
           {
             "kind": "payloadChange",
             "forbiddenActions": [
-              "Google Custom Search",
-              "Perplexity Search",
+              "Web Search",
               "Web Page Content",
               "Census Data Lookup"
             ],
@@ -83,8 +81,7 @@
               {
                 "kind": "taskComplete",
                 "forbiddenActions": [
-                  "Google Custom Search",
-                  "Perplexity Search",
+                  "Web Search",
                   "Web Page Content",
                   "Census Data Lookup"
                 ]
@@ -92,8 +89,7 @@
               {
                 "kind": "payloadChange",
                 "forbiddenActions": [
-                  "Google Custom Search",
-                  "Perplexity Search",
+                  "Web Search",
                   "Web Page Content",
                   "Census Data Lookup"
                 ],
