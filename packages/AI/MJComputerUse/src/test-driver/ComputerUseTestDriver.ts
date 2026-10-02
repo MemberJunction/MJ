@@ -105,6 +105,7 @@ import {
     FormatConsoleLine,
     ReadSuiteComputerUseConfig,
     MergeComputerUseConfig,
+    InlineVerdictIsAdvisory,
     IsOracleAdvisory,
     PartitionGatingOracles,
     ClassifyFailure,
@@ -1615,11 +1616,12 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         if (verdicts && verdicts.length > 0) {
             const inline = inlineOracleFromVerdicts(verdicts);
+            inline.advisory = InlineVerdictIsAdvisory(config);
             results.push(inline);
             this.logToTestRun(
                 context,
                 inline.passed ? 'info' : 'warn',
-                `Oracle llm-judge (inline): ${inline.passed ? 'PASSED' : 'FAILED'} (Score: ${inline.score.toFixed(2)})`,
+                `Oracle llm-judge (inline)${inline.advisory ? ' (advisory)' : ''}: ${inline.passed ? 'PASSED' : 'FAILED'} (Score: ${inline.score.toFixed(2)})`,
             );
         }
 
