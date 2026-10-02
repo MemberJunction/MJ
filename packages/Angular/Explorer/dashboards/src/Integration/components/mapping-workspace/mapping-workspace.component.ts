@@ -310,19 +310,19 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     this.LatestRun = null;
     this.EntityMapSearchText = '';
     this.CloseAddPanel();
-    this.CloseAllPreviews();
+    this.closeAllPreviews();
 
     if (!integrationID) return;
 
     // Load entity maps + latest run in parallel, and auto-discover source objects
     await Promise.all([
-      this.LoadEntityMapsForIntegration(integrationID),
-      this.LoadLatestRunForIntegration(integrationID),
-      this.DiscoverSourceObjects(integrationID)
+      this.loadEntityMapsForIntegration(integrationID),
+      this.loadLatestRunForIntegration(integrationID),
+      this.discoverSourceObjects(integrationID)
     ]);
   }
 
-  private async LoadEntityMapsForIntegration(integrationID: string): Promise<void> {
+  private async loadEntityMapsForIntegration(integrationID: string): Promise<void> {
     this.IsLoadingEntityMaps = true;
     this.cdr.detectChanges();
     try {
@@ -333,7 +333,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     }
   }
 
-  private async LoadLatestRunForIntegration(integrationID: string): Promise<void> {
+  private async loadLatestRunForIntegration(integrationID: string): Promise<void> {
     this.IsLoadingRunDetails = true;
     this.cdr.detectChanges();
     try {
@@ -349,7 +349,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   }
 
   /** Load source objects from IntegrationObject metadata via engine (cached per integration) */
-  private DiscoverSourceObjects(integrationID: string): Promise<void> {
+  private discoverSourceObjects(integrationID: string): Promise<void> {
     if (this.discoverCache.has(integrationID)) {
       this.DiscoveredObjects = this.discoverCache.get(integrationID)!;
       return Promise.resolve();
@@ -393,7 +393,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   async OnMapSelect(item: MapListItem): Promise<void> {
     this.SelectedMapID = item.ID;
-    this.CloseAllPreviews();
+    this.closeAllPreviews();
 
     if (item.IsPending) {
       // Pending maps show the pending entity view in center panel
@@ -409,7 +409,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     try {
       await Promise.all([
         this.dataService.LoadFieldMaps(item.ID, this.RunViewToUse).then(fms => { this.FieldMaps = fms; }),
-        this.LoadDestinationFields(item.RealMap!.EntityID)
+        this.loadDestinationFields(item.RealMap!.EntityID)
       ]);
 
       // Resolve source fields from IntegrationObject metadata
@@ -418,7 +418,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
         item.RealMap!.ExternalObjectName
       );
 
-      this.EditableFields = this.FieldMaps.map(fm => this.ToEditableField(fm));
+      this.EditableFields = this.FieldMaps.map(fm => this.toEditableField(fm));
     } finally {
       this.IsLoadingFieldMaps = false;
       this.cdr.detectChanges();
@@ -459,14 +459,14 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   OpenAddPanel(): void {
     this.ShowAddPanel = true;
     this.TargetMode = 'existing';
-    this.ResetAddForm();
-    this.EnsureEntitiesLoaded();
-    this.LoadDBSchemas();
+    this.resetAddForm();
+    this.ensureEntitiesLoaded();
+    this.loadDBSchemas();
   }
 
   CloseAddPanel(): void {
     this.ShowAddPanel = false;
-    this.ResetAddForm();
+    this.resetAddForm();
   }
 
   SetTargetMode(mode: TargetMode): void {
@@ -496,9 +496,9 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
     try {
       if (this.TargetMode === 'existing') {
-        await this.SaveExistingEntityMap();
+        await this.saveExistingEntityMap();
       } else {
-        await this.SaveNewEntityMap();
+        await this.saveNewEntityMap();
       }
     } finally {
       this.IsSavingEntityMap = false;
@@ -506,7 +506,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     }
   }
 
-  private async SaveExistingEntityMap(): Promise<void> {
+  private async saveExistingEntityMap(): Promise<void> {
     const sourceObj = this.DiscoveredObjects.find(o => o.Name === this.SelectedSourceObjectName);
     const result = await this.dataService.CreateEntityMap({
       CompanyIntegrationID: this.SelectedIntegrationID,
@@ -518,7 +518,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
     if (result) {
       // Reload entity maps and auto-generate field mappings
-      await this.LoadEntityMapsForIntegration(this.SelectedIntegrationID);
+      await this.loadEntityMapsForIntegration(this.SelectedIntegrationID);
       const newMap = this.EntityMaps.find(
         em => em.ExternalObjectName === this.SelectedSourceObjectName
       );
@@ -530,7 +530,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     }
   }
 
-  private async SaveNewEntityMap(): Promise<void> {
+  private async saveNewEntityMap(): Promise<void> {
     // Resolve source fields from IntegrationObject metadata
     const sourceFields = this.resolveSourceFieldsFromMetadata(
       this.SelectedIntegrationID,
@@ -576,7 +576,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     this.CloseAddPanel();
   }
 
-  private ResetAddForm(): void {
+  private resetAddForm(): void {
     this.SelectedSourceObjectName = '';
     this.SelectedEntityID = null;
     this.NewEntitySchemaName = '';
@@ -587,7 +587,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     this.DDLPreviewError = '';
   }
 
-  private async EnsureEntitiesLoaded(): Promise<void> {
+  private async ensureEntitiesLoaded(): Promise<void> {
     if (this.MJEntities.length > 0) return;
     this.IsLoadingEntities = true;
     this.cdr.detectChanges();
@@ -599,7 +599,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     }
   }
 
-  private LoadDBSchemas(): void {
+  private loadDBSchemas(): void {
     if (this.DBSchemas.length > 0) return;
     const md = this.ProviderToUse;
     const schemaSet = new Set<string>();
@@ -651,7 +651,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
   // Field Mapping
   // =====================================================================
 
-  private ToEditableField(fm: FieldMapRow): EditableFieldMap {
+  private toEditableField(fm: FieldMapRow): EditableFieldMap {
     // Look up source metadata from IntegrationObjectField entities
     const srcMeta = this.SourceFields.find(
       sf => sf.Name.toLowerCase() === fm.SourceFieldName.toLowerCase()
@@ -672,12 +672,12 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       IsSourcePK: srcMeta?.IsPrimaryKey ?? false,
       IsSourceRequired: srcMeta?.IsRequired ?? false,
       IsSourceReadOnly: srcMeta?.IsReadOnly ?? false,
-      TransformPipeline: this.ParseTransformPipeline(fm.TransformPipeline),
+      TransformPipeline: this.parseTransformPipeline(fm.TransformPipeline),
       ShowTransformEditor: false
     };
   }
 
-  private ParseTransformPipeline(json: string | null): TransformStepUI[] {
+  private parseTransformPipeline(json: string | null): TransformStepUI[] {
     if (!json || json.trim() === '') return [];
     try {
       const parsed: unknown = JSON.parse(json);
@@ -697,7 +697,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     return JSON.stringify(steps.map(s => ({ Type: s.Type, Config: s.Config, OnError: s.OnError })));
   }
 
-  private async LoadDestinationFields(entityID: string): Promise<void> {
+  private async loadDestinationFields(entityID: string): Promise<void> {
     this.IsLoadingDestFields = true;
     this.cdr.detectChanges();
     try {
@@ -722,10 +722,10 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       if (this.SourceFields.length === 0) return;
 
       // Load destination fields
-      await this.LoadDestinationFields(entityMap.EntityID);
+      await this.loadDestinationFields(entityMap.EntityID);
 
       // Match fields by name (case-insensitive)
-      const matchedFields = this.MatchFieldsByName(this.SourceFields, this.DestinationFields);
+      const matchedFields = this.matchFieldsByName(this.SourceFields, this.DestinationFields);
       this.AutoMapCount = matchedFields.length;
       this.ShowAutoMapBanner = this.AutoMapCount > 0;
 
@@ -748,14 +748,14 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
       // Reload field maps
       this.FieldMaps = await this.dataService.LoadFieldMaps(entityMap.ID, this.RunViewToUse);
-      this.EditableFields = this.FieldMaps.map(fm => this.ToEditableField(fm));
+      this.EditableFields = this.FieldMaps.map(fm => this.toEditableField(fm));
     } finally {
       this.IsLoadingSourceFields = false;
       this.cdr.detectChanges();
     }
   }
 
-  private MatchFieldsByName(
+  private matchFieldsByName(
     sourceFields: MJIntegrationObjectFieldEntity[],
     destFields: MJFieldOption[]
   ): Array<{ sourceField: MJIntegrationObjectFieldEntity; destField: MJFieldOption; sourceIndex: number }> {
@@ -880,7 +880,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
       }
 
       this.FieldMaps = await this.dataService.LoadFieldMaps(this.SelectedEntityMap.ID, this.RunViewToUse);
-      this.EditableFields = this.FieldMaps.map(fm => this.ToEditableField(fm));
+      this.EditableFields = this.FieldMaps.map(fm => this.toEditableField(fm));
       this.ShowAutoMapBanner = false;
     } finally {
       this.IsSavingFields = false;
@@ -938,7 +938,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   OnTransformTypeChange(field: EditableFieldMap, step: TransformStepUI, newType: TransformType): void {
     step.Type = newType;
-    step.Config = this.GetDefaultConfigForType(newType);
+    step.Config = this.getDefaultConfigForType(newType);
     field.IsDirty = true;
     this.cdr.detectChanges();
   }
@@ -947,7 +947,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     field.IsDirty = true;
   }
 
-  private GetDefaultConfigForType(type: TransformType): Record<string, unknown> {
+  private getDefaultConfigForType(type: TransformType): Record<string, unknown> {
     switch (type) {
       case 'direct': return {};
       case 'regex': return { Pattern: '', Replacement: '', Flags: 'g' };
@@ -1096,7 +1096,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     this.DestPreviewData = [];
   }
 
-  private CloseAllPreviews(): void {
+  private closeAllPreviews(): void {
     this.CloseSourcePreview();
     this.CloseDestPreview();
     this.ShowAutoMapBanner = false;

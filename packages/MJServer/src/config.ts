@@ -3,6 +3,7 @@ import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
+import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -229,6 +230,29 @@ const cacheSettingsSchema = z.object({
   evictionSweepIntervalSeconds: z.number().optional().default(300),
   /** Enable verbose cache logging (hits, misses, evictions). Default: false. */
   verboseLogging: z.boolean().optional().default(false),
+  /**
+   * Entity names whose FULL ROW may ride along with a cache-invalidation broadcast.
+   *
+   * The cache-invalidation subscription is delivered to EVERY connected client with no per-user
+   * filter (see CacheInvalidationResolver), so any row named here is disclosed to every signed-in
+   * session, whatever row-level security or tenant scoping would otherwise apply to reading it.
+   *
+   * Defaults to `[]`: invalidation still carries the entity name and primary key, which is all a
+   * client needs to evict, and the client re-fetches through the normal read path where access
+   * control applies. Listing an entity re-enables the apply-in-place optimisation for it — correct
+   * only for reference data every signed-in user is allowed to read.
+   *
+   * What the re-fetch costs depends on the consumer. `ConversationEngine` re-reads the ONE record
+   * by primary key. `BaseEngine` (every engine subclass with `AutoRefresh`, the default) applies a
+   * remote save in place only when the row is present, so without it a remote save falls through to
+   * a full reload of each matching config — a `RunView` of that entity, not a keyed read. Remote
+   * deletes still apply in place from the primary key. Engine-cached reference entities that every
+   * signed-in user may read are the ones worth listing here.
+   *
+   * `['*']` opts every entity in, restoring the previous behaviour. Only safe on a deployment where
+   * every signed-in user may read every row of every entity.
+   */
+  recordDataBroadcastEntities: z.array(z.string()).optional().default([]),
 });
 
 const loggingSettingsSchema = z.object({
@@ -540,8 +564,8 @@ const telephonySchema = z.object({
 }).passthrough();
 
 const realtimeSchema = z.object({
-  /** Master switch. When false (default), the WebRTC SDP broker router is not mounted. */
-  enabled: zodBooleanWithTransforms().default(false),
+  /** Master switch. When false, the WebRTC SDP broker router is not mounted. Defaults to true. */
+  enabled: zodBooleanWithTransforms().default(true),
 }).passthrough();
 
 const configInfoSchema = z.object({
@@ -751,9 +775,9 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentRuns: 3
   },
 
-  // Realtime WebRTC SDP broker defaults (off by default)
+  // Realtime WebRTC SDP broker defaults (on by default; can be disabled via MJ_REALTIME_ENABLED=false)
   realtime: {
-    enabled: parseBooleanEnv(process.env.MJ_REALTIME_ENABLED),
+    enabled: RealtimeEnabledDefault(process.env.MJ_REALTIME_ENABLED),
   },
 
   // Telemetry defaults — on unless the operator turns it off via MJ_TELEMETRY_ENABLED.
@@ -811,9 +835,14 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
  * startup summary `Config` line. Declared before `configInfo` so the assignment
  * inside `loadConfig()` (invoked below) is not in its temporal dead zone.
  */
-export let configFilePath: string | undefined;
+export let ConfigFilePath: string | undefined;
 
-export const configInfo: ConfigInfo = loadConfig();
+export {
+  /** @deprecated Use {@link ConfigFilePath} instead. */
+  ConfigFilePath as configFilePath,
+};
+
+export const configInfo: ConfigInfo = LoadConfig();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 export const {
   dbUsername,
@@ -840,7 +869,7 @@ export const {
   restApiOptions: RESTApiOptions,
 } = configInfo;
 
-export function loadConfig() {
+export function LoadConfig() {
   const configSearchResult = explorer.search(process.cwd());
 
   // Start with DEFAULT_SERVER_CONFIG as base
@@ -850,7 +879,7 @@ export function loadConfig() {
   if (configSearchResult && !configSearchResult.isEmpty) {
     // Resolved config-file path. Surfaced in the startup summary `Config` line at standard
     // level (see StartupLogger). Demoted to verbose-only here to avoid a duplicate inline line.
-    configFilePath = configSearchResult.filepath;
+    ConfigFilePath = configSearchResult.filepath;
     LogStatusEx({ message: `Config file found at ${configSearchResult.filepath}`, verboseOnly: true });
 
     // Merge user config with defaults (user config takes precedence)
@@ -866,4 +895,9 @@ export function loadConfig() {
     throw new Error('Configuration validation failed');
   }
   return configParsing.data;
+}
+
+/** @deprecated Use {@link LoadConfig}. */
+export function loadConfig() {
+  return LoadConfig();
 }

@@ -38,7 +38,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { APIKeysEngineBase, parseAPIScopeUIConfig } from '../APIKeysEngineBase';
+import { APIKeysEngineBase, ParseAPIScopeUIConfig } from '../APIKeysEngineBase';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -47,14 +47,14 @@ import { APIKeysEngineBase, parseAPIScopeUIConfig } from '../APIKeysEngineBase';
 describe('parseAPIScopeUIConfig', () => {
   it('should return defaults for null UIConfig', () => {
     const scope = { UIConfig: null } as { UIConfig: string | null };
-    const config = parseAPIScopeUIConfig(scope as Parameters<typeof parseAPIScopeUIConfig>[0]);
+    const config = ParseAPIScopeUIConfig(scope as Parameters<typeof ParseAPIScopeUIConfig>[0]);
     expect(config.icon).toBe('fa-solid fa-ellipsis');
     expect(config.color).toBe('#6b7280');
   });
 
   it('should return defaults for empty string UIConfig', () => {
     const scope = { UIConfig: '' } as { UIConfig: string };
-    const config = parseAPIScopeUIConfig(scope as Parameters<typeof parseAPIScopeUIConfig>[0]);
+    const config = ParseAPIScopeUIConfig(scope as Parameters<typeof ParseAPIScopeUIConfig>[0]);
     expect(config.icon).toBe('fa-solid fa-ellipsis');
     expect(config.color).toBe('#6b7280');
   });
@@ -63,21 +63,21 @@ describe('parseAPIScopeUIConfig', () => {
     const scope = {
       UIConfig: JSON.stringify({ icon: 'fa-solid fa-database', color: '#6366f1' }),
     };
-    const config = parseAPIScopeUIConfig(scope as Parameters<typeof parseAPIScopeUIConfig>[0]);
+    const config = ParseAPIScopeUIConfig(scope as Parameters<typeof ParseAPIScopeUIConfig>[0]);
     expect(config.icon).toBe('fa-solid fa-database');
     expect(config.color).toBe('#6366f1');
   });
 
   it('should return defaults for invalid JSON', () => {
     const scope = { UIConfig: 'not json' };
-    const config = parseAPIScopeUIConfig(scope as Parameters<typeof parseAPIScopeUIConfig>[0]);
+    const config = ParseAPIScopeUIConfig(scope as Parameters<typeof ParseAPIScopeUIConfig>[0]);
     expect(config.icon).toBe('fa-solid fa-ellipsis');
     expect(config.color).toBe('#6b7280');
   });
 
   it('should fill missing fields with defaults', () => {
     const scope = { UIConfig: JSON.stringify({ icon: 'fa-solid fa-key' }) };
-    const config = parseAPIScopeUIConfig(scope as Parameters<typeof parseAPIScopeUIConfig>[0]);
+    const config = ParseAPIScopeUIConfig(scope as Parameters<typeof ParseAPIScopeUIConfig>[0]);
     expect(config.icon).toBe('fa-solid fa-key');
     expect(config.color).toBe('#6b7280');
   });

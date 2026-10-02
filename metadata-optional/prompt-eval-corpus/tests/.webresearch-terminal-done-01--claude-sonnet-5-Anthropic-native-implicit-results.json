@@ -41,7 +41,7 @@
         },
         {
           "role": "user",
-          "content": "[Action Result] Google Custom Search succeeded — 5 credible sources summarized into payload.sources."
+          "content": "[Action Result] Web Search succeeded — 5 credible sources summarized into payload.sources."
         }
       ],
       "templateData": {}
@@ -54,16 +54,14 @@
           {
             "kind": "taskComplete",
             "forbiddenActions": [
-              "Google Custom Search",
-              "Perplexity Search",
+              "Web Search",
               "Web Page Content"
             ]
           },
           {
             "kind": "payloadChange",
             "forbiddenActions": [
-              "Google Custom Search",
-              "Perplexity Search",
+              "Web Search",
               "Web Page Content"
             ]
           }
@@ -92,16 +90,14 @@
               {
                 "kind": "taskComplete",
                 "forbiddenActions": [
-                  "Google Custom Search",
-                  "Perplexity Search",
+                  "Web Search",
                   "Web Page Content"
                 ]
               },
               {
                 "kind": "payloadChange",
                 "forbiddenActions": [
-                  "Google Custom Search",
-                  "Perplexity Search",
+                  "Web Search",
                   "Web Page Content"
                 ]
               }

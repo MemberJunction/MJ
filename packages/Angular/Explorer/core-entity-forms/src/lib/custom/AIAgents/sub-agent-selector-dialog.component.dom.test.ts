@@ -33,11 +33,11 @@ const TYPES = [
 ];
 
 const CONFIG: SubAgentSelectorConfig = {
-  title: 'Pick a Sub-Agent',
-  multiSelect: false,
-  selectedAgentIds: [],
-  showCreateNew: false,
-  parentAgentId: 'parent-1',
+  Title: 'Pick a Sub-Agent',
+  MultiSelect: false,
+  SelectedAgentIds: [],
+  ShowCreateNew: false,
+  ParentAgentId: 'parent-1',
 };
 
 interface RenderOpts {
@@ -112,9 +112,9 @@ describe('SubAgentSelectorDialogComponent (DOM)', () => {
     fixture.detectChanges(false);
     buttonByText(fixture, 'Add Sub-Agent').click();
     expect(closed.length).toBe(1);
-    const payload = results[0] as { selectedAgents: Array<{ ID: string }>; createNew: boolean };
-    expect(payload.createNew).toBe(false);
-    expect(payload.selectedAgents[0].ID).toBe('ag2');
+    const payload = results[0] as { SelectedAgents: Array<{ ID: string }>; CreateNew: boolean };
+    expect(payload.CreateNew).toBe(false);
+    expect(payload.SelectedAgents[0].ID).toBe('ag2');
   });
 
   it('emits DialogClose and a null result on Cancel', async () => {
@@ -128,17 +128,17 @@ describe('SubAgentSelectorDialogComponent (DOM)', () => {
   });
 
   it('hides Create Sub-Agent unless config.showCreateNew is set', async () => {
-    const fixture = await render({ config: { showCreateNew: false } });
+    const fixture = await render({ config: { ShowCreateNew: false } });
     expect(buttons(fixture).some((b) => b.textContent?.includes('Create Sub-Agent'))).toBe(false);
   });
 
   it('emits a createNew result when Create Sub-Agent is clicked', async () => {
-    const fixture = await render({ config: { showCreateNew: true } });
+    const fixture = await render({ config: { ShowCreateNew: true } });
     const closed = capture(fixture.componentInstance.DialogClose);
     const results: Array<unknown> = [];
     fixture.componentInstance.result.subscribe((r) => results.push(r));
     buttonByText(fixture, 'Create Sub-Agent').click();
     expect(closed.length).toBe(1);
-    expect((results[0] as { createNew: boolean }).createNew).toBe(true);
+    expect((results[0] as { CreateNew: boolean }).CreateNew).toBe(true);
   });
 });

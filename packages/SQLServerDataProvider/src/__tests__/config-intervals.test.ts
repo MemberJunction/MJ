@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 import sql from 'mssql';
 import { StartupManager, UserInfo } from '@memberjunction/core';
-import { setupSQLServerClient } from '../config';
+import { SetupSQLServerClient } from '../config';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { SQLServerProviderConfigData } from '../types';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -71,7 +71,7 @@ describe('setupSQLServerClient effective refresh intervals (seconds → millisec
   it('a 180-second config yields EXACTLY 180,000 ms for both UserCache.Refresh and the metadata timer', async () => {
     const { config } = makeConfig(180);
 
-    await setupSQLServerClient(config);
+    await SetupSQLServerClient(config);
 
     // UserCache.Refresh expects MILLISECONDS (first arg is the provider, not the pool)
     expect(refreshSpy).toHaveBeenCalledTimes(1);
@@ -90,7 +90,7 @@ describe('setupSQLServerClient effective refresh intervals (seconds → millisec
   it('a 5-second config produces a 5,000 ms timer (never raw seconds)', async () => {
     const { config } = makeConfig(5);
 
-    await setupSQLServerClient(config);
+    await SetupSQLServerClient(config);
 
     expect(refreshSpy.mock.calls[0][1]).toBe(5000);
     expect(setIntervalSpy.mock.calls[0][1]).toBe(5000);
@@ -99,7 +99,7 @@ describe('setupSQLServerClient effective refresh intervals (seconds → millisec
   it('a 0-second (disabled) config never starts the metadata refresh timer', async () => {
     const { config } = makeConfig(0);
 
-    await setupSQLServerClient(config);
+    await SetupSQLServerClient(config);
 
     // UserCache still refreshes once at startup (0 ms simply disables ITS auto-refresh loop)
     expect(refreshSpy).toHaveBeenCalledWith(expect.any(SQLServerDataProvider), 0);
@@ -112,7 +112,7 @@ describe('setupSQLServerClient effective refresh intervals (seconds → millisec
       .mockResolvedValue(true);
     const { config } = makeConfig(60);
 
-    await setupSQLServerClient(config);
+    await SetupSQLServerClient(config);
 
     expect(refreshIfNeededSpy).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(60 * 1000);
@@ -130,7 +130,7 @@ describe('setupSQLServerClient effective refresh intervals (seconds → millisec
     );
     const { config } = makeConfig(30);
 
-    await setupSQLServerClient(config);
+    await SetupSQLServerClient(config);
 
     // Must not reject / produce an unhandled rejection — the callback catches internally
     await expect(vi.advanceTimersByTimeAsync(30 * 1000)).resolves.not.toThrow();
@@ -138,7 +138,7 @@ describe('setupSQLServerClient effective refresh intervals (seconds → millisec
 
   it('returns the configured provider instance', async () => {
     const { config } = makeConfig(0);
-    const provider = await setupSQLServerClient(config);
+    const provider = await SetupSQLServerClient(config);
     expect(provider).toBeInstanceOf(SQLServerDataProvider);
   });
 });

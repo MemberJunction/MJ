@@ -596,6 +596,34 @@ check("block-less IF NOT EXISTS(sys.indexes) CREATE INDEX → pg_indexes DO bloc
       must_not_contain=["sys.", "OBJECT_ID"],
       expect_unhandled=0)
 
+# A guarded CREATE INDEX must flush deferred FK triggers first. PostgreSQL refuses
+# `CREATE INDEX` on a table with pending trigger events ("cannot CREATE INDEX \"Entity\"
+# because it has pending trigger events"), which a migration hits whenever it seeds
+# FK-bearing rows and then indexes the REFERENCED table. SQL Server has no such rule, so
+# the T-SQL is legal and the breakage appears only after conversion, at apply time. -----
+check("guarded CREATE INDEX flushes deferred FK triggers",
+      "IF NOT EXISTS (\n"
+      "    SELECT 1 FROM sys.indexes\n"
+      "    WHERE name = 'IDX_AUTO_MJ_FKEY_Entity_ParentID'\n"
+      "      AND object_id = OBJECT_ID('${flyway:defaultSchema}.Entity'))\n"
+      "    CREATE INDEX IDX_AUTO_MJ_FKEY_Entity_ParentID\n"
+      "        ON ${flyway:defaultSchema}.Entity ([ParentID]);",
+      must_contain=["SET CONSTRAINTS ALL IMMEDIATE;", "CREATE INDEX", "pg_indexes"],
+      expect_unhandled=0)
+
+# ...and a guard that does NOT create an index must be left exactly as it was — the flush
+# is emitted only where it is needed, not sprayed across every guard. -------------------
+check("guard without CREATE INDEX emits no constraint flush",
+      "IF NOT EXISTS (\n"
+      "    SELECT 1 FROM sys.columns\n"
+      "    WHERE name = 'Foo' AND object_id = OBJECT_ID('${flyway:defaultSchema}.Entity'))\n"
+      "BEGIN\n"
+      "    ALTER TABLE ${flyway:defaultSchema}.Entity ADD [Foo] INT NULL;\n"
+      "END",
+      must_contain=["DO $$", "ALTER TABLE"],
+      must_not_contain=["SET CONSTRAINTS"],
+      expect_unhandled=0)
+
 # Inline named DEFAULT constraint (issue #3252 RC3): T-SQL allows a name on a column
 # default (`CONSTRAINT [DF_x] DEFAULT (75)`); PG does NOT — it is a `syntax error at or
 # near "CONSTRAINT"`. The name must be stripped, leaving a bare (unnamed) DEFAULT.

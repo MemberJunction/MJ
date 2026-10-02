@@ -56,7 +56,7 @@ export interface ScoringBindingInput {
  * @param contextUser request user — required server-side for isolation/audit
  * @throws when the underlying `Save()` fails (surfaces `LatestResult.CompleteMessage`)
  */
-export async function upsertScoringBinding(
+export async function UpsertScoringBinding(
   input: ScoringBindingInput,
   entityFactory: IEntityFactory,
   contextUser?: UserInfo,
@@ -94,6 +94,15 @@ export async function upsertScoringBinding(
   return binding;
 }
 
+/** @deprecated Use {@link UpsertScoringBinding}. */
+export async function upsertScoringBinding(
+  input: ScoringBindingInput,
+  entityFactory: IEntityFactory,
+  contextUser?: UserInfo,
+): Promise<MJMLModelScoringBindingEntity> {
+  return UpsertScoringBinding(input, entityFactory, contextUser);
+}
+
 /**
  * Convenience wrapper to stamp a binding's monitoring fields after a scoring run
  * — `LastScoredAt = now` and `LastRowCount = rowCount`. Creates the binding if it
@@ -105,14 +114,14 @@ export async function upsertScoringBinding(
  * @param entityFactory the entity-creation seam
  * @param contextUser request user
  */
-export async function recordScoringRun(
+export async function RecordScoringRun(
   bindingId: string | undefined,
   details: { mlModelId: string; recordProcessId: string; mode?: ScoringBindingMode },
   rowCount: number,
   entityFactory: IEntityFactory,
   contextUser?: UserInfo,
 ): Promise<MJMLModelScoringBindingEntity> {
-  return upsertScoringBinding(
+  return UpsertScoringBinding(
     {
       bindingId,
       mlModelId: details.mlModelId,
@@ -124,4 +133,15 @@ export async function recordScoringRun(
     entityFactory,
     contextUser,
   );
+}
+
+/** @deprecated Use {@link RecordScoringRun}. */
+export async function recordScoringRun(
+  bindingId: string | undefined,
+  details: { mlModelId: string; recordProcessId: string; mode?: ScoringBindingMode },
+  rowCount: number,
+  entityFactory: IEntityFactory,
+  contextUser?: UserInfo,
+): Promise<MJMLModelScoringBindingEntity> {
+  return RecordScoringRun(bindingId, details, rowCount, entityFactory, contextUser);
 }

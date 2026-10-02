@@ -29,16 +29,21 @@ export class StartupValidationService {
   /**
    * Runs all validation checks
    */
-  public validateSystemSetup(): void {
+  public ValidateSystemSetup(): void {
     this.validateUserRoles();
     // Add more validation checks here as needed
+  }
+
+  /** @deprecated Use {@link ValidateSystemSetup}. */
+  public validateSystemSetup(): void {
+    return this.ValidateSystemSetup();
   }
   
   /**
    * Directly adds a validation issue for no user roles
    * This is used when we detect the missing roles error during GraphQL setup
    */
-  public addNoRolesValidationIssue(): void {
+  public AddNoRolesValidationIssue(): void {
     this.validationService.addIssue({
       id: 'no-user-roles',
       message: 'Missing User Roles - Cannot Access Application',
@@ -46,6 +51,11 @@ export class StartupValidationService {
       details: 'Your account does not have any roles assigned, which is required to use the application. This is preventing the system from loading core resources and metadata.',
       help: 'Please contact your system administrator to have appropriate roles assigned to your account. At minimum, a "UI" role is required.'
     });
+  }
+
+  /** @deprecated Use {@link AddNoRolesValidationIssue}. */
+  public addNoRolesValidationIssue(): void {
+    return this.AddNoRolesValidationIssue();
   }
 
   /**

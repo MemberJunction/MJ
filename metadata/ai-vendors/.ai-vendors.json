@@ -45,14 +45,21 @@
     "fields": {
       "Name": "OpenAI",
       "Description": "AI Vendor",
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
+      "Configuration": {
+        "ModelDefaults": {
+          "LLM": {
+            "PrefixPromptCache": true
+          }
+        }
+      }
     },
     "primaryKey": {
       "ID": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-02-12T19:47:36.254Z",
-      "checksum": "648a037376385a26c9300f4cec4f1569eaa85a23dfa6829eb92eae6d7a866458"
+      "lastModified": "2026-09-28T19:13:23.375Z",
+      "checksum": "8cbd68ce4f95513fbef9a4e1043678d7ce655ea564707c775b68b4657300ac6d"
     }
   },
   {
@@ -225,14 +232,21 @@
     "fields": {
       "Name": "x.ai",
       "Description": "x.ai is the creator of the Grok series of large language models that power various AI applications including coding assistance and general reasoning.",
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
+      "Configuration": {
+        "ModelDefaults": {
+          "LLM": {
+            "PrefixPromptCache": true
+          }
+        }
+      }
     },
     "primaryKey": {
       "ID": "5483D98F-1F4E-40F4-91FC-EAA8EFDC90F1"
     },
     "sync": {
-      "lastModified": "2026-02-12T19:47:36.276Z",
-      "checksum": "7a3f1a96a532c9968eb70c14e73b73d59155c69d63ac0482277e07cbc4b20c26"
+      "lastModified": "2026-09-28T19:13:23.408Z",
+      "checksum": "25d78862bda96bdbc9c74afbc809f7a7e5112e65981136a22a8db4159433e051"
     }
   },
   {
@@ -427,6 +441,76 @@
     "sync": {
       "lastModified": "2026-09-10T17:40:33.656Z",
       "checksum": "1134eae54271063f047baa8030bb6feee93f8075662a587c598337e1bc8648a0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sakana AI",
+      "Description": "Sakana AI - Tokyo-based research lab, developer of the Fugu family of learned multi-agent orchestration models. Rather than answering directly, a Fugu model routes each task across a pool of open-weight and specialist models (including NVIDIA's Nemotron family) and recursively calls instances of itself. Sakana serves an OpenAI-compatible first-party API authenticated with an API key; MJ currently reaches Fugu models through OpenRouter rather than Sakana direct, because no Sakana driver class exists yet.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "5F935B01-EC5F-4409-AADC-8063A94936D6"
+    },
+    "sync": {
+      "lastModified": "2026-09-15T13:56:42.685Z",
+      "checksum": "ffcb145b12e3690546bdd56181db4092ed845f55c858f1e2657aa6efd72ff7c5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Xiaomi",
+      "Description": "Chinese consumer-electronics manufacturer whose AI division develops the open-weight MiMo model family. The MiMo V2.6 generation (Pro, Flash and a Pro-UltraSpeed serving variant, all released 2026-09-22) is MIT-licensed and natively omnimodal, with a 1M-token context. Xiaomi serves an OpenAI-compatible first-party API authenticated with an API key; MJ currently reaches MiMo models through OpenRouter rather than Xiaomi direct, because no Xiaomi driver class exists yet. This vendor row therefore records Model Developer attribution only.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "8D69D59B-6F29-4FE6-BD31-EBB908768871"
+    },
+    "sync": {
+      "lastModified": "2026-09-29T19:19:09.092Z",
+      "checksum": "8cc9594b7f83ce43298d43b506e20302d288b2201e6d2f7fb8657a5bead29f98"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DeepInfra",
+      "Description": "US-based serverless inference provider hosting open-weight models (GLM, Qwen, DeepSeek, Kimi, Llama and others) behind an OpenAI-compatible API at https://api.deepinfra.com/v1/openai, authenticated with an API key. Models are addressed by their Hugging Face-style id (e.g. zai-org/GLM-5.3-Flash). Consistently among the lowest-priced hosts on Artificial Analysis provider leaderboards, often running launch promotions below the model developer's list rate. MJ reaches it through the DeepInfraLLM driver.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "C54A8588-D653-4263-AAD7-71FB9DA096B0"
+    },
+    "sync": {
+      "lastModified": "2026-09-29T19:19:09.102Z",
+      "checksum": "7647b5f72a5181c2601f47c81e5ad669684a04107c02dbca9ed9870a1ef3b638"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SiliconFlow",
+      "Description": "Serverless inference provider specializing in open-weight Chinese and international models (GLM, Qwen, DeepSeek, Kimi, MiniMax), serving an OpenAI-compatible API at https://api.siliconflow.com/v1 (international; a separate mainland-China platform runs at api.siliconflow.cn) authenticated with an API key. Models are addressed by their Hugging Face-style id (e.g. zai-org/GLM-5.3-Flash). MJ reaches it through the SiliconFlowLLM driver.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "E688DFD9-AE6B-4D93-AA4D-8AB642DDB541"
+    },
+    "sync": {
+      "lastModified": "2026-09-29T19:19:09.114Z",
+      "checksum": "40b35cb4ac71dc812c442d87a4a6ecf7d64bde86fe323af7c7d5aa298395c4e7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MemberJunction",
+      "Description": "MemberJunction — developer of Betty, the MJ-native organization-scoped assistant. Unlike a single hosted service, Betty is deployed per organization, so each instance configures its own API root (BETTY_API_BASE_URL) and the API key is presented directly as a bearer token rather than exchanged for a session credential.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "F684A68C-D3CB-4AFF-92AE-D189D22A69D9"
+    },
+    "sync": {
+      "lastModified": "2026-09-29T19:19:09.136Z",
+      "checksum": "929c970f960d3242d054a57a4e240bb3f892453abe6e2932182113eb2845daeb"
     }
   }
 ]

@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T126 - Communication Analytics Tour",
+    "Description": "Opens the Communication app once, then walks its bespoke analytics surfaces (provider cards with capability chips and 24h stats, monitor analytics KPIs/charts, bulk runs timeline), verifying each via checkpoints. Consolidates old T307, T308, T309.",
+    "InputDefinition": "{\n  \"goal\": \"Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app. Then walk these sections IN ORDER, and as you arrive at each one set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) comm-providers \u2014 open the Providers section and confirm provider cards render, each showing capability chips (e.g. Sending and Receiving with check/x marks, possibly Scheduled/Drafts/Forward/Reply), a small stats row (Sent 24h / Success % / Failed), a Status badge (Active/Disabled), and Configure/Analytics footer actions \u2014 OR a valid empty state if no providers are configured; (2) comm-monitor \u2014 open the Monitor section and confirm the monitor analytics render: a KPI strip with four cards (Total Sent, Delivery Rate %, Pending, Failed), a 'Delivery Volume' time-series chart, a 'Provider Health' list, and a 'Channel Breakdown' \u2014 each populated OR showing a valid empty state; (3) comm-runs \u2014 open the Bulk Runs (Runs) section and confirm a summary row (Active Runs, Completed 24h, Success Rate %) and a run timeline listing runs with status badges/dots (Complete/Failed/In-Progress/Pending) \u2014 OR a 'No communication runs found' empty state \u2014 then click the 'Refresh' button and confirm the view reloads and stays functional. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment \u2014 wait for content rather than navigating away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"checkpoints\": [\n    {\n      \"name\": \"comm-providers\",\n      \"instruction\": \"provider cards with capabilities and 24h stats\",\n      \"visualCriteria\": [\n        \"Provider cards render with capability chips and a 24h stats row (Sent / Success % / Failed), each with a Status badge and Configure/Analytics footer buttons \u2014 OR a valid empty state if no providers are configured\"\n      ]\n    },\n    {\n      \"name\": \"comm-monitor\",\n      \"instruction\": \"monitor analytics KPIs and charts\",\n      \"visualCriteria\": [\n        \"The Monitor analytics render a KPI strip of four metric cards (Total Sent, Delivery Rate %, Pending, Failed) plus a 'Delivery Volume' chart, a 'Provider Health' list, and a 'Channel Breakdown' \u2014 each populated or a valid empty state (zeros acceptable)\"\n      ]\n    },\n    {\n      \"name\": \"comm-runs\",\n      \"instruction\": \"bulk runs summary + timeline + refresh\",\n      \"visualCriteria\": [\n        \"The Bulk Runs view renders a summary row (Active Runs, Completed 24h, Success Rate %) and a run timeline with status badges/dots \u2014 OR a valid 'No communication runs found' empty state \u2014 and clicking Refresh reloads the view without error\"\n      ]\n    }\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "url-match": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,communication",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "AA96E970-DFF8-467A-B0B5-E8310F344642"
+  }
+}
