@@ -24,7 +24,7 @@
  * @module @memberjunction/ai-vectors-memory
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { CompositeKey, EntityInfo, Metadata, RunView, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import type {
@@ -87,7 +87,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
         const rv = new RunView();
         const r = await rv.RunView<{ ID: string; ProviderConfig: string | null }>({
             EntityName: 'MJ: Vector Indexes',
-            ExtraFilter: `Name='${indexName.replace(/'/g, "''")}'`,
+            ExtraFilter: `Name='${EscapeSQLString(indexName)}'`,
             Fields: ['ID', 'ProviderConfig'],
             ResultType: 'simple',
             MaxRows: 1,
@@ -212,7 +212,9 @@ export class SimpleVectorDatabase extends VectorDBBase {
      *  ID→row map used to enrich match metadata. Rows with missing IDs,
      *  missing vector columns, or unparseable JSON are silently skipped
      *  — callers haven't necessarily embedded every row yet (e.g. only
-     *  `Status='Active'` rows have embeddings), so logging would spam. */
+     *  `Status='Active'` rows have embeddings), so logging would spam.
+     *  Rows whose vector size differs from the first one are skipped too,
+     *  with one log line, since they point at an embedding-model mix-up. */
     private buildServiceFromRows(
         rows: Array<Record<string, unknown>>,
         config: SimpleVectorProviderConfig,
@@ -221,6 +223,8 @@ export class SimpleVectorDatabase extends VectorDBBase {
         const service = new SimpleVectorService();
         const entries: Array<{ key: string; vector: number[]; metadata: Record<string, unknown> }> = [];
         const rowsByID = new Map<string, Record<string, unknown>>();
+        let dims: number | null = null;
+        let mismatched = 0;
         for (const row of rows) {
             // Key each vector by the row's full primary key — any column name(s) — in the prefixed
             // CompositeKey segment form vector metadata carries. `row['ID']` skipped every row of an
@@ -231,13 +235,23 @@ export class SimpleVectorDatabase extends VectorDBBase {
             const id = key.ToURLSegment();
             try {
                 const vector = typeof vecRaw === 'string' ? JSON.parse(vecRaw) : vecRaw;
-                if (Array.isArray(vector) && vector.every(v => typeof v === 'number')) {
+                if (Array.isArray(vector) && vector.length > 0 && vector.every(v => typeof v === 'number')) {
+                    // One vector of another size (a re-embed with a different model in progress)
+                    // must not fail the whole index: skip it, and report the count once below.
+                    dims ??= vector.length;
+                    if (vector.length !== dims) {
+                        mismatched++;
+                        continue;
+                    }
                     entries.push({ key: id, vector: vector as number[], metadata: row });
                     rowsByID.set(id, row);
                 }
             } catch {
                 // Vector column is unparseable — silently skip (see JSDoc above).
             }
+        }
+        if (mismatched > 0) {
+            LogError(`SimpleVectorDatabase: skipped ${mismatched} "${config.entityName}" row(s) whose ${config.vectorField} has a different dimension count than the rest (${dims}) — re-embed them with one model`);
         }
         service.LoadVectors(entries);
         return { service, rowsByID };
@@ -280,7 +294,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
         // contextUser is required for RunView's server-side guard. Remote
         // drivers (Pinecone/Qdrant) ignore it; in-process drivers like this
         // one need it to honor row-level security on the source entity.
-        if (!indexName || !Array.isArray(queryVector)) {
+        if (!indexName || !Array.isArray(queryVector) || queryVector.length === 0) {
             LogError(`SimpleVectorDatabase.QueryIndex: missing indexName="${indexName}" or vector (length ${Array.isArray(queryVector) ? queryVector.length : 'n/a'})`);
             return { success: false, message: 'Missing indexName or vector', data: null };
         }

@@ -309,6 +309,12 @@ describe('SimpleVectorDatabase', () => {
             ]);
             expect(mocks.RunView).not.toHaveBeenCalled();
         });
+
+        it('refuses an empty query vector with a failure response instead of throwing', async () => {
+            const result = await query('notes-index', []);
+            expect(result).toEqual({ success: false, message: 'Missing indexName or vector', data: null });
+            expect(mocks.RunView).not.toHaveBeenCalled();
+        });
     });
 
     describe('QueryIndex — loading the index configuration', () => {
@@ -336,6 +342,11 @@ describe('SimpleVectorDatabase', () => {
             expect(indexQueries()[0].ExtraFilter).toBe("Name='O''Brien''s notes'");
             expect(result.success).toBe(true);
             expect(matchesOf(result)).toHaveLength(1);
+        });
+
+        it('strips null bytes from the index name in the lookup filter', async () => {
+            await query('notes\u0000-index', [1, 0, 0]);
+            expect(indexQueries()[0].ExtraFilter).toBe("Name='notes-index'");
         });
 
         it('reports the index as not configured when the config lookup fails, logging the RunView error', async () => {
@@ -574,6 +585,34 @@ describe('SimpleVectorDatabase', () => {
     });
 
     describe('QueryIndex — which rows become vectors', () => {
+        it('skips rows whose vector size differs from the rest, logging the count once, instead of failing the query', async () => {
+            defineIndex('notes-index', NOTES_CONFIG);
+            setRows(NOTES.Name, [
+                note('a', [1, 0, 0]),
+                note('odd-1', [1, 0]),
+                note('b', [0, 1, 0]),
+                note('odd-2', [1, 0, 0, 0]),
+            ]);
+
+            const result = await query('notes-index', [1, 0, 0]);
+
+            expect(result.success).toBe(true);
+            expect(matchesOf(result).map(m => m.id)).toEqual(['ID|a', 'ID|b']);
+            expect(loggedErrors()).toEqual([
+                'SimpleVectorDatabase: skipped 2 "Agent Notes" row(s) whose EmbeddingVector has a different dimension count than the rest (3) — re-embed them with one model',
+            ]);
+        });
+
+        it('skips a row whose vector is an empty array', async () => {
+            defineIndex('notes-index', NOTES_CONFIG);
+            setRows(NOTES.Name, [note('empty', []), note('a', [1, 0, 0])]);
+
+            const result = await query('notes-index', [1, 0, 0]);
+
+            expect(matchesOf(result).map(m => m.id)).toEqual(['ID|a']);
+            expect(loggedErrors()).toEqual([]);
+        });
+
         beforeEach(() => {
             defineIndex('notes-index', NOTES_CONFIG);
         });
