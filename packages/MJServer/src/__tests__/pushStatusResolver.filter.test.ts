@@ -10,7 +10,7 @@
  */
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
-import { statusUpdatesFilter, type PushStatusNotificationPayload, type StatusUpdatesFilterContext } from '../generic/PushStatusResolver';
+import { StatusUpdatesFilter, type PushStatusNotificationPayload, type StatusUpdatesFilterContext } from '../generic/PushStatusResolver';
 import type { UserPayload } from '../types';
 
 const OWNER = 'AA11BB22-0000-4000-8000-000000000001';
@@ -28,29 +28,29 @@ function push(overrides: Partial<PushStatusNotificationPayload> = {}): PushStatu
 
 describe('statusUpdatesFilter (B49 session-hijack gate)', () => {
   it('delivers when sessionId matches AND the connection identity owns the push', () => {
-    expect(statusUpdatesFilter({ payload: push(), args: { sessionId: SESSION }, context: ctxFor(OWNER) })).toBe(true);
+    expect(StatusUpdatesFilter({ payload: push(), args: { sessionId: SESSION }, context: ctxFor(OWNER) })).toBe(true);
   });
 
   it('THE FIX: rejects a matching sessionId when the connection identity is a DIFFERENT user (hijack)', () => {
     // Attacker lifted the victim's sessionId and subscribes with it — but their authenticated
     // connection identity is their own, so delivery must be denied.
-    expect(statusUpdatesFilter({ payload: push({ ownerUserId: OWNER }), args: { sessionId: SESSION }, context: ctxFor(ATTACKER) })).toBe(false);
+    expect(StatusUpdatesFilter({ payload: push({ ownerUserId: OWNER }), args: { sessionId: SESSION }, context: ctxFor(ATTACKER) })).toBe(false);
   });
 
   it('rejects when the requested sessionId does not match the push', () => {
-    expect(statusUpdatesFilter({ payload: push(), args: { sessionId: 'some-other-session' }, context: ctxFor(OWNER) })).toBe(false);
+    expect(StatusUpdatesFilter({ payload: push(), args: { sessionId: 'some-other-session' }, context: ctxFor(OWNER) })).toBe(false);
   });
 
   it('fails closed when the push carries no ownerUserId', () => {
-    expect(statusUpdatesFilter({ payload: push({ ownerUserId: '' }), args: { sessionId: SESSION }, context: ctxFor(OWNER) })).toBe(false);
+    expect(StatusUpdatesFilter({ payload: push({ ownerUserId: '' }), args: { sessionId: SESSION }, context: ctxFor(OWNER) })).toBe(false);
   });
 
   it('fails closed when the connection has no authenticated identity', () => {
-    expect(statusUpdatesFilter({ payload: push(), args: { sessionId: SESSION }, context: ctxFor(undefined) })).toBe(false);
-    expect(statusUpdatesFilter({ payload: push(), args: { sessionId: SESSION }, context: undefined })).toBe(false);
+    expect(StatusUpdatesFilter({ payload: push(), args: { sessionId: SESSION }, context: ctxFor(undefined) })).toBe(false);
+    expect(StatusUpdatesFilter({ payload: push(), args: { sessionId: SESSION }, context: undefined })).toBe(false);
   });
 
   it('matches identity case-insensitively (SQL Server upper vs PostgreSQL lower UUIDs)', () => {
-    expect(statusUpdatesFilter({ payload: push({ ownerUserId: OWNER.toUpperCase() }), args: { sessionId: SESSION }, context: ctxFor(OWNER.toLowerCase()) })).toBe(true);
+    expect(StatusUpdatesFilter({ payload: push({ ownerUserId: OWNER.toUpperCase() }), args: { sessionId: SESSION }, context: ctxFor(OWNER.toLowerCase()) })).toBe(true);
   });
 });

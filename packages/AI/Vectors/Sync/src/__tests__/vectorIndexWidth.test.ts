@@ -1,7 +1,7 @@
 /**
  * Unit tests for the two guards that stand between an embedding and an index it does not fit.
  *
- * The `dimensions` value threaded into `EmbedTexts` is a **request hint, not a contract**: only
+ * The `Dimensions` value threaded into `RunEmbedding` is a **request hint, not a contract**: only
  * some providers honour it, a local ONNX model is free to ignore it, and nothing downstream ever
  * compared what came back against what the index accepts. Both failure modes are silent in
  * different ways — a provider that enforces width rejects the upsert one API round trip at a time,
@@ -22,7 +22,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { EmbedTextsResult } from '@memberjunction/ai';
+import type { EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import type { MJEntityDocumentEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import type { IndexList, VectorDBBase } from '@memberjunction/ai-vectordb';
 
@@ -65,6 +65,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));
+vi.mock('@memberjunction/ai-prompts', () => ({
+  AIEmbeddingRunner: class {},
+}));
 vi.mock('@memberjunction/ai-vectordb', () => ({
   VectorDBBase: class { constructor(_k: string) {} },
 }));
@@ -93,7 +96,7 @@ class TestableSyncer extends EntityVectorSyncer {
   public resolveDims(index: MJVectorIndexEntity, db: VectorDBBase): Promise<number | null> {
     return this.ResolveIndexDimensions(index, db);
   }
-  public assertWidth(e: EmbedTextsResult, expected: number | undefined, model: string, indexName?: string): void {
+  public assertWidth(e: EmbeddingRunResult, expected: number | undefined, model: string, indexName?: string): void {
     this.AssertVectorWidth(e, expected, model, indexName);
   }
   public resolveModel(doc: MJEntityDocumentEntity, index?: MJVectorIndexEntity) {
@@ -137,12 +140,16 @@ function driver(opts: { managesIndexes?: boolean; indexes?: IndexList | Error })
   } as unknown as VectorDBBase;
 }
 
-function embeddings(widths: number[], model = 'text-embedding-3-small'): EmbedTextsResult {
+function embeddings(widths: number[], model = 'text-embedding-3-small'): EmbeddingRunResult {
   return {
-    object: 'list',
-    model,
-    ModelUsage: {} as EmbedTextsResult['ModelUsage'],
-    vectors: widths.map(w => new Array<number>(w).fill(0.1)),
+    Success: true,
+    Vectors: widths.map(w => new Array<number>(w).fill(0.1)),
+    PromptRunID: null,
+    TokensUsed: 0,
+    Cost: 0,
+    ErrorMessage: null,
+    ExecutionTimeMs: 0,
+    ModelName: model,
   };
 }
 

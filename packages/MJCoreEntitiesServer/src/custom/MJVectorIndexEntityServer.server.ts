@@ -1,4 +1,4 @@
-import { BaseEntity, LogError, LogStatus, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, RunView } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { MJVectorIndexEntity, MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorDBBase, CreateIndexParams, IndexModelMetricEnum } from "@memberjunction/ai-vectordb";
@@ -67,9 +67,9 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      *   - **The driver owns no index objects** (`not-applicable`) — recorded, and the save stands.
      *     See {@link VectorDBBase.ManagesIndexes}.
      */
-    public override async Save(): Promise<boolean> {
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isNew = this.IsSaved === false;
-        const saveResult = await super.Save();
+        const saveResult = await super.Save(options);
 
         if (!saveResult || !isNew) {
             return saveResult;

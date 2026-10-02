@@ -41,7 +41,7 @@ vi.mock('@test/openapp-server', () => ({
 }));
 vi.mock('@test/disabled-server', () => ({ RESOLVER_PATHS: [DISABLED_APP_RESOLVER], load: vi.fn() }));
 
-import { createMJServer, MJServerConfig } from '../index';
+import { CreateMJServer, MJServerConfig } from '../index';
 import { serve } from '@memberjunction/server';
 import { cosmiconfigSync } from 'cosmiconfig';
 
@@ -52,18 +52,18 @@ describe('ServerBootstrap', () => {
 
     describe('createMJServer', () => {
         it('should be a function', () => {
-            expect(typeof createMJServer).toBe('function');
+            expect(typeof CreateMJServer).toBe('function');
         });
 
         it('should call cosmiconfigSync with mj module name', async () => {
-            await createMJServer();
+            await CreateMJServer();
             expect(cosmiconfigSync).toHaveBeenCalledWith('mj', expect.objectContaining({
                 searchStrategy: 'global',
             }));
         });
 
         it('should call serve with default resolver paths when none provided', async () => {
-            await createMJServer();
+            await CreateMJServer();
             expect(serve).toHaveBeenCalledWith(
                 expect.arrayContaining([
                     expect.stringContaining('generated.{js,ts}'),
@@ -75,7 +75,7 @@ describe('ServerBootstrap', () => {
 
         it('should call serve with custom resolver paths when provided', async () => {
             const customPaths = ['./custom/**/*Resolver.ts'];
-            await createMJServer({ resolverPaths: customPaths });
+            await CreateMJServer({ resolverPaths: customPaths });
             expect(serve).toHaveBeenCalledWith(
                 customPaths,
                 undefined,
@@ -85,19 +85,19 @@ describe('ServerBootstrap', () => {
 
         it('should call beforeStart hook if provided', async () => {
             const beforeStart = vi.fn();
-            await createMJServer({ beforeStart });
+            await CreateMJServer({ beforeStart });
             expect(beforeStart).toHaveBeenCalled();
         });
 
         it('should call afterStart hook if provided', async () => {
             const afterStart = vi.fn();
-            await createMJServer({ afterStart });
+            await CreateMJServer({ afterStart });
             expect(afterStart).toHaveBeenCalled();
         });
 
         it('should pass restApiOptions to serve', async () => {
             const restApiOptions = { enabled: true };
-            await createMJServer({ restApiOptions } as MJServerConfig);
+            await CreateMJServer({ restApiOptions } as MJServerConfig);
             expect(serve).toHaveBeenCalledWith(
                 expect.anything(),
                 undefined,
@@ -113,7 +113,7 @@ describe('ServerBootstrap', () => {
             });
             (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
 
-            await createMJServer({ configPath: '/custom/path' });
+            await CreateMJServer({ configPath: '/custom/path' });
             expect(mockSearch).toHaveBeenCalledWith('/custom/path');
         });
 
@@ -133,7 +133,7 @@ describe('ServerBootstrap', () => {
 
             // import() of a non-existent package throws ERR_MODULE_NOT_FOUND; the loader
             // must swallow it so boot proceeds (serve still called).
-            await expect(createMJServer()).resolves.toBeUndefined();
+            await expect(CreateMJServer()).resolves.toBeUndefined();
             expect(serve).toHaveBeenCalled();
         });
 
@@ -158,7 +158,7 @@ describe('ServerBootstrap', () => {
                 const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
                 const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-                await expect(createMJServer()).resolves.toBeUndefined();
+                await expect(CreateMJServer()).resolves.toBeUndefined();
 
                 // The failure names the missing TRANSITIVE dep — it must reach the operator via
                 // console.warn with the true cause, not be swallowed by the friendly line.
@@ -188,7 +188,7 @@ describe('ServerBootstrap', () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
             const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-            await expect(createMJServer()).resolves.toBeUndefined();
+            await expect(CreateMJServer()).resolves.toBeUndefined();
 
             // The mirror of the transitive-dep test: when the error's quoted subject IS this
             // package, the benign friendly line fires and the scary warn path stays silent.
@@ -215,7 +215,7 @@ describe('ServerBootstrap', () => {
             });
             (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
 
-            await expect(createMJServer()).resolves.toBeUndefined();
+            await expect(CreateMJServer()).resolves.toBeUndefined();
             expect(serve).toHaveBeenCalled();
         });
 
@@ -231,7 +231,7 @@ describe('ServerBootstrap', () => {
             });
             (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
 
-            await createMJServer();
+            await CreateMJServer();
 
             // The app package's resolver file must be in serve()'s glob set — otherwise its
             // mutations/queries register type-graphql metadata but never enter the schema.
@@ -253,7 +253,7 @@ describe('ServerBootstrap', () => {
             });
             (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
 
-            await createMJServer();
+            await CreateMJServer();
 
             const servePaths = (serve as ReturnType<typeof vi.fn>).mock.calls[0][0] as string[];
             expect(servePaths).not.toContain(DISABLED_APP_RESOLVER);
@@ -271,7 +271,7 @@ describe('ServerBootstrap', () => {
             });
             (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
 
-            await createMJServer();
+            await CreateMJServer();
 
             const serveOptions = (serve as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
                 serverExtensions: Array<{ DriverClass: string; RootPath: string }>;
@@ -298,7 +298,7 @@ describe('ServerBootstrap', () => {
             (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
             const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-            await createMJServer();
+            await CreateMJServer();
 
             const lines = logSpy.mock.calls.map((c) => String(c[0]));
             expect(lines.some((l) => l.includes('TestOpenAppEdge') && l.includes('/test-openapp') && l.includes('PRE-AUTH'))).toBe(true);
@@ -325,7 +325,7 @@ describe('ServerBootstrap', () => {
             });
             (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
 
-            await createMJServer();
+            await CreateMJServer();
 
             const serveOptions = (serve as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
                 serverExtensions: Array<{ DriverClass: string }>;
@@ -346,7 +346,7 @@ describe('ServerBootstrap', () => {
             });
             (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
 
-            await createMJServer();
+            await CreateMJServer();
 
             const serveOptions = (serve as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
                 serverExtensions: unknown[];
@@ -389,7 +389,7 @@ describe('ServerBootstrap', () => {
                 });
                 (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
 
-                await createMJServer();
+                await CreateMJServer();
 
                 const serveOptions = (serve as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
                     serverExtensions: Array<{ DriverClass: string; RootPath: string; Settings: Record<string, unknown> }>;
@@ -416,7 +416,7 @@ describe('ServerBootstrap', () => {
             });
             (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
 
-            await createMJServer();
+            await CreateMJServer();
             const servePaths = (serve as ReturnType<typeof vi.fn>).mock.calls[0][0] as string[];
             expect(servePaths.length).toBeGreaterThan(0);
             expect(servePaths.every((p) => p.includes('generated.{js,ts}'))).toBe(true);

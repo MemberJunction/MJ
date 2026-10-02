@@ -134,15 +134,15 @@ export class UserOverviewPanel extends BaseFormPanel<MJUserEntity> implements On
     }
 
     public ngOnInit(): void {
-        this.LoadUserRoles();
+        this.loadUserRoles();
     }
 
-    private async LoadUserRoles(): Promise<void> {
+    private async loadUserRoles(): Promise<void> {
         if (!this.Record?.ID) return;
         try {
             const rv = new RunView();
             const res = await rv.RunView<UserRoleRow>({
-                EntityName: 'User Roles',
+                EntityName: 'MJ: User Roles',
                 ExtraFilter: `UserID = '${this.Record.ID}'`,
                 Fields: ['ID', 'Role'],
                 MaxRows: 20,

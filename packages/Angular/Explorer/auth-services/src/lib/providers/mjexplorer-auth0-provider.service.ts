@@ -32,7 +32,7 @@ export class MJAuth0Provider extends MJAuthBase {
    * Factory function to provide Angular dependencies required by Auth0
    * Stored as a static property for the factory to access without instantiation
    */
-  static angularProviderFactory = (environment: Record<string, unknown>): Provider[] => {
+  static AngularProviderFactory = (environment: Record<string, unknown>): Provider[] => {
     // Check if we're on the MCP OAuth callback path
     const isMCPOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
 
@@ -70,12 +70,30 @@ export class MJAuth0Provider extends MJAuthBase {
     ];
   };
 
-  constructor(public auth: AuthService) {
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static get angularProviderFactory() {
+    return this.AngularProviderFactory;
+  }
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static set angularProviderFactory(value) {
+    this.AngularProviderFactory = value;
+  }
+
+  constructor(public Auth: AuthService) {
     const config: AngularAuthProviderConfig = {
       name: MJAuth0Provider.PROVIDER_TYPE,
       type: MJAuth0Provider.PROVIDER_TYPE
     };
     super(config);
+  }
+
+  /** @deprecated Use {@link Auth}. */
+  public get auth(): AuthService {
+    return this.Auth;
+  }
+  /** @deprecated Use {@link Auth}. */
+  public set auth(value: AuthService) {
+    this.Auth = value;
   }
 
   // ============================================================================
@@ -89,18 +107,18 @@ export class MJAuth0Provider extends MJAuthBase {
 
     // CRITICAL: Wait for Auth0 SDK to process any redirect callback
     // The SDK handles this internally and updates isLoading$ when done
-    await firstValueFrom(this.auth.isLoading$.pipe(
+    await firstValueFrom(this.Auth.isLoading$.pipe(
       filter(loading => !loading),
       take(1)
     ));
 
     // Get current authentication state
-    const isAuthenticated = await firstValueFrom(this.auth.isAuthenticated$);
+    const isAuthenticated = await firstValueFrom(this.Auth.isAuthenticated$);
 
     // CRITICAL: Get current user BEFORE setting up subscriptions
     // This ensures userInfo$ has a value before app.component.ts subscribes
     if (isAuthenticated) {
-      const user = await firstValueFrom(this.auth.user$);
+      const user = await firstValueFrom(this.Auth.user$);
       if (user) {
         const userInfo = this.mapAuth0UserToStandard(user);
         this.updateUserInfo(userInfo);
@@ -108,11 +126,11 @@ export class MJAuth0Provider extends MJAuthBase {
     }
 
     // Subscribe to authentication state and user info for future changes
-    this.auth.isAuthenticated$.subscribe((loggedIn) => {
+    this.Auth.isAuthenticated$.subscribe((loggedIn) => {
       this.updateAuthState(loggedIn);
     });
 
-    this.auth.user$.subscribe((user) => {
+    this.Auth.user$.subscribe((user) => {
       if (user) {
         const userInfo = this.mapAuth0UserToStandard(user);
         this.updateUserInfo(userInfo);
@@ -126,14 +144,14 @@ export class MJAuth0Provider extends MJAuthBase {
 
   protected async loginInternal(options?: Record<string, unknown>): Promise<void> {
     await this.ensureInitialized();
-    this.auth.loginWithRedirect(options);
+    this.Auth.loginWithRedirect(options);
   }
 
   protected async logoutInternal(): Promise<void> {
     // Subscribe to the Observable so Auth0 Angular SDK v2's authState.refresh() fires.
     try {
       await firstValueFrom(
-        this.auth.logout({ logoutParams: { returnTo: document.location.origin } })
+        this.Auth.logout({ logoutParams: { returnTo: document.location.origin } })
       );
     } catch {
       // Expected when Auth0 redirects the browser before the Observable completes.
@@ -157,7 +175,7 @@ export class MJAuth0Provider extends MJAuthBase {
    */
   protected async extractIdTokenInternal(): Promise<string | null> {
     try {
-      const claims = await firstValueFrom(this.auth.idTokenClaims$);
+      const claims = await firstValueFrom(this.Auth.idTokenClaims$);
       // Auth0-specific detail: JWT is in __raw property
       return claims?.__raw || null;
     } catch (error) {
@@ -173,7 +191,7 @@ export class MJAuth0Provider extends MJAuthBase {
    */
   protected async extractTokenInfoInternal(): Promise<StandardAuthToken | null> {
     try {
-      const claims = await firstValueFrom(this.auth.idTokenClaims$);
+      const claims = await firstValueFrom(this.Auth.idTokenClaims$);
       if (!claims) {
         return null;
       }
@@ -201,7 +219,7 @@ export class MJAuth0Provider extends MJAuthBase {
    */
   protected async extractUserInfoInternal(): Promise<StandardUserInfo | null> {
     try {
-      const user = await firstValueFrom(this.auth.user$);
+      const user = await firstValueFrom(this.Auth.user$);
       if (!user) {
         return null;
       }
@@ -225,7 +243,7 @@ export class MJAuth0Provider extends MJAuthBase {
 
       // Force token refresh by bypassing cache
       // With useRefreshTokens: true and offline_access scope, this will use refresh tokens
-      await firstValueFrom(this.auth.getAccessTokenSilently({
+      await firstValueFrom(this.Auth.getAccessTokenSilently({
         cacheMode: 'off'
       }));
 
@@ -364,7 +382,7 @@ export class MJAuth0Provider extends MJAuthBase {
    */
   protected async getProfilePictureUrlInternal(): Promise<string | null> {
     try {
-      const user = await firstValueFrom(this.auth.user$);
+      const user = await firstValueFrom(this.Auth.user$);
       return user?.picture || null;
     } catch (error) {
       console.error('[Auth0] Error getting profile picture:', error);

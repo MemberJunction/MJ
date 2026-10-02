@@ -347,5 +347,13 @@ When creating new applications with custom dashboards:
 
 > **Note**: every `BaseResourceComponent` subclass must call `this.NotifyLoadComplete()` when its initial load finishes, or direct URL navigation hangs on the loading screen. See [`packages/Angular/CLAUDE.md`](../packages/Angular/CLAUDE.md).
 
+### 17. Clone Configurations (`entities/.clone-configurations.json`)
+
+`metadata/entities/.clone-configurations.json` seeds each entity's `Configuration.Clone` bag, which the record-cloning engine reads.
+
+- **It is the only file that may set `Configuration` on the entities it covers.** `mj sync push` writes the whole `Configuration` field, so a second file setting it on the same entity would overwrite this one, depending on push order. `packages/RecordCloning/base/src/__tests__/ShippedCloneConfigurations.test.ts` fails if any entity's `Configuration` is set in more than one `metadata/entities` file. To add another bag (for example `Hierarchy`) to one of these entities, add it here.
+- **Relationship keys:** a bare child entity name matches every FK from that child. When the child has more than one FK to the root, use the qualified `"<Child>.<JoinField>"` form so each edge gets its own policy. For example, `MJ: AI Agent Relationships` has both `AgentID` and `SubAgentID`, so the `MJ: AI Agents` bag uses `"MJ: AI Agent Relationships.AgentID"`. A bare key applies only to edges from the root's own entity; below it (rows of a copied prompt or step), only relationship-ID and `"<Child>.<JoinField>"` keys match, so a child that hangs from a deeper entity, such as step paths from steps, is keyed by its join column.
+- The same test also checks that every enabled root skips relationships it doesn't list, that `NotCloneable` entities are never listed as `Deep`, and that agent credentials, company integrations, clone logs and agent runs stay `NotCloneable`.
+
 ## Remember
 The metadata system is designed to be declarative and version-controlled. Let the MetadataSync tool handle all the system-level bookkeeping while you focus on defining the business logic and behavior of your agents.

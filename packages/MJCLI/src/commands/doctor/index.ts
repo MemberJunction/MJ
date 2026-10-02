@@ -7,6 +7,8 @@ import {
   type Diagnostics,
   type LogEvent,
 } from '@memberjunction/installer';
+import { ResolveOutputFormat } from '@memberjunction/cli-core';
+import { CANONICAL_FORMAT_FLAG } from '../../lib/format-compat.js';
 
 export default class Doctor extends Command {
   static description = 'Diagnose a MemberJunction installation';
@@ -14,6 +16,8 @@ export default class Doctor extends Command {
   static examples = [
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --dir ./my-mj-project',
+    '<%= config.bin %> <%= command.id %> --format json',
+    '<%= config.bin %> <%= command.id %> --scope ai',
     '<%= config.bin %> <%= command.id %> --verbose',
     '<%= config.bin %> <%= command.id %> --report',
     '<%= config.bin %> <%= command.id %> --report_extended',
@@ -24,6 +28,11 @@ export default class Doctor extends Command {
       description: 'Target directory to diagnose',
       default: '.',
     }),
+    scope: Flags.string({
+      description: 'Diagnostic scope to filter by (install, runtime, ai, metadata, agent)',
+      options: ['install', 'runtime', 'ai', 'metadata', 'agent'],
+    }),
+    format: CANONICAL_FORMAT_FLAG,
     verbose: Flags.boolean({
       char: 'v',
       description: 'Show detailed output including suggested fixes inline',
@@ -41,33 +50,47 @@ export default class Doctor extends Command {
     const { flags } = await this.parse(Doctor);
     const engine = new InstallerEngine();
     const targetDir = path.resolve(flags.dir);
+    const { format } = ResolveOutputFormat({ formatFlag: flags.format });
+    const isJson = format === 'json';
 
-    this.log('');
-    this.log(chalk.bold('MJ Doctor'));
-    this.log('─────────');
+    if (!isJson) {
+      this.log('');
+      this.log(chalk.bold('MJ Doctor'));
+      this.log('─────────');
 
-    engine.On('diagnostic', (event: DiagnosticEvent) => {
-      const icon = this.formatStatusIcon(event.Status);
-      this.log(`${icon} ${event.Message}`);
-      if (event.SuggestedFix && flags.verbose) {
-        this.log(chalk.dim(`     Fix: ${event.SuggestedFix}`));
-      }
-    });
+      engine.On('diagnostic', (event: DiagnosticEvent) => {
+        const icon = this.formatStatusIcon(event.Status);
+        this.log(`${icon} ${event.Message}`);
+        if (event.SuggestedFix && flags.verbose) {
+          this.log(chalk.dim(`     Fix: ${event.SuggestedFix}`));
+        }
+      });
 
-    // Capture log events for report path notification
-    engine.On('log', (event: LogEvent) => {
-      if (event.Message.startsWith('Diagnostic report saved to:')) {
-        this.log('');
-        this.log(chalk.cyan(event.Message));
-        this.log(chalk.dim('Share this file when requesting installation support. Passwords are redacted.'));
-      }
-    });
+      // Capture log events for report path notification
+      engine.On('log', (event: LogEvent) => {
+        if (event.Message.startsWith('Diagnostic report saved to:')) {
+          this.log('');
+          this.log(chalk.cyan(event.Message));
+          this.log(chalk.dim('Share this file when requesting installation support. Passwords are redacted.'));
+        }
+      });
+    }
 
     const result: Diagnostics = await engine.Doctor(targetDir, {
       Verbose: flags.verbose,
       Report: flags.report,
       ReportExtended: flags.report_extended,
+      Scope: flags.scope,
+      Format: format,
     });
+
+    if (isJson) {
+      this.log(JSON.stringify(result.toJSON(), null, 2));
+      if (result.HasFailures) {
+        this.exit(1);
+      }
+      return;
+    }
 
     this.log('');
 
@@ -103,6 +126,10 @@ export default class Doctor extends Command {
       if (flags.report_extended) {
         this.log(chalk.dim('Extended report includes config file snapshots and service startup logs.'));
       }
+    }
+
+    if (result.HasFailures) {
+      this.exit(1);
     }
   }
 

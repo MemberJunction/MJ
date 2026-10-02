@@ -46,6 +46,29 @@ describe('ErrorAnalyzer', () => {
             expect(info.canFailover).toBe(true);
         });
 
+        // Anthropic reports an account spend cap as a 400 invalid_request_error. Read by status
+        // alone it looked like a malformed request (no failover), so every prompt whose top
+        // candidate was a capped vendor failed outright instead of moving to the next vendor.
+        // Found by IT56/IT57 in the 6.2.0-edge.0 release gate.
+        it('treats a vendor spend cap reported as HTTP 400 as NoCredit, so failover runs', () => {
+            const error = {
+                status: 400,
+                message: '400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-10-01 at 00:00 UTC."}}',
+            };
+            const info = ErrorAnalyzer.analyzeError(error, 'Anthropic');
+
+            expect(info.errorType).toBe('NoCredit');
+            expect(info.canFailover).toBe(true);
+        });
+
+        it('still treats a genuinely malformed 400 as InvalidRequest (no failover)', () => {
+            const error = { status: 400, message: 'Malformed JSON in request body' };
+            const info = ErrorAnalyzer.analyzeError(error, 'Anthropic');
+
+            expect(info.errorType).toBe('InvalidRequest');
+            expect(info.canFailover).toBe(false);
+        });
+
         it('should detect service unavailable', () => {
             const error = { message: 'Service unavailable, try again later', status: 503 };
             const info = ErrorAnalyzer.analyzeError(error);

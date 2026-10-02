@@ -6,7 +6,7 @@
 
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { logStatus } from '../Misc/status_logging';
-import { sortBySequenceAndCreatedAt } from '../Misc/util';
+import { SortBySequenceAndCreatedAt } from '../Misc/util';
 import fs from 'fs';
 import path from 'path';
 import { configInfo } from '../Config/config';
@@ -56,7 +56,7 @@ export class DBSchemaGeneratorBase {
      * @param outputDir Directory to write the JSON files to
      * @returns True if generation was successful, false otherwise
      */
-    public generateDBSchemaJSONOutput(entities: EntityInfo[], outputDir: string): boolean {
+    public GenerateDBSchemaJSONOutput(entities: EntityInfo[], outputDir: string): boolean {
         try {
             if (!fs.existsSync(outputDir))
                 fs.mkdirSync(outputDir, { recursive: true }); // create the directory if it doesn't exist
@@ -83,13 +83,13 @@ export class DBSchemaGeneratorBase {
             schemas.forEach(s => {
                 try {
                     const schemaEntities = entities.filter(e => e.SchemaName === s);
-                    const schemaJSON = this.generateDBSchemaJSON(schemaEntities, excludeEntities, s, false);
+                    const schemaJSON = this.GenerateDBSchemaJSON(schemaEntities, excludeEntities, s, false);
                     allSchemas.fullJSON += (allSchemas.count === 0 ? '' : ',') + schemaJSON;
                     fs.writeFileSync(path.join(outputDir, `${s}.full.json`), schemaJSON);
                     const schemaJSONMin = JSON.stringify(JSON.parse(schemaJSON));
                     fs.writeFileSync(path.join(outputDir, `${s}.full.min.json`), schemaJSONMin);
             
-                    const simpleSchemaJSON = this.generateDBSchemaJSON(schemaEntities, excludeEntities, s, true);
+                    const simpleSchemaJSON = this.GenerateDBSchemaJSON(schemaEntities, excludeEntities, s, true);
                     allSchemas.simpleJSON += (allSchemas.count === 0 ? '' : ',') + simpleSchemaJSON;
                     fs.writeFileSync(path.join(outputDir, `${s}.simple.json`), simpleSchemaJSON);
                     const simpleSchemaJSONMin = JSON.stringify(JSON.parse(simpleSchemaJSON));
@@ -132,8 +132,8 @@ export class DBSchemaGeneratorBase {
                     // grab the JSON for the schema in question and incorporate it into an output string
                     const schemaName = b.schemas[x];
                     const schemaEntities = entities.filter(e => e.SchemaName === schemaName);
-                    json += (x > 0 ? ',' : '') + this.generateDBSchemaJSON(schemaEntities, b.excludeEntities || [], schemaName, false)
-                    simpleJson += (x > 0 ? ',' : '') + this.generateDBSchemaJSON(schemaEntities, b.excludeEntities || [], schemaName, true);
+                    json += (x > 0 ? ',' : '') + this.GenerateDBSchemaJSON(schemaEntities, b.excludeEntities || [], schemaName, false)
+                    simpleJson += (x > 0 ? ',' : '') + this.GenerateDBSchemaJSON(schemaEntities, b.excludeEntities || [], schemaName, true);
                 }
                 json += ']';
                 simpleJson += ']';
@@ -152,6 +152,11 @@ export class DBSchemaGeneratorBase {
             return false;
         }
     }
+
+    /** @deprecated Use {@link GenerateDBSchemaJSONOutput}. */
+    public generateDBSchemaJSONOutput(entities: EntityInfo[], outputDir: string): boolean {
+        return this.GenerateDBSchemaJSONOutput(entities, outputDir);
+    }
     
     /**
      * Generates JSON representation for a specific database schema
@@ -161,7 +166,7 @@ export class DBSchemaGeneratorBase {
      * @param simpleVersion Whether to generate simplified output (field names only)
      * @returns JSON string representing the schema
      */
-    public generateDBSchemaJSON(entities: EntityInfo[], excludeEntities: string[], schemaName: string, simpleVersion: boolean): string {
+    public GenerateDBSchemaJSON(entities: EntityInfo[], excludeEntities: string[], schemaName: string, simpleVersion: boolean): string {
         let sOutput: string = `{
         "schemaName": "${this.escapeJsonString(schemaName)}", 
         "entities": [`;
@@ -183,6 +188,11 @@ export class DBSchemaGeneratorBase {
     }`;
         return sOutput;
     }
+
+    /** @deprecated Use {@link GenerateDBSchemaJSON}. */
+    public generateDBSchemaJSON(entities: EntityInfo[], excludeEntities: string[], schemaName: string, simpleVersion: boolean): string {
+        return this.GenerateDBSchemaJSON(entities, excludeEntities, schemaName, simpleVersion);
+    }
     
     /**
      * Generates JSON representation for a single entity
@@ -203,11 +213,11 @@ export class DBSchemaGeneratorBase {
     
         if (simpleVersion) {
             // just create a comma delim string of the field names
-            const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+            const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
             sOutput += `"${sortedFields.map(f => this.escapeJsonString(f.Name)).join('","')}"]`;
         }
         else {
-            const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+            const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
             for (let i:number = 0; i < sortedFields.length; ++i) {
                 const field = sortedFields[i];
                 if (i > 0) sOutput += ',';

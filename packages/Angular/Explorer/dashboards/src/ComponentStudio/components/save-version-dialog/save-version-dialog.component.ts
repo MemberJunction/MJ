@@ -168,15 +168,15 @@ export class SaveVersionDialogComponent {
       Comment: this.Comment,
       Mode: this.Mode
     });
-    this.ResetForm();
+    this.resetForm();
   }
 
   OnCancel(): void {
     this.Cancel.emit();
-    this.ResetForm();
+    this.resetForm();
   }
 
-  private ResetForm(): void {
+  private resetForm(): void {
     this.Comment = '';
     this.Mode = 'new';
   }

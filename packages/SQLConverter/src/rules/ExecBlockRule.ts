@@ -21,8 +21,8 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { resolveType } from './TypeResolver.js';
-import { removeNPrefix } from './ExpressionHelpers.js';
+import { ResolveType } from './TypeResolver.js';
+import { RemoveNPrefix } from './ExpressionHelpers.js';
 import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from './ProcedureToFunctionRule.js';
 
 interface DeclaredVar {
@@ -38,6 +38,19 @@ interface SetAssignment {
 interface ExecCall {
   procRef: string;
   params: Array<{ paramName: string; valueExpr: string }>;
+}
+
+/**
+ * mj-sync's create-or-update form (6.2+): `IF NOT EXISTS (SELECT 1 FROM t WHERE [ID] = @v)
+ * BEGIN EXEC spCreate… END ELSE BEGIN EXEC spUpdate… END`, trailing the last SET.
+ */
+interface UpsertCall {
+  /** Already-converted PostgreSQL predicate, e.g. `SELECT 1 FROM __mj."AIVendor" WHERE "ID" = p_ID_x`. */
+  guardSelect: string;
+  /** Variables the guard reads, for the declared-variable check. */
+  guardVars: string[];
+  create: ExecCall;
+  update: ExecCall;
 }
 
 export class ExecBlockRule implements IConversionRule {
@@ -79,10 +92,14 @@ export class ExecBlockRule implements IConversionRule {
       // A second EXEC at line start begins a new statement. `findExecPosition`
       // scans the accumulated block (not just this line) so its own string-literal
       // tracking decides whether the earlier EXEC was real code or prompt text.
+      // An EXEC that opens an IF branch (`… END ELSE BEGIN` / `EXEC`) is the second half of a
+      // create-or-update block, not a new statement — only a standalone call starts a block.
+      const previousLine = [...current].reverse().find(l => l.trim() !== '')?.trim() ?? '';
       const startsNewExec =
         !inString &&
         /^EXEC\s/i.test(trimmed) &&
         current.length > 0 &&
+        !/^BEGIN$/i.test(previousLine) &&
         this.findExecPosition(current.join('\n')) >= 0;
 
       if (!inString && (/^DECLARE\s+@/i.test(trimmed) || startsNewExec) && current.length > 0) {
@@ -121,6 +138,24 @@ export class ExecBlockRule implements IConversionRule {
   private convertOneBlock(block: string, context: ConversionContext): string {
     const { comments, body } = this.extractLeadingComments(block);
     const declareVars = this.parseDeclare(body);
+
+    // A create-or-update block carries TWO EXECs behind an IF NOT EXISTS guard. Detect it
+    // first: the single-EXEC path below would cut at the first EXEC and fold the guard into
+    // the last SET value, emitting raw T-SQL. A block that looks like an upsert but does not
+    // parse cleanly returns null here and falls through to that path, which SKIPs it visibly.
+    const upsert = this.parseUpsert(body);
+    if (upsert) {
+      const declared = new Set(declareVars.map(v => v.name));
+      const usesUndeclared =
+        upsert.assignments.some(a => !declared.has(a.varName)) ||
+        upsert.call.guardVars.some(v => !declared.has(v)) ||
+        [upsert.call.create, upsert.call.update].some(e =>
+          e.params.some(p => /^p_\w+$/.test(p.valueExpr.trim()) && !declared.has(p.valueExpr.trim())));
+      if (!usesUndeclared) {
+        return this.generateDoBlock(comments, declareVars, upsert.assignments, { kind: 'upsert', call: upsert.call }, context);
+      }
+    }
+
     const { setSection, execSection } = this.findSetsAndExec(body);
     const assignments = this.parseSets(setSection);
     const exec = this.parseExec(execSection);
@@ -153,7 +188,92 @@ export class ExecBlockRule implements IConversionRule {
       return `-- SKIPPED: EXEC block (auto-conversion not supported)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
     }
 
-    return this.generateDoBlock(comments, declareVars, assignments, exec, context);
+    return this.generateDoBlock(comments, declareVars, assignments, { kind: 'call', exec }, context);
+  }
+
+  // ─── Create-or-update (IF NOT EXISTS … ELSE …) ─────────────────────
+
+  /**
+   * Parses the create-or-update tail mj-sync appends after the last SET. Returns null unless the
+   * WHOLE tail matches `IF NOT EXISTS (SELECT 1 FROM t WHERE [c] = @v [AND …]) BEGIN EXEC … END
+   * ELSE BEGIN EXEC … END[;]` — a partial match must not be half-converted.
+   */
+  private parseUpsert(body: string): { assignments: SetAssignment[]; call: UpsertCall } | null {
+    const afterDeclare = body.slice(this.findDeclareEnd(body));
+    const ifPos = this.findOutsideStrings(afterDeclare, /IF\s+NOT\s+EXISTS\s*\(/iy);
+    if (ifPos < 0) return null;
+
+    const openParen = afterDeclare.indexOf('(', ifPos);
+    const closeParen = this.findMatchingParen(afterDeclare, openParen);
+    if (closeParen < 0) return null;
+    const guard = this.convertUpsertGuard(afterDeclare.slice(openParen + 1, closeParen));
+    if (!guard) return null;
+
+    const tail = afterDeclare.slice(closeParen + 1);
+    const begin = tail.match(/^\s*BEGIN\s+/i);
+    if (!begin) return null;
+    const branches = tail.slice(begin[0].length);
+    const elsePos = this.findOutsideStrings(branches, /END\s+ELSE\s+BEGIN\b/iy);
+    if (elsePos < 0) return null;
+    const elseMatch = branches.slice(elsePos).match(/^END\s+ELSE\s+BEGIN\s*/i)!;
+    const updateAndEnd = branches.slice(elsePos + elseMatch[0].length);
+    const endMatch = updateAndEnd.match(/\bEND\s*;?\s*$/i);
+    if (!endMatch || endMatch.index === undefined) return null;
+
+    const create = this.parseExec(branches.slice(0, elsePos));
+    const update = this.parseExec(updateAndEnd.slice(0, endMatch.index));
+    if (!create || !update) return null;
+
+    return {
+      assignments: this.parseSets(afterDeclare.slice(0, ifPos)),
+      call: { guardSelect: guard.select, guardVars: guard.vars, create, update },
+    };
+  }
+
+  /** `SELECT 1 FROM [s].[t] WHERE [c] = @v [AND …]` → PostgreSQL, or null for any other shape. */
+  private convertUpsertGuard(inner: string): { select: string; vars: string[] } | null {
+    const m = inner.trim().replace(/\s+/g, ' ').match(/^SELECT 1 FROM (\[?\w+\]?\s*\.\s*\[?\w+\]?) WHERE (.+)$/i);
+    if (!m) return null;
+    const conditions = m[2].split(/\s+AND\s+/i).map(c => c.trim().match(/^\[?(\w+)\]?\s*=\s*@(\w+)$/));
+    if (conditions.some(c => !c)) return null;
+    const pairs = conditions as RegExpMatchArray[];
+    return {
+      select: `SELECT 1 FROM ${this.convertProcRef(m[1])} WHERE ${pairs.map(c => `"${c[1]}" = p_${c[2]}`).join(' AND ')}`,
+      vars: pairs.map(c => `p_${c[2]}`),
+    };
+  }
+
+  /** Offset of the first match of sticky `re` outside string literals, or -1. */
+  private findOutsideStrings(text: string, re: RegExp): number {
+    let inString = false;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === "'") {
+        if (inString && text[i + 1] === "'") { i++; continue; }
+        inString = !inString;
+        continue;
+      }
+      if (inString || (i > 0 && /\w/.test(text[i - 1]))) continue;
+      re.lastIndex = i;
+      if (re.test(text)) return i;
+    }
+    return -1;
+  }
+
+  /** Index of the `)` closing the `(` at `open`, respecting string literals; -1 if unbalanced. */
+  private findMatchingParen(text: string, open: number): number {
+    let depth = 0;
+    let inString = false;
+    for (let i = open; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === "'") {
+        if (inString && text[i + 1] === "'") { i++; continue; }
+        inString = !inString;
+      } else if (!inString) {
+        if (ch === '(') depth++;
+        else if (ch === ')' && --depth === 0) return i;
+      }
+    }
+    return -1;
   }
 
   // ─── Comment extraction ───────────────────────────────────────────
@@ -220,7 +340,7 @@ export class ExecBlockRule implements IConversionRule {
     const tsqlType = m[2].trim();
     return {
       name: `p_${m[1]}`,
-      pgType: resolveType(tsqlType),
+      pgType: ResolveType(tsqlType),
     };
   }
 
@@ -435,7 +555,7 @@ export class ExecBlockRule implements IConversionRule {
     let result = value;
 
     // Remove N prefix from string literals
-    result = removeNPrefix(result);
+    result = RemoveNPrefix(result);
 
     // Convert CAST types: CAST(x AS NVARCHAR(MAX)) → CAST(x AS TEXT)
     result = result.replace(/\bAS\s+NVARCHAR\s*\(\s*MAX\s*\)/gi, 'AS TEXT');
@@ -577,7 +697,7 @@ export class ExecBlockRule implements IConversionRule {
     comments: string,
     vars: DeclaredVar[],
     assignments: SetAssignment[],
-    exec: ExecCall,
+    action: { kind: 'call'; exec: ExecCall } | { kind: 'upsert'; call: UpsertCall },
     context: ConversionContext,
   ): string {
     const out: string[] = [];
@@ -627,6 +747,23 @@ export class ExecBlockRule implements IConversionRule {
       }
     }
 
+    if (action.kind === 'call') {
+      out.push(...this.performLines(action.exec, context, '  '));
+    } else {
+      out.push(`  IF NOT EXISTS (${action.call.guardSelect}) THEN`);
+      out.push(...this.performLines(action.call.create, context, '    '));
+      out.push('  ELSE');
+      out.push(...this.performLines(action.call.update, context, '    '));
+      out.push('  END IF;');
+    }
+
+    out.push('END $mj$;');
+    return out.join('\n') + '\n';
+  }
+
+  /** The PERFORM for one EXEC, at `indent`. */
+  private performLines(exec: ExecCall, context: ConversionContext, indent: string): string[] {
+    const out: string[] = [];
     // Generate PERFORM call. CodeGen's wide CRUD sprocs take BIT/boolean params —
     // both real boolean columns and the synthetic `<Col>_Clear` flags. A literal
     // `1`/`0` passed positionally-by-name would make PG fail to resolve the function
@@ -641,7 +778,7 @@ export class ExecBlockRule implements IConversionRule {
       // Definitely wide: this CALL alone exceeds the limit, so a typed-arg function with
       // at least this many parameters cannot exist on PostgreSQL. Only the JSON-arg shape
       // is possible, so emit it unconditionally.
-      out.push(`  PERFORM ${exec.procRef}(p_data := ${this.buildJsonArg(exec.params, boolCols)});`);
+      out.push(`${indent}PERFORM ${exec.procRef}(p_data := ${this.buildJsonArg(exec.params, boolCols)});`);
     } else {
       // The call count does NOT settle the shape, so resolve it at APPLY time.
       //
@@ -672,19 +809,18 @@ export class ExecBlockRule implements IConversionRule {
       const schemaRef = exec.procRef.includes('.')
         ? exec.procRef.replace(/\.[^.]*$/, '').replace(/"/g, '')
         : context.Schema;
-      out.push(`  IF EXISTS (`);
-      out.push(`    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace`);
-      out.push(`     WHERE n.nspname = '${schemaRef}' AND p.proname = '${procName}'`);
-      out.push(`       AND p.pronargs = 1 AND p.proargtypes[0] = 'jsonb'::regtype`);
-      out.push(`  ) THEN`);
-      out.push(`    PERFORM ${exec.procRef}(p_data := ${this.buildJsonArg(exec.params, boolCols)});`);
-      out.push(`  ELSE`);
-      out.push(`    PERFORM ${exec.procRef}(${paramList});`);
-      out.push(`  END IF;`);
+      out.push(`${indent}IF EXISTS (`);
+      out.push(`${indent}  SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace`);
+      out.push(`${indent}   WHERE n.nspname = '${schemaRef}' AND p.proname = '${procName}'`);
+      out.push(`${indent}     AND p.pronargs = 1 AND p.proargtypes[0] = 'jsonb'::regtype`);
+      out.push(`${indent}) THEN`);
+      out.push(`${indent}  PERFORM ${exec.procRef}(p_data := ${this.buildJsonArg(exec.params, boolCols)});`);
+      out.push(`${indent}ELSE`);
+      out.push(`${indent}  PERFORM ${exec.procRef}(${paramList});`);
+      out.push(`${indent}END IF;`);
     }
 
-    out.push('END $mj$;');
-    return out.join('\n') + '\n';
+    return out;
   }
 
   // ─── Utility methods ──────────────────────────────────────────────
