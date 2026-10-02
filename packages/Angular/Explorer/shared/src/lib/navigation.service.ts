@@ -2,7 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, Metadata, IsNewEntityRecordUrlId } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { map, distinctUntilChanged } from 'rxjs/operators';
@@ -170,9 +170,14 @@ export class NavigationService implements OnDestroy {
    * Clears the cached Home app info.
    * Call this if apps are reloaded or user logs out.
    */
-  public clearHomeAppCache(): void {
+  public ClearHomeAppCache(): void {
     this._homeAppId = undefined;
     this._homeAppColor = null;
+  }
+
+  /** @deprecated Use {@link ClearHomeAppCache}. */
+  public clearHomeAppCache(): void {
+    return this.ClearHomeAppCache();
   }
 
   // ════════════════════════════════════════════
@@ -502,9 +507,16 @@ export class NavigationService implements OnDestroy {
     // a record, which is the protection the old unconditional force provided.
     let forceNew = this.shouldForceNewTab(options);
 
+    const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity and cached record names using global metadata cache
+    const entityInfo = md?.EntityByName(entityName);
+    const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
+    const compositeKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(entityInfo, recordId) : new CompositeKey();
+    const cachedRecordName = md ? md.GetCachedRecordNameOnlyIfCached(entityName, compositeKey) : undefined;
+    const initialTitle = cachedRecordName || friendlyEntityName;
+
     const request: TabRequest = {
       ApplicationId: appId,
-      Title: `${entityName} - ${recordId}`,
+      Title: initialTitle,
       Configuration: {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
@@ -529,6 +541,20 @@ export class NavigationService implements OnDestroy {
       tabId = this.workspaceManager.OpenTabForced(request, appColor);
     } else {
       tabId = this.workspaceManager.OpenTab(request, appColor);
+    }
+
+    // If the friendly record name was not already in the LRU cache, fire-and-forget
+    // an async lookup so the tab title upgrades smoothly once resolved without stalling tab open.
+    if (!cachedRecordName && typeof md?.GetEntityRecordName === 'function') {
+      md.GetEntityRecordName(entityName, compositeKey)
+        .then(resolvedName => {
+          if (resolvedName && typeof this.workspaceManager?.GetTab === 'function' && this.workspaceManager.GetTab(tabId)) {
+            this.workspaceManager.UpdateTabTitle?.(tabId, resolvedName);
+          }
+        })
+        .catch(() => {
+          // Non-fatal cache warm / tab retitle miss; initialTitle remains
+        });
     }
 
     if (tabsMode) {
@@ -655,7 +681,13 @@ export class NavigationService implements OnDestroy {
       const parentRecordId = activeTab.resourceRecordId || activeTab.configuration?.['recordId'];
       if (typeof parentEntity === 'string' && typeof parentRecordId === 'string' && parentRecordId) {
         context['sourceTabId'] = activeTab.id;
-        context['sourceLabel'] = activeTab.title;
+        const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves parent entity and cached record names using global metadata cache
+        const parentEntityInfo = md?.EntityByName(parentEntity);
+        const parentKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(parentEntityInfo, parentRecordId) : new CompositeKey();
+        const cachedParentName = md ? md.GetCachedRecordNameOnlyIfCached(parentEntity, parentKey) : undefined;
+        const fallbackParentLabel = parentEntityInfo?.DisplayName || parentEntityInfo?.Name || parentEntity;
+        const sourceLabel = cachedParentName || (activeTab.title && !activeTab.title.includes(parentRecordId) ? activeTab.title : fallbackParentLabel);
+        context['sourceLabel'] = sourceLabel;
         context['sourceRecordEntity'] = parentEntity;
         context['sourceRecordId'] = parentRecordId;
         // Carry the parent's OWN origin forward. Preview-tab replacement
@@ -1034,9 +1066,13 @@ export class NavigationService implements OnDestroy {
     // a record the user is reading.
     let forceNew = tabsMode || this.shouldForceNewTab(options);
 
+    const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity name for new record tab using global metadata cache
+    const entityInfo = md?.EntityByName(entityName);
+    const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
+
     const request: TabRequest = {
       ApplicationId: appId,
-      Title: `New ${entityName}`,
+      Title: `New ${friendlyEntityName}`,
       Configuration: {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component

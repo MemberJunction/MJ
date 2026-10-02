@@ -88,6 +88,7 @@ export class SearchKnowledgeSystemUserResolver extends ResolverBase {
             Results: result.Results.map((r: SearchEngineResultItem) => ({
                 ID: r.ID,
                 EntityName: r.EntityName,
+                EntityDisplayName: r.EntityDisplayName,
                 RecordID: r.RecordID,
                 SourceType: r.SourceType,
                 ResultType: r.ResultType,

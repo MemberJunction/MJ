@@ -195,7 +195,7 @@ export class SqlWhereClauseValidator extends SemanticValidator {
     const violations: ConstraintViolation[] = [];
 
     // Parse WHERE clause using SQLParser (wraps node-sql-parser with FOR XML workaround)
-    const dialect = context.dialect ?? DEFAULT_DIALECT;
+    const dialect = context.Dialect ?? DEFAULT_DIALECT;
     const ast = SQLParser.ParseSQL(`SELECT * FROM t WHERE ${whereClause}`, dialect);
     if (!ast) {
       throw new Error('Failed to parse WHERE clause');

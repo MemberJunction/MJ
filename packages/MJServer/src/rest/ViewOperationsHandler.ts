@@ -11,7 +11,7 @@ export class ViewOperationsHandler {
     /**
      * Run a view and return results
      */
-    static async runView(params: RunViewParams, user: UserInfo): Promise<{ success: boolean, result?: RunViewResult, error?: string }> {
+    static async RunView(params: RunViewParams, user: UserInfo): Promise<{ success: boolean, result?: RunViewResult, error?: string }> {
         try {
             // Validate entity exists
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -45,11 +45,16 @@ export class ViewOperationsHandler {
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link RunView}. */
+    static async runView(params: RunViewParams, user: UserInfo): Promise<{ success: boolean, result?: RunViewResult, error?: string }> {
+        return this.RunView(params, user);
+    }
     
     /**
      * Run multiple views in batch
      */
-    static async runViews(paramsArray: RunViewParams[], user: UserInfo): Promise<{ success: boolean, results?: RunViewResult[], error?: string }> {
+    static async RunViews(paramsArray: RunViewParams[], user: UserInfo): Promise<{ success: boolean, results?: RunViewResult[], error?: string }> {
         try {
             // Validate and sanitize each set of parameters
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -86,11 +91,16 @@ export class ViewOperationsHandler {
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link RunViews}. */
+    static async runViews(paramsArray: RunViewParams[], user: UserInfo): Promise<{ success: boolean, results?: RunViewResult[], error?: string }> {
+        return this.RunViews(paramsArray, user);
+    }
     
     /**
      * List entities with optional filtering
      */
-    static async listEntities(params: RunViewParams, user: UserInfo): Promise<RunViewResult> {
+    static async ListEntities(params: RunViewParams, user: UserInfo): Promise<RunViewResult> {
         try {
             // Check entity exists and user has permission
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -115,11 +125,16 @@ export class ViewOperationsHandler {
             throw error;
         }
     }
+
+    /** @deprecated Use {@link ListEntities}. */
+    static async listEntities(params: RunViewParams, user: UserInfo): Promise<RunViewResult> {
+        return this.ListEntities(params, user);
+    }
     
     /**
      * Get available views for an entity
      */
-    static async getEntityViews(entityName: string, user: UserInfo): Promise<{ success: boolean, views?: any[], error?: string }> {
+    static async GetEntityViews(entityName: string, user: UserInfo): Promise<{ success: boolean, views?: any[], error?: string }> {
         try {
             // Validate entity exists
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -170,6 +185,11 @@ export class ViewOperationsHandler {
             LogError(error);
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
         }
+    }
+
+    /** @deprecated Use {@link GetEntityViews}. */
+    static async getEntityViews(entityName: string, user: UserInfo): Promise<{ success: boolean, views?: any[], error?: string }> {
+        return this.GetEntityViews(entityName, user);
     }
     
     /**

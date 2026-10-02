@@ -21,56 +21,344 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 })
 export class ArtifactViewerPanelComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
   @Input() artifactId!: string;
-  @Input() currentUser!: UserInfo;
-  @Input() environmentId!: string;
-  @Input() versionNumber?: number; // Version to display
-  @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
-  @Input() showHeader: boolean = true; // Control whether the header section is shown
-  @Input() showTabs: boolean = true; // Control whether the tab navigation is shown (false = show only Display tab content)
-  @Input() showCloseButton: boolean = true; // Control whether the close button is shown in header
-  @Input() showMaximizeButton: boolean = true; // Control whether the maximize/restore button is shown in header
-  @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
-  @Input() viewContext: 'conversation' | 'collection' | null = null; // Where artifact is being viewed
-  @Input() contextCollectionId?: string; // If viewing in collection, which collection
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() VersionNumber?: number;
+
+  /** @deprecated Use {@link VersionNumber}. */
+  @Input() set versionNumber(value: number | undefined) {
+    this.VersionNumber = value;
+  }
+  /** @deprecated Use {@link VersionNumber}. */
+  get versionNumber(): number | undefined {
+    return this.VersionNumber;
+  } // Version to display
+  @Input() ShowSaveToCollection: boolean = true;
+
+  /** @deprecated Use {@link ShowSaveToCollection}. */
+  @Input() set showSaveToCollection(value: boolean) {
+    this.ShowSaveToCollection = value;
+  }
+  /** @deprecated Use {@link ShowSaveToCollection}. */
+  get showSaveToCollection(): boolean {
+    return this.ShowSaveToCollection;
+  } // Control whether Save to Collection button is shown
+  @Input() ShowHeader: boolean = true;
+
+  /** @deprecated Use {@link ShowHeader}. */
+  @Input() set showHeader(value: boolean) {
+    this.ShowHeader = value;
+  }
+  /** @deprecated Use {@link ShowHeader}. */
+  get showHeader(): boolean {
+    return this.ShowHeader;
+  } // Control whether the header section is shown
+  @Input() ShowTabs: boolean = true;
+
+  /** @deprecated Use {@link ShowTabs}. */
+  @Input() set showTabs(value: boolean) {
+    this.ShowTabs = value;
+  }
+  /** @deprecated Use {@link ShowTabs}. */
+  get showTabs(): boolean {
+    return this.ShowTabs;
+  } // Control whether the tab navigation is shown (false = show only Display tab content)
+  @Input() ShowCloseButton: boolean = true;
+
+  /** @deprecated Use {@link ShowCloseButton}. */
+  @Input() set showCloseButton(value: boolean) {
+    this.ShowCloseButton = value;
+  }
+  /** @deprecated Use {@link ShowCloseButton}. */
+  get showCloseButton(): boolean {
+    return this.ShowCloseButton;
+  } // Control whether the close button is shown in header
+  @Input() ShowMaximizeButton: boolean = true;
+
+  /** @deprecated Use {@link ShowMaximizeButton}. */
+  @Input() set showMaximizeButton(value: boolean) {
+    this.ShowMaximizeButton = value;
+  }
+  /** @deprecated Use {@link ShowMaximizeButton}. */
+  get showMaximizeButton(): boolean {
+    return this.ShowMaximizeButton;
+  } // Control whether the maximize/restore button is shown in header
+  @Input() RefreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
+
+  /** @deprecated Use {@link RefreshTrigger}. */
+  @Input() set refreshTrigger(value: Subject<{artifactId: string; versionNumber: number}> | undefined) {
+    this.RefreshTrigger = value;
+  }
+  /** @deprecated Use {@link RefreshTrigger}. */
+  get refreshTrigger(): Subject<{artifactId: string; versionNumber: number}> | undefined {
+    return this.RefreshTrigger;
+  }
+  @Input() ViewContext: 'conversation' | 'collection' | null = null;
+
+  /** @deprecated Use {@link ViewContext}. */
+  @Input() set viewContext(value: 'conversation' | 'collection' | null) {
+    this.ViewContext = value;
+  }
+  /** @deprecated Use {@link ViewContext}. */
+  get viewContext(): 'conversation' | 'collection' | null {
+    return this.ViewContext;
+  } // Where artifact is being viewed
+  @Input() ContextCollectionId?: string;
+
+  /** @deprecated Use {@link ContextCollectionId}. */
+  @Input() set contextCollectionId(value: string | undefined) {
+    this.ContextCollectionId = value;
+  }
+  /** @deprecated Use {@link ContextCollectionId}. */
+  get contextCollectionId(): string | undefined {
+    return this.ContextCollectionId;
+  } // If viewing in collection, which collection
   @Input() canShare?: boolean; // Whether user can share this artifact
   @Input() canEdit?: boolean; // Whether user can edit this artifact
-  @Input() isMaximized: boolean = false; // Whether the panel is currently maximized
-  @Output() closed = new EventEmitter<void>();
-  @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
-  @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}>();
-  @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
-  @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Input() IsMaximized: boolean = false;
+
+  /** @deprecated Use {@link IsMaximized}. */
+  @Input() set isMaximized(value: boolean) {
+    this.IsMaximized = value;
+  }
+  /** @deprecated Use {@link IsMaximized}. */
+  get isMaximized(): boolean {
+    return this.IsMaximized;
+  } // Whether the panel is currently maximized
+  @Output() Closed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
+  @Output() SaveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
+
+  /**
+   * @deprecated Use {@link SaveToCollectionRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (saveToCollectionRequested) keeps working. Must stay AFTER SaveToCollectionRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() saveToCollectionRequested = this.SaveToCollectionRequested;
+  @Output() NavigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}>();
+
+  /**
+   * @deprecated Use {@link NavigateToLink}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigateToLink) keeps working. Must stay AFTER NavigateToLink: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigateToLink = this.NavigateToLink;
+  @Output() ShareRequested = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link ShareRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (shareRequested) keeps working. Must stay AFTER ShareRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() shareRequested = this.ShareRequested; // Emits artifactId when share is clicked
+  @Output() MaximizeToggled = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link MaximizeToggled}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (maximizeToggled) keeps working. Must stay AFTER MaximizeToggled: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() maximizeToggled = this.MaximizeToggled; // Emits when user clicks maximize/restore button
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
-  @Output() analyzeRequested = new EventEmitter<{ artifactId: string; snapshot: DataSnapshot }>();
+  @Output() AnalyzeRequested = new EventEmitter<{ artifactId: string; snapshot: DataSnapshot }>();
+
+  /**
+   * @deprecated Use {@link AnalyzeRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (analyzeRequested) keeps working. Must stay AFTER AnalyzeRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() analyzeRequested = this.AnalyzeRequested;
   /**
    * "Apply to my form" — bubbled from the form-aware component-artifact-viewer
    * branch. Carries the spec + entity. Consumer (chat message card, etc.)
    * confirms and invokes the Create-or-Modify Interactive Form action.
    */
-  @Output() applyFormRequested = new EventEmitter<{ spec: unknown; entityName: string }>();
+  @Output() ApplyFormRequested = new EventEmitter<{ spec: unknown; entityName: string }>();
 
-  @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
+  /**
+   * @deprecated Use {@link ApplyFormRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (applyFormRequested) keeps working. Must stay AFTER ApplyFormRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() applyFormRequested = this.ApplyFormRequested;
+
+  @ViewChild(ArtifactTypePluginViewerComponent) PluginViewer?: ArtifactTypePluginViewerComponent;
+
+  /** @deprecated Use {@link PluginViewer}. */
+  get pluginViewer(): ArtifactTypePluginViewerComponent | undefined {
+    return this.PluginViewer;
+  }
+  /** @deprecated Use {@link PluginViewer}. */
+  set pluginViewer(value: ArtifactTypePluginViewerComponent | undefined) {
+    this.PluginViewer = value;
+  }
 
   private destroy$ = new Subject<void>();
   private artifactLoadToken = 0;
 
-  public artifact: MJArtifactEntity | null = null;
+  public Artifact: MJArtifactEntity | null = null;
+
+  /** @deprecated Use {@link Artifact}. */
+  public get artifact(): MJArtifactEntity | null {
+    return this.Artifact;
+  }
+  /** @deprecated Use {@link Artifact}. */
+  public set artifact(value: MJArtifactEntity | null) {
+    this.Artifact = value;
+  }
   public artifactVersion: MJArtifactVersionEntity | null = null;
-  public allVersions: MJArtifactVersionEntity[] = [];
-  public selectedVersionNumber: number = 1;
+  public AllVersions: MJArtifactVersionEntity[] = [];
+
+  /** @deprecated Use {@link AllVersions}. */
+  public get allVersions(): MJArtifactVersionEntity[] {
+    return this.AllVersions;
+  }
+  /** @deprecated Use {@link AllVersions}. */
+  public set allVersions(value: MJArtifactVersionEntity[]) {
+    this.AllVersions = value;
+  }
+  public SelectedVersionNumber: number = 1;
+
+  /** @deprecated Use {@link SelectedVersionNumber}. */
+  public get selectedVersionNumber(): number {
+    return this.SelectedVersionNumber;
+  }
+  /** @deprecated Use {@link SelectedVersionNumber}. */
+  public set selectedVersionNumber(value: number) {
+    this.SelectedVersionNumber = value;
+  }
   public isLoading = true;
   public error: string | null = null;
-  public jsonContent = '';
-  public showVersionDropdown = false;
-  public artifactCollections: MJCollectionArtifactEntity[] = []; // All collections for ALL versions
-  public currentVersionCollections: MJCollectionArtifactEntity[] = []; // Collections containing CURRENT version only
-  public primaryCollection: MJCollectionEntity | null = null;
+  public JsonContent = '';
+
+  /** @deprecated Use {@link JsonContent}. */
+  public get jsonContent() {
+    return this.JsonContent;
+  }
+  /** @deprecated Use {@link JsonContent}. */
+  public set jsonContent(value) {
+    this.JsonContent = value;
+  }
+  public ShowVersionDropdown = false;
+
+  /** @deprecated Use {@link ShowVersionDropdown}. */
+  public get showVersionDropdown() {
+    return this.ShowVersionDropdown;
+  }
+  /** @deprecated Use {@link ShowVersionDropdown}. */
+  public set showVersionDropdown(value) {
+    this.ShowVersionDropdown = value;
+  }
+  public ArtifactCollections: MJCollectionArtifactEntity[] = [];
+
+  /** @deprecated Use {@link ArtifactCollections}. */
+  public get artifactCollections(): MJCollectionArtifactEntity[] {
+    return this.ArtifactCollections;
+  }
+  /** @deprecated Use {@link ArtifactCollections}. */
+  public set artifactCollections(value: MJCollectionArtifactEntity[]) {
+    this.ArtifactCollections = value;
+  } // All collections for ALL versions
+  public CurrentVersionCollections: MJCollectionArtifactEntity[] = [];
+
+  /** @deprecated Use {@link CurrentVersionCollections}. */
+  public get currentVersionCollections(): MJCollectionArtifactEntity[] {
+    return this.CurrentVersionCollections;
+  }
+  /** @deprecated Use {@link CurrentVersionCollections}. */
+  public set currentVersionCollections(value: MJCollectionArtifactEntity[]) {
+    this.CurrentVersionCollections = value;
+  } // Collections containing CURRENT version only
+  public PrimaryCollection: MJCollectionEntity | null = null;
+
+  /** @deprecated Use {@link PrimaryCollection}. */
+  public get primaryCollection(): MJCollectionEntity | null {
+    return this.PrimaryCollection;
+  }
+  /** @deprecated Use {@link PrimaryCollection}. */
+  public set primaryCollection(value: MJCollectionEntity | null) {
+    this.PrimaryCollection = value;
+  }
 
   // Tabbed interface
-  public activeTab: string = 'display'; // Changed to string to support dynamic tabs
-  public displayMarkdown: string | null = null;
-  public displayHtml: string | null = null;
+  public ActiveTab: string = 'display';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  public get activeTab(): string {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  public set activeTab(value: string) {
+    this.ActiveTab = value;
+  } // Changed to string to support dynamic tabs
+  public DisplayMarkdown: string | null = null;
+
+  /** @deprecated Use {@link DisplayMarkdown}. */
+  public get displayMarkdown(): string | null {
+    return this.DisplayMarkdown;
+  }
+  /** @deprecated Use {@link DisplayMarkdown}. */
+  public set displayMarkdown(value: string | null) {
+    this.DisplayMarkdown = value;
+  }
+  public DisplayHtml: string | null = null;
+
+  /** @deprecated Use {@link DisplayHtml}. */
+  public get displayHtml(): string | null {
+    return this.DisplayHtml;
+  }
+  /** @deprecated Use {@link DisplayHtml}. */
+  public set displayHtml(value: string | null) {
+    this.DisplayHtml = value;
+  }
   /**
    * The no-plugin fallback. An artifact type with no viewer plugin (CSV today) used to render an empty
    * pane: the display tab only knew the extracted markdown/HTML attributes, and a file-backed version
@@ -78,40 +366,112 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * text-like content (text/*, JSON, CSV) is fetched and shown as plain text — capped, so a large file
    * is downloaded rather than rendered.
    */
-  public fallbackText: string | null = null;
-  public fallbackTextTruncated = false;
-  public fallbackBusy = false;
+  public FallbackText: string | null = null;
+
+  /** @deprecated Use {@link FallbackText}. */
+  public get fallbackText(): string | null {
+    return this.FallbackText;
+  }
+  /** @deprecated Use {@link FallbackText}. */
+  public set fallbackText(value: string | null) {
+    this.FallbackText = value;
+  }
+  public FallbackTextTruncated = false;
+
+  /** @deprecated Use {@link FallbackTextTruncated}. */
+  public get fallbackTextTruncated() {
+    return this.FallbackTextTruncated;
+  }
+  /** @deprecated Use {@link FallbackTextTruncated}. */
+  public set fallbackTextTruncated(value) {
+    this.FallbackTextTruncated = value;
+  }
+  public FallbackBusy = false;
+
+  /** @deprecated Use {@link FallbackBusy}. */
+  public get fallbackBusy() {
+    return this.FallbackBusy;
+  }
+  /** @deprecated Use {@link FallbackBusy}. */
+  public set fallbackBusy(value) {
+    this.FallbackBusy = value;
+  }
   private static readonly FALLBACK_TEXT_MAX_CHARS = 200_000;
-  public versionAttributes: MJArtifactVersionAttributeEntity[] = [];
+  public VersionAttributes: MJArtifactVersionAttributeEntity[] = [];
+
+  /** @deprecated Use {@link VersionAttributes}. */
+  public get versionAttributes(): MJArtifactVersionAttributeEntity[] {
+    return this.VersionAttributes;
+  }
+  /** @deprecated Use {@link VersionAttributes}. */
+  public set versionAttributes(value: MJArtifactVersionAttributeEntity[]) {
+    this.VersionAttributes = value;
+  }
   private artifactTypeDriverClass: string | null = null;
   /** Populated from ArtifactType.ContentCategory. Used to suppress the JSON tab for
    *  binary file-type artifacts — driven by metadata, not hardcoded plugin overrides. */
   private artifactContentCategory: 'File' | 'Text' | null = null;
 
   // Links tab data
-  public originConversation: MJConversationEntity | null = null;
-  public allCollections: MJCollectionEntity[] = [];
-  public hasAccessToOriginConversation: boolean = false;
-  public originConversationVersionId: string | null = null; // Version ID that came from origin conversation
+  public OriginConversation: MJConversationEntity | null = null;
+
+  /** @deprecated Use {@link OriginConversation}. */
+  public get originConversation(): MJConversationEntity | null {
+    return this.OriginConversation;
+  }
+  /** @deprecated Use {@link OriginConversation}. */
+  public set originConversation(value: MJConversationEntity | null) {
+    this.OriginConversation = value;
+  }
+  public AllCollections: MJCollectionEntity[] = [];
+
+  /** @deprecated Use {@link AllCollections}. */
+  public get allCollections(): MJCollectionEntity[] {
+    return this.AllCollections;
+  }
+  /** @deprecated Use {@link AllCollections}. */
+  public set allCollections(value: MJCollectionEntity[]) {
+    this.AllCollections = value;
+  }
+  public HasAccessToOriginConversation: boolean = false;
+
+  /** @deprecated Use {@link HasAccessToOriginConversation}. */
+  public get hasAccessToOriginConversation(): boolean {
+    return this.HasAccessToOriginConversation;
+  }
+  /** @deprecated Use {@link HasAccessToOriginConversation}. */
+  public set hasAccessToOriginConversation(value: boolean) {
+    this.HasAccessToOriginConversation = value;
+  }
+  public OriginConversationVersionId: string | null = null;
+
+  /** @deprecated Use {@link OriginConversationVersionId}. */
+  public get originConversationVersionId(): string | null {
+    return this.OriginConversationVersionId;
+  }
+  /** @deprecated Use {@link OriginConversationVersionId}. */
+  public set originConversationVersionId(value: string | null) {
+    this.OriginConversationVersionId = value;
+  } // Version ID that came from origin conversation
 
   // Dynamic tabs from plugin
-  public get allTabs(): string[] {
+  public get AllTabs(): string[] {
     const tabs: string[] = [];
 
     // Only add Display tab if there's content to display
-    if (this.hasDisplayTab) {
+    if (this.HasDisplayTab) {
       tabs.push('Display');
     }
 
     // Get plugin tabs directly from plugin instance (no caching needed - plugin always exists)
-    if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
-      const pluginTabs = this.pluginViewer.pluginInstance.GetAdditionalTabs();
+    if (this.PluginViewer?.pluginInstance?.GetAdditionalTabs) {
+      const pluginTabs = this.PluginViewer.pluginInstance.GetAdditionalTabs();
       const pluginTabLabels = pluginTabs.map((t: ArtifactViewerTab) => t.label);
       tabs.push(...pluginTabLabels);
     }
 
     // Get tabs to remove from plugin (case-insensitive)
-    const removals = this.pluginViewer?.pluginInstance?.GetStandardTabRemovals?.() || [];
+    const removals = this.PluginViewer?.pluginInstance?.GetStandardTabRemovals?.() || [];
     const removalsLower = removals.map(r => r.toLowerCase());
 
     // File-category artifacts (PDF, Excel, Word) have binary content — the JSON tab
@@ -128,11 +488,16 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
 
     // Only add Links tab if there are links to show (unless plugin explicitly removes it)
-    if (!removalsLower.includes('links') && this.linksToShow.length > 0) {
+    if (!removalsLower.includes('links') && this.LinksToShow.length > 0) {
       tabs.push('Links');
     }
 
     return tabs;
+  }
+
+  /** @deprecated Use {@link AllTabs}. */
+  public get allTabs(): string[] {
+    return this.AllTabs;
   }
 
   /**
@@ -141,8 +506,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   public GetTabDefinition(tabName: string): ArtifactViewerTab | null {
     // Check if this is a plugin-provided tab
-    if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
-      const pluginTabs = this.pluginViewer.pluginInstance.GetAdditionalTabs();
+    if (this.PluginViewer?.pluginInstance?.GetAdditionalTabs) {
+      const pluginTabs = this.PluginViewer.pluginInstance.GetAdditionalTabs();
       const pluginTab = pluginTabs.find((t: ArtifactViewerTab) =>
         t.label.toLowerCase() === tabName.toLowerCase()
       );
@@ -154,9 +519,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     // Handle base tabs
     switch (tabName.toLowerCase()) {
       case 'json':
-        return { label: 'JSON', contentType: 'json', content: this.jsonContent, language: 'json' };
+        return { label: 'JSON', contentType: 'json', content: this.JsonContent, language: 'json' };
       case 'details':
-        return { label: 'Details', contentType: 'html', content: this.displayMarkdown || this.displayHtml || '' };
+        return { label: 'Details', contentType: 'html', content: this.DisplayMarkdown || this.DisplayHtml || '' };
       default:
         return null;
     }
@@ -234,8 +599,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
   async ngOnInit() {
     // Subscribe to refresh trigger for dynamic version changes
-    if (this.refreshTrigger) {
-      this.refreshTrigger.pipe(takeUntil(this.destroy$)).subscribe(async (data) => {
+    if (this.RefreshTrigger) {
+      this.RefreshTrigger.pipe(takeUntil(this.destroy$)).subscribe(async (data) => {
         // UUIDsEqual, not ===: SQL Server hands back upper-case UUIDs and PostgreSQL lower-case, so
         // a raw comparison silently drops a legitimate refresh whenever the emitting side and this
         // input picked up the id from differently-cased sources.
@@ -253,10 +618,10 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     // Using setTimeout(0) instead of Promise.resolve() because we need a fresh
     // macrotask boundary — microtasks can still drain inside Angular's CD cycle.
     setTimeout(async () => {
-      await this.loadArtifact(this.versionNumber);
+      await this.loadArtifact(this.VersionNumber);
 
       // Track that user viewed this artifact (deferred so it runs after the load)
-      if (this.artifactVersion?.ID && this.currentUser) {
+      if (this.artifactVersion?.ID && this.CurrentUser) {
         this.trackArtifactUsage('Viewed');
         // Also log to User Record Logs for recents feature (fire-and-forget)
         this.recentAccessService.logAccess('MJ: Artifacts', this.artifactId, 'artifact');
@@ -267,7 +632,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   async ngOnChanges(changes: SimpleChanges) {
     // Reload artifact when artifactId changes
     if (changes['artifactId'] && !changes['artifactId'].firstChange) {
-      await this.loadArtifact(this.versionNumber);
+      await this.loadArtifact(this.VersionNumber);
       // `loadArtifact` already honored the (possibly also-changed) versionNumber, so the branch
       // below has nothing left to do. Angular delivers both inputs in ONE SimpleChanges when a
       // caller switches artifact and version together, and these are two independent `if`s: the
@@ -283,15 +648,15 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       const newVersionNumber = changes['versionNumber'].currentValue;
       if (newVersionNumber != null) {
         // Check if we have metadata for this version (allVersions has lightweight metadata)
-        const targetVersion = this.allVersions.find(v => v.VersionNumber === newVersionNumber);
+        const targetVersion = this.AllVersions.find(v => v.VersionNumber === newVersionNumber);
         if (targetVersion) {
-          this.selectedVersionNumber = (targetVersion.VersionNumber as number) || 1;
+          this.SelectedVersionNumber = (targetVersion.VersionNumber as number) || 1;
 
           // Load full content for the selected version
           const fullVersion = await this.loadVersionContent(targetVersion.ID);
           if (fullVersion) {
             this.artifactVersion = fullVersion;
-            this.jsonContent = this.FormatJSON(fullVersion.Content || '{}');
+            this.JsonContent = this.formatJSON(fullVersion.Content || '{}');
           }
 
           // Load attributes and collection data in parallel
@@ -320,18 +685,18 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   }
 
   private clearLoadedArtifactState(): void {
-    this.artifact = null;
+    this.Artifact = null;
     this.artifactVersion = null;
-    this.allVersions = [];
-    this.versionAttributes = [];
-    this.jsonContent = '';
-    this.displayMarkdown = null;
-    this.displayHtml = null;
-    this.fallbackText = null;
-    this.fallbackTextTruncated = false;
-    this.artifactCollections = [];
-    this.currentVersionCollections = [];
-    this.primaryCollection = null;
+    this.AllVersions = [];
+    this.VersionAttributes = [];
+    this.JsonContent = '';
+    this.DisplayMarkdown = null;
+    this.DisplayHtml = null;
+    this.FallbackText = null;
+    this.FallbackTextTruncated = false;
+    this.ArtifactCollections = [];
+    this.CurrentVersionCollections = [];
+    this.PrimaryCollection = null;
     this.artifactTypeDriverClass = null;
     this.artifactContentCategory = null;
     this.clearLinksData();
@@ -350,7 +715,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       const md = this.ProviderToUse;
 
       // Load artifact — assign to local first to avoid mid-cycle icon flicker
-      const artifactEntity = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
+      const artifactEntity = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.CurrentUser);
       const loaded = await artifactEntity.Load(artifactId);
       if (!isCurrentLoad()) {
         return;
@@ -392,7 +757,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           MaxRows: 1,
           ResultType: 'simple'
         }
-      ], this.currentUser);
+      ], this.CurrentUser);
       if (!isCurrentLoad()) {
         return;
       }
@@ -404,8 +769,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         return;
       }
 
-      this.artifact = artifactEntity;
-      this.allVersions = versionsResult.Results as MJArtifactVersionEntity[];
+      this.Artifact = artifactEntity;
+      this.AllVersions = versionsResult.Results as MJArtifactVersionEntity[];
 
       // Determine which version to display
       let selectedVersion: Record<string, unknown> | undefined;
@@ -416,7 +781,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       }
       // Fall back to latest version (first in DESC order)
       const versionToLoad = selectedVersion || versionsResult.Results[0];
-      this.selectedVersionNumber = (versionToLoad.VersionNumber as number) || 1;
+      this.SelectedVersionNumber = (versionToLoad.VersionNumber as number) || 1;
 
       // PERF: Start artifact type resolution and selected version content load in parallel
       const [, selectedVersionEntity] = await Promise.all([
@@ -429,7 +794,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
       if (selectedVersionEntity) {
         this.artifactVersion = selectedVersionEntity;
-        this.jsonContent = this.FormatJSON(selectedVersionEntity.Content || '{}');
+        this.JsonContent = this.formatJSON(selectedVersionEntity.Content || '{}');
       } else {
         this.error = 'Failed to load artifact version content';
         return;
@@ -469,7 +834,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   private async loadVersionContent(versionId: string): Promise<MJArtifactVersionEntity | null> {
     try {
       const md = this.ProviderToUse;
-      const versionEntity = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
+      const versionEntity = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.CurrentUser);
       const loaded = await versionEntity.Load(versionId);
       return loaded ? versionEntity : null;
     } catch (err) {
@@ -482,13 +847,13 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Clear all links-related data to prevent stale data when switching artifacts
    */
   private clearLinksData(): void {
-    this.allCollections = [];
-    this.originConversation = null;
-    this.hasAccessToOriginConversation = false;
-    this.originConversationVersionId = null;
+    this.AllCollections = [];
+    this.OriginConversation = null;
+    this.HasAccessToOriginConversation = false;
+    this.OriginConversationVersionId = null;
   }
 
-  private async loadArtifactType(artifactTypeName: string | null | undefined = this.artifact?.Type, artifactId: string = this.artifactId, loadToken: number = this.artifactLoadToken): Promise<void> {
+  private async loadArtifactType(artifactTypeName: string | null | undefined = this.Artifact?.Type, artifactId: string = this.artifactId, loadToken: number = this.artifactLoadToken): Promise<void> {
     const isCurrentLoad = () => this.isCurrentArtifactLoad(artifactId, loadToken);
     this.artifactTypeDriverClass = null;
     this.artifactContentCategory = null;
@@ -498,7 +863,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
 
     try {
-      await ArtifactMetadataEngine.Instance.Config(false, this.currentUser);
+      await ArtifactMetadataEngine.Instance.Config(false, this.CurrentUser);
       if (!isCurrentLoad()) {
         return;
       }
@@ -529,25 +894,25 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         EntityName: 'MJ: Artifact Version Attributes',
         ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
         ResultType: 'simple'
-      }, this.currentUser);
+      }, this.CurrentUser);
       if (!isCurrentLoad()) {
         return;
       }
 
       if (result.Success && result.Results) {
-        this.versionAttributes = result.Results;
+        this.VersionAttributes = result.Results;
 
         // Check for displayMarkdown or displayHtml attributes
-        const displayMarkdownAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displaymarkdown');
-        const displayHtmlAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displayhtml');
+        const displayMarkdownAttr = this.VersionAttributes.find(a => a.Name?.toLowerCase() === 'displaymarkdown');
+        const displayHtmlAttr = this.VersionAttributes.find(a => a.Name?.toLowerCase() === 'displayhtml');
 
         // Parse values - they might be JSON-encoded strings
-        this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
-        this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
+        this.DisplayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
+        this.DisplayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
 
         // Clean up double-escaped characters in HTML (from LLM generation)
-        if (this.displayHtml) {
-          this.displayHtml = this.cleanEscapedCharacters(this.displayHtml);
+        if (this.DisplayHtml) {
+          this.DisplayHtml = this.cleanEscapedCharacters(this.DisplayHtml);
         }
 
         // Set active tab to the first available tab
@@ -570,17 +935,22 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     if (this.artifactVersion?.Name) {
       return this.artifactVersion.Name;
     }
-    return this.artifact?.Name || 'Artifact';
+    return this.Artifact?.Name || 'Artifact';
   }
 
-  get displayDescription(): string | null {
+  get DisplayDescription(): string | null {
     if (this.artifactVersion?.Description) {
       return this.artifactVersion.Description;
     }
-    return this.artifact?.Description || null;
+    return this.Artifact?.Description || null;
   }
 
-  get hasDisplayTab(): boolean {
+  /** @deprecated Use {@link DisplayDescription}. */
+  get displayDescription(): string | null {
+    return this.DisplayDescription;
+  }
+
+  get HasDisplayTab(): boolean {
     // Show Display tab if:
     // 1. We have a plugin AND it reports having content to display, OR
     // 2. We have displayMarkdown or displayHtml attributes from extract rules
@@ -588,29 +958,49 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     // Note: hasDisplayContent defaults to false in base class, so plugins must
     // explicitly opt-in by overriding to return true when they have content.
     // This prevents showing Display tab before plugin loads or when plugin has no content.
-    const pluginHasContent = this.pluginViewer?.pluginInstance?.hasDisplayContent ?? false;
+    const pluginHasContent = this.PluginViewer?.pluginInstance?.hasDisplayContent ?? false;
 
-    return pluginHasContent || !!this.displayMarkdown || !!this.displayHtml;
+    return pluginHasContent || !!this.DisplayMarkdown || !!this.DisplayHtml;
+  }
+
+  /** @deprecated Use {@link HasDisplayTab}. */
+  get hasDisplayTab(): boolean {
+    return this.HasDisplayTab;
   }
 
   /** True when the display tab has nothing better than the file card to show. */
+  get ShowFileFallback(): boolean {
+    return !this.HasPlugin && !!this.artifactVersion && !this.DisplayMarkdown && !this.DisplayHtml;
+  }
+
+  /** @deprecated Use {@link ShowFileFallback}. */
   get showFileFallback(): boolean {
-    return !this.hasPlugin && !!this.artifactVersion && !this.displayMarkdown && !this.displayHtml;
+    return this.ShowFileFallback;
   }
 
   /** The file name shown on the fallback card. */
+  get FallbackFileName(): string {
+    return this.artifactVersion?.FileName || this.Artifact?.Name || 'file';
+  }
+
+  /** @deprecated Use {@link FallbackFileName}. */
   get fallbackFileName(): string {
-    return this.artifactVersion?.FileName || this.artifact?.Name || 'file';
+    return this.FallbackFileName;
   }
 
   /** Human file size for the fallback card, when the version knows it. */
-  get fallbackSize(): string | null {
+  get FallbackSize(): string | null {
     const content = this.artifactVersion?.Content;
     if (this.artifactVersion?.ContentMode === 'Text' && content?.startsWith('data:')) {
       const b64 = content.slice(content.indexOf(',') + 1);
       return this.formatBytes(Math.floor((b64.length * 3) / 4));
     }
     return null;
+  }
+
+  /** @deprecated Use {@link FallbackSize}. */
+  get fallbackSize(): string | null {
+    return this.FallbackSize;
   }
 
   /** Text-like MIME types are shown inline on the fallback card; everything else is download-only. */
@@ -624,10 +1014,10 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * inline: the data URL. Silent on failure — the Download action still works.
    */
   private async prepareNoPluginFallback(isCurrentLoad: () => boolean): Promise<void> {
-    this.fallbackText = null;
-    this.fallbackTextTruncated = false;
+    this.FallbackText = null;
+    this.FallbackTextTruncated = false;
     const version = this.artifactVersion;
-    if (!this.showFileFallback || !version || !this.isTextLike(version.MimeType)) return;
+    if (!this.ShowFileFallback || !version || !this.isTextLike(version.MimeType)) return;
     try {
       let text: string | null = null;
       if (version.ContentMode === 'File') {
@@ -642,9 +1032,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       if (!isCurrentLoad() || text == null) return;
       if (text.length > ArtifactViewerPanelComponent.FALLBACK_TEXT_MAX_CHARS) {
         text = text.slice(0, ArtifactViewerPanelComponent.FALLBACK_TEXT_MAX_CHARS);
-        this.fallbackTextTruncated = true;
+        this.FallbackTextTruncated = true;
       }
-      this.fallbackText = text;
+      this.FallbackText = text;
       this.cdr.markForCheck();
     } catch (err) {
       LogError(`Artifact viewer: could not load text for the no-plugin fallback: ${err instanceof Error ? err.message : String(err)}`);
@@ -652,10 +1042,10 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   }
 
   /** Download the artifact's file: file-backed via MJ's URL (fetched to a blob so the browser saves it), inline via the data URL. */
-  public async downloadArtifactFile(): Promise<void> {
+  public async DownloadArtifactFile(): Promise<void> {
     const version = this.artifactVersion;
-    if (!version || this.fallbackBusy) return;
-    this.fallbackBusy = true;
+    if (!version || this.FallbackBusy) return;
+    this.FallbackBusy = true;
     try {
       let objectUrl: string | null = null;
       if (version.ContentMode === 'File') {
@@ -676,16 +1066,21 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       if (!objectUrl) return;
       const a = document.createElement('a');
       a.href = objectUrl;
-      a.download = this.fallbackFileName;
+      a.download = this.FallbackFileName;
       a.rel = 'noopener';
       document.body.appendChild(a);
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl as string), 60_000);
     } finally {
-      this.fallbackBusy = false;
+      this.FallbackBusy = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link DownloadArtifactFile}. */
+  public async downloadArtifactFile(): Promise<void> {
+    return this.DownloadArtifactFile();
   }
 
   private formatBytes(n: number): string {
@@ -694,38 +1089,63 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     return `${(n / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  get hasPlugin(): boolean {
+  get HasPlugin(): boolean {
     // Check if the artifact type has a DriverClass configured
     // If DriverClass is set, we have a plugin available
     return !!this.artifactTypeDriverClass;
   }
 
-  get hasJsonTab(): boolean {
+  /** @deprecated Use {@link HasPlugin}. */
+  get hasPlugin(): boolean {
+    return this.HasPlugin;
+  }
+
+  get HasJsonTab(): boolean {
     // Query plugin directly (no cache needed - plugin always exists when it should)
-    const pluginInstance = this.pluginViewer?.pluginInstance;
+    const pluginInstance = this.PluginViewer?.pluginInstance;
     return pluginInstance?.parentShouldShowRawContent || false;
   }
 
-  get artifactTypeName(): string {
-    return this.artifact?.Type || '';
+  /** @deprecated Use {@link HasJsonTab}. */
+  get hasJsonTab(): boolean {
+    return this.HasJsonTab;
   }
 
-  get contentType(): string | undefined {
+  get ArtifactTypeName(): string {
+    return this.Artifact?.Type || '';
+  }
+
+  /** @deprecated Use {@link ArtifactTypeName}. */
+  get artifactTypeName(): string {
+    return this.ArtifactTypeName;
+  }
+
+  get ContentType(): string | undefined {
     // Try to get content type from artifact type or attributes
-    const contentTypeAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'contenttype');
+    const contentTypeAttr = this.VersionAttributes.find(a => a.Name?.toLowerCase() === 'contenttype');
     return contentTypeAttr?.Value || undefined;
   }
 
-  get filteredAttributes(): MJArtifactVersionAttributeEntity[] {
+  /** @deprecated Use {@link ContentType}. */
+  get contentType(): string | undefined {
+    return this.ContentType;
+  }
+
+  get FilteredAttributes(): MJArtifactVersionAttributeEntity[] {
     // Filter out displayMarkdown and displayHtml as they're shown in the Display tab
-    return this.versionAttributes.filter(attr => {
+    return this.VersionAttributes.filter(attr => {
       const name = attr.Name?.toLowerCase();
       return name !== 'displaymarkdown' && name !== 'displayhtml';
     });
   }
 
-  setActiveTab(tab: 'display' | 'json' | 'details' | 'links'): void {
-    this.activeTab = tab;
+  /** @deprecated Use {@link FilteredAttributes}. */
+  get filteredAttributes(): MJArtifactVersionAttributeEntity[] {
+    return this.FilteredAttributes;
+  }
+
+  setActiveTab(tab: 'display' | 'json' | 'details' | 'links'): void {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    this.ActiveTab = tab;
   }
 
   /**
@@ -733,16 +1153,16 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Called when tabs change or when the currently active tab becomes unavailable.
    */
   private setActiveTabToFirstAvailable(): void {
-    const tabs = this.allTabs;
+    const tabs = this.AllTabs;
     if (tabs.length > 0) {
       // If current tab is still available, keep it; otherwise switch to first
-      const currentTabStillAvailable = tabs.some(t => t.toLowerCase() === this.activeTab.toLowerCase());
+      const currentTabStillAvailable = tabs.some(t => t.toLowerCase() === this.ActiveTab.toLowerCase());
       if (!currentTabStillAvailable) {
-        this.activeTab = tabs[0].toLowerCase();
+        this.ActiveTab = tabs[0].toLowerCase();
       }
     } else {
       // Fallback to details if no tabs available (shouldn't happen)
-      this.activeTab = 'details';
+      this.ActiveTab = 'details';
     }
   }
 
@@ -751,28 +1171,38 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * the full spec from the registry after initial render with a stripped spec).
    * Forces re-evaluation of allTabs so new tab labels render correctly.
    */
-  onTabsChanged(): void {
+  OnTabsChanged(): void {
     // If Display tab just became available (e.g., after plugin async load),
     // switch to it — it should be the default when present.
-    const tabs = this.allTabs;
-    if (tabs.length > 0 && tabs[0].toLowerCase() === 'display' && this.activeTab !== 'display') {
-      this.activeTab = 'display';
+    const tabs = this.AllTabs;
+    if (tabs.length > 0 && tabs[0].toLowerCase() === 'display' && this.ActiveTab !== 'display') {
+      this.ActiveTab = 'display';
     }
     this.cdr.detectChanges(); // zone.js 0.15: plugin emitted tabsChanged, force CD to re-evaluate allTabs
+  }
+
+  /** @deprecated Use {@link OnTabsChanged}. */
+  onTabsChanged(): void {
+    return this.OnTabsChanged();
   }
 
   /**
    * Called when the plugin viewer finishes loading.
    * Selects the first available tab now that plugin tabs are available.
    */
-  onPluginLoaded(): void {
+  OnPluginLoaded(): void {
     // Now that plugin is loaded, we have accurate tab information
     // Always select the first tab since this is the initial load
-    const tabs = this.allTabs;
+    const tabs = this.AllTabs;
     if (tabs.length > 0) {
-      this.activeTab = tabs[0].toLowerCase();
+      this.ActiveTab = tabs[0].toLowerCase();
     }
     this.cdr.detectChanges(); // zone.js 0.15: plugin loaded via async callback, force CD
+  }
+
+  /** @deprecated Use {@link OnPluginLoaded}. */
+  onPluginLoaded(): void {
+    return this.OnPluginLoaded();
   }
 
   private parseAttributeValue(value: string | null | undefined): string | null {
@@ -838,7 +1268,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           )`,
           Fields: ['ID', 'CollectionID', 'ArtifactVersionID', 'Sequence'],
           ResultType: 'simple'
-        }, this.currentUser);
+        }, this.CurrentUser);
         collectionRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
       }
       if (!isCurrentLoad()) {
@@ -846,35 +1276,35 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       }
 
       // Store as simple objects — these are read-only display data
-      this.artifactCollections = collectionRows as unknown as MJCollectionArtifactEntity[];
+      this.ArtifactCollections = collectionRows as unknown as MJCollectionArtifactEntity[];
 
       // Filter to get only collections containing the CURRENT version
       const currentVersionId = this.artifactVersion?.ID;
       if (currentVersionId) {
         const currentIdStr = String(currentVersionId).toLowerCase();
-        this.currentVersionCollections = collectionRows.filter(ca => {
+        this.CurrentVersionCollections = collectionRows.filter(ca => {
           const versionIdStr = String(ca['ArtifactVersionID'] || ca.ArtifactVersionID || '').toLowerCase();
           return versionIdStr && currentIdStr && versionIdStr === currentIdStr;
         }) as unknown as MJCollectionArtifactEntity[];
       } else {
-        this.currentVersionCollections = [];
+        this.CurrentVersionCollections = [];
       }
 
       // Load the primary collection details if exists
-      if (this.artifactCollections.length > 0) {
+      if (this.ArtifactCollections.length > 0) {
         const collectionId = (collectionRows[0] as Record<string, unknown>).CollectionID as string ||
-                             (this.artifactCollections[0] as unknown as Record<string, unknown>).CollectionID as string;
+                             (this.ArtifactCollections[0] as unknown as Record<string, unknown>).CollectionID as string;
         if (collectionId) {
           const md = this.ProviderToUse;
-          const primaryCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+          const primaryCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
           await primaryCollection.Load(collectionId);
           if (!isCurrentLoad()) {
             return;
           }
-          this.primaryCollection = primaryCollection;
+          this.PrimaryCollection = primaryCollection;
         }
       } else {
-        this.primaryCollection = null;
+        this.PrimaryCollection = null;
       }
     } catch (err) {
       if (!isCurrentLoad()) {
@@ -896,31 +1326,46 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     return this.processCollectionAssociations();
   }
 
+  get IsInCollection(): boolean {
+    return this.CurrentVersionCollections.length > 0;
+  }
+
+  /** @deprecated Use {@link IsInCollection}. */
   get isInCollection(): boolean {
-    return this.currentVersionCollections.length > 0;
+    return this.IsInCollection;
   }
 
   /**
    * Get collection IDs that already contain the current version
    * Used to exclude them from the save picker
    */
-  get currentVersionCollectionIds(): string[] {
-    return this.currentVersionCollections.map(ca => ca.CollectionID);
+  get CurrentVersionCollectionIds(): string[] {
+    return this.CurrentVersionCollections.map(ca => ca.CollectionID);
   }
 
-  onCopyToClipboard(): void {
+  /** @deprecated Use {@link CurrentVersionCollectionIds}. */
+  get currentVersionCollectionIds(): string[] {
+    return this.CurrentVersionCollectionIds;
+  }
+
+  OnCopyToClipboard(): void {
     // Get content from the currently active tab instead of always copying jsonContent
-    const tabData = this.GetTabContent(this.activeTab);
+    const tabData = this.GetTabContent(this.ActiveTab);
     if (tabData?.content) {
       navigator.clipboard.writeText(tabData.content);
-    } else if (this.jsonContent) {
+    } else if (this.JsonContent) {
       // Fallback to jsonContent if tab content not found
-      navigator.clipboard.writeText(this.jsonContent);
+      navigator.clipboard.writeText(this.JsonContent);
     }
   }
 
-  onCopyDisplayContent(): void {
-    const content = this.displayHtml || this.displayMarkdown;
+  /** @deprecated Use {@link OnCopyToClipboard}. */
+  onCopyToClipboard(): void {
+    return this.OnCopyToClipboard();
+  }
+
+  OnCopyDisplayContent(): void {
+    const content = this.DisplayHtml || this.DisplayMarkdown;
     if (content) {
       navigator.clipboard.writeText(content).catch(err => {
         console.error('Failed to copy to clipboard:', err);
@@ -928,10 +1373,15 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
   }
 
-  onPrintDisplayContent(): void {
+  /** @deprecated Use {@link OnCopyDisplayContent}. */
+  onCopyDisplayContent(): void {
+    return this.OnCopyDisplayContent();
+  }
+
+  OnPrintDisplayContent(): void {
     // Try to delegate to the plugin viewer's print method
-    if (this.pluginViewer?.pluginInstance) {
-      const plugin = this.pluginViewer.pluginInstance as any;
+    if (this.PluginViewer?.pluginInstance) {
+      const plugin = this.PluginViewer.pluginInstance as any;
       if (typeof plugin.printHtml === 'function') {
         plugin.printHtml();
         return;
@@ -939,13 +1389,13 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
 
     // Fallback: create a temporary print window with displayHtml or displayMarkdown
-    const content = this.displayHtml || this.displayMarkdown;
+    const content = this.DisplayHtml || this.DisplayMarkdown;
     if (content) {
       const printWindow = window.open('', '_blank');
       if (printWindow) {
-        if (this.displayHtml) {
+        if (this.DisplayHtml) {
           printWindow.document.write(content);
-        } else if (this.displayMarkdown) {
+        } else if (this.DisplayMarkdown) {
           // Wrap markdown in basic HTML for printing
           printWindow.document.write(`
             <!DOCTYPE html>
@@ -973,21 +1423,31 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
   }
 
-  toggleVersionDropdown(): void {
-    if (this.allVersions.length > 1) {
-      this.showVersionDropdown = !this.showVersionDropdown;
+  /** @deprecated Use {@link OnPrintDisplayContent}. */
+  onPrintDisplayContent(): void {
+    return this.OnPrintDisplayContent();
+  }
+
+  ToggleVersionDropdown(): void {
+    if (this.AllVersions.length > 1) {
+      this.ShowVersionDropdown = !this.ShowVersionDropdown;
     }
   }
 
-  async selectVersion(version: MJArtifactVersionEntity): Promise<void> {
-    this.selectedVersionNumber = (version.VersionNumber as number) || 1;
-    this.showVersionDropdown = false;
+  /** @deprecated Use {@link ToggleVersionDropdown}. */
+  toggleVersionDropdown(): void {
+    return this.ToggleVersionDropdown();
+  }
+
+  async SelectVersion(version: MJArtifactVersionEntity): Promise<void> {
+    this.SelectedVersionNumber = (version.VersionNumber as number) || 1;
+    this.ShowVersionDropdown = false;
 
     // Load full content for the selected version (allVersions only has metadata)
     const fullVersion = await this.loadVersionContent(version.ID);
     if (fullVersion) {
       this.artifactVersion = fullVersion;
-      this.jsonContent = this.FormatJSON(fullVersion.Content || '{}');
+      this.JsonContent = this.formatJSON(fullVersion.Content || '{}');
     }
 
     // Load attributes and collection data in parallel
@@ -1000,22 +1460,37 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.cdr.detectChanges();
   }
 
-  async onSaveToLibrary(): Promise<void> {
+  /** @deprecated Use {@link SelectVersion}. */
+  async selectVersion(version: MJArtifactVersionEntity): Promise<void> {
+    return this.SelectVersion(version);
+  }
+
+  async OnSaveToLibrary(): Promise<void> {
     // Always show the collection picker modal
     // Artifacts can be saved to multiple collections
-    this.saveToCollectionRequested.emit({
+    this.SaveToCollectionRequested.emit({
       artifactId: this.artifactId,
-      excludedCollectionIds: this.excludedCollectionIds
+      excludedCollectionIds: this.ExcludedCollectionIds
     });
   }
 
-  get excludedCollectionIds(): string[] {
+  /** @deprecated Use {@link OnSaveToLibrary}. */
+  async onSaveToLibrary(): Promise<void> {
+    return this.OnSaveToLibrary();
+  }
+
+  get ExcludedCollectionIds(): string[] {
     // Return IDs of collections that already contain the CURRENT VERSION
     // This allows saving different versions to the same collection
-    const excluded = this.currentVersionCollections
+    const excluded = this.CurrentVersionCollections
       .filter(ca => ca.CollectionID)
       .map(ca => String(ca.CollectionID));
     return excluded;
+  }
+
+  /** @deprecated Use {@link ExcludedCollectionIds}. */
+  get excludedCollectionIds(): string[] {
+    return this.ExcludedCollectionIds;
   }
 
   /**
@@ -1060,14 +1535,14 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID='${currentVersionId}'`,
           ResultType: 'entity_object'
-        }, this.currentUser);
+        }, this.CurrentUser);
 
         if (existingResult.Success && existingResult.Results && existingResult.Results.length > 0) {
           continue;
         }
 
         // Create junction record with version ID
-        const collectionArtifact = await md.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+        const collectionArtifact = await md.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.CurrentUser);
         collectionArtifact.CollectionID = collectionId;
         collectionArtifact.ArtifactVersionID = currentVersionId;
         collectionArtifact.Sequence = 0;
@@ -1140,7 +1615,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           )`,
           Fields: ['ID', 'CollectionID', 'ArtifactVersionID'],
           ResultType: 'simple'
-        }, this.currentUser);
+        }, this.CurrentUser);
         collectionRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
       }
       if (!isCurrentLoad()) {
@@ -1159,13 +1634,13 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           ExtraFilter: collectionsFilter,
           Fields: ['ID', 'Name', 'UserID', 'Description'],
           ResultType: 'simple'
-        }, this.currentUser);
+        }, this.CurrentUser);
         if (!isCurrentLoad()) {
           return;
         }
 
         if (collectionsEntityResult.Success && collectionsEntityResult.Results) {
-          this.allCollections = collectionsEntityResult.Results as unknown as MJCollectionEntity[];
+          this.AllCollections = collectionsEntityResult.Results as unknown as MJCollectionEntity[];
         }
       }
 
@@ -1174,7 +1649,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       if (convDetailResult?.Success && convDetailResult.Results) {
         convDetailRows = convDetailResult.Results;
       } else {
-        const versionIds = this.allVersions.map(v => v.ID);
+        const versionIds = this.AllVersions.map(v => v.ID);
         if (versionIds.length > 0) {
           const versionFilter = versionIds.map(id => `ArtifactVersionID='${id}'`).join(' OR ');
           const result = await rv.RunView<{ ID: string; ConversationDetailID: string; ArtifactVersionID: string }>({
@@ -1183,7 +1658,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
             Fields: ['ID', 'ConversationDetailID', 'ArtifactVersionID'],
             MaxRows: 1,
             ResultType: 'simple'
-          }, this.currentUser);
+          }, this.CurrentUser);
           convDetailRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
         }
       }
@@ -1199,17 +1674,17 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         if (!isCurrentLoad()) {
           return;
         }
-        this.originConversationVersionId = artifactVersionId;
+        this.OriginConversationVersionId = artifactVersionId;
 
         // Load conversation detail to get conversation ID
-        const conversationDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+        const conversationDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.CurrentUser);
         const detailLoaded = await conversationDetail.Load(conversationDetailId);
         if (!isCurrentLoad()) {
           return;
         }
 
         if (detailLoaded && conversationDetail.ConversationID) {
-          const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', this.currentUser);
+          const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', this.CurrentUser);
           const loaded = await conversation.Load(conversationDetail.ConversationID);
           if (!isCurrentLoad()) {
             return;
@@ -1217,15 +1692,15 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
           if (loaded) {
             // Check if user has access (is owner or participant)
-            const userIsOwner = UUIDsEqual(conversation.UserID, this.currentUser.ID);
+            const userIsOwner = UUIDsEqual(conversation.UserID, this.CurrentUser.ID);
 
             const participantResult = await rv.RunView({
               EntityName: 'MJ: Conversation Details',
-              ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.currentUser.ID}'`,
+              ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.CurrentUser.ID}'`,
               MaxRows: 1,
               Fields: ['ID'],
               ResultType: 'simple'
-            }, this.currentUser);
+            }, this.CurrentUser);
             if (!isCurrentLoad()) {
               return;
             }
@@ -1234,8 +1709,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
                                        participantResult.Results &&
                                        participantResult.Results.length > 0;
 
-            this.originConversation = conversation;
-            this.hasAccessToOriginConversation = userIsOwner || userIsParticipant;
+            this.OriginConversation = conversation;
+            this.HasAccessToOriginConversation = userIsOwner || userIsParticipant;
           }
         }
       }
@@ -1258,7 +1733,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     return this.processLinksData();
   }
 
-  get linksToShow(): Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> {
+  get LinksToShow(): Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> {
     const links: Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> = [];
 
     // Get current version ID being viewed
@@ -1266,9 +1741,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
     // RULE: In conversation context, show ONLY collection links
     // RULE: In collection context, show ONLY conversation links
-    if (this.viewContext === 'conversation') {
+    if (this.ViewContext === 'conversation') {
       // Show all collections containing this artifact (any version)
-      for (const collection of this.allCollections) {
+      for (const collection of this.AllCollections) {
         links.push({
           type: 'collection',
           id: collection.ID,
@@ -1276,15 +1751,15 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           hasAccess: true
         });
       }
-    } else if (this.viewContext === 'collection') {
+    } else if (this.ViewContext === 'collection') {
       // Show origin conversation if it exists
       // Show for ALL versions of the artifact, not just the original version that was added
-      if (this.originConversation) {
+      if (this.OriginConversation) {
         links.push({
           type: 'conversation',
-          id: this.originConversation.ID,
-          name: this.originConversation.Name || 'Untitled Conversation',
-          hasAccess: this.hasAccessToOriginConversation
+          id: this.OriginConversation.ID,
+          name: this.OriginConversation.Name || 'Untitled Conversation',
+          hasAccess: this.HasAccessToOriginConversation
         });
       }
     }
@@ -1293,50 +1768,85 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     return links;
   }
 
+  /** @deprecated Use {@link LinksToShow}. */
+  get linksToShow(): Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> {
+    return this.LinksToShow;
+  }
+
   /**
    * Navigate to a linked conversation or collection
    */
-  onNavigateToLink(link: {type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}): void {
+  OnNavigateToLink(link: {type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}): void {
     if (!link.hasAccess) {
       return;
     }
 
     // Include artifact ID, version number, and version ID so destination can show the artifact with correct URL
-    this.navigateToLink.emit({
+    this.NavigateToLink.emit({
       type: link.type,
       id: link.id,
       artifactId: this.artifactId,
-      versionNumber: this.selectedVersionNumber,
+      versionNumber: this.SelectedVersionNumber,
       versionId: this.artifactVersion?.ID
     });
   }
 
+  /** @deprecated Use {@link OnNavigateToLink}. */
+  onNavigateToLink(link: {type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}): void {
+    return this.OnNavigateToLink(link);
+  }
+
+  OnClose(): void {
+    this.Closed.emit();
+  }
+
+  /** @deprecated Use {@link OnClose}. */
   onClose(): void {
-    this.closed.emit();
+    return this.OnClose();
   }
 
+  OnShare(): void {
+    this.ShareRequested.emit(this.artifactId);
+  }
+
+  /** @deprecated Use {@link OnShare}. */
   onShare(): void {
-    this.shareRequested.emit(this.artifactId);
+    return this.OnShare();
   }
 
+  OnMaximizeToggle(): void {
+    this.MaximizeToggled.emit();
+  }
+
+  /** @deprecated Use {@link OnMaximizeToggle}. */
   onMaximizeToggle(): void {
-    this.maximizeToggled.emit();
+    return this.OnMaximizeToggle();
   }
 
   /**
    * Handle entity record open request from artifact viewer plugin (React component)
    * Propagates the event up to parent components
    */
+  OnOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    this.OpenEntityRecord.emit(event);
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
-    this.openEntityRecord.emit(event);
+    return this.OnOpenEntityRecord(event);
   }
 
   /**
    * Handle navigation request from artifact viewer plugin.
    * Propagates the event up to parent components for app-level navigation.
    */
-  onNavigationRequest(event: NavigationRequest): void {
+  OnNavigationRequest(event: NavigationRequest): void {
     this.navigationRequest.emit(event);
+  }
+
+  /** @deprecated Use {@link OnNavigationRequest}. */
+  onNavigationRequest(event: NavigationRequest): void {
+    return this.OnNavigationRequest(event);
   }
 
   /**
@@ -1369,7 +1879,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   private async getArtifactTypeById(id: string): Promise<MJArtifactTypeEntity | null> {
     try {
       const md = this.ProviderToUse;
-      const artifactType = await md.GetEntityObject<MJArtifactTypeEntity>('MJ: Artifact Types', this.currentUser);
+      const artifactType = await md.GetEntityObject<MJArtifactTypeEntity>('MJ: Artifact Types', this.CurrentUser);
       const loaded = await artifactType.Load(id);
 
       if (loaded) {
@@ -1386,7 +1896,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   /**
    * Format JSON content using ParseJSONRecursive for deep parsing and formatting
    */
-  private FormatJSON(content: string): string {
+  private formatJSON(content: string): string {
     try {
       // First parse the JSON string to an object
       const obj = JSON.parse(content);
@@ -1431,7 +1941,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
 
     // Check plugin tabs
-    const plugin = this.pluginViewer?.pluginInstance;
+    const plugin = this.PluginViewer?.pluginInstance;
     if (plugin?.GetAdditionalTabs) {
       const pluginTab = plugin.GetAdditionalTabs().find((t: ArtifactViewerTab) => t.label === tabName);
       if (pluginTab?.icon) {
@@ -1446,7 +1956,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Set active tab
    */
   public SetActiveTab(tabName: string): void {
-    this.activeTab = tabName.toLowerCase();
+    this.ActiveTab = tabName.toLowerCase();
   }
 
   /**
@@ -1454,7 +1964,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   private async trackArtifactUsage(usageType: 'Viewed' | 'Opened' | 'Shared' | 'Saved' | 'Exported'): Promise<void> {
     try {
-      if (!this.artifactVersion?.ID || !this.currentUser?.ID) {
+      if (!this.artifactVersion?.ID || !this.CurrentUser?.ID) {
         return;
       }
 
@@ -1462,11 +1972,11 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       const usage = await md.GetEntityObject<MJArtifactUseEntity>('MJ: Artifact Uses');
 
       usage.ArtifactVersionID = this.artifactVersion.ID;
-      usage.UserID = this.currentUser.ID;
+      usage.UserID = this.CurrentUser.ID;
       usage.UsageType = usageType;
       usage.UsageContext = JSON.stringify({
-        viewContext: this.viewContext,
-        contextCollectionId: this.contextCollectionId,
+        viewContext: this.ViewContext,
+        contextCollectionId: this.ContextCollectionId,
         timestamp: new Date().toISOString()
       });
 
@@ -1485,12 +1995,21 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
    */
   /** Cached icon class — set once after artifact loads to avoid mid-cycle flicker */
-  public artifactIcon: string = 'fa-file';
+  public ArtifactIcon: string = 'fa-file';
+
+  /** @deprecated Use {@link ArtifactIcon}. */
+  public get artifactIcon(): string {
+    return this.ArtifactIcon;
+  }
+  /** @deprecated Use {@link ArtifactIcon}. */
+  public set artifactIcon(value: string) {
+    this.ArtifactIcon = value;
+  }
 
   /** Update the cached icon from the loaded artifact */
   private updateArtifactIcon(): void {
-    this.artifactIcon = this.artifact
-      ? this.artifactIconService.getArtifactIcon(this.artifact)
+    this.ArtifactIcon = this.Artifact
+      ? this.artifactIconService.getArtifactIcon(this.Artifact)
       : 'fa-file';
   }
 
@@ -1500,9 +2019,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   public OnAnalyze(): void {
     const snapshot = this.GetCurrentStateSnapshot();
-    if (snapshot && this.artifact) {
-      this.analyzeRequested.emit({
-        artifactId: this.artifact.ID,
+    if (snapshot && this.Artifact) {
+      this.AnalyzeRequested.emit({
+        artifactId: this.Artifact.ID,
         snapshot
       });
     } else {
@@ -1519,6 +2038,6 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Returns null if no plugin is loaded or the plugin has no snapshot.
    */
   public GetCurrentStateSnapshot(): DataSnapshot | null {
-    return this.pluginViewer?.pluginInstance?.GetCurrentStateSnapshot() ?? null;
+    return this.PluginViewer?.pluginInstance?.GetCurrentStateSnapshot() ?? null;
   }
 }

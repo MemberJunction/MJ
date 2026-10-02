@@ -231,8 +231,26 @@ import { NotificationService } from '../../services/notification.service';
   `]
 })
 export class NotificationBadgeComponent implements OnInit, OnDestroy {
-  @Input() conversationId?: string;
-  @Input() badgeConfig?: BadgeConfig;
+  @Input() ConversationId?: string;
+
+  /** @deprecated Use {@link ConversationId}. */
+  @Input() set conversationId(value: string | undefined) {
+    this.ConversationId = value;
+  }
+  /** @deprecated Use {@link ConversationId}. */
+  get conversationId(): string | undefined {
+    return this.ConversationId;
+  }
+  @Input() BadgeConfig?: BadgeConfig;
+
+  /** @deprecated Use {@link BadgeConfig}. */
+  @Input() set badgeConfig(value: BadgeConfig | undefined) {
+    this.BadgeConfig = value;
+  }
+  /** @deprecated Use {@link BadgeConfig}. */
+  get badgeConfig(): BadgeConfig | undefined {
+    return this.BadgeConfig;
+  }
 
   private destroy$ = new Subject<void>();
   private _loadedBadgeConfig: BadgeConfig | null = null;
@@ -241,9 +259,9 @@ export class NotificationBadgeComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // If badgeConfig not provided but conversationId is, load from service
-    if (!this.badgeConfig && this.conversationId) {
+    if (!this.BadgeConfig && this.ConversationId) {
       this.notificationService
-        .getBadgeConfig$(this.conversationId)
+        .getBadgeConfig$(this.ConversationId)
         .pipe(takeUntil(this.destroy$))
         .subscribe(config => {
           this._loadedBadgeConfig = config;
@@ -256,15 +274,25 @@ export class NotificationBadgeComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  get DisplayConfig(): BadgeConfig | null {
+    return this.BadgeConfig || this._loadedBadgeConfig;
+  }
+
+  /** @deprecated Use {@link DisplayConfig}. */
   get displayConfig(): BadgeConfig | null {
-    return this.badgeConfig || this._loadedBadgeConfig;
+    return this.DisplayConfig;
   }
 
   /**
    * Formats count for display
    * Shows 99+ for counts over 99
    */
-  formatCount(count: number): string {
+  FormatCount(count: number): string {
     return count > 99 ? '99+' : count.toString();
+  }
+
+  /** @deprecated Use {@link FormatCount}. */
+  formatCount(count: number): string {
+    return this.FormatCount(count);
   }
 }

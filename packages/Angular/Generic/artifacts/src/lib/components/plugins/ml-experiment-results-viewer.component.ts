@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter, inject } fr
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
-import { createMarkdownSnapshot } from '../../snapshot-helpers';
+import { CreateMarkdownSnapshot } from '../../snapshot-helpers';
 
 /**
  * A single feature-importance entry for the winning model.
@@ -230,7 +230,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
     // The richest portable representation is the agent-authored markdown report.
-    return createMarkdownSnapshot(this.WinningMarkdown ?? this.getRawContent(), this.getDisplayTitle());
+    return CreateMarkdownSnapshot(this.WinningMarkdown ?? this.getRawContent(), this.getDisplayTitle());
   }
 
   /**
@@ -274,7 +274,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   /** Headline best score (the winning row's primary score), formatted. */
   public get HeadlineScore(): string | null {
     const score = this.WinningRow?.score;
-    return score != null ? this.formatScore(score) : null;
+    return score != null ? this.FormatScore(score) : null;
   }
 
   public get WinningAlgorithm(): string {
@@ -302,7 +302,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     // Synthesize a single metric from the headline score when nothing explicit was provided.
     const row = this.WinningRow;
     if (row?.score != null) {
-      return [{ label: this.firstMetricName() ?? 'Score', value: this.formatScore(row.score) }];
+      return [{ label: this.firstMetricName() ?? 'Score', value: this.FormatScore(row.score) }];
     }
     return [];
   }
@@ -428,7 +428,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   }
 
   /** Format a numeric score for display (3 decimals, trimmed). */
-  public formatScore(value: number | null): string {
+  public FormatScore(value: number | null): string {
     if (value == null) {
       return '—';
     }
@@ -437,12 +437,22 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     return value.toFixed(decimals);
   }
 
+  /** @deprecated Use {@link FormatScore}. */
+  public formatScore(value: number | null): string {
+    return this.FormatScore(value);
+  }
+
   /** Format an importance weight for the small bar label. */
-  public formatImportance(value: number): string {
+  public FormatImportance(value: number): string {
     if (!Number.isFinite(value)) {
       return '';
     }
     // Show .31 style for sub-1 weights, otherwise 2 decimals.
     return Math.abs(value) < 1 ? value.toFixed(2).replace(/^0/, '') : value.toFixed(2);
+  }
+
+  /** @deprecated Use {@link FormatImportance}. */
+  public formatImportance(value: number): string {
+    return this.FormatImportance(value);
   }
 }

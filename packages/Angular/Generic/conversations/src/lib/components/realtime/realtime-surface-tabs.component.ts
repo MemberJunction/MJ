@@ -10,11 +10,11 @@ import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeActivityRailComponent } from './realtime-activity-rail.component';
 import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
 import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
-import { ChannelOnboardingDetails } from './channels/base-realtime-channel-client';
+import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
   RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration
 } from './realtime-surface-tabs.model';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
 /**
  * User-settings key (NOT localStorage — see `UserInfoEngine`) under which the per-user "which
@@ -61,7 +61,7 @@ const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.
 })
 export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   /** How long a just-revealed channel tab keeps its flash highlight. */
-  private static readonly FlashDurationMs = 1400;
+  private static readonly flashDurationMs = 1400;
 
   /** Shared live-session state, owned by the overlay shell (feeds the Activity rail). */
   @Input({ required: true }) State!: RealtimeSessionState;
@@ -300,7 +300,7 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     const tab = this.ActiveTab;
     const plugin = tab.Kind === 'channel' ? tab.Data?.Plugin ?? null : null;
     const details = plugin?.GetOnboardingDetails() ?? null;
-    if (!plugin || !details || this.HasSeenOnboarding(plugin.ChannelName)) {
+    if (!plugin || !details || this.hasSeenOnboarding(plugin.ChannelName)) {
       this.onboardingChannelName = null;
       this.OnboardingContent = null;
       return;
@@ -324,7 +324,7 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   }
 
   /** Reads the per-user seen-map and reports whether this channel's intro has been dismissed. */
-  private HasSeenOnboarding(channelName: string): boolean {
+  private hasSeenOnboarding(channelName: string): boolean {
     return this.readOnboardingSeen()[channelName] === true;
   }
 
@@ -377,6 +377,6 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     this.flashTimer = setTimeout(() => {
       this.flashTimer = null;
       this.Model.ClearFlash();
-    }, RealtimeSurfaceTabsComponent.FlashDurationMs);
+    }, RealtimeSurfaceTabsComponent.flashDurationMs);
   }
 }

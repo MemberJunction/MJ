@@ -28,12 +28,30 @@ export class ListsSharedWithMeComponent extends BaseAngularComponent implements 
   @Output() OpenList = new EventEmitter<{ ListID: string; ListName: string }>();
 
   /** Permission-level filter (empty = "All Permissions"). */
-  public filterLevel: SharePermissionLevel | '' = '';
+  public FilterLevel: SharePermissionLevel | '' = '';
+
+  /** @deprecated Use {@link FilterLevel}. */
+  public get filterLevel(): SharePermissionLevel | '' {
+    return this.FilterLevel;
+  }
+  /** @deprecated Use {@link FilterLevel}. */
+  public set filterLevel(value: SharePermissionLevel | '') {
+    this.FilterLevel = value;
+  }
 
   /** Free-text filter on list name. */
   public filterText = '';
 
-  public loading = false;
+  public Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
   public errorMessage: string | null = null;
   private allShares: SharedListSummary[] = [];
 
@@ -41,13 +59,18 @@ export class ListsSharedWithMeComponent extends BaseAngularComponent implements 
     await this.loadShares();
   }
 
-  public get visibleShares(): SharedListSummary[] {
+  public get VisibleShares(): SharedListSummary[] {
     const term = this.filterText.trim().toLowerCase();
     return this.allShares.filter((s) => {
-      if (this.filterLevel && s.PermissionLevel !== this.filterLevel) return false;
+      if (this.FilterLevel && s.PermissionLevel !== this.FilterLevel) return false;
       if (term && !s.ListName.toLowerCase().includes(term)) return false;
       return true;
     });
+  }
+
+  /** @deprecated Use {@link VisibleShares}. */
+  public get visibleShares(): SharedListSummary[] {
+    return this.VisibleShares;
   }
 
   public OnFilterChange(): void {
@@ -68,7 +91,7 @@ export class ListsSharedWithMeComponent extends BaseAngularComponent implements 
    * ("3d ago", "2w ago"). Matches the mockup; falls back to absolute on
    * older entries.
    */
-  public formatRelative(date: Date): string {
+  public FormatRelative(date: Date): string {
     const diffMs = Date.now() - date.getTime();
     const seconds = Math.floor(diffMs / 1000);
     if (seconds < 60) return 'just now';
@@ -85,8 +108,13 @@ export class ListsSharedWithMeComponent extends BaseAngularComponent implements 
     return date.toLocaleDateString();
   }
 
+  /** @deprecated Use {@link FormatRelative}. */
+  public formatRelative(date: Date): string {
+    return this.FormatRelative(date);
+  }
+
   /** Badge variant class for the permission-level chip. */
-  public badgeClass(level: SharePermissionLevel): string {
+  public BadgeClass(level: SharePermissionLevel): string {
     switch (level) {
       case 'Owner':
         return 'badge--owner';
@@ -97,7 +125,12 @@ export class ListsSharedWithMeComponent extends BaseAngularComponent implements 
     }
   }
 
-  public badgeLabel(level: SharePermissionLevel): string {
+  /** @deprecated Use {@link BadgeClass}. */
+  public badgeClass(level: SharePermissionLevel): string {
+    return this.BadgeClass(level);
+  }
+
+  public BadgeLabel(level: SharePermissionLevel): string {
     switch (level) {
       case 'Owner':
         return 'Owner';
@@ -108,8 +141,13 @@ export class ListsSharedWithMeComponent extends BaseAngularComponent implements 
     }
   }
 
+  /** @deprecated Use {@link BadgeLabel}. */
+  public badgeLabel(level: SharePermissionLevel): string {
+    return this.BadgeLabel(level);
+  }
+
   private async loadShares(): Promise<void> {
-    this.loading = true;
+    this.Loading = true;
     this.errorMessage = null;
     this.cdr.markForCheck();
     try {
@@ -120,7 +158,7 @@ export class ListsSharedWithMeComponent extends BaseAngularComponent implements 
       this.errorMessage = e instanceof Error ? e.message : String(e);
       this.allShares = [];
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.markForCheck();
     }
   }

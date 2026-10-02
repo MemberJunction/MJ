@@ -13,7 +13,7 @@
  * @module lib/db-preflight
  */
 
-import { openConnection, type DbConnectionParams } from '../baseline/connection';
+import { OpenConnection, type DbConnectionParams } from '../baseline/connection';
 import type { Dialect } from '../baseline/types';
 import type { MJConfig } from '../config';
 
@@ -111,21 +111,21 @@ function classifyFailure(message: string, config: DbConnectionConfig): DbPreflig
  * trivial query, and report success or a classified failure. Always closes the
  * connection it opened.
  */
-export async function verifyDatabaseConnection(config: DbConnectionConfig): Promise<DbPreflightResult> {
+export async function VerifyDatabaseConnection(config: DbConnectionConfig): Promise<DbPreflightResult> {
   const params: DbConnectionParams = {
-    dialect: dialectFor(config.dbPlatform),
-    host: config.dbHost,
+    Dialect: dialectFor(config.dbPlatform),
+    Host: config.dbHost,
     port: config.dbPort,
-    user: config.codeGenLogin,
-    password: config.codeGenPassword,
-    database: config.dbDatabase,
+    User: config.codeGenLogin,
+    Password: config.codeGenPassword,
+    Database: config.dbDatabase,
     encrypt: config.dbEncrypt,
     trustServerCertificate: config.dbTrustServerCertificate,
   };
 
   let conn: { close(): Promise<void> } | undefined;
   try {
-    const runner = await openConnection(params);
+    const runner = await OpenConnection(params);
     conn = runner;
     await runner.query('SELECT 1');
     return { Ok: true };
@@ -134,6 +134,11 @@ export async function verifyDatabaseConnection(config: DbConnectionConfig): Prom
   } finally {
     await closeQuietly(conn);
   }
+}
+
+/** @deprecated Use {@link VerifyDatabaseConnection}. */
+export async function verifyDatabaseConnection(config: DbConnectionConfig): Promise<DbPreflightResult> {
+  return VerifyDatabaseConnection(config);
 }
 
 /** Best-effort close of a preflight connection; a teardown error must not mask the verdict. */

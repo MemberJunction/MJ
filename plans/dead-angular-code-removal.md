@@ -23,20 +23,20 @@ These packages have **no imports, no selector usage, and no package.json referen
 | 1 | `Generic/data-context` | `@memberjunction/ng-data-context` | 2 | 60K | 0 imports, 0 selector matches, 0 package.json refs |
 | 2 | `Generic/entity-communication` | `@memberjunction/ng-entity-communications` | 2 | 40K | 0 imports, 0 selector matches, 0 package.json refs |
 | 3 | `Generic/find-record` | `@memberjunction/ng-find-record` | 2 | 40K | 0 imports, 0 selector matches, 0 package.json refs |
-| 4 | `Generic/record-merge` | `@memberjunction/ng-record-merge` | 1 | 44K | 0 imports, 0 selector matches, 0 package.json refs |
-| 5 | `Generic/chat` | `@memberjunction/ng-chat` | 1 | 44K | Only referenced in its own README; superseded by `ng-conversations` |
-| 6 | `Generic/gantt` | `@memberjunction/ng-gantt` | 1 | 24K | 0 imports, 0 selector matches, 0 package.json refs, no tests |
-| 7 | `Generic/kanban` | `@memberjunction/ng-kanban` | 1 | 24K | 0 imports, 0 selector matches, 0 package.json refs, no tests |
-| 8 | `Generic/tab-strip` | `@memberjunction/ng-tab-strip` | 3 | 68K | Only referenced in completed Kendo-removal plan docs; never actually imported by any source file |
+| 4 | `Generic/chat` | `@memberjunction/ng-chat` | 1 | 44K | Only referenced in its own README; superseded by `ng-conversations` |
+| 5 | `Generic/gantt` | `@memberjunction/ng-gantt` | 1 | 24K | 0 imports, 0 selector matches, 0 package.json refs, no tests |
+| 6 | `Generic/kanban` | `@memberjunction/ng-kanban` | 1 | 24K | 0 imports, 0 selector matches, 0 package.json refs, no tests |
+| 7 | `Generic/tab-strip` | `@memberjunction/ng-tab-strip` | 3 | 68K | Only referenced in completed Kendo-removal plan docs; never actually imported by any source file |
 
-**Total**: 13 components, ~344K source code
+**Total**: 12 components, ~300K source code
 
 ### Notes on Specific Packages
 
 - **`ng-chat`**: This was the original chat component, now fully replaced by `@memberjunction/ng-conversations`. The conversations package is the active implementation.
 - **`ng-tab-strip`**: Was created during the Kendo removal project as a replacement for `kendo-tabstrip`, but was never adopted. Code uses native tabs or other patterns instead.
 - **`ng-gantt` / `ng-kanban`**: Appear to be speculative implementations — they have no tests, no external usage, and were only recently touched for CSS token migration (April 3). They seem to have been built proactively but never integrated.
-- **`ng-data-context` / `ng-find-record` / `ng-record-merge` / `ng-entity-communication`**: Older utility components that were likely used at some point but have been orphaned as the UI evolved.
+- **`ng-data-context` / `ng-find-record` / `ng-entity-communication`**: Older utility components that were likely used at some point but have been orphaned as the UI evolved.
+- **`ng-record-merge`**: no longer dead. It was orphaned because nothing hosted it — the entity grid's Merge button emitted an event with no subscriber. `grid-view-renderer` now hosts the panel and calls `MergeRecords` (MJ#4639), so the package is live and must not be deleted.
 
 ---
 
@@ -82,7 +82,6 @@ These are actively imported but marked `@deprecated` with documented replacement
 packages/Angular/Generic/data-context/
 packages/Angular/Generic/entity-communication/
 packages/Angular/Generic/find-record/
-packages/Angular/Generic/record-merge/
 packages/Angular/Generic/chat/
 packages/Angular/Generic/gantt/
 packages/Angular/Generic/kanban/

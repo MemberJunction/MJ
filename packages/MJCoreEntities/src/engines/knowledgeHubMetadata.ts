@@ -6,12 +6,14 @@ import {
     MJContentSourceEntity,
     MJContentTypeEntity,
     MJContentSourceTypeEntity,
-    MJContentFileTypeEntity
+    MJContentFileTypeEntity,
+    MJFeaturePipelineTypeEntity
 } from "../generated/entity_subclasses";
 
 /**
  * Caches Knowledge Hub metadata: entity documents, vector indexes, vector databases,
- * content sources, content types, content source types, and content file types.
+ * content sources, content types, content source types, content file types, and
+ * feature pipeline types.
  * Provides helper methods for lookups and filtering. Uses BaseEngine for automatic
  * caching and entity-event auto-refresh.
  */
@@ -39,6 +41,7 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     private _contentTypes: MJContentTypeEntity[] = [];
     private _contentSourceTypes: MJContentSourceTypeEntity[] = [];
     private _contentFileTypes: MJContentFileTypeEntity[] = [];
+    private _featurePipelineTypes: MJFeaturePipelineTypeEntity[] = [];
 
     /**
      * Lazily-built `NormalizeUUID(ID) → row` indexes, one per cached array (keyed by array name),
@@ -84,6 +87,12 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
                 EntityName: 'MJ: Content File Types',
                 PropertyName: '_contentFileTypes',
                 CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Feature Pipeline Types',
+                PropertyName: '_featurePipelineTypes',
+                CacheLocal: true
             }
         ];
         await this.Load(c, provider, forceRefresh, contextUser);
@@ -121,6 +130,14 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     /** All content file types (.pdf, .html, etc.) */
     public get ContentFileTypes(): MJContentFileTypeEntity[] {
         return this._contentFileTypes;
+    }
+
+    /**
+     * All feature pipeline types (LLM, and any other registered types), both Active and Disabled.
+     * @throws {PermissionConstrainedError} if the engine skipped loading because the user lacks read access.
+     */
+    public get FeaturePipelineTypes(): MJFeaturePipelineTypeEntity[] {
+        return this.GetConfigData<MJFeaturePipelineTypeEntity>('_featurePipelineTypes');
     }
 
     // ================================================================

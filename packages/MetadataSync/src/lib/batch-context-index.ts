@@ -73,39 +73,69 @@ export class BatchContextIndex {
   // ---------------------------------------------------------------------------
 
   /** Add an entity to the context (called after save). */
-  set(key: string, entity: BaseEntity | BatchContextStub): void {
+  Set(key: string, entity: BaseEntity | BatchContextStub): void {
     this.map.set(key, entity);
     this.indexEntity(entity);
   }
 
+  /** @deprecated Use {@link Set}. */
+  set(key: string, entity: BaseEntity | BatchContextStub): void {
+    return this.Set(key, entity);
+  }
+
   /** Get by direct key (existing behaviour). */
-  get(key: string): BaseEntity | BatchContextStub | undefined {
+  Get(key: string): BaseEntity | BatchContextStub | undefined {
     return this.map.get(key);
   }
 
+  /** @deprecated Use {@link Get}. */
+  get(key: string): BaseEntity | BatchContextStub | undefined {
+    return this.Get(key);
+  }
+
   /** Check if a key exists. */
-  has(key: string): boolean {
+  Has(key: string): boolean {
     return this.map.has(key);
   }
 
-  get size(): number {
+  /** @deprecated Use {@link Has}. */
+  has(key: string): boolean {
+    return this.Has(key);
+  }
+
+  get Size(): number {
     return this.map.size;
+  }
+
+  /** @deprecated Use {@link Size}. */
+  get size(): number {
+    return this.Size;
   }
 
   [Symbol.iterator](): IterableIterator<[string, BaseEntity | BatchContextStub]> {
     return this.map[Symbol.iterator]();
   }
 
-  entries(): IterableIterator<[string, BaseEntity | BatchContextStub]> {
+  Entries(): IterableIterator<[string, BaseEntity | BatchContextStub]> {
     return this.map.entries();
   }
 
+  /** @deprecated Use {@link Entries}. */
+  entries(): IterableIterator<[string, BaseEntity | BatchContextStub]> {
+    return this.Entries();
+  }
+
   /** Remove all entries and free memory. */
-  clear(): void {
+  Clear(): void {
     this.map.clear();
     this.index.clear();
     this.entitiesByName.clear();
     this.pkFieldCache.clear();
+  }
+
+  /** @deprecated Use {@link Clear}. */
+  clear(): void {
+    return this.Clear();
   }
 
   // ---------------------------------------------------------------------------
@@ -118,7 +148,7 @@ export class BatchContextIndex {
    * Returns the primary key value if a matching entity is in the batch context,
    * or `undefined` if not found.
    */
-  lookupByFields(
+  LookupByFields(
     entityName: string,
     lookupFields: Array<{ fieldName: string; fieldValue: string }>,
   ): string | undefined {
@@ -166,6 +196,14 @@ export class BatchContextIndex {
     }
 
     return undefined;
+  }
+
+  /** @deprecated Use {@link LookupByFields}. */
+  lookupByFields(
+    entityName: string,
+    lookupFields: Array<{ fieldName: string; fieldValue: string }>,
+  ): string | undefined {
+    return this.LookupByFields(entityName, lookupFields);
   }
 
   // ---------------------------------------------------------------------------

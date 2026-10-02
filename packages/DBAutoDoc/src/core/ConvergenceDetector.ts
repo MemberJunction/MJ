@@ -18,7 +18,7 @@ export class ConvergenceDetector {
   /**
    * Check if analysis has converged
    */
-  public hasConverged(
+  public HasConverged(
     state: DatabaseDocumentation,
     run: AnalysisRun
   ): ConvergenceResult {
@@ -86,6 +86,14 @@ export class ConvergenceDetector {
     };
   }
 
+  /** @deprecated Use {@link HasConverged}. */
+  public hasConverged(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): ConvergenceResult {
+    return this.HasConverged(state, run);
+  }
+
   /**
    * Check if there were changes in recent iterations
    */
@@ -100,7 +108,7 @@ export class ConvergenceDetector {
   /**
    * Calculate average confidence across all tables
    */
-  public calculateAverageConfidence(state: DatabaseDocumentation): number {
+  public CalculateAverageConfidence(state: DatabaseDocumentation): number {
     let totalConfidence = 0;
     let count = 0;
 
@@ -117,5 +125,10 @@ export class ConvergenceDetector {
     }
 
     return count > 0 ? totalConfidence / count : 0;
+  }
+
+  /** @deprecated Use {@link CalculateAverageConfidence}. */
+  public calculateAverageConfidence(state: DatabaseDocumentation): number {
+    return this.CalculateAverageConfidence(state);
   }
 }
