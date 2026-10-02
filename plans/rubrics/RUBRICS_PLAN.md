@@ -811,9 +811,10 @@ by their evaluator and by roles the consumer grants.
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (say why in §16).
 
 **R — core**
-- [x] **R0** Run the §9.2 procedure: CodeGen captures appended to 2204 and 2206, generated
+- [ ] **R0** Run the §9.2 procedure: CodeGen captures appended to 2204 and 2206, generated
       entities committed, from-zero build green. Add `packages/Rubrics/*` to workspace globs.
       Layered flags stay in `metadata/entities/.layered-base-views.json` — no Entity UPDATE migration.
+      The tails, generated entities, workspace glob, and layered-flag file are in. A from-zero build of this head is not recorded green.
 - [x] **R1** Metadata: JSONType interfaces + bridge records (§4.1); layered flags + `CascadeDeletes`
       in `metadata/entities`; `IsHierarchy` config on `RubricCriterion.ParentID` and
       `RubricCategory.ParentID` (see `guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md`);
@@ -858,7 +859,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **A2** Default Evaluation rubric in resolution (§11.2) — the last source in T2.
 - [x] **A3** Self-check in `BaseAgent` (§11.3). `decideSelfCheck` covers pass, retry, exhausted attempts, and a flow-agent failure.
 - [x] **A4** Production sampling selection and drift deltas (§11.4). Evaluate Sampled Agent Runs is the scheduled job. Drift joins the score to the version and the agent run.
-- [x] **A5** `AIRubricEvaluator` is the agent evaluator (§8.3). The Rubric Evaluation Agent is a Loop agent with Get Rubric and Get Rubric Consensus. It does not publish.
+- [x] **A5** `AIRubricEvaluator` is the agent evaluator (§8.3). The Rubric Evaluation Agent is a Loop agent with Get Rubric and Get Rubric Subject. Get Rubric Consensus is removed. It does not publish.
 - [x] **A6** Import a numbered matrix, critique a draft, and the Rubric Architect agent (§11.5). The agent writes Drafts and does not publish.
 
 **U — UI and docs**
@@ -883,6 +884,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-02** — §15 rechecked against the branch. R0 is open: the CodeGen tails, generated entities, `packages/Rubrics/*` glob, and layered-flag file are in, and a from-zero build of this head is not recorded green. R1, R5, R7, T2, T3, T8, T9, T10, U2, U3, and S1 stay done. A5 stays done with Get Rubric Consensus removed.
 - **2026-10-01** — R7 adds the rest of the deterministic Rubrics bundle at sequence 50.
   Raw SQL covers 51101–51110. Publish classifies Initial then Major. Submit is compared
   with `RubricScoring`. Supersede and withdraw, and the cohort mean against the engine Mean,
