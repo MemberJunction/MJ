@@ -1,8 +1,8 @@
 /**
- * decision-fixtures.ts — throwaway decision-routing fixtures for the cloudflare-clef and systemone-kev
- * bundles: real `MJ: Credentials` rows created through `CredentialEngine`, `MJ: AI Credential Bindings`
- * rows, a test Decision prompt with its own model bindings, a probe runner, and the cleanup for all of
- * them.
+ * decision-fixtures.ts — throwaway decision-routing fixtures for the cloudflare-clef, systemone-kev and
+ * perplexity-decider bundles: real `MJ: Credentials` rows created through `CredentialEngine`,
+ * `MJ: AI Credential Bindings` rows, a test Decision prompt with its own model bindings, a probe runner,
+ * a driver that is always unavailable, and the cleanup for all of them.
  *
  * NOT a check bundle: it registers nothing on import.
  *
@@ -25,7 +25,7 @@
 import { randomBytes } from 'node:crypto';
 import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { BaseDecision } from '@memberjunction/ai';
+import { BaseDecision, DecisionResult } from '@memberjunction/ai';
 import type {
     MJAICredentialBindingEntity,
     MJAIPromptEntity,
@@ -194,6 +194,24 @@ export function RegisterDecisionStandIn(driverClass: string, standIn: DecisionDr
     return () => {
         factory.Register(BaseDecision, restoreTo, driverClass, highestDecisionPriority(driverClass) + 1);
     };
+}
+
+/**
+ * A decision driver that fails every call with an error that allows failover, as a 503 does. A check
+ * registers it over the drivers ahead of the candidate it wants a run to fail over to.
+ */
+export class UnavailableDecision extends BaseDecision {
+    constructor(apiKey?: string) {
+        super(apiKey || 'it-unavailable-decision');
+    }
+
+    protected async DoDecide(): Promise<DecisionResult> {
+        const now = new Date();
+        const failed = new DecisionResult(false, now, now);
+        failed.errorMessage = 'The integration-test decision stand-in is unavailable';
+        failed.errorInfo = { errorType: 'ServiceUnavailable', severity: 'Retriable', canFailover: true };
+        return failed;
+    }
 }
 
 // ─── Environment ─────────────────────────────────────────────────────────────────────────────────

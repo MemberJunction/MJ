@@ -64,7 +64,6 @@ import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseDecision,
-    DecisionResult,
     IsSystemOneWireObject,
     type ChoiceAnswer,
     type DecisionQuestion,
@@ -92,6 +91,7 @@ import {
     RegisterDecisionStandIn,
     RequireDefaultDecisionPrompt,
     RequireInferenceRowID,
+    UnavailableDecision,
 } from './decision-fixtures';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────────────────────
@@ -698,28 +698,14 @@ async function assertSelectionWithBoundKev(
 }
 
 /** The drivers KV4's failover leg makes unavailable: every decision driver but System One's. */
-const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = ['OpenRouterDecision', 'LLMDecision', 'CloudflareDecision'];
-
-/** A decision driver that fails every call with an error that allows failover, as a 503 does. */
-class UnavailableDecision extends BaseDecision {
-    constructor(apiKey?: string) {
-        super(apiKey || 'it-unavailable-decision');
-    }
-
-    protected async DoDecide(): Promise<DecisionResult> {
-        const now = new Date();
-        const failed = new DecisionResult(false, now, now);
-        failed.errorMessage = 'The integration-test decision stand-in is unavailable';
-        failed.errorInfo = { errorType: 'ServiceUnavailable', severity: 'Retriable', canFailover: true };
-        return failed;
-    }
-}
+const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = ['OpenRouterDecision', 'LLMDecision', 'CloudflareDecision', 'PerplexityDecision'];
 
 /**
- * KV4 failover: with Jev, LLM Decision and Clef unavailable, `Default Decision` fails over from model to
- * model, past every credentialed candidate ahead of the bound Kev-27B, and Kev-27B answers. Its
- * `FailoverStrategy` is the column default, `SameModelDifferentVendor`, and `AIDecisionRunner` treats
- * every strategy but `None` as the full priority list: the strategy does not keep it on one model.
+ * KV4 failover: with Jev, LLM Decision, Clef and the Perplexity Decider unavailable, `Default Decision`
+ * fails over from model to model, past every credentialed candidate ahead of the bound Kev-27B, and
+ * Kev-27B answers. Its `FailoverStrategy` is the column default, `SameModelDifferentVendor`, and
+ * `AIDecisionRunner` treats every strategy but `None` as the full priority list: the strategy does not
+ * keep it on one model.
  */
 async function assertFailoverReachesBoundKev(
     ctx: IntegrationCheckContext,
