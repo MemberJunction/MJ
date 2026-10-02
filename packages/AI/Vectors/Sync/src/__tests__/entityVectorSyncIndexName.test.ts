@@ -3,7 +3,7 @@ import type { IMetadataProvider } from '@memberjunction/core';
 
 /**
  * `VectorizeEntity` must address the vector index on the provider by the name the
- * KnowledgeHubMetadataEngine resolves for it (`GetProviderIndexName` — the ExternalID), not by the
+ * AIEngine resolves for it (`GetProviderIndexName` — the ExternalID), not by the
  * MJ display `Name`. They differ whenever the label is human-friendly — e.g. Name
  * "More Cheese Content (Pinecone)" vs ExternalID "morecheese-content" — and passing the Name
  * made every Pinecone upsert 404 (`/indexes/More%20Cheese%20Content%20(Pinecone)`), so a run
@@ -16,7 +16,7 @@ const IDS = vi.hoisted(() => ({
     doc: '33333333-3333-3333-3333-333333333333',
 }));
 
-const kh = vi.hoisted(() => ({ GetProviderIndexName: vi.fn<(index: { Name: string }) => string>() }));
+const aiEngine = vi.hoisted(() => ({ GetProviderIndexName: vi.fn<(index: { Name: string }) => string>() }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
@@ -34,9 +34,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, LogError: vi.fn(), LogStatus: vi.fn(), LogStatusEx: vi.fn() };
 });
 
-vi.mock('@memberjunction/core-entities', () => ({
-    KnowledgeHubMetadataEngine: { Instance: { GetProviderIndexName: kh.GetProviderIndexName } },
-}));
+vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));
 vi.mock('@memberjunction/ai-prompts', () => ({ AIEmbeddingRunner: class {} }));
 vi.mock('@memberjunction/ai-vectordb', () => ({
@@ -49,7 +47,9 @@ vi.mock('@memberjunction/ai-vectors', () => ({
         constructor(provider?: unknown) { this.Provider = provider; }
     },
 }));
-vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: { Config: vi.fn() } } }));
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: { Instance: { Config: vi.fn(), GetProviderIndexName: aiEngine.GetProviderIndexName } },
+}));
 vi.mock('@memberjunction/templates', () => ({
     TemplateEngineServer: {
         Instance: {
@@ -85,13 +85,13 @@ function syncerFor() {
 
 describe('EntityVectorSyncer.VectorizeEntity index name', () => {
     it('upserts into the index name the engine resolves (ExternalID), not the MJ display Name', async () => {
-        kh.GetProviderIndexName.mockReturnValueOnce('morecheese-content');
+        aiEngine.GetProviderIndexName.mockReturnValueOnce('morecheese-content');
         const { syncer, createVectorUpserter } = syncerFor();
 
         await expect(syncer.VectorizeEntity({ entityID: IDS.entity, entityDocumentID: IDS.doc } as never, { ID: 'user-1' } as never))
             .rejects.toBe(STOP);
 
-        expect(kh.GetProviderIndexName).toHaveBeenCalledWith(VECTOR_INDEX);
+        expect(aiEngine.GetProviderIndexName).toHaveBeenCalledWith(VECTOR_INDEX);
         expect(createVectorUpserter).toHaveBeenCalledTimes(1);
         expect((createVectorUpserter.mock.calls[0] as unknown[])[3]).toBe('morecheese-content');
     });

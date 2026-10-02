@@ -115,9 +115,6 @@ vi.mock('@memberjunction/core-entities', () => ({
             Config: vi.fn().mockResolvedValue(undefined),
             GetEntityDocumentsForEntity: mocks.GetEntityDocumentsForEntity,
             GetEntityDocumentByID: mocks.GetEntityDocumentByID,
-            GetVectorIndexByID: mocks.GetVectorIndexByID,
-            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
-            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
         },
     },
 }));
@@ -167,6 +164,9 @@ vi.mock('@memberjunction/aiengine', () => ({
                 { ID: 'prompt-decision', Name: 'Default Decision' },
                 { ID: 'prompt-reasoning', Name: 'Duplicate Resolution' },
             ],
+            GetVectorIndexByID: mocks.GetVectorIndexByID,
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
         },
     },
 }));

@@ -53,8 +53,6 @@ vi.mock('@memberjunction/core-entities', () => ({
         Instance: {
             Config: mockKHConfig,
             get EntityDocuments() { return entityDocumentsRef.value; },
-            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
-            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
             // Mirrors the real engine: Active documents from the cached array, no query.
             GetActiveEntityDocuments() {
                 getActiveDocsCalls.count++;
@@ -68,7 +66,14 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({
-    AIEngine: { Instance: { Config: vi.fn(), get Models() { return modelsRef.value; } } },
+    AIEngine: {
+        Instance: {
+            Config: vi.fn(),
+            get Models() { return modelsRef.value; },
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
+        },
+    },
 }));
 
 vi.mock('@memberjunction/ai', () => ({

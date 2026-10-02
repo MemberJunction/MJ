@@ -14,8 +14,13 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
+// The engine proxies AIEngineBase's Vector Indexes cache through BaseEngineRegistry; tests control
+// what the registry hands back (null = no loaded engine caches Vector Indexes).
+const registry = vi.hoisted(() => ({ VectorIndexes: null as MockVectorIndex[] | null, TryGetCachedRecords: vi.fn() }));
+
 vi.mock('@memberjunction/core', () => {
     return {
+        BaseEngineRegistry: { Instance: { TryGetCachedRecords: registry.TryGetCachedRecords } },
         BaseEngine: class MockBaseEngine {
             // Minimal stand-in for BaseEngine.DataChange$ so the engine constructor's
             // invalidation subscription is satisfied. Tests reset the index cache directly
@@ -50,7 +55,6 @@ vi.mock('@memberjunction/core', () => {
 // ---------------------------------------------------------------------------
 
 import { KnowledgeHubMetadataEngine } from '../engines/knowledgeHubMetadata';
-import type { MJVectorIndexEntity } from '../generated/entity_subclasses';
 
 // ---------------------------------------------------------------------------
 // Test data factories
@@ -122,10 +126,12 @@ describe('KnowledgeHubMetadataEngine', () => {
             createMockEntityDocument({ ID: 'ED-CCC', Entity: 'Accounts', Status: 'Active' }),
             createMockEntityDocument({ ID: 'ED-DDD', Entity: 'Leads', Status: 'Active' }),
         ];
-        (engine as unknown as Record<string, unknown[]>)['_vectorIndexes'] = [
+        registry.VectorIndexes = [
             createMockVectorIndex({ ID: 'VI-AAA', Name: 'contacts-idx' }),
             createMockVectorIndex({ ID: 'VI-BBB', Name: 'accounts-idx' }),
         ];
+        registry.TryGetCachedRecords.mockReset();
+        registry.TryGetCachedRecords.mockImplementation(() => registry.VectorIndexes);
         (engine as unknown as Record<string, MockContentSource[]>)['_contentSources'] = [
             createMockContentSource({ ID: 'CS-AAA', Name: 'RSS Feed' }),
             createMockContentSource({ ID: 'CS-BBB', Name: 'Website' }),
@@ -291,30 +297,13 @@ describe('KnowledgeHubMetadataEngine', () => {
             const result = engine.GetVectorIndexByID('');
             expect(result).toBeUndefined();
         });
-    });
 
-    // ================================================================
-    // GetProviderIndexName
-    // ================================================================
-
-    describe('GetProviderIndexName', () => {
-        type IndexNaming = Pick<MJVectorIndexEntity, 'Name' | 'ExternalID'>;
-        const providerName = (index: IndexNaming): string =>
-            engine.GetProviderIndexName(index as MJVectorIndexEntity);
-
-        it('uses ExternalID, the provider-side name, when the display Name differs', () => {
-            expect(providerName({ Name: 'More Cheese Content (Pinecone)', ExternalID: 'morecheese-content' }))
-                .toBe('morecheese-content');
-        });
-
-        it('trims surrounding whitespace from ExternalID', () => {
-            expect(providerName({ Name: 'Label', ExternalID: '  my-index \n' })).toBe('my-index');
-        });
-
-        it.each([null, '', '   '])('falls back to Name when ExternalID is %j', (externalID) => {
-            expect(providerName({ Name: 'legacy-index', ExternalID: externalID })).toBe('legacy-index');
+        it('should return undefined when no engine has loaded Vector Indexes', () => {
+            registry.VectorIndexes = null;
+            expect(engine.GetVectorIndexByID('VI-AAA')).toBeUndefined();
         });
     });
+
 
     // ================================================================
     // O(1) by-id finders (content sources / types / source types)
@@ -405,8 +394,14 @@ describe('KnowledgeHubMetadataEngine', () => {
             expect(engine.EntityDocuments).toHaveLength(4);
         });
 
-        it('VectorIndexes should return all vector indexes', () => {
+        it('VectorIndexes should proxy the Vector Indexes cache owned by AIEngineBase', () => {
             expect(engine.VectorIndexes).toHaveLength(2);
+            expect(registry.TryGetCachedRecords).toHaveBeenCalledWith('MJ: Vector Indexes', { unfilteredOnly: true });
+        });
+
+        it('VectorIndexes should be empty, not throw, until an engine has loaded Vector Indexes', () => {
+            registry.VectorIndexes = null;
+            expect(engine.VectorIndexes).toEqual([]);
         });
     });
 

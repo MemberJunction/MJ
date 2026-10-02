@@ -204,6 +204,14 @@ const mockPrompts = [
   },
 ];
 
+// Vector index fixtures — shared by the AIEngine mock (which owns the Vector Indexes cache) and the
+// KnowledgeHubMetadataEngine mock (whose VectorIndexes getter proxies it). Hoisted so both factories see one array.
+const { mockVectorIndexes } = vi.hoisted(() => ({
+  mockVectorIndexes: [
+    { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1', Dimensions: null },
+  ] as Array<{ ID: string; Name: string; VectorDatabaseID: string; EmbeddingModelID: string; Dimensions?: number | null; ExternalID?: string | null }>,
+}));
+
 vi.mock('@memberjunction/aiengine', () => ({
   AIEngine: class MockAIEngine {
     static getInstance() {
@@ -215,6 +223,10 @@ vi.mock('@memberjunction/aiengine', () => ({
         Models: mockModels,
         Prompts: mockPrompts,
         VectorDatabases: [{ ID: 'vdb-1', Name: 'Pinecone', ClassKey: 'PineconeDB' }],
+        VectorIndexes: mockVectorIndexes,
+        GetVectorIndexByID: (id: string) => mockVectorIndexes.find(v => v.ID === id),
+        // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+        GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
       };
     }
     Config = vi.fn().mockResolvedValue(undefined);
@@ -235,15 +247,6 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
   // MJAICredentialBindingEntity, pulled in via BaseAIEngine) always exist —
   // otherwise adding any new core-entities export breaks this mock's load.
   const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
-  const mockVectorIndexes: Array<{
-    ID: string;
-    Name: string;
-    VectorDatabaseID: string;
-    EmbeddingModelID: string;
-    Dimensions?: number | null;
-  }> = [
-    { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1', Dimensions: null },
-  ];
   const mockKHInstance = {
     ContentSources: [],
     ContentTypes: [],
@@ -256,8 +259,6 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     GetVectorIndexByID: vi.fn().mockImplementation((id: string) =>
       mockVectorIndexes.find(v => v.ID === id)
     ),
-    // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
-    GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
     // Mirror the real KnowledgeHubMetadataEngine O(1) by-id helpers (which the engine now calls
     // instead of `.find` at the call sites). Read the live arrays so tests that push after setup work.
     GetContentSourceByID: vi.fn().mockImplementation((id: string) =>
