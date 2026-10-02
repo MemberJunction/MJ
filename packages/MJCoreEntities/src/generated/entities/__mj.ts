@@ -2535,8 +2535,8 @@ export const MJAIAgentRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
-        * * Default Value: 0.000000
+        * * SQL Data Type: decimal(19, 8)
+        * * Default Value: 0.00000000
         * * Description: Total estimated cost for all AI model usage during this agent run`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -3506,19 +3506,20 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Decision'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Decision
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
-        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`),
+        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`),
     StartingStep: z.boolean().describe(`
         * * Field Name: StartingStep
         * * Display Name: Starting Step
@@ -3625,7 +3626,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.`),
+        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -6407,7 +6408,7 @@ export const MJAIPromptRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.`),
     Success: z.boolean().describe(`
         * * Field Name: Success
@@ -6536,7 +6537,7 @@ export const MJAIPromptRunSchema = z.object({
     DescendantCost: z.number().nullable().describe(`
         * * Field Name: DescendantCost
         * * Display Name: Descendant Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
     ValidationAttemptCount: z.number().nullable().describe(`
         * * Field Name: ValidationAttemptCount
@@ -6833,6 +6834,12 @@ export const MJAIPromptRunSchema = z.object({
     *   * NativeFallback
     *   * NativeImplicit
         * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -6881,6 +6888,10 @@ export const MJAIPromptRunSchema = z.object({
         * * Field Name: UsageType
         * * Display Name: Usage Type
         * * SQL Data Type: nvarchar(50)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -8073,6 +8084,12 @@ export const MJAIVendorSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
         * * Description: Reference to the type of credential this vendor expects (e.g., API Key, GCP Service Account, Azure Service Principal). Used for type-based default credential resolution when no explicit binding exists, and for UI guidance when creating credentials.`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIVendorEntity_IAIVendorConfiguration
+        * * Description: Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.`),
     CredentialType: z.string().nullable().describe(`
         * * Field Name: CredentialType
         * * Display Name: Credential Type
@@ -18501,7 +18518,7 @@ export const MJEntityDocumentSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.`),
-    ReasoningMode: z.union([z.literal('Agent'), z.literal('Prompt')]).describe(`
+    ReasoningMode: z.union([z.literal('Agent'), z.literal('Decision'), z.literal('DecisionThenPrompt'), z.literal('Prompt')]).describe(`
         * * Field Name: ReasoningMode
         * * Display Name: Reasoning Mode
         * * SQL Data Type: nvarchar(20)
@@ -18509,6 +18526,8 @@ export const MJEntityDocumentSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Agent
+    *   * Decision
+    *   * DecisionThenPrompt
     *   * Prompt
         * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.`),
     ReasoningThreshold: z.number().nullable().describe(`
@@ -20606,6 +20625,54 @@ export const MJExternalDataSourceSchema = z.object({
 });
 
 export type MJExternalDataSourceEntityType = z.infer<typeof MJExternalDataSourceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Feature Pipeline Types
+ */
+export const MJFeaturePipelineTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The type's name, as a pipeline spec refers to it in PipelineType (for example LLM or Decision). Unique.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the type does, and what it can and cannot produce, for pipeline authors choosing a type.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The registered class name of the type's BaseFeaturePipelineDriver subclass, which the ClassFactory resolves to compute each record's outputs.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active types can be chosen for a pipeline. A Disabled type is hidden from the builder, and a pipeline that names it fails validation.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJFeaturePipelineTypeEntityType = z.infer<typeof MJFeaturePipelineTypeSchema>;
 
 /**
  * zod schema definition for the entity MJ: Feature Value Caches
@@ -25899,6 +25966,12 @@ export const MJProjectSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    OwnerUserID: z.string().nullable().describe(`
+        * * Field Name: OwnerUserID
+        * * Display Name: Owner User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who owns this folder, or NULL when the folder is shared with the whole environment. NULL (the value every pre-existing folder carries) means SHARED: visible to anyone who can read projects in the environment, which was the only possible behaviour before this column existed. A set value means PERSONAL: the folder belongs to that user and consumers filter it to them, so it stays out of other people's sidebars. Personal is opt-in at create time; nothing is migrated.`),
     Environment: z.string().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -25907,6 +25980,10 @@ export const MJProjectSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    OwnerUser: z.string().nullable().describe(`
+        * * Field Name: OwnerUser
+        * * Display Name: Owner User
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -27255,13 +27332,14 @@ export const MJRecordChangeSchema = z.object({
     *   * Snapshot
     *   * Update
         * * Description: Create, Update, or Delete`),
-    Source: z.union([z.literal('External'), z.literal('Internal'), z.literal('Restore')]).describe(`
+    Source: z.union([z.literal('Clone'), z.literal('External'), z.literal('Internal'), z.literal('Restore')]).describe(`
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Internal
     * * Value List Type: List
     * * Possible Values 
+    *   * Clone
     *   * External
     *   * Internal
     *   * Restore
@@ -27340,6 +27418,12 @@ export const MJRecordChangeSchema = z.object({
         * * Display Name: Restore Reason
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.`),
+    ChangeContext: z.any().nullable().describe(`
+        * * Field Name: ChangeContext
+        * * Display Name: Change Context
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRecordChangeEntity_IRecordChangeContext
+        * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -27363,6 +27447,234 @@ export const MJRecordChangeSchema = z.object({
 });
 
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Clone Log Items
+ */
+export const MJRecordCloneLogItemSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the record clone log item record.`),
+    RecordCloneLogID: z.string().describe(`
+        * * Field Name: RecordCloneLogID
+        * * Display Name: Record Clone Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Clone Logs (vwRecordCloneLogs.ID)
+        * * Description: Foreign key to the parent RecordCloneLog header record coordinating this clone execution.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the Entity type of this individual cloned record.`),
+    SourceRecordID: z.string().describe(`
+        * * Field Name: SourceRecordID
+        * * Display Name: Source Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Source record key identifier, encoded as a compact URL segment.`),
+    TargetRecordID: z.string().nullable().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Target record key identifier resulting from the clone, encoded as a compact URL segment. Null if skipped or failed.`),
+    Depth: z.number().describe(`
+        * * Field Name: Depth
+        * * Display Name: Depth
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Distance from the root node in the clone record graph (0 for root).`),
+    Route: z.union([z.literal('Collection'), z.literal('Embedded'), z.literal('IsAChain'), z.literal('RootSave'), z.literal('Sidecar')]).describe(`
+        * * Field Name: Route
+        * * Display Name: Route
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Collection
+    *   * Embedded
+    *   * IsAChain
+    *   * RootSave
+    *   * Sidecar
+        * * Description: Relationship route traversed to reach this record (RootSave, Collection, Embedded, IsAChain, Sidecar).`),
+    Status: z.union([z.literal('Created'), z.literal('Failed'), z.literal('Referenced'), z.literal('Skipped')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Created
+    *   * Failed
+    *   * Referenced
+    *   * Skipped
+        * * Description: Execution outcome status for this node (Created, Referenced, Skipped, Failed).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Execution sequence order within the clone transaction.`),
+    Reason: z.string().nullable().describe(`
+        * * Field Name: Reason
+        * * Display Name: Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Diagnostic explanation or reason for the action taken (e.g., skip reason or failure details).`),
+    FieldChangesJSON: z.string().nullable().describe(`
+        * * Field Name: FieldChangesJSON
+        * * Display Name: Field Changes JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Serialized JSON array of field-level modifications, copies, transforms, resets, and remaps applied to this record.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRecordCloneLogItemEntityType = z.infer<typeof MJRecordCloneLogItemSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Clone Logs
+ */
+export const MJRecordCloneLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the record clone log header record.`),
+    RootEntityID: z.string().describe(`
+        * * Field Name: RootEntityID
+        * * Display Name: Root Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the Entity being cloned as the root of the clone record graph.`),
+    RootSourceRecordID: z.string().describe(`
+        * * Field Name: RootSourceRecordID
+        * * Display Name: Root Source Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Source root record identifier, encoded as a compact URL segment.`),
+    RootTargetRecordID: z.string().nullable().describe(`
+        * * Field Name: RootTargetRecordID
+        * * Display Name: Root Target Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Target root record identifier resulting from the clone, encoded as a compact URL segment. Null while in progress or if failed.`),
+    InitiatedByUserID: z.string().describe(`
+        * * Field Name: InitiatedByUserID
+        * * Display Name: Initiated By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the User who initiated this clone operation.`),
+    Status: z.union([z.literal('Cancelled'), z.literal('Complete'), z.literal('Error'), z.literal('Planned'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Planned
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Complete
+    *   * Error
+    *   * Planned
+    *   * Running
+        * * Description: Current operational status of the clone execution (Planned, Running, Complete, Error, Cancelled).`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Timestamp (UTC with offset) when the clone operation started.`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp (UTC with offset) when the clone operation concluded.`),
+    PlanHash: z.string().describe(`
+        * * Field Name: PlanHash
+        * * Display Name: Plan Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the execution plan used for concurrency validation and provenance.`),
+    PlanJSON: z.any().describe(`
+        * * Field Name: PlanJSON
+        * * Display Name: Plan JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRecordCloneLogEntity_IClonePlan
+        * * Description: Serialized JSON execution plan detailing all graph nodes, edges, actions, and options.`),
+    OptionsJSON: z.string().nullable().describe(`
+        * * Field Name: OptionsJSON
+        * * Display Name: Options JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON request options supplied by the user or client for this clone execution.`),
+    ResultJSON: z.string().nullable().describe(`
+        * * Field Name: ResultJSON
+        * * Display Name: Result JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Summary result JSON payload containing counts, timings, and created record mappings.`),
+    Reason: z.string().nullable().describe(`
+        * * Field Name: Reason
+        * * Display Name: Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional business justification or user-provided explanation for this clone operation.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error message and diagnostic details if the clone operation failed.`),
+    ProcessRunID: z.string().nullable().describe(`
+        * * Field Name: ProcessRunID
+        * * Display Name: Process Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+        * * Description: Foreign key to the parent ProcessRun when this clone was executed via a batch RecordProcess.`),
+    CreatedCount: z.number().describe(`
+        * * Field Name: CreatedCount
+        * * Display Name: Created Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total count of new records successfully created during this clone operation.`),
+    ReferencedCount: z.number().describe(`
+        * * Field Name: ReferencedCount
+        * * Display Name: Referenced Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total count of existing records linked or referenced by foreign key rather than copied.`),
+    SkippedCount: z.number().describe(`
+        * * Field Name: SkippedCount
+        * * Display Name: Skipped Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total count of records intentionally skipped based on relationship or entity clone policies.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RootEntity_: z.string().describe(`
+        * * Field Name: RootEntity
+        * * Display Name: Root Entity
+        * * SQL Data Type: nvarchar(255)`),
+    InitiatedByUser: z.string().describe(`
+        * * Field Name: InitiatedByUser
+        * * Display Name: Initiated By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJRecordCloneLogEntityType = z.infer<typeof MJRecordCloneLogSchema>;
 
 /**
  * zod schema definition for the entity MJ: Record Geo Codes
@@ -27876,7 +28188,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Disabled
     *   * Draft
         * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
-    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model')]).describe(`
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Clone'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model')]).describe(`
         * * Field Name: WorkType
         * * Display Name: Work Type
         * * SQL Data Type: nvarchar(20)
@@ -27884,6 +28196,7 @@ export const MJRecordProcessSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Clone
     *   * FieldRules
     *   * Infer
     *   * ML Model
@@ -31424,7 +31737,7 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
         * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.`),
-    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('While')]).nullable().describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('While')]).nullable().describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -31432,6 +31745,7 @@ export const MJTaskSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Decision
     *   * External
     *   * ForEach
     *   * Human
@@ -42115,8 +42429,8 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
-    * * Default Value: 0.000000
+    * * SQL Data Type: decimal(19, 8)
+    * * Default Value: 0.00000000
     * * Description: Total estimated cost for all AI model usage during this agent run
     */
     get TotalCost(): number | null {
@@ -44607,17 +44921,18 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Decision
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
-    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
+    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).
     */
-    get StepType(): 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
+    get StepType(): 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
+    set StepType(value: 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -44857,7 +45172,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.
+    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
@@ -50313,7 +50628,8 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
  *    `MJAIModelTypeEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -50322,7 +50638,8 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -50409,6 +50726,19 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -50480,6 +50810,25 @@ export interface MJAIModelTypeEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelTypeEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -50498,6 +50847,8 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50516,6 +50867,8 @@ export interface MJAIModelTypeEntity_IAIPromptConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50531,6 +50884,26 @@ export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIModelTypeEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIModelTypeEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -50736,7 +51109,8 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
  *    `MJAIModelVendorEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -50745,7 +51119,8 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -50832,6 +51207,19 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -50903,6 +51291,25 @@ export interface MJAIModelVendorEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelVendorEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -50921,6 +51328,8 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50939,6 +51348,8 @@ export interface MJAIModelVendorEntity_IAIPromptConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50954,6 +51365,26 @@ export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIModelVendorEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIModelVendorEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -51351,7 +51782,8 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
  *    `MJAIModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -51360,7 +51792,8 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -51447,6 +51880,19 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -51518,6 +51964,25 @@ export interface MJAIModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -51536,6 +52001,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51554,6 +52021,8 @@ export interface MJAIModelEntity_IAIPromptConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51569,6 +52038,26 @@ export interface MJAIModelEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIModelEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIModelEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -52670,7 +53159,8 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
  *    `MJAIPromptModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -52679,7 +53169,8 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -52766,6 +53257,19 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -52837,6 +53341,25 @@ export interface MJAIPromptModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIPromptModelEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -52855,6 +53378,8 @@ export interface MJAIPromptModelEntity_IAIModelConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -52873,6 +53398,8 @@ export interface MJAIPromptModelEntity_IAIPromptConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -52888,6 +53415,26 @@ export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIPromptModelEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIPromptModelEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -53914,7 +54461,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.
     */
     get TotalCost(): number | null {
@@ -54229,7 +54776,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: DescendantCost
     * * Display Name: Descendant Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.
     */
     get DescendantCost(): number | null {
@@ -54959,6 +55506,20 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -55064,6 +55625,15 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     */
     get UsageType(): string | null {
         return this.Get('UsageType');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 
     /**
@@ -55208,7 +55778,8 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
  *    `MJAIPromptEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -55217,7 +55788,8 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -55304,6 +55876,19 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -55375,6 +55960,25 @@ export interface MJAIPromptEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIPromptEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -55393,6 +55997,8 @@ export interface MJAIPromptEntity_IAIModelConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -55411,6 +56017,8 @@ export interface MJAIPromptEntity_IAIPromptConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -55426,6 +56034,26 @@ export interface MJAIPromptEntity_IAIPromptModelConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIPromptEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIPromptEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -58335,6 +58963,290 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
 
 
 /**
+ * The AI stack's per-modality configuration bags — ONE source of truth for every layer.
+ *
+ * Two kinds of type live here, and the distinction is the whole point of the file:
+ *
+ * 1. **Shared modality sections** (`MJAIVendorEntity_LLMConfigurationSettings`, `MJAIVendorEntity_RealtimeConfigurationSettings`,
+ *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
+ *    MEANS, defined once and reused by every layer that carries a configuration bag.
+ * 2. **Per-table outer types** (`MJAIVendorEntity_IAIModelConfiguration`, `MJAIVendorEntity_IAIPromptConfiguration`,
+ *    `MJAIVendorEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
+ *    though they compose the same sections.
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
+ *
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
+ * ```
+ *
+ * The catalog cascade is resolved base-first with per-key deep merge by
+ * `ResolveEffectiveModelConfiguration` in `@memberjunction/ai`; the prompt cascade is resolved by
+ * the prompt runner, which layers the prompt bags ON TOP of the catalog result.
+ *
+ * **Why one file**: `EntityField.JSONTypeDefinition` stores this text VERBATIM, and CodeGen emits
+ * it inline above each entity class with every top-level name prefixed (`MJAIModelEntity_…`). It
+ * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
+ * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
+ * type in ONE file is what makes a shared section possible at all; the cost is that each of the
+ * five entities emits the full (prefixed) set, including outer types it does not use.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
+ * compiles against. Keep the two in step when adding a section or property — the same pact
+ * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
+ * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
+ * or runner consumes at call time belongs HERE. New capability knobs go in the bag — do not add a
+ * capability column per knob. A knob graduates to a real column when it needs a foreign key or
+ * becomes a first-class thing the platform reasons about.
+ */
+
+// =============================================================================
+// Shared modality sections — defined once, composed by every outer type below
+// =============================================================================
+
+/**
+ * Text-generation knobs, consumed by the LLM drivers and the prompt runner at call time.
+ *
+ * Every flag is TRI-STATE (`boolean | null | absent`) and the three differ: the cascade REPLACES on
+ * any explicit value (including `null`) and only skips a layer that OMITS the property. So absent
+ * means "inherit", while an explicit value at a higher layer overrides a lower one even when false.
+ *
+ * Properties are marked with the layers that HONOR them. A property set at a layer that does not
+ * honor it is inert, not an error — that tolerance is deliberate, so a knob can move between layers
+ * without a schema change.
+ */
+export interface MJAIVendorEntity_LLMConfigurationSettings {
+    /**
+     * **Catalog layers only** (model type / model / model vendor). Whether this model — or this
+     * vendor's serving of it — supports native tool/function calling.
+     *
+     * CAPABILITY flag, and a hard gate: no policy or preference at any layer can force tools onto a
+     * (model, vendor) whose resolved value is not true. Set `false` only for a model or serving path
+     * verified NOT to support tools; leave absent when support is unknown, because absent is the
+     * honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link MJAIVendorEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only** (prompt / prompt model). Whether THIS prompt asks for native tool
+     * calling. PREFERENCE — it outranks the catalog's `DefaultToNativeToolCalling`, and is still
+     * subordinate to the capability gate. Absent means "no preference; fall through to the model's
+     * default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link MJAIVendorEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
+}
+
+/**
+ * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
+ * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
+ * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
+ * default — a wrong inherited value degrades safely, it never rejects a session.
+ */
+export interface MJAIVendorEntity_RealtimeTurnDetectionSettings {
+    /**
+     * - `'default'` — let the provider profile decide (today's behavior).
+     * - `'serverVad'` — classic silence-based server VAD.
+     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+     *   to; the forward slot for full-duplex reasoning voice models.
+     */
+    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    Eagerness?: 'low' | 'auto' | 'high' | null;
+    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    Threshold?: number | null;
+    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    SilenceDurationMs?: number | null;
+}
+
+/**
+ * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
+ * `'local'`.
+ */
+export interface MJAIVendorEntity_RealtimeReasoningSettings {
+    /**
+     * Which plane handles reasoning:
+     * - `'local'` — application/agent loop (default).
+     * - `'remote'` — delegated to remote model or hosted agent.
+     */
+    Plane?: 'local' | 'remote' | null;
+    /** Remote reasoning target configuration. */
+    Remote?: {
+        Kind?: 'model' | 'hostedAgent' | null;
+        Ref?: string | null;
+        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+        MaxOutputTokens?: number | null;
+    } | null;
+}
+
+/** Realtime (speech-to-speech) knobs. */
+export interface MJAIVendorEntity_RealtimeConfigurationSettings {
+    /**
+     * Catalog-level turn-detection default for this model. Folded into the realtime session Config
+     * bag as the `turnDetection` key BELOW the agent/app config cascade
+     * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+     * default, agents/apps/callers refine it.
+     */
+    TurnDetection?: MJAIVendorEntity_RealtimeTurnDetectionSettings | null;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
+     */
+    Reasoning?: MJAIVendorEntity_RealtimeReasoningSettings | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface MJAIVendorEntity_VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface MJAIVendorEntity_AudioConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIVendorEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
+// =============================================================================
+// Per-table outer types — one per JSONType, composing the sections above
+// =============================================================================
+
+/**
+ * The `ModelConfiguration` column on the three MODEL-CATALOG entities (`MJ: AI Model Types`,
+ * `MJ: AI Models`, `MJ: AI Model Vendors`), which form an inherit-with-override cascade. Sections
+ * are per-modality so one catalog row can configure everything its model does.
+ */
+export interface MJAIVendorEntity_IAIModelConfiguration {
+    /** Text-generation knobs. Honors the catalog-layer properties. */
+    LLM?: MJAIVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: MJAIVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIVendorEntity_VisionConfigurationSettings | null;
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered ON TOP of the
+ * resolved model-catalog configuration by the prompt runner.
+ *
+ * The same anti-widening argument that produced `ModelConfiguration` applies here with more force:
+ * `AIPrompt` already carries fifty-odd columns. New per-prompt call-time knobs land here.
+ */
+export interface MJAIVendorEntity_IAIPromptConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIVendorEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export interface MJAIVendorEntity_IAIPromptModelConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIVendorEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIVendorEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIVendorEntity_IAIModelConfiguration | null;
+}
+
+/**
  * MJ: AI Vendors - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIVendor
@@ -58435,6 +59347,41 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
     }
     set CredentialTypeID(value: string | null) {
         this.Set('CredentialTypeID', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIVendorEntity_IAIVendorConfiguration
+    * * Description: Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJAIVendorEntity_IAIVendorConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJAIVendorEntity_IAIVendorConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJAIVendorEntity_IAIVendorConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJAIVendorEntity_IAIVendorConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -83015,6 +83962,14 @@ export interface MJEntityEntity_IEntityConfiguration {
      * Controls whether attachments are permitted and sets entity-level upload policies.
      */
     Attachments?: MJEntityEntity_IEntityAttachmentsConfiguration;
+
+    /**
+     * Record cloning configuration.
+     * Omitted or Enabled=false means the entity cannot be a clone ROOT.
+     * It may still be cloned as a child of another root when that root's relationship
+     * policy says Deep, unless NotCloneable is true.
+     */
+    Clone?: MJEntityEntity_IEntityCloneConfiguration;
 }
 
 /**
@@ -83110,6 +84065,180 @@ export interface MJEntityEntity_IEntityFormConfiguration {
      * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
+}
+
+/**
+ * Configuration for record cloning at the entity level.
+ * @see plans/record-cloning/README.md §4.1
+ */
+export interface MJEntityEntity_IEntityCloneConfiguration {
+    /** Schema version of this section. Default 1. */
+    Version?: 1;
+    /** Master switch for cloning this entity as a ROOT. Default false. */
+    Enabled?: boolean;
+    /** Hard refusal: this entity's rows are never created by the clone engine, as root or as child. Overrides every relationship policy. Use for audit, run, credential and metadata entities. */
+    NotCloneable?: boolean;
+    /** Shown to users and returned in warnings when NotCloneable or Enabled=false. */
+    NotCloneableReason?: string;
+    /** Authorization name checked with ancestors. Default 'Clone Records'; resolved per §9.1. */
+    RequiredAuthorization?: string;
+    /** Caps. Defaults 3 and 500. A plan that exceeds either is Blocked. */
+    MaxDepth?: number;
+    MaxRecords?: number;
+    /** IS-A subtype rows. Default 'include'. */
+    Subtypes?: 'include' | 'exclude';
+    /** Self-referencing IsHierarchy fields. Default 'subtree'. */
+    Hierarchy?: 'subtree' | 'node';
+    /** Inbound polymorphic EntityID/RecordID rows (tags, attachments, notes...). Default 'skip'. */
+    SoftLinks?: 'skip' | 'include';
+    Naming?: MJEntityEntity_ICloneNamingConfig;
+    Fields?: MJEntityEntity_ICloneFieldRules;
+    /** Per-relationship policy, keyed by "<RelatedEntityName>" or "<RelatedEntityName>.<JoinField>" when an entity has two FKs to the same target. Overrides the relationship's own bag when Locked is false there. */
+    Relationships?: Record<string, MJEntityEntity_ICloneRelationshipPolicy>;
+    /** Rules applied to descendant rows cloned under THIS root, keyed by descendant entity name. Lets a root shape its children without editing the child entity's bag. */
+    Descendants?: Record<string, MJEntityEntity_ICloneDescendantConfig>;
+    Hooks?: MJEntityEntity_ICloneHookConfig;
+    /** Route the ROOT through an existing creation path instead of a raw Save. Children still clone through the engine against the created root. */
+    CreationPath?: MJEntityEntity_ICloneCreationPath;
+    /** Offer "create derived record" (BasedOnID-style inheritance) as an alternative to copying. */
+    Derivation?: { Field: string; Label?: string; Description?: string };
+    /** Persisted embedding columns. Default 'copy' when EmbeddingModelID matches the configured model, else regenerate. */
+    Embeddings?: 'copy' | 'regenerate';
+    /** The entity's own server class refuses creates by other user types (Users, Roles). The planner blocks early with the entity's reason. */
+    RequiredUserType?: 'Owner';
+    /** How much the UI may change. Default 'all'. 'none' = confirm only. */
+    UserEditable?: 'none' | 'fields' | 'scope' | 'all';
+    Presets?: MJEntityEntity_IClonePreset[];
+    UI?: {
+        Label?: string;
+        Icon?: string;
+        ConfirmationMessage?: string;
+        DefaultPreset?: string;
+        /** FK fields the panel offers as retarget pickers (CompanyID → another company). */
+        RetargetFields?: string[];
+    };
+}
+
+export interface MJEntityEntity_ICloneNamingConfig {
+    /** Template for the name field and any string unique field with no other rule. '{Name}' interpolates the source value; '{n}' the collision counter. Default 'Copy of {Name}'. */
+    Template?: string;
+    /** Fields the template applies to. Default: the entity's NameField plus every IsUnique string field not otherwise handled. */
+    Fields?: string[];
+    /** suffix = apply Template and probe for collisions appending ' {n}'; increment = numeric/versioned bump; prompt = user must supply; none = leave untouched. Default 'suffix'. */
+    Strategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+}
+
+export interface MJEntityEntity_ICloneFieldRules {
+    /** Never copied; take the column default. Beyond the always-excluded set (PK, __mj_*, identity, computed, virtual, denied-create). */
+    Exclude?: string[];
+    /** Literal stamps applied after the copy. Values pass through BaseEntity.Set and validation. */
+    Reset?: Record<string, unknown>;
+    /** Set to the cloning user's ID. */
+    Ownership?: string[];
+    /** The user must supply a value; un-suffixable uniques such as Email. Missing → plan Blocked. */
+    PromptFor?: string[];
+    /** Server-minted values (numbers, slugs): blanked so the entity's Save hook allocates. */
+    ServerAllocated?: string[];
+    /** Rich rewrites. Evaluated per row with the source row as fields, plus clone context (user, now, root, keyMap) — see §7.5. */
+    Rules?: Record<string, unknown>;
+    /** JSON columns that embed record IDs, one entry per column. */
+    JsonRemap?: MJEntityEntity_IJsonRemapColumn[];
+    /** Columns that must be cleared together (all-or-nothing CHECK pairs). Each group is cleared as a unit when any member is reset. */
+    ClearTogether?: string[][];
+    /** Unique keys the metadata cannot see: composite and filtered indexes. See §7.3. */
+    UniqueKeys?: Array<{ Fields: string[]; Scope: 'Global' | 'Parent' | 'LiveState'; ScopeField?: string }>;
+    /** Drift guard (§13.3): every field must appear in Copy, Exclude, Reset, Ownership, PromptFor, ServerAllocated or JsonRemap, or validation fails. Default false. */
+    Strict?: boolean;
+    /** Explicit copy allow-list, used with Strict. */
+    Copy?: string[];
+}
+
+export interface MJEntityEntity_IJsonRemapSpec {
+    /** Path selector: dot segments and [*] for arrays, e.g. 'layout.content[*].componentState.config.viewId'. */
+    Path: string;
+    /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
+    Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
+    /** Entity the ID refers to, for remap. */
+    TargetEntityName?: string;
+    /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
+    OnMissing?: 'reuse' | 'drop';
+    /** Remove arrays and objects left empty by a drop. Default true. */
+    CleanEmptyContainers?: boolean;
+}
+
+/** One JSON column to rewrite: explicit rules, a shipped preset, or both (the preset's rules run first). An entry with neither is invalid. */
+export interface MJEntityEntity_IJsonRemapColumn {
+    /** The JSON column. */
+    Field: string;
+    Rules?: MJEntityEntity_IJsonRemapSpec[];
+    /** A shipped rule set for a known payload shape. */
+    Preset?: 'dashboard-ui-config' | 'scheduled-job-configuration';
+}
+
+export interface MJEntityEntity_ICloneRelationshipPolicy {
+    Policy?: 'Deep' | 'Reference' | 'Skip';
+    /** UI may not change it. */
+    Locked?: boolean;
+    MaxRecords?: number;
+    /** Write the source's positional values after the last Add instead of letting the collection renumber. Default false. */
+    PreserveSequence?: boolean;
+    /** Formula over the child row (fields.X); only rows evaluating true are cloned. */
+    IncludeWhen?: string;
+    /** Rows left out even when the edge is Deep, e.g. per-device or per-person settings. A row matching any entry is not cloned, nor are its descendants. */
+    ExcludeRows?: MJEntityEntity_ICloneRowExclusion[];
+    Fields?: MJEntityEntity_ICloneFieldRules;
+}
+
+/** Matches a child row by one field: equal to one of `Equals`, or a string starting with one of `StartsWith` (case-sensitive). */
+export interface MJEntityEntity_ICloneRowExclusion {
+    Field: string;
+    Equals?: Array<string | number | boolean>;
+    StartsWith?: string[];
+}
+
+export interface MJEntityEntity_ICloneDescendantConfig {
+    Fields?: MJEntityEntity_ICloneFieldRules;
+    Naming?: MJEntityEntity_ICloneNamingConfig;
+}
+
+export interface MJEntityEntity_ICloneHookConfig {
+    /** Entity Actions (Create/Update invocations) during the clone save. Default 'fire', as for any create. */
+    EntityActions?: 'suppress' | 'fire';
+    /** Entity AI Actions. Default 'suppress': each can be a paid model call per cloned row. */
+    AIActions?: 'suppress' | 'fire';
+    /** Children the entity's own server Save() creates. The engine never clones these, and warns if a relationship policy tries. */
+    ServerGeneratedChildren?: string[];
+    /** Values set before the save to keep expensive hooks quiet, restored on the row after the clone when RestoreAfterSave is true. */
+    PreSaveOverrides?: Record<string, unknown>;
+    RestoreAfterSave?: string[];
+    /** Action run once per created ROOT after commit, with the new key. */
+    PostCloneAction?: string;
+}
+
+export interface MJEntityEntity_ICloneCreationPath {
+    Kind: 'Action' | 'RemoteOperation';
+    Name: string;
+    /** Source field or formula → input param. */
+    InputMapping: Record<string, string>;
+    /** Output param holding the created key. */
+    OutputKeyParam: string;
+}
+
+/**
+ * A named clone scope a user can pick instead of adjusting options one by one.
+ * `Options` apply as if the request had sent them (so `UserEditable` still limits them);
+ * `Relationships` override edge policies by related entity name, like `Clone.Relationships`.
+ */
+export interface MJEntityEntity_IClonePreset {
+    /** Stable identifier sent by clients in `Options.Preset`. */
+    Key: string;
+    /** Name shown in the preset picker. */
+    Label: string;
+    Description?: string;
+    /** Plan options this preset sets, e.g. `{ "MaxDepth": 2 }`. */
+    Options?: Record<string, unknown>;
+    /** Edge policy overrides, keyed by related entity name. */
+    Relationships?: Record<string, { Policy: 'Deep' | 'Reference' | 'Skip' }>;
 }
 
 /**
@@ -86341,13 +87470,15 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Value List Type: List
     * * Possible Values 
     *   * Agent
+    *   * Decision
+    *   * DecisionThenPrompt
     *   * Prompt
     * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.
     */
-    get ReasoningMode(): 'Agent' | 'Prompt' {
+    get ReasoningMode(): 'Agent' | 'Decision' | 'DecisionThenPrompt' | 'Prompt' {
         return this.Get('ReasoningMode');
     }
-    set ReasoningMode(value: 'Agent' | 'Prompt') {
+    set ReasoningMode(value: 'Agent' | 'Decision' | 'DecisionThenPrompt' | 'Prompt') {
         this.Set('ReasoningMode', value);
     }
 
@@ -86908,6 +88039,12 @@ export interface MJEntityFieldEntity_IEntityFieldConfiguration {
      * Hierarchy and tree structure configuration for self-referencing foreign keys.
      */
     Hierarchy?: MJEntityFieldEntity_IEntityFieldHierarchyConfig;
+
+    /**
+     * Record cloning configuration for this field.
+     * @see plans/record-cloning/README.md §4.3
+     */
+    Clone?: MJEntityFieldEntity_IEntityFieldCloneConfiguration;
 }
 
 /**
@@ -86923,6 +88060,31 @@ export interface MJEntityFieldEntity_IEntityFieldHierarchyConfig {
      * Optional custom maximum recursion depth guard (defaults to 100).
      */
     MaxDepth?: number;
+}
+
+/**
+ * Record cloning configuration for an entity field.
+ * @see plans/record-cloning/README.md §4.3
+ */
+export interface MJEntityFieldEntity_IEntityFieldCloneConfiguration {
+    /** Copy (default) | Reset (column default, or Value) | Suffix (naming template) | Prompt | Ownership | ServerAllocated | Remap (FK inside the set → new key) | RemapJSON | Transform */
+    Policy?: 'Copy' | 'Reset' | 'Suffix' | 'Prompt' | 'Ownership' | 'ServerAllocated' | 'Remap' | 'RemapJSON' | 'Transform';
+    Value?: unknown;
+    JsonRemap?: MJEntityFieldEntity_IJsonRemapSpec[];
+    Transform?: unknown;
+}
+
+export interface MJEntityFieldEntity_IJsonRemapSpec {
+    /** Path selector: dot segments and [*] for arrays, e.g. 'layout.content[*].componentState.config.viewId'. */
+    Path: string;
+    /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
+    Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
+    /** Entity the ID refers to, for remap. */
+    TargetEntityName?: string;
+    /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
+    OnMissing?: 'reuse' | 'drop';
+    /** Remove arrays and objects left empty by a drop. Default true. */
+    CleanEmptyContainers?: boolean;
 }
 
 /**
@@ -89607,6 +90769,12 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipConfiguration {
      * Null = the parent entity's related-role ranker decides.
      */
     UI?: MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration;
+
+    /**
+     * Clone policy for rows of RelatedEntity that point at this entity through RelatedEntityJoinField.
+     * @see plans/record-cloning/README.md §4.2
+     */
+    Clone?: MJEntityRelationshipEntity_ICloneRelationshipPolicy;
 }
 
 /**
@@ -89650,6 +90818,78 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration {
      * after lead contributions such as Overview). Omit = 0.
      */
     sortKey?: number;
+}
+
+/**
+ * Clone policy for rows of RelatedEntity that point at this entity through RelatedEntityJoinField.
+ * @see plans/record-cloning/README.md §4.2
+ */
+export interface MJEntityRelationshipEntity_ICloneRelationshipPolicy {
+    Policy?: 'Deep' | 'Reference' | 'Skip';
+    /** UI may not change it. */
+    Locked?: boolean;
+    MaxRecords?: number;
+    /** Write the source's positional values after the last Add instead of letting the collection renumber. Default false. */
+    PreserveSequence?: boolean;
+    /** Formula over the child row (fields.X); only rows evaluating true are cloned. */
+    IncludeWhen?: string;
+    /** Rows left out even when the edge is Deep, e.g. per-device or per-person settings. A row matching any entry is not cloned, nor are its descendants. */
+    ExcludeRows?: MJEntityRelationshipEntity_ICloneRowExclusion[];
+    Fields?: MJEntityRelationshipEntity_ICloneFieldRules;
+}
+
+/** Matches a child row by one field: equal to one of `Equals`, or a string starting with one of `StartsWith` (case-sensitive). */
+export interface MJEntityRelationshipEntity_ICloneRowExclusion {
+    Field: string;
+    Equals?: Array<string | number | boolean>;
+    StartsWith?: string[];
+}
+
+export interface MJEntityRelationshipEntity_ICloneFieldRules {
+    /** Never copied; take the column default. Beyond the always-excluded set (PK, __mj_*, identity, computed, virtual, denied-create). */
+    Exclude?: string[];
+    /** Literal stamps applied after the copy. Values pass through BaseEntity.Set and validation. */
+    Reset?: Record<string, unknown>;
+    /** Set to the cloning user's ID. */
+    Ownership?: string[];
+    /** The user must supply a value; un-suffixable uniques such as Email. Missing → plan Blocked. */
+    PromptFor?: string[];
+    /** Server-minted values (numbers, slugs): blanked so the entity's Save hook allocates. */
+    ServerAllocated?: string[];
+    /** Rich rewrites. Evaluated per row with the source row as fields, plus clone context (user, now, root, keyMap) — see §7.5. */
+    Rules?: Record<string, unknown>;
+    /** JSON columns that embed record IDs, one entry per column. */
+    JsonRemap?: MJEntityRelationshipEntity_IJsonRemapColumn[];
+    /** Columns that must be cleared together (all-or-nothing CHECK pairs). Each group is cleared as a unit when any member is reset. */
+    ClearTogether?: string[][];
+    /** Unique keys the metadata cannot see: composite and filtered indexes. See §7.3. */
+    UniqueKeys?: Array<{ Fields: string[]; Scope: 'Global' | 'Parent' | 'LiveState'; ScopeField?: string }>;
+    /** Drift guard (§13.3): every field must appear in Copy, Exclude, Reset, Ownership, PromptFor, ServerAllocated or JsonRemap, or validation fails. Default false. */
+    Strict?: boolean;
+    /** Explicit copy allow-list, used with Strict. */
+    Copy?: string[];
+}
+
+export interface MJEntityRelationshipEntity_IJsonRemapSpec {
+    /** Path selector: dot segments and [*] for arrays, e.g. 'layout.content[*].componentState.config.viewId'. */
+    Path: string;
+    /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
+    Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
+    /** Entity the ID refers to, for remap. */
+    TargetEntityName?: string;
+    /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
+    OnMissing?: 'reuse' | 'drop';
+    /** Remove arrays and objects left empty by a drop. Default true. */
+    CleanEmptyContainers?: boolean;
+}
+
+/** One JSON column to rewrite: explicit rules, a shipped preset, or both (the preset's rules run first). An entry with neither is invalid. */
+export interface MJEntityRelationshipEntity_IJsonRemapColumn {
+    /** The JSON column. */
+    Field: string;
+    Rules?: MJEntityRelationshipEntity_IJsonRemapSpec[];
+    /** A shipped rule set for a known payload shape. */
+    Preset?: 'dashboard-ui-config' | 'scheduled-job-configuration';
 }
 
 /**
@@ -91870,6 +93110,128 @@ export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceE
     */
     get Credential(): string | null {
         return this.Get('Credential');
+    }
+}
+
+
+/**
+ * MJ: Feature Pipeline Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FeaturePipelineType
+ * * Base View: vwFeaturePipelineTypes
+ * * @description The catalog of Feature Pipeline types. Each type names the driver that turns one record's context into its output values: LLM runs a prompt, and further types (such as Decision) run other kinds of model. A pipeline names its type in DataFeatureSpec.PipelineType, and a spec without one is an LLM pipeline.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Feature Pipeline Types')
+export class MJFeaturePipelineTypeEntity extends BaseEntity<MJFeaturePipelineTypeEntityType> {
+    /**
+    * Loads the MJ: Feature Pipeline Types record from the database
+    * @param ID: string - primary key value to load the MJ: Feature Pipeline Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFeaturePipelineTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The type's name, as a pipeline spec refers to it in PipelineType (for example LLM or Decision). Unique.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the type does, and what it can and cannot produce, for pipeline authors choosing a type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The registered class name of the type's BaseFeaturePipelineDriver subclass, which the ClassFactory resolves to compute each record's outputs.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active types can be chosen for a pipeline. A Disabled type is hidden from the builder, and a pipeline that names it fails validation.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -105332,6 +106694,20 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
     }
 
     /**
+    * * Field Name: OwnerUserID
+    * * Display Name: Owner User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who owns this folder, or NULL when the folder is shared with the whole environment. NULL (the value every pre-existing folder carries) means SHARED: visible to anyone who can read projects in the environment, which was the only possible behaviour before this column existed. A set value means PERSONAL: the folder belongs to that user and consumers filter it to them, so it stays out of other people's sidebars. Personal is opt-in at create time; nothing is migrated.
+    */
+    get OwnerUserID(): string | null {
+        return this.Get('OwnerUserID');
+    }
+    set OwnerUserID(value: string | null) {
+        this.Set('OwnerUserID', value);
+    }
+
+    /**
     * * Field Name: Environment
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
@@ -105347,6 +106723,15 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: OwnerUser
+    * * Display Name: Owner User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OwnerUser(): string | null {
+        return this.Get('OwnerUser');
     }
 
     /**
@@ -108822,6 +110207,50 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
 
 
 /**
+ * Structured provenance context for RecordChange rows.
+ *
+ * Stored as JSON in `MJ: Record Changes.ChangeContext`. CodeGen emits a
+ * typed `ChangeContextObject` accessor on `MJRecordChangeEntity` that
+ * returns `MJRecordChangeEntity_IRecordChangeContext | null`.
+ *
+ * @see plans/record-cloning/README.md §10.2
+ */
+
+export interface MJRecordChangeEntity_IRecordChangeCloneContext {
+    /** ID of the RecordCloneLog row coordinating this clone operation. */
+    CloneLogID: string;
+    /** Entity name of the record being cloned. */
+    SourceEntityName: string;
+    /** Compact URL segment of the source key (bare value for single-column keys). */
+    SourceRecordID: string;
+    /** Entity name of the root record of the clone graph. */
+    RootEntityName: string;
+    /** Source key of the root record. */
+    RootSourceRecordID: string;
+    /** Target key of the root record after insertion. */
+    RootTargetRecordID: string;
+    /** Depth within the record graph (0 for root). */
+    Depth: number;
+    /** Relationship route traversed to reach this record. */
+    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
+    /** Kinds and field names only. Values are already in FullRecordJSON and are subject to FLS projection there. */
+    FieldChangeSummary: Array<{ Kind: string; Fields: string[] }>;
+    /** Optional explanation entered at clone time. */
+    Reason?: string;
+}
+
+export interface MJRecordChangeEntity_IRecordChangeContext {
+    /** Shape version. */
+    Version: 1;
+    /** The process that produced the change. Restore keeps its dedicated columns; it is listed so future writers can carry both. */
+    Kind: 'Clone' | 'Merge' | 'Import' | 'Process' | 'Replay' | 'Other';
+    /** Populated when Kind === 'Clone'. */
+    Clone?: MJRecordChangeEntity_IRecordChangeCloneContext;
+    /** Free-form tags for future kinds; never values. */
+    Tags?: string[];
+}
+
+/**
  * MJ: Record Changes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RecordChange
@@ -108930,15 +110359,16 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     * * Default Value: Internal
     * * Value List Type: List
     * * Possible Values 
+    *   * Clone
     *   * External
     *   * Internal
     *   * Restore
     * * Description: Internal or External
     */
-    get Source(): 'External' | 'Internal' | 'Restore' {
+    get Source(): 'Clone' | 'External' | 'Internal' | 'Restore' {
         return this.Get('Source');
     }
-    set Source(value: 'External' | 'Internal' | 'Restore') {
+    set Source(value: 'Clone' | 'External' | 'Internal' | 'Restore') {
         this.Set('Source', value);
     }
 
@@ -109115,6 +110545,41 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     }
 
     /**
+    * * Field Name: ChangeContext
+    * * Display Name: Change Context
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRecordChangeEntity_IRecordChangeContext
+    * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.
+    */
+    get ChangeContext(): string | null {
+        return this.Get('ChangeContext');
+    }
+    set ChangeContext(value: string | null) {
+        this.Set('ChangeContext', value);
+    }
+
+    private _ChangeContextObject_cached: MJRecordChangeEntity_IRecordChangeContext | null | undefined = undefined;
+    private _ChangeContextObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ChangeContext — returns parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ChangeContextObject(): MJRecordChangeEntity_IRecordChangeContext | null {
+        const raw = this.ChangeContext;
+        if (raw !== this._ChangeContextObject_lastRaw) {
+            this._ChangeContextObject_cached = raw ? JSON.parse(raw) : null;
+            this._ChangeContextObject_lastRaw = raw;
+        }
+        return this._ChangeContextObject_cached!;
+    }
+    set ChangeContextObject(value: MJRecordChangeEntity_IRecordChangeContext | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ChangeContext = raw;
+        this._ChangeContextObject_cached = value;
+        this._ChangeContextObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -109157,6 +110622,677 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     */
     get RestoredFrom(): string | null {
         return this.Get('RestoredFrom');
+    }
+}
+
+
+/**
+ * MJ: Record Clone Log Items - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordCloneLogItem
+ * * Base View: vwRecordCloneLogItems
+ * * @description Item-level detail for each node in a record clone operation, capturing traversal route, action, status, and field changes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Clone Log Items')
+export class MJRecordCloneLogItemEntity extends BaseEntity<MJRecordCloneLogItemEntityType> {
+    /**
+    * Loads the MJ: Record Clone Log Items record from the database
+    * @param ID: string - primary key value to load the MJ: Record Clone Log Items record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordCloneLogItemEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the record clone log item record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordCloneLogID
+    * * Display Name: Record Clone Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Clone Logs (vwRecordCloneLogs.ID)
+    * * Description: Foreign key to the parent RecordCloneLog header record coordinating this clone execution.
+    */
+    get RecordCloneLogID(): string {
+        return this.Get('RecordCloneLogID');
+    }
+    set RecordCloneLogID(value: string) {
+        this.Set('RecordCloneLogID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the Entity type of this individual cloned record.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: SourceRecordID
+    * * Display Name: Source Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Source record key identifier, encoded as a compact URL segment.
+    */
+    get SourceRecordID(): string {
+        return this.Get('SourceRecordID');
+    }
+    set SourceRecordID(value: string) {
+        this.Set('SourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: TargetRecordID
+    * * Display Name: Target Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Target record key identifier resulting from the clone, encoded as a compact URL segment. Null if skipped or failed.
+    */
+    get TargetRecordID(): string | null {
+        return this.Get('TargetRecordID');
+    }
+    set TargetRecordID(value: string | null) {
+        this.Set('TargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: Depth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Distance from the root node in the clone record graph (0 for root).
+    */
+    get Depth(): number {
+        return this.Get('Depth');
+    }
+    set Depth(value: number) {
+        this.Set('Depth', value);
+    }
+
+    /**
+    * * Field Name: Route
+    * * Display Name: Route
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Collection
+    *   * Embedded
+    *   * IsAChain
+    *   * RootSave
+    *   * Sidecar
+    * * Description: Relationship route traversed to reach this record (RootSave, Collection, Embedded, IsAChain, Sidecar).
+    */
+    get Route(): 'Collection' | 'Embedded' | 'IsAChain' | 'RootSave' | 'Sidecar' {
+        return this.Get('Route');
+    }
+    set Route(value: 'Collection' | 'Embedded' | 'IsAChain' | 'RootSave' | 'Sidecar') {
+        this.Set('Route', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Created
+    *   * Failed
+    *   * Referenced
+    *   * Skipped
+    * * Description: Execution outcome status for this node (Created, Referenced, Skipped, Failed).
+    */
+    get Status(): 'Created' | 'Failed' | 'Referenced' | 'Skipped' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Created' | 'Failed' | 'Referenced' | 'Skipped') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Execution sequence order within the clone transaction.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Diagnostic explanation or reason for the action taken (e.g., skip reason or failure details).
+    */
+    get Reason(): string | null {
+        return this.Get('Reason');
+    }
+    set Reason(value: string | null) {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: FieldChangesJSON
+    * * Display Name: Field Changes JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Serialized JSON array of field-level modifications, copies, transforms, resets, and remaps applied to this record.
+    */
+    get FieldChangesJSON(): string | null {
+        return this.Get('FieldChangesJSON');
+    }
+    set FieldChangesJSON(value: string | null) {
+        this.Set('FieldChangesJSON', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * Serialized execution plan for record cloning.
+ *
+ * Stored as JSON in `MJ: Record Clone Logs.PlanJSON`. CodeGen emits a typed
+ * `PlanJSONObject` accessor on `MJRecordCloneLogEntity` that returns
+ * `MJRecordCloneLogEntity_IClonePlan | null`.
+ *
+ * @see plans/record-cloning/README.md §3.4
+ */
+
+export interface MJRecordCloneLogEntity_ICloneCompositeKeyKVP {
+    FieldName: string;
+    Value: unknown;
+}
+
+export interface MJRecordCloneLogEntity_ICloneCompositeKeyLike {
+    KeyValuePairs: MJRecordCloneLogEntity_ICloneCompositeKeyKVP[];
+}
+
+export type MJRecordCloneLogEntity_CloneEdgePolicy = 'Deep' | 'Reference' | 'Skip';
+export type MJRecordCloneLogEntity_CloneNodeAction = 'Create' | 'Reference' | 'Skip' | 'Blocked';
+export type MJRecordCloneLogEntity_CloneEdgeKind =
+    | 'IsASubtype' | 'Collection' | 'Embedded' | 'Relationship' | 'InboundFK'
+    | 'ForwardFK' | 'SoftLink' | 'Hierarchy' | 'SelfPointer';
+
+export type MJRecordCloneLogEntity_CloneWarningCode =
+    | 'UNMAPPABLE_REFERENCE_DROPPED' | 'PAYLOAD_DROPPED' | 'ROW_DISABLED' | 'UNIQUE_RENAMED' | 'UNIQUE_PROMPT_REQUIRED'
+    | 'CAP_EXCEEDED' | 'NO_CREATE_PERMISSION' | 'NOT_CLONEABLE' | 'WRITE_ONCE_ENTITY' | 'SERVER_HOOK_SIDE_EFFECT'
+    | 'CONSTRAINT_FORCED_DEEP' | 'LOCKED_EDGE_OVERRIDE_IGNORED' | 'EMBEDDING_REGENERATED' | 'SOURCE_ROW_INVISIBLE';
+
+export interface MJRecordCloneLogEntity_ICloneWarning {
+    Code: MJRecordCloneLogEntity_CloneWarningCode;
+    Severity: 'Info' | 'Warning' | 'Error';
+    NodeKey?: string;
+    Field?: string;
+    Message: string;
+}
+
+export interface MJRecordCloneLogEntity_ICloneFieldChange {
+    Field: string;
+    Kind: 'Copy' | 'Reset' | 'Ownership' | 'Rename' | 'Remap' | 'RemapJSON' | 'Rule' | 'Override' | 'Prompt' | 'Excluded' | 'DeniedRead' | 'DeniedCreate' | 'NotWritable';
+    OldValue: unknown;
+    NewValue: unknown;
+    Reason: string;
+}
+
+export interface MJRecordCloneLogEntity_IClonePlanEdge {
+    FromKey: string;
+    ToKey: string;
+    Kind: MJRecordCloneLogEntity_CloneEdgeKind;
+    RelatedEntityName: string;
+    JoinField: string;
+    RelationshipID?: string;
+    CollectionName?: string;
+    IsSoftLink?: boolean;
+    Policy: MJRecordCloneLogEntity_CloneEdgePolicy;
+    Locked: boolean;
+    PolicySource: 'BuiltIn' | 'Constraint' | 'Entity' | 'Relationship' | 'Descendant' | 'Request';
+}
+
+export interface MJRecordCloneLogEntity_IClonePlanNode {
+    Key: string;
+    EntityName: string;
+    SourceKey: MJRecordCloneLogEntity_ICloneCompositeKeyLike;
+    TargetKey: MJRecordCloneLogEntity_ICloneCompositeKeyLike | null;
+    Action: MJRecordCloneLogEntity_CloneNodeAction;
+    Reason: string;
+    Depth: number;
+    ParentKey: string | null;
+    Via: MJRecordCloneLogEntity_IClonePlanEdge | null;
+    DisplayName: string;
+    IsSubtypeRow?: boolean;
+    FieldChanges: MJRecordCloneLogEntity_ICloneFieldChange[];
+    Warnings: MJRecordCloneLogEntity_ICloneWarning[];
+    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
+}
+
+export interface MJRecordCloneLogEntity_IClonePlanCounts {
+    ByEntity: Record<string, { Create: number; Reference: number; Skip: number }>;
+    Create: number;
+    Total: number;
+}
+
+export interface MJRecordCloneLogEntity_ICloneEffectiveOptions {
+    MaxDepth: number;
+    MaxRecords: number;
+    Subtypes: 'include' | 'exclude';
+    Hierarchy: 'subtree' | 'node';
+    SoftLinks: 'skip' | 'include';
+    EntityActions: 'suppress' | 'fire';
+    AIActions: 'suppress' | 'fire';
+    Embeddings: 'copy' | 'regenerate';
+}
+
+export interface MJRecordCloneLogEntity_IClonePlan {
+    PlanVersion: 1;
+    Hash: string;
+    Roots: string[];
+    Nodes: MJRecordCloneLogEntity_IClonePlanNode[];
+    Edges: MJRecordCloneLogEntity_IClonePlanEdge[];
+    Counts: MJRecordCloneLogEntity_IClonePlanCounts;
+    Warnings: MJRecordCloneLogEntity_ICloneWarning[];
+    Blocked: boolean;
+    EffectiveOptions: MJRecordCloneLogEntity_ICloneEffectiveOptions;
+}
+
+/**
+ * MJ: Record Clone Logs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordCloneLog
+ * * Base View: vwRecordCloneLogs
+ * * @description Audit and coordination header entity for record cloning operations. Captures plan, execution status, counts, and outcome.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Clone Logs')
+export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityType> {
+    /**
+    * Loads the MJ: Record Clone Logs record from the database
+    * @param ID: string - primary key value to load the MJ: Record Clone Logs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordCloneLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the record clone log header record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RootEntityID
+    * * Display Name: Root Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the Entity being cloned as the root of the clone record graph.
+    */
+    get RootEntityID(): string {
+        return this.Get('RootEntityID');
+    }
+    set RootEntityID(value: string) {
+        this.Set('RootEntityID', value);
+    }
+
+    /**
+    * * Field Name: RootSourceRecordID
+    * * Display Name: Root Source Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Source root record identifier, encoded as a compact URL segment.
+    */
+    get RootSourceRecordID(): string {
+        return this.Get('RootSourceRecordID');
+    }
+    set RootSourceRecordID(value: string) {
+        this.Set('RootSourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: RootTargetRecordID
+    * * Display Name: Root Target Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Target root record identifier resulting from the clone, encoded as a compact URL segment. Null while in progress or if failed.
+    */
+    get RootTargetRecordID(): string | null {
+        return this.Get('RootTargetRecordID');
+    }
+    set RootTargetRecordID(value: string | null) {
+        this.Set('RootTargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: InitiatedByUserID
+    * * Display Name: Initiated By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the User who initiated this clone operation.
+    */
+    get InitiatedByUserID(): string {
+        return this.Get('InitiatedByUserID');
+    }
+    set InitiatedByUserID(value: string) {
+        this.Set('InitiatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Planned
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Complete
+    *   * Error
+    *   * Planned
+    *   * Running
+    * * Description: Current operational status of the clone execution (Planned, Running, Complete, Error, Cancelled).
+    */
+    get Status(): 'Cancelled' | 'Complete' | 'Error' | 'Planned' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Cancelled' | 'Complete' | 'Error' | 'Planned' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp (UTC with offset) when the clone operation started.
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp (UTC with offset) when the clone operation concluded.
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: PlanHash
+    * * Display Name: Plan Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the execution plan used for concurrency validation and provenance.
+    */
+    get PlanHash(): string {
+        return this.Get('PlanHash');
+    }
+    set PlanHash(value: string) {
+        this.Set('PlanHash', value);
+    }
+
+    /**
+    * * Field Name: PlanJSON
+    * * Display Name: Plan JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRecordCloneLogEntity_IClonePlan
+    * * Description: Serialized JSON execution plan detailing all graph nodes, edges, actions, and options.
+    */
+    get PlanJSON(): string {
+        return this.Get('PlanJSON');
+    }
+    set PlanJSON(value: string) {
+        this.Set('PlanJSON', value);
+    }
+
+    private _PlanJSONObject_cached: MJRecordCloneLogEntity_IClonePlan | undefined = undefined;
+    private _PlanJSONObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for PlanJSON — returns parsed JSON as MJRecordCloneLogEntity_IClonePlan.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get PlanJSONObject(): MJRecordCloneLogEntity_IClonePlan {
+        const raw = this.PlanJSON;
+        if (raw !== this._PlanJSONObject_lastRaw) {
+            this._PlanJSONObject_cached = raw ? JSON.parse(raw) : null;
+            this._PlanJSONObject_lastRaw = raw;
+        }
+        return this._PlanJSONObject_cached!;
+    }
+    set PlanJSONObject(value: MJRecordCloneLogEntity_IClonePlan) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.PlanJSON = raw;
+        this._PlanJSONObject_cached = value;
+        this._PlanJSONObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: OptionsJSON
+    * * Display Name: Options JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON request options supplied by the user or client for this clone execution.
+    */
+    get OptionsJSON(): string | null {
+        return this.Get('OptionsJSON');
+    }
+    set OptionsJSON(value: string | null) {
+        this.Set('OptionsJSON', value);
+    }
+
+    /**
+    * * Field Name: ResultJSON
+    * * Display Name: Result JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Summary result JSON payload containing counts, timings, and created record mappings.
+    */
+    get ResultJSON(): string | null {
+        return this.Get('ResultJSON');
+    }
+    set ResultJSON(value: string | null) {
+        this.Set('ResultJSON', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional business justification or user-provided explanation for this clone operation.
+    */
+    get Reason(): string | null {
+        return this.Get('Reason');
+    }
+    set Reason(value: string | null) {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message and diagnostic details if the clone operation failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunID
+    * * Display Name: Process Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+    * * Description: Foreign key to the parent ProcessRun when this clone was executed via a batch RecordProcess.
+    */
+    get ProcessRunID(): string | null {
+        return this.Get('ProcessRunID');
+    }
+    set ProcessRunID(value: string | null) {
+        this.Set('ProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: CreatedCount
+    * * Display Name: Created Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total count of new records successfully created during this clone operation.
+    */
+    get CreatedCount(): number {
+        return this.Get('CreatedCount');
+    }
+    set CreatedCount(value: number) {
+        this.Set('CreatedCount', value);
+    }
+
+    /**
+    * * Field Name: ReferencedCount
+    * * Display Name: Referenced Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total count of existing records linked or referenced by foreign key rather than copied.
+    */
+    get ReferencedCount(): number {
+        return this.Get('ReferencedCount');
+    }
+    set ReferencedCount(value: number) {
+        this.Set('ReferencedCount', value);
+    }
+
+    /**
+    * * Field Name: SkippedCount
+    * * Display Name: Skipped Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total count of records intentionally skipped based on relationship or entity clone policies.
+    */
+    get SkippedCount(): number {
+        return this.Get('SkippedCount');
+    }
+    set SkippedCount(value: number) {
+        this.Set('SkippedCount', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RootEntity
+    * * Display Name: Root Entity
+    * * SQL Data Type: nvarchar(255)
+    * * NOTE: Property renamed to `RootEntity_` to avoid conflict with BaseEntity.RootEntity
+    */
+    get RootEntity_(): string {
+        return this.Get('RootEntity');
+    }
+
+    /**
+    * * Field Name: InitiatedByUser
+    * * Display Name: Initiated By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get InitiatedByUser(): string {
+        return this.Get('InitiatedByUser');
     }
 }
 
@@ -110436,15 +112572,16 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Clone
     *   * FieldRules
     *   * Infer
     *   * ML Model
     * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
     */
-    get WorkType(): 'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model' {
+    get WorkType(): 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model' {
         return this.Get('WorkType');
     }
-    set WorkType(value: 'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model') {
+    set WorkType(value: 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model') {
         this.Set('WorkType', value);
     }
 
@@ -120046,6 +122183,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Decision
     *   * External
     *   * ForEach
     *   * Human
@@ -120053,10 +122191,10 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     *   * While
     * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.
     */
-    get StepType(): 'Action' | 'Agent' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null {
+    get StepType(): 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Agent' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null) {
+    set StepType(value: 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null) {
         this.Set('StepType', value);
     }
 

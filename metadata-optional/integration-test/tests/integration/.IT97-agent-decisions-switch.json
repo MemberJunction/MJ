@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT97 - Agent Decisions Master Switch",
+    "Description": "The decisionsEnabled master switch (a Loop agent-type prompt param, off by default) gates every automatic decision-model use by agents, end to end against this database's metadata and with no live model: every chat call is a scripted reply from TestLLM and every decision call a scripted answer from a stand-in decision driver, both registered on the ClassFactory for this bundle only and restored after it. DS1 the synced Loop schema declares decisionsEnabled with default false, and the seeded IT agents carry the params the bundle relies on. DS2 a loop agent whose run turns inline decisions and finishIf on, but leaves the switch at its default, and whose replies request both, completes normally after three turns with no Decision step, no decision call and no Default Decision prompt run, and its first prompt has none of the decisions or finishIf docs, fields or types. DS3 an agent with every governed setting on but not the switch (decisions docs, both response fields set explicitly, finishIfMode on, decision discovery, the payload change check, catalog narrowing at one item) behaves the same, its prompt describes every action, and the shortened payload is kept unchecked. DS4 an agent whose own params turn the switch on asks for its inline decision and its finishIf gate (two Decision steps, each linked to a Default Decision prompt run naming the agent), the passing gate ends the run after two turns, and the uses it did not turn on stay off. DS5 the per-run override decisionsEnabled true turns all five governed loop uses on for the DS3 agent in one run: discovery, catalog narrowing (which hides the action the decision judged not useful), the payload change check, the inline decision and the finishIf gate. DS6 the next run of that agent without the override asks nothing again. DS7 the per-run override decisionsEnabled false turns the switch off for the DS4 agent. DS8 the Memory Manager's note gate asks nothing with enableDecisionGate on and the switch off, and asks once, with a persisted Default Decision prompt run, with the switch on for the run. DS9 a Flow agent's Decision step, run in this process, asks its decision with the switch explicitly off for the run: an explicit use is not gated. Server transport by necessity: the scripted drivers are ClassFactory registrations in this process, which an agent run inside MJAPI would never see. Every run, step, prompt run and action log the bundle creates is deleted in teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Unless decisionsEnabled is true no agent asks a decision model on its own, whatever its other settings; with it on, each governed use the agent turns on asks once; a run override flips it for one run; the Memory Manager's note gate obeys it; a Flow Decision step ignores it."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-decisions-switch"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0F9C929F-CED1-4D3B-9C99-E88D18150732"
+  }
+}
