@@ -398,6 +398,20 @@
                   "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
                 }
               }
+            ],
+            "MJ: AI Agent Rubrics": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "RubricID": "@lookup:MJ: Rubrics.Name=Query answer",
+                  "Purpose": "Evaluation",
+                  "IsDefault": true,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CC9C12E6-0381-4F87-B2EE-B7CA43C42C34"
+                }
+              }
             ]
           },
           "primaryKey": {
@@ -406,6 +420,33 @@
           "sync": {
             "lastModified": "2026-06-16T01:17:22.155Z",
             "checksum": "52f1b3b936097da7463a314d31b5d523d478023a6a87ceb3c68ac8bca2356d27"
+          }
+        }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Query answer",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0072D249-FDA6-4705-AD31-B0577552DDB1"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Query answer",
+            "Purpose": "ProductionSampling",
+            "IsDefault": true,
+            "Status": "Active",
+            "SampleRate": 0.02
+          },
+          "primaryKey": {
+            "ID": "51D9C17C-C780-483E-87FB-7061BA88C210"
           }
         }
       ]

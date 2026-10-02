@@ -67,6 +67,16 @@ All agents in MemberJunction currently use the "Loop" agent type, which provides
 - **ActionID**: Reference to action using `@lookup:`
 - **Status**: Typically "Active"
 
+#### AI Agent Rubrics
+Nest under the agent as `relatedEntities["MJ: AI Agent Rubrics"]`.
+- **AgentID**: `@parent:ID`
+- **RubricID**: `@lookup:MJ: Rubrics.Name=...` for a rubric authored under `metadata/rubrics/`
+- **Purpose**: `Evaluation`, `SelfCheck`, or `ProductionSampling`
+- **IsDefault**: true for the rubric used when a caller does not name one
+- **Status**: `Active` or `Disabled`
+- **PassThreshold**, **SampleRate**, **MaxSelfCheckAttempts**, **EvaluatorConfig**: optional overrides
+- **primaryKey**: a UUID from `uuidgen`. Do not add a `sync` block.
+
 #### AI Prompts
 - **Name**: Unique prompt name
 - **Description**: Purpose of the prompt

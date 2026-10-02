@@ -117,6 +117,11 @@ export interface FormContext {
   showRelatedEntities?: boolean;
   hiddenSectionKeys?: string[];
   visibleSectionKeys?: string[];
+  /**
+   * Field names to omit from the form. A draft evaluation uses this to hide
+   * cohort figures until the viewer submits.
+   */
+  hiddenFieldNames?: string[];
 }
 
 /**
