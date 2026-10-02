@@ -2,7 +2,7 @@
  * Offline sync engine (P3.2) — drains the {@link ./offline-queue!list offline
  * mutation queue} back to MJAPI once connectivity returns.
  *
- * {@link replayQueue} walks the queue oldest-first and, for each entry, re-drives
+ * {@link ReplayQueue} walks the queue oldest-first and, for each entry, re-drives
  * a `BaseEntity` save deterministically: it loads the entity via
  * `Metadata.GetEntityObject` + `InnerLoad(CompositeKey.FromID(pk))` (mirroring the
  * write path in `services/record-edit.ts`), applies the captured scalar fields, and
@@ -21,17 +21,17 @@
  * concurrent invocations onto the same promise.
  */
 import { Metadata, CompositeKey, type BaseEntity } from '@memberjunction/core';
-import { list, remove, recordError, type OfflineMutation } from '@/data/offline-queue';
+import { list, remove, RecordError, type OfflineMutation } from '@/data/offline-queue';
 
 /** The tally returned by a replay pass. */
 export type ReplayResult = {
     /** Number of mutations successfully written to the server this pass. */
-    synced: number;
+    synced: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Number of mutations dropped due to unrecoverable business failures this pass. */
-    failed: number;
+    failed: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
-/** The in-flight replay promise, used to collapse concurrent {@link replayQueue} calls. */
+/** The in-flight replay promise, used to collapse concurrent {@link ReplayQueue} calls. */
 let inFlight: Promise<ReplayResult> | null = null;
 
 /** Extract a human-readable message from an unknown thrown value. */
@@ -55,7 +55,8 @@ async function loadTarget(md: Metadata, entry: OfflineMutation): Promise<BaseEnt
         return record;
     }
     if (!entry.primaryKey) return null;
-    const loaded = await record.InnerLoad(CompositeKey.FromID(entry.primaryKey));
+    // Arbitrary entity: resolve the key column from metadata instead of assuming `ID`.
+    const loaded = await record.InnerLoad(CompositeKey.FromURLSegment(md.EntityByName(entry.entityName), entry.primaryKey));
     return loaded ? record : null;
 }
 
@@ -105,7 +106,7 @@ async function replayEntry(entry: OfflineMutation): Promise<EntryOutcome> {
         return 'dropped';
     } catch (error) {
         // A throw means transport/network failure — we are still offline. Keep it queued.
-        recordError(entry.id, errorMessage(error));
+        RecordError(entry.id, errorMessage(error));
         return 'offline';
     }
 }
@@ -133,7 +134,7 @@ async function drainQueue(): Promise<ReplayResult> {
  *
  * @returns A {@link ReplayResult} tallying what synced and what was dropped.
  */
-export async function replayQueue(): Promise<ReplayResult> {
+export async function ReplayQueue(): Promise<ReplayResult> {
     if (inFlight) return inFlight;
     inFlight = drainQueue().finally(() => {
         inFlight = null;
@@ -143,10 +144,10 @@ export async function replayQueue(): Promise<ReplayResult> {
 
 /**
  * Manually trigger a replay pass. Thin, intention-revealing alias over
- * {@link replayQueue} for UI "Sync now" affordances.
+ * {@link ReplayQueue} for UI "Sync now" affordances.
  *
  * @returns The {@link ReplayResult} of the pass.
  */
-export async function syncNow(): Promise<ReplayResult> {
-    return replayQueue();
+export async function SyncNow(): Promise<ReplayResult> {
+    return ReplayQueue();
 }

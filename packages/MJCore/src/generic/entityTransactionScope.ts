@@ -5,10 +5,13 @@
  *
  * Before this abstraction MemberJunction had **two mutually-blind transaction mechanisms**:
  *
- * 1. `DatabaseProviderBase.BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()` —
- *    a properly re-entrant ambient manager (depth counter, `SAVE TRANSACTION` savepoints at depth
- *    ≥ 2, serialization against an in-flight outermost begin). Application composite-save code
+ * 1. `GenericDatabaseProvider.BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()` —
+ *    a properly re-entrant ambient manager (depth counter, dialect savepoints at depth
+ *    ≥ 2, serialized by a promise mutex). Application composite-save code
  *    (order headers + lines, journal entries + lines, payments + allocations) calls this directly.
+ *    A server abort (mssql `ENOTBEGUN`/`EABORT`, pg `25P01`) is **not recoverable**: nested begin
+ *    throws `DoomedTransactionError`, the outer `Commit` fails, and `Save()` returns false.
+ *    Concurrent nested scopes on one provider instance are unsupported.
  * 2. `BeginISATransaction()` / `CommitISATransaction()` / `RollbackISATransaction()` — an
  *    IS-A-specific trio that opened a brand-new physical transaction on the pool with **no depth
  *    awareness at all**.

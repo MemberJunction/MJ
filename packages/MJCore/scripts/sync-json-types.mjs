@@ -14,7 +14,9 @@ const allowedFiles = new Set([
   'IEntityConfiguration.ts',
   'IEntityFieldConfiguration.ts',
   'IEntityRelationshipConfiguration.ts',
-  'IFileStorageProviderConfiguration.ts'
+  'IFileStorageProviderConfiguration.ts',
+  'IEntitySubtypeSelectorConfig.ts',
+  'IQueryConfiguration.ts'
 ]);
 
 if (fs.existsSync(srcDir)) {

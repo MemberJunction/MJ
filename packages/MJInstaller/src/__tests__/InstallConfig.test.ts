@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
   InstallConfigDefaults,
-  resolveFromEnvironment,
-  loadConfigFile,
-  mergeConfigs,
+  ResolveFromEnvironment,
+  LoadConfigFile,
+  MergeConfigs,
   type PartialInstallConfig,
 } from '../models/InstallConfig.js';
 
@@ -15,44 +15,25 @@ import {
 /* ================================================================== */
 
 describe('InstallConfigDefaults', () => {
-  it('should set DatabaseHost to "localhost"', () => {
-    expect(InstallConfigDefaults.DatabaseHost).toBe('localhost');
-  });
-
-  it('should set DatabasePort to 1433', () => {
-    expect(InstallConfigDefaults.DatabasePort).toBe(1433);
-  });
-
-  it('should set DatabaseTrustCert to false', () => {
-    expect(InstallConfigDefaults.DatabaseTrustCert).toBe(false);
-  });
-
-  it('should set APIPort to 4000', () => {
-    expect(InstallConfigDefaults.APIPort).toBe(4000);
-  });
-
-  it('should set ExplorerPort to 4200', () => {
-    expect(InstallConfigDefaults.ExplorerPort).toBe(4200);
-  });
-
   it('should set AuthProvider to "none"', () => {
     expect(InstallConfigDefaults.AuthProvider).toBe('none');
   });
 
-  it('should have exactly 7 keys', () => {
+  it('should set InstallMode to "distribution"', () => {
+    expect(InstallConfigDefaults.InstallMode).toBe('distribution');
+  });
+
+  it('should set PackageManager to "pnpm"', () => {
+    expect(InstallConfigDefaults.PackageManager).toBe('pnpm');
+  });
+
+  it('should have exactly 3 keys', () => {
+    // Only fields a phase BEFORE `configure` reads belong here. A field whose
+    // only default is a prompt fallback makes ConfigurePhase's `??` guard
+    // permanently non-nullish, so its prompt can never fire — see #4562.
     const keys = Object.keys(InstallConfigDefaults);
-    expect(keys).toHaveLength(7);
-    expect(keys).toEqual(
-      expect.arrayContaining([
-        'DatabaseHost',
-        'DatabasePort',
-        'DatabaseTrustCert',
-        'APIPort',
-        'ExplorerPort',
-        'AuthProvider',
-        'InstallMode',
-      ])
-    );
+    expect(keys).toHaveLength(3);
+    expect(keys).toEqual(expect.arrayContaining(['AuthProvider', 'InstallMode', 'PackageManager']));
   });
 });
 
@@ -105,7 +86,7 @@ describe('resolveFromEnvironment', () => {
   });
 
   it('should return empty object when no env vars are set', () => {
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(Object.keys(config)).toHaveLength(0);
   });
 
@@ -117,7 +98,7 @@ describe('resolveFromEnvironment', () => {
     process.env.MJ_INSTALL_API_USER = 'MJ_Connect';
     process.env.MJ_INSTALL_API_PASSWORD = 'secret456';
 
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.DatabaseHost).toBe('prod-sql.example.com');
     expect(config.DatabaseName).toBe('MyMJ');
     expect(config.CodeGenUser).toBe('MJ_CodeGen');
@@ -131,7 +112,7 @@ describe('resolveFromEnvironment', () => {
     process.env.MJ_INSTALL_API_PORT = '8080';
     process.env.MJ_INSTALL_EXPLORER_PORT = '3000';
 
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.DatabasePort).toBe(5433);
     expect(config.APIPort).toBe(8080);
     expect(config.ExplorerPort).toBe(3000);
@@ -140,7 +121,7 @@ describe('resolveFromEnvironment', () => {
   it('should parse boolean field (true variants)', () => {
     for (const truthyValue of ['true', 'TRUE', '1', 'yes', 'YES']) {
       process.env.MJ_INSTALL_DB_TRUST_CERT = truthyValue;
-      const config = resolveFromEnvironment();
+      const config = ResolveFromEnvironment();
       expect(config.DatabaseTrustCert).toBe(true);
     }
   });
@@ -148,14 +129,14 @@ describe('resolveFromEnvironment', () => {
   it('should parse boolean field (false variants)', () => {
     for (const falsyValue of ['false', '0', 'no', 'anything']) {
       process.env.MJ_INSTALL_DB_TRUST_CERT = falsyValue;
-      const config = resolveFromEnvironment();
+      const config = ResolveFromEnvironment();
       expect(config.DatabaseTrustCert).toBe(false);
     }
   });
 
   it('should resolve AuthProvider from env var', () => {
     process.env.MJ_INSTALL_AUTH_PROVIDER = 'entra';
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.AuthProvider).toBe('entra');
   });
 
@@ -164,7 +145,7 @@ describe('resolveFromEnvironment', () => {
     process.env.MJ_INSTALL_ANTHROPIC_KEY = 'sk-ant';
     process.env.MJ_INSTALL_MISTRAL_KEY = 'sk-mistral';
 
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.OpenAIKey).toBe('sk-openai');
     expect(config.AnthropicKey).toBe('sk-ant');
     expect(config.MistralKey).toBe('sk-mistral');
@@ -173,7 +154,7 @@ describe('resolveFromEnvironment', () => {
   it('should resolve BaseEncryptionKey from env vars', () => {
     process.env.MJ_INSTALL_BASE_ENCRYPTION_KEY = 'base64-key-value';
 
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.BaseEncryptionKey).toBe('base64-key-value');
   });
 
@@ -181,7 +162,7 @@ describe('resolveFromEnvironment', () => {
     process.env.MJ_INSTALL_ENTRA_TENANT_ID = 'tenant-abc';
     process.env.MJ_INSTALL_ENTRA_CLIENT_ID = 'client-def';
 
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.AuthProviderValues).toEqual({
       TenantID: 'tenant-abc',
       ClientID: 'client-def',
@@ -193,7 +174,7 @@ describe('resolveFromEnvironment', () => {
     process.env.MJ_INSTALL_AUTH0_CLIENT_ID = 'auth0-client';
     process.env.MJ_INSTALL_AUTH0_CLIENT_SECRET = 'auth0-secret';
 
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.AuthProviderValues).toEqual({
       Domain: 'myapp.auth0.com',
       ClientID: 'auth0-client',
@@ -205,7 +186,7 @@ describe('resolveFromEnvironment', () => {
     process.env.MJ_INSTALL_DB_HOST = '';
     process.env.MJ_INSTALL_DB_NAME = '';
 
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.DatabaseHost).toBeUndefined();
     expect(config.DatabaseName).toBeUndefined();
   });
@@ -213,14 +194,14 @@ describe('resolveFromEnvironment', () => {
   it('should not include AuthProviderValues when no auth env vars are set', () => {
     process.env.MJ_INSTALL_DB_HOST = 'localhost';
 
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.AuthProviderValues).toBeUndefined();
   });
 
   it('should only include fields that have env vars set', () => {
     process.env.MJ_INSTALL_DB_HOST = 'myhost';
 
-    const config = resolveFromEnvironment();
+    const config = ResolveFromEnvironment();
     expect(config.DatabaseHost).toBe('myhost');
     expect(Object.keys(config)).toEqual(['DatabaseHost']);
   });
@@ -249,7 +230,7 @@ describe('loadConfigFile', () => {
       APIPort: 8080,
     }));
 
-    const config = await loadConfigFile(filePath);
+    const config = await LoadConfigFile(filePath);
     expect(config.DatabaseHost).toBe('prod-sql');
     expect(config.DatabaseName).toBe('MyDB');
     expect(config.APIPort).toBe(8080);
@@ -279,7 +260,7 @@ describe('loadConfigFile', () => {
     const filePath = path.join(tempDir, 'full.json');
     await fs.writeFile(filePath, JSON.stringify(fullConfig));
 
-    const config = await loadConfigFile(filePath);
+    const config = await LoadConfigFile(filePath);
     expect(config).toEqual(fullConfig);
   });
 
@@ -291,7 +272,7 @@ describe('loadConfigFile', () => {
       AnotherUnknown: 42,
     }));
 
-    const config = await loadConfigFile(filePath);
+    const config = await LoadConfigFile(filePath);
     expect(config.DatabaseHost).toBe('host');
     expect(Object.keys(config)).toEqual(['DatabaseHost']);
   });
@@ -300,32 +281,32 @@ describe('loadConfigFile', () => {
     const filePath = path.join(tempDir, 'bad.json');
     await fs.writeFile(filePath, 'not valid json{{{');
 
-    await expect(loadConfigFile(filePath)).rejects.toThrow();
+    await expect(LoadConfigFile(filePath)).rejects.toThrow();
   });
 
   it('should throw if file contains an array', async () => {
     const filePath = path.join(tempDir, 'array.json');
     await fs.writeFile(filePath, JSON.stringify([1, 2, 3]));
 
-    await expect(loadConfigFile(filePath)).rejects.toThrow('JSON object');
+    await expect(LoadConfigFile(filePath)).rejects.toThrow('JSON object');
   });
 
   it('should throw if file contains a primitive', async () => {
     const filePath = path.join(tempDir, 'prim.json');
     await fs.writeFile(filePath, '"just a string"');
 
-    await expect(loadConfigFile(filePath)).rejects.toThrow('JSON object');
+    await expect(LoadConfigFile(filePath)).rejects.toThrow('JSON object');
   });
 
   it('should throw if file does not exist', async () => {
-    await expect(loadConfigFile(path.join(tempDir, 'missing.json'))).rejects.toThrow();
+    await expect(LoadConfigFile(path.join(tempDir, 'missing.json'))).rejects.toThrow();
   });
 
   it('should handle empty object gracefully', async () => {
     const filePath = path.join(tempDir, 'empty.json');
     await fs.writeFile(filePath, '{}');
 
-    const config = await loadConfigFile(filePath);
+    const config = await LoadConfigFile(filePath);
     expect(Object.keys(config)).toHaveLength(0);
   });
 
@@ -336,7 +317,7 @@ describe('loadConfigFile', () => {
       AnotherUnknown: 42,
     }));
 
-    await expect(loadConfigFile(filePath)).rejects.toThrow(/contains 2 key\(s\) but none are recognized/i);
+    await expect(LoadConfigFile(filePath)).rejects.toThrow(/contains 2 key\(s\) but none are recognized/i);
   });
 
   it('should NOT throw when at least one known key is recognized among unknowns', async () => {
@@ -346,7 +327,7 @@ describe('loadConfigFile', () => {
       UnknownField: 'ignored',
     }));
 
-    const config = await loadConfigFile(filePath);
+    const config = await LoadConfigFile(filePath);
     expect(config.DatabaseHost).toBe('host');
   });
 
@@ -367,7 +348,7 @@ describe('loadConfigFile', () => {
         mistralAPIKey: 'mis',
       }));
 
-      const config = await loadConfigFile(filePath);
+      const config = await LoadConfigFile(filePath);
       expect(config.DatabaseHost).toBe('legacy-host');
       expect(config.DatabasePort).toBe(1444);
       expect(config.DatabaseName).toBe('LegacyDB');
@@ -385,7 +366,7 @@ describe('loadConfigFile', () => {
       const filePath = path.join(tempDir, 'trust.json');
       await fs.writeFile(filePath, JSON.stringify({ dbTrustServerCertificate: 'Y' }));
 
-      const config = await loadConfigFile(filePath);
+      const config = await LoadConfigFile(filePath);
       expect(config.DatabaseTrustCert).toBe(true);
     });
 
@@ -393,7 +374,7 @@ describe('loadConfigFile', () => {
       const filePath = path.join(tempDir, 'trust-n.json');
       await fs.writeFile(filePath, JSON.stringify({ dbTrustServerCertificate: 'N' }));
 
-      const config = await loadConfigFile(filePath);
+      const config = await LoadConfigFile(filePath);
       expect(config.DatabaseTrustCert).toBe(false);
     });
 
@@ -405,7 +386,7 @@ describe('loadConfigFile', () => {
         msalTenantId: 'tenant-id',
       }));
 
-      const config = await loadConfigFile(filePath);
+      const config = await LoadConfigFile(filePath);
       expect(config.AuthProvider).toBe('entra');
       expect(config.AuthProviderValues).toEqual({ ClientID: 'client-id', TenantID: 'tenant-id' });
     });
@@ -419,7 +400,7 @@ describe('loadConfigFile', () => {
         auth0Domain: 'tenant.auth0.com',
       }));
 
-      const config = await loadConfigFile(filePath);
+      const config = await LoadConfigFile(filePath);
       expect(config.AuthProvider).toBe('auth0');
       expect(config.AuthProviderValues).toEqual({
         ClientID: 'cid',
@@ -438,7 +419,7 @@ describe('loadConfigFile', () => {
         userLastName: 'Doe',
       }));
 
-      const config = await loadConfigFile(filePath);
+      const config = await LoadConfigFile(filePath);
       expect(config.CreateNewUser).toEqual({
         Username: 'jdoe',
         Email: 'jdoe@example.com',
@@ -456,7 +437,7 @@ describe('loadConfigFile', () => {
         DatabaseHost: 'h',
       }));
 
-      const config = await loadConfigFile(filePath);
+      const config = await LoadConfigFile(filePath);
       expect(config.CreateNewUser).toBeUndefined();
     });
 
@@ -486,7 +467,7 @@ describe('loadConfigFile', () => {
         mistralAPIKey: 'mis',
       }));
 
-      const config = await loadConfigFile(filePath);
+      const config = await LoadConfigFile(filePath);
       expect(config.DatabaseHost).toBe('localhost');
       expect(config.DatabasePort).toBe(1433);
       expect(config.DatabaseName).toBe('MyMJ');
@@ -508,13 +489,13 @@ describe('loadConfigFile', () => {
 
 describe('mergeConfigs', () => {
   it('should return empty object with no sources', () => {
-    const result = mergeConfigs();
+    const result = MergeConfigs();
     expect(Object.keys(result)).toHaveLength(0);
   });
 
   it('should return a copy of a single source', () => {
     const source: PartialInstallConfig = { DatabaseHost: 'host', APIPort: 8080 };
-    const result = mergeConfigs(source);
+    const result = MergeConfigs(source);
     expect(result).toEqual(source);
     expect(result).not.toBe(source); // different object reference
   });
@@ -523,7 +504,7 @@ describe('mergeConfigs', () => {
     const defaults: PartialInstallConfig = { DatabaseHost: 'localhost', APIPort: 4000 };
     const envVars: PartialInstallConfig = { DatabaseHost: 'prod-sql' };
 
-    const result = mergeConfigs(defaults, envVars);
+    const result = MergeConfigs(defaults, envVars);
     expect(result.DatabaseHost).toBe('prod-sql'); // overridden
     expect(result.APIPort).toBe(4000); // preserved from defaults
   });
@@ -532,7 +513,7 @@ describe('mergeConfigs', () => {
     const base: PartialInstallConfig = { DatabaseHost: 'host', APIPort: 4000 };
     const overlay: PartialInstallConfig = { DatabaseHost: undefined };
 
-    const result = mergeConfigs(base, overlay);
+    const result = MergeConfigs(base, overlay);
     expect(result.DatabaseHost).toBe('host'); // not overridden by undefined
   });
 
@@ -550,7 +531,7 @@ describe('mergeConfigs', () => {
       DatabaseHost: 'cli-host',
     };
 
-    const result = mergeConfigs(defaults, envVars, cliFlags);
+    const result = MergeConfigs(defaults, envVars, cliFlags);
     expect(result.DatabaseHost).toBe('cli-host');   // CLI wins
     expect(result.DatabaseName).toBe('env-db');      // env layer
     expect(result.DatabasePort).toBe(1433);          // defaults layer
@@ -565,7 +546,7 @@ describe('mergeConfigs', () => {
       AuthProviderValues: { ClientID: 'client-2', Domain: 'new-domain' },
     };
 
-    const result = mergeConfigs(base, overlay);
+    const result = MergeConfigs(base, overlay);
     expect(result.AuthProviderValues).toEqual({
       TenantID: 'tenant-1',   // preserved from base
       ClientID: 'client-2',   // overridden by overlay
@@ -579,7 +560,7 @@ describe('mergeConfigs', () => {
     };
     const overlay: PartialInstallConfig = { DatabaseHost: 'host' };
 
-    const result = mergeConfigs(base, overlay);
+    const result = MergeConfigs(base, overlay);
     expect(result.AuthProviderValues).toEqual({ TenantID: 'tenant-1' });
   });
 
@@ -589,7 +570,65 @@ describe('mergeConfigs', () => {
       AuthProviderValues: { Domain: 'auth0.com' },
     };
 
-    const result = mergeConfigs(base, overlay);
+    const result = MergeConfigs(base, overlay);
     expect(result.AuthProviderValues).toEqual({ Domain: 'auth0.com' });
+  });
+});
+
+/* ------------------------------------------------------------------- */
+/*  PackageManager field                                               */
+/* ------------------------------------------------------------------- */
+
+describe('PackageManager config field', () => {
+  it('defaults to pnpm', () => {
+    expect(InstallConfigDefaults.PackageManager).toBe('pnpm');
+  });
+
+  describe('via environment variable', () => {
+    let saved: string | undefined;
+
+    beforeEach(() => {
+      saved = process.env.MJ_INSTALL_PACKAGE_MANAGER;
+      delete process.env.MJ_INSTALL_PACKAGE_MANAGER;
+    });
+
+    afterEach(() => {
+      if (saved !== undefined) {
+        process.env.MJ_INSTALL_PACKAGE_MANAGER = saved;
+      } else {
+        delete process.env.MJ_INSTALL_PACKAGE_MANAGER;
+      }
+    });
+
+    it('reads MJ_INSTALL_PACKAGE_MANAGER', () => {
+      process.env.MJ_INSTALL_PACKAGE_MANAGER = 'npm';
+      const config = ResolveFromEnvironment();
+      expect(config.PackageManager).toBe('npm');
+    });
+
+    it('omits the field when the env var is unset', () => {
+      const config = ResolveFromEnvironment();
+      expect(config.PackageManager).toBeUndefined();
+    });
+  });
+
+  describe('via config file', () => {
+    let tempDir: string;
+
+    beforeEach(async () => {
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-config-pm-test-'));
+    });
+
+    afterEach(async () => {
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    });
+
+    it('accepts the canonical PackageManager key', async () => {
+      const filePath = path.join(tempDir, 'config.json');
+      await fs.writeFile(filePath, JSON.stringify({ PackageManager: 'npm', DatabaseHost: 'x' }));
+
+      const config = await LoadConfigFile(filePath);
+      expect(config.PackageManager).toBe('npm');
+    });
   });
 });

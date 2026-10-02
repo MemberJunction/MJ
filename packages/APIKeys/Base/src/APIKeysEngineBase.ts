@@ -38,7 +38,7 @@ const DEFAULT_UI_CONFIG: APIScopeUIConfig = {
  * @param scope - The API Scope entity
  * @returns Parsed UIConfig with defaults applied
  */
-export function parseAPIScopeUIConfig(scope: MJAPIScopeEntity): APIScopeUIConfig {
+export function ParseAPIScopeUIConfig(scope: MJAPIScopeEntity): APIScopeUIConfig {
     if (!scope.UIConfig) {
         return { ...DEFAULT_UI_CONFIG };
     }
@@ -51,6 +51,11 @@ export function parseAPIScopeUIConfig(scope: MJAPIScopeEntity): APIScopeUIConfig
     } catch {
         return { ...DEFAULT_UI_CONFIG };
     }
+}
+
+/** @deprecated Use {@link ParseAPIScopeUIConfig}. */
+export function parseAPIScopeUIConfig(scope: MJAPIScopeEntity): APIScopeUIConfig {
+    return ParseAPIScopeUIConfig(scope);
 }
 
 /**

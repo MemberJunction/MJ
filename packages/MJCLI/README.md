@@ -170,6 +170,29 @@ Uses [cosmiconfig](https://github.com/davidtheclark/cosmiconfig) to find configu
 
 These can also be set in `mj.config.cjs` as `dbHost`, `dbPort`, `dbDatabase`, `codeGenLogin`, `codeGenPassword`, `dbEncrypt`, and `dbTrustServerCertificate`.
 
+### Open App packages and `--no-app-packages`
+
+Every heavy command (anything that is not `version`, `help`, `migrate`, `clean`, `bump`, `install`,
+`dbdoc *` or `* usage`) imports, before it opens a database, the host's generated packages and the
+installed Open Apps' server packages named in `mj.config.cjs` — so `mj sync push`, `mj app …`,
+`mj test` and `mj ai` construct an app's real entity subclasses rather than a generic `BaseEntity`.
+The command's process ID is `cli:<command>` (`cli:sync:push`), which entries can be scoped to with
+`Processes` / `ExcludeProcesses` and `dynamicPackages.policy`:
+
+```javascript
+// mj.config.cjs
+dynamicPackages: {
+  server: [
+    { PackageName: '@acme/seed-hooks', StartupExport: 'LoadSeedHooks', Processes: ['cli:sync'] },
+  ],
+  policy: { 'cli:codegen': 'none' },
+}
+```
+
+`--no-app-packages` (global, any command) or `MJ_DYNAMIC_PACKAGES=none` skips them for one run;
+`--verbose` prints what loaded on stderr. Full model:
+[`guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
+
 ## Commands
 
 ### mj install
@@ -503,13 +526,24 @@ mj app check-updates
 
 #### Internal / dangerous flags
 
-Intentionally omitted from `--help`. Only for MJ-internal apps that own a
-reserved-looking schema (e.g. `__bcsaas`). Do not use on third-party apps.
+Intentionally omitted from `--help`. Almost never needed: MJ's own Open Apps use the
+`__mj_<AppName>` schema namespace (`__mj_BizAppsCommon`, `__mj_BizAppsForms`, …), which
+installs on the default path with no flag at all.
 
-- `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`
-  and `mj app upgrade`. Bypasses the rule that blocks schema names starting with
-  `__` (reserved for MJ internals). Exact-match reserved names (`__mj`, `dbo`,
-  `sys`, `guest`, `INFORMATION_SCHEMA`) remain hard-blocked regardless.
+- `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`,
+  `mj app upgrade` and `mj app remove`. Allows a `__`-prefixed schema name *outside* the
+  `__mj_` app namespace (e.g. `__bcsaas`). Reserved schemas remain hard-blocked regardless,
+  on both supported platforms: every schema the **database** owns — `dbo`, `sys`, `guest`,
+  SQL Server's nine `db_*` fixed database-role schemas, `public`, anything starting `pg_`,
+  and `information_schema` — plus every schema **MJ** owns: `__mj` and `__mj_UDT`. Each of
+  these already exists in a stock database, so naming one would not create it, it would
+  *adopt* it — and `mj app remove` would then drop it.
+
+  Removing an app installed under one of those `__`-outside-namespace names (e.g. `__bcsaas`)
+  needs the same flag again: `mj app remove <app> --dangerously-ignore-dbl-underscore-schema-rule`
+  drops the schema. `--keep-data` is the exit for the platform- and MJ-reserved names above, which MJ
+  must never drop: `mj app remove <app> --keep-data` unregisters the app and leaves the
+  schema in place.
 
 ```bash
 mj app install https://github.com/BlueCypress/SaaS \

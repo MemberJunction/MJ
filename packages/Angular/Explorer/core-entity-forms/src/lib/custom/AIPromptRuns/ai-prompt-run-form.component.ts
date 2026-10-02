@@ -20,29 +20,160 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 })
 export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
     public record!: MJAIPromptRunEntityExtended;
-    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+    public readonly ToolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** @deprecated Use {@link ToolbarConfig}. */
+    public get toolbarConfig() {
+      return this.ToolbarConfig;
+    }
 
     /** Custom-layout AI Prompt Run form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
 
     // Related entities
-    public prompt: MJAIPromptEntityExtended | null = null;
+    public Prompt: MJAIPromptEntityExtended | null = null;
+
+    /** @deprecated Use {@link Prompt}. */
+    public get prompt(): MJAIPromptEntityExtended | null {
+      return this.Prompt;
+    }
+    /** @deprecated Use {@link Prompt}. */
+    public set prompt(value: MJAIPromptEntityExtended | null) {
+      this.Prompt = value;
+    }
     public model: MJAIModelEntity | null = null;
-    public parentRun: MJAIPromptRunEntityExtended | null = null;
-    public childRuns: MJAIPromptRunEntityExtended[] = [];
+    public ParentRun: MJAIPromptRunEntityExtended | null = null;
+
+    /** @deprecated Use {@link ParentRun}. */
+    public get parentRun(): MJAIPromptRunEntityExtended | null {
+      return this.ParentRun;
+    }
+    /** @deprecated Use {@link ParentRun}. */
+    public set parentRun(value: MJAIPromptRunEntityExtended | null) {
+      this.ParentRun = value;
+    }
+    public ChildRuns: MJAIPromptRunEntityExtended[] = [];
+
+    /** @deprecated Use {@link ChildRuns}. */
+    public get childRuns(): MJAIPromptRunEntityExtended[] {
+      return this.ChildRuns;
+    }
+    /** @deprecated Use {@link ChildRuns}. */
+    public set childRuns(value: MJAIPromptRunEntityExtended[]) {
+      this.ChildRuns = value;
+    }
     
     // UI state
-    public isLoadingRelatedData = false;
-    public isParsingMessages = false; // Will be set to true in ngOnInit if there are messages
-    public inputExpanded = true; // Start open as users want to see this
-    public messagesExpanded = true;
-    public dataExpanded = false; // Changed to false - often blank
-    public rawExpanded = false;
-    public resultExpanded = false; // Start closed for lazy loading
-    public metricsExpanded = false;
-    public hierarchyExpanded = false;
-    public validationExpanded = false; // Start closed for lazy loading
-    public modelSpecificExpanded = false; // Start closed for lazy loading
+    public IsLoadingRelatedData = false;
+
+    /** @deprecated Use {@link IsLoadingRelatedData}. */
+    public get isLoadingRelatedData() {
+      return this.IsLoadingRelatedData;
+    }
+    /** @deprecated Use {@link IsLoadingRelatedData}. */
+    public set isLoadingRelatedData(value) {
+      this.IsLoadingRelatedData = value;
+    }
+    public IsParsingMessages = false;
+
+    /** @deprecated Use {@link IsParsingMessages}. */
+    public get isParsingMessages() {
+      return this.IsParsingMessages;
+    }
+    /** @deprecated Use {@link IsParsingMessages}. */
+    public set isParsingMessages(value) {
+      this.IsParsingMessages = value;
+    } // Will be set to true in ngOnInit if there are messages
+    public InputExpanded = true;
+
+    /** @deprecated Use {@link InputExpanded}. */
+    public get inputExpanded() {
+      return this.InputExpanded;
+    }
+    /** @deprecated Use {@link InputExpanded}. */
+    public set inputExpanded(value) {
+      this.InputExpanded = value;
+    } // Start open as users want to see this
+    public MessagesExpanded = true;
+
+    /** @deprecated Use {@link MessagesExpanded}. */
+    public get messagesExpanded() {
+      return this.MessagesExpanded;
+    }
+    /** @deprecated Use {@link MessagesExpanded}. */
+    public set messagesExpanded(value) {
+      this.MessagesExpanded = value;
+    }
+    public DataExpanded = false;
+
+    /** @deprecated Use {@link DataExpanded}. */
+    public get dataExpanded() {
+      return this.DataExpanded;
+    }
+    /** @deprecated Use {@link DataExpanded}. */
+    public set dataExpanded(value) {
+      this.DataExpanded = value;
+    } // Changed to false - often blank
+    public RawExpanded = false;
+
+    /** @deprecated Use {@link RawExpanded}. */
+    public get rawExpanded() {
+      return this.RawExpanded;
+    }
+    /** @deprecated Use {@link RawExpanded}. */
+    public set rawExpanded(value) {
+      this.RawExpanded = value;
+    }
+    public ResultExpanded = false;
+
+    /** @deprecated Use {@link ResultExpanded}. */
+    public get resultExpanded() {
+      return this.ResultExpanded;
+    }
+    /** @deprecated Use {@link ResultExpanded}. */
+    public set resultExpanded(value) {
+      this.ResultExpanded = value;
+    } // Start closed for lazy loading
+    public MetricsExpanded = false;
+
+    /** @deprecated Use {@link MetricsExpanded}. */
+    public get metricsExpanded() {
+      return this.MetricsExpanded;
+    }
+    /** @deprecated Use {@link MetricsExpanded}. */
+    public set metricsExpanded(value) {
+      this.MetricsExpanded = value;
+    }
+    public HierarchyExpanded = false;
+
+    /** @deprecated Use {@link HierarchyExpanded}. */
+    public get hierarchyExpanded() {
+      return this.HierarchyExpanded;
+    }
+    /** @deprecated Use {@link HierarchyExpanded}. */
+    public set hierarchyExpanded(value) {
+      this.HierarchyExpanded = value;
+    }
+    public ValidationExpanded = false;
+
+    /** @deprecated Use {@link ValidationExpanded}. */
+    public get validationExpanded() {
+      return this.ValidationExpanded;
+    }
+    /** @deprecated Use {@link ValidationExpanded}. */
+    public set validationExpanded(value) {
+      this.ValidationExpanded = value;
+    } // Start closed for lazy loading
+    public ModelSpecificExpanded = false;
+
+    /** @deprecated Use {@link ModelSpecificExpanded}. */
+    public get modelSpecificExpanded() {
+      return this.ModelSpecificExpanded;
+    }
+    /** @deprecated Use {@link ModelSpecificExpanded}. */
+    public set modelSpecificExpanded(value) {
+      this.ModelSpecificExpanded = value;
+    } // Start closed for lazy loading
     
     // Track what has been loaded
     private hasLoadedInput = false;
@@ -52,22 +183,130 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     private hasLoadedModelSpecific = false;
     
     // Formatted values
-    public formattedMessages = '';
-    public formattedResult = '';
-    public formattedValidationSummary = '';
-    public formattedValidationAttempts = '';
-    public formattedData = '';
-    public formattedModelSelection = '';
-    public formattedErrorDetails = '';
-    public formattedModelSpecificResponseDetails = '';
+    public FormattedMessages = '';
+
+    /** @deprecated Use {@link FormattedMessages}. */
+    public get formattedMessages() {
+      return this.FormattedMessages;
+    }
+    /** @deprecated Use {@link FormattedMessages}. */
+    public set formattedMessages(value) {
+      this.FormattedMessages = value;
+    }
+    public FormattedResult = '';
+
+    /** @deprecated Use {@link FormattedResult}. */
+    public get formattedResult() {
+      return this.FormattedResult;
+    }
+    /** @deprecated Use {@link FormattedResult}. */
+    public set formattedResult(value) {
+      this.FormattedResult = value;
+    }
+    public FormattedValidationSummary = '';
+
+    /** @deprecated Use {@link FormattedValidationSummary}. */
+    public get formattedValidationSummary() {
+      return this.FormattedValidationSummary;
+    }
+    /** @deprecated Use {@link FormattedValidationSummary}. */
+    public set formattedValidationSummary(value) {
+      this.FormattedValidationSummary = value;
+    }
+    public FormattedValidationAttempts = '';
+
+    /** @deprecated Use {@link FormattedValidationAttempts}. */
+    public get formattedValidationAttempts() {
+      return this.FormattedValidationAttempts;
+    }
+    /** @deprecated Use {@link FormattedValidationAttempts}. */
+    public set formattedValidationAttempts(value) {
+      this.FormattedValidationAttempts = value;
+    }
+    public FormattedData = '';
+
+    /** @deprecated Use {@link FormattedData}. */
+    public get formattedData() {
+      return this.FormattedData;
+    }
+    /** @deprecated Use {@link FormattedData}. */
+    public set formattedData(value) {
+      this.FormattedData = value;
+    }
+    public FormattedModelSelection = '';
+
+    /** @deprecated Use {@link FormattedModelSelection}. */
+    public get formattedModelSelection() {
+      return this.FormattedModelSelection;
+    }
+    /** @deprecated Use {@link FormattedModelSelection}. */
+    public set formattedModelSelection(value) {
+      this.FormattedModelSelection = value;
+    }
+    public FormattedErrorDetails = '';
+
+    /** @deprecated Use {@link FormattedErrorDetails}. */
+    public get formattedErrorDetails() {
+      return this.FormattedErrorDetails;
+    }
+    /** @deprecated Use {@link FormattedErrorDetails}. */
+    public set formattedErrorDetails(value) {
+      this.FormattedErrorDetails = value;
+    }
+    public FormattedModelSpecificResponseDetails = '';
+
+    /** @deprecated Use {@link FormattedModelSpecificResponseDetails}. */
+    public get formattedModelSpecificResponseDetails() {
+      return this.FormattedModelSpecificResponseDetails;
+    }
+    /** @deprecated Use {@link FormattedModelSpecificResponseDetails}. */
+    public set formattedModelSpecificResponseDetails(value) {
+      this.FormattedModelSpecificResponseDetails = value;
+    }
     
     // Parsed input data
-    public chatMessages: ChatMessage[] = [];
-    public inputData: any = null;
+    public ChatMessages: ChatMessage[] = [];
+
+    /** @deprecated Use {@link ChatMessages}. */
+    public get chatMessages(): ChatMessage[] {
+      return this.ChatMessages;
+    }
+    /** @deprecated Use {@link ChatMessages}. */
+    public set chatMessages(value: ChatMessage[]) {
+      this.ChatMessages = value;
+    }
+    public InputData: any = null;
+
+    /** @deprecated Use {@link InputData}. */
+    public get inputData(): any {
+      return this.InputData;
+    }
+    /** @deprecated Use {@link InputData}. */
+    public set inputData(value: any) {
+      this.InputData = value;
+    }
     
     // Validation data
-    public validationAttempts: any[] = [];
-    public validationSummary: any = null;
+    public ValidationAttempts: any[] = [];
+
+    /** @deprecated Use {@link ValidationAttempts}. */
+    public get validationAttempts(): any[] {
+      return this.ValidationAttempts;
+    }
+    /** @deprecated Use {@link ValidationAttempts}. */
+    public set validationAttempts(value: any[]) {
+      this.ValidationAttempts = value;
+    }
+    public ValidationSummary: any = null;
+
+    /** @deprecated Use {@link ValidationSummary}. */
+    public get validationSummary(): any {
+      return this.ValidationSummary;
+    }
+    /** @deprecated Use {@link ValidationSummary}. */
+    public set validationSummary(value: any) {
+      this.ValidationSummary = value;
+    }
 
     // Full-screen overlay state
     public FullScreenContent: string | null = null;
@@ -82,8 +321,8 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         await super.ngOnInit();
         if (this.record?.ID) {
             // Set loading state immediately if input panel will be loaded and has messages
-            if (this.inputExpanded && this.record.Messages && this.record.Messages.trim() !== '') {
-                this.isParsingMessages = true;
+            if (this.InputExpanded && this.record.Messages && this.record.Messages.trim() !== '') {
+                this.IsParsingMessages = true;
                 this.cdr.detectChanges(); // Force immediate update to show spinner
             }
             
@@ -101,7 +340,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
             this.hasLoadedMetrics = true;
             this.hasLoadedModelSpecific = true;
             
-            this.isParsingMessages = false;
+            this.IsParsingMessages = false;
             this.cdr.detectChanges();
         }
     }
@@ -119,51 +358,81 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         // This is here for future use and to complete the lifecycle
     }
     
+    OnInputPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.InputExpanded = expanded;
+        // Data is already formatted on init, no need to do anything
+    }
+
+    /** @deprecated Use {@link OnInputPanelToggle}. */
     onInputPanelToggle(event: any) {
-        const expanded = event as boolean;
-        this.inputExpanded = expanded;
-        // Data is already formatted on init, no need to do anything
+      return this.OnInputPanelToggle(event);
     }
     
+    OnResultPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.ResultExpanded = expanded;
+        // Data is already formatted on init, no need to do anything
+    }
+
+    /** @deprecated Use {@link OnResultPanelToggle}. */
     onResultPanelToggle(event: any) {
-        const expanded = event as boolean;
-        this.resultExpanded = expanded;
-        // Data is already formatted on init, no need to do anything
+      return this.OnResultPanelToggle(event);
     }
     
+    OnValidationPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.ValidationExpanded = expanded;
+        // Data is already formatted on init, no need to do anything
+    }
+
+    /** @deprecated Use {@link OnValidationPanelToggle}. */
     onValidationPanelToggle(event: any) {
-        const expanded = event as boolean;
-        this.validationExpanded = expanded;
-        // Data is already formatted on init, no need to do anything
+      return this.OnValidationPanelToggle(event);
     }
     
+    OnMetricsPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.MetricsExpanded = expanded;
+        // Data is already formatted on init, no need to do anything
+    }
+
+    /** @deprecated Use {@link OnMetricsPanelToggle}. */
     onMetricsPanelToggle(event: any) {
-        const expanded = event as boolean;
-        this.metricsExpanded = expanded;
-        // Data is already formatted on init, no need to do anything
+      return this.OnMetricsPanelToggle(event);
     }
     
+    OnModelSpecificPanelToggle(event: any) {
+        const expanded = event as boolean;
+        this.ModelSpecificExpanded = expanded;
+        // Data is already formatted on init, no need to do anything
+    }
+
+    /** @deprecated Use {@link OnModelSpecificPanelToggle}. */
     onModelSpecificPanelToggle(event: any) {
-        const expanded = event as boolean;
-        this.modelSpecificExpanded = expanded;
-        // Data is already formatted on init, no need to do anything
+      return this.OnModelSpecificPanelToggle(event);
     }
     
-    onModelSelectionPanelToggle(event: any) {
+    OnModelSelectionPanelToggle(event: any) {
         const expanded = event as boolean;
         // Data is already formatted on init, no need to do anything
+    }
+
+    /** @deprecated Use {@link OnModelSelectionPanelToggle}. */
+    onModelSelectionPanelToggle(event: any) {
+      return this.OnModelSelectionPanelToggle(event);
     }
     
     private async loadRelatedData() {
-        this.isLoadingRelatedData = true;
+        this.IsLoadingRelatedData = true;
         try {
             const md = this.ProviderToUse;
             
             // Load prompt
             if (this.record.PromptID) {
-                this.prompt = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
-                if (this.prompt) {
-                    await this.prompt.Load(this.record.PromptID);
+                this.Prompt = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
+                if (this.Prompt) {
+                    await this.Prompt.Load(this.record.PromptID);
                 }
             }
             
@@ -177,9 +446,9 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
             
             // Load parent run if exists
             if (this.record.ParentID) {
-                this.parentRun = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
-                if (this.parentRun) {
-                    await this.parentRun.Load(this.record.ParentID);
+                this.ParentRun = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
+                if (this.ParentRun) {
+                    await this.ParentRun.Load(this.record.ParentID);
                 }
             }
             
@@ -188,7 +457,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         } catch (error) {
             console.error('Error loading related data:', error);
         } finally {
-            this.isLoadingRelatedData = false;
+            this.IsLoadingRelatedData = false;
         }
     }
     
@@ -204,7 +473,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         });
         
         if (result.Success) {
-            this.childRuns = result.Results || [];
+            this.ChildRuns = result.Results || [];
         }
     }
     
@@ -217,16 +486,16 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         console.log('📄 Formatting input data...');
         // Format input/messages data
         const messageData = this.record.ParseMessagesData();
-        this.chatMessages = messageData.chatMessages;
-        this.inputData = messageData.inputData;
-        this.formattedMessages = messageData.formattedMessages;
-        this.formattedData = messageData.formattedData;
-        console.log('📄 Input data formatted. Chat messages:', this.chatMessages.length, 'Input data exists:', !!this.inputData);
+        this.ChatMessages = messageData.chatMessages;
+        this.InputData = messageData.inputData;
+        this.FormattedMessages = messageData.formattedMessages;
+        this.FormattedData = messageData.formattedData;
+        console.log('📄 Input data formatted. Chat messages:', this.ChatMessages.length, 'Input data exists:', !!this.InputData);
         
         console.log('📊 Formatting result data...');
         // Format result data
-        this.formattedResult = this.record.GetFormattedResult();
-        console.log('📊 Result formatted:', !!this.formattedResult, 'Length:', this.formattedResult?.length);
+        this.FormattedResult = this.record.GetFormattedResult();
+        console.log('📊 Result formatted:', !!this.FormattedResult, 'Length:', this.FormattedResult?.length);
         
         console.log('🔍 Formatting validation data...');
         // Format validation data
@@ -241,7 +510,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         this.formatModelSpecificResponseDetails();
         
         // Format error details if available
-        if (this.record.ErrorDetails && !this.formattedErrorDetails) {
+        if (this.record.ErrorDetails && !this.FormattedErrorDetails) {
             console.log('⚠️ Formatting error details...');
             this.formatErrorDetails();
         }
@@ -263,9 +532,9 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
             try {
                 const modelSelection = JSON.parse(this.record.ModelSelection);
                 const parsed = ParseJSONRecursive(modelSelection, parseOptions);
-                this.formattedModelSelection = JSON.stringify(parsed, null, 2);
+                this.FormattedModelSelection = JSON.stringify(parsed, null, 2);
             } catch (error) {
-                this.formattedModelSelection = this.record.ModelSelection;
+                this.FormattedModelSelection = this.record.ModelSelection;
             }
         }
         
@@ -274,9 +543,9 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
             try {
                 const errorDetails = JSON.parse(this.record.ErrorDetails);
                 const parsed = ParseJSONRecursive(errorDetails, parseOptions);
-                this.formattedErrorDetails = JSON.stringify(parsed, null, 2);
+                this.FormattedErrorDetails = JSON.stringify(parsed, null, 2);
             } catch (error) {
-                this.formattedErrorDetails = this.record.ErrorDetails;
+                this.FormattedErrorDetails = this.record.ErrorDetails;
             }
         }
         
@@ -285,7 +554,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     
     private formatErrorDetails() {
         if (!this.record.ErrorDetails) {
-            this.formattedErrorDetails = '';
+            this.FormattedErrorDetails = '';
             return;
         }
         
@@ -298,15 +567,15 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         try {
             const errorDetails = JSON.parse(this.record.ErrorDetails);
             const parsed = ParseJSONRecursive(errorDetails, parseOptions);
-            this.formattedErrorDetails = JSON.stringify(parsed, null, 2);
+            this.FormattedErrorDetails = JSON.stringify(parsed, null, 2);
         } catch (error) {
-            this.formattedErrorDetails = this.record.ErrorDetails;
+            this.FormattedErrorDetails = this.record.ErrorDetails;
         }
     }
     
     private formatModelSpecificResponseDetails() {
         if (!this.record.ModelSpecificResponseDetails) {
-            this.formattedModelSpecificResponseDetails = '';
+            this.FormattedModelSpecificResponseDetails = '';
             return;
         }
         
@@ -319,13 +588,13 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         try {
             const modelDetails = JSON.parse(this.record.ModelSpecificResponseDetails);
             const parsed = ParseJSONRecursive(modelDetails, parseOptions);
-            this.formattedModelSpecificResponseDetails = JSON.stringify(parsed, null, 2);
+            this.FormattedModelSpecificResponseDetails = JSON.stringify(parsed, null, 2);
         } catch (error) {
-            this.formattedModelSpecificResponseDetails = this.record.ModelSpecificResponseDetails;
+            this.FormattedModelSpecificResponseDetails = this.record.ModelSpecificResponseDetails;
         }
     }
     
-    getStatusColor(): string {
+    GetStatusColor(): string {
         if (!this.record) return '#6c757d';
 
         if (!this.record.CompletedAt) {
@@ -339,7 +608,12 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         }
     }
 
-    getStatusIcon(): string {
+    /** @deprecated Use {@link GetStatusColor}. */
+    getStatusColor(): string {
+      return this.GetStatusColor();
+    }
+
+    GetStatusIcon(): string {
         if (!this.record) return 'fa-circle';
 
         if (!this.record.CompletedAt) {
@@ -353,7 +627,12 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         }
     }
 
-    getStatusText(): string {
+    /** @deprecated Use {@link GetStatusIcon}. */
+    getStatusIcon(): string {
+      return this.GetStatusIcon();
+    }
+
+    GetStatusText(): string {
         if (!this.record) return 'Unknown';
 
         if (!this.record.CompletedAt) {
@@ -365,6 +644,11 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         } else {
             return 'Completed';
         }
+    }
+
+    /** @deprecated Use {@link GetStatusText}. */
+    getStatusText(): string {
+      return this.GetStatusText();
     }
     
     formatDuration(ms: number | null): string {
@@ -381,14 +665,24 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         }
     }
     
-    formatCost(cost: number | null): string {
+    FormatCost(cost: number | null): string {
         if (!cost) return '-';
         return `$${cost.toFixed(4)}`;
     }
+
+    /** @deprecated Use {@link FormatCost}. */
+    formatCost(cost: number | null): string {
+      return this.FormatCost(cost);
+    }
     
-    formatTokens(tokens: number | null): string {
+    FormatTokens(tokens: number | null): string {
         if (!tokens) return '-';
         return tokens.toLocaleString();
+    }
+
+    /** @deprecated Use {@link FormatTokens}. */
+    formatTokens(tokens: number | null): string {
+      return this.FormatTokens(tokens);
     }
 
     /**
@@ -429,7 +723,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         return totalInput > 0 ? (read / totalInput) * 100 : 0;
     }
     
-    getRunTypeIcon(runType: string | null): string {
+    GetRunTypeIcon(runType: string | null): string {
         switch (runType) {
             case 'Single':
                 return 'fa-play-circle';
@@ -443,8 +737,13 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
                 return 'fa-circle';
         }
     }
+
+    /** @deprecated Use {@link GetRunTypeIcon}. */
+    getRunTypeIcon(runType: string | null): string {
+      return this.GetRunTypeIcon(runType);
+    }
     
-    getRunTypeColor(runType: string | null): string {
+    GetRunTypeColor(runType: string | null): string {
         switch (runType) {
             case 'Single':
                 return '#6f42c1';
@@ -458,20 +757,35 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
                 return '#6c757d';
         }
     }
-    
-    navigateToEntity(entityName: string, recordId: string | null) {
-        if (!recordId) return;
-        
-        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+
+    /** @deprecated Use {@link GetRunTypeColor}. */
+    getRunTypeColor(runType: string | null): string {
+      return this.GetRunTypeColor(runType);
     }
     
-    navigateToOriginalRun() {
+    NavigateToEntity(entityName: string, recordId: string | null) {
+        if (!recordId) return;
+        
+        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
+    }
+
+    /** @deprecated Use {@link NavigateToEntity}. */
+    navigateToEntity(entityName: string, recordId: string | null) {
+      return this.NavigateToEntity(entityName, recordId);
+    }
+    
+    NavigateToOriginalRun() {
         if (this.record?.RerunFromPromptRunID) {
             SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(this.record.RerunFromPromptRunID));
         }
     }
+
+    /** @deprecated Use {@link NavigateToOriginalRun}. */
+    navigateToOriginalRun() {
+      return this.NavigateToOriginalRun();
+    }
     
-    reRunPrompt() {
+    ReRunPrompt() {
         console.log('🚀 Re-Run button clicked');
         console.log('📋 Current record:', this.record);
         console.log('🆔 Record ID:', this.record?.ID);
@@ -485,7 +799,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         const params = {
             promptId: this.record.PromptID,
             promptRunId: this.record.ID,
-            title: `Re-Run: ${this.prompt?.Name || 'Prompt'}`,
+            title: `Re-Run: ${this.Prompt?.Name || 'Prompt'}`,
             width: '80vw',
             height: '80vh',
             viewContainerRef: this.viewContainerRef
@@ -506,8 +820,13 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
             }
         });
     }
+
+    /** @deprecated Use {@link ReRunPrompt}. */
+    reRunPrompt() {
+      return this.ReRunPrompt();
+    }
     
-    copyToClipboard(text: string, fieldName: string) {
+    CopyToClipboard(text: string, fieldName: string) {
         navigator.clipboard.writeText(text).then(() => {
             // Just show a console log for now, as ShowSimpleNotification may not exist
             console.log(`${fieldName} copied to clipboard`);
@@ -515,8 +834,13 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
             console.error('Failed to copy:', err);
         });
     }
+
+    /** @deprecated Use {@link CopyToClipboard}. */
+    copyToClipboard(text: string, fieldName: string) {
+      return this.CopyToClipboard(text, fieldName);
+    }
     
-    async refreshData() {
+    async RefreshData() {
         console.log('🔄 refreshData called');
         if (this.record?.ID) {
             console.log('🔄 Reloading record and formatting all data...');
@@ -531,17 +855,32 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
             this.cdr.detectChanges();
         }
     }
+
+    /** @deprecated Use {@link RefreshData}. */
+    async refreshData() {
+      return this.RefreshData();
+    }
     
-    public openFullScreen(content: string, language: string, title: string): void {
+    public OpenFullScreen(content: string, language: string, title: string): void {
         this.FullScreenContent = content;
         this.FullScreenLanguage = language;
         this.FullScreenTitle = title;
         this.cdr.detectChanges();
     }
 
-    public closeFullScreen(): void {
+    /** @deprecated Use {@link OpenFullScreen}. */
+    public openFullScreen(content: string, language: string, title: string): void {
+      return this.OpenFullScreen(content, language, title);
+    }
+
+    public CloseFullScreen(): void {
         this.FullScreenContent = null;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link CloseFullScreen}. */
+    public closeFullScreen(): void {
+      return this.CloseFullScreen();
     }
 
     private loadValidationData() {
@@ -554,33 +893,33 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         // Parse validation attempts if available
         if (this.record.ValidationAttempts) {
             try {
-                this.validationAttempts = JSON.parse(this.record.ValidationAttempts);
-                const recursivelyParsed = ParseJSONRecursive(this.validationAttempts, parseOptions);
-                this.formattedValidationAttempts = JSON.stringify(recursivelyParsed, null, 2);
+                this.ValidationAttempts = JSON.parse(this.record.ValidationAttempts);
+                const recursivelyParsed = ParseJSONRecursive(this.ValidationAttempts, parseOptions);
+                this.FormattedValidationAttempts = JSON.stringify(recursivelyParsed, null, 2);
             } catch (error) {
                 console.error('Error parsing ValidationAttempts:', error);
-                this.validationAttempts = [];
-                this.formattedValidationAttempts = '';
+                this.ValidationAttempts = [];
+                this.FormattedValidationAttempts = '';
             }
         } else {
-            this.validationAttempts = [];
-            this.formattedValidationAttempts = '';
+            this.ValidationAttempts = [];
+            this.FormattedValidationAttempts = '';
         }
         
         // Parse validation summary if available
         if (this.record.ValidationSummary) {
             try {
-                this.validationSummary = JSON.parse(this.record.ValidationSummary);
-                const recursivelyParsed = ParseJSONRecursive(this.validationSummary, parseOptions);
-                this.formattedValidationSummary = JSON.stringify(recursivelyParsed, null, 2);
+                this.ValidationSummary = JSON.parse(this.record.ValidationSummary);
+                const recursivelyParsed = ParseJSONRecursive(this.ValidationSummary, parseOptions);
+                this.FormattedValidationSummary = JSON.stringify(recursivelyParsed, null, 2);
             } catch (error) {
                 console.error('Error parsing ValidationSummary:', error);
-                this.validationSummary = null;
-                this.formattedValidationSummary = '';
+                this.ValidationSummary = null;
+                this.FormattedValidationSummary = '';
             }
         } else {
-            this.validationSummary = null;
-            this.formattedValidationSummary = '';
+            this.ValidationSummary = null;
+            this.FormattedValidationSummary = '';
         }
         
         // Don't auto-expand validation panel anymore - let user expand when needed

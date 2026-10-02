@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@memberjunction/standards/schema/mj-standards.schema.json",
-  "StandardsVersion": "6.0.0",
+  "StandardsVersion": "6.2.0",
   "Checks": {
     "ui-layers": {
       "Severity": "error",
@@ -10,6 +10,17 @@
       "Options": {
         "requireDeclaredIn": [
           "packages/Angular"
+        ]
+      }
+    },
+    "naming-conventions": {
+      "Severity": "error",
+      "Roots": [
+        "packages"
+      ],
+      "Options": {
+        "allowedNames": [
+          "environment"
         ]
       }
     }

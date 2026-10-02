@@ -38,10 +38,16 @@ if ($RecreateDatabase -or $Bootstrap) {
 if ($Bootstrap) {
     Push-Location $RepoRoot
     try {
-        npx mj migrate
-        npx mj codegen --skipfiles
-        npx mj sync push --dir=metadata --ci
-        npx mj codegen --skipdb
+        # NOT `npx mj`: nothing in this repo creates a workspace-root node_modules/.bin/mj (the
+        # root `workspace:*` devDependencies that used to are gone, so turbo's
+        # hashOfInternalDependencies stays empty), and this demo has no package.json of its own.
+        # `npx` would walk up, find nothing, and fetch the UNRELATED `mj` package from the
+        # registry — in a script holding DB credentials.
+        $MJCli = Join-Path $RepoRoot "packages/MJCLI/bin/run.js"
+        node $MJCli migrate
+        node $MJCli codegen --skipfiles
+        node $MJCli sync push --dir=metadata --ci
+        node $MJCli codegen --skipdb
     } finally {
         Pop-Location
     }

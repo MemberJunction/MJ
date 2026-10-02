@@ -17,6 +17,15 @@ vi.mock('@memberjunction/core', () => {
     ToConcatenatedString() {
       return this.KeyValuePairs.map((kv) => `${kv.FieldName}|${kv.Value}`).join('||');
     }
+    // Compact record-id form: bare value for a single column, prefixed segment for composite.
+    ToCompactURLSegment(): string {
+      return this.KeyValuePairs.length === 1 ? String(this.KeyValuePairs[0].Value ?? '') : this.ToConcatenatedString();
+    }
+    static FromEntityRecord(entity: { PrimaryKeys: Array<{ Name: string }> }, row: Record<string, unknown>): CompositeKey {
+      const key = new CompositeKey();
+      key.KeyValuePairs = entity.PrimaryKeys.map((pk) => ({ FieldName: pk.Name, Value: row[pk.Name] }));
+      return key;
+    }
   }
   class RunView {
     constructor(_p?: unknown) {}

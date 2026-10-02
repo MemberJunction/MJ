@@ -10,6 +10,41 @@
       "LinkedRecordType": "None"
     },
     "relatedEntities": {
+      "MJ: User Applications": [
+        {
+          "_comment": "An app appears in the header's application switcher ONLY if the user has a UserApplication row. Those rows are provisioned once per user, and nothing backfills them — so any Application added to metadata after this user was first provisioned stays invisible to them forever. That silently broke every test whose goal is 'open the app switcher and choose X': the agent opened and scrolled the dropdown correctly and the item simply was not there, then burned its step budget until the loop detector fired (Credentials T085-T089, Archiving T141-T142, Realtime T143). Seeded explicitly rather than relying on Application.DefaultForNewUser (which is 0 for most of these) so switcher visibility is deterministic and immune to provisioning order. Sequences continue past the 20 auto-provisioned rows (0-19).",
+          "fields": {
+            "UserID": "@parent:ID",
+            "ApplicationID": "@lookup:MJ: Applications.Name=Credentials",
+            "Sequence": 20,
+            "IsActive": true
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "ApplicationID": "@lookup:MJ: Applications.Name=Archiving",
+            "Sequence": 21,
+            "IsActive": true
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "ApplicationID": "@lookup:MJ: Applications.Name=Realtime Recordings",
+            "Sequence": 22,
+            "IsActive": true
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "ApplicationID": "@lookup:MJ: Applications.Name=Theme Studio",
+            "Sequence": 23,
+            "IsActive": true
+          }
+        }
+      ],
       "MJ: User Roles": [
         {
           "fields": {

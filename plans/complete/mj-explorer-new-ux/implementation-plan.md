@@ -794,7 +794,8 @@ During development, the implementation MUST be continuously compared against the
 
 #### Visual Comparison
 
-Run prototype (`plans/mj-explorer-new-ux/explorer-prototype`) and production side-by-side:
+Run prototype (`plans/mj-explorer-new-ux/explorer-prototype`) and production side-by-side
+(the prototype source has since been removed — see PROTOTYPE-OVERVIEW.md):
 
 - [ ] **Header**
   - [ ] App switcher button styling matches (icon, name, arrow)

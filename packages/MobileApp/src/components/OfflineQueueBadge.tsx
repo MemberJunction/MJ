@@ -22,7 +22,7 @@ import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
  * is pending.
  */
 export function OfflineQueueBadge() {
-    const { count, syncing, syncNow } = useOfflineQueue();
+    const { Count: count, Syncing: syncing, SyncNow } = useOfflineQueue();
 
     if (count === 0) return null;
 
@@ -30,7 +30,7 @@ export function OfflineQueueBadge() {
 
     return (
         <Pressable
-            onPress={() => void syncNow()}
+            onPress={() => void SyncNow()}
             disabled={syncing}
             style={styles.pill}
             accessibilityRole="button"

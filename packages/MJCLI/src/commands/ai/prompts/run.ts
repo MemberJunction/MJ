@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
+import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, ResolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class PromptsRun extends Command {
   static description = 'Execute a direct prompt with an AI model';
@@ -62,12 +62,12 @@ export default class PromptsRun extends Command {
 
     const { flags, metadata } = await this.parse(PromptsRun);
     const service = new PromptService();
-    const formatter = new OutputFormatter(resolveLegacyFormat({
-        format: flags.format,
-        legacy: flags.output as 'compact' | 'json' | 'table',
-        legacyDefault: 'compact' as const,
-        legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
-        map: AI_FORMAT_MAP,
+    const formatter = new OutputFormatter(ResolveLegacyFormat({
+        Format: flags.format,
+        Legacy: flags.output as 'compact' | 'json' | 'table',
+        LegacyDefault: 'compact' as const,
+        LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+        Map: AI_FORMAT_MAP,
       }));
 
     try {

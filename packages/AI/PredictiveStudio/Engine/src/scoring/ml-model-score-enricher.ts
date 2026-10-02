@@ -26,7 +26,7 @@ import type {
   IScoreRecordSetRunner,
   ScoringScope,
 } from '../actions/score-record-set.action';
-import { buildScoreRecordSetRunner } from '../operations/delegation';
+import { BuildScoreRecordSetRunner } from '../operations/delegation';
 
 /** The ClassFactory key the enricher registers under — the `EnricherKey` callers pass on `RunQueryParams.Enrichment`. */
 export const ML_MODEL_SCORE_ENRICHER_KEY = 'ML Model Score';
@@ -115,7 +115,7 @@ export class MLModelScoreEnricher extends QueryResultEnricherBase {
    * production default wires the model loader / sidecar / artifact loader.
    */
   protected createRunner(): IScoreRecordSetRunner {
-    return buildScoreRecordSetRunner();
+    return BuildScoreRecordSetRunner();
   }
 
   /**

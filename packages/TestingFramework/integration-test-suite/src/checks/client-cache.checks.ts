@@ -248,15 +248,29 @@ export const ClientCacheChecks: NamedCheck[] = [
             const rv = new RunView();
             // Use any existing approved query in the DB (the client RunQuery cache is
             // query-agnostic; we assert the caching mechanics, not the data)
-            const queries = await rv.RunView({
+            const queries = await rv.RunView<{ ID: string; Name: string }>({
                 EntityName: 'MJ: Queries',
                 ExtraFilter: "Status = 'Approved' AND SQL IS NOT NULL",
                 Fields: ['ID', 'Name'],
-                MaxRows: 1,
+                MaxRows: 20,
                 ResultType: 'simple'
             });
-            Assert(queries.Success && queries.Results.length === 1, 'need at least one approved query in the DB');
-            const queryId = String(queries.Results[0].ID);
+            Assert(queries.Success && queries.Results.length > 0, 'need at least one approved query in the DB');
+
+            // Find an approved query without required parameters so parameterless RunQuery succeeds
+            const requiredParams = await rv.RunView<{ QueryID: string }>({
+                EntityName: 'MJ: Query Parameters',
+                ExtraFilter: "IsRequired = 1",
+                Fields: ['QueryID'],
+                ResultType: 'simple'
+            });
+            const queriesWithReqParams = new Set(
+                requiredParams.Success ? requiredParams.Results.map(r => String(r.QueryID).toLowerCase()) : []
+            );
+            const candidate = queries.Results.find(q => !queriesWithReqParams.has(String(q.ID).toLowerCase()));
+            Assert(candidate !== undefined, 'need at least one approved query without required parameters in the DB');
+            if (!candidate) throw new Error('need at least one approved query without required parameters in the DB');
+            const queryId = String(candidate.ID);
 
             const rq = new RunQuery();
             ctx.Storage.ResetCounts();

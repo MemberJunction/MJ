@@ -3,7 +3,7 @@ import type { ActionResultSimple, RunActionParams } from '@memberjunction/action
 import { RegisterClass } from '@memberjunction/global';
 import { ListSharing } from '@memberjunction/lists';
 
-import { addOutputParam, getStringParam, missingParam } from './_action-helpers';
+import { AddOutputParam, GetStringParam, MissingParam } from './_action-helpers';
 
 /**
  * Issue a pending-email invitation to share a List. Returns the
@@ -19,12 +19,12 @@ import { addOutputParam, getStringParam, missingParam } from './_action-helpers'
 @RegisterClass(BaseAction, 'Invite To List')
 export class InviteToListAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const listId = getStringParam(params, 'ListID');
-    const email = getStringParam(params, 'Email');
-    if (!listId) return missingParam('ListID');
-    if (!email) return missingParam('Email');
+    const listId = GetStringParam(params, 'ListID');
+    const email = GetStringParam(params, 'Email');
+    if (!listId) return MissingParam('ListID');
+    if (!email) return MissingParam('Email');
 
-    const role = (getStringParam(params, 'Role') ?? 'Viewer') as 'Editor' | 'Viewer';
+    const role = (GetStringParam(params, 'Role') ?? 'Viewer') as 'Editor' | 'Viewer';
     if (role !== 'Editor' && role !== 'Viewer') {
       return {
         Success: false,
@@ -32,14 +32,14 @@ export class InviteToListAction extends BaseAction {
         Message: `Role must be Editor or Viewer (got '${role}')`,
       };
     }
-    const ttlHoursRaw = getStringParam(params, 'TtlHours');
+    const ttlHoursRaw = GetStringParam(params, 'TtlHours');
     const ttlMs = ttlHoursRaw != null ? Number(ttlHoursRaw) * 60 * 60 * 1000 : undefined;
 
     const sharing = new ListSharing(params.ContextUser, params.Provider);
     const result = await sharing.Invite({ ListID: listId, Email: email, Role: role, TtlMs: ttlMs });
-    addOutputParam(params, 'InvitationID', result.InvitationID);
-    addOutputParam(params, 'Token', result.Token);
-    addOutputParam(params, 'ExpiresAt', result.ExpiresAt?.toISOString());
+    AddOutputParam(params, 'InvitationID', result.InvitationID);
+    AddOutputParam(params, 'Token', result.Token);
+    AddOutputParam(params, 'ExpiresAt', result.ExpiresAt?.toISOString());
     return { Success: result.Success, ResultCode: result.ResultCode, Message: result.Message };
   }
 }

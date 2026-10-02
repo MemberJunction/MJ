@@ -840,8 +840,11 @@ The two checker scripts live at `.github/scripts/check-css-hex-tokens.sh` and `.
 - Prefer object shorthand syntax
 - Follow existing naming conventions:
   - PascalCase for classes and interfaces
-  - **PascalCase for public class members** (properties, methods, `@Input()`, `@Output()`)
-  - **camelCase for private/protected class members**
+  - **PascalCase for public class members** (properties, methods, `@Input()`, `@Output()`) — and remember TypeScript's default visibility is _public_, so a member with **no** access modifier follows this rule too
+  - **camelCase for `private` class members** (a leading `_` is fine — `_config` backing a `public get Config()` is idiomatic)
+  - **PascalCase for `protected` extension points** — see the carve-out below; `protected` is NOT camelCase in MJ
+  - **PascalCase for exported functions, classes, interfaces, types and enums**; exported value `const`s are PascalCase or `SCREAMING_SNAKE`
+  - `SCREAMING_SNAKE_CASE` for constants, at any visibility
   - camelCase for local variables and function parameters
   - Use descriptive names and avoid abbreviations
 - Imports: group imports by type (external, internal, relative)
@@ -855,7 +858,7 @@ The two checker scripts live at `.github/scripts/check-css-hex-tokens.sh` and `.
 
 ### Class Member Naming Convention (IMPORTANT)
 
-MemberJunction uses **PascalCase for all public class members** and **camelCase for private/protected members**. This applies to:
+MemberJunction uses **PascalCase for all public class members** and **camelCase for `private` members**. `protected` members are PascalCase when they are inherited extension points — see the carve-out below. This applies to:
 
 ```typescript
 // ✅ CORRECT - MemberJunction naming convention
@@ -897,6 +900,67 @@ export class MyComponent {
 - Clear visual distinction between public API and internal implementation
 - Matches the naming style used in MJ's generated entity classes
 - HTML template bindings must match the PascalCase property names
+
+#### 🚨 `protected` is PascalCase, not camelCase
+
+MJ's base classes declare **PascalCase protected extension points**, and an override must match the parent's casing exactly. `BaseAction.InternalRunAction` is overridden ~300 times; `BaseEngine.AdditionalLoading`, `BaseResourceComponent.OnQueryParamsChanged` and `ProviderToUse` are the same shape. This is the template-method pattern and it is load-bearing, so **write new protected extension points in PascalCase** and never "fix" an existing one — renaming it breaks every subclass.
+
+The `private`/`protected` split is therefore not symmetric: `private` has no inheritance contract to honour, so it stays camelCase and is the only half the gate enforces.
+
+```typescript
+export class MyAction extends BaseAction {
+  protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {} // ✅ matches the base
+  private buildPayload(): Payload {} // ✅ camelCase
+  private BuildPayload(): Payload {} // ❌ flagged
+}
+```
+
+#### Exported members are API surface too
+
+An exported type's members are a published contract, so the rule reaches them: members of an
+exported `interface`, of an exported `type` alias's object literals, and of an exported `enum` are
+PascalCase. Members of a **non-exported** interface are an implementation detail and are not
+checked. Public constructor parameter properties (`constructor(public QueryId: string)`) are class
+members and follow the member rule. Names published via `export { Foo }` follow the export rule.
+
+An interface that `extends` another, or a class that `implements` one, inherits its names — the
+finding lands on the declaring interface, which is the one place a rename can start. For a payload
+that mirrors a vendor's JSON (`access_token`), keep the remote casing and use the marker.
+
+#### Exported functions are PascalCase
+
+The repo was split almost evenly with nothing written down, so this is now settled: the public API surface is PascalCase whether it is a class member or a module export. A `const` holding an arrow function follows the function rule, not the const rule.
+
+```typescript
+export function EscapeSQLString(v: string): string {} // ✅
+export const ResolveRestore = () => {}; // ✅
+export function computeContentHash(): string {} // ❌ flagged
+export const TERMINAL_STATUSES = ["Complete"]; // ✅ value const — SCREAMING_SNAKE
+```
+
+#### The gate
+
+Enforced on every PR by the `naming-conventions` standard — an AST pass over every `.ts` file. Severity says whether a **compatible fix exists**: anything a deprecated stub can fix (class members, exported functions and consts) is an `error` and fails the build; members of an exported data shape are a `warn`, because an interface is erased at compile time so there is no carrier for a stub.
+
+**The fix is a rename plus a deprecated stub**, which is what the gate is built around:
+
+```typescript
+public LoadData(): void {} // the real implementation
+
+/** @deprecated Use {@link LoadData}. */
+public loadData(): void {
+  return this.LoadData();
+}
+```
+
+Anything carrying `@deprecated` is exempt, so the stub is not itself a violation. Name the replacement with `{@link}` and give no removal version.
+
+```bash
+pnpm run check:naming       # this check alone
+pnpm run check:standards    # every adopted standard, as CI runs it
+```
+
+Framework contracts (Angular `ng*` hooks, oclif command members, base-class overrides, `__mj_*` columns, `SCREAMING_SNAKE` constants, `@HostListener`/`@HostBinding`) are exempt automatically. For anything else, `// case-violation-ok-legacy-back-compat: <reason>` on the offending line or the one directly above it. Full detail, including why renaming an Angular `@Input()` also means editing its HTML template: [`guides/NAMING_CONVENTIONS_GUIDE.md`](guides/NAMING_CONVENTIONS_GUIDE.md).
 
 ## 🚨 IMPORTANT: FUNCTIONAL DECOMPOSITION IS MANDATORY 🚨
 
@@ -2254,7 +2318,7 @@ When a migration creates a new lookup or reference table (e.g., `AIAgentRequestT
    }
    ```
 3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — these are auto-populated by mj-sync on first push.
-4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+4. Push with: `pnpm mj sync push --dir=metadata --include="agent-request-types"`
 
 **Why metadata files over SQL INSERTs:**
 
@@ -2304,15 +2368,15 @@ Codex should start and stop MJAPI and MJExplorer as background processes itself.
 # Run as a background task from: packages/MJAPI/
 npm run start
 
-# Start MJExplorer (port 4201, configured in package.json start script)
+# Start MJExplorer (port 4200, configured in package.json start script)
 # Run as a background task from: packages/MJExplorer/
 npm run start
 ```
 
 **Key points:**
 
-- MJAPI runs on port **4001** (set by `GRAPHQL_PORT=4001` in `.env`)
-- MJExplorer runs on port **4201** (set by `--port 4201` in its start script)
+- MJAPI runs on port **4001** (set by `GRAPHQL_PORT=4001` in `.env`, or 4000 in local dev)
+- MJExplorer runs on port **4200** (set by `--port 4200` in its start script)
 - Run both as background tasks so you can monitor output and restart as needed
 - After rebuilding a server-side package, restart MJAPI to pick up changes
 - After rebuilding an Angular library, MJExplorer's Vite dev server auto-detects changes and triggers a browser reload — no restart needed
@@ -2324,10 +2388,10 @@ To avoid re-authenticating every time you launch a browser session, use the `--p
 
 ```bash
 # First-time launch (requires manual login in the headed browser):
-npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4200
 
 # Subsequent launches reuse cached auth automatically:
-npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4200
 ```
 
 **Key points:**
@@ -2341,7 +2405,7 @@ npx playwright-cli open --headed --profile .playwright-cli/profile http://localh
 
 ```bash
 # Open browser with persistent auth
-npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4200
 
 # Take a snapshot (get element refs for interaction)
 npx playwright-cli snapshot
@@ -2369,7 +2433,7 @@ npx playwright-cli close
 
 1. Start MJAPI and MJExplorer as background processes (if not already running)
 2. Wait for both servers to be ready (MJAPI listening, MJExplorer compiled)
-3. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201`
+3. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4200`
 4. Authenticate once if needed (cached for future sessions)
 5. Use `snapshot` to inspect the page, `click`/`type` to interact
 6. Use `console info` / `console error` to check for issues

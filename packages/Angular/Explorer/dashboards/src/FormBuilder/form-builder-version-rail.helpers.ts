@@ -63,7 +63,7 @@ const OVERRIDE_STATUS_RANK: Record<string, number> = {
  * a previously-Inactive Component's lineage), we collapse using the
  * Active > Pending > Inactive precedence — highest rank wins.
  */
-export function joinVersionsWithOverrides(
+export function JoinVersionsWithOverrides(
     components: ComponentRailRow[],
     overrides: OverrideRailRow[],
 ): ComponentVersionRow[] {
@@ -91,16 +91,29 @@ export function joinVersionsWithOverrides(
     });
 }
 
+/** @deprecated Use {@link JoinVersionsWithOverrides}. */
+export function joinVersionsWithOverrides(
+    components: ComponentRailRow[],
+    overrides: OverrideRailRow[],
+): ComponentVersionRow[] {
+    return JoinVersionsWithOverrides(components, overrides);
+}
+
 /**
  * Pick the version ID the rail should highlight as "currently active". Falls
  * back to the highest-VersionSequence row when no override flags Active —
  * common case for a form that's still in draft Pending state without an
  * Active override yet.
  */
-export function pickActiveVersionID(rows: ComponentVersionRow[]): string | null {
+export function PickActiveVersionID(rows: ComponentVersionRow[]): string | null {
     const active = rows.find(r => r.IsActive);
     if (active) return active.ID;
     if (rows.length === 0) return null;
     // Highest VersionSequence — rows arrive ordered DESC; return the first.
     return rows[0].ID;
+}
+
+/** @deprecated Use {@link PickActiveVersionID}. */
+export function pickActiveVersionID(rows: ComponentVersionRow[]): string | null {
+    return PickActiveVersionID(rows);
 }

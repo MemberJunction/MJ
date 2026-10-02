@@ -29,7 +29,7 @@ import {
 } from 'livekit-client';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { LiveKitRoomEventBus } from './events';
-import { applyBackgroundEffect, applyNoiseFilter } from './livekit-effects';
+import { ApplyBackgroundEffect, ApplyNoiseFilter } from './livekit-effects';
 import {
   LiveKitBackgroundEffect,
   LiveKitConnectionStatus,
@@ -51,7 +51,10 @@ import {
 export type LiveKitRoomFactory = (options?: RoomOptions) => Room;
 
 /** The default factory — constructs a real livekit-client `Room`. */
-export const defaultRoomFactory: LiveKitRoomFactory = (options) => new Room(options);
+export const DefaultRoomFactory: LiveKitRoomFactory = (options) => new Room(options);
+
+/** @deprecated Use {@link DefaultRoomFactory}. */
+export const defaultRoomFactory: LiveKitRoomFactory = DefaultRoomFactory;
 
 /** Resolves a participant's {@link LiveKitParticipantRole} from its LiveKit metadata / flags. */
 export type LiveKitRoleResolver = (participant: Participant) => LiveKitParticipantRole;
@@ -60,7 +63,7 @@ export type LiveKitRoleResolver = (participant: Participant) => LiveKitParticipa
  * Default role resolver: reads a JSON `metadata` string for `{ "mjRole": "agent" | "host" }`, falling
  * back to `'participant'`. The MJ bridge stamps the agent bot's metadata so its tile renders as the agent.
  */
-export const defaultRoleResolver: LiveKitRoleResolver = (participant) => {
+export const DefaultRoleResolver: LiveKitRoleResolver = (participant) => {
   const raw = participant.metadata;
   if (raw) {
     try {
@@ -75,6 +78,9 @@ export const defaultRoleResolver: LiveKitRoleResolver = (participant) => {
   }
   return 'participant';
 };
+
+/** @deprecated Use {@link DefaultRoleResolver}. */
+export const defaultRoleResolver: LiveKitRoleResolver = DefaultRoleResolver;
 
 /** Construction options for the controller (all optional — sensible defaults applied). */
 export interface LiveKitRoomControllerOptions {
@@ -124,8 +130,8 @@ export class LiveKitRoomController {
   public readonly Events: LiveKitRoomEventBus;
 
   constructor(options: LiveKitRoomControllerOptions = {}) {
-    this.roomFactory = options.RoomFactory ?? defaultRoomFactory;
-    this.roleResolver = options.RoleResolver ?? defaultRoleResolver;
+    this.roomFactory = options.RoomFactory ?? DefaultRoomFactory;
+    this.roleResolver = options.RoleResolver ?? DefaultRoleResolver;
     this.Events = options.EventBus ?? new LiveKitRoomEventBus();
     this.stateSubject = new BehaviorSubject<LiveKitRoomState>(this.initialState());
   }
@@ -325,7 +331,7 @@ export class LiveKitRoomController {
     if (!track) {
       return false;
     }
-    const ok = await applyNoiseFilter(track, enabled);
+    const ok = await ApplyNoiseFilter(track, enabled);
     if (ok) {
       this.noiseFilterEnabled = enabled;
       this.patchState({ NoiseFilterEnabled: enabled });
@@ -345,7 +351,7 @@ export class LiveKitRoomController {
     if (!track) {
       return false;
     }
-    const ok = await applyBackgroundEffect(track, effect);
+    const ok = await ApplyBackgroundEffect(track, effect);
     if (ok) {
       this.backgroundEffect = effect;
       this.patchState({ BackgroundEffect: effect });

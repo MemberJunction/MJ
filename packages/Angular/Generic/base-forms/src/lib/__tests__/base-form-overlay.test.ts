@@ -35,6 +35,7 @@ vi.mock('@memberjunction/ng-base-types', () => ({
 vi.mock('@memberjunction/core', () => ({
   CompositeKey: class {
     static FromID(id: string) { return { __fromId: id }; }
+    static FromURLSegment(_entity: unknown, id: string) { return { __fromId: id }; }
   },
   BaseEntity: class {},
 }));

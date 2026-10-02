@@ -186,32 +186,35 @@ If an appended CodeGen block inserts `EntityField` rows, the `Sequence` must be 
 evaluated **at apply time**, never the number CodeGen wrote:
 
 ```sql
--- ✅ correct — what CodeGen now emits. The offset is the field's SCHEMA ORDINAL, so a batch of
---    new fields keeps its relative order regardless of the order the INSERTs execute.
-(SELECT COALESCE(MAX([Sequence]), 0)
-   FROM [${flyway:defaultSchema}].[EntityField]
-  WHERE [EntityID] = '<entity-id>') + <schema-ordinal>
-
--- ✅ also fine for a HAND-written correction of a single field, where there is no batch to order
+-- ✅ correct — what CodeGen emits, one INSERT statement per row. Unique on any database in any
+--    order: each INSERT re-evaluates MAX after the one before it. (A multi-row VALUES evaluates
+--    every subquery against the same snapshot — do not batch rows that way.)
 (SELECT COALESCE(MAX([Sequence]), 0) + 1
    FROM [${flyway:defaultSchema}].[EntityField]
   WHERE [EntityID] = '<entity-id>')
 
 -- ❌ wrong — a placeholder that was only ever valid on the database CodeGen ran against
 100025,
+
+-- ❌ equally wrong — the catalog ordinal. Low, so it LOOKS like a real value; it is not.
+--    Only free on the database CodeGen ran against (v6.1.0-edge.4/5, MJ#4202).
+16,
 ```
 
 **Values are disposable; order is not.** `spUpdateExistingEntityFieldsFromSchema` overwrites `Sequence`
 from the schema on its next pass (`ef.Sequence = fr.Sequence`), so the numbers themselves are
 throwaway — two independent from-scratch builds land on identical sequences. What must hold is that
 base (non-virtual) fields sort **before** virtual ones, because the providers' positional
-save-capture depends on that alignment. Encoding the ordinal in the emitted value keeps that true
-without depending on statement execution order.
+save-capture depends on that alignment. That holds because each INSERT re-evaluates `MAX` after the
+one before it: the batch is emitted in schema order (the pending-fields SELECT orders by
+`EntityID, Sequence`) and executes sequentially in one round trip, and base columns are discovered
+in pass 1 before pass 2 adds the virtual ones. Two invariants, both pinned by
+`entity-field-sequence-insert.test.ts`: keep the `ORDER BY`, and never parallelize the chunk.
 
-**Why this is not a style preference.** The number CodeGen emits is a *temporary* placeholder —
-`MAX(Sequence) + 100000 + ordinal` — that `spUpdateExistingEntityFieldsFromSchema` rewrites to a
-proper low value moments later, both live and from `R__RefreshMetadata.sql`. Locally it is always
-correct by the time anyone looks.
+**Why this is not a style preference.** Whatever value the INSERT lands on is a *temporary*
+placeholder that `spUpdateExistingEntityFieldsFromSchema` rewrites to a proper low value moments
+later, both live and from `R__RefreshMetadata.sql`. Locally it is always correct by the time anyone
+looks — which is exactly why a literal copied from the generating database looks fine there.
 
 But Flyway runs **every versioned migration before any repeatable script**. On a database built only
 from migrations, that renumber never happens in between. So two migrations that add columns to the
@@ -227,13 +230,26 @@ Note what makes this invisible to ordinary review: whether your migration collid
 migration **someone else wrote**, and on the state of a database **nobody is looking at**. It cannot
 fail on a working dev database. It fails only on fresh installs — CI, new developers, releases.
 
-CodeGen now emits the computed form (`manage-metadata.ts`, `getPendingEntityFieldINSERTSQL`), so
-newly generated blocks are already correct. Two guard rails back it up:
+CodeGen emits the computed form (`manage-metadata.ts`, `getPendingEntityFieldINSERTSQL`), so newly
+generated blocks are correct. It has regressed once already: #4048 (v6.1.0-edge.4) switched the
+emitter to the catalog ordinal plus a `+100000` "park" `UPDATE`, which is safe only within one
+CodeGen run — across two appended migrations the park has nothing reliable to move, and the
+second migration collides (MJ#4202). Two guard rails back the rule up, and CI runs both in the
+"Check migrations" workflow (the self-test on every PR, the scan on every PR that touches
+`migrations/`). The scan is positional — it parses the INSERT's column list and flags **any** bare
+integer in the `Sequence` position, high band or low — and it BLOCKS the PR. All three CodeGen
+emitters (schema-derived fields, virtual-entity fields, IS-A parent fields) use the same
+`applyTimeEntityFieldSequenceSQL` helper:
 
 ```bash
-.github/scripts/check-migration-entityfield-sequence.sh              # changed migrations (CI gate)
-.github/scripts/check-migration-entityfield-sequence.sh --self-test  # the detector's own tests
+node .github/scripts/check-migration-entityfield-sequence.mjs               # local: working tree + untracked vs merge-base(origin/next)
+node .github/scripts/check-migration-entityfield-sequence.mjs <base> <head> # CI: lines added between two commits
+node .github/scripts/check-migration-entityfield-sequence.mjs --self-test   # the detector's own fixtures
+node .github/scripts/check-migration-entityfield-sequence.mjs --all         # every migration (informational)
 ```
+
+Scope on both forms: Flyway versioned files only (`V<12 digits>__*.sql`) — baselines are dumps of
+`EntityField` and literal by construction, and `tests/` fixtures never run.
 
 Existing migrations using the literal form are left alone deliberately — they apply cleanly today,
 and rewriting them would change Flyway checksums on every existing database for no benefit.

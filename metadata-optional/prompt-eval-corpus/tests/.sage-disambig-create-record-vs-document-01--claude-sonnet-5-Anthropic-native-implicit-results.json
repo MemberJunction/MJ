@@ -1,0 +1,72 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "sage-disambig-create-record-vs-document-01 [claude-sonnet-5 · Anthropic · native-implicit-results]",
+    "Description": "Create Record and Create Document are one word apart and do entirely different things. A structured data row is a Record.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Add a new customer row for Contoso Ltd with status Active."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "sage-disambig-create-record-vs-document-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Create Record"
+          }
+        ],
+        "allowAdditionalActions": false,
+        "forbiddenActions": [
+          "Create Document"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Create Record"
+              }
+            ],
+            "allowAdditionalActions": false,
+            "forbiddenActions": [
+              "Create Document"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "32CDBB97-91DE-4504-A892-DE51DB93DE53"
+  }
+}

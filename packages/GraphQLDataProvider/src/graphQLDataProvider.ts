@@ -15,9 +15,9 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
-         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
+         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
          SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
-import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
+import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -32,6 +32,17 @@ import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
+
+/**
+ * The URL and credentials each GraphQL client was built with (recorded by CreateNewGraphQLClient).
+ * A client's headers are fixed at construction, so a connect bringing different credentials must
+ * build a new client rather than reuse one that would keep sending the old identity (#4887).
+ */
+const clientCredentials = new WeakMap<GraphQLClient, string>();
+
+function credentialsKey(url: string, token: string, mjAPIKey: string, userAPIKey?: string): string {
+    return JSON.stringify([url, token ?? null, mjAPIKey ?? null, userAPIKey ?? null]);
+}
 
 /**
  * State of the provider's graphql-ws WebSocket connection.
@@ -222,6 +233,37 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 
 
+/**
+ * How often the client sends a keepalive ping, in ms.
+ *
+ * Matched to MJAPI's own cadence: graphql-ws's `useServer(options, ws, keepAlive)` defaults its
+ * third positional argument to 12s, so the server already pings and terminates on an unanswered
+ * pong. Pinging at a comparable rate makes the two ends detect a dead link at roughly the same
+ * time instead of leaving the client blind for half a minute after the server has given up.
+ */
+export const WS_KEEPALIVE_MS = 10_000;
+
+/**
+ * How long to wait for a pong before declaring the socket dead, in ms.
+ *
+ * REQUIRED, not optional. graphql-ws re-arms its keepalive ping ONLY on pong receipt, so a
+ * half-open socket receives exactly one ping and then goes silent forever — its own JSDoc says
+ * "NOTHING will happen automatically with the client if the server never responds to a
+ * PingMessage with a PongMessage." Without this watchdog the socket never closes, `retryAttempts`
+ * never engages (it fires only on abnormal CLOSURE), and every recovery path that keys off
+ * `on('closed')` stays asleep indefinitely. See MJ #4222.
+ */
+export const WS_PONG_TIMEOUT_MS = 10_000;
+
+/**
+ * How long to wait for `ConnectionAck` after opening the socket, in ms.
+ *
+ * graphql-ws defaults this to 0, i.e. disabled — a reconnect that completes the TCP handshake but
+ * never acks would hang forever, which is the same blindness as an unanswered pong, just on the
+ * reconnect path. On expiry graphql-ws closes with `4418`, which is retriable.
+ */
+export const WS_CONNECTION_ACK_TIMEOUT_MS = 10_000;
+
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
 /**
  * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunQueryProvider interfaces and connects to the
@@ -364,7 +406,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * 
      * @param sessionId The session ID to store
      */
-    private async SaveStoredSessionID(sessionId: string): Promise<void> {
+    private async saveStoredSessionID(sessionId: string): Promise<void> {
         try {
             const ls = this.LocalStorageProvider;
             if (ls) {
@@ -396,53 +438,92 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
-            // Enhanced logging to diagnose token issues
-            // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
-            // console.log('[GraphQL] Config called with token:', {
-            //     tokenPreview,
-            //     tokenLength: configData.Token?.length,
-            //     separateConnection,
-            //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
-            // });
-
-            // CRITICAL: Always set this instance's _configData first
-            // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
-            this._configData = configData;
-
-            if (separateConnection) {
-                // Get UUID after setting the configData, so that it can be used to get any stored session ID
-                this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-
-                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-                // Store the session ID for this connection
-                await this.SaveStoredSessionID(this._sessionId);
-            }
-            else {
-                // Update the singleton instance
-                GraphQLDataProvider.Instance._configData = configData;
-
-                if (GraphQLDataProvider.Instance._sessionId === undefined) {
-                    GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-                }
-
-                // now create the new client, if it isn't already created
-                if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-
-                // Store the session ID for the global instance
-                await GraphQLDataProvider.Instance.SaveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
-
-                // CRITICAL: Sync this instance with the singleton
-                // This ensures ExecuteGQL() can use this._client.request()
-                this._sessionId = GraphQLDataProvider.Instance._sessionId;
-                this._client = GraphQLDataProvider.Instance._client;
-            }
+            await this.connectClient(configData, separateConnection, forceRefreshSessionId);
             return super.Config(configData); // now parent class can do it's config
         }
         catch (e) {
             LogError(e);
             throw (e)
         }
+    }
+
+    /**
+     * The authenticate-only half of {@link Config}, for embedded/anonymous surfaces that only make
+     * their own GraphQL calls. After it resolves, {@link ExecuteGQL} works. No metadata is fetched,
+     * so entity metadata (`Entities`, `EntityByName`, `RunView`, `GetEntityObject`) is NOT available
+     * until the full boot runs (`SetupGraphQLClient`, or {@link Config}) on this same instance.
+     * Uses the shared singleton connection (a secondary instance keeps its own). A later Connect/Config with a different URL,
+     * token or API key rebuilds that connection's client (keeping the session id).
+     */
+    public async Connect(configData: GraphQLProviderConfigData): Promise<void> {
+        await this.connectClient(configData, false, false);
+    }
+
+    /**
+     * The connection half of {@link Config}: stores the config, resolves the session id and creates the
+     * GraphQL client (this instance's own client when separateConnection is true or this is not the
+     * global singleton, otherwise the shared singleton client, which is reused unless the credentials
+     * changed). Loads no metadata.
+     */
+    private async connectClient(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<void> {
+        // Enhanced logging to diagnose token issues
+        // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
+        // console.log('[GraphQL] Config called with token:', {
+        //     tokenPreview,
+        //     tokenLength: configData.Token?.length,
+        //     separateConnection,
+        //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
+        // });
+
+        // CRITICAL: Always set this instance's _configData first
+        // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
+        this._configData = configData;
+
+        // An instance that is not the global singleton (built while the global-store slot was
+        // parked) owns its own connection, even when a re-entry path omits the flag:
+        // ProviderBase.Refresh() re-runs Config(this._ConfigData) without separateConnection.
+        // Taking the shared branch from such an instance would hand the global provider this
+        // instance's credentials, and every global call would then run as its user (#4887).
+        if (separateConnection || GraphQLDataProvider.Instance !== this) {
+            // Get UUID after setting the configData, so that it can be used to get any stored session ID
+            this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+
+            this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+            // Store the session ID for this connection
+            await this.saveStoredSessionID(this._sessionId);
+        }
+        else {
+            // Update the singleton instance
+            GraphQLDataProvider.Instance._configData = configData;
+
+            if (GraphQLDataProvider.Instance._sessionId === undefined) {
+                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+            }
+
+            // Create the client if there is none, or rebuild it (same session id) when this config
+            // brings different credentials — e.g. an anonymous connect upgraded to a login.
+            const existing = GraphQLDataProvider.Instance._client;
+            if (!existing || this.isBuiltWithOtherCredentials(existing, configData))
+                GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+
+            // Store the session ID for the global instance
+            await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+
+            // CRITICAL: Sync this instance with the singleton
+            // This ensures ExecuteGQL() can use this._client.request()
+            this._sessionId = GraphQLDataProvider.Instance._sessionId;
+            this._client = GraphQLDataProvider.Instance._client;
+        }
+    }
+
+    /**
+     * True when `client` was built with a URL or credentials other than `configData`'s. A client this
+     * class did not record (a subclass's own CreateNewGraphQLClient, a test harness) is kept as-is.
+     */
+    private isBuiltWithOtherCredentials(client: GraphQLClient, configData: GraphQLProviderConfigData): boolean {
+        const builtWith = clientCredentials.get(client);
+        return builtWith !== undefined &&
+            builtWith !== credentialsKey(configData.URL, configData.Token, configData.MJAPIKey, configData.UserAPIKey);
     }
 
     public get sessionId(): string {
@@ -1511,12 +1592,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityName
                     RelatedEntityName
                     FieldName
-                    CompositeKey {
+                    PrimaryKey {
                         KeyValuePairs {
                             FieldName
                             Value
                         }
                     }
+                    IsSoftLink
+                    EntityIDFieldName
                 }
             }`
 
@@ -1527,7 +1610,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
             const data = await this.ExecuteGQL(query, vars);
 
-            return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
+            if (data?.GetRecordDependencies && Array.isArray(data.GetRecordDependencies)) {
+                return data.GetRecordDependencies.map((raw: {
+                    EntityName: string;
+                    RelatedEntityName: string;
+                    FieldName: string;
+                    PrimaryKey?: { KeyValuePairs?: KeyValuePair[] };
+                    IsSoftLink?: boolean | null;
+                    EntityIDFieldName?: string | null;
+                }): RecordDependency => {
+                    const dep = new RecordDependency();
+                    dep.EntityName = raw.EntityName;
+                    dep.RelatedEntityName = raw.RelatedEntityName;
+                    dep.FieldName = raw.FieldName;
+                    const kvps = (raw.PrimaryKey?.KeyValuePairs ?? []).map(kv => new KeyValuePair(kv.FieldName, kv.Value));
+                    const pk = new CompositeKey(kvps);
+                    if (pk.KeyValuePairs.length === 0 && kvps.length > 0) {
+                        pk.KeyValuePairs = kvps;
+                    }
+                    dep.PrimaryKey = pk;
+                    dep.IsSoftLink = raw.IsSoftLink ?? undefined;
+                    dep.EntityIDFieldName = raw.EntityIDFieldName ?? undefined;
+                    return dep;
+                });
+            }
+            return [];
         }
         catch (e) {
             LogError(e);
@@ -1718,7 +1825,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         let progressSub: { unsubscribe(): void } | undefined;
         if (options.onProgress) {
             progressChannelId = this.GenerateUUID();
-            progressSub = this.subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
+            progressSub = this.Subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
                 next: (data: { RemoteOperationProgress?: { ProgressJSON?: string } }) => {
                     const json = data?.RemoteOperationProgress?.ProgressJSON;
                     if (json) {
@@ -1822,6 +1929,95 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    /**
+     * Field-level security, client side. The current user's denied-READ set is computable HERE
+     * because `EntityFieldPermission` records ship to clients with entity metadata — so the
+     * provider can exclude denied fields from the selection sets it requests (a GraphQL response
+     * always contains every REQUESTED key, so key-omission — which drives
+     * `EntityField.NotLoaded` marking in the hydration paths — only happens for fields never
+     * requested). Empty for unrestricted users and non-FLS entities.
+     *
+     * **This is an optimization, not the correctness boundary.** It is computed from metadata
+     * this client holds, which can lag the server's — and which it may not hold at all once
+     * metadata filtering lands (issue #3485). What makes a response correct regardless is the
+     * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
+     */
+    private getDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
+        if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
+            return new Set<string>();
+        }
+        return entityInfo.GetDeniedReadFields(this.CurrentUser);
+    }
+
+    /**
+     * The `ReadableFields___` selection to append to a query, or `''` when it should not be asked
+     * for. See {@link ReadableFieldsTransportKey} for what it carries.
+     *
+     * **Gated on the ENTITY's field-security flag, deliberately not on whether THIS user currently
+     * has denials.** Gating on the user's denied set would re-introduce the dependence on local
+     * metadata this key exists to remove: in the window right after a permission change the client
+     * believes it is unrestricted, would not ask, and would silently load the server's nulls as
+     * real values. The entity-level flag is stable configuration by comparison.
+     *
+     * Not asking on non-FLS entities — which is nearly all of them — also keeps this client
+     * working against a server whose generated schema predates the key. On an FLS-enabled entity
+     * the two must match versions, which is the narrow and acceptable coupling: restricting a
+     * non-nullable column is broken on such a server regardless.
+     */
+    private fieldSecurityTransportSelection(entityInfo: EntityInfo): string {
+        return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
+    }
+
+    /**
+     * Turns fields the SERVER withheld into genuine key-absence on a response payload, so the
+     * hydration paths mark them {@link EntityField.NotLoaded} rather than loading a null over
+     * them.
+     *
+     * This is needed because deleting the key server-side is not sufficient by itself: GraphQL
+     * emits every SELECTED field, so a withheld field the client asked for arrives as an explicit
+     * `null` that is indistinguishable from a genuine one. Rewriting it back to absence here is
+     * what preserves the "key-absence means not-loaded, never means null" contract end to end.
+     *
+     * Two sources, in priority order:
+     *
+     * 1. **The server's `ReadableFields___`** — authoritative. It describes the request that
+     *    actually ran, so it is correct even when this client's metadata is stale, and it stays
+     *    correct once metadata filtering (issue #3485) means the client may not hold the
+     *    permission rules at all. Anything not on that list is withheld, whatever value arrived.
+     * 2. **This client's own denied set** — the fallback, for a server predating the transport
+     *    key. Only null values are pruned here: a non-null arrival means the local set is stale
+     *    in the safe direction (the server actually allowed the field), and dropping a real value
+     *    would be a regression rather than a protection.
+     *
+     * The transport key itself is always removed — it is not an entity field, and leaving it on
+     * the payload would trip `SetMany`'s field-not-found warning during hydration.
+     */
+    protected ApplyServerFieldAccess<T>(entityInfo: EntityInfo, row: T): T {
+        if (!row || typeof row !== 'object') return row;
+        const record = row as Record<string, unknown>;
+        const readable = record[ReadableFieldsTransportKey];
+        delete record[ReadableFieldsTransportKey];
+
+        if (Array.isArray(readable)) {
+            const allowed = new Set(readable.map(n => String(n).trim().toLowerCase()));
+            for (const field of entityInfo.Fields) {
+                if (allowed.has(field.Name.trim().toLowerCase())) continue;
+                delete record[field.Name];
+                delete record[field.CodeName];
+            }
+            return row;
+        }
+
+        const denied = this.getDeniedReadFieldNamesForCurrentUser(entityInfo);
+        if (denied.size === 0) return row;
+        for (const field of entityInfo.Fields) {
+            if (!denied.has(field.Name.trim().toLowerCase())) continue;
+            if (record[field.Name] === null) delete record[field.Name];
+            if (record[field.CodeName] === null) delete record[field.CodeName];
+        }
+        return row;
+    }
+
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         // IS-A parent entity save: the full ORM pipeline (permissions, validation, events)
         // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
@@ -1858,10 +2054,44 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const mutationName = `${type}${graphQLTypeName}`
 
-            // only pass along writable fields, AND the PKEY value if this is an update
-            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
+            // Only pass along writable fields, AND the primary key when the server must NOT mint it:
+            // on an update, and on an IS-A PROMOTION create. An IS-A child's key is ReadOnly because
+            // in IS-A the shared key IS the relationship — it belongs to the root, not to this table.
+            // A promotion is a NEW child bound to a parent that already EXISTS (an Animal that is now
+            // also a Dog): the parent's own Save() is short-circuited above (IsParentEntitySave) on
+            // the premise that this mutation carries the whole chain, so if the key were dropped
+            // here nothing would tell the server which parent row this is about — it would mint a
+            // fresh GUID and INSERT a second copy of the parent. The key is sent ONLY when the
+            // parent is saved: a whole-chain create (new parent + new child) keeps sending no key,
+            // so the server still mints the root identity and pays no parent lookup on that path.
+            //
+            // NotLoaded fields are OMITTED from the mutation input entirely (legal — the
+            // generated Update input types mark every non-PK field optional): their value is
+            // a construction artifact the user was never shown, and the NOT-NULL fabrication
+            // fallback below must never run for them. An explicitly (blind-)set field has its
+            // flag cleared and flows normally — the write-only case.
+            // Denied-READ fields are dropped from both the input and the response selection.
+            // Input: the loop below calls entity.Get(), which throws for a denied field.
+            // Response: a never-requested key comes back absent, which is what marks the field
+            // NotLoaded on the refresh, and a denied NOT-NULL column no longer breaks response
+            // serialization.
+            //
+            // Only the READ verb is filtered here. A readable-but-update-denied field must
+            // still be SENT, or the server cannot reject an attempt to change it — its check
+            // is dirty-only (BaseEntity.CheckFieldLevelUpdatePermissions), so an unchanged
+            // value round-trips safely and a changed one is refused. Create-denied values are
+            // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
+            // here would replace a visible refusal with a silent success.
+            const isaPromotionCreate = !entity.IsSaved && entity.EntityInfo.IsChildType && entity.ISAParent?.IsSaved === true;
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
+            const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
+            const filteredFields = entity.Fields.filter(f =>
+                (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
+                (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name))));
                 const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                ${entity.Fields.filter(f => !isDeniedRead(f.Name))
+                    .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -1933,6 +2163,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 options.SkipOldValuesCheck === false) {
                 const ov = [];
                 entity.Fields.forEach(f => {
+                    // A NotLoaded field has no real old value — sending a fabricated null
+                    // would feed the server's conflict detection fiction. Omit it entirely.
+                    if (f.NotLoaded && !f.IsPrimaryKey) return;
                     let val = null;
                     if (f.OldValue !== null && f.OldValue !== undefined) {
                         if (f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
@@ -1977,7 +2210,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         // got our data, send it back to the caller, which is the entity object
                         // and that object needs to update itself from this data.
                         result.Success = true;
-                        result.NewValues = this.ConvertBackToMJFields(results);
+                        // Prune stale-metadata nulls so the entity's post-save refresh
+                        // (finalizeSave) sees key-omission and marks NotLoaded correctly.
+                        result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(results));
                     }
                     else {
                         // the transaction failed, nothing to update, but we need to call Reject so the
@@ -1995,7 +2230,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (d && d[mutationName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
-                    result.NewValues = this.ConvertBackToMJFields(d[mutationName]);
+                    // Prune stale-metadata nulls so finalizeSave's re-hydration sees
+                    // key-omission and marks NotLoaded correctly on the refresh.
+                    result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(d[mutationName]));
                     return result.NewValues;
                 }
                 else
@@ -2006,6 +2243,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Success = false;
             result.EndedAt = new Date();
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
+            // A refusal from Validate()/ValidateAsync() on the server arrives twice: as the prose in
+            // `message` (kept above, for the toast) and as `extensions.validationErrors`, the same
+            // reasons with their field names. Rehydrating them here — the result is already
+            // registered on the entity — means `record.LatestResult.Errors` reads exactly as it does
+            // after a local Validate() refusal, so the form paints the fields either way. Empty when
+            // the server sent none (a SQL error, a permission refusal).
+            const extensions = e.response?.errors?.[0]?.extensions;
+            result.Errors = DeserializeValidationErrors(extensions?.validationErrors);
+            // Whether `Message` already renders those errors is a fact only the SERVER knows (it threw
+            // the message), so it states it on the wire and we repeat it — never inferred here. Without
+            // the statement CompleteMessage keeps today's behaviour (the text may read twice).
+            result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
             LogError(e);
             return null;
         }
@@ -2050,9 +2299,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
+            // Field security: don't request fields this client believes it cannot read — the keys
+            // come back genuinely absent and InnerLoad marks them NotLoaded (D-1). This is an
+            // optimization, NOT the correctness mechanism: it is only as good as this client's
+            // metadata. `ReadableFields___` (requested just below) is what makes the result
+            // correct when that metadata is stale. Empty set for unrestricted users — no change.
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
-                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType)
+                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType && !deniedReadFields.has(f.Name.trim().toLowerCase()))
                                       .map((f) => {
                                         if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
                                           // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
@@ -2062,6 +2317,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                         }
                                       })
                                       .join('\n                    ')}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
                     ${rel}
                 }
             }
@@ -2070,7 +2326,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const d = await this.ExecuteGQL(query, vars)
             if (d && d[graphQLTypeName]) {
                 // the resulting object has all the values in it, but we need to convert any elements that start with _mj__ back to __mj_
-                return this.ConvertBackToMJFields(d[graphQLTypeName]);
+                // (plus the stale-metadata null prune, so InnerLoad's key-omission marking is exact)
+                return this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(d[graphQLTypeName]));
             }
             else
                 return null;
@@ -2115,6 +2372,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
+        // IS-A parent delete: the leaf's delete mutation already deleted the whole chain on the
+        // server, so the parent has nothing left to send. Record the success and return, as
+        // Save() does for IsParentEntitySave (MJ#4864).
+        if (options?.IsParentEntityDelete) {
+            const parentResult = new BaseEntityResult();
+            parentResult.StartedAt = new Date();
+            parentResult.EndedAt = new Date();
+            parentResult.Type = 'delete';
+            parentResult.Success = true;
+            entity.RegisterResultHistoryEntry(parentResult);
+            return true;
+        }
+
         const result = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing();
@@ -2244,6 +2514,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.EndedAt = new Date(); // done processing
             result.Success = false;
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
+            // Same rehydration as Save(): a delete refused with field-named reasons keeps them.
+            const extensions = e.response?.errors?.[0]?.extensions;
+            result.Errors = DeserializeValidationErrors(extensions?.validationErrors);
+            result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
             LogError(e);
 
             return false;
@@ -2897,7 +3171,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param preservedKeys localStorage keys to keep across logout (e.g. theme preference).
      *        Defaults to an empty set.
      */
-    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+    public static async ClearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
         // Clear all localStorage except explicitly preserved keys
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -2915,6 +3189,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             req.onerror = () => resolve();
             req.onblocked = () => resolve();
         });
+    }
+
+    /** @deprecated Use {@link ClearClientCache}. */
+    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+        return this.ClearClientCache(preservedKeys);
     }
 
     protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string, userAPIKey?: string): GraphQLClient {
@@ -2948,6 +3227,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             client.setHeader(key, value);
         }
 
+        clientCredentials.set(client, credentialsKey(url, token, mjAPIKey, userAPIKey));
         return client;
     }
 
@@ -3014,7 +3294,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _wsClient: Client = null;
     private _wsClientCreatedAt: number = null;
     private _socketStateSubject = new BehaviorSubject<SocketConnectionState>('unknown');
+    private _socketReconnectedSubject = new Subject<void>();
     private _isDisposingSocketIntentionally = false;
+    /** Disarms the current client's pong watchdog. Each client owns its own timer. */
+    private _disarmPongWatchdog: (() => void) | null = null;
+
+    /**
+     * Fires each time the socket comes back up after having dropped — never on the first
+     * connect. Subscribers should treat it as "you may have missed events while you were
+     * away; re-read authoritative state", because the push topic has no replay buffer.
+     */
+    public get SocketReconnected$(): Observable<void> {
+        return this._socketReconnectedSubject.asObservable();
+    }
 
     /**
      * Observable of the WebSocket (graphql-ws) connection state. Used by
@@ -3030,6 +3322,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public get SocketConnectionState(): SocketConnectionState {
         return this._socketStateSubject.value;
+    }
+
+    /**
+     * How many WebSocket subscriptions are currently open. Zero means nothing is waiting on
+     * push frames, so a socket that is down is delivering nothing and costing nothing.
+     */
+    public get ActiveSubscriptionCount(): number {
+        return this._activeSubscriptionCount;
     }
 
     /**
@@ -3076,7 +3376,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // Create new client if needed
         if (!this._wsClient) {
             this._isDisposingSocketIntentionally = false;
-            this._wsClient = createClient({
+            // Bind handlers to this LOCAL client, not to `this._wsClient`. A pong watchdog armed
+            // on one socket must never be able to terminate a *replacement* socket created while
+            // that timer was still pending.
+            const client = createClient({
                 url: this.ConfigData.WSURL,
                 // Function form: re-evaluated on every connection attempt (including
                 // retries after 4403 "Token expired"). This lets the client pick up a
@@ -3088,17 +3391,79 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ...(this.ConfigData.MJAPIKey ? { 'x-mj-api-key': this.ConfigData.MJAPIKey } : {}),
                     ...(this.ConfigData.UserAPIKey ? { 'x-mj-user-api-key': this.ConfigData.UserAPIKey } : {}),
                 }),
-                keepAlive: 30000, // Send keepalive ping every 30 seconds
+                keepAlive: WS_KEEPALIVE_MS,
+                connectionAckWaitTimeout: WS_CONNECTION_ACK_TIMEOUT_MS,
                 retryAttempts: 3,
                 shouldRetry: () => true,
             });
+            this._wsClient = client;
             this._wsClientCreatedAt = now;
 
-            // Emit connectivity events — consumed by ServerConnectivityService
-            this._wsClient.on('connected', () => {
-                this._socketStateSubject.next('connected');
+            // The pong timer belongs to this client alone, so a late event from a replaced client
+            // can never disarm the watchdog of the client that took its place.
+            let pongTimeout: ReturnType<typeof setTimeout> | null = null;
+            const disarmPongWatchdog = (): void => {
+                if (pongTimeout !== null) {
+                    clearTimeout(pongTimeout);
+                    pongTimeout = null;
+                }
+            };
+            this._disarmPongWatchdog = disarmPongWatchdog;
+
+            // ── Pong watchdog (MJ #4222) ──
+            // graphql-ws sends the keepalive ping but deliberately does nothing when no pong
+            // comes back, and re-arms the ping ONLY on pong receipt. So on a half-open socket
+            // the library emits exactly one 'ping' and then falls permanently silent: no close,
+            // no error, no retry. This watchdog is what converts that silence into a real close
+            // event, which is the single signal the retry logic, `_socketStateSubject`,
+            // ServerConnectivityService, ConversationStreaming and FireAndForgetHelper all wait on.
+            client.on('ping', (received: boolean) => {
+                // `received === true` is a server-initiated ping, which graphql-ws answers on our
+                // behalf — it tells us nothing about whether OUR traffic is getting through. Only
+                // a ping we sent starts the countdown.
+                if (received) {
+                    return;
+                }
+                disarmPongWatchdog();
+                pongTimeout = setTimeout(() => {
+                    pongTimeout = null;
+                    try {
+                        // Issues a synthetic `4499 Terminated` close. graphql-ws treats terminate
+                        // as non-fatal, so `retryAttempts`/`shouldRetry` reconnect as normal.
+                        client.terminate();
+                    } catch {
+                        // Socket already gone — the close we wanted has effectively happened.
+                    }
+                }, WS_PONG_TIMEOUT_MS);
             });
-            this._wsClient.on('closed', (event: unknown) => {
+            client.on('pong', (received: boolean) => {
+                // The link is proven alive in both directions; stand the watchdog down.
+                if (received) {
+                    disarmPongWatchdog();
+                }
+            });
+
+            // Emit connectivity events — consumed by ServerConnectivityService
+            client.on('connected', (_socket: unknown, _payload: unknown, wasRetry: boolean) => {
+                this._socketStateSubject.next('connected');
+                if (wasRetry) {
+                    // A RECONNECT, not a first connect. This is the only trustworthy reconnect
+                    // signal available: graphql-ws re-establishes subscriptions transparently, so
+                    // the RxJS stream may never error or complete, and `_socketStateSubject` can
+                    // re-emit 'connected' without an intervening 'disconnected' when the close was
+                    // suppressed. Anything published while the socket was down was dropped with no
+                    // replay, so a listener must reconcile against durable state (MJ #4222).
+                    this._socketReconnectedSubject.next();
+                }
+            });
+            client.on('closed', (event: unknown) => {
+                // Whatever closed the socket, no pong can arrive on it now. Disarm first so a
+                // pending watchdog cannot fire against an already-dead client.
+                disarmPongWatchdog();
+                // A replaced client's late close says nothing about the socket in use now.
+                if (this._wsClient !== client) {
+                    return;
+                }
                 // Ignore closes we initiated via disposeWSClient() — those already
                 // emit 'unknown' themselves. Only treat unexpected closes (retries
                 // exhausted) as 'disconnected'.
@@ -3136,6 +3501,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private disposeWSClient(): void {
         if (this._wsClient) {
             this._isDisposingSocketIntentionally = true;
+            // Disarm before disposing: a deliberate teardown must not leave a watchdog running
+            // against a client that is going away.
+            this._disarmPongWatchdog?.();
+            this._disarmPongWatchdog = null;
             try {
                 this._wsClient.dispose();
             } catch (e) {
@@ -3253,7 +3622,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param variables Variables to pass to the subscription
      * @returns Observable that emits subscription data
      */
-    public subscribe(subscription: string, variables?: any): Observable<any> {
+    public Subscribe(subscription: string, variables?: any): Observable<any> {
         return new Observable((observer) => {
             const client = this.getOrCreateWSClient();
             this._activeSubscriptionCount++;
@@ -3305,6 +3674,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 unsubscribe();
             };
         });
+    }
+
+    /** @deprecated Use {@link Subscribe}. */
+    public subscribe(subscription: string, variables?: any): Observable<any> {
+        return this.Subscribe(subscription, variables);
     }
 
     public PushStatusUpdates(sessionId: string = null): Observable<string> {
@@ -3545,7 +3919,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         subscription.add(
             // `subscribe()` already owns the WS client lifecycle, JWT refresh, and reconnect
             // posture — riding it keeps one implementation of that machinery.
-            this.subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
+            this.Subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
                 next: (data: { taskGraphFrames?: TaskGraphFrameEvent }) => {
                     if (data?.taskGraphFrames) {
                         subject.next(data.taskGraphFrames);
@@ -3573,7 +3947,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Public method to dispose of WebSocket resources
      * Call this when shutting down the provider or on logout
      */
-    public disposeWebSocketResources(): void {
+    public DisposeWebSocketResources(): void {
         // Stop cleanup timer
         if (this._subscriptionCleanupTimer) {
             clearInterval(this._subscriptionCleanupTimer);
@@ -3591,6 +3965,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Dispose WebSocket client
         this.disposeWSClient();
+    }
+
+    /** @deprecated Use {@link DisposeWebSocketResources}. */
+    public disposeWebSocketResources(): void {
+        return this.DisposeWebSocketResources();
     }
 
     /**************************************************************************
@@ -3636,7 +4015,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             }
         `;
-        return this.subscribe(query, { sessionID: sessionId });
+        return this.Subscribe(query, { sessionID: sessionId });
     }
 
     public SubscribeToCacheInvalidation(): void {
@@ -3660,7 +4039,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`;
 
-        const observable = this.subscribe(CACHE_INVALIDATION_SUB);
+        const observable = this.Subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
             next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string }>) => {
@@ -3697,6 +4076,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     },
                 };
 
+                // The event drives BaseEngine caches directly, AND — because this provider
+                // registers the entities its metadata is built from (the MJ_Metadata dataset's
+                // items) with ProviderBase's static event fan-out — it also schedules a debounced
+                // metadata staleness check when the written entity is one of them. See
+                // ProviderBase.handleMetadataMemberEntityEvent; no entity names are listed here.
                 MJGlobal.Instance.RaiseEvent({
                     event: MJEventType.ComponentEvent,
                     eventCode: BaseEntity.BaseEventCode,
@@ -3717,9 +4101,68 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Minimum client-side coalescing window after a metadata member write, in milliseconds.
+     * See {@link MetadataMemberRefreshDelayMs} for why this is tens of seconds and jittered.
+     */
+    public static ClientMemberRefreshWindowMinMs: number = 15_000;
+
+    /**
+     * Random jitter added on top of {@link ClientMemberRefreshWindowMinMs} each time the window
+     * is armed, so the fleet of connected browsers never runs its checks in the same instant.
+     */
+    public static ClientMemberRefreshWindowJitterMs: number = 30_000;
+
+    /**
+     * The client's window is long and RANDOMIZED where the server's is a short debounce,
+     * because the economics are inverted. MJ_Metadata's members are not only permission
+     * entities — they include entities ordinary users and agents write routinely
+     * (`MJ: Dashboards`, `MJ: Queries` and its children, `MJ: Libraries`), and the server
+     * broadcasts every save to every connected browser. With the server-style 500ms window,
+     * one dashboard save would make EVERY session run a staleness check and — since the member
+     * table's timestamp genuinely moved — re-pull the multi-megabyte metadata graph, all
+     * within the same half-second: at 200 sessions, gigabytes of egress per routine save.
+     * A window of 15–45s (uniform jitter per arming) caps each browser at one status check and
+     * at most one pull per window regardless of org-wide write rate, and spreads those pulls
+     * so they cannot stampede the server. Client metadata freshness is a UX nicety, not an
+     * enforcement surface — the server enforces from its OWN metadata on its unchanged ~1–2s
+     * path, so a browser rendering a just-revoked column for up to a window is display-only
+     * (the wire strips it regardless).
+     */
+    protected get MetadataMemberRefreshDelayMs(): number {
+        return GraphQLDataProvider.ClientMemberRefreshWindowMinMs
+            + Math.random() * GraphQLDataProvider.ClientMemberRefreshWindowJitterMs;
+    }
+
+    /**
+     * Coalesce instead of debounce: with a window this long, re-arming on every event would let
+     * steady org-wide write activity postpone the refresh forever. Joining the armed window
+     * guarantees at most one refresh per window at any write rate.
+     */
+    protected get MetadataMemberRefreshRearmsOnNewEvents(): boolean {
+        return false;
+    }
+
+    /**
+     * How this client refreshes after one of the entities its metadata is built from changes
+     * (see ProviderBase.handleMetadataMemberEntityEvent — membership comes from the MJ_Metadata
+     * dataset definition, not a list). A browser must not re-pull the full metadata graph on
+     * every such write, so instead of the base class's hard Refresh this runs the staleness
+     * check: `RefreshIfNeeded` compares server timestamps and refetches only when genuinely
+     * stale, so a spurious event costs one cheap status round-trip. The check-interval throttle
+     * is bypassed because by the time the coalescing window fires, the caller holds positive
+     * evidence at least one member entity was written since the window was armed — the throttle
+     * would otherwise silently drop it. Volume is governed by the window above, not the
+     * throttle.
+     */
+    protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
+        return this.RefreshIfNeeded(undefined, true);
+    }
+
+    /**
      * Unsubscribes from cache invalidation events. Called during cleanup/logout.
      */
     public UnsubscribeFromCacheInvalidation(): void {
+        this.CancelPendingMetadataMemberRefresh();
         if (this._cacheInvalidationSubscription) {
             this._cacheInvalidationSubscription.unsubscribe();
             this._cacheInvalidationSubscription = null;

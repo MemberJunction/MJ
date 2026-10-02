@@ -389,14 +389,53 @@ describe('LocalCacheManager Differential Caching', () => {
                 testParams,
                 [],
                 deletedIDs,
-                'EntityID', // Primary key field name (first field of composite)
+                ['EntityID', 'FieldID'], // every key column, in key order
                 '2024-06-20T00:00:00.000Z',
                 18
             );
 
             expect(result).not.toBeNull();
-            // Note: The current implementation extracts only the first field value
-            // This test documents the current behavior
+            // Exactly the two named rows are gone; the other 18 — including the eight that share
+            // EntityID 'entity-0' with them — survive. Keying on the first column alone made these
+            // segments never match (so nothing was deleted) and collapsed the ten 'entity-0' rows.
+            expect(result!.results.length).toBe(18);
+            const remaining = result!.results as Record<string, unknown>[];
+            expect(remaining.some(r => r['EntityID'] === 'entity-0' && r['FieldID'] === 'field-0')).toBe(false);
+            expect(remaining.some(r => r['EntityID'] === 'entity-0' && r['FieldID'] === 'field-1')).toBe(false);
+            expect(remaining.filter(r => r['EntityID'] === 'entity-0').length).toBe(8);
+        });
+
+        test('keeps composite-key rows that share their first key column distinct on update', async () => {
+            const initialRows = generateCompositeKeyRows(20);
+            await cacheManager.SetRunViewResult(
+                testFingerprint,
+                testParams,
+                initialRows,
+                '2024-06-15T00:00:00.000Z'
+            );
+
+            // Two updates to rows that share EntityID 'entity-1' but differ in FieldID.
+            const updatedRows = [
+                { ...initialRows[10], Name: 'Updated 1/0' },
+                { ...initialRows[11], Name: 'Updated 1/1' },
+            ];
+
+            const result = await cacheManager.ApplyDifferentialUpdate(
+                testFingerprint,
+                testParams,
+                updatedRows,
+                [],
+                ['EntityID', 'FieldID'],
+                '2024-06-20T00:00:00.000Z',
+                20
+            );
+
+            expect(result).not.toBeNull();
+            expect(result!.results.length).toBe(20);
+            const rows = result!.results as Record<string, unknown>[];
+            expect(rows.find(r => r['EntityID'] === 'entity-1' && r['FieldID'] === 'field-0')?.['Name']).toBe('Updated 1/0');
+            expect(rows.find(r => r['EntityID'] === 'entity-1' && r['FieldID'] === 'field-1')?.['Name']).toBe('Updated 1/1');
+            expect(rows.find(r => r['EntityID'] === 'entity-1' && r['FieldID'] === 'field-2')?.['Name']).toBe('Composite Record 12');
         });
 
         test('handles malformed composite key gracefully', async () => {

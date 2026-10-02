@@ -167,3 +167,98 @@ describe('SQLServerTransactionGroup.BatchedSubmit', () => {
         throwOnQuery = undefined;
     });
 });
+
+/**
+ * Per-item variable scoping.
+ *
+ * T-SQL scopes DECLARE to the BATCH — `BEGIN…END` creates no declaration scope — so concatenating
+ * N generated CRUD wrappers declared `@ResultTable` / `@ID` / `@ResultChangesTable` N times and SQL
+ * Server rejected the whole batch with "The variable name '@ResultChangesTable' has already been
+ * declared." Regression for v6.1.0-edge.5: this fired for ANY group of two or more record-change-
+ * tracked items, which broke IntegrationEngine's sync writes (it sets BatchedSubmit = true) and
+ * failed four checks in the transaction-groups-batched bundle. That bundle is mutation-gated, so
+ * integration.yml — which omits RUN_MUTATION_TESTS=1 — had never executed it.
+ */
+describe('SQLServerTransactionGroup.scopeItemVariables', () => {
+    const wrapper = (pk: string) => `
+        DECLARE @ResultTable TABLE ([ID] uniqueidentifier);
+        INSERT INTO @ResultTable
+        EXEC [__mj].[spCreateTask] @Name='${pk}';
+        DECLARE @ID NVARCHAR(MAX);
+        SELECT @ID = [ID] FROM @ResultTable;
+        IF @ID IS NOT NULL
+        BEGIN
+            DECLARE @ResultChangesTable TABLE ([ID] uniqueidentifier);
+            INSERT INTO @ResultChangesTable
+            EXEC [__mj].[spCreateRecordChange_Internal] @EntityName='MJ: Tasks', @RecordID=@ID;
+        END;
+        SELECT * FROM @ResultTable;`;
+
+    it('renames every DECLAREd variable so two items can share one batch', () => {
+        const a = SQLServerTransactionGroup.scopeItemVariables(wrapper('a'), 0);
+        const b = SQLServerTransactionGroup.scopeItemVariables(wrapper('b'), 1);
+        for (const v of ['@ResultTable', '@ID', '@ResultChangesTable']) {
+            expect(a).toContain(`${v}_mjb0`);
+            expect(b).toContain(`${v}_mjb1`);
+        }
+        // The whole point: no bare declaration survives to collide across the joined batch.
+        const batch = `${a}\n${b}`;
+        expect(batch).not.toMatch(/DECLARE\s+@ResultChangesTable\s+TABLE/);
+        expect(batch.match(/DECLARE\s+@ResultTable_mjb\d/g)).toHaveLength(2);
+    });
+
+    it('does NOT rename a called procedure\'s named arguments', () => {
+        // @EntityName / @RecordID belong to spCreateRecordChange_Internal's signature. Renaming one
+        // yields "@EntityName_mjb0 is not a parameter for procedure ..." — a fix that trades one
+        // batch failure for another.
+        const out = SQLServerTransactionGroup.scopeItemVariables(wrapper('a'), 0);
+        expect(out).toContain("@EntityName='MJ: Tasks'");
+        expect(out).not.toContain('@EntityName_mjb0');
+        // ...but a DECLAREd variable passed AS an argument is still renamed, or it would be unbound.
+        expect(out).toContain('@RecordID=@ID_mjb0');
+    });
+
+    it('does NOT rename a callee parameter that shares a local\'s name', () => {
+        // The sharp case: spCreateActionCategory takes a parameter literally named @ID, while the
+        // wrapper also declares a local @ID. Position, not spelling, separates them — renaming the
+        // argument name gives "@ID_mjb2 is not a parameter for procedure spCreateActionCategory".
+        const src = `DECLARE @ID NVARCHAR(MAX);
+            SELECT @ID = NEWID();
+            EXEC [__mj].[spCreateActionCategory] @ID=@ID, @Name='x';`;
+        const out = SQLServerTransactionGroup.scopeItemVariables(src, 2);
+        expect(out).toContain('SELECT @ID_mjb2 = NEWID()');   // assignment to the local: renamed
+        expect(out).toContain('@ID=@ID_mjb2');                // arg NAME kept, arg VALUE renamed
+        expect(out).not.toContain('@ID_mjb2=');
+    });
+
+    it('leaves @pN request parameters alone', () => {
+        const out = SQLServerTransactionGroup.scopeItemVariables(
+            'DECLARE @ID INT; SELECT @ID = 1; EXEC spX @Value=@p0, @Other=@p12;', 3);
+        expect(out).toContain('@ID_mjb3');
+        expect(out).toContain('@p0');
+        expect(out).toContain('@p12');
+        expect(out).not.toContain('@p0_mjb3');
+    });
+
+    it('does not rewrite text inside string literals or comments', () => {
+        const src = `DECLARE @ID INT;
+            -- @ID mentioned in a comment
+            EXEC spX @Note='the value of @ID is unknown', @Real=@ID;`;
+        const out = SQLServerTransactionGroup.scopeItemVariables(src, 0);
+        expect(out).toContain("'the value of @ID is unknown'");
+        expect(out).toContain('-- @ID mentioned in a comment');
+        expect(out).toContain('@Real=@ID_mjb0');
+    });
+
+    it('handles escaped quotes without losing track of literal boundaries', () => {
+        const src = `DECLARE @ID INT; EXEC spX @A='it''s @ID here', @B=@ID;`;
+        const out = SQLServerTransactionGroup.scopeItemVariables(src, 2);
+        expect(out).toContain("'it''s @ID here'");
+        expect(out).toContain('@B=@ID_mjb2');
+    });
+
+    it('is a no-op when the item declares nothing', () => {
+        const src = "EXEC [__mj].[spDeleteTask] @ID='00000000-0000-0000-0000-000000000000';";
+        expect(SQLServerTransactionGroup.scopeItemVariables(src, 0)).toBe(src);
+    });
+});

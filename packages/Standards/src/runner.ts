@@ -5,7 +5,7 @@
  */
 
 import { GetCheck, STANDARD_CHECKS } from './registry.js';
-import type { CheckOutcome, RunSummary, StandardsConfig, Violation } from './types.js';
+import type { CheckOutcome, RunSummary, Severity, StandardsConfig, Violation } from './types.js';
 import { IsNewerThan } from './version.js';
 
 /**
@@ -47,15 +47,29 @@ export async function RunStandards(repoRoot: string, config: StandardsConfig): P
         PostdatesAdoption: IsNewerThan(Check.Since, config.StandardsVersion),
     }));
 
-    const errorCount = outcomes.filter((o) => o.Severity === 'error').reduce((n, o) => n + o.Violations.length, 0);
-    const warningCount = outcomes.filter((o) => o.Severity === 'warn').reduce((n, o) => n + o.Violations.length, 0);
+    // Counted per VIOLATION, not per outcome: a check may stamp its own severity on individual
+    // findings (see Violation.Severity) to hard-fail the trees a repo has cleaned while still only
+    // reporting the ones it has not. A violation without one takes its check's severity.
+    const countBy = (want: Exclude<Severity, 'off'>): number =>
+        outcomes.reduce((n, o) => n + o.Violations.filter((v) => (v.Severity ?? o.Severity) === want).length, 0);
+    const errorCount = countBy('error');
+    const warningCount = countBy('warn');
 
     return { Outcomes: outcomes, Available: available, UnknownCheckIds: unknownCheckIds, ErrorCount: errorCount, WarningCount: warningCount };
 }
 
-function formatViolation(v: Violation): string {
+/**
+ * One finding, one line.
+ *
+ * The severity prefix appears only when the finding disagrees with its check's configured severity.
+ * A check whose findings are uniform therefore prints exactly as it always did, and a mixed check
+ * makes the build-failing subset obvious without the reader cross-referencing the config.
+ */
+function formatViolation(v: Violation, checkSeverity: Exclude<Severity, 'off'>): string {
     const location = v.Line > 0 ? `${v.File}:${v.Line}` : v.File;
-    return `    ${location}  ${v.Message}`;
+    const effective = v.Severity ?? checkSeverity;
+    const prefix = effective === checkSeverity ? '' : `[${effective}] `;
+    return `    ${prefix}${location}  ${v.Message}`;
 }
 
 /**
@@ -68,11 +82,33 @@ export function FormatSummary(summary: RunSummary, config: StandardsConfig): str
     const lines: string[] = [];
 
     for (const outcome of summary.Outcomes) {
-        const mark = outcome.Violations.length === 0 ? '✓' : outcome.Severity === 'error' ? '✗' : '!';
-        const label = outcome.Violations.length === 0 ? '' : ` — ${outcome.Violations.length} violation(s)`;
-        lines.push(`${mark} ${outcome.Check.Id} [${outcome.Severity}]${label}`);
+        // The mark reflects what this check does to the BUILD, so it keys off whether any finding
+        // is actually an error — not off the configured severity, which a mixed check overrides
+        // per violation.
+        const errors = outcome.Violations.filter((v) => (v.Severity ?? outcome.Severity) === 'error').length;
+        const mark = outcome.Violations.length === 0 ? '✓' : errors > 0 ? '✗' : '!';
+        const counts = errors > 0 && errors < outcome.Violations.length
+            ? ` — ${outcome.Violations.length} violation(s), ${errors} failing`
+            : outcome.Violations.length === 0
+              ? ''
+              : ` — ${outcome.Violations.length} violation(s)`;
+        lines.push(`${mark} ${outcome.Check.Id} [${outcome.Severity}]${counts}`);
         for (const note of outcome.Notes) lines.push(`    ${note}`);
-        for (const violation of outcome.Violations) lines.push(formatViolation(violation));
+
+        // Both lists are capped. Errors were once printed in full, on the reasoning that every one
+        // is something a human has to act on — true at ten, false at eighteen thousand, where the
+        // log is megabytes, GitHub stops rendering it in the UI, and the summary above scrolls out
+        // of reach. A standard adopted against a large existing codebase is a worklist, and a
+        // worklist needs a count and a starting point, not a transcript. The full set is still
+        // available from the check's own output when a caller wants it.
+        const failing = outcome.Violations.filter((v) => (v.Severity ?? outcome.Severity) === 'error');
+        const warning = outcome.Violations.filter((v) => (v.Severity ?? outcome.Severity) !== 'error');
+        const show = (list: Violation[], label: string): void => {
+            for (const violation of list.slice(0, DISPLAY_LIMIT)) lines.push(formatViolation(violation, outcome.Severity));
+            if (list.length > DISPLAY_LIMIT) lines.push(`    … and ${list.length - DISPLAY_LIMIT} more ${label}(s) not shown`);
+        };
+        show(failing, 'error');
+        show(warning, 'warning');
         if (outcome.Violations.length > 0) lines.push(`    → ${outcome.Check.DocsUrl}`);
     }
 
@@ -111,6 +147,14 @@ export function FormatSummary(summary: RunSummary, config: StandardsConfig): str
 }
 
 const CONFIG_LABEL = '.mj-standards.json';
+
+/**
+ * How many violations of one severity a check prints before the rest are summarised.
+ *
+ * Enough to show the shape of the problem and give a reader somewhere to start; far short of what
+ * it takes to bury the summary above it.
+ */
+const DISPLAY_LIMIT = 50;
 
 /** Exit code for a run: non-zero only for `error`-severity violations. */
 export function ExitCodeFor(summary: RunSummary): number {

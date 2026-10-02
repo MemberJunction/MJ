@@ -97,11 +97,11 @@ async function main(): Promise<void> {
         nodeCheck.Status === 'pass' || nodeCheck.Status === 'info');
     }
 
-    // Verify npm version check exists
-    const npmCheck = diagnostics.Checks.find((c: DiagnosticCheck) =>
-      c.Name.toLowerCase().includes('npm'));
-    assertTruthy(failures, 'npm version check exists',
-      npmCheck !== undefined);
+    // Verify the package-manager check exists (pnpm by default, npm on override)
+    const pmCheck = diagnostics.Checks.find((c: DiagnosticCheck) =>
+      c.Name.toLowerCase().includes('package manager'));
+    assertTruthy(failures, 'package manager check exists',
+      pmCheck !== undefined);
 
     // Verify OS check was produced
     const osCheck = diagnostics.Checks.find((c: DiagnosticCheck) =>

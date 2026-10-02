@@ -15,7 +15,7 @@ export class QueryResource extends BaseResourceComponent implements OnInit {
     }
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         const md = this.ProviderToUse;
-        let compositeKey: CompositeKey = new CompositeKey([{FieldName: "ID", Value: data.ResourceRecordID}]);
+        let compositeKey: CompositeKey = CompositeKey.FromID(data.ResourceRecordID); // first-pk-ok: ResourceRecordID of a Queries resource — core entity keyed by ID
         const name = await md.GetEntityRecordName('Queries', compositeKey);
         return `${name ? name : 'Query ID: ' + data.ResourceRecordID}`;
     }

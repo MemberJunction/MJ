@@ -24,8 +24,13 @@ vi.mock('../github/github-client.js', () => ({
     ListGitHubReleases: vi.fn(),
     ListGitHubTags: vi.fn(),
 }));
-vi.mock('../install/schema-manager.js', () => ({
+// Spread the real module so ValidateSchemaName is the genuine rule (these suites declare
+// ordinary schema names, so it always passes); only the DB-touching functions are stubbed.
+vi.mock('../install/schema-manager.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../install/schema-manager.js')>()),
     CreateAppSchema: vi.fn(),
+    // Default: the installer may migrate the app schema. Tests of the #4756 gate override it.
+    CheckCanMigrateAppSchema: vi.fn(async () => ({ Success: true })),
     DropAppSchema: vi.fn(),
     SchemaExists: vi.fn(),
     EscapeSqlString: (s: string) => s,
