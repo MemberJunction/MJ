@@ -200,8 +200,9 @@ describe('finishIf state and verdict, as BaseAgent produces them', () => {
         agent = new TestAgent();
         agent['_activeProvider'] = new MockMetadataProvider(async () => new MockStepEntity() as MJAIAgentRunStepEntityExtended) as IMetadataProvider;
         agent['_agentRun'] = new MockAgentRun() as MJAIAgentRunEntityExtended;
-        // The gate is evaluated only when finishIfMode is shadow or on (it defaults to off).
-        agent['_agentTypePromptParams'] = { finishIfMode: 'on' };
+        // The gate is evaluated only when finishIfMode is shadow or on (it defaults to off), with the
+        // master switch for decision-model use on (it defaults to off too).
+        agent['_agentTypePromptParams'] = { decisionsEnabled: true, finishIfMode: 'on' };
         decisions = new AgentDecisionService();
         agent.SetDecisionService(decisions);
         finishChecks = [];
