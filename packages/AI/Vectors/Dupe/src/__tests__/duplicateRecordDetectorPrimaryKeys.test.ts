@@ -42,6 +42,22 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, LogError: vi.fn(), LogStatus: vi.fn() };
 });
 
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIEmbeddingRunner: class {
+        async RunEmbedding(params: { Texts: string[] }) {
+            return {
+                Success: true,
+                Vectors: (params.Texts || []).map(() => [0.1, 0.2]),
+                PromptRunID: 'pr-mock',
+                TokensUsed: 10,
+                Cost: 0,
+                ErrorMessage: null,
+                ExecutionTimeMs: 1,
+            };
+        }
+    },
+}));
+
 vi.mock('@memberjunction/ai', () => ({
     BaseEmbeddings: vi.fn(),
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),

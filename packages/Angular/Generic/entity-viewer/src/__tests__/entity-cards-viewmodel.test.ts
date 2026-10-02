@@ -189,7 +189,7 @@ describe('EntityCardsComponent — rebuild trigger matrix (content vs selection-
   for (const trigger of contentTriggers) {
     it(`rebuilds the VMs when '${String(trigger.name)}' changes`, () => {
       const arrayBefore = component.cardViewModels;
-      const highlightSpy = vi.spyOn(component, 'highlightMatch');
+      const highlightSpy = vi.spyOn(component, 'HighlightMatch');
       trigger.apply(component);
       component.ngOnChanges({ [trigger.name]: change(null, undefined) } as SimpleChanges);
 
@@ -200,7 +200,7 @@ describe('EntityCardsComponent — rebuild trigger matrix (content vs selection-
 
   it('records change rebuilds (new array + highlightMatch)', () => {
     const arrayBefore = component.cardViewModels;
-    const highlightSpy = vi.spyOn(component, 'highlightMatch');
+    const highlightSpy = vi.spyOn(component, 'HighlightMatch');
     component.records = [{ ID: 'cccc', Name: 'Charlie', Status: 'Active' }];
     component.ngOnChanges({ records: change(null, component.records) });
     expect(component.cardViewModels).not.toBe(arrayBefore);
@@ -211,7 +211,7 @@ describe('EntityCardsComponent — rebuild trigger matrix (content vs selection-
   it('selectedRecordId alone does NOT rebuild — only flips isSelected (no highlightMatch, same array)', () => {
     const arrayBefore = component.cardViewModels;
     const vmsBefore = [...component.cardViewModels];
-    const highlightSpy = vi.spyOn(component, 'highlightMatch');
+    const highlightSpy = vi.spyOn(component, 'HighlightMatch');
 
     const targetPk = component.cardViewModels[1].pkString;
     component.selectedRecordId = targetPk;
@@ -224,7 +224,7 @@ describe('EntityCardsComponent — rebuild trigger matrix (content vs selection-
   });
 
   it('a content change + selection together: content wins (rebuild) and selection is applied', () => {
-    const highlightSpy = vi.spyOn(component, 'highlightMatch');
+    const highlightSpy = vi.spyOn(component, 'HighlightMatch');
     component.records = [
       { ID: 'cccc', Name: 'Charlie', Status: 'Active' },
       { ID: 'dddd', Name: 'Delta', Status: 'Pending' },

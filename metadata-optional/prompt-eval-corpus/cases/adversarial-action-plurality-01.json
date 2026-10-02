@@ -1,0 +1,37 @@
+{
+  "id": "adversarial-action-plurality-01",
+  "agent": "Codesmith Agent",
+  "tags": [
+    "adversarial-exemplar",
+    "first-step-action",
+    "prompt-fragility"
+  ],
+  "description": "Detects the singular-action defect: six shipped Codesmith exemplars used type 'Action' with an 'action' object and an 'input' key. The normalizer only reads nextStep.actions[], so the broken shape scores as no action at all.",
+  "input": {
+    "payload": {
+      "task": "reverse a string",
+      "inputData": {
+        "s": "hello"
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Write code to reverse input.s."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Execute Code",
+        "params": {
+          "code": {
+            "matcher": "nonEmpty"
+          }
+        }
+      }
+    ]
+  }
+}

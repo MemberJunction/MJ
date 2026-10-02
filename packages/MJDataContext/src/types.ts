@@ -105,6 +105,11 @@ export class DataContextItem {
             this.DataLoadingError = null;
     }
 
+    // `private` is erased at runtime, so JSON.stringify emits this backing field under its own
+    // name and FromRawItem() below reads it straight back off the raw object. The name is part of
+    // a persisted shape, not an implementation detail: renaming it would make new writes disagree
+    // with every DataContext row already stored, and nothing would fail to compile.
+    // case-violation-ok-legacy-back-compat: persisted field name, read back by FromRawItem
     private _Data?: any[];
 
     /**

@@ -2,7 +2,7 @@
   "entity": "MJ: Tests",
   "filePattern": "**/.*.json",
   "pull": {
-    "filter": "Type <> 'Integration Test'",
+    "filter": "Type <> 'Integration Test' AND Type <> 'Computer Use'",
     "lookupFields": {
       "TypeID": {
         "entity": "MJ: Test Types",

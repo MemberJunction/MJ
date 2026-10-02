@@ -14,7 +14,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     }
 
 
-    private _Metadata: {
+    private _metadata: {
         TemplateContentTypes: MJTemplateContentTypeEntity[],
         TemplateCategories: MJTemplateCategoryEntity[],
         Templates: MJTemplateEntityExtended[],
@@ -28,7 +28,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
                 Type: 'dataset',
                 DatasetName: 'Template_Metadata',
                 DatasetResultHandling: "single_property",
-                PropertyName: "_Metadata"
+                PropertyName: "_metadata"
             }
         ]
         await this.Load(c, provider, forceRefresh, contextUser);
@@ -43,20 +43,20 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     }
 
     public get Templates(): MJTemplateEntityExtended[] {
-        return this._Metadata.Templates;
+        return this._metadata.Templates;
     }
 
     public get TemplateContentTypes(): MJTemplateContentTypeEntity[] {
-        return this._Metadata.TemplateContentTypes;
+        return this._metadata.TemplateContentTypes;
     }
     public get TemplateCategories(): MJTemplateCategoryEntity[] {
-        return this._Metadata.TemplateCategories;
+        return this._metadata.TemplateCategories;
     }
     public get TemplateContents(): MJTemplateContentEntity[] {
-        return this._Metadata.TemplateContents;
+        return this._metadata.TemplateContents;
     }
     public get TemplateParams(): MJTemplateParamEntity[] {
-        return this._Metadata.TemplateParams;
+        return this._metadata.TemplateParams;
     }
 
     /**

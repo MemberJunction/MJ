@@ -118,7 +118,7 @@ function skipNote(checkId: string, reason: string): void {
  * than its owner" true — OR-composition would let the key layer WIDEN role RLS.
  * Skips-as-pass when the seed is absent or metadata lacks a usable distinct filter.
  */
-export async function CheckKf1_KeyFilterIsolation(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckKf1KeyFilterIsolation(ctx: IntegrationCheckContext): Promise<void> {
     const seeded = ctx.RlsFixture?.SeededScopedA;
     if (!seeded) {
         skipNote('KF1', `seeded scoped user ${SEEDED_SCOPED_A_EMAIL} not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
@@ -163,6 +163,11 @@ export async function CheckKf1_KeyFilterIsolation(ctx: IntegrationCheckContext):
     Assert(!effWithout.includes(') AND ('), `unbound principal's single-layer clause must have no cross-layer AND: '${effWithout}'`);
 }
 
+/** @deprecated Use {@link CheckKf1KeyFilterIsolation}. */
+export async function CheckKf1_KeyFilterIsolation(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckKf1KeyFilterIsolation(ctx);
+}
+
 /**
  * KF2 — exemption independence [FO] (deterministic, no DB read).
  * THE §5.5 regression, pinned live: a principal EXEMPT from role RLS (the run's context user
@@ -172,7 +177,7 @@ export async function CheckKf1_KeyFilterIsolation(ctx: IntegrationCheckContext):
  * role method AFTER its exemption early-return, which drops it for exactly these principals
  * while passing every narrow-role test — this check is the one that would have caught it.
  */
-export async function CheckKf2_ExemptionIndependence(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckKf2ExemptionIndependence(ctx: IntegrationCheckContext): Promise<void> {
     const filter = findSelfScopedFilter(ctx.Provider);
     if (!filter) {
         skipNote('KF2', "no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; key binding not constructible.");
@@ -208,6 +213,11 @@ export async function CheckKf2_ExemptionIndependence(ctx: IntegrationCheckContex
     Assert(effective.includes(keyTerm), `effective clause must contain the key term '${keyTerm}', got: '${effective}'`);
 }
 
+/** @deprecated Use {@link CheckKf2ExemptionIndependence}. */
+export async function CheckKf2_ExemptionIndependence(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckKf2ExemptionIndependence(ctx);
+}
+
 /**
  * KF3 — INV-1 cache-slot separation [FO] (live, read-only).
  * Two principals whose ONLY difference is the resolved key filter issue IDENTICAL
@@ -219,7 +229,7 @@ export async function CheckKf2_ExemptionIndependence(ctx: IntegrationCheckContex
  * AND the bound principal's rows all satisfy its key filter (end-to-end enforcement, not
  * just fingerprint hygiene).
  */
-export async function CheckKf3_CacheSlotSeparation(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckKf3CacheSlotSeparation(ctx: IntegrationCheckContext): Promise<void> {
     const filter = findSelfScopedFilter(ctx.Provider);
     if (!filter) {
         skipNote('KF3', "no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; key binding not constructible.");
@@ -273,6 +283,11 @@ export async function CheckKf3_CacheSlotSeparation(ctx: IntegrationCheckContext)
         `unbound principal must see a superset (${unboundRes.Results.length} rows) of the filtered principal's rows (${boundRes.Results.length})`);
 }
 
+/** @deprecated Use {@link CheckKf3CacheSlotSeparation}. */
+export async function CheckKf3_CacheSlotSeparation(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckKf3CacheSlotSeparation(ctx);
+}
+
 /**
  * KF4 — INV-2 / INV-3 fingerprint↔WHERE agreement [FO] (deterministic, no DB read).
  * The cache fingerprint's clause (ComputeRunViewRLSWhereClause) and the WHERE assembly's
@@ -283,7 +298,7 @@ export async function CheckKf3_CacheSlotSeparation(ctx: IntegrationCheckContext)
  * is a leak). Uses real metadata filters (no SQL executes) so the composed clause is
  * multi-layered when the DB carries 2+ filters.
  */
-export async function CheckKf4_FingerprintWhereAgreement(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckKf4FingerprintWhereAgreement(ctx: IntegrationCheckContext): Promise<void> {
     const filters = (ctx.Provider.RowLevelSecurityFilters ?? []).filter(f => !!f.FilterText && f.FilterText.trim() !== '');
     if (filters.length === 0) {
         skipNote('KF4', 'no RLS filters in metadata; a key-filtered clause is not constructible.');
@@ -333,6 +348,11 @@ export async function CheckKf4_FingerprintWhereAgreement(ctx: IntegrationCheckCo
         'INV-3 VIOLATION: a different principal produced the SAME fingerprint clause — the fingerprint is not computed from the passed principal');
 }
 
+/** @deprecated Use {@link CheckKf4FingerprintWhereAgreement}. */
+export async function CheckKf4_FingerprintWhereAgreement(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckKf4FingerprintWhereAgreement(ctx);
+}
+
 /**
  * KF5 — post-image update rejection, end to end (live, self-cleaning fixture).
  * The WS1 × WS3 seam: an Update-typed key binding drives CheckUpdateRLSPostImage through
@@ -342,7 +362,7 @@ export async function CheckKf4_FingerprintWhereAgreement(ctx: IntegrationCheckCo
  * deliberately read-only (CanUpdate=false), so the Update filter comes from a key binding —
  * the same enforcement path, no metadata mutation, no cache refresh.
  */
-export async function CheckKf5_PostImageUpdateRejection(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckKf5PostImageUpdateRejection(ctx: IntegrationCheckContext): Promise<void> {
     const filter = findSelfScopedFilter(ctx.Provider);
     if (!filter) {
         skipNote('KF5', "no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; an Update key binding is not constructible.");
@@ -414,6 +434,11 @@ export async function CheckKf5_PostImageUpdateRejection(ctx: IntegrationCheckCon
     }
 }
 
+/** @deprecated Use {@link CheckKf5PostImageUpdateRejection}. */
+export async function CheckKf5_PostImageUpdateRejection(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckKf5PostImageUpdateRejection(ctx);
+}
+
 /**
  * KF6 — Load-by-PK enforcement (live, self-cleaning fixture).
  * §5.5 site 4 — the concrete path a PreRunViewHook implementation would have missed:
@@ -421,7 +446,7 @@ export async function CheckKf5_PostImageUpdateRejection(ctx: IntegrationCheckCon
  * load a row outside its filter, while the SAME principal without the binding loads it fine
  * (the binding — not permissions — is the discriminator).
  */
-export async function CheckKf6_LoadByPkEnforcement(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckKf6LoadByPkEnforcement(ctx: IntegrationCheckContext): Promise<void> {
     const filter = findSelfScopedFilter(ctx.Provider);
     if (!filter) {
         skipNote('KF6', "no self-scoped RLS filter (UserID = '{{UserID}}') in metadata; a Read key binding is not constructible.");
@@ -471,6 +496,11 @@ export async function CheckKf6_LoadByPkEnforcement(ctx: IntegrationCheckContext)
     }
 }
 
+/** @deprecated Use {@link CheckKf6LoadByPkEnforcement}. */
+export async function CheckKf6_LoadByPkEnforcement(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckKf6LoadByPkEnforcement(ctx);
+}
+
 /**
  * The KF members of the 'rls-isolation' bundle (server transport). Registered after
  * RLS1–RLS10 (index.ts export order) so the bundle runs RLS* then KF*.
@@ -479,32 +509,32 @@ export const KeyRowFilterChecks: NamedCheck[] = [
     {
         Id: 'rls-isolation.KF1',
         Name: 'KF1: two principals differing ONLY in API-key row-filter bindings get different clauses; key term is AND-composed with the role term',
-        Fn: CheckKf1_KeyFilterIsolation
+        Fn: CheckKf1KeyFilterIsolation
     },
     {
         Id: 'rls-isolation.KF2',
         Name: 'KF2: a role-RLS-EXEMPT principal with a key binding still gets a non-empty effective clause (the §5.5 fail-open regression)',
-        Fn: CheckKf2_ExemptionIndependence
+        Fn: CheckKf2ExemptionIndependence
     },
     {
         Id: 'rls-isolation.KF3',
         Name: 'KF3: INV-1 — key-filtered and unfiltered principals with identical RunViewParams never share a cache slot',
-        Fn: CheckKf3_CacheSlotSeparation
+        Fn: CheckKf3CacheSlotSeparation
     },
     {
         Id: 'rls-isolation.KF4',
         Name: 'KF4: INV-2/INV-3 — fingerprint clause and WHERE clause are byte-identical, order-stable, and computed for the passed principal',
-        Fn: CheckKf4_FingerprintWhereAgreement
+        Fn: CheckKf4FingerprintWhereAgreement
     },
     {
         Id: 'rls-isolation.KF5',
         Name: 'KF5: an update moving a row OUTSIDE an Update key filter is rejected post-image (specific message, nothing written); inside-filter update passes',
-        Fn: CheckKf5_PostImageUpdateRejection
+        Fn: CheckKf5PostImageUpdateRejection
     },
     {
         Id: 'rls-isolation.KF6',
         Name: 'KF6: Load-by-PK of a row outside a Read key filter fails for the bound principal and succeeds without the binding',
-        Fn: CheckKf6_LoadByPkEnforcement
+        Fn: CheckKf6LoadByPkEnforcement
     }
 ];
 

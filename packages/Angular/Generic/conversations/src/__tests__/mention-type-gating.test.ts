@@ -14,13 +14,23 @@ import { resolve } from 'path';
 const read = (rel: string) =>
   readFileSync(resolve(__dirname, '..', rel), 'utf8');
 
+/**
+ * The @Input DECLARATIONS are matched on their PascalCase names — MJ's convention — while the
+ * template bindings below are still matched on the camelCase ones. That is not an oversight: each
+ * renamed input kept its old name as a `@deprecated` accessor pair aliasing the new one, so a
+ * template that still writes `[enableAgentMentions]` goes on working. The chain is what this spec
+ * pins, and it is intact through either spelling.
+ */
+const declaresInput = (name: string) =>
+  new RegExp(`@Input\\(\\)\\s+${name}(\\s*:\\s*boolean)?\\s*=\\s*true;`);
+
 describe('per-type mention gating — forwarding contract', () => {
   it('chat-area declares the three allow* inputs, all defaulting true', () => {
     const ts = read('lib/components/conversation/conversation-chat-area.component.ts');
     // Tolerate an explicit `: boolean` — the assertion is about the default, not the
     // annotation style.
-    for (const name of ['allowAgentMentions', 'allowEntityMentions', 'allowSkillCommands']) {
-      expect(ts).toMatch(new RegExp(`@Input\\(\\)\\s+${name}(\\s*:\\s*boolean)?\\s*=\\s*true;`));
+    for (const name of ['AllowAgentMentions', 'AllowEntityMentions', 'AllowSkillCommands']) {
+      expect(ts).toMatch(declaresInput(name));
     }
   });
 
@@ -39,8 +49,10 @@ describe('per-type mention gating — forwarding contract', () => {
   it('empty-state accepts and forwards the flags to its inner message-input', () => {
     const ts = read('lib/components/conversation/conversation-empty-state.component.ts');
     const html = read('lib/components/conversation/conversation-empty-state.component.html');
+    for (const name of ['EnableAgentMentions', 'EnableEntityMentions', 'EnableSkillCommands']) {
+      expect(ts).toMatch(declaresInput(name));
+    }
     for (const name of ['enableAgentMentions', 'enableEntityMentions', 'enableSkillCommands']) {
-      expect(ts).toMatch(new RegExp(`@Input\\(\\)\\s+${name}(\\s*:\\s*boolean)?\\s*=\\s*true;`));
       expect(html).toContain(`[${name}]="${name}"`);
     }
   });
@@ -48,8 +60,8 @@ describe('per-type mention gating — forwarding contract', () => {
   it('message-input accepts the flags and binds the composer PascalCase Enable* inputs', () => {
     const ts = read('lib/components/message/message-input.component.ts');
     const html = read('lib/components/message/message-input.component.html');
-    for (const name of ['enableAgentMentions', 'enableEntityMentions', 'enableSkillCommands']) {
-      expect(ts).toMatch(new RegExp(`@Input\\(\\)\\s+${name}(\\s*:\\s*boolean)?\\s*=\\s*true;`));
+    for (const name of ['EnableAgentMentions', 'EnableEntityMentions', 'EnableSkillCommands']) {
+      expect(ts).toMatch(declaresInput(name));
     }
     expect(html).toContain('[EnableAgentMentions]="enableAgentMentions"');
     expect(html).toContain('[EnableEntityMentions]="enableEntityMentions"');

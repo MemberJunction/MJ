@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import { Skyway } from '@memberjunction/skyway-core';
 import ora from 'ora-classic';
-import { getValidatedConfig, getSkywayConfig } from '../../config';
+import { GetValidatedConfig, GetSkywayConfig } from '../../config';
 
 export default class Clean extends Command {
   static description = 'Resets the MemberJunction database to a pre-installation state';
@@ -17,13 +17,13 @@ export default class Clean extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Clean);
-    const config = getValidatedConfig();
+    const config = GetValidatedConfig();
 
     if (config.cleanDisabled !== false) {
       this.error('Clean is disabled. Set cleanDisabled: false in mj.config.cjs to enable.');
     }
 
-    const skywayConfig = await getSkywayConfig(config);
+    const skywayConfig = await GetSkywayConfig(config);
     const skyway = new Skyway(skywayConfig);
 
     this.log('Resetting MJ database to pre-installation state');

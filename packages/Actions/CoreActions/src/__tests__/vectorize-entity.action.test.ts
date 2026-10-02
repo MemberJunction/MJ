@@ -15,14 +15,19 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { IMetadataProvider } from '@memberjunction/core';
 
 // --- Controllable EntityVectorSyncer mock -----------------------------------
 const configMock = vi.fn();
 const getActiveEntityDocumentsMock = vi.fn();
 const vectorizeEntityMock = vi.fn();
+let syncerConstructorProvider: IMetadataProvider | null | undefined;
 
 vi.mock('@memberjunction/ai-vector-sync', () => ({
     EntityVectorSyncer: class {
+        constructor(provider?: IMetadataProvider | null) {
+            syncerConstructorProvider = provider;
+        }
         public Config = configMock;
         public GetActiveEntityDocuments = getActiveEntityDocumentsMock;
         public VectorizeEntity = vectorizeEntityMock;
@@ -79,6 +84,7 @@ describe('VectorizeEntityAction', () => {
         configMock.mockReset().mockResolvedValue(undefined);
         getActiveEntityDocumentsMock.mockReset().mockResolvedValue([]);
         vectorizeEntityMock.mockReset().mockResolvedValue(okResp());
+        syncerConstructorProvider = undefined;
     });
 
     describe('no-op when nothing to vectorize', () => {
@@ -211,6 +217,30 @@ describe('VectorizeEntityAction', () => {
             ]));
 
             expect(getActiveEntityDocumentsMock).toHaveBeenCalledWith(['Customers', 'Orders'], 'Search');
+        });
+    });
+
+    describe('provider propagation', () => {
+        it('passes params.Provider to EntityVectorSyncer constructor', async () => {
+            getActiveEntityDocumentsMock.mockResolvedValue([]);
+            const mockProvider = { Entities: [] } as IMetadataProvider;
+            const params = {
+                ...makeParams([]),
+                Provider: mockProvider,
+            };
+
+            await run(action, params);
+
+            expect(syncerConstructorProvider).toBe(mockProvider);
+        });
+
+        it('passes undefined to EntityVectorSyncer when Provider is not in params', async () => {
+            getActiveEntityDocumentsMock.mockResolvedValue([]);
+            const params = makeParams([]);
+
+            await run(action, params);
+
+            expect(syncerConstructorProvider).toBeUndefined();
         });
     });
 });

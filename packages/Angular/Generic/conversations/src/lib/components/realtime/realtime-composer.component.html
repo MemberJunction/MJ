@@ -129,14 +129,15 @@
       }
     </div>
     <div class="dock__box">
-      <input
+      <textarea
         #dockInput
-        type="text"
         class="dock__input"
+        rows="1"
         placeholder="Type into the live session — joins this same voice call…"
         [(ngModel)]="Draft"
         (keydown)="OnKeydown($event)"
-        aria-label="Type a message into the live voice session" />
+        (input)="AutoResize()"
+        aria-label="Type a message into the live voice session"></textarea>
       <span class="dock__hint" aria-hidden="true">↵ send</span>
       <button
         class="dock__send"
@@ -152,6 +153,10 @@
             title="Hide typing — back to the voice controls"
             aria-label="Close the typed-input composer">
       <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+    </button>
+    <button type="button" class="mini mini--end" (click)="EndRequested.emit()"
+            title="End call" aria-label="End call">
+      <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
     </button>
   </div>
 }

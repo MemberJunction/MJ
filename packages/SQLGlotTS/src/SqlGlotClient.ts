@@ -88,7 +88,7 @@ export class SqlGlotClient {
    * Start the Python microservice. Resolves once the server is ready.
    * If already running, this is a no-op.
    */
-  async start(): Promise<void> {
+  async Start(): Promise<void> {
     if (this.IsRunning) {
       return;
     }
@@ -161,11 +161,16 @@ export class SqlGlotClient {
     });
   }
 
+  /** @deprecated Use {@link Start}. */
+  async start(): Promise<void> {
+    return this.Start();
+  }
+
   /**
    * Stop the Python microservice. Resolves once the process has exited.
    * If not running, this is a no-op.
    */
-  async stop(): Promise<void> {
+  async Stop(): Promise<void> {
     if (!this.process) {
       return;
     }
@@ -189,11 +194,16 @@ export class SqlGlotClient {
     });
   }
 
+  /** @deprecated Use {@link Stop}. */
+  async stop(): Promise<void> {
+    return this.Stop();
+  }
+
   /**
    * Transpile SQL from one dialect to another.
    * All statements are transpiled together as a batch.
    */
-  async transpile(sql: string, options: TranspileOptions): Promise<TranspileResult> {
+  async Transpile(sql: string, options: TranspileOptions): Promise<TranspileResult> {
     this.assertRunning();
     return this.httpPost<TranspileResult>('/transpile', {
       sql,
@@ -204,11 +214,16 @@ export class SqlGlotClient {
     });
   }
 
+  /** @deprecated Use {@link Transpile}. */
+  async transpile(sql: string, options: TranspileOptions): Promise<TranspileResult> {
+    return this.Transpile(sql, options);
+  }
+
   /**
    * Transpile SQL statement-by-statement.
    * Each statement is transpiled individually, so one failure doesn't block others.
    */
-  async transpileStatements(sql: string, options: TranspileOptions): Promise<TranspileResult> {
+  async TranspileStatements(sql: string, options: TranspileOptions): Promise<TranspileResult> {
     this.assertRunning();
     return this.httpPost<TranspileResult>('/transpile-statements', {
       sql,
@@ -219,10 +234,15 @@ export class SqlGlotClient {
     });
   }
 
+  /** @deprecated Use {@link TranspileStatements}. */
+  async transpileStatements(sql: string, options: TranspileOptions): Promise<TranspileResult> {
+    return this.TranspileStatements(sql, options);
+  }
+
   /**
    * Parse SQL and return the AST as JSON.
    */
-  async parse(sql: string, options: ParseOptions): Promise<ParseResult> {
+  async Parse(sql: string, options: ParseOptions): Promise<ParseResult> {
     this.assertRunning();
     return this.httpPost<ParseResult>('/parse', {
       sql,
@@ -230,19 +250,29 @@ export class SqlGlotClient {
     });
   }
 
+  /** @deprecated Use {@link Parse}. */
+  async parse(sql: string, options: ParseOptions): Promise<ParseResult> {
+    return this.Parse(sql, options);
+  }
+
   /**
    * List all supported SQL dialects.
    */
-  async getDialects(): Promise<string[]> {
+  async GetDialects(): Promise<string[]> {
     this.assertRunning();
     const result = await this.httpGet<{ dialects: string[] }>('/dialects');
     return result.dialects;
   }
 
+  /** @deprecated Use {@link GetDialects}. */
+  async getDialects(): Promise<string[]> {
+    return this.GetDialects();
+  }
+
   /**
    * Check server health and return status information.
    */
-  async health(): Promise<HealthStatus> {
+  async Health(): Promise<HealthStatus> {
     this.assertRunning();
     const result = await this.httpGet<{
       status: string;
@@ -255,6 +285,11 @@ export class SqlGlotClient {
       service: result.service,
       port: this.port!,
     };
+  }
+
+  /** @deprecated Use {@link Health}. */
+  async health(): Promise<HealthStatus> {
+    return this.Health();
   }
 
   private assertRunning(): void {

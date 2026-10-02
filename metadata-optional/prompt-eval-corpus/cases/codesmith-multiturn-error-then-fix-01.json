@@ -1,0 +1,15 @@
+{
+  "id": "codesmith-multiturn-error-then-fix-01",
+  "agent": "Codesmith Agent",
+  "tags": ["multi-turn", "n4", "error-recovery"],
+  "description": "The first execution failed with a TypeError returned as a tool result; the right next step is a corrected execution, not a question. Neutral tool form (see dbresearch-multiturn-entity-then-query-01).",
+  "input": {
+    "payload": { "task": "parse dates", "inputData": { "dates": ["2024-01-01", "2024-02-15"] }, "iterations": 1 },
+    "conversationMessages": [
+      { "role": "user", "content": "Parse the dates in inputData and return them as ISO timestamps." },
+      { "role": "assistant", "content": "", "toolCalls": [{ "id": "call_0", "name": "execute_code", "arguments": { "code": "output = input.dates.map(d => new Date(d).toISOString());", "inputData": "{\"dates\":[\"2024-01-01\",\"2024-02-15\"]}" } }] },
+      { "role": "tool", "content": [{ "type": "tool_result", "toolCallId": "call_0", "toolName": "execute_code", "isError": true, "content": "TypeError: Cannot read properties of undefined (reading 'map') — `input.dates` is undefined; the input object is `{ inputData: { dates: [...] } }`." }] }
+    ]
+  },
+  "expect": { "kind": "action", "actions": [{ "name": "Execute Code", "params": { "code": { "matcher": "nonEmpty" } } }], "allowAdditionalActions": false }
+}

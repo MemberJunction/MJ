@@ -10,14 +10,14 @@ export type LoadingAnimationType = 'pulse' | 'spin' | 'bounce' | 'pulse-spin';
  */
 export interface AnimationStep {
   /** The animation type to use */
-  type: LoadingAnimationType;
+  Type: LoadingAnimationType;
 
   /**
    * Duration in milliseconds for this animation step.
    * If not specified or 0, this animation runs for the remainder of loading.
    * Use this to create sequences like: bounce for 5s, then pulse for the rest.
    */
-  durationMs?: number;
+  DurationMs?: number;
 }
 
 /**
@@ -26,16 +26,16 @@ export interface AnimationStep {
  */
 export interface LoadingTheme {
   /** Unique identifier for the theme */
-  id: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
   /** Human-readable name for the theme */
-  name: string;
+  Name: string;
 
   /** Month (1-12) and day when this theme starts */
-  startsAt: { month: number; day: number };
+  StartsAt: { month: number; day: number };
 
   /** Month (1-12) and day when this theme ends (inclusive) */
-  endsAt: { month: number; day: number };
+  EndsAt: { month: number; day: number };
 
   /**
    * Optional locale codes where this theme applies.
@@ -43,14 +43,14 @@ export interface LoadingTheme {
    * If undefined or empty, theme applies globally.
    * Can include partial matches (e.g., 'en' matches 'en-US', 'en-GB', etc.)
    */
-  locales?: string[];
+  Locales?: string[];
 
   /**
    * Array of theme colors used for the logo and text.
    * Colors are cycled through as loading progresses.
    * For the standard theme, only the first color is used (no changes).
    */
-  colors: string[];
+  Colors: string[];
 
   /**
    * Optional array of gradient configurations for the logo.
@@ -58,26 +58,26 @@ export interface LoadingTheme {
    * Takes precedence over solid colors for the logo fill.
    * If only one gradient is provided, it's used throughout.
    */
-  gradients?: LogoGradient[];
+  Gradients?: LogoGradient[];
 
   /**
    * Array of themed messages to display during loading.
    * Should contain at least 25 messages for variety.
    */
-  messages: string[];
+  Messages: string[];
 
   /**
    * Priority for theme selection when multiple themes match.
    * Higher priority themes are selected over lower priority ones.
    * Default is 0. More specific themes (e.g., regional) should have higher priority.
    */
-  priority?: number;
+  Priority?: number;
 
   /**
    * If true, colors and gradients remain fixed (no cycling).
    * Used for standard theme to keep MJ blue throughout.
    */
-  staticColors?: boolean;
+  StaticColors?: boolean;
 
   /**
    * Animation configuration for this theme.
@@ -90,7 +90,7 @@ export interface LoadingTheme {
    *
    * If not specified, defaults to 'pulse' for standard theme or random selection for others.
    */
-  animations?: LoadingAnimationType | AnimationStep[];
+  Animations?: LoadingAnimationType | AnimationStep[];
 }
 
 /**
@@ -99,15 +99,15 @@ export interface LoadingTheme {
  */
 export const STANDARD_THEME: LoadingTheme = {
   id: 'standard',
-  name: 'Standard',
-  startsAt: { month: 1, day: 1 },
-  endsAt: { month: 12, day: 31 },
-  staticColors: true, // Keep MJ blue the whole time
-  animations: 'pulse', // Calm, professional pulse animation only
-  colors: [
+  Name: 'Standard',
+  StartsAt: { month: 1, day: 1 },
+  EndsAt: { month: 12, day: 31 },
+  StaticColors: true, // Keep MJ blue the whole time
+  Animations: 'pulse', // Calm, professional pulse animation only
+  Colors: [
     '', // Uses --mj-logo-color CSS variable (adapts to theme)
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Warming up the engines... 🚀',
     'Fetching your applications...',
@@ -142,29 +142,29 @@ export const STANDARD_THEME: LoadingTheme = {
  */
 export const WINTER_HOLIDAY_THEME: LoadingTheme = {
   id: 'winter-holiday',
-  name: 'Winter Holidays',
-  startsAt: { month: 12, day: 1 },
-  endsAt: { month: 12, day: 31 },
+  Name: 'Winter Holidays',
+  StartsAt: { month: 12, day: 1 },
+  EndsAt: { month: 12, day: 31 },
   // Festive bounce to start, then gentle pulse
-  animations: [
-    { type: 'bounce', durationMs: 4000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'bounce', DurationMs: 4000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#C41E3A', // Christmas Red
     '#228B22', // Forest Green
     '#FFD700', // Gold
     '#87CEEB', // Sky Blue (icy)
     '#8B4513', // Saddle Brown (cozy)
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#C41E3A', endColor: '#228B22', angle: 45 }, // Red to Green
     { startColor: '#228B22', endColor: '#C41E3A', angle: 45 }, // Green to Red
     { startColor: '#C41E3A', endColor: '#FFD700', angle: 45 }, // Red to Gold
     { startColor: '#FFD700', endColor: '#228B22', angle: 45 }, // Gold to Green
     { startColor: '#87CEEB', endColor: '#C41E3A', angle: 45 }, // Ice Blue to Red
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Happy Holidays! 🎄',
     'Spreading holiday cheer... ✨',
@@ -198,31 +198,31 @@ export const WINTER_HOLIDAY_THEME: LoadingTheme = {
  */
 export const NEW_YEAR_THEME: LoadingTheme = {
   id: 'new-year',
-  name: 'New Year',
-  startsAt: { month: 12, day: 31 },
-  endsAt: { month: 1, day: 2 },
-  priority: 10, // Higher priority than Winter Holiday
+  Name: 'New Year',
+  StartsAt: { month: 12, day: 31 },
+  EndsAt: { month: 1, day: 2 },
+  Priority: 10, // Higher priority than Winter Holiday
   // Exciting spin for countdown feel, then celebratory pulse-spin
-  animations: [
-    { type: 'spin', durationMs: 3000 },
-    { type: 'pulse-spin', durationMs: 4000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'spin', DurationMs: 3000 },
+    { Type: 'pulse-spin', DurationMs: 4000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#FFD700', // Gold
     '#C0C0C0', // Silver
     '#4169E1', // Royal Blue
     '#9400D3', // Dark Violet
     '#FF1493', // Deep Pink
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#FFD700', endColor: '#C0C0C0', angle: 135 }, // Gold to Silver
     { startColor: '#C0C0C0', endColor: '#FFD700', angle: 135 }, // Silver to Gold
     { startColor: '#FFD700', endColor: '#4169E1', angle: 135 }, // Gold to Blue
     { startColor: '#4169E1', endColor: '#9400D3', angle: 135 }, // Blue to Violet
     { startColor: '#9400D3', endColor: '#FF1493', angle: 135 }, // Violet to Pink
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Happy New Year! 🎆',
     'New year, new possibilities... ✨',
@@ -256,29 +256,29 @@ export const NEW_YEAR_THEME: LoadingTheme = {
  */
 export const HALLOWEEN_THEME: LoadingTheme = {
   id: 'halloween',
-  name: 'Halloween',
-  startsAt: { month: 10, day: 15 },
-  endsAt: { month: 10, day: 31 },
+  Name: 'Halloween',
+  StartsAt: { month: 10, day: 15 },
+  EndsAt: { month: 10, day: 31 },
   // Spooky slow pulse-spin, then eerie pulse
-  animations: [
-    { type: 'pulse-spin', durationMs: 5000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'pulse-spin', DurationMs: 5000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#FF6600', // Pumpkin Orange
     '#8B008B', // Dark Magenta
     '#2E8B57', // Sea Green (witchy)
     '#800080', // Purple
     '#000000', // Black
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#FF6600', endColor: '#8B008B', angle: 45 }, // Orange to Magenta
     { startColor: '#8B008B', endColor: '#FF6600', angle: 45 }, // Magenta to Orange
     { startColor: '#FF6600', endColor: '#000000', angle: 45 }, // Orange to Black
     { startColor: '#800080', endColor: '#2E8B57', angle: 45 }, // Purple to Green
     { startColor: '#2E8B57', endColor: '#FF6600', angle: 45 }, // Green to Orange
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Summoning your data... 🔮',
     'Brewing a spooky potion... 🧙',
@@ -312,26 +312,26 @@ export const HALLOWEEN_THEME: LoadingTheme = {
  */
 export const VALENTINES_THEME: LoadingTheme = {
   id: 'valentines',
-  name: "Valentine's Day",
-  startsAt: { month: 2, day: 1 },
-  endsAt: { month: 2, day: 14 },
+  Name: "Valentine's Day",
+  StartsAt: { month: 2, day: 1 },
+  EndsAt: { month: 2, day: 14 },
   // Heartbeat-like pulse throughout
-  animations: 'pulse',
-  colors: [
+  Animations: 'pulse',
+  Colors: [
     '#FF69B4', // Hot Pink
     '#DC143C', // Crimson
     '#FFB6C1', // Light Pink
     '#C71585', // Medium Violet Red
     '#FF1493', // Deep Pink
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#FF69B4', endColor: '#DC143C', angle: 45 }, // Hot Pink to Crimson
     { startColor: '#DC143C', endColor: '#FF69B4', angle: 45 }, // Crimson to Hot Pink
     { startColor: '#FFB6C1', endColor: '#C71585', angle: 45 }, // Light Pink to Violet Red
     { startColor: '#C71585', endColor: '#FF1493', angle: 45 }, // Violet Red to Deep Pink
     { startColor: '#FF1493', endColor: '#FFB6C1', angle: 45 }, // Deep Pink to Light Pink
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Hearts are loading... 💕',
     'Cupid is on the way... 💘',
@@ -360,29 +360,29 @@ export const VALENTINES_THEME: LoadingTheme = {
  */
 export const ST_PATRICKS_THEME: LoadingTheme = {
   id: 'st-patricks',
-  name: "St. Patrick's Day",
-  startsAt: { month: 3, day: 14 },
-  endsAt: { month: 3, day: 17 },
+  Name: "St. Patrick's Day",
+  StartsAt: { month: 3, day: 14 },
+  EndsAt: { month: 3, day: 17 },
   // Lucky bounce, then pulse
-  animations: [
-    { type: 'bounce', durationMs: 3000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'bounce', DurationMs: 3000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#228B22', // Forest Green
     '#32CD32', // Lime Green
     '#FFD700', // Gold
     '#006400', // Dark Green
     '#90EE90', // Light Green
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#228B22', endColor: '#FFD700', angle: 45 }, // Forest Green to Gold
     { startColor: '#FFD700', endColor: '#228B22', angle: 45 }, // Gold to Forest Green
     { startColor: '#32CD32', endColor: '#006400', angle: 45 }, // Lime to Dark Green
     { startColor: '#006400', endColor: '#90EE90', angle: 45 }, // Dark to Light Green
     { startColor: '#90EE90', endColor: '#FFD700', angle: 45 }, // Light Green to Gold
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Feeling lucky... 🍀',
     'Finding the pot of gold... 🌈',
@@ -415,15 +415,15 @@ export const ST_PATRICKS_THEME: LoadingTheme = {
  */
 export const SPRING_THEME: LoadingTheme = {
   id: 'spring',
-  name: 'Spring',
-  startsAt: { month: 3, day: 20 },
-  endsAt: { month: 4, day: 15 },
+  Name: 'Spring',
+  StartsAt: { month: 3, day: 20 },
+  EndsAt: { month: 4, day: 15 },
   // Fresh, light bounce then gentle pulse
-  animations: [
-    { type: 'bounce', durationMs: 3000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'bounce', DurationMs: 3000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#98FB98', // Pale Green
     '#FFB6C1', // Light Pink
     '#87CEEB', // Sky Blue
@@ -431,7 +431,7 @@ export const SPRING_THEME: LoadingTheme = {
     '#F0E68C', // Khaki (sunny)
     '#FFA07A', // Light Salmon
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#98FB98', endColor: '#FFB6C1', angle: 45 }, // Green to Pink
     { startColor: '#FFB6C1', endColor: '#87CEEB', angle: 45 }, // Pink to Sky Blue
     { startColor: '#87CEEB', endColor: '#DDA0DD', angle: 45 }, // Sky Blue to Plum
@@ -439,7 +439,7 @@ export const SPRING_THEME: LoadingTheme = {
     { startColor: '#F0E68C', endColor: '#FFA07A', angle: 45 }, // Sunny to Salmon
     { startColor: '#FFA07A', endColor: '#98FB98', angle: 45 }, // Salmon to Green
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Spring is in the air... 🌸',
     'Flowers are blooming... 🌷',
@@ -473,13 +473,13 @@ export const SPRING_THEME: LoadingTheme = {
  */
 export const THANKSGIVING_US_THEME: LoadingTheme = {
   id: 'thanksgiving-us',
-  name: 'Thanksgiving (US)',
-  startsAt: { month: 11, day: 1 },
-  endsAt: { month: 11, day: 30 },
-  locales: ['en-US'],
+  Name: 'Thanksgiving (US)',
+  StartsAt: { month: 11, day: 1 },
+  EndsAt: { month: 11, day: 30 },
+  Locales: ['en-US'],
   // Warm, cozy pulse throughout
-  animations: 'pulse',
-  colors: [
+  Animations: 'pulse',
+  Colors: [
     '#D2691E', // Chocolate (brown)
     '#FF8C00', // Dark Orange
     '#8B4513', // Saddle Brown
@@ -487,7 +487,7 @@ export const THANKSGIVING_US_THEME: LoadingTheme = {
     '#CD853F', // Peru
     '#B22222', // Firebrick (cranberry)
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#D2691E', endColor: '#FF8C00', angle: 45 }, // Brown to Orange
     { startColor: '#FF8C00', endColor: '#D2691E', angle: 45 }, // Orange to Brown
     { startColor: '#8B4513', endColor: '#DAA520', angle: 45 }, // Saddle to Gold
@@ -495,7 +495,7 @@ export const THANKSGIVING_US_THEME: LoadingTheme = {
     { startColor: '#CD853F', endColor: '#B22222', angle: 45 }, // Peru to Cranberry
     { startColor: '#B22222', endColor: '#FF8C00', angle: 45 }, // Cranberry to Orange
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Giving thanks... 🙏',
     'Harvest time loading... 🌾',
@@ -529,13 +529,13 @@ export const THANKSGIVING_US_THEME: LoadingTheme = {
  */
 export const THANKSGIVING_CA_THEME: LoadingTheme = {
   id: 'thanksgiving-ca',
-  name: 'Thanksgiving (Canada)',
-  startsAt: { month: 10, day: 1 },
-  endsAt: { month: 10, day: 14 },
-  locales: ['en-CA', 'fr-CA'],
+  Name: 'Thanksgiving (Canada)',
+  StartsAt: { month: 10, day: 1 },
+  EndsAt: { month: 10, day: 14 },
+  Locales: ['en-CA', 'fr-CA'],
   // Warm, cozy pulse throughout
-  animations: 'pulse',
-  colors: [
+  Animations: 'pulse',
+  Colors: [
     '#D2691E', // Chocolate (brown)
     '#FF8C00', // Dark Orange
     '#8B4513', // Saddle Brown
@@ -543,14 +543,14 @@ export const THANKSGIVING_CA_THEME: LoadingTheme = {
     '#CD853F', // Peru
     '#C41E3A', // Maple red
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#C41E3A', endColor: '#FF8C00', angle: 45 }, // Maple to Orange
     { startColor: '#FF8C00', endColor: '#C41E3A', angle: 45 }, // Orange to Maple
     { startColor: '#D2691E', endColor: '#DAA520', angle: 45 }, // Brown to Gold
     { startColor: '#DAA520', endColor: '#8B4513', angle: 45 }, // Gold to Saddle
     { startColor: '#8B4513', endColor: '#CD853F', angle: 45 }, // Saddle to Peru
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Giving thanks, eh... 🙏',
     'Harvest time loading... 🌾',
@@ -584,28 +584,28 @@ export const THANKSGIVING_CA_THEME: LoadingTheme = {
  */
 export const INDEPENDENCE_DAY_US_THEME: LoadingTheme = {
   id: 'independence-day-us',
-  name: 'Independence Day (US)',
-  startsAt: { month: 6, day: 28 },
-  endsAt: { month: 7, day: 4 },
-  locales: ['en-US'],
+  Name: 'Independence Day (US)',
+  StartsAt: { month: 6, day: 28 },
+  EndsAt: { month: 7, day: 4 },
+  Locales: ['en-US'],
   // Fireworks-like spin, then celebratory pulse-spin
-  animations: [
-    { type: 'spin', durationMs: 3000 },
-    { type: 'pulse-spin', durationMs: 3000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'spin', DurationMs: 3000 },
+    { Type: 'pulse-spin', DurationMs: 3000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#B22234', // Old Glory Red
     '#FFFFFF', // White
     '#3C3B6E', // Old Glory Blue
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#B22234', endColor: '#3C3B6E', angle: 0 }, // Red to Blue
     { startColor: '#3C3B6E', endColor: '#B22234', angle: 0 }, // Blue to Red
     { startColor: '#B22234', endColor: '#FFFFFF', angle: 0 }, // Red to White
     { startColor: '#FFFFFF', endColor: '#3C3B6E', angle: 0 }, // White to Blue
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Happy 4th of July! 🎆',
     'Land of the free loading... 🗽',
@@ -639,24 +639,24 @@ export const INDEPENDENCE_DAY_US_THEME: LoadingTheme = {
  */
 export const CANADA_DAY_THEME: LoadingTheme = {
   id: 'canada-day',
-  name: 'Canada Day',
-  startsAt: { month: 6, day: 28 },
-  endsAt: { month: 7, day: 1 },
-  locales: ['en-CA', 'fr-CA'],
+  Name: 'Canada Day',
+  StartsAt: { month: 6, day: 28 },
+  EndsAt: { month: 7, day: 1 },
+  Locales: ['en-CA', 'fr-CA'],
   // Celebratory bounce, then pulse
-  animations: [
-    { type: 'bounce', durationMs: 4000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'bounce', DurationMs: 4000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#FF0000', // Red
     '#FFFFFF', // White
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#FF0000', endColor: '#FFFFFF', angle: 0 }, // Red to White
     { startColor: '#FFFFFF', endColor: '#FF0000', angle: 0 }, // White to Red
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Happy Canada Day! 🇨🇦',
     'Bonne fête du Canada! 🍁',
@@ -690,29 +690,29 @@ export const CANADA_DAY_THEME: LoadingTheme = {
  */
 export const INDEPENDENCE_DAY_MX_THEME: LoadingTheme = {
   id: 'independence-day-mx',
-  name: 'Mexican Independence Day',
-  startsAt: { month: 9, day: 13 },
-  endsAt: { month: 9, day: 16 },
-  locales: ['es-MX', 'es'],
-  priority: 5,
+  Name: 'Mexican Independence Day',
+  StartsAt: { month: 9, day: 13 },
+  EndsAt: { month: 9, day: 16 },
+  Locales: ['es-MX', 'es'],
+  Priority: 5,
   // Fiesta spin, then celebratory pulse-spin
-  animations: [
-    { type: 'spin', durationMs: 3000 },
-    { type: 'pulse-spin', durationMs: 3000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'spin', DurationMs: 3000 },
+    { Type: 'pulse-spin', DurationMs: 3000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#006847', // Green
     '#FFFFFF', // White
     '#CE1126', // Red
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#006847', endColor: '#CE1126', angle: 0 }, // Green to Red
     { startColor: '#CE1126', endColor: '#006847', angle: 0 }, // Red to Green
     { startColor: '#006847', endColor: '#FFFFFF', angle: 0 }, // Green to White
     { startColor: '#FFFFFF', endColor: '#CE1126', angle: 0 }, // White to Red
   ],
-  messages: [
+  Messages: [
     'Cargando espacio de trabajo...',
     '¡Viva México! 🇲🇽',
     'Felices fiestas patrias... 🎉',
@@ -745,28 +745,28 @@ export const INDEPENDENCE_DAY_MX_THEME: LoadingTheme = {
  */
 export const INDEPENDENCE_DAY_IN_THEME: LoadingTheme = {
   id: 'independence-day-in',
-  name: 'Indian Independence Day',
-  startsAt: { month: 8, day: 13 },
-  endsAt: { month: 8, day: 15 },
-  locales: ['en-IN', 'hi', 'hi-IN'],
+  Name: 'Indian Independence Day',
+  StartsAt: { month: 8, day: 13 },
+  EndsAt: { month: 8, day: 15 },
+  Locales: ['en-IN', 'hi', 'hi-IN'],
   // Patriotic spin, then pulse
-  animations: [
-    { type: 'spin', durationMs: 3000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'spin', DurationMs: 3000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#FF9933', // Saffron
     '#FFFFFF', // White
     '#138808', // Green
     '#000080', // Navy Blue (Ashoka Chakra)
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#FF9933', endColor: '#138808', angle: 90 }, // Saffron to Green
     { startColor: '#138808', endColor: '#FF9933', angle: 90 }, // Green to Saffron
     { startColor: '#FF9933', endColor: '#FFFFFF', angle: 90 }, // Saffron to White
     { startColor: '#FFFFFF', endColor: '#138808', angle: 90 }, // White to Green
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Jai Hind! 🇮🇳',
     'Happy Independence Day! 🎉',
@@ -801,31 +801,31 @@ export const INDEPENDENCE_DAY_IN_THEME: LoadingTheme = {
  */
 export const DIWALI_THEME: LoadingTheme = {
   id: 'diwali',
-  name: 'Diwali',
-  startsAt: { month: 10, day: 20 },
-  endsAt: { month: 11, day: 15 },
-  locales: ['en-IN', 'hi', 'hi-IN'],
-  priority: 5,
+  Name: 'Diwali',
+  StartsAt: { month: 10, day: 20 },
+  EndsAt: { month: 11, day: 15 },
+  Locales: ['en-IN', 'hi', 'hi-IN'],
+  Priority: 5,
   // Festival of lights - glowing pulse-spin, then warm pulse
-  animations: [
-    { type: 'pulse-spin', durationMs: 4000 },
-    { type: 'pulse' }
+  Animations: [
+    { Type: 'pulse-spin', DurationMs: 4000 },
+    { Type: 'pulse' }
   ],
-  colors: [
+  Colors: [
     '#FFD700', // Gold
     '#FF6600', // Orange (diyas)
     '#8B0000', // Dark Red
     '#9400D3', // Dark Violet
     '#FF1493', // Deep Pink
   ],
-  gradients: [
+  Gradients: [
     { startColor: '#FFD700', endColor: '#FF6600', angle: 45 }, // Gold to Orange
     { startColor: '#FF6600', endColor: '#FFD700', angle: 45 }, // Orange to Gold
     { startColor: '#FFD700', endColor: '#8B0000', angle: 45 }, // Gold to Dark Red
     { startColor: '#8B0000', endColor: '#9400D3', angle: 45 }, // Red to Violet
     { startColor: '#9400D3', endColor: '#FF1493', angle: 45 }, // Violet to Pink
   ],
-  messages: [
+  Messages: [
     'Loading workspace...',
     'Happy Diwali! 🪔',
     'Shubh Deepavali! ✨',
@@ -883,11 +883,16 @@ export const ALL_THEMES: LoadingTheme[] = [
 /**
  * Get the user's browser locale.
  */
-export function getBrowserLocale(): string {
+export function GetBrowserLocale(): string {
   if (typeof navigator !== 'undefined') {
     return navigator.language || (navigator as { userLanguage?: string }).userLanguage || 'en';
   }
   return 'en';
+}
+
+/** @deprecated Use {@link GetBrowserLocale}. */
+export function getBrowserLocale(): string {
+  return GetBrowserLocale();
 }
 
 /**
@@ -936,14 +941,14 @@ function localeMatches(userLocale: string, themeLocales?: string[]): boolean {
  * Find the best matching theme for the current date and locale.
  * Returns the highest priority matching theme, or STANDARD_THEME if none match.
  */
-export function getActiveTheme(date: Date = new Date(), locale?: string): LoadingTheme {
-  const userLocale = locale || getBrowserLocale();
+export function GetActiveTheme(date: Date = new Date(), locale?: string): LoadingTheme {
+  const userLocale = locale || GetBrowserLocale();
   const today = { month: date.getMonth() + 1, day: date.getDate() };
 
   // Find all matching themes
   const matchingThemes = ALL_THEMES.filter(theme => {
-    const dateMatches = isDateInRange(today, theme.startsAt, theme.endsAt);
-    const localeMatch = localeMatches(userLocale, theme.locales);
+    const dateMatches = isDateInRange(today, theme.StartsAt, theme.EndsAt);
+    const localeMatch = localeMatches(userLocale, theme.Locales);
     return dateMatches && localeMatch;
   });
 
@@ -952,7 +957,7 @@ export function getActiveTheme(date: Date = new Date(), locale?: string): Loadin
   }
 
   // Sort by priority (higher first) and return the best match
-  matchingThemes.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  matchingThemes.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
 
   // If the best match is STANDARD_THEME and there are other matches, prefer those
   if (matchingThemes[0].id === 'standard' && matchingThemes.length > 1) {
@@ -960,4 +965,9 @@ export function getActiveTheme(date: Date = new Date(), locale?: string): Loadin
   }
 
   return matchingThemes[0];
+}
+
+/** @deprecated Use {@link GetActiveTheme}. */
+export function getActiveTheme(date: Date = new Date(), locale?: string): LoadingTheme {
+  return GetActiveTheme(date, locale);
 }

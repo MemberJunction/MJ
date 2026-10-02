@@ -1,0 +1,34 @@
+{
+  "id": "infographic-chart-first-step-01",
+  "agent": "Infographic Agent",
+  "tags": [
+    "first-step-action",
+    "disambiguation"
+  ],
+  "description": "Six near-synonymous SVG actions. Numeric series over time is a chart, not a diagram, network or word cloud — the near-duplicate-names variant.",
+  "input": {
+    "payload": {
+      "data": {
+        "2021": 120,
+        "2022": 180,
+        "2023": 260,
+        "2024": 410
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Plot these yearly totals as a bar chart."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Create SVG Chart"
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

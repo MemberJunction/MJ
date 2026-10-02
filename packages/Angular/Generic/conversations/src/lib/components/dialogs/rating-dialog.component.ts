@@ -287,57 +287,169 @@ import { Component, Input } from '@angular/core';
   `]
 })
 export class RatingDialogComponent {
-  @Input() message: string = '';
-  @Input() initialRating: number | null = null;
-  @Input() initialComments: string = '';
+  @Input() Message: string = '';
+
+  /** @deprecated Use {@link Message}. */
+  @Input() set message(value: string) {
+    this.Message = value;
+  }
+  /** @deprecated Use {@link Message}. */
+  get message(): string {
+    return this.Message;
+  }
+  @Input() InitialRating: number | null = null;
+
+  /** @deprecated Use {@link InitialRating}. */
+  @Input() set initialRating(value: number | null) {
+    this.InitialRating = value;
+  }
+  /** @deprecated Use {@link InitialRating}. */
+  get initialRating(): number | null {
+    return this.InitialRating;
+  }
+  @Input() InitialComments: string = '';
+
+  /** @deprecated Use {@link InitialComments}. */
+  @Input() set initialComments(value: string) {
+    this.InitialComments = value;
+  }
+  /** @deprecated Use {@link InitialComments}. */
+  get initialComments(): string {
+    return this.InitialComments;
+  }
 
   /** When true, the user must check the consent box before submitting. */
-  @Input() requireConsent: boolean = false;
+  @Input() RequireConsent: boolean = false;
 
-  readonly scale: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  selectedRating: number | null = null;
-  hoveredRating: number | null = null;
-  comments: string = '';
-  consentChecked: boolean = false;
+  /** @deprecated Use {@link RequireConsent}. */
+  @Input() set requireConsent(value: boolean) {
+    this.RequireConsent = value;
+  }
+  /** @deprecated Use {@link RequireConsent}. */
+  get requireConsent(): boolean {
+    return this.RequireConsent;
+  }
+
+  readonly Scale: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  /** @deprecated Use {@link Scale}. */
+  get scale(): number[] {
+    return this.Scale;
+  }
+  SelectedRating: number | null = null;
+
+  /** @deprecated Use {@link SelectedRating}. */
+  get selectedRating(): number | null {
+    return this.SelectedRating;
+  }
+  /** @deprecated Use {@link SelectedRating}. */
+  set selectedRating(value: number | null) {
+    this.SelectedRating = value;
+  }
+  HoveredRating: number | null = null;
+
+  /** @deprecated Use {@link HoveredRating}. */
+  get hoveredRating(): number | null {
+    return this.HoveredRating;
+  }
+  /** @deprecated Use {@link HoveredRating}. */
+  set hoveredRating(value: number | null) {
+    this.HoveredRating = value;
+  }
+  Comments: string = '';
+
+  /** @deprecated Use {@link Comments}. */
+  get comments(): string {
+    return this.Comments;
+  }
+  /** @deprecated Use {@link Comments}. */
+  set comments(value: string) {
+    this.Comments = value;
+  }
+  ConsentChecked: boolean = false;
+
+  /** @deprecated Use {@link ConsentChecked}. */
+  get consentChecked(): boolean {
+    return this.ConsentChecked;
+  }
+  /** @deprecated Use {@link ConsentChecked}. */
+  set consentChecked(value: boolean) {
+    this.ConsentChecked = value;
+  }
 
   ngOnInit(): void {
-    this.selectedRating = this.initialRating;
-    this.comments = this.initialComments ?? '';
+    this.SelectedRating = this.InitialRating;
+    this.Comments = this.InitialComments ?? '';
   }
 
+  get EffectiveRating(): number | null {
+    return this.HoveredRating ?? this.SelectedRating;
+  }
+
+  /** @deprecated Use {@link EffectiveRating}. */
   get effectiveRating(): number | null {
-    return this.hoveredRating ?? this.selectedRating;
+    return this.EffectiveRating;
   }
 
+  get EffectiveBand(): string | null {
+    const r = this.EffectiveRating;
+    return r === null ? null : this.BandFor(r);
+  }
+
+  /** @deprecated Use {@link EffectiveBand}. */
   get effectiveBand(): string | null {
-    const r = this.effectiveRating;
-    return r === null ? null : this.bandFor(r);
+    return this.EffectiveBand;
   }
 
-  bandFor(n: number): 'low' | 'mid' | 'high' {
+  BandFor(n: number): 'low' | 'mid' | 'high' {
     if (n <= 3) return 'low';
     if (n <= 7) return 'mid';
     return 'high';
   }
 
-  isFilled(n: number): boolean {
-    const r = this.effectiveRating;
+  /** @deprecated Use {@link BandFor}. */
+  bandFor(n: number): 'low' | 'mid' | 'high' {
+    return this.BandFor(n);
+  }
+
+  IsFilled(n: number): boolean {
+    const r = this.EffectiveRating;
     return r !== null && r >= n;
   }
 
+  /** @deprecated Use {@link IsFilled}. */
+  isFilled(n: number): boolean {
+    return this.IsFilled(n);
+  }
+
+  SelectRating(n: number): void {
+    this.SelectedRating = n;
+  }
+
+  /** @deprecated Use {@link SelectRating}. */
   selectRating(n: number): void {
-    this.selectedRating = n;
+    return this.SelectRating(n);
   }
 
+  OnScaleMouseLeave(): void {
+    this.HoveredRating = null;
+  }
+
+  /** @deprecated Use {@link OnScaleMouseLeave}. */
   onScaleMouseLeave(): void {
-    this.hoveredRating = null;
+    return this.OnScaleMouseLeave();
   }
 
+  OnPipBlur(): void {
+    this.HoveredRating = null;
+  }
+
+  /** @deprecated Use {@link OnPipBlur}. */
   onPipBlur(): void {
-    this.hoveredRating = null;
+    return this.OnPipBlur();
   }
 
-  getDescriptor(n: number): string {
+  GetDescriptor(n: number): string {
     if (n <= 2) return 'Very Poor';
     if (n <= 4) return 'Needs Improvement';
     if (n <= 6) return 'Okay';
@@ -345,21 +457,46 @@ export class RatingDialogComponent {
     return 'Excellent';
   }
 
-  getRating(): number | null {
-    return this.selectedRating;
+  /** @deprecated Use {@link GetDescriptor}. */
+  getDescriptor(n: number): string {
+    return this.GetDescriptor(n);
   }
 
+  GetRating(): number | null {
+    return this.SelectedRating;
+  }
+
+  /** @deprecated Use {@link GetRating}. */
+  getRating(): number | null {
+    return this.GetRating();
+  }
+
+  GetComments(): string {
+    return (this.Comments ?? '').trim();
+  }
+
+  /** @deprecated Use {@link GetComments}. */
   getComments(): string {
-    return (this.comments ?? '').trim();
+    return this.GetComments();
   }
 
   /** True if the consent requirement is met (not required, or required and checked). */
+  IsConsentValid(): boolean {
+    return !this.RequireConsent || this.ConsentChecked;
+  }
+
+  /** @deprecated Use {@link IsConsentValid}. */
   isConsentValid(): boolean {
-    return !this.requireConsent || this.consentChecked;
+    return this.IsConsentValid();
   }
 
   /** True only when the user *just* acknowledged consent in this dialog session. */
+  WasConsentNewlyAcknowledged(): boolean {
+    return this.RequireConsent && this.ConsentChecked;
+  }
+
+  /** @deprecated Use {@link WasConsentNewlyAcknowledged}. */
   wasConsentNewlyAcknowledged(): boolean {
-    return this.requireConsent && this.consentChecked;
+    return this.WasConsentNewlyAcknowledged();
   }
 }

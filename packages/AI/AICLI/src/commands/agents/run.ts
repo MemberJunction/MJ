@@ -166,8 +166,8 @@ export default class AgentsRun extends Command {
 
   private async cleanup(): Promise<void> {
     try {
-      const { closeMJProvider } = await import('../../lib/mj-provider');
-      await closeMJProvider();
+      const { CloseMJProvider } = await import('../../lib/mj-provider');
+      await CloseMJProvider();
     } catch (error) {
       // Ignore cleanup errors to not interfere with main execution
     }

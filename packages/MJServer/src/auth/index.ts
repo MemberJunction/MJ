@@ -14,7 +14,7 @@ export * from './scopeLimitedPrincipal.js';
 export * from './actingContextResolver.js';
 export * from './AuthProviderEngine.js';
 export * from './AuthProviderCatalogRouter.js';
-export { initializeAuthProviders, initializeAuthProvidersFromMetadata, refreshAuthProviders, validateAuthProvidersRegistered } from './initializeProviders.js';
+export { InitializeAuthProviders, initializeAuthProviders, InitializeAuthProvidersFromMetadata, initializeAuthProvidersFromMetadata, RefreshAuthProviders, refreshAuthProviders, ValidateAuthProvidersRegistered, validateAuthProvidersRegistered } from './initializeProviders.js';
 
 // This is a hard-coded forever constant due to internal migrations
 
@@ -58,7 +58,7 @@ const refreshUserCache = async () => {
  * the same domain with different audiences/client IDs), all unique audiences
  * are aggregated into an array. jwt.verify() natively accepts string | string[].
  */
-export const getValidationOptions = (issuer: string): { audience: string | string[]; jwksUri: string } | undefined => {
+export const GetValidationOptions = (issuer: string): { audience: string | string[]; jwksUri: string } | undefined => {
   const factory = AuthProviderFactory.Instance;
   const providers = factory.getAllByIssuer(issuer);
 
@@ -75,16 +75,19 @@ export const getValidationOptions = (issuer: string): { audience: string | strin
   };
 };
 
+/** @deprecated Use {@link GetValidationOptions}. */
+export const getValidationOptions = GetValidationOptions;
+
 /**
  * Backward compatible validationOptions object
  * @deprecated Use getValidationOptions() or AuthProviderRegistry instead
  */
 export const validationOptions: Record<string, { audience: string | string[]; jwksUri: string }> = new Proxy({}, {
   get: (target, prop: string) => {
-    return getValidationOptions(prop);
+    return GetValidationOptions(prop);
   },
   has: (target, prop: string) => {
-    return getValidationOptions(prop) !== undefined;
+    return GetValidationOptions(prop) !== undefined;
   },
   ownKeys: () => {
     const factory = AuthProviderFactory.Instance;
@@ -93,31 +96,31 @@ export const validationOptions: Record<string, { audience: string | string[]; jw
 });
 
 export class UserPayload {
-  aio?: string;
-  aud?: string;
-  exp?: number;
-  iat?: number;
-  iss?: string;
-  name?: string;
-  nbf?: number;
-  nonce?: string;
-  oid?: string;
-  preferred_username?: string;
-  rh?: string;
-  sub?: string;
-  tid?: string;
-  uti?: string;
-  ver?: string;
-  email?: string;
-  given_name?: string;
-  family_name?: string;
+  aio?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  aud?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  exp?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  iat?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  iss?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  name?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  nbf?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  nonce?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  oid?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  preferred_username?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  rh?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  sub?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  tid?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  uti?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  ver?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  email?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  given_name?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  family_name?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   [key: string]: unknown; // Allow additional claims
 }
 
 /**
  * Gets signing keys for JWT validation
  */
-export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
+export const GetSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
   const factory = AuthProviderFactory.Instance;
   
   // Initialize providers if not already done
@@ -138,10 +141,13 @@ export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: Signin
   provider.getSigningKey(header, cb);
 };
 
+/** @deprecated Use {@link GetSigningKeys}. */
+export const getSigningKeys = GetSigningKeys;
+
 /**
  * Extracts user information from JWT payload using the appropriate provider
  */
-export const extractUserInfoFromPayload = (payload: JwtPayload): {
+export const ExtractUserInfoFromPayload = (payload: JwtPayload): {
   email?: string;
   firstName?: string;
   lastName?: string;
@@ -181,19 +187,25 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
   return provider.extractUserInfo(payload);
 };
 
-export const getSystemUser = async (dataSource?: sql.ConnectionPool, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo> => {
+/** @deprecated Use {@link ExtractUserInfoFromPayload}. */
+export const extractUserInfoFromPayload = ExtractUserInfoFromPayload;
+
+export const GetSystemUser = async (dataSource?: sql.ConnectionPool, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo> => {
   const systemUser = UserCache.Instance.GetSystemUser();
   if (!systemUser) {
     if (dataSource && attemptCacheUpdateIfNeeded) {
       console.warn(`System user not found in cache. Updating cache in attempt to find the user...`);
 
       await refreshUserCache();
-      return getSystemUser(dataSource, false); // try one more time but do not update cache next time if not found
+      return GetSystemUser(dataSource, false); // try one more time but do not update cache next time if not found
     }
     throw new Error(`System user ID '${UserCache.Instance.SYSTEM_USER_ID}' not found in database`);
   }
   return systemUser;
 };
+
+/** @deprecated Use {@link GetSystemUser}. */
+export const getSystemUser = GetSystemUser;
 
 /**
  * Extracts the lowercased domain portion of an email address.
@@ -231,7 +243,7 @@ const isDomainAuthorized = (domain: string): boolean =>
  *        authorization runs against the verified JWT's email domain instead. Retained for audit
  *        logging and for the recursive retry call.
  */
-export const verifyUserRecord = async (
+export const VerifyUserRecord = async (
   email?: string,
   firstName?: string,
   lastName?: string,
@@ -311,12 +323,15 @@ export const verifyUserRecord = async (
 
       await refreshUserCache();
 
-      return verifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false); // try one more time but do not update cache next time if not found
+      return VerifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false); // try one more time but do not update cache next time if not found
     }
   }
 
   return user;
 };
+
+/** @deprecated Use {@link VerifyUserRecord}. */
+export const verifyUserRecord = VerifyUserRecord;
 
 // Initialize providers on module load
 initializeAuthProviders();
