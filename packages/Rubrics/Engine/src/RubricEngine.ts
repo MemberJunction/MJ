@@ -191,7 +191,14 @@ export class RubricEngine {
     private async resolveContent(params: EvaluateParams): Promise<RubricSubjectContent> {
         if (!params.loadRecord) return { text: '' };
         const record = await params.loadRecord(params.subject.entityName, params.subject.recordId);
-        return ShapeContent(params.subject.entityName, record, params.canRead);
+        if (!record || Object.keys(record).length === 0) throw new Error('subject not found or not readable');
+        const content = ShapeContent(params.subject.entityName, record, params.canRead);
+        const data = content.data ?? {};
+        const readable = Object.entries(data).filter(([, value]) => value !== undefined);
+        if (!content.text && readable.length === 0 && (!content.files || content.files.length === 0)) {
+            throw new Error('subject not found or not readable');
+        }
+        return content;
     }
 
     /**
@@ -221,9 +228,13 @@ export class RubricEngine {
             content: input.content,
             loadRecord: input.content ? undefined : async (entityName, recordId) => {
                 const rows = await this.records.rows(entityName, `ID=${sqlLiteral(recordId)}`);
-                return rows[0] ?? {};
+                if (!rows[0]) throw new Error('subject not found or not readable');
+                return rows[0];
             },
         });
+        if (done.evaluation.status === 'Failed') {
+            throw new Error(done.evaluation.errorMessage || 'The evaluation failed.');
+        }
         const result = done.output?.result;
         const answers = done.output?.answers ?? [];
         return {
@@ -419,7 +430,8 @@ export class RubricEngine {
      */
     public async SubjectContent(input: { subjectEntityName: string; subjectRecordId: string }): Promise<RubricSubjectContent> {
         const rows = await this.records.rows(input.subjectEntityName, `ID=${sqlLiteral(input.subjectRecordId)}`);
-        const record = { ...(rows[0] ?? {}) };
+        if (!rows[0]) throw new Error('subject not found or not readable');
+        const record = { ...rows[0] };
         if (input.subjectEntityName === 'MJ: AI Agent Runs') {
             record.Steps = await this.records.rows('MJ: AI Agent Run Steps', `AgentRunID=${sqlLiteral(input.subjectRecordId)} ORDER BY StepNumber`);
         }

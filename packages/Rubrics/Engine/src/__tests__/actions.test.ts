@@ -67,6 +67,7 @@ function catalog(): RubricRecords & { filters: string[]; draftCalls: number; dra
             if (entityName === 'MJ: Rubric Versions' && filter.includes('version-9')) return [published('version-9', 1)];
             if (entityName === 'MJ: Rubric Versions') return [published('version-1', 1), published('version-4', 4)];
             if (entityName === 'MJ: Entities') return [{ ID: 'entity-1', Name: 'MJ: Documents' }];
+            if (entityName === 'MJ: Documents') return [{ ID: 'record-1', Name: 'Note', Body: 'Easy to read.' }];
             if (entityName === 'MJ: Rubric Evaluations') {
                 const rows = [];
                 if (filter.includes("'version-1'")) rows.push({ NormalizedScore: 0.2 });
@@ -283,5 +284,65 @@ describe('rubric actions', () => {
         expect(ai.Success).toBe(false);
         expect(ai.Message).toBe('Evaluator AI is not accepted.');
         expect(ai.Message ?? '').not.toMatch(/prompt runner/i);
+    });
+
+    it('returns FAILED when the evaluation fails, and does not score a missing subject', async () => {
+        const store: RubricEvaluationStore = {
+            async createDraft() { return { id: 'eval-failed', status: 'Draft' }; },
+            async submit() { throw new Error('should not submit'); },
+            async fail(_id, message) { return { id: 'eval-failed', status: 'Failed', errorMessage: message }; },
+        };
+        const records: RubricRecords = {
+            async rows(entityName: string) {
+                if (entityName === 'MJ: Rubrics') return [{ ID: 'rubric', Name: 'Writing' }];
+                if (entityName === 'MJ: Rubric Versions') return [{
+                    ID: 'version-1', RubricID: 'rubric', MajorVersion: 1, MinorVersion: 0, PatchVersion: 0,
+                    Status: 'Published', NotApplicablePolicy: 'ExcludeAndRedistribute', ScoreDisplayMin: 0, ScoreDisplayMax: 100,
+                }];
+                if (entityName === 'MJ: Entities') return [{ ID: 'entity-1', Name: 'MJ: Documents' }];
+                return [];
+            },
+            async createDraft() { return { id: 'draft', status: 'Draft' }; },
+        };
+        const engine = new RubricEngine(store, records, {
+            async Run() { throw new Error('the model refused'); },
+        });
+        const params = {
+            Params: [
+                { Name: 'RubricID', Type: 'Input', Value: 'rubric' },
+                { Name: 'SubjectEntityName', Type: 'Input', Value: 'MJ: Documents' },
+                { Name: 'SubjectRecordID', Type: 'Input', Value: 'missing' },
+                { Name: 'Evaluator', Type: 'Input', Value: 'LLM' },
+            ],
+            Context: { rubricEngine: engine },
+        };
+        const missing = await new EvaluateRecordAgainstRubricAction().InternalRunAction(params as never);
+        expect(missing.Success).toBe(false);
+        expect(missing.ResultCode).toBe('FAILED');
+        expect(missing.Message).toBe('subject not found or not readable');
+        expect(params.Params.some(item => item.Name === 'Outcome')).toBe(false);
+
+        records.rows = async (entityName: string) => {
+            if (entityName === 'MJ: Documents') return [{ ID: 'record-1', Body: 'Easy to read.' }];
+            if (entityName === 'MJ: Rubrics') return [{ ID: 'rubric', Name: 'Writing' }];
+            if (entityName === 'MJ: Rubric Versions') return [{
+                ID: 'version-1', RubricID: 'rubric', MajorVersion: 1, MinorVersion: 0, PatchVersion: 0,
+                Status: 'Published', NotApplicablePolicy: 'ExcludeAndRedistribute', ScoreDisplayMin: 0, ScoreDisplayMax: 100,
+            }];
+            if (entityName === 'MJ: Entities') return [{ ID: 'entity-1', Name: 'MJ: Documents' }];
+            return [];
+        };
+        const failed = await new EvaluateRecordAgainstRubricAction().InternalRunAction({
+            Params: [
+                { Name: 'RubricID', Type: 'Input', Value: 'rubric' },
+                { Name: 'SubjectEntityName', Type: 'Input', Value: 'MJ: Documents' },
+                { Name: 'SubjectRecordID', Type: 'Input', Value: 'record-1' },
+                { Name: 'Evaluator', Type: 'Input', Value: 'LLM' },
+            ],
+            Context: { rubricEngine: engine },
+        } as never);
+        expect(failed.Success).toBe(false);
+        expect(failed.ResultCode).toBe('FAILED');
+        expect(failed.Message).toBe('the model refused');
     });
 });
