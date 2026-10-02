@@ -22,20 +22,20 @@ export type Disposition = 'auto-apply' | 'route-to-inbox' | 'create-new' | 'reje
 /** A single existing ContentItemTag being previewed. */
 export interface DryRunInput {
     /** Free-text tag as extracted by the LLM. */
-    tag: string;
+    tag: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Resolved formal Tag ID if the server already linked it, else null. */
-    resolvedTagId: string | null;
+    resolvedTagId: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** ContentItemTag.Weight (0..1). */
-    weight: number;
+    weight: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** The effective source config that governs routing. */
 export interface DryRunConfig {
-    mode: 'constrained' | 'auto-grow' | 'free-flow';
+    Mode: 'constrained' | 'auto-grow' | 'free-flow';
     /** Score at/above which an auto-apply happens (0..1). */
-    matchThreshold: number;
+    MatchThreshold: number;
     /** Lower band: at/above this but below matchThreshold → route to inbox. */
-    suggestThreshold: number;
+    SuggestThreshold: number;
 }
 
 /** Which resolution tier a tag landed in. */
@@ -43,20 +43,20 @@ export type ResolveTier = 'synonym' | 'exact' | 'fuzzy' | 'none';
 
 /** Result of resolving a free-text tag against the cached taxonomy. */
 export interface ResolveResult {
-    tagId: string | null;
-    tagName: string | null;
+    TagId: string | null;
+    TagName: string | null;
     /** 1.0 for synonym/exact, ~0.8 for fuzzy, null for none. */
-    score: number | null;
-    tier: ResolveTier;
+    Score: number | null;
+    Tier: ResolveTier;
 }
 
 /** A previewed disposition row, ready to render. */
 export interface DryRunRow {
-    tag: string;
-    matchedTag: string | null;
-    score: number | null;
-    disposition: Disposition;
-    reason: string;
+    Tag: string;
+    MatchedTag: string | null;
+    Score: number | null;
+    Disposition: Disposition;
+    Reason: string;
 }
 
 /**
@@ -73,45 +73,45 @@ export interface DryRunRow {
  */
 function disposeRow(input: DryRunInput, cfg: DryRunConfig, r: ResolveResult): DryRunRow {
     // Tier 1 — exact/synonym match (or a numeric score that clears the match bar).
-    if (r.tier === 'synonym' || r.tier === 'exact' || (r.score != null && r.score >= cfg.matchThreshold)) {
+    if (r.Tier === 'synonym' || r.Tier === 'exact' || (r.Score != null && r.Score >= cfg.MatchThreshold)) {
         return {
-            tag: input.tag,
-            matchedTag: r.tagName,
-            score: r.score,
-            disposition: 'auto-apply',
-            reason: r.tier === 'synonym' ? 'synonym match' : 'exact/synonym match',
+            Tag: input.tag,
+            MatchedTag: r.TagName,
+            Score: r.Score,
+            Disposition: 'auto-apply',
+            Reason: r.Tier === 'synonym' ? 'synonym match' : 'exact/synonym match',
         };
     }
 
     // Tier 2 — fuzzy/near match inside the suggest band → human-in-the-loop.
-    if (r.score != null && r.score >= cfg.suggestThreshold && r.score < cfg.matchThreshold) {
+    if (r.Score != null && r.Score >= cfg.SuggestThreshold && r.Score < cfg.MatchThreshold) {
         return {
-            tag: input.tag,
-            matchedTag: r.tagName,
-            score: r.score,
-            disposition: 'route-to-inbox',
-            reason: 'below match threshold',
+            Tag: input.tag,
+            MatchedTag: r.TagName,
+            Score: r.Score,
+            Disposition: 'route-to-inbox',
+            Reason: 'below match threshold',
         };
     }
 
     // Tier 3 — no usable match → governed by taxonomy mode.
-    if (cfg.mode === 'constrained') {
+    if (cfg.Mode === 'constrained') {
         return {
-            tag: input.tag,
-            matchedTag: null,
-            score: r.score,
-            disposition: 'route-to-inbox',
-            reason: 'constrained: novel tag → review',
+            Tag: input.tag,
+            MatchedTag: null,
+            Score: r.Score,
+            Disposition: 'route-to-inbox',
+            Reason: 'constrained: novel tag → review',
         };
     }
 
     // auto-grow | free-flow
     return {
-        tag: input.tag,
-        matchedTag: null,
-        score: r.score,
-        disposition: 'create-new',
-        reason: cfg.mode === 'auto-grow' ? 'auto-grow: would create tag' : 'free-flow: would create tag',
+        Tag: input.tag,
+        MatchedTag: null,
+        Score: r.Score,
+        Disposition: 'create-new',
+        Reason: cfg.Mode === 'auto-grow' ? 'auto-grow: would create tag' : 'free-flow: would create tag',
     };
 }
 
@@ -120,10 +120,19 @@ function disposeRow(input: DryRunInput, cfg: DryRunConfig, r: ResolveResult): Dr
  * Pure and deterministic — given the same inputs + resolve function it always
  * returns the same rows in the same order.
  */
-export function previewDispositions(
+export function PreviewDispositions(
     input: DryRunInput[],
     cfg: DryRunConfig,
     resolve: (tag: string) => ResolveResult,
 ): DryRunRow[] {
     return input.map(row => disposeRow(row, cfg, resolve(row.tag)));
+}
+
+/** @deprecated Use {@link PreviewDispositions}. */
+export function previewDispositions(
+    input: DryRunInput[],
+    cfg: DryRunConfig,
+    resolve: (tag: string) => ResolveResult,
+): DryRunRow[] {
+    return PreviewDispositions(input, cfg, resolve);
 }

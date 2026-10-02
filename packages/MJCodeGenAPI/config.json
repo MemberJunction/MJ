@@ -233,6 +233,7 @@
                 "start"
             ],
             "timeout": 30000,
+            "isDaemon": true,
             "when": "after"
         }
     ]

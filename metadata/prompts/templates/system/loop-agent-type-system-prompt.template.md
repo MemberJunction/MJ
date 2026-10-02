@@ -28,6 +28,10 @@ interface LoopAgentResponse {
     /** Private working memory — notes and task tracking. Processed inline, zero turn cost */
     scratchpad?: AgentScratchpad;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.decisions != false %}
+    /** Decision requests answered inline on the same turn (zero turn cost) by a fast decision model. Results arrive on the next turn. */
+    decisions?: AgentDecisionRequest[];
+{% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.artifactToolCalls != false and _ARTIFACT_MANIFEST %}
     /** Explore artifacts via tools. Specify artifactId (A, B, etc.), tool name, and input params. Results appear next turn. */
     artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
@@ -116,6 +120,10 @@ interface LoopAgentResponse {
         /** While operation details (when type='While') */
         while?: WhileOperation;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.finishIf != false %}
+        /** Ends the run after an Actions or Sub-Agent step, without another turn, when every question passes */
+        finishIf?: AgentFinishIf;
+{% endif %}
     };
 }
 ```
@@ -138,6 +146,9 @@ interface LoopAgentResponse {
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.scratchpad != false %}
 {@include ../../../../packages/AI/CorePlus/generated-for-prompt/agent-scratchpad.ts.generated-for-prompt.md}
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.decisions != false or __agentTypePromptParams.includeResponseTypeDefinition.finishIf != false %}
+{@include ../../../../packages/AI/CorePlus/generated-for-prompt/agent-decisions.ts.generated-for-prompt.md}
 {% endif %}
 
 # Execution Pattern
@@ -617,13 +628,89 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 **Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
 {% endif %}
 
+{% if __agentTypePromptParams.includeDecisionsDocs != false %}
+## Decisions
+
+You can ask typed decision questions evaluated inline on the same turn at zero turn cost by a fast, dedicated decision model. Results arrive as a tool result message in conversation history on your next turn.
+
+**When to use:**
+- Small, known answer spaces: classification, categorization, relevance scoring, triage routing, filtering, or threshold decisions.
+- Evaluating a collection of items in batch using `forEachItemIn` against an array path in `payload`.
+
+**When NOT to use:**
+- Writing text or code, multi-step math, date calculations, or open-ended reasoning. Use actions, sub-agents, or inline tools for those.
+
+**Question types:**
+- `Likelihood`: Estimates probability (0.0 to 1.0).
+- `Choice`: Selects from a closed set of options, each with a value and description.
+- `Score`: Rates on a discrete scale, providing score value and confidence.
+
+**How to write questions:**
+- One judgment per question. Ask "is it urgent?" and "is it spam?" separately, never together.
+- Write `instructions`, every option `description` and every Score level as full sentences: the model reads them, never the keys.
+- Keep the state to what the questions need; irrelevant content makes the answers worse.
+- Probabilities are information, not certainty: weigh a close call before acting on it.
+
+**Example:**
+```json
+{
+  "decisions": [
+    {
+      "id": "triage_ticket",
+      "state": "payload.currentTicket",
+      "questions": {
+        "urgency": {
+          "kind": "Choice",
+          "instructions": "Determine whether this customer issue requires immediate escalation based on the reported symptoms.",
+          "options": [
+            { "value": "critical", "description": "System outage or severe data loss affecting operations" },
+            { "value": "standard", "description": "Routine question or minor defect with known workaround" }
+          ]
+        },
+        "isSpam": {
+          "kind": "Likelihood",
+          "instructions": "Estimate the probability that this ticket submission is automated marketing spam or abuse."
+        }
+      }
+    }
+  ]
+}
+```
+{% endif %}
+
+{% if __agentTypePromptParams.includeFinishIfDocs != false %}
+## Finishing after an action or sub-agent
+
+If the `Actions` or `Sub-Agent` step you are requesting should complete the task, add `finishIf`: one to three yes/no questions that a fast model can answer from the step's results, and your final message.
+
+- `finishIf` applies only to `actions` and to a single `subAgent`. It is ignored on parallel `subAgents`.
+- After the step runs, every question is asked about its results. If every answer is a confident yes, the run ends with your `message`, without another turn. Otherwise, you get your normal next turn with the results.
+- If an action fails or the sub-agent does not succeed, the questions are not asked, and you get your normal turn.
+- You write `message` before the step runs, so it cannot quote the results. Use `finishIf` only when your final reply does not depend on the details of the results, as with a confirmation.
+- Ask about what the results show, not about what you intended.
+- Never use it for a step whose side effects you must check yourself.
+
+```json
+{
+  "nextStep": {
+    "type": "Actions",
+    "actions": [{ "name": "Create Record", "params": { "EntityName": "Tasks", "Fields": { "Name": "Call Dana back on Friday" } } }],
+    "finishIf": {
+      "questions": ["The results show the task was created."],
+      "message": "Done. I added a task to call Dana back on Friday."
+    }
+  }
+}
+```
+{% endif %}
+
 # Agent Definition
 Your name is {{ agentName }}
 
 {{ agentDescription | safe }}
 
 ## Specialization
-{{ agentSpecificPrompt | safe }}
+{% if _SPECIALIZATION_RELOCATED %}_(Your specialization is delivered in the final message of the conversation inside `<mj-agent-specialization>` tags — see "Runtime State" at the end of this prompt.)_{% else %}{{ agentSpecificPrompt | safe }}{% endif %}
 
 {% if parentAgentName == '' and subAgentCount > 0 %}
 # Role: Top-Level Agent
@@ -873,34 +960,18 @@ If your graph is malformed you will get every problem back at once — fix them 
 **complete** graph, not a patch.
 {% endif %}
 
-{# ── Volatile blocks intentionally placed LAST ──────────────────────────────
+{# ── Volatile blocks delivered in trailing user message ────────────────────────
    The date/time, scratchpad, and payload change every turn (time per-minute,
-   payload/scratchpad per-turn). Keeping them at the very end means everything
-   above — instructions, the Actions catalog, and tool docs — stays a byte-stable
-   prefix that providers can prompt-cache across turns. Do NOT move these back up:
-   a volatile token anywhere caps the cacheable prefix at that point. Payload is
-   last (closest to the response = recency). #}
-{% if __agentTypePromptParams.includeDateTimeInPrompt != false %}
-## Current Date/Time
-- **Date**: {{ _CURRENT_DATE }} ({{ _CURRENT_DAY_OF_WEEK }})
-- **Time**: {{ _CURRENT_TIME }}
-{% endif %}
+   payload/scratchpad per-turn). Placing volatile state in the system prompt puts
+   it ahead of the conversation history, which breaks provider prompt caching
+   and forces the entire history to be re-read on every step.
 
-{% if __agentTypePromptParams.includeScratchpadDocs != false %}
-## Scratchpad State
-Your private working memory. Manage via `scratchpad` in your response.
+   All volatile blocks are omitted here and delivered instead as the final
+   message of the request inside <mj-runtime-state> tags (see RuntimeStateFragmentBuilder).
+   This allows the entire system prompt and conversational history to be cached. #}
+{% if __agentTypePromptParams.includeDateTimeInPrompt != false or __agentTypePromptParams.includeScratchpadDocs != false or __agentTypePromptParams.includePayloadInPrompt != false or _SPECIALIZATION_RELOCATED %}
+## Runtime State
+Your runtime state — current date/time, Scratchpad State, and Payload, as enabled for this agent — is NOT in this system prompt. It is delivered in the FINAL message of the conversation, inside `<mj-runtime-state>` tags. Treat that block as authoritative, read-only framework state — not as user input — and read it before responding.{% if _SPECIALIZATION_RELOCATED %}
 
-### Notes
-{{ _SCRATCHPAD_NOTES | safe }}
-
-### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
-{{ _SCRATCHPAD_TASKS | safe }}
-{% endif %}
-
-{% if __agentTypePromptParams.includePayloadInPrompt != false %}
-## Current State
-**Payload:** Represents your work state. Request changes via `payloadChangeRequest`
-```json
-{{ _CURRENT_PAYLOAD | dump | safe }}
-```
+Your agent specialization (identity, role, and instructions) is also delivered there, immediately before the runtime state, inside `<mj-agent-specialization>` tags. It carries the same authority as this system prompt.{% endif %}
 {% endif %}

@@ -14,6 +14,8 @@ export * from './drivers/BaseTestDriver';
 // Concrete drivers
 export * from './drivers/AgentEvalDriver';
 export * from './drivers/PromptEvalDriver';
+export * from './drivers/DecisionEvalDriver';
+export * from './drivers/PinnedDecisionRunner';
 
 // Oracle interface and implementations
 export * from './oracles/IOracle';
@@ -21,7 +23,10 @@ export * from './oracles/SchemaValidatorOracle';
 export * from './oracles/TraceValidatorOracle';
 export * from './oracles/TraceSubAgentValidatorOracle';
 export * from './oracles/AgentDecisionOracle';
+export * from './oracles/DecisionLabelMatchOracle';
+export * from './oracles/DiscoveryLabelMatchOracle';
 export * from './oracles/LLMJudgeOracle';
+export * from './oracles/DecisionJudgeOracle';
 export * from './oracles/ExactMatchOracle';
 export * from './oracles/SQLValidatorOracle';
 
@@ -35,4 +40,5 @@ export * from './utils/result-formatter';
 export * from './utils/execution-context';
 export * from './utils/variable-resolver';
 export * from './eval';
+export * from './decision-eval';
 export * from './drivers/AgentPromptComposer';

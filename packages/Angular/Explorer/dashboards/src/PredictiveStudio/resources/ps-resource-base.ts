@@ -86,7 +86,7 @@ export abstract class PSResourceBase extends BaseResourceComponent {
       this.engine = <PredictiveStudioEngine>(
         PredictiveStudioEngine.GetProviderInstance(provider, PredictiveStudioEngine)
       );
-      await this.engine.Config(false, provider.CurrentUser ?? undefined, provider);
+      await this.engine.Config(true, provider.CurrentUser ?? undefined, provider);
       this.publishAgentContext();
       this.registerAgentTools();
     } catch (err) {

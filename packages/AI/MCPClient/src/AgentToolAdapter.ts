@@ -132,7 +132,7 @@ export class AgentToolAdapter {
      * @param options - Discovery options for filtering tools
      * @returns Array of tool definitions
      */
-    async discoverTools(options?: ToolDiscoveryOptions): Promise<AgentToolDefinition[]> {
+    async DiscoverTools(options?: ToolDiscoveryOptions): Promise<AgentToolDefinition[]> {
         await this.refreshToolCache();
 
         let tools = Array.from(this.toolCache.values());
@@ -165,14 +165,19 @@ export class AgentToolAdapter {
         return tools;
     }
 
+    /** @deprecated Use {@link DiscoverTools}. */
+    async discoverTools(options?: ToolDiscoveryOptions): Promise<AgentToolDefinition[]> {
+        return this.DiscoverTools(options);
+    }
+
     /**
      * Gets tools formatted for OpenAI's function calling API
      *
      * @param options - Discovery options
      * @returns Array of OpenAI function definitions
      */
-    async getToolsForOpenAI(options?: ToolDiscoveryOptions): Promise<OpenAIFunctionDefinition[]> {
-        const tools = await this.discoverTools(options);
+    async GetToolsForOpenAI(options?: ToolDiscoveryOptions): Promise<OpenAIFunctionDefinition[]> {
+        const tools = await this.DiscoverTools(options);
 
         return tools.map(tool => ({
             type: 'function' as const,
@@ -184,20 +189,30 @@ export class AgentToolAdapter {
         }));
     }
 
+    /** @deprecated Use {@link GetToolsForOpenAI}. */
+    async getToolsForOpenAI(options?: ToolDiscoveryOptions): Promise<OpenAIFunctionDefinition[]> {
+        return this.GetToolsForOpenAI(options);
+    }
+
     /**
      * Gets tools formatted for Anthropic's tool use API
      *
      * @param options - Discovery options
      * @returns Array of Anthropic tool definitions
      */
-    async getToolsForAnthropic(options?: ToolDiscoveryOptions): Promise<AnthropicToolDefinition[]> {
-        const tools = await this.discoverTools(options);
+    async GetToolsForAnthropic(options?: ToolDiscoveryOptions): Promise<AnthropicToolDefinition[]> {
+        const tools = await this.DiscoverTools(options);
 
         return tools.map(tool => ({
             name: tool.id,
             description: this.formatDescription(tool),
             input_schema: tool.inputSchema
         }));
+    }
+
+    /** @deprecated Use {@link GetToolsForAnthropic}. */
+    async getToolsForAnthropic(options?: ToolDiscoveryOptions): Promise<AnthropicToolDefinition[]> {
+        return this.GetToolsForAnthropic(options);
     }
 
     /**
@@ -208,7 +223,7 @@ export class AgentToolAdapter {
      * @param connectionId - Optional connection ID (required if using tool name only)
      * @returns Tool execution result
      */
-    async executeTool(
+    async ExecuteTool(
         toolIdOrName: string,
         args: Record<string, unknown>,
         connectionId?: string
@@ -258,13 +273,22 @@ export class AgentToolAdapter {
         }
     }
 
+    /** @deprecated Use {@link ExecuteTool}. */
+    async executeTool(
+        toolIdOrName: string,
+        args: Record<string, unknown>,
+        connectionId?: string
+    ): Promise<AgentToolResult> {
+        return this.ExecuteTool(toolIdOrName, args, connectionId);
+    }
+
     /**
      * Gets a tool by its ID or name
      *
      * @param toolIdOrName - Tool ID or name
      * @returns Tool definition or undefined
      */
-    async getTool(toolIdOrName: string): Promise<AgentToolDefinition | undefined> {
+    async GetTool(toolIdOrName: string): Promise<AgentToolDefinition | undefined> {
         await this.refreshToolCache();
 
         // Try direct ID lookup first
@@ -282,23 +306,38 @@ export class AgentToolAdapter {
         return undefined;
     }
 
+    /** @deprecated Use {@link GetTool}. */
+    async getTool(toolIdOrName: string): Promise<AgentToolDefinition | undefined> {
+        return this.GetTool(toolIdOrName);
+    }
+
     /**
      * Checks if a specific tool is available
      *
      * @param toolIdOrName - Tool ID or name
      * @returns True if the tool is available
      */
-    async hasToolAvailable(toolIdOrName: string): Promise<boolean> {
-        const tool = await this.getTool(toolIdOrName);
+    async HasToolAvailable(toolIdOrName: string): Promise<boolean> {
+        const tool = await this.GetTool(toolIdOrName);
         return tool !== undefined;
+    }
+
+    /** @deprecated Use {@link HasToolAvailable}. */
+    async hasToolAvailable(toolIdOrName: string): Promise<boolean> {
+        return this.HasToolAvailable(toolIdOrName);
     }
 
     /**
      * Forces a refresh of the tool cache
      */
-    async refreshCache(): Promise<void> {
+    async RefreshCache(): Promise<void> {
         this.lastCacheRefresh = 0;
         await this.refreshToolCache();
+    }
+
+    /** @deprecated Use {@link RefreshCache}. */
+    async refreshCache(): Promise<void> {
+        return this.RefreshCache();
     }
 
     // ========================================
@@ -415,7 +454,12 @@ export class AgentToolAdapter {
  * @param contextUser - User context for permissions
  * @returns New AgentToolAdapter instance
  */
-export function createAgentToolAdapter(contextUser: UserInfo): AgentToolAdapter {
+export function CreateAgentToolAdapter(contextUser: UserInfo): AgentToolAdapter {
     return new AgentToolAdapter(contextUser);
+}
+
+/** @deprecated Use {@link CreateAgentToolAdapter}. */
+export function createAgentToolAdapter(contextUser: UserInfo): AgentToolAdapter {
+    return CreateAgentToolAdapter(contextUser);
 }
 

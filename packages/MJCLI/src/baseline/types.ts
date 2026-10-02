@@ -11,145 +11,145 @@ export type Dialect = 'mssql' | 'postgres';
 
 /** Top-level snapshot of an introspected database. */
 export interface SchemaSnapshot {
-  dialect: Dialect;
-  schemas: SchemaDef[];
-  tables: TableDef[];
-  views: ViewDef[];
-  procedures: RoutineDef[];
-  functions: RoutineDef[];
-  triggers: TriggerDef[];
-  sequences: SequenceDef[];
+  Dialect: Dialect;
+  Schemas: SchemaDef[];
+  Tables: TableDef[];
+  Views: ViewDef[];
+  Procedures: RoutineDef[];
+  Functions: RoutineDef[];
+  Triggers: TriggerDef[];
+  Sequences: SequenceDef[];
   /** User-defined types (table types primarily; scalar/CLR are future work). */
-  userDefinedTypes: UserDefinedTypeDef[];
+  UserDefinedTypes: UserDefinedTypeDef[];
   /** sp_addextendedproperty entries (descriptions etc.) on schemas/tables/columns/views/routines. */
-  extendedProperties: ExtendedPropertyDef[];
+  ExtendedProperties: ExtendedPropertyDef[];
   /** Non-system database principals (users + custom roles). */
-  principals: DatabasePrincipalDef[];
+  Principals: DatabasePrincipalDef[];
   /** Non-system role memberships (ALTER ROLE ... ADD MEMBER). */
-  roleMemberships: RoleMembershipDef[];
+  RoleMemberships: RoleMembershipDef[];
   /** Object/schema/database/type permission grants (no DENY/REVOKE captured by default). */
-  permissions: PermissionDef[];
+  Permissions: PermissionDef[];
 }
 
 export interface SchemaDef {
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface TableDef {
-  schema: string;
-  name: string;
-  columns: ColumnDef[];
-  primaryKey?: PrimaryKeyDef;
-  uniqueConstraints: UniqueConstraintDef[];
-  indexes: IndexDef[];
-  foreignKeys: ForeignKeyDef[];
-  checks: CheckConstraintDef[];
-  hasIdentity: boolean;
+  Schema: string;
+  Name: string;
+  Columns: ColumnDef[];
+  PrimaryKey?: PrimaryKeyDef;
+  UniqueConstraints: UniqueConstraintDef[];
+  Indexes: IndexDef[];
+  ForeignKeys: ForeignKeyDef[];
+  Checks: CheckConstraintDef[];
+  HasIdentity: boolean;
 }
 
 export interface ColumnDef {
-  name: string;
-  ordinal: number;
-  dataType: string;            // canonical: e.g. 'nvarchar(255)', 'int', 'decimal(18,4)'
-  isNullable: boolean;
-  isIdentity: boolean;
-  isComputed: boolean;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ordinal: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  dataType: string;            // canonical: e.g. 'nvarchar(255)', 'int', 'decimal(18,4)' — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  isNullable: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  isIdentity: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  isComputed: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /** When `isComputed`, the body of the AS (...) expression. */
-  computedExpression?: string;
+  computedExpression?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /** When `isComputed`, whether the value is PERSISTED. */
-  isComputedPersisted?: boolean;
+  isComputedPersisted?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /** DEFAULT expression text (already wrapped in parens by sys.default_constraints.definition). */
-  defaultExpression?: string;
+  defaultExpression?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /** Original `sys.default_constraints.name`. Needed so the new DB's DF_* constraints match the source byte-for-byte. */
-  defaultConstraintName?: string;
-  collation?: string;
+  defaultConstraintName?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  collation?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export interface PrimaryKeyDef {
-  name: string;
-  columns: string[];
-  clustered: boolean;
+  Name: string;
+  Columns: string[];
+  Clustered: boolean;
 }
 
 export interface UniqueConstraintDef {
-  name: string;
-  columns: string[];
-  clustered: boolean;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  columns: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  clustered: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export interface IndexDef {
-  name: string;
-  columns: string[];
-  includes: string[];
-  isUnique: boolean;
-  isClustered: boolean;
-  filter?: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  columns: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  includes: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  isUnique: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  isClustered: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  filter?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export interface ForeignKeyDef {
-  name: string;
-  columns: string[];
-  referencedSchema: string;
-  referencedTable: string;
-  referencedColumns: string[];
-  onDelete: 'NO_ACTION' | 'CASCADE' | 'SET_NULL' | 'SET_DEFAULT';
-  onUpdate: 'NO_ACTION' | 'CASCADE' | 'SET_NULL' | 'SET_DEFAULT';
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  columns: string[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  referencedSchema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  referencedTable: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  referencedColumns: string[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  onDelete: 'NO_ACTION' | 'CASCADE' | 'SET_NULL' | 'SET_DEFAULT';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  onUpdate: 'NO_ACTION' | 'CASCADE' | 'SET_NULL' | 'SET_DEFAULT';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface CheckConstraintDef {
-  name: string;
-  expression: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  expression: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export interface ViewDef {
-  schema: string;
-  name: string;
-  definition: string;          // raw OBJECT_DEFINITION / pg_get_viewdef text
+  schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  definition: string;          // raw OBJECT_DEFINITION / pg_get_viewdef text — case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface RoutineDef {
-  schema: string;
-  name: string;
-  definition: string;          // raw object body text
-  kind: 'procedure' | 'function';
+  schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  definition: string;          // raw object body text — case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  kind: 'procedure' | 'function';  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export interface TriggerDef {
-  schema: string;
-  name: string;
-  table: string;
-  definition: string;
+  schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  table: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  definition: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface SequenceDef {
-  schema: string;
-  name: string;
-  startValue: string;
-  increment: string;
-  minValue?: string;
-  maxValue?: string;
-  cycle: boolean;
-  currentValue?: string;
+  schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  startValue: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  increment: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  minValue?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  maxValue?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  cycle: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  currentValue?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** A user-defined TYPE (currently only table types; scalar/CLR are future work). */
 export interface UserDefinedTypeDef {
-  schema: string;
-  name: string;
-  kind: 'table';
-  isMemoryOptimized: boolean;
-  columns: UserDefinedTypeColumnDef[];
+  Schema: string;
+  Name: string;
+  Kind: 'table';
+  IsMemoryOptimized: boolean;
+  Columns: UserDefinedTypeColumnDef[];
   /** Inline primary key, if any. CREATE TYPE AS TABLE supports a PK clause. */
-  primaryKey?: PrimaryKeyDef;
+  PrimaryKey?: PrimaryKeyDef;
 }
 
 /** Columns inside a CREATE TYPE AS TABLE definition. Subset of ColumnDef (no identity/computed/FK). */
 export interface UserDefinedTypeColumnDef {
-  name: string;
-  ordinal: number;
-  dataType: string;
-  isNullable: boolean;
-  collation?: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ordinal: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  dataType: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  isNullable: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  collation?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**
@@ -159,18 +159,18 @@ export interface UserDefinedTypeColumnDef {
  * time; the baseline never re-creates those.
  */
 export interface DatabasePrincipalDef {
-  name: string;
-  kind: 'sql_user' | 'database_role' | 'windows_user' | 'application_role' | 'aad_user' | 'aad_group';
+  Name: string;
+  Kind: 'sql_user' | 'database_role' | 'windows_user' | 'application_role' | 'aad_user' | 'aad_group';
   /** Owner principal name (e.g. `db_securityadmin` for MJ's cdp_* roles). Undefined falls back to the current user (typically `dbo`). */
-  owner?: string;
+  Owner?: string;
   /** Default schema for users. Roles don't have one. */
-  defaultSchema?: string;
+  DefaultSchema?: string;
 }
 
 /** A row in `sys.database_role_members`. Both names refer to principals (user or role). */
 export interface RoleMembershipDef {
-  role: string;
-  member: string;
+  role: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  member: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** State of a permission row in `sys.database_permissions`. */
@@ -183,14 +183,14 @@ export type PermissionState = 'GRANT' | 'GRANT_WITH_GRANT_OPTION' | 'DENY' | 'RE
  * the grantee is missing AND/OR the migration sequence drifts.
  */
 export interface PermissionDef {
-  grantee: string;
-  state: PermissionState;
-  permission: string;            // SELECT | EXECUTE | CONNECT | UPDATE | INSERT | DELETE | REFERENCES | etc.
-  targetClass: 'database' | 'schema' | 'object' | 'type';
-  targetSchema?: string;         // for class='schema' or 'object'
-  targetObject?: string;         // for class='object'
-  targetType?: string;           // for class='type' (UDT name)
-  targetColumn?: string;         // for column-level grants (object-class with minor_id > 0)
+  grantee: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  state: PermissionState;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  permission: string;            // SELECT | EXECUTE | CONNECT | UPDATE | INSERT | DELETE | REFERENCES | etc. — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  targetClass: 'database' | 'schema' | 'object' | 'type';  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  targetSchema?: string;         // for class='schema' or 'object' — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  targetObject?: string;         // for class='object' — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  targetType?: string;           // for class='type' (UDT name) — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  targetColumn?: string;         // for column-level grants (object-class with minor_id > 0) — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**
@@ -200,60 +200,60 @@ export interface PermissionDef {
  */
 export interface ExtendedPropertyDef {
   /** Property name, e.g. 'MS_Description'. Case is preserved as stored. */
-  name: string;
+  Name: string;
   /** Property value, always serialized as NVARCHAR. */
-  value: string;
+  Value: string;
   /** level0 is always SCHEMA in MJ. Stored separately so we can emit the canonical 3-tier call. */
-  schemaName: string;
+  SchemaName: string;
   /** TABLE | VIEW | PROCEDURE | FUNCTION | TYPE | SEQUENCE | TRIGGER | null (for schema-level properties). */
-  level1Type?: string;
-  level1Name?: string;
+  Level1Type?: string;
+  Level1Name?: string;
   /** COLUMN | PARAMETER | TRIGGER | INDEX | null. */
-  level2Type?: string;
-  level2Name?: string;
+  Level2Type?: string;
+  Level2Name?: string;
 }
 
 /** Per-table data dump (every row, ordered deterministically). */
 export interface TableDataDump {
-  schema: string;
-  table: string;
+  Schema: string;
+  Table: string;
   /** Column order matches the INSERT column list. */
-  columns: string[];
+  Columns: string[];
   /** Each row is an array of values matching `columns`. Null = JS null. */
-  rows: unknown[][];
+  Rows: unknown[][];
   /** Set when the dump was truncated due to a hard limit. */
-  truncated?: boolean;
-  rowCount: number;
+  Truncated?: boolean;
+  RowCount: number;
 }
 
 /** Output of a full diff between two snapshots (and optional row data). */
 export interface DiffReport {
-  generatedAt: string;
-  leftLabel: string;
-  rightLabel: string;
-  rowCompareMode: RowCompareMode;
-  isClean: boolean;
-  objectDiffs: ObjectDiff[];
-  tableRowDiffs: TableRowDiff[];
-  summary: DiffSummary;
+  generatedAt: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  leftLabel: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  rightLabel: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  rowCompareMode: RowCompareMode;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  isClean: boolean;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  objectDiffs: ObjectDiff[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  tableRowDiffs: TableRowDiff[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  summary: DiffSummary;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 export interface DiffSummary {
-  schemasChecked: number;
-  tablesChecked: number;
-  viewsChecked: number;
-  proceduresChecked: number;
-  functionsChecked: number;
-  triggersChecked: number;
-  sequencesChecked: number;
-  userDefinedTypesChecked: number;
-  extendedPropertiesChecked: number;
-  principalsChecked: number;
-  roleMembershipsChecked: number;
-  permissionsChecked: number;
-  objectsWithDiffs: number;
-  tablesWithRowDiffs: number;
-  totalRowDiffs: number;
+  schemasChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  tablesChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  viewsChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  proceduresChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  functionsChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  triggersChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  sequencesChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  userDefinedTypesChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  extendedPropertiesChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  principalsChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  roleMembershipsChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  permissionsChecked: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  objectsWithDiffs: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  tablesWithRowDiffs: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  totalRowDiffs: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 export type RowCompareMode = 'full' | 'hash' | 'counts' | 'none';
@@ -282,55 +282,55 @@ export type ObjectKind =
 export type DiffKind = 'missing-on-left' | 'missing-on-right' | 'changed';
 
 export interface ObjectDiff {
-  kind: ObjectKind;
-  diffKind: DiffKind;
-  qualifiedName: string;       // e.g. "dbo.Customer" or "dbo.Customer.FirstName"
+  Kind: ObjectKind;
+  DiffKind: DiffKind;
+  QualifiedName: string;       // e.g. "dbo.Customer" or "dbo.Customer.FirstName"
   /** Free-form details: which fields differ, with left/right values. */
-  details?: string;
-  leftValue?: unknown;
-  rightValue?: unknown;
+  Details?: string;
+  LeftValue?: unknown;
+  RightValue?: unknown;
 }
 
 export interface TableRowDiff {
-  schema: string;
-  table: string;
-  leftRowCount: number;
-  rightRowCount: number;
+  Schema: string;
+  Table: string;
+  LeftRowCount: number;
+  RightRowCount: number;
   /** First N (default 100) row mismatches captured during full mode. */
-  sampleDiffs: RowDiff[];
+  SampleDiffs: RowDiff[];
   /** True if there are more diffs than `sampleDiffs` shows. */
-  truncated: boolean;
+  Truncated: boolean;
   /** Total mismatches counted (may exceed sampleDiffs.length). */
-  diffCount: number;
+  DiffCount: number;
 }
 
 export interface RowDiff {
-  diffKind: DiffKind;
+  DiffKind: DiffKind;
   /** Stringified key (PK or whole-row hash) used for matching. */
-  key: string;
+  Key: string;
   /** Per-column diffs in 'changed' rows only. */
-  columnDiffs?: ColumnValueDiff[];
+  ColumnDiffs?: ColumnValueDiff[];
 }
 
 export interface ColumnValueDiff {
-  column: string;
-  leftValue: unknown;
-  rightValue: unknown;
+  Column: string;
+  LeftValue: unknown;
+  RightValue: unknown;
 }
 
 /** Build options passed to the emitter. */
 export interface BaselineEmitOptions {
-  baselineVersion: string;     // 'Major.Minor' (literal x is appended in filename to match V-file convention)
-  description: string;
-  generatedAtUtc: Date;
-  includeData: boolean;
-  excludedDataTables: Set<string>; // 'schema.table' lowercased
-  batchSize: number;
+  baselineVersion: string;     // 'Major.Minor' (literal x is appended in filename to match V-file convention) — case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  description: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  generatedAtUtc: Date;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  includeData: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  excludedDataTables: Set<string>; // 'schema.table' lowercased — case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  batchSize: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface BaselineCompareOptions {
-  rowCompareMode: RowCompareMode;
-  rowHashAlgo: RowHashAlgo;
-  ignorePattern?: RegExp;
-  rowDiffSampleLimit: number;  // default 100
+  RowCompareMode: RowCompareMode;
+  RowHashAlgo: RowHashAlgo;
+  IgnorePattern?: RegExp;
+  RowDiffSampleLimit: number;  // default 100
 }

@@ -319,6 +319,12 @@ export interface RunAgentFromConversationDetailParams {
     SourceArtifactId?: string;
     /** Source artifact version ID for versioning */
     SourceArtifactVersionId?: string;
+    /**
+     * The first moment of the conversation the run may read. When set, the server loads the
+     * agent's history from there and skips its summary of earlier messages. Sent only when set,
+     * so a server that predates the argument keeps working.
+     */
+    AgentHistoryFrom?: Date | null;
     /** Optional callback for progress updates */
     OnProgress?: (progress: {
         CurrentStep: string;

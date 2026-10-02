@@ -15,4 +15,7 @@ const defaultModule = CreateLiveKitRtcNodeModule();
 // Exported both as default and as a top-level `createRoomClient` so the bridge's lazy loader resolves it
 // under either CJS-`.default` or ESM-namespace interop.
 export default defaultModule;
-export const createRoomClient = defaultModule.createRoomClient;
+export const CreateRoomClient = defaultModule.createRoomClient;
+
+/** @deprecated Use {@link CreateRoomClient}. */
+export const createRoomClient = CreateRoomClient;

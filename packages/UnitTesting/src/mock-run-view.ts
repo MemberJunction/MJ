@@ -27,17 +27,22 @@ let _mockResponses: RunViewMockMap = new Map();
  * ]));
  * ```
  */
-export function mockRunView(responses: RunViewMockMap): void {
+export function MockRunView(responses: RunViewMockMap): void {
   _mockResponses = new Map(
     [...responses.entries()].map(([k, v]) => [k.toLowerCase(), v])
   );
+}
+
+/** @deprecated Use {@link MockRunView}. */
+export function mockRunView(responses: RunViewMockMap): void {
+  return MockRunView(responses);
 }
 
 /**
  * Create a mock RunView instance that returns configured test data.
  * Use with vi.mock() to replace the real RunView.
  */
-export function createMockRunViewClass() {
+export function CreateMockRunViewClass() {
   return class MockRunView {
     async RunView<T = unknown>(params: { EntityName?: string; ExtraFilter?: string }): Promise<RunViewResult<T>> {
       const entityName = params.EntityName?.toLowerCase() ?? '';
@@ -60,17 +65,32 @@ export function createMockRunViewClass() {
   };
 }
 
+/** @deprecated Use {@link CreateMockRunViewClass}. */
+export function createMockRunViewClass() {
+  return CreateMockRunViewClass();
+}
+
 /**
  * Configure mock responses for batch RunViews calls.
  * Same as mockRunView but semantically indicates batch usage.
  */
+export function MockRunViews(responses: RunViewMockMap): void {
+  MockRunView(responses);
+}
+
+/** @deprecated Use {@link MockRunViews}. */
 export function mockRunViews(responses: RunViewMockMap): void {
-  mockRunView(responses);
+  return MockRunViews(responses);
 }
 
 /**
  * Reset all RunView mock responses.
  */
-export function resetRunViewMocks(): void {
+export function ResetRunViewMocks(): void {
   _mockResponses = new Map();
+}
+
+/** @deprecated Use {@link ResetRunViewMocks}. */
+export function resetRunViewMocks(): void {
+  return ResetRunViewMocks();
 }

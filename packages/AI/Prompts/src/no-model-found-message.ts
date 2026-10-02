@@ -89,6 +89,12 @@ export function buildNoModelFoundMessage(
 ): string {
   const base = `No suitable model found for prompt ${promptName}`;
 
+  // A selection step that threw (for example the model-type floor) records its error here; show it
+  // rather than the generic "no candidates" text. Every other reason keeps its detailed message below.
+  if (selectionInfo?.selectionReason?.startsWith('Error during model selection:')) {
+    return `${base}. ${selectionInfo.selectionReason}`;
+  }
+
   if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
     return `${base}. No model-vendor candidates were available. Please ensure AI models are configured for this prompt.`;
   }

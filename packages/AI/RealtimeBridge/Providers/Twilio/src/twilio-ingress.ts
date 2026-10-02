@@ -15,7 +15,7 @@
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { buildConnectStreamTwiML } from './real-twilio-bindings';
+import { BuildConnectStreamTwiML } from './real-twilio-bindings';
 
 /**
  * Verifies a Twilio webhook request signature per Twilio's documented scheme:
@@ -35,7 +35,7 @@ import { buildConnectStreamTwiML } from './real-twilio-bindings';
  * @param params The POST form parameters Twilio sent.
  * @returns `true` when the signature is valid; `false` otherwise (including a missing header).
  */
-export function verifyTwilioSignature(
+export function VerifyTwilioSignature(
     authToken: string,
     signatureHeader: string | undefined,
     url: string,
@@ -44,8 +44,18 @@ export function verifyTwilioSignature(
     if (!signatureHeader) {
         return false;
     }
-    const expected = computeTwilioSignature(authToken, url, params);
+    const expected = ComputeTwilioSignature(authToken, url, params);
     return constantTimeEquals(expected, signatureHeader);
+}
+
+/** @deprecated Use {@link VerifyTwilioSignature}. */
+export function verifyTwilioSignature(
+    authToken: string,
+    signatureHeader: string | undefined,
+    url: string,
+    params: Record<string, string>,
+): boolean {
+    return VerifyTwilioSignature(authToken, signatureHeader, url, params);
 }
 
 /**
@@ -57,9 +67,14 @@ export function verifyTwilioSignature(
  * @param params The POST form parameters.
  * @returns The base64-encoded HMAC-SHA1 signature.
  */
-export function computeTwilioSignature(authToken: string, url: string, params: Record<string, string>): string {
+export function ComputeTwilioSignature(authToken: string, url: string, params: Record<string, string>): string {
     const data = url + concatSortedParams(params);
     return createHmac('sha1', authToken).update(data, 'utf8').digest('base64');
+}
+
+/** @deprecated Use {@link ComputeTwilioSignature}. */
+export function computeTwilioSignature(authToken: string, url: string, params: Record<string, string>): string {
+    return ComputeTwilioSignature(authToken, url, params);
 }
 
 /**
@@ -70,8 +85,13 @@ export function computeTwilioSignature(authToken: string, url: string, params: R
  * @param streamWssUrl The `wss://…/telephony/twilio/media` endpoint to connect the inbound call's audio to.
  * @returns The TwiML document string to return to Twilio as the webhook response.
  */
+export function BuildInboundVoiceTwiML(streamWssUrl: string): string {
+    return BuildConnectStreamTwiML(streamWssUrl);
+}
+
+/** @deprecated Use {@link BuildInboundVoiceTwiML}. */
 export function buildInboundVoiceTwiML(streamWssUrl: string): string {
-    return buildConnectStreamTwiML(streamWssUrl);
+    return BuildInboundVoiceTwiML(streamWssUrl);
 }
 
 /** The resolved identity of an inbound Twilio call, mapped from the voice-webhook params. */
@@ -93,7 +113,7 @@ export interface ResolvedInboundCall {
  * @returns The `{ callSid, from, to }` mapping.
  * @throws When `CallSid`, `From`, or `To` is missing.
  */
-export function resolveInboundCall(params: Record<string, string>): ResolvedInboundCall {
+export function ResolveInboundCall(params: Record<string, string>): ResolvedInboundCall {
     const callSid = params['CallSid'];
     const from = params['From'];
     const to = params['To'];
@@ -104,6 +124,11 @@ export function resolveInboundCall(params: Record<string, string>): ResolvedInbo
         );
     }
     return { callSid, from, to };
+}
+
+/** @deprecated Use {@link ResolveInboundCall}. */
+export function resolveInboundCall(params: Record<string, string>): ResolvedInboundCall {
+    return ResolveInboundCall(params);
 }
 
 /** Concatenates params sorted by key as `key + value` (Twilio's signature input), with no separators. */

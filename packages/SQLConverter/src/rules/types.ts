@@ -5,7 +5,7 @@
  * or bypass sqlglot entirely for statement types it handles natively.
  */
 
-import { seedCoreMetadataBooleanColumns } from './CoreMetadataBooleanColumns.js';
+import { SeedCoreMetadataBooleanColumns } from './CoreMetadataBooleanColumns.js';
 
 /** Classification labels for SQL batches/statements */
 export type StatementType =
@@ -201,7 +201,7 @@ export interface OutputGroups {
 }
 
 /** Create a fresh ConversionContext */
-export function createConversionContext(
+export function CreateConversionContext(
   sourceDialect: string,
   targetDialect: string,
   schema: string = '__mj'
@@ -211,7 +211,7 @@ export function createConversionContext(
   // baseline tables from inside migrations that never re-create them, so without
   // this seed InsertRule can't know to rewrite BIT 0/1 literals to FALSE/TRUE.
   const tableColumns = new Map<string, Map<string, string>>();
-  seedCoreMetadataBooleanColumns(tableColumns);
+  SeedCoreMetadataBooleanColumns(tableColumns);
 
   return {
     SourceDialect: sourceDialect,
@@ -225,8 +225,17 @@ export function createConversionContext(
   };
 }
 
+/** @deprecated Use {@link CreateConversionContext}. */
+export function createConversionContext(
+  sourceDialect: string,
+  targetDialect: string,
+  schema: string = '__mj'
+): ConversionContext {
+  return CreateConversionContext(sourceDialect, targetDialect, schema);
+}
+
 /** Create empty conversion stats */
-export function createConversionStats(): ConversionStats {
+export function CreateConversionStats(): ConversionStats {
   return {
     TotalBatches: 0,
     Converted: 0,
@@ -250,8 +259,13 @@ export function createConversionStats(): ConversionStats {
   };
 }
 
+/** @deprecated Use {@link CreateConversionStats}. */
+export function createConversionStats(): ConversionStats {
+  return CreateConversionStats();
+}
+
 /** Create empty output groups */
-export function createOutputGroups(): OutputGroups {
+export function CreateOutputGroups(): OutputGroups {
   return {
     Tables: [],
     HelperFunctions: [],
@@ -264,4 +278,9 @@ export function createOutputGroups(): OutputGroups {
     Comments: [],
     Other: [],
   };
+}
+
+/** @deprecated Use {@link CreateOutputGroups}. */
+export function createOutputGroups(): OutputGroups {
+  return CreateOutputGroups();
 }

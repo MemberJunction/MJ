@@ -86,7 +86,7 @@ export class TestRunner {
  * compares. Both the tsx scripts (via EmitOutcomes) and the IntegrationTestDriver
  * call this so the two execution paths produce identical files.
  */
-export async function writeOutcomesFile(path: string, outcomes: readonly TestOutcome[]): Promise<void> {
+export async function WriteOutcomesFile(path: string, outcomes: readonly TestOutcome[]): Promise<void> {
     const serialized: EmittedOutcome[] = outcomes.map(o => ({
         name: o.Name,
         passed: o.Passed,
@@ -99,9 +99,14 @@ export async function writeOutcomesFile(path: string, outcomes: readonly TestOut
     await writeFile(path, JSON.stringify(serialized, null, 2));
 }
 
+/** @deprecated Use {@link WriteOutcomesFile}. */
+export async function writeOutcomesFile(path: string, outcomes: readonly TestOutcome[]): Promise<void> {
+    return WriteOutcomesFile(path, outcomes);
+}
+
 /** Dump a finished TestRunner's outcomes for the golden diff (no-op semantics on Run() preserved). */
 export async function EmitOutcomes(runner: TestRunner, path: string): Promise<void> {
-    await writeOutcomesFile(path, runner.LastOutcomes);
+    await WriteOutcomesFile(path, runner.LastOutcomes);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -118,7 +123,10 @@ export function Assert(condition: boolean, message: string): void {
  * Sleep for `ms` — lets fire-and-forget run/step/detail saves (BaseEntitySaveQueue) land before a
  * check reads them back. Lifted from the tsx harness so graduated bundles read it from the package.
  */
-export const settle = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+export const Settle = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+/** @deprecated Use {@link Settle}. */
+export const settle = Settle;
 
 export function AssertEqual<T>(actual: T, expected: T, message: string): void {
     if (actual !== expected) {

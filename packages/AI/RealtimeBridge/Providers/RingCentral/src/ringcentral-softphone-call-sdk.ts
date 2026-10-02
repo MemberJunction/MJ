@@ -34,10 +34,15 @@ import type { RtpConstructors, SoftphoneCallSession } from './softphone-types';
  * standalone `ArrayBuffer` so the result never aliases a larger backing window. Used to hand inbound audio
  * to the bridge as a clean `ArrayBuffer`.
  */
-export function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
+export function BufferToArrayBuffer(buf: Buffer): ArrayBuffer {
     const out = new ArrayBuffer(buf.byteLength);
     new Uint8Array(out).set(buf);
     return out;
+}
+
+/** @deprecated Use {@link BufferToArrayBuffer}. */
+export function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
+    return BufferToArrayBuffer(buf);
 }
 
 /**
@@ -47,11 +52,11 @@ export function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
  */
 export interface SoftphoneCallSource {
     /** Places an OUTBOUND call (the caller-id is fixed by the registration; `toNumber` is the destination). */
-    placeCall(toNumber: string): Promise<SoftphoneCallSession>;
+    placeCall(toNumber: string): Promise<SoftphoneCallSession>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Answers the inbound INVITE the handle parked under `callId` (the SIP `Call-ID`). */
-    answerCall(callId: string): Promise<SoftphoneCallSession>;
+    answerCall(callId: string): Promise<SoftphoneCallSession>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The `werift-rtp` constructors the outbound RTP sender needs (loaded with the softphone). */
-    readonly rtp: RtpConstructors;
+    readonly rtp: RtpConstructors;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -144,7 +149,7 @@ export class RingCentralSoftphoneCallSdk implements ITelephonyCallSdk {
     public onAudioFrame(cb: (pcm: ArrayBuffer) => void): void {
         this.audioCb = cb;
         if (this.session) {
-            this.session.on('audioPacket', (rtp) => cb(bufferToArrayBuffer(rtp.payload)));
+            this.session.on('audioPacket', (rtp) => cb(BufferToArrayBuffer(rtp.payload)));
         }
     }
 
@@ -215,7 +220,7 @@ export class RingCentralSoftphoneCallSdk implements ITelephonyCallSdk {
 
         if (this.audioCb) {
             const cb = this.audioCb;
-            session.on('audioPacket', (rtp) => cb(bufferToArrayBuffer(rtp.payload)));
+            session.on('audioPacket', (rtp) => cb(BufferToArrayBuffer(rtp.payload)));
         }
         if (this.dtmfCb) {
             session.on('dtmf', this.dtmfCb);

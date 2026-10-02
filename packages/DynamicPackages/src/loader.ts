@@ -21,7 +21,7 @@ import {
     FindWorkspacePackageDir,
     ReadDynamicPackagesConfig,
 } from './discover.js';
-import { importFromHost, isResolutionFailure } from './host-import.js';
+import { ImportFromHost, IsResolutionFailure } from './host-import.js';
 import { ResolveDynamicPackagesMode } from './mode.js';
 import { MatchesProcess, NormalizeProcessId } from './process-id.js';
 import type {
@@ -192,7 +192,7 @@ export async function LoadDynamicPackages(options: LoadDynamicPackagesOptions): 
         Failed: [],
     };
 
-    const { candidates, duplicates } = mergeCandidates(collectCandidates(options, tier, config, section, log));
+    const { candidates, duplicates } = MergeCandidates(collectCandidates(options, tier, config, section, log));
     for (const duplicate of duplicates) {
         report.Skipped.push({ ...duplicate, Reason: 'duplicate' });
     }
@@ -259,7 +259,7 @@ export async function LoadDynamicPackages(options: LoadDynamicPackagesOptions): 
  * the host cannot `require.resolve` still loads from the workspace. Every later duplicate is
  * returned separately so the report can list it as skipped.
  */
-export function mergeCandidates(all: DiscoveredDynamicPackage[]): {
+export function MergeCandidates(all: DiscoveredDynamicPackage[]): {
     candidates: DiscoveredDynamicPackage[];
     duplicates: DiscoveredDynamicPackage[];
 } {
@@ -285,6 +285,14 @@ export function mergeCandidates(all: DiscoveredDynamicPackage[]): {
         duplicates.push(candidate);
     }
     return { candidates, duplicates };
+}
+
+/** @deprecated Use {@link MergeCandidates}. */
+export function mergeCandidates(all: DiscoveredDynamicPackage[]): {
+    candidates: DiscoveredDynamicPackage[];
+    duplicates: DiscoveredDynamicPackage[];
+} {
+    return MergeCandidates(all);
 }
 
 /** Orders the three discovery sources. Manifest discovery failures are the operator's to see, not fatal. */
@@ -329,7 +337,7 @@ async function loadOne(
     try {
         let mod: Record<string, unknown>;
         try {
-            mod = await importFromHost(pkgName, options.configFilePath);
+            mod = await ImportFromHost(pkgName, options.configFilePath);
         } catch (error: unknown) {
             // A manifest-sourced package may be a workspace member nothing can require.resolve
             // (pnpm strict layout, root without the package as a dependency). Find it on disk.
@@ -412,7 +420,7 @@ export function ResetLoadedDynamicPackages(): void {
  */
 function isOwnResolutionFailure(error: unknown, pkgName: string): boolean {
     const message = error instanceof Error ? error.message : String(error);
-    return isResolutionFailure(error) && message.includes(`'${pkgName}'`);
+    return IsResolutionFailure(error) && message.includes(`'${pkgName}'`);
 }
 
 /**
