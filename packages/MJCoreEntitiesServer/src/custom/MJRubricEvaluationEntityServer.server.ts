@@ -13,7 +13,7 @@ import { EvaluationStatusError, PushFailure } from './rubrics/statusRules.js';
  * superseded, a score for a criterion outside the version, a level from the
  * wrong scale, a raw value on a levels scale, a client-written computed row,
  * and a missing rationale or evidence when the criterion requires it.
- * It calls RubricScoring.compute and writes that result. It does not reimplement
+ * It calls RubricScoring.Compute and writes that result. It does not reimplement
  * the math. Score rows must be saved while this evaluation is still Draft,
  * because the score trigger rejects writes after submit.
  */
@@ -40,14 +40,9 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
         return result;
     }
 
-    /** @deprecated Use {@link Submit}. */
-    public submit(input: SubmitEvaluationInput): { evaluation: PersistedEvaluation; scores: PersistedScore[] } {
-        return this.Submit(input);
-    }
-
     /**
      * When Status moves Draft → Submitted, loads the pinned version and the
-     * score rows and calls {@link submit}. Setting Status and saving is enough.
+     * score rows and calls {@link Submit}. Setting Status and saving is enough.
      * Score rows are written before this row, while the stored status is still
      * Draft. This evaluation is saved next. A supersede target is refused when
      * the subject, context, rubric, or status does not match, and is marked
@@ -122,7 +117,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 record.OverallContribution = computed.overallContribution;
                 record.GateFailed = computed.gateFailed;
                 record.IsComputed = computed.isComputed;
-                if (computed.isComputed) record.allowServerComputedWrite = true;
+                if (computed.isComputed) record.AllowServerComputedWrite = true;
                 writtenIds.add(criterionId);
                 await saveOrThrow(record, 'the score');
             }
@@ -138,7 +133,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 created.OverallContribution = computed.overallContribution;
                 created.GateFailed = computed.gateFailed;
                 created.IsComputed = true;
-                created.allowServerComputedWrite = true;
+                created.AllowServerComputedWrite = true;
                 await saveOrThrow(created, 'the computed score');
             }
             const written = result.evaluation;

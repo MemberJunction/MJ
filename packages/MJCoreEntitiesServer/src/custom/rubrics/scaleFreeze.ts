@@ -32,7 +32,3 @@ export function FrozenScaleChange(usedByPublishedVersion: boolean, before: Scale
     return null;
 }
 
-/** @deprecated Use {@link FrozenScaleChange}. */
-export function frozenScaleChange(usedByPublishedVersion: boolean, before: ScaleShape, after: ScaleShape): string | null {
-    return FrozenScaleChange(usedByPublishedVersion, before, after);
-}

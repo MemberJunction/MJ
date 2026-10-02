@@ -15,16 +15,16 @@ import { MJRubricEvaluationScoreEntityServer } from '../custom/MJRubricEvaluatio
 describe('MJRubricEvaluationScoreEntityServer.ValidateAsync', () => {
     it('refuses a client computed row and allows the evaluation server flag', async () => {
         const client = new MJRubricEvaluationScoreEntityServer();
-        const clientHost = client as unknown as { IsComputed: boolean; allowServerComputedWrite: boolean };
+        const clientHost = client as unknown as { IsComputed: boolean; AllowServerComputedWrite: boolean };
         clientHost.IsComputed = true;
-        clientHost.allowServerComputedWrite = false;
+        clientHost.AllowServerComputedWrite = false;
         const refused = await client.ValidateAsync();
         expect(refused.Success).toBe(false);
 
         const server = new MJRubricEvaluationScoreEntityServer();
-        const serverHost = server as unknown as { IsComputed: boolean; allowServerComputedWrite: boolean };
+        const serverHost = server as unknown as { IsComputed: boolean; AllowServerComputedWrite: boolean };
         serverHost.IsComputed = true;
-        serverHost.allowServerComputedWrite = true;
+        serverHost.AllowServerComputedWrite = true;
         const allowed = await server.ValidateAsync();
         expect(allowed.Success).toBe(true);
     });

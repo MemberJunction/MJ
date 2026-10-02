@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { RubricEngine, type RubricRecords } from '@memberjunction/rubrics';
 import type { RubricScoreResult } from '@memberjunction/rubrics-base';
@@ -17,6 +20,12 @@ describe('PickSelfCheckLink', () => {
 });
 
 describe('agent self-check', () => {
+    it('does not keep camelCase aliases of the decision helpers', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../self-check.ts'), 'utf8');
+        expect(source).not.toContain('export function decideSelfCheck');
+        expect(source).not.toContain('export async function executeSelfCheck');
+    });
+
     it('skips when there is no Active SelfCheck link', () => {
         expect(DecideSelfCheck({ agentKind: 'loop', link: null, attempt: 1, passed: false }).Action).toBe('skip');
         expect(DecideSelfCheck({ agentKind: 'loop', link: { Purpose: 'Evaluation', Status: 'Active' }, attempt: 1, passed: false }).Action).toBe('skip');

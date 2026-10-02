@@ -24,11 +24,6 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
         return CloneVersionNodes(source);
     }
 
-    /** @deprecated Use {@link CloneNodes}. */
-    public cloneNodes(source: RubricVersionSnapshot['nodes']): RubricVersionSnapshot['nodes'] {
-        return this.CloneNodes(source);
-    }
-
     /**
      * Computes the publish result and copies it onto this version. Refuses the
      * cases documented on the class. The caller saves inside its transaction.
@@ -52,17 +47,8 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
         return result;
     }
 
-    /** @deprecated Use {@link Publish}. */
-    public async publish(
-        base: RubricVersionSnapshot | null,
-        draft: RubricVersionSnapshot,
-        requestedBump?: 'Major' | 'Minor' | 'Patch' | null,
-    ): Promise<PublishResult> {
-        return this.Publish(base, draft, requestedBump);
-    }
-
     /**
-     * A new version is Draft. Draft becomes Published only through publish.
+     * A new version is Draft. Draft becomes Published only through Publish.
      * A frozen version moves only between Published and Retired, and none of
      * the columns the immutability trigger freezes may change on that move.
      */

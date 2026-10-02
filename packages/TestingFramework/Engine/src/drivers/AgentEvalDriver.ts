@@ -212,11 +212,6 @@ export function MessageWhenNoOracleJudged(results: unknown[]): string | undefine
     return results.length === 0 ? 'No oracle judged this run.' : undefined;
 }
 
-/** @deprecated Use {@link MessageWhenNoOracleJudged}. */
-export function messageWhenNoOracleJudged(results: unknown[]): string | undefined {
-    return MessageWhenNoOracleJudged(results);
-}
-
 @RegisterClass(BaseTestDriver, 'AgentEvalDriver')
 export class AgentEvalDriver extends BaseTestDriver {
     /**

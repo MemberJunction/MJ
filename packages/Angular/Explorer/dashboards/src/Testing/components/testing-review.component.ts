@@ -1223,11 +1223,6 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
     SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(runId));
   }
 
-  /** @deprecated Use {@link LoadDisagreement}. */
-  async loadDisagreement(): Promise<void> {
-    return this.LoadDisagreement();
-  }
-
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { AgreementByCriterion, CalibrationOracles, CalibrationPairs, QuadraticWeightedKappa } from '../drivers/calibration.js';
 
@@ -7,6 +10,12 @@ const agreed = [
 ];
 
 describe('rubric judge calibration', () => {
+    it('does not keep camelCase aliases of the calibration helpers', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../drivers/calibration.ts'), 'utf8');
+        expect(source).not.toContain('export function rankLevels');
+        expect(source).not.toContain('export function calibrationOracles');
+    });
+
     it('scores perfect agreement as kappa 1 and a swapped pair as no agreement', () => {
         expect(QuadraticWeightedKappa([1, 0], [1, 0], 2)).toBe(1);
         expect(QuadraticWeightedKappa([0, 1], [1, 0], 2)).toBe(-1);

@@ -18,11 +18,6 @@ export class MJRubricCriterionEntityServer extends MJRubricCriterionEntity {
         return ValidateRubricTree(version).errors;
     }
 
-    /** @deprecated Use {@link TreeErrors}. */
-    public treeErrors(version: RubricVersionSnapshot): string[] {
-        return this.TreeErrors(version);
-    }
-
     /** Criteria of a published or retired version cannot be added or changed. */
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();

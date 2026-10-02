@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { VersionRows } from './model';
 import { CategoryParentChoices, HostSnapshot, PriorPublishedVersion, ScaleIsFrozen } from './form-hosts.model';
 
 describe('rubric form hosts', () => {
+    it('does not keep a camelCase parent-choice alias', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'form-hosts.model.ts'), 'utf8');
+        expect(source).not.toContain('export function categoryParentChoices');
+    });
+
     it('diffs a version against the one it was based on', () => {
         expect(PriorPublishedVersion([
             { Id: 'published', Status: 'Published', BasedOnId: null, Major: 1, Minor: 0, Patch: 0 },

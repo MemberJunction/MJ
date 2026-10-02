@@ -35,6 +35,9 @@ describe('rubric CLI', () => {
         expect(cli).toContain('RunView.FromMetadataProvider');
         expect(commands).toContain('CloseMJProvider');
         expect(report).toContain('CloseMJProvider');
+        expect(cli).not.toContain('export function parseRubricRef');
+        expect(cli).not.toContain('export function resolveRubricRef');
+        expect(cli).not.toContain('export async function lookupRubricOverride');
     });
 
     it('parses a name, a version label, and a version id', () => {

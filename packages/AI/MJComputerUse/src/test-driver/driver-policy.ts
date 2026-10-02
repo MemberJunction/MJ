@@ -70,11 +70,6 @@ export function InlineVerdictIsAdvisory(config: ComputerUseTestConfig): boolean 
     return config.gateInlineVerdicts !== true;
 }
 
-/** @deprecated Use {@link InlineVerdictIsAdvisory}. */
-export function inlineVerdictIsAdvisory(config: ComputerUseTestConfig): boolean {
-    return InlineVerdictIsAdvisory(config);
-}
-
 /** An explicit per-oracle `advisory` value wins; otherwise the type's default applies. */
 export function IsOracleAdvisory(type: string, explicitAdvisory?: boolean): boolean {
     return explicitAdvisory ?? DEFAULT_ADVISORY_TYPES.has(type);

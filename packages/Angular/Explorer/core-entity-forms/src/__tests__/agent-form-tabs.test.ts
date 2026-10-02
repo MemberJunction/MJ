@@ -22,7 +22,7 @@ import {
     ResolveActiveTab,
     type AgentFormTabContext,
 } from '../lib/custom/AIAgents/agent-form-tabs';
-import { sortAgentRubrics } from '@memberjunction/ng-agents';
+import { SortAgentRubrics } from '@memberjunction/ng-agents';
 
 const flow: AgentFormTabContext = { AgentTypeName: 'Flow', UIFormSectionKey: 'FlowAgentType', HasRecordID: true };
 const loop: AgentFormTabContext = { AgentTypeName: 'Loop', UIFormSectionKey: null, HasRecordID: true };
@@ -80,7 +80,7 @@ describe('which tabs exist', () => {
 
 describe('rubric link order', () => {
     it('puts the default Evaluation link first', () => {
-        const ordered = sortAgentRubrics([
+        const ordered = SortAgentRubrics([
             { Purpose: 'SelfCheck', IsDefault: true, Sequence: 0, Rubric: 'Check' },
             { Purpose: 'Evaluation', IsDefault: false, Sequence: 0, Rubric: 'Other' },
             { Purpose: 'Evaluation', IsDefault: true, Sequence: 1, Rubric: 'Judge' },

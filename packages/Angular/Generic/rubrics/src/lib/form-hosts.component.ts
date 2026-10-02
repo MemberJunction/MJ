@@ -3,7 +3,7 @@ import { CompositeKey, RunView, type IMetadataProvider, type UserInfo } from '@m
 import { MJRubricCriterionLevelEntity } from '@memberjunction/core-entities';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { CategoryParentChoices, HostSnapshot, PriorPublishedVersion, ScaleIsFrozen } from './form-hosts.model';
-import { publishPreview } from './model.js';
+import { PublishPreview } from './model.js';
 import { RubricCategoryEditorComponent, RubricCriterionEditorComponent, RubricScaleLevelEditorComponent } from './record-editors.component';
 import { RubricVersionDiffComponent } from './version-diff.component';
 
@@ -47,7 +47,7 @@ export class RubricVersionHostComponent implements OnChanges {
         const priorId = PriorPublishedVersion(listed, this.VersionId);
         this.Draft = await snapshot(this.Provider, versions.find(row => String(row.ID) === this.VersionId));
         this.Base = priorId ? await snapshot(this.Provider, versions.find(row => String(row.ID) === priorId)) : null;
-        this.NextVersion = this.Draft ? publishPreview(this.Base, this.Draft).nextVersion ?? '' : '';
+        this.NextVersion = this.Draft ? PublishPreview(this.Base, this.Draft).nextVersion ?? '' : '';
     }
 }
 

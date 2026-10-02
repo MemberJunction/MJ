@@ -13,7 +13,7 @@ import {
   TagsHelper,
   EvaluationPreferencesService,
   EvaluationPreferences,
-  rubricPickerOptions
+  RubricPickerOptions
 } from '@memberjunction/ng-testing';
 import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
@@ -1335,7 +1335,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView({ EntityName: 'MJ: Rubrics', ExtraFilter: `Status='Active'`, OrderBy: 'Name', ResultType: 'simple', MaxRows: 500 });
-      this.RubricOptions = rubricPickerOptions((result.Results ?? []) as { ID: string; Name: string; Status: string }[]);
+      this.RubricOptions = RubricPickerOptions((result.Results ?? []) as { ID: string; Name: string; Status: string }[]);
       this.cdr.markForCheck();
     } catch (error) {
       console.warn('Failed to load rubric options:', error);

@@ -155,11 +155,6 @@ export function AnchorsForLevel(node: RubricNodeSnapshot, levelId: string): { de
     return (node.anchors ?? []).filter(anchor => anchor.scaleLevelId === levelId && (anchor.descriptor ?? '').trim().length > 0);
 }
 
-/** @deprecated Use {@link AnchorsForLevel}. */
-export function anchorsForLevel(node: RubricNodeSnapshot, levelId: string): { descriptor: string }[] {
-    return AnchorsForLevel(node, levelId);
-}
-
 export function EffectivePolicy(node: RubricNodeSnapshot, versionPolicy: NotApplicablePolicy): NotApplicablePolicy {
     return node.notApplicablePolicy ?? versionPolicy;
 }
@@ -386,7 +381,6 @@ export function PublishPreview(base: RubricVersionSnapshot | null, draft: Rubric
     };
 }
 
-/** @deprecated Use {@link PublishPreview}. */
 /** Keyboard shortcuts apply to the criterion card, not to the rationale or level controls. */
 export function ScoringShortcutApplies(tagName: string | undefined): boolean {
     const tag = tagName?.toLowerCase();
@@ -396,10 +390,6 @@ export function ScoringShortcutApplies(tagName: string | undefined): boolean {
 /** A requested bump is sent only when the author picked one. Initial is computed, not requested. */
 export function ChosenPublishBump(requested: string | null | undefined): 'Major' | 'Minor' | 'Patch' | null {
     return requested === 'Major' || requested === 'Minor' || requested === 'Patch' ? requested : null;
-}
-
-export function publishPreview(base: RubricVersionSnapshot | null, draft: RubricVersionSnapshot, requested?: 'Major' | 'Minor' | 'Patch' | null): PublishPreview {
-    return PublishPreview(base, draft, requested);
 }
 
 export interface DiffRow {
@@ -586,11 +576,6 @@ export function PlanNodeSave(
     return { upserts: parentsFirst(upserts), removedIds: deleteChildrenFirst(existing, removed) };
 }
 
-/** @deprecated Use {@link PlanNodeSave}. */
-export function planNodeSave(existing: { id: string; parentId: string | null }[], nodes: RubricNodeSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
-    return PlanNodeSave(existing, nodes);
-}
-
 export function ScaleFromRow(row: Record<string, unknown>, levels: Record<string, unknown>[]): RubricScaleSnapshot {
     return {
         id: String(row.ID ?? ''),
@@ -635,11 +620,6 @@ export function PlanBandSave(existingIds: string[], bands: RubricBandSnapshot[])
         })),
         removedIds: existingIds.filter(id => !kept.has(id)),
     };
-}
-
-/** @deprecated Use {@link PlanBandSave}. */
-export function planBandSave(existingIds: string[], bands: RubricBandSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
-    return PlanBandSave(existingIds, bands);
 }
 
 const UUID_FIELDS = new Set(['ParentID', 'ScaleID']);
@@ -819,7 +799,7 @@ function versionLabel(version: CatalogVersionInput | null): string | null {
     return `${version.majorVersion}.${version.minorVersion}.${version.patchVersion}`;
 }
 
-/** One catalog row. Draft text comes from publishPreview, so null version numbers are never printed. */
+/** One catalog row. Draft text comes from PublishPreview, so null version numbers are never printed. */
 export function CatalogRow(input: CatalogRubricInput): CatalogRowView {
     const published = input.versions.find(version => version.status === 'Published') ?? null;
     const draft = input.versions.find(version => version.status === 'Draft') ?? null;
@@ -828,7 +808,7 @@ export function CatalogRow(input: CatalogRubricInput): CatalogRowView {
     const scaleName = leaves.map(leaf => leaf.scaleId).filter((id): id is string => !!id).map(id => input.scaleNames[id.toLowerCase()]).find(name => !!name) ?? null;
     let draftLabel = 'none';
     if (draft) {
-        const preview = publishPreview(published ? catalogSnapshot(published) : null, catalogSnapshot(draft));
+        const preview = PublishPreview(published ? catalogSnapshot(published) : null, catalogSnapshot(draft));
         draftLabel = preview.nextVersion && preview.computedBump ? `${preview.nextVersion} draft, ${preview.computedBump}` : 'draft';
     }
     return {

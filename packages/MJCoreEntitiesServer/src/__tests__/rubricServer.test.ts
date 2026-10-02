@@ -43,6 +43,17 @@ describe('rubric version publish', () => {
     it('imports evaluation helpers statically', () => {
         const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'rubricServer.test.ts'), 'utf8');
         expect(source).not.toMatch(/await import\(/);
+        const publish = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../custom/rubrics/versionPublish.ts'), 'utf8');
+        const submit = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../custom/rubrics/evaluationSubmit.ts'), 'utf8');
+        const freeze = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../custom/rubrics/scaleFreeze.ts'), 'utf8');
+        expect(publish).not.toContain('export function validateRubricTree');
+        expect(publish).not.toContain('export async function publishRubricVersion');
+        expect(publish).not.toContain('export function cloneVersionNodes');
+        expect(publish).not.toContain('export async function loadDraftForPublish');
+        expect(submit).not.toContain('export function assertCanSupersede');
+        expect(submit).not.toContain('export function validateEvaluationScores');
+        expect(submit).not.toContain('export function submitEvaluation');
+        expect(freeze).not.toContain('export function frozenScaleChange');
     });
 
     it('refuses a criterion with no scale, a cycle, and a gate with no minimum', () => {

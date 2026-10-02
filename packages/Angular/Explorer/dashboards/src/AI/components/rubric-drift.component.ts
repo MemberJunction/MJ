@@ -16,7 +16,7 @@ import { DriftPeriodRows } from './rubric-drift-series';
       li { display: flex; flex-direction: column; gap: 0.25rem; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md, 6px); padding: var(--mj-space-3, 0.75rem); color: var(--mj-text-primary); }
     `],
     template: `
-      @if (current.length === 0 || previous.length === 0) {
+      @if (Current.length === 0 || Previous.length === 0) {
         <mj-empty-state Icon="fa-solid fa-chart-line" Title="No scores in this period" Message="Drift compares the last 30 days with the 30 days before that. One of those periods has no scores."></mj-empty-state>
       } @else if (Rows.length === 0) {
         <mj-empty-state Icon="fa-solid fa-chart-line" Title="No movement" Message="The period means did not drop past the threshold."></mj-empty-state>
@@ -31,35 +31,8 @@ import { DriftPeriodRows } from './rubric-drift-series';
 })
 export class RubricDriftComponent {
     @Input() Current: { key: string; mean: number }[] = [];
-
-    /** @deprecated Use {@link Current}. */
-    @Input() set current(value: { key: string; mean: number }[]) {
-        this.Current = value;
-    }
-    /** @deprecated Use {@link Current}. */
-    get current(): { key: string; mean: number }[] {
-        return this.Current;
-    }
     @Input() Previous: { key: string; mean: number }[] = [];
-
-    /** @deprecated Use {@link Previous}. */
-    @Input() set previous(value: { key: string; mean: number }[]) {
-        this.Previous = value;
-    }
-    /** @deprecated Use {@link Previous}. */
-    get previous(): { key: string; mean: number }[] {
-        return this.Previous;
-    }
     @Input() Threshold = 0.2;
-
-    /** @deprecated Use {@link Threshold}. */
-    @Input() set threshold(value: RubricDriftComponent['Threshold']) {
-        this.Threshold = value;
-    }
-    /** @deprecated Use {@link Threshold}. */
-    get threshold(): RubricDriftComponent['Threshold'] {
-        return this.Threshold;
-    }
     public get Rows() {
         return DriftDeltas(this.Current, this.Previous, this.Threshold).filter(row => row.alert);
     }
@@ -81,7 +54,7 @@ export class RubricDriftComponent {
           @if (LoadError) {
             <p role="alert">{{ LoadError }}</p>
           }
-          <mj-rubric-drift [current]="current" [previous]="previous" [threshold]="threshold"></mj-rubric-drift>
+          <mj-rubric-drift [Current]="Current" [Previous]="Previous" [Threshold]="Threshold"></mj-rubric-drift>
         </mj-page-body>
       </mj-page-layout>
     `,
@@ -96,36 +69,9 @@ export class RubricDriftResourceComponent extends BaseResourceComponent implemen
     }
 
     public Current: { key: string; mean: number }[] = [];
-
-    /** @deprecated Use {@link Current}. */
-    public get current(): { key: string; mean: number }[] {
-        return this.Current;
-    }
-    /** @deprecated Use {@link Current}. */
-    public set current(value: { key: string; mean: number }[]) {
-        this.Current = value;
-    }
     public Previous: { key: string; mean: number }[] = [];
-
-    /** @deprecated Use {@link Previous}. */
-    public get previous(): { key: string; mean: number }[] {
-        return this.Previous;
-    }
-    /** @deprecated Use {@link Previous}. */
-    public set previous(value: { key: string; mean: number }[]) {
-        this.Previous = value;
-    }
     public Threshold = 0.2;
     public LoadError = '';
-
-    /** @deprecated Use {@link Threshold}. */
-    public get threshold() {
-        return this.Threshold;
-    }
-    /** @deprecated Use {@link Threshold}. */
-    public set threshold(value) {
-        this.Threshold = value;
-    }
 
     public override async ngOnInit(): Promise<void> {
         await super.ngOnInit();

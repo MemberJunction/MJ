@@ -1,7 +1,17 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DisableLink, LinkDraft, MakeDefaultLink } from './agent-rubrics.model';
 
 describe('agent rubric links', () => {
+    it('does not keep camelCase aliases of the link helpers', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'agent-rubrics.model.ts'), 'utf8');
+        expect(source).not.toContain('export function sortAgentRubrics');
+        expect(source).not.toContain('export function makeDefaultLink');
+        expect(source).not.toContain('export function disableLink');
+    });
+
     it('leaves only the newly saved Evaluation link as the default', () => {
         const next = MakeDefaultLink([
             { ID: 'first', Purpose: 'Evaluation', Status: 'Active', IsDefault: true },

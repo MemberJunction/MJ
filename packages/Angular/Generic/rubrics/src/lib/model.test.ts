@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, ScoringCompleteness, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, QueueNodeSave, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
+import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, ScoringCompleteness, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, PublishPreview, QueueNodeSave, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -35,6 +35,15 @@ describe('catalog row', () => {
     it('does not re-export rubrics-base types from the package entry', () => {
         const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../public-api.ts'), 'utf8');
         expect(source).not.toContain('@memberjunction/rubrics-base');
+    });
+
+    it('does not keep camelCase aliases beside the PascalCase form helpers', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'model.ts'), 'utf8');
+        expect(source).not.toContain('export function publishPreview');
+        expect(source).not.toContain('export function anchorsForLevel');
+        expect(source).not.toContain('export function planNodeSave');
+        expect(source).not.toContain('export function planBandSave');
+        expect(source).not.toContain('@deprecated Use {@link PublishPreview}');
     });
 
     it('names the published version, the previewed draft, and the category', () => {
@@ -165,7 +174,7 @@ describe('publish, diff, and comparison', () => {
     }
 
     it('shows a major weight change and will not apply a lower request', () => {
-        const preview = publishPreview(snap(1, null), snap(2, null), 'Patch');
+        const preview = PublishPreview(snap(1, null), snap(2, null), 'Patch');
         expect(preview.computedBump).toBe('Major');
         expect(preview.appliedBump).toBe('Major');
         expect(preview.nextVersion).toBe('2.0.0');
@@ -176,7 +185,7 @@ describe('publish, diff, and comparison', () => {
     it('offers a higher bump for a wording change and lines the keys up', () => {
         const base = snap(1, null);
         const draft = snap(1, 'Clearer instructions');
-        const preview = publishPreview(base, draft, 'Major');
+        const preview = PublishPreview(base, draft, 'Major');
         expect(preview.computedBump).toBe('Patch');
         expect(preview.appliedBump).toBe('Major');
         expect(preview.higherBumps).toEqual(['Minor', 'Major']);
@@ -192,16 +201,16 @@ describe('publish, diff, and comparison', () => {
     it('does not show Patch when blank guidance is identical to the server snapshot', () => {
         const base = snap(1, null);
         const blank = { ...base, nodes: [{ ...base.nodes[0], guidance: '' }] };
-        const preview = publishPreview(base, blank);
+        const preview = PublishPreview(base, blank);
         expect(preview.computedBump).toBeNull();
         expect(preview.identical).toBe(true);
         expect(preview.nextVersion).toBeNull();
         expect(VersionRows(base, blank).find(row => row.key === 'clarity')?.marks ?? []).toEqual([]);
-        expect(publishPreview(base, { ...base, nodes: [{ ...base.nodes[0], guidance: 'Cite the figure.' }] }).computedBump).toBe('Patch');
+        expect(PublishPreview(base, { ...base, nodes: [{ ...base.nodes[0], guidance: 'Cite the figure.' }] }).computedBump).toBe('Patch');
     });
 
     it('shows Initial for a first publish', () => {
-        const preview = publishPreview(null, snap(1, null));
+        const preview = PublishPreview(null, snap(1, null));
         expect(preview.computedBump).toBeNull();
         expect(preview.appliedBump).toBe('Initial');
         expect(ChosenPublishBump(null)).toBeNull();

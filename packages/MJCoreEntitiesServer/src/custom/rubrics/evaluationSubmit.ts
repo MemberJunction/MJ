@@ -30,11 +30,6 @@ export function AssertCanSupersede(target: SupersedeTarget, current: SupersedeTa
     }
 }
 
-/** @deprecated Use {@link AssertCanSupersede}. */
-export function assertCanSupersede(target: SupersedeTarget, current: SupersedeTarget): void {
-    return AssertCanSupersede(target, current);
-}
-
 export class RubricEvaluationError extends Error {
     public constructor(message: string) {
         super(message);
@@ -148,13 +143,8 @@ export function ValidateEvaluationScores(input: SubmitEvaluationInput): void {
     }
 }
 
-/** @deprecated Use {@link ValidateEvaluationScores}. */
-export function validateEvaluationScores(input: SubmitEvaluationInput): void {
-    return ValidateEvaluationScores(input);
-}
-
 /**
- * Validates, then scores with {@link RubricScoring.compute} and returns the
+ * Validates, then scores with {@link RubricScoring.Compute} and returns the
  * fields to persist. The caller writes score rows while the evaluation is
  * still Draft, then writes these evaluation fields and sets Status to Submitted.
  * This is the only copy of the math.
@@ -198,7 +188,3 @@ export function SubmitEvaluation(input: SubmitEvaluationInput): { evaluation: Pe
     };
 }
 
-/** @deprecated Use {@link SubmitEvaluation}. */
-export function submitEvaluation(input: SubmitEvaluationInput): { evaluation: PersistedEvaluation; scores: PersistedScore[] } {
-    return SubmitEvaluation(input);
-}

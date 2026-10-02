@@ -27,11 +27,6 @@ export function JudgedRubric(rows: Record<string, unknown>[]): JudgedRubric | nu
     };
 }
 
-/** @deprecated Use {@link JudgedRubric}. */
-export function judgedRubric(rows: Record<string, unknown>[]): JudgedRubric | null {
-    return JudgedRubric(rows);
-}
-
 /**
  * This reviewer's current Submitted human score for the same subject and version.
  * The new evaluation supersedes it so the cohort does not count the same person twice.
@@ -46,11 +41,6 @@ export function PriorHumanEvaluation(rows: Record<string, unknown>[], judged: Ju
         && String(row.SubjectRecordID ?? '') === judged.SubjectRecordId
         && blank(row.ContextRecordID) === judged.ContextRecordId);
     return prior?.ID == null || prior.ID === '' ? null : String(prior.ID);
-}
-
-/** @deprecated Use {@link PriorHumanEvaluation}. */
-export function priorHumanEvaluation(rows: Record<string, unknown>[], judged: JudgedRubric, userId: string): string | null {
-    return PriorHumanEvaluation(rows, judged, userId);
 }
 
 /** Draft fields for the human score. Subject and context match the judgment. Status stays Draft until the scores are saved. */
@@ -69,11 +59,6 @@ export function HumanEvaluationFields(judged: JudgedRubric, userId: string, supe
     };
 }
 
-/** @deprecated Use {@link HumanEvaluationFields}. */
-export function humanEvaluationFields(judged: JudgedRubric, userId: string, supersedesEvaluationId?: string | null): Record<string, unknown> {
-    return HumanEvaluationFields(judged, userId, supersedesEvaluationId);
-}
-
 /** Score rows written while the evaluation is still Draft. The server computes the result on submit. */
 export function HumanScoreFields(evaluationId: string, answers: RubricFormAnswer[]): Record<string, unknown>[] {
     return answers.map(answer => ({
@@ -85,11 +70,6 @@ export function HumanScoreFields(evaluationId: string, answers: RubricFormAnswer
         Rationale: answer.rationale ?? null,
         Evidence: EvidenceJson(answer.evidence),
     }));
-}
-
-/** @deprecated Use {@link HumanScoreFields}. */
-export function humanScoreFields(evaluationId: string, answers: RubricFormAnswer[]): Record<string, unknown>[] {
-    return HumanScoreFields(evaluationId, answers);
 }
 
 /** The version the scoring form needs, built from the stored rows. */
@@ -143,17 +123,6 @@ export function VersionSnapshot(
         })),
         bands: [],
     };
-}
-
-/** @deprecated Use {@link VersionSnapshot}. */
-export function versionSnapshot(
-    version: Record<string, unknown>,
-    criteria: Record<string, unknown>[],
-    scales: Record<string, unknown>[],
-    levels: Record<string, unknown>[],
-    criterionLevels: Record<string, unknown>[] = [],
-): RubricVersionSnapshot {
-    return VersionSnapshot(version, criteria, scales, levels, criterionLevels);
 }
 
 function blank(value: unknown): string | null {

@@ -20,11 +20,6 @@ export function CriterionSpreads(repeats: { oracleResults?: { oracleType?: strin
         .sort((left, right) => right.Spread - left.Spread || left.Key.localeCompare(right.Key));
 }
 
-/** @deprecated Use {@link CriterionSpreads}. */
-export function criterionSpreads(repeats: { oracleResults?: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null }[]): CriterionSpread[] {
-    return CriterionSpreads(repeats);
-}
-
 function criteriaOf(oracles: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[]): [string, number][] {
     const rubric = oracles.find(oracle => kind(oracle) === 'rubric' && criteria(oracle).length > 0)
         ?? oracles.find(oracle => kind(oracle).includes('judge') && criteria(oracle).length > 0);

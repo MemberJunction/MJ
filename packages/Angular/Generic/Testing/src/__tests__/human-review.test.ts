@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { HumanEvaluationFields, HumanScoreFields, judgedRubric, PriorHumanEvaluation, VersionSnapshot } from '../lib/models/human-review';
+import { HumanEvaluationFields, HumanScoreFields, JudgedRubric, PriorHumanEvaluation, VersionSnapshot } from '../lib/models/human-review';
 
 const JUDGE = {
     Status: 'Submitted',
@@ -13,8 +16,17 @@ const JUDGE = {
 };
 
 describe('human rubric review', () => {
+    it('does not keep camelCase aliases of the review helpers', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../lib/models/human-review.ts'), 'utf8');
+        expect(source).not.toContain('export function judgedRubric');
+        expect(source).not.toContain('export function priorHumanEvaluation');
+        expect(source).not.toContain('export function humanEvaluationFields');
+        expect(source).not.toContain('export function humanScoreFields');
+        expect(source).not.toContain('export function versionSnapshot');
+    });
+
     it('uses the AI judgment and copies its subject and context onto a human draft', () => {
-        const judged = judgedRubric([
+        const judged = JudgedRubric([
             { ...JUDGE, EvaluatorType: 'Human', RubricVersionID: 'other' },
             JUDGE,
         ]);
@@ -33,8 +45,8 @@ describe('human rubric review', () => {
     });
 
     it('hides the review when the run has no submitted rubric judgment', () => {
-        expect(judgedRubric([])).toBeNull();
-        expect(judgedRubric([{ ...JUDGE, Status: 'Draft' }])).toBeNull();
+        expect(JudgedRubric([])).toBeNull();
+        expect(JudgedRubric([{ ...JUDGE, Status: 'Draft' }])).toBeNull();
     });
 
     it('writes the chosen level onto a score row and leaves a not-applicable leaf without a level', () => {
@@ -79,7 +91,7 @@ describe('human rubric review', () => {
     });
 
     it('points a second human score at the reviewer\'s current submitted evaluation', () => {
-        const judged = judgedRubric([JUDGE])!;
+        const judged = JudgedRubric([JUDGE])!;
         const prior = PriorHumanEvaluation([
             { ...JUDGE, ID: 'human-1', EvaluatorType: 'Human', EvaluatorUserID: 'user-1' },
             { ...JUDGE, ID: 'other-person', EvaluatorType: 'Human', EvaluatorUserID: 'user-2' },

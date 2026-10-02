@@ -5,7 +5,7 @@ import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphq
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { RubricFormAnswer } from '@memberjunction/ng-rubrics';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { judgedRubric, PriorHumanEvaluation, VersionSnapshot, type JudgedRubric } from '../models/human-review';
+import { JudgedRubric, PriorHumanEvaluation, VersionSnapshot } from '../models/human-review';
 
 export interface TestFeedbackDialogData {
   testRunId: string;
@@ -95,13 +95,13 @@ export interface TestFeedbackDialogResult {
                 </div>
                 @if (Judged) {
                   <div class="feedback-section">
-                    <button type="button" class="btn btn-secondary" (click)="openRubric()" [disabled]="isSaving || ShowRubric">Score against rubric</button>
+                    <button type="button" class="btn btn-secondary" (click)="OpenRubric()" [disabled]="isSaving || ShowRubric">Score against rubric</button>
                     @if (ShowRubric && RubricVersion) {
                       <mj-rubric-scoring-form
                         [Version]="RubricVersion"
                         [Answers]="RubricAnswers"
                         (AnswersChange)="RubricAnswers = $event"
-                        (Submit)="onRubricSubmit($event)">
+                        (Submit)="OnRubricSubmit($event)">
                       </mj-rubric-scoring-form>
                     }
                     @if (RubricMessage) {
@@ -681,7 +681,7 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
   private async loadRubricJudgment(): Promise<void> {
     try {
       const rows = await this.rows('MJ: Rubric Evaluations', `SubjectRecordID='${this.Data.testRunId.replace(/'/g, "''")}'`);
-      this.Judged = judgedRubric(rows);
+      this.Judged = JudgedRubric(rows);
     } catch (error) {
       console.error('Error loading the rubric judgment:', error);
     } finally {
@@ -713,11 +713,6 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
     } finally {
       this.cdr.detectChanges();
     }
-  }
-
-  /** @deprecated Use {@link OpenRubric}. */
-  async openRubric(): Promise<void> {
-    return this.OpenRubric();
   }
 
   async OnRubricSubmit(answers: RubricFormAnswer[]): Promise<void> {
@@ -755,11 +750,6 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       this.IsSaving = false;
       this.cdr.detectChanges();
     }
-  }
-
-  /** @deprecated Use {@link OnRubricSubmit}. */
-  async onRubricSubmit(answers: RubricFormAnswer[]): Promise<void> {
-    return this.OnRubricSubmit(answers);
   }
 
   private async rows(entityName: string, filter: string): Promise<Record<string, unknown>[]> {

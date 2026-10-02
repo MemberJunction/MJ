@@ -10,11 +10,6 @@ export function ParseRubricRef(value: string): { rubric: string; version?: strin
     return { rubric: value.slice(0, at).trim(), version: value.slice(at + 1).trim() };
 }
 
-/** @deprecated Use {@link ParseRubricRef}. */
-export function parseRubricRef(value: string): { rubric: string; version?: string } {
-    return ParseRubricRef(value);
-}
-
 export function ResolveRubricRef(
     rubrics: { id: string; name: string }[],
     versions: { id: string; rubricId: string; major: number; minor: number; patch: number }[],
@@ -34,15 +29,6 @@ export function ResolveRubricRef(
     const byId = versions.find(row => UUIDsEqual(row.id, parsed.version) && UUIDsEqual(row.rubricId, rubric.id));
     if (!byId) return { error: `Version "${parsed.version}" was not found on ${rubric.name}.` };
     return { rubricId: rubric.id, versionId: byId.id };
-}
-
-/** @deprecated Use {@link ResolveRubricRef}. */
-export function resolveRubricRef(
-    rubrics: { id: string; name: string }[],
-    versions: { id: string; rubricId: string; major: number; minor: number; patch: number }[],
-    ref: string,
-): { rubricId: string; versionId?: string } | { error: string } {
-    return ResolveRubricRef(rubrics, versions, ref);
 }
 
 /** One line per criterion from a rubric or inline-judge oracle result. */
@@ -207,11 +193,6 @@ export async function LookupRubricOverride(ref: string, user: UserInfo): Promise
     const resolved = ResolveRubricRef(rubrics, versions, ref);
     if ('error' in resolved) throw new Error(resolved.error);
     return resolved;
-}
-
-/** @deprecated Use {@link LookupRubricOverride}. */
-export async function lookupRubricOverride(ref: string, user: UserInfo): Promise<{ rubricId: string; versionId?: string }> {
-    return LookupRubricOverride(ref, user);
 }
 
 function kind(oracle: { oracleType?: string; type?: string; Name?: string }): string {

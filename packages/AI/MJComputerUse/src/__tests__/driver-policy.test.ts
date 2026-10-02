@@ -39,6 +39,8 @@ describe('oracle-scoring', () => {
             expect(InlineVerdictIsAdvisory({ gateInlineVerdicts: true })).toBe(false);
             const driver = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../test-driver/ComputerUseTestDriver.ts'), 'utf8');
             expect(driver).toMatch(/inline\.advisory = InlineVerdictIsAdvisory\(config\)/);
+            const policy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../test-driver/driver-policy.ts'), 'utf8');
+            expect(policy).not.toContain('export function inlineVerdictIsAdvisory');
         });
 
         it('defaults step-count to advisory', () => {

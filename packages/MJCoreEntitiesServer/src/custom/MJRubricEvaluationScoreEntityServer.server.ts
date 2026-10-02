@@ -19,23 +19,9 @@ export class MJRubricEvaluationScoreEntityServer extends MJRubricEvaluationScore
      */
     public AllowServerComputedWrite = false;
 
-    /** @deprecated Use {@link AllowServerComputedWrite}. */
-    public get allowServerComputedWrite() {
-        return this.AllowServerComputedWrite;
-    }
-    /** @deprecated Use {@link AllowServerComputedWrite}. */
-    public set allowServerComputedWrite(value) {
-        this.AllowServerComputedWrite = value;
-    }
-
     /** Throws RubricEvaluationError when this row is not a legal client write. */
     public AssertWritable(input: SubmitEvaluationInput): void {
         ValidateEvaluationScores(input);
-    }
-
-    /** @deprecated Use {@link AssertWritable}. */
-    public assertWritable(input: SubmitEvaluationInput): void {
-        return this.AssertWritable(input);
     }
 
     /**

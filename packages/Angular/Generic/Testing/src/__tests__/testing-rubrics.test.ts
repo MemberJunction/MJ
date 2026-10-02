@@ -1,7 +1,18 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CohortDisagreement, CriterionFailureRates, CriterionIdentity, DisagreementFromScores, RubricPickerOptions, RubricScoreTrend, RubricRunView, ScoreTrend } from '../lib/models/testing-rubrics';
 
 describe('testing rubric UI', () => {
+    it('does not keep camelCase aliases of the picker and trend helpers', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../lib/models/testing-rubrics.ts'), 'utf8');
+        expect(source).not.toContain('export function criterionIdentity');
+        expect(source).not.toContain('export function scoreTrend');
+        expect(source).not.toContain('export function criterionFailureRates');
+        expect(source).not.toContain('export function rubricPickerOptions');
+    });
+
     it('orders the review queue by the largest human–AI gap', () => {
         const queue = DisagreementFromScores({
             evaluations: [

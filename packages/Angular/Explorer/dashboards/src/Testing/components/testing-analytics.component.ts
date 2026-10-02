@@ -934,11 +934,6 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
     SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(runId));
   }
 
-  /** @deprecated Use {@link LoadRubricAnalytics}. */
-  async loadRubricAnalytics(): Promise<void> {
-    return this.LoadRubricAnalytics();
-  }
-
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();

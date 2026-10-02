@@ -104,11 +104,6 @@ export function CategoryParentChoices(rows: CategoryRow[], selfId: string): { id
     return rows.filter(row => !excluded.has(row.Id)).map(row => ({ id: row.Id, name: row.Name }));
 }
 
-/** @deprecated Use {@link CategoryParentChoices}. */
-export function categoryParentChoices(rows: CategoryRow[], selfId: string): { id: string; name: string }[] {
-    return CategoryParentChoices(rows, selfId);
-}
-
 /** A level is frozen only when a published version uses its scale. */
 export function ScaleIsFrozen(publishedScaleIds: Iterable<string>, scaleId: string | null): boolean {
     if (!scaleId) return false;

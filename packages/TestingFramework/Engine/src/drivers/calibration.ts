@@ -19,11 +19,6 @@ export function RankLevels(levels: { id: string; scaleId: string; sequence: numb
     return { indexByLevel, countByScale };
 }
 
-/** @deprecated Use {@link RankLevels}. */
-export function rankLevels(levels: { id: string; scaleId: string; sequence: number }[]): { indexByLevel: Map<string, number>; countByScale: Map<string, number> } {
-    return RankLevels(levels);
-}
-
 /** Pair submitted human and AI scores. Criterion identity is the criterion Key. Level indexes are ranked, not the stored sequence. */
 export function CalibrationPairs(input: {
     evaluations: { id: string; subjectId: string; versionId: string; evaluatorType: string; status: string }[];
@@ -190,11 +185,6 @@ export function CalibrationOracles(pairs: CalibrationPair[], expected: Calibrati
     const oracles = criteria.map(row => criterionOracle(row, expected.perCriterion?.[row.criterionId] ?? expected));
     oracles.push(overallOracle(criteria, overallKappa, score, expected));
     return { score, oracles };
-}
-
-/** @deprecated Use {@link CalibrationOracles}. */
-export function calibrationOracles(pairs: CalibrationPair[], expected: CalibrationExpectation = {}): { score: number; oracles: OracleResult[] } {
-    return CalibrationOracles(pairs, expected);
 }
 
 function criterionOracle(row: CriterionAgreement, thresholds: CalibrationThresholds): OracleResult {

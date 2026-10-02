@@ -12,6 +12,9 @@ describe('drift period means', () => {
         expect(sql).toContain("evaluation.[Status] = 'Submitted'");
         expect(sql).toContain("evaluation.[EvaluatorType] <> 'Self'");
         expect(sql).toContain('GROUP BY agent.[Name], rubric.[Name], criterion.[Key]');
+        const component = readFileSync(join(directory, 'rubric-drift.component.ts'), 'utf8');
+        expect(component).not.toContain('@deprecated Use {@link Current}');
+        expect(component).not.toContain('[current]=');
         const periods = DriftPeriodRows([
             { AgentName: 'Researcher', RubricName: 'Answer quality', CriterionKey: 'cites-sources', CurrentMean: 0.4, PreviousMean: 0.9 },
             { AgentName: 'Researcher', RubricName: 'Answer quality', CriterionKey: 'complete', CurrentMean: null, PreviousMean: 1 },

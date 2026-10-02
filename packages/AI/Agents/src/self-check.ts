@@ -67,17 +67,6 @@ export function DecideSelfCheck(input: {
     return { Action: 'fail', Attempt: input.attempt, Message: message || 'Self-check failed.' };
 }
 
-/** @deprecated Use {@link DecideSelfCheck}. */
-export function decideSelfCheck(input: {
-    agentKind: 'loop' | 'flow';
-    link: SelfCheckLink | null;
-    attempt: number;
-    passed: boolean;
-    failedCriteria?: SelfCheckFailure[];
-}): SelfCheckDecision {
-    return DecideSelfCheck(input);
-}
-
 /** The candidate still in memory. FinalPayload is written only after the run finishes. */
 export interface SelfCheckCandidate {
     message?: string;
@@ -154,15 +143,3 @@ export async function ExecuteSelfCheck(input: {
     return { decision, step, evaluationId: result.evaluationId };
 }
 
-/** @deprecated Use {@link ExecuteSelfCheck}. */
-export async function executeSelfCheck(input: {
-    engine: SelfCheckEngine;
-    link: SelfCheckLink & { rubricId: string; passThreshold?: number | null };
-    runId: string;
-    agentKind: 'loop' | 'flow';
-    attempt: number;
-    candidate?: SelfCheckCandidate;
-    record: (step: SelfCheckValidation) => void | Promise<void>;
-}): Promise<{ decision: SelfCheckDecision; step: 'Success' | 'Failed' | 'Retry'; evaluationId: string }> {
-    return ExecuteSelfCheck(input);
-}

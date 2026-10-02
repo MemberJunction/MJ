@@ -19,11 +19,6 @@ export function CriterionIdentity(row: { CriterionKey?: unknown; Criterion?: unk
     return { key, name };
 }
 
-/** @deprecated Use {@link CriterionIdentity}. */
-export function criterionIdentity(row: { CriterionKey?: unknown; Criterion?: unknown }): { key: string; name: string | null } {
-    return CriterionIdentity(row);
-}
-
 /**
  * One row per stored cohort. The human and AI means are the view's cohort columns.
  * A second score in the same cohort does not change those means.
@@ -129,11 +124,6 @@ export function ScoreTrend(runs: { at: string | Date; score: number | null; scop
         .sort((left, right) => left.at.localeCompare(right.at));
 }
 
-/** @deprecated Use {@link ScoreTrend}. */
-export function scoreTrend(runs: { at: string | Date; score: number | null; scopeId: string }[], scopeId: string): { at: string; score: number }[] {
-    return ScoreTrend(runs, scopeId);
-}
-
 /** A leaf fails when its gate failed, or when its score is below that version's pass threshold. */
 export function CriterionFailureRates(scores: { key: string; normalizedScore: number | null; gateFailed?: boolean; passThreshold?: number | null }[]): { key: string; rate: number; count: number }[] {
     const buckets = new Map<string, { failed: number; total: number }>();
@@ -150,11 +140,6 @@ export function CriterionFailureRates(scores: { key: string; normalizedScore: nu
         .sort((left, right) => right.rate - left.rate || left.key.localeCompare(right.key));
 }
 
-/** @deprecated Use {@link CriterionFailureRates}. */
-export function criterionFailureRates(scores: { key: string; normalizedScore: number | null; gateFailed?: boolean; passThreshold?: number | null }[]): { key: string; rate: number; count: number }[] {
-    return CriterionFailureRates(scores);
-}
-
 /** Active rubrics, by name, for the Test and Test Suite RubricID picker. */
 export function RubricPickerOptions(rows: { ID?: string; id?: string; Name?: string; name?: string; Status?: string | null }[]): { id: string; name: string }[] {
     return rows
@@ -162,11 +147,6 @@ export function RubricPickerOptions(rows: { ID?: string; id?: string; Name?: str
         .map(row => ({ id: String(row.ID ?? row.id ?? ''), name: String(row.Name ?? row.name ?? '') }))
         .filter(row => row.id.length > 0 && row.name.length > 0)
         .sort((left, right) => left.name.localeCompare(right.name));
-}
-
-/** @deprecated Use {@link RubricPickerOptions}. */
-export function rubricPickerOptions(rows: { ID?: string; id?: string; Name?: string; name?: string; Status?: string | null }[]): { id: string; name: string }[] {
-    return RubricPickerOptions(rows);
 }
 
 export interface RubricRunView {

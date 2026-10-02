@@ -112,14 +112,9 @@ function bandCoverageErrors(bands: RubricVersionSnapshot['bands']): string[] {
     return errors;
 }
 
-/** @deprecated Use {@link ValidateRubricTree}. */
-export function validateRubricTree(version: RubricVersionSnapshot): { errors: string[]; warnings: PublishWarning[] } {
-    return ValidateRubricTree(version);
-}
-
 /**
  * Publishes a draft. Refuses an identical draft and a tree that fails
- * {@link validateRubricTree}. Writes the bump from {@link RubricVersionDiff},
+ * {@link ValidateRubricTree}. Writes the bump from {@link RubricVersionDiff},
  * and ContentHash and ScoringHash from its canonical projections. Does not
  * touch the database.
  */
@@ -157,15 +152,6 @@ export async function PublishRubricVersion(
     };
 }
 
-/** @deprecated Use {@link PublishRubricVersion}. */
-export async function publishRubricVersion(
-    base: RubricVersionSnapshot | null,
-    draft: RubricVersionSnapshot,
-    requestedBump?: 'Major' | 'Minor' | 'Patch' | null,
-): Promise<PublishResult> {
-    return PublishRubricVersion(base, draft, requestedBump);
-}
-
 /** A new draft: new ids, status left to the caller, keys and parent structure preserved. */
 export function CloneVersionNodes(nodes: RubricNodeSnapshot[]): RubricNodeSnapshot[] {
     const ids = new Map(nodes.map(node => [node.id, crypto.randomUUID()]));
@@ -174,11 +160,6 @@ export function CloneVersionNodes(nodes: RubricNodeSnapshot[]): RubricNodeSnapsh
         id: ids.get(node.id) as string,
         parentId: node.parentId ? ids.get(node.parentId) ?? null : null,
     }));
-}
-
-/** @deprecated Use {@link CloneVersionNodes}. */
-export function cloneVersionNodes(nodes: RubricNodeSnapshot[]): RubricNodeSnapshot[] {
-    return CloneVersionNodes(nodes);
 }
 
 type RowRun = (entityName: string, filter: string) => Promise<{ Success: boolean; Results?: unknown[] }>;
@@ -212,11 +193,6 @@ async function highestNonDraftId(run: RowRun, rubricId: string, exceptVersionId:
         patch: Number(read(row, 'PatchVersion') ?? 0),
     })).filter(version => version.id !== exceptVersionId));
     return best?.id ?? null;
-}
-
-/** @deprecated Use {@link LoadDraftForPublish}. */
-export async function loadDraftForPublish(run: RowRun, versionId: string, rubricId: string, basedOnVersionId: string | null): Promise<{ base: RubricVersionSnapshot | null; draft: RubricVersionSnapshot }> {
-    return LoadDraftForPublish(run, versionId, rubricId, basedOnVersionId);
 }
 
 async function loadSnapshot(run: RowRun, versionId: string, rubricId: string): Promise<RubricVersionSnapshot> {

@@ -64,7 +64,7 @@ import { RubricRunView } from '@memberjunction/ng-testing';
               <app-oracle-breakdown-table [results]="oracleResults"></app-oracle-breakdown-table>
             </div>
           }
-          @if (rubricView) {
+          @if (RubricView) {
             <mj-testing-rubric-result [OracleResults]="oracleResults" [Provider]="SessionProvider"></mj-testing-rubric-result>
           }
           <!-- Result Details -->
@@ -407,12 +407,7 @@ export class TestRunDetailPanelComponent {
     this.OracleResults = value;
   }
   get RubricView() {
-    return RubricRunView(this.oracleResults);
-  }
-
-  /** @deprecated Use {@link RubricView}. */
-  get rubricView() {
-    return this.RubricView;
+    return RubricRunView(this.OracleResults);
   }
 
   /** @deprecated Use {@link OracleResults}. */
