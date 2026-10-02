@@ -95,6 +95,22 @@ interface LoadedIndex {
 /** A row-level change recorded while a load is in flight, replayed onto its result. */
 type PendingChange = { Kind: 'upsert'; Row: RecordDocumentVectorRow } | { Kind: 'remove'; ID: string };
 
+/** One running load of an EntityDocument's index. */
+class LoadInProgress {
+    /** Changes that arrived while loading; replayed onto the result so the load can't resurrect old state */
+    public readonly Pending: PendingChange[] = [];
+    /** Set when something changed that the load may have read too early; its result is cached as stale */
+    public StaleOnArrival = false;
+    public Promise: Promise<LoadedIndex | null> = Promise.resolve(null);
+
+    constructor(
+        /** The EntityDocument's invalidation epoch when the load started; a later epoch supersedes it */
+        public readonly Epoch: number,
+        /** The user the load reads as */
+        public readonly ContextUser: UserInfo | undefined
+    ) {}
+}
+
 /**
  * Default TTL (ms) before a cached index is refreshed in the background.
  * Row-level events keep indexes current; the TTL is just the safety net for
@@ -120,8 +136,10 @@ const REMOTE_REFRESH_BATCH_SIZE = 500;
  */
 export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache> {
     private indexCache = new Map<string, LoadedIndex>();
-    private inFlightLoads = new Map<string, Promise<LoadedIndex | null>>();
-    private pendingDuringLoad = new Map<string, PendingChange[]>();
+    /** The current load per EntityDocument; a superseded load is dropped from here but finishes for its own callers */
+    private inFlightLoads = new Map<string, LoadInProgress>();
+    /** Bumped by an explicit invalidate, so a load that started before it is never cached */
+    private loadEpochs = new Map<string, number>();
     private remoteRefreshIDs = new Set<string>();
     private remoteRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     private ttlMs = DEFAULT_TTL_MS;
@@ -156,58 +174,91 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         const cached = this.indexCache.get(entityDocumentId);
         if (cached) {
             if (cached.stale || (Date.now() - cached.loadedAt) >= this.ttlMs) {
-                void this.startLoad(entityDocumentId, loader);
+                void this.startLoad(entityDocumentId, contextUser, loader);
             }
             return cached;
         }
-        return this.startLoad(entityDocumentId, loader);
-    }
-
-    /** Starts (or joins) the single in-flight load for an EntityDocument. */
-    private startLoad(entityDocumentId: string, loader: () => Promise<LoadedIndex | null>): Promise<LoadedIndex | null> {
-        const existing = this.inFlightLoads.get(entityDocumentId);
-        if (existing) return existing;
-
-        this.pendingDuringLoad.set(entityDocumentId, []);
-        const p = (async (): Promise<LoadedIndex | null> => {
-            try {
-                const loaded = await loader();
-                if (loaded) {
-                    this.replayPendingChanges(entityDocumentId, loaded);
-                    this.indexCache.set(entityDocumentId, loaded);
-                }
-                return loaded;
-            } finally {
-                // Always clear the in-flight slot, success or failure, so the next
-                // caller can retry on failure instead of being stuck with a
-                // resolved-null Promise forever.
-                this.inFlightLoads.delete(entityDocumentId);
-                this.pendingDuringLoad.delete(entityDocumentId);
-            }
-        })();
-        this.inFlightLoads.set(entityDocumentId, p);
-        // A background refresh has no awaiter; log its failure rather than leave it unhandled.
-        p.catch((e: unknown) => {
-            LogError(`SimpleVectorIndexCache: load failed for EntityDocumentID="${entityDocumentId}": ${e instanceof Error ? e.message : String(e)}`);
-        });
-        return p;
+        return this.startLoad(entityDocumentId, contextUser, loader);
     }
 
     /**
-     * Drop a cached index so the next query reloads it before answering.
-     * An in-flight load is left to finish; its result is cached when it lands.
+     * Starts (or joins) the current load for an EntityDocument. A load that
+     * started before an explicit invalidate is not joined: it may have read the
+     * rows the invalidate is about.
+     */
+    private startLoad(
+        entityDocumentId: string,
+        contextUser: UserInfo | undefined,
+        loader: () => Promise<LoadedIndex | null>
+    ): Promise<LoadedIndex | null> {
+        const epoch = this.epochOf(entityDocumentId);
+        const existing = this.inFlightLoads.get(entityDocumentId);
+        if (existing && existing.Epoch === epoch) return existing.Promise;
+
+        const load = new LoadInProgress(epoch, contextUser);
+        load.Promise = this.runLoad(entityDocumentId, load, loader);
+        this.inFlightLoads.set(entityDocumentId, load);
+        // A background refresh has no awaiter; log its failure rather than leave it unhandled.
+        load.Promise.catch((e: unknown) => {
+            LogError(`SimpleVectorIndexCache: load failed for EntityDocumentID="${entityDocumentId}": ${e instanceof Error ? e.message : String(e)}`);
+        });
+        return load.Promise;
+    }
+
+    private async runLoad(
+        entityDocumentId: string,
+        load: LoadInProgress,
+        loader: () => Promise<LoadedIndex | null>
+    ): Promise<LoadedIndex | null> {
+        try {
+            // Through a microtask, so even a loader that throws synchronously fails
+            // only after this load is registered — and is then cleared below.
+            const loaded = await Promise.resolve().then(loader);
+            if (loaded && load.Epoch === this.epochOf(entityDocumentId)) {
+                this.replayPendingChanges(load, loaded);
+                if (load.StaleOnArrival) loaded.stale = true;
+                this.indexCache.set(entityDocumentId, loaded);
+            }
+            return loaded;
+        } finally {
+            // Clear the slot, success or failure, so the next caller can retry —
+            // unless a newer load has already taken it.
+            if (this.inFlightLoads.get(entityDocumentId) === load) this.inFlightLoads.delete(entityDocumentId);
+        }
+    }
+
+    private epochOf(entityDocumentId: string): number {
+        return this.loadEpochs.get(entityDocumentId) ?? 0;
+    }
+
+    /** Supersedes any load in flight for the EntityDocument. */
+    private bumpEpoch(entityDocumentId: string): void {
+        this.loadEpochs.set(entityDocumentId, this.epochOf(entityDocumentId) + 1);
+    }
+
+    /**
+     * Drop a cached index so the next query reloads it before answering. A load
+     * already in flight is superseded: it still answers the callers waiting on
+     * it, but its result is not cached and the next query starts a fresh load.
      */
     public Invalidate(entityDocumentId: string): void {
         this.indexCache.delete(entityDocumentId);
+        this.bumpEpoch(entityDocumentId);
     }
 
     public InvalidateAll(): void {
         this.indexCache.clear();
+        this.inFlightLoads.forEach((_, entityDocumentId) => this.bumpEpoch(entityDocumentId));
     }
 
-    /** Keep serving every cached index, but reload each in the background on its next query. */
+    /**
+     * Keep serving every cached index, but reload each in the background on its
+     * next query. A load already in flight may have read too early, so its
+     * result arrives stale too.
+     */
     public MarkAllStale(): void {
         this.indexCache.forEach(index => { index.stale = true; });
+        this.inFlightLoads.forEach(load => { load.StaleOnArrival = true; });
     }
 
     /**
@@ -217,25 +268,42 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
      * (the change is replayed onto the load's result).
      */
     public ApplyRowChange(row: RecordDocumentVectorRow): void {
-        if (!row.ID) return;
-        // A row that moved to another EntityDocument must leave its old index.
-        this.indexCache.forEach((index, docId) => {
-            if (docId !== row.EntityDocumentID) index.service.RemoveVector(row.ID);
-        });
-        if (!row.EntityDocumentID) return;
-        this.pendingDuringLoad.get(row.EntityDocumentID)?.push({ Kind: 'upsert', Row: row });
-        const target = this.indexCache.get(row.EntityDocumentID);
-        if (target && !this.applyRowToIndex(target, row)) {
-            // The new vector's dimensions don't match the index (the embedding
-            // model changed). Only a full reload yields a consistent index.
-            this.Invalidate(row.EntityDocumentID);
-        }
+        this.applyRowChangeWhere(row, () => true);
     }
 
     /** Removes an EntityRecordDocument from every loaded (or loading) index. */
     public ApplyRowRemoval(id: string): void {
-        this.indexCache.forEach(index => index.service.RemoveVector(id));
-        this.pendingDuringLoad.forEach(changes => changes.push({ Kind: 'remove', ID: id }));
+        this.applyRowRemovalWhere(id, () => true);
+    }
+
+    /** {@link ApplyRowChange}, limited to the indexes (and loads) whose user passes `includeUser`. */
+    private applyRowChangeWhere(row: RecordDocumentVectorRow, includeUser: (contextUser: UserInfo | undefined) => boolean): void {
+        if (!row.ID) return;
+        const targetDoc = row.EntityDocumentID || null;
+        // A row that moved to another EntityDocument must leave its old index — loaded or still loading.
+        this.indexCache.forEach((index, docId) => {
+            if (docId !== targetDoc && includeUser(index.contextUser)) index.service.RemoveVector(row.ID);
+        });
+        this.inFlightLoads.forEach((load, docId) => {
+            if (!includeUser(load.ContextUser)) return;
+            load.Pending.push(docId === targetDoc ? { Kind: 'upsert', Row: row } : { Kind: 'remove', ID: row.ID });
+        });
+        if (!targetDoc) return;
+        const target = this.indexCache.get(targetDoc);
+        if (target && includeUser(target.contextUser) && !this.applyRowToIndex(target, row)) {
+            // The new vector's dimensions don't match the index (the embedding
+            // model changed). Only a full reload yields a consistent index.
+            this.Invalidate(targetDoc);
+        }
+    }
+
+    private applyRowRemovalWhere(id: string, includeUser: (contextUser: UserInfo | undefined) => boolean): void {
+        this.indexCache.forEach(index => {
+            if (includeUser(index.contextUser)) index.service.RemoveVector(id);
+        });
+        this.inFlightLoads.forEach(load => {
+            if (includeUser(load.ContextUser)) load.Pending.push({ Kind: 'remove', ID: id });
+        });
     }
 
     /**
@@ -256,12 +324,10 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
     }
 
     /** Replays changes that arrived while an index was loading, so the load can't resurrect old state. */
-    private replayPendingChanges(entityDocumentId: string, loaded: LoadedIndex): void {
-        for (const change of this.pendingDuringLoad.get(entityDocumentId) ?? []) {
+    private replayPendingChanges(load: LoadInProgress, loaded: LoadedIndex): void {
+        for (const change of load.Pending) {
             if (change.Kind === 'remove') {
                 loaded.service.RemoveVector(change.ID);
-            } else if (change.Row.EntityDocumentID !== entityDocumentId) {
-                loaded.service.RemoveVector(change.Row.ID);
             } else if (!this.applyRowToIndex(loaded, change.Row)) {
                 loaded.stale = true; // dimensions changed mid-load; refresh on next query
             }
@@ -356,22 +422,31 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         }, REMOTE_REFRESH_DEBOUNCE_MS);
     }
 
-    /** Re-reads the queued rows as the user a loaded index was read as, and applies them. */
+    /**
+     * Re-reads the queued rows once per user an index was loaded as, and
+     * applies each read only to that user's indexes: a row one user cannot see
+     * must not be removed from an index another user loaded.
+     */
     private async refreshQueuedRows(): Promise<void> {
         const ids = Array.from(this.remoteRefreshIDs);
         this.remoteRefreshIDs.clear();
-        const contextUser = this.anyLoadedContextUser();
-        for (let start = 0; start < ids.length; start += REMOTE_REFRESH_BATCH_SIZE) {
-            const batch = ids.slice(start, start + REMOTE_REFRESH_BATCH_SIZE);
-            const applied = await this.refreshRows(batch, contextUser);
-            if (!applied) {
-                this.MarkAllStale();
-                return;
+        for (const [userKey, contextUser] of this.loadedUsers()) {
+            const includeUser = (user: UserInfo | undefined): boolean => userKeyOf(user) === userKey;
+            for (let start = 0; start < ids.length; start += REMOTE_REFRESH_BATCH_SIZE) {
+                const batch = ids.slice(start, start + REMOTE_REFRESH_BATCH_SIZE);
+                if (!await this.refreshRows(batch, contextUser, includeUser)) {
+                    this.MarkAllStale();
+                    return;
+                }
             }
         }
     }
 
-    private async refreshRows(ids: string[], contextUser: UserInfo | undefined): Promise<boolean> {
+    private async refreshRows(
+        ids: string[],
+        contextUser: UserInfo | undefined,
+        includeUser: (user: UserInfo | undefined) => boolean
+    ): Promise<boolean> {
         const inList = ids.map(id => `'${EscapeSQLString(id)}'`).join(',');
         const result = await new RunView().RunView<RecordDocumentVectorRow>({
             EntityName: ENTITY_RECORD_DOCUMENTS,
@@ -387,21 +462,27 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         const found = new Set<string>();
         for (const row of result.Results ?? []) {
             found.add(row.ID);
-            this.ApplyRowChange(row);
+            this.applyRowChangeWhere(row, includeUser);
         }
-        // A changed row that no longer exists was deleted after the change was published.
+        // A changed row this user can no longer read was deleted (or hidden from them) after the change.
         for (const id of ids) {
-            if (!found.has(id)) this.ApplyRowRemoval(id);
+            if (!found.has(id)) this.applyRowRemovalWhere(id, includeUser);
         }
         return true;
     }
 
-    private anyLoadedContextUser(): UserInfo | undefined {
-        for (const index of this.indexCache.values()) {
-            if (index.contextUser) return index.contextUser;
-        }
-        return undefined;
+    /** Each distinct user a loaded or loading index reads as, keyed by user ID ('' for none). */
+    private loadedUsers(): Map<string, UserInfo | undefined> {
+        const users = new Map<string, UserInfo | undefined>();
+        this.indexCache.forEach(index => users.set(userKeyOf(index.contextUser), index.contextUser));
+        this.inFlightLoads.forEach(load => users.set(userKeyOf(load.ContextUser), load.ContextUser));
+        return users;
     }
+}
+
+/** Groups indexes by the user they were loaded as. */
+function userKeyOf(user: UserInfo | undefined): string {
+    return user?.ID ?? '';
 }
 
 /**
