@@ -78,8 +78,8 @@ describe('LLMRubricEvaluator', () => {
             { key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [{ quote: 'Easy' }] },
             { key: 'missing', level: 'High', rationale: 'No such criterion.', evidence: [] },
         ] }); } };
-        const spy = vi.spyOn(RubricScoring, 'compute');
-        const output = await new LLMRubricEvaluator(runner, 'SinglePass').evaluateContent(version(), { text: 'Easy to read.' });
+        const spy = vi.spyOn(RubricScoring, 'Compute');
+        const output = await new LLMRubricEvaluator(runner, 'SinglePass').EvaluateContent(version(), { text: 'Easy to read.' });
         expect(calls).toHaveLength(1);
         const sent = calls[0] as unknown as RubricEvaluatorMessages;
         expect(sent.system).toContain('Be strict.');
@@ -100,7 +100,7 @@ describe('LLMRubricEvaluator', () => {
             const key = prompt.system.includes('accuracy') ? 'accuracy' : 'clarity';
             return JSON.stringify({ chosen: 'High', probabilities: { High: key === 'clarity' ? 0.8 : 0.4, Low: key === 'clarity' ? 0.2 : 0.6 }, rationale: key, evidence: [{ quote: 'Easy' }] });
         } };
-        const output = await new LLMRubricEvaluator(runner, 'PerCriterion').evaluateContent(tree, { text: 'Easy to read.' });
+        const output = await new LLMRubricEvaluator(runner, 'PerCriterion').EvaluateContent(tree, { text: 'Easy to read.' });
         expect(calls).toHaveLength(2);
         expect(output.answers.find(answer => answer.criterionId === 'a')?.confidence).toBe(0.8);
         expect(output.answers.find(answer => answer.criterionId === 'b')?.confidence).toBe(0.4);
@@ -110,16 +110,16 @@ describe('LLMRubricEvaluator', () => {
         const tree = version();
         tree.nodes[0].scaleId = 'numeric';
         tree.scales.push({ id: 'numeric', scaleType: 'Numeric', minValue: 0, maxValue: 10, step: 1, higherIsBetter: true, levels: [] });
-        const spy = vi.spyOn(RubricScoring, 'compute');
+        const spy = vi.spyOn(RubricScoring, 'Compute');
         const runner = { async run() { return JSON.stringify({ decisions: [{ key: 'clarity', value: 11, rationale: 'Too high.', evidence: [] }] }); } };
-        await expect(new LLMRubricEvaluator(runner).evaluateContent(tree, { text: 'x' })).rejects.toThrow(/outside 0..10/);
+        await expect(new LLMRubricEvaluator(runner).EvaluateContent(tree, { text: 'x' })).rejects.toThrow(/outside 0..10/);
         expect(spy).not.toHaveBeenCalled();
         spy.mockRestore();
     });
 
     it('drops a quote that is not in the subject text', async () => {
         const runner = { async run() { return JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [{ quote: 'not in the text' }, { quote: 'Easy' }] }] }); } };
-        const output = await new LLMRubricEvaluator(runner).evaluateContent(version(), { text: 'Easy to read.' });
+        const output = await new LLMRubricEvaluator(runner).EvaluateContent(version(), { text: 'Easy to read.' });
         expect(output.droppedQuotes).toBe(1);
         expect(output.evidence.map(item => item.quote)).toEqual(['Easy']);
     });
@@ -130,7 +130,7 @@ describe('LLMRubricEvaluator', () => {
         const levels = ['High', 'Low', 'High'];
         let call = 0;
         const runner = { async run() { const level = levels[call++]; return JSON.stringify({ decisions: [{ key: 'clarity', level, rationale: level, evidence: [{ quote: 'Easy' }] }] }); } };
-        const output = await new LLMRubricEvaluator(runner, 'SinglePass').evaluateSamples(tree, { text: 'Easy to read.' }, 3);
+        const output = await new LLMRubricEvaluator(runner, 'SinglePass').EvaluateSamples(tree, { text: 'Easy to read.' }, 3);
         expect(call).toBe(3);
         expect(output.sampleSpread).toEqual([{ key: 'clarity', levels: ['High', 'Low', 'High'], median: 'High' }]);
         expect(output.answers[0].scaleLevelId).toBe('high');
@@ -147,7 +147,7 @@ describe('LLMRubricEvaluator', () => {
             { chosen: 'High', probabilities: { High: 0.6, Low: 0.4 } },
         ];
         const runner = { async run() { return JSON.stringify({ ...script[call++ % script.length], rationale: 'x', evidence: [{ quote: 'Easy' }] }); } };
-        const output = await new LLMRubricEvaluator(runner, 'PerCriterion').evaluateSamples(tree, { text: 'Easy to read.' }, 3);
+        const output = await new LLMRubricEvaluator(runner, 'PerCriterion').EvaluateSamples(tree, { text: 'Easy to read.' }, 3);
         const clarity = output.answers.find(answer => answer.criterionId === 'a');
         expect(clarity?.scaleLevelId).toBe('high');
         expect(clarity?.confidence).toBe(0.8);
@@ -165,7 +165,7 @@ describe('LLMRubricEvaluator', () => {
             },
         };
         const runner = { async run() { throw new Error('the prompt runner is not used'); } };
-        const output = await new LLMRubricEvaluator(runner, 'PerCriterion', decision).evaluateContent(tree, { text: 'Easy to read.' });
+        const output = await new LLMRubricEvaluator(runner, 'PerCriterion', decision).EvaluateContent(tree, { text: 'Easy to read.' });
         expect(questions).toHaveLength(1);
         expect(questions[0].Kind).toBe('Score');
         expect(questions[0].Levels).toEqual(['Low', 'High']);
@@ -176,7 +176,7 @@ describe('LLMRubricEvaluator', () => {
     it('keeps a not-applicable sample and a numeric sample', async () => {
         const skipped = await new LLMRubricEvaluator({
             async run() { return JSON.stringify({ decisions: [{ key: 'clarity', notApplicable: true, rationale: 'skip', evidence: [] }] }); },
-        }).evaluateSamples(version(), { text: 'Easy to read.' }, 1);
+        }).EvaluateSamples(version(), { text: 'Easy to read.' }, 1);
         expect(skipped.answers[0].isNotApplicable).toBe(true);
 
         const tree = version();
@@ -184,7 +184,7 @@ describe('LLMRubricEvaluator', () => {
         tree.scales.push({ id: 'numeric', scaleType: 'Numeric', minValue: 0, maxValue: 10, step: 1, higherIsBetter: true, levels: [] });
         const numeric = await new LLMRubricEvaluator({
             async run() { return JSON.stringify({ decisions: [{ key: 'clarity', value: 4, rationale: 'four', evidence: [] }] }); },
-        }).evaluateSamples(tree, { text: 'Easy to read.' }, 1);
+        }).EvaluateSamples(tree, { text: 'Easy to read.' }, 1);
         expect(numeric.answers[0].rawValue).toBe(4);
     });
 
@@ -192,7 +192,7 @@ describe('LLMRubricEvaluator', () => {
         const tree = version();
         tree.nodes.push({ ...tree.nodes[0], id: 'b', key: 'accuracy', name: 'Accuracy', anchors: [] });
         const runner = { async run() { return JSON.stringify({ decisions: [{ level: 'High', rationale: 'No key.', evidence: [{ quote: 'Easy' }] }] }); } };
-        const output = await new LLMRubricEvaluator(runner, 'SinglePass').evaluateSamples(tree, { text: 'Easy to read.' }, 1);
+        const output = await new LLMRubricEvaluator(runner, 'SinglePass').EvaluateSamples(tree, { text: 'Easy to read.' }, 1);
         expect(output.answers).toHaveLength(0);
         expect(output.droppedUnknownKeys).toBe(1);
     });

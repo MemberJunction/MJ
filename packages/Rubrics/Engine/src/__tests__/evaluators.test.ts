@@ -86,7 +86,7 @@ describe('AIRubricEvaluator', () => {
     });
 
     it('refuses an unknown level before scoring', async () => {
-        const spy = vi.spyOn(RubricScoring, 'compute');
+        const spy = vi.spyOn(RubricScoring, 'Compute');
         const agent: RubricAgent = {
             async run() {
                 return { level: 'Outstanding', rationale: 'No such level.', evidence: [{ ref: 'ev:1', quote: 'text' }] };
@@ -102,7 +102,7 @@ describe('AIRubricEvaluator', () => {
     });
 
     it('refuses evidence without a quote when the criterion requires one, before scoring', async () => {
-        const spy = vi.spyOn(RubricScoring, 'compute');
+        const spy = vi.spyOn(RubricScoring, 'Compute');
         const tree = version();
         tree.nodes[0].evaluatorConfig = { AI: { RequireQuote: true } };
         const agent: RubricAgent = {

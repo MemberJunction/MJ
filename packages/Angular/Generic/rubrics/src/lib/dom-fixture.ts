@@ -48,6 +48,9 @@ export function passedResult(): RubricScoreResult {
         passThresholdApplied: 0.5,
         bandId: 'good',
         confidence: null,
+        scoredCriteriaCount: 1,
+        applicableCriteriaCount: 1,
+        totalCriteriaCount: 1,
         nodes: [{
             id: 'clarity',
             key: 'clarity',

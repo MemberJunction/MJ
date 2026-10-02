@@ -81,7 +81,7 @@ describe('RubricEngine', () => {
             async submit(_id, answers) {
                 calls.push('submit');
                 expect(answers).toHaveLength(1);
-                return { normalizedScore: 1, completeness: 0.5, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' };
+                return { normalizedScore: 1, completeness: 0.5, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, scoredCriteriaCount: 0, applicableCriteriaCount: 0, totalCriteriaCount: 0, nodes: [], scoringEngineVersion: '1.0' };
             },
             async fail() { throw new Error('should not fail'); },
         };
@@ -102,7 +102,7 @@ describe('RubricEngine', () => {
         tree.nodes[0].evaluatorConfig = { Deterministic: { path: 'actualOutput', equals: 'shipped', level: 'High' } };
         const store: RubricEvaluationStore = {
             async createDraft() { return { id: 'eval-3', status: 'Draft' }; },
-            async submit() { return { normalizedScore: 1, completeness: 0.5, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' }; },
+            async submit() { return { normalizedScore: 1, completeness: 0.5, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, scoredCriteriaCount: 0, applicableCriteriaCount: 0, totalCriteriaCount: 0, nodes: [], scoringEngineVersion: '1.0' }; },
             async fail() { throw new Error('should not fail'); },
         };
         const done = await new RubricEngine(store).Evaluate({
@@ -138,7 +138,7 @@ describe('RubricEngine', () => {
         const calls: string[] = [];
         const store: RubricEvaluationStore = {
             async createDraft() { calls.push('draft'); return { id: 'eval-llm', status: 'Draft' }; },
-            async submit() { calls.push('submit'); return { normalizedScore: 1, completeness: 1, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' }; },
+            async submit() { calls.push('submit'); return { normalizedScore: 1, completeness: 1, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, scoredCriteriaCount: 0, applicableCriteriaCount: 0, totalCriteriaCount: 0, nodes: [], scoringEngineVersion: '1.0' }; },
             async fail() { throw new Error('should not fail'); },
         };
         const tree = version();
@@ -167,7 +167,7 @@ describe('RubricEngine', () => {
                 return { id: 'eval-choice', status: 'Draft' };
             },
             async submit() {
-                return { normalizedScore: 1, completeness: 1, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' };
+                return { normalizedScore: 1, completeness: 1, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, scoredCriteriaCount: 0, applicableCriteriaCount: 0, totalCriteriaCount: 0, nodes: [], scoringEngineVersion: '1.0' };
             },
             async fail() { throw new Error('should not fail'); },
         };
@@ -228,7 +228,7 @@ describe('RubricEngine', () => {
         const store = (name: string): RubricEvaluationStore => ({
             async createDraft() { calls.push(name); return { id: name, status: 'Draft' }; },
             async submit() {
-                return { normalizedScore: 1, completeness: 1, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' };
+                return { normalizedScore: 1, completeness: 1, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, scoredCriteriaCount: 0, applicableCriteriaCount: 0, totalCriteriaCount: 0, nodes: [], scoringEngineVersion: '1.0' };
             },
             async fail() { throw new Error('should not fail'); },
         });

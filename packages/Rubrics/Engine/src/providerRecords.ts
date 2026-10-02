@@ -293,6 +293,9 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
                 passThresholdApplied: numberOrNull(evaluation.PassThresholdApplied),
                 bandId: evaluation.BandID == null ? null : String(evaluation.BandID),
                 confidence: numberOrNull(evaluation.Confidence),
+                scoredCriteriaCount: numberOrNull(evaluation.ScoredCriteriaCount) ?? 0,
+                applicableCriteriaCount: numberOrNull(evaluation.ApplicableCriteriaCount) ?? 0,
+                totalCriteriaCount: numberOrNull(evaluation.TotalCriteriaCount) ?? 0,
                 nodes: await loadScoredNodes(provider, user, evaluationId),
                 scoringEngineVersion: '1.0',
             };
@@ -344,6 +347,8 @@ async function loadScoredNodes(provider: RubricProvider, user: unknown, evaluati
             normalizedScore: numberOrNull(row.NormalizedScore),
             effectiveWeight: numberOrNull(row.EffectiveWeight),
             overallContribution: numberOrNull(row.OverallContribution),
+            completeness: numberOrNull(row.Completeness),
+            confidence: numberOrNull(row.Confidence),
             gateFailed: row.GateFailed === true || row.GateFailed === 1,
             isNotApplicable: row.IsNotApplicable === true || row.IsNotApplicable === 1,
             isAdvisory: criterion?.IsAdvisory === true || criterion?.IsAdvisory === 1,

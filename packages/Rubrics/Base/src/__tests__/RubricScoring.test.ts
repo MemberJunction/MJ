@@ -317,4 +317,71 @@ describe('RubricScoring', () => {
         expect(result.bandId).toBe('met');
         expect(result.completeness).toBe(1);
     });
+
+    it('weights confidence by path weight, including a zero score and a Minimum group', () => {
+        const zero = leaf({ id: 'zero', key: 'zero', scaleId: 'numeric' });
+        const full = leaf({ id: 'full', key: 'full', scaleId: 'numeric' });
+        const flat = score([zero, full], [
+            { criterionId: 'zero', rawValue: 0, confidence: 0 },
+            { criterionId: 'full', rawValue: 10, confidence: 1 },
+        ]);
+        expect(flat.confidence).toBe(0.5);
+        expect(flat.scoredCriteriaCount).toBe(2);
+        expect(flat.applicableCriteriaCount).toBe(2);
+        expect(flat.totalCriteriaCount).toBe(2);
+
+        const group = leaf({ id: 'g', key: 'g', nodeType: 'Group', scaleId: null, rollupMethod: 'Minimum' });
+        const nested = score(
+            [group, leaf({ id: 'a', key: 'a', parentId: 'g' }), leaf({ id: 'b', key: 'b', parentId: 'g' })],
+            [
+                { criterionId: 'a', scaleLevelId: 'high', confidence: 1 },
+                { criterionId: 'b', scaleLevelId: 'low', confidence: 0 },
+            ],
+        );
+        expect(nested.nodes.find(node => node.key === 'a')?.overallContribution).toBeNull();
+        expect(nested.confidence).toBe(0.5);
+        const groupRow = nested.nodes.find(node => node.key === 'g');
+        expect(groupRow?.confidence).toBe(0.5);
+        expect(groupRow?.completeness).toBe(1);
+    });
+
+    it('counts unanswered leaves and stores that completeness on the group', () => {
+        const group = leaf({ id: 'g', key: 'g', nodeType: 'Group', scaleId: null });
+        const nodes = [
+            group,
+            leaf({ id: 'a', key: 'a', parentId: 'g' }),
+            leaf({ id: 'b', key: 'b', parentId: 'g' }),
+            leaf({ id: 'note', key: 'note', parentId: 'g', isAdvisory: true }),
+        ];
+        const result = score(nodes, [{ criterionId: 'a', scaleLevelId: 'high' }]);
+        expect(result.scoredCriteriaCount).toBe(1);
+        expect(result.applicableCriteriaCount).toBe(2);
+        expect(result.totalCriteriaCount).toBe(2);
+        expect(result.completeness).toBe(0.5);
+        expect(result.nodes.find(node => node.key === 'g')?.completeness).toBe(0.5);
+    });
+
+    it('fails a Minimum gate when one child is silent, and still scores a weighted-mean gate', () => {
+        const group = leaf({ id: 'g', key: 'g', nodeType: 'Group', scaleId: null, rollupMethod: 'Minimum', isGate: true, gateMinimumScore: 0 });
+        const children = [leaf({ id: 'a', key: 'a', parentId: 'g' }), leaf({ id: 'b', key: 'b', parentId: 'g' })];
+        const silent = score([group, ...children], [{ criterionId: 'a', scaleLevelId: 'high' }]);
+        expect(silent.nodes.find(node => node.key === 'g')?.normalizedScore).toBe(1);
+        expect(silent.gateFailed).toBe(true);
+
+        const mean = score(
+            [{ ...group, rollupMethod: 'WeightedMean' }, ...children],
+            [{ criterionId: 'a', scaleLevelId: 'high' }],
+        );
+        expect(mean.nodes.find(node => node.key === 'g')?.gateFailed).toBe(false);
+        expect(mean.gateFailed).toBe(false);
+    });
+
+    it('refuses blank evidence and a NaN raw value', () => {
+        const quoted = leaf({ id: 'a', key: 'a', evidenceRequired: true });
+        expect(() => score([quoted], [{ criterionId: 'a', scaleLevelId: 'high', evidence: '' }])).toThrow(/requires evidence/);
+        expect(() => score([quoted], [{ criterionId: 'a', scaleLevelId: 'high', evidence: '[]' }])).toThrow(/requires evidence/);
+        expect(score([quoted], [{ criterionId: 'a', scaleLevelId: 'high', evidence: 'The quote' }]).normalizedScore).toBe(1);
+        const numeric = leaf({ id: 'n', key: 'n', scaleId: 'numeric' });
+        expect(() => score([numeric], [{ criterionId: 'n', rawValue: Number.NaN }])).toThrow(/numeric value/);
+    });
 });

@@ -8,7 +8,7 @@ export type RubricNodeType = 'Group' | 'Criterion';
 
 export type RubricScaleType = 'Levels' | 'Numeric';
 
-/** First match wins. See RubricScoring.compute. */
+/** First match wins. See RubricScoring.Compute. */
 export type RubricOutcome =
     | 'Incomplete'
     | 'NotApplicableFailure'
@@ -135,6 +135,10 @@ export interface ScoredNode {
     gateFailed: boolean;
     isNotApplicable: boolean;
     isAdvisory: boolean;
+    /** Group rows: scored applicable descendants over applicable descendants. Null on a leaf. */
+    completeness?: number | null;
+    /** A leaf's reported confidence, or a group's path-weighted mean of those reports. */
+    confidence?: number | null;
 }
 
 export interface RubricScoreResult {
@@ -151,8 +155,14 @@ export interface RubricScoreResult {
     gateFailed: boolean;
     passThresholdApplied: number | null;
     bandId: string | null;
-    /** OverallContribution-weighted mean of leaf confidences that were reported. */
+    /** Path-weight mean of leaf confidences that were reported. Path weight is the product of effective weights to the root, not the score. */
     confidence: number | null;
+    /** Non-advisory leaves that received a score. */
+    scoredCriteriaCount: number;
+    /** Non-advisory leaves that count toward completeness. */
+    applicableCriteriaCount: number;
+    /** Non-advisory leaves on the version. */
+    totalCriteriaCount: number;
     nodes: ScoredNode[];
     scoringEngineVersion: '1.0';
 }

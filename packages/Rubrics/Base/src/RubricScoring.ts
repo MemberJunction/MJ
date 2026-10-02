@@ -1,5 +1,6 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BandFor, round6 } from './authoring.js';
+import { EvidenceSatisfied } from './evidence.js';
 import type {
     NotApplicablePolicy,
     RollupMethod,
@@ -35,6 +36,10 @@ interface Calc {
     gateFailed: boolean;
     effectiveWeight: number | null;
     overallContribution: number | null;
+    /** Product of effective weights from this node to the root. Null when the node is outside the rollup. */
+    pathWeight: number | null;
+    /** Group rows only. Scored applicable descendants over applicable descendants. */
+    completeness: number | null;
     method: RollupMethod | null;
     confidence: number | null;
 }
@@ -83,10 +88,12 @@ export class RubricScoring {
         const roots = (byParent.get(null) ?? []).map(node => RubricScoring.scoreNode(node, byParent, answers, version, scales));
         RubricScoring.rollupWeights(roots, 'WeightedMean');
         RubricScoring.assignContributions(roots, 1, false);
+        RubricScoring.assignPathWeights(roots, 1);
+        RubricScoring.assignGroupConfidence(roots);
 
         const includedRoots = roots.filter(root => root.included && root.score !== null);
         const overall = includedRoots.length === 0 ? null : RubricScoring.combine(includedRoots, 'WeightedMean');
-        const leaves = RubricScoring.flatten(roots).filter(calc => calc.node.nodeType === 'Criterion');
+        const leaves = RubricScoring.flatten(roots).filter(calc => calc.node.nodeType === 'Criterion' && !calc.node.isAdvisory);
         const applicable = leaves.filter(leaf => leaf.applicable).length;
         const scored = leaves.filter(leaf => leaf.applicable && leaf.scored).length;
         const completeness = applicable === 0 ? 1 : scored / applicable;
@@ -111,6 +118,9 @@ export class RubricScoring {
             passThresholdApplied: threshold === null ? null : round6(threshold),
             bandId,
             confidence,
+            scoredCriteriaCount: scored,
+            applicableCriteriaCount: applicable,
+            totalCriteriaCount: leaves.length,
             nodes: RubricScoring.flatten(roots).map(RubricScoring.toStored),
             scoringEngineVersion: SCORING_ENGINE_VERSION,
         };
@@ -144,12 +154,15 @@ export class RubricScoring {
             gateFailed: false,
             effectiveWeight: null,
             overallContribution: null,
+            pathWeight: null,
+            completeness: RubricScoring.groupCompleteness(children),
             method: node.rollupMethod ?? 'WeightedMean',
             confidence: null,
         };
         if (node.isGate && !node.isAdvisory) {
+            const method = node.rollupMethod ?? 'WeightedMean';
             if (score !== null && round6(score) < round6(node.gateMinimumScore ?? 0)) calc.gateFailed = true;
-            if (score === null && unansweredLeaves > 0) calc.gateFailed = true;
+            if (unansweredLeaves > 0 && (score === null || method === 'Minimum')) calc.gateFailed = true;
         }
         return calc;
     }
@@ -174,6 +187,8 @@ export class RubricScoring {
             gateFailed: false,
             effectiveWeight: null,
             overallContribution: null,
+            pathWeight: null,
+            completeness: null,
             method: null,
             confidence: answer?.confidence ?? null,
         };
@@ -201,6 +216,9 @@ export class RubricScoring {
             }
             RubricScoring.applyGate(base);
             return base;
+        }
+        if (node.evidenceRequired && !EvidenceSatisfied(answer.evidence)) {
+            throw new RubricValidationError(`${node.name} requires evidence.`);
         }
         base.score = RubricScoring.normalize(node, answer, scales);
         if (!node.isAdvisory) {
@@ -243,7 +261,7 @@ export class RubricScoring {
         const raw = answer.rawValue;
         const min = scale.minValue ?? null;
         const max = scale.maxValue ?? null;
-        if (raw === undefined || raw === null || min === null || max === null || max === min) {
+        if (raw === undefined || raw === null || Number.isNaN(raw) || min === null || max === null || max === min) {
             throw new RubricValidationError(`${node.name} needs a numeric value inside its scale.`);
         }
         if (raw < min || raw > max) {
@@ -336,13 +354,43 @@ export class RubricScoring {
     private static confidence(leaves: Calc[]): number | null {
         const weighted = leaves.filter(leaf =>
             leaf.node.nodeType === 'Criterion'
-            && leaf.overallContribution !== null
+            && leaf.pathWeight !== null
+            && leaf.pathWeight > 0
             && RubricScoring.leafConfidence(leaf) !== null);
-        const sumWeight = weighted.reduce((sum, leaf) => sum + Math.abs(leaf.overallContribution as number), 0);
+        const sumWeight = weighted.reduce((sum, leaf) => sum + (leaf.pathWeight as number), 0);
         if (sumWeight === 0) return null;
         const mean = weighted.reduce((sum, leaf) =>
-            sum + (RubricScoring.leafConfidence(leaf) as number) * Math.abs(leaf.overallContribution as number), 0) / sumWeight;
+            sum + (RubricScoring.leafConfidence(leaf) as number) * (leaf.pathWeight as number), 0) / sumWeight;
         return round6(mean);
+    }
+
+    /** Path weight keeps going under a Minimum or Maximum group. Contribution does not. */
+    private static assignPathWeights(children: Calc[], ancestorProduct: number): void {
+        for (const child of children) {
+            if (child.effectiveWeight === null) {
+                child.pathWeight = null;
+                RubricScoring.assignPathWeights(child.children, 0);
+                continue;
+            }
+            const product = ancestorProduct * child.effectiveWeight;
+            child.pathWeight = product;
+            RubricScoring.assignPathWeights(child.children, product);
+        }
+    }
+
+    private static assignGroupConfidence(children: Calc[]): void {
+        for (const child of children) {
+            RubricScoring.assignGroupConfidence(child.children);
+            if (child.node.nodeType !== 'Group') continue;
+            child.confidence = RubricScoring.confidence(RubricScoring.flatten(child.children));
+        }
+    }
+
+    private static groupCompleteness(children: Calc[]): number {
+        const leaves = RubricScoring.flatten(children).filter(calc => calc.node.nodeType === 'Criterion' && !calc.node.isAdvisory);
+        const applicable = leaves.filter(leaf => leaf.applicable).length;
+        if (applicable === 0) return 1;
+        return leaves.filter(leaf => leaf.applicable && leaf.scored).length / applicable;
     }
 
     private static leafConfidence(leaf: Calc): number | null {
@@ -369,6 +417,8 @@ export class RubricScoring {
             gateFailed: calc.gateFailed,
             isNotApplicable: calc.isNotApplicable,
             isAdvisory: calc.node.isAdvisory,
+            completeness: calc.completeness === null ? null : round6(calc.completeness),
+            confidence: calc.confidence === null ? null : round6(calc.confidence),
         };
     }
 }

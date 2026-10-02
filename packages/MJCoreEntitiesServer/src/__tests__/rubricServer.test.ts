@@ -182,6 +182,30 @@ describe('rubric evaluation submit', () => {
             versionStatus: 'Published',
             scores: [{ criterionId: 'a', scaleLevelId: 'high' }],
         })).toThrow(/rationale/);
+        const needsEvidence = version({
+            passThreshold: 0.5,
+            nodes: [{ ...draft.nodes[0], evidenceRequired: true }],
+        });
+        expect(() => SubmitEvaluation({
+            version: needsEvidence,
+            versionStatus: 'Published',
+            scores: [{ criterionId: 'a', scaleLevelId: 'high', evidence: '' }],
+        })).toThrow(/evidence/);
+        expect(() => SubmitEvaluation({
+            version: needsEvidence,
+            versionStatus: 'Published',
+            scores: [{ criterionId: 'a', scaleLevelId: 'high', evidence: '[]' }],
+        })).toThrow(/evidence/);
+        const numeric = version({
+            passThreshold: 0.5,
+            nodes: [{ ...draft.nodes[0], scaleId: 'numeric' }],
+            scales: [...draft.scales, { id: 'numeric', scaleType: 'Numeric', minValue: 0, maxValue: 10, step: 1, higherIsBetter: true, levels: [] }],
+        });
+        expect(() => SubmitEvaluation({
+            version: numeric,
+            versionStatus: 'Published',
+            scores: [{ criterionId: 'a', rawValue: Number.NaN }],
+        })).toThrow(/numeric value/);
     });
 
     it('persists the RubricScoring result and no other math', () => {
@@ -199,6 +223,8 @@ describe('rubric evaluation submit', () => {
         expect(scored.evaluation.status).toBe('Submitted');
         expect(scored.evaluation.scoringEngineVersion).toBe('1.0');
         expect(scored.scores[0].normalizedScore).toBe(direct.nodes[0].normalizedScore);
+        expect(scored.evaluation.scoredCriteriaCount).toBe(direct.scoredCriteriaCount);
+        expect(scored.scores[0].completeness).toBe(direct.nodes[0].completeness ?? null);
         expect(scored.evaluation.submittedAt).toBeInstanceOf(Date);
         const folded = SubmitEvaluation({
             version: draft,

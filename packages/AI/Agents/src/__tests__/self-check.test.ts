@@ -83,7 +83,7 @@ describe('agent self-check', () => {
         const steps: SelfCheckValidation[] = [];
         const score: RubricScoreResult = {
             normalizedScore: 0, completeness: 1, outcome: 'GateFailed', passed: false, gateFailed: true,
-            passThresholdApplied: 0.6, bandId: null, confidence: null, scoringEngineVersion: '1.0',
+            passThresholdApplied: 0.6, bandId: null, confidence: null, scoredCriteriaCount: 1, applicableCriteriaCount: 1, totalCriteriaCount: 1, scoringEngineVersion: '1.0',
             nodes: [{ id: 'criterion', key: 'accuracy', normalizedScore: 0, effectiveWeight: 1, overallContribution: 0, gateFailed: true, isNotApplicable: false, isAdvisory: false }],
         };
         const records: RubricRecords = {
@@ -100,7 +100,7 @@ describe('agent self-check', () => {
                 if (entityName === 'MJ: Rubric Scales') return [{ ID: 'scale', ScaleType: 'Levels', HigherIsBetter: 1 }];
                 if (entityName === 'MJ: Rubric Scale Levels') return [{ ID: 'miss', ScaleID: 'scale', Label: 'Miss', Value: 0, NormalizedValue: 0, Sequence: 0 }];
                 if (entityName === 'MJ: Entities') return [{ ID: 'entity', Name: 'MJ: AI Agent Runs' }];
-                if (entityName === 'MJ: AI Agent Runs') return [{ ID: 'run-1' }];
+                if (entityName === 'MJ: AI Agent Runs') return [{ ID: 'run-1', Message: 'The figure is wrong.' }];
                 return [];
             },
             async createDraft() { return { id: 'draft', status: 'Draft' }; },

@@ -145,7 +145,7 @@ export async function PublishRubricVersion(
                 Bump: change.bump,
             })),
         },
-        contentHash: await Sha256Hex(RubricVersionDiff.contentCanonical(draft)),
+        contentHash: await Sha256Hex(RubricVersionDiff.ContentCanonical(draft)),
         scoringHash: await Sha256Hex(RubricVersionDiff.ScoringCanonical(draft)),
         warnings: validation.warnings,
         publishedAt: new Date(),

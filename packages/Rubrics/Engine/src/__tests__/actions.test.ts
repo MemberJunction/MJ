@@ -66,6 +66,9 @@ const score: RubricScoreResult = {
     passThresholdApplied: 0.6,
     bandId: null,
     confidence: null,
+    scoredCriteriaCount: 1,
+    applicableCriteriaCount: 1,
+    totalCriteriaCount: 1,
     nodes: [{ id: 'c', key: 'clarity', normalizedScore: 0.75, effectiveWeight: 1, overallContribution: 0.75, gateFailed: false, isNotApplicable: false, isAdvisory: false }],
     scoringEngineVersion: '1.0',
 };

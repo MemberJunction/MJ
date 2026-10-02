@@ -35,12 +35,12 @@ function version(): RubricVersionSnapshot {
 
 describe('AgentRubricEvaluator', () => {
     it('scores the High level when the quote is in the subject text', async () => {
-        const spy = vi.spyOn(RubricScoring, 'compute');
+        const spy = vi.spyOn(RubricScoring, 'Compute');
         const output = await new AgentRubricEvaluator({
             async run() {
                 return { key: 'accuracy', level: 'High', rationale: 'The answer cited the source.', evidence: [{ quote: 'cited' }] };
             },
-        }).evaluateContent(version(), { text: 'The report cited the source.' });
+        }).EvaluateContent(version(), { text: 'The report cited the source.' });
         expect(output.answers).toHaveLength(1);
         expect(output.answers[0].scaleLevelId).toBe('high');
         expect(output.evidence).toEqual([{ ref: 'cited', quote: 'cited' }]);
@@ -54,7 +54,7 @@ describe('AgentRubricEvaluator', () => {
             async run() {
                 return { key: 'accuracy', level: 'High', rationale: 'Missing quote.', evidence: [{ quote: 'not in the text' }] };
             },
-        }).evaluateContent(version(), { text: 'The report cited the source.' });
+        }).EvaluateContent(version(), { text: 'The report cited the source.' });
         expect(output.answers[0].scaleLevelId).toBe('high');
         expect(output.evidence).toEqual([]);
         expect(output.droppedQuotes).toBe(1);

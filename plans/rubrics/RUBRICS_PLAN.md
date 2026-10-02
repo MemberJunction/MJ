@@ -337,7 +337,7 @@ the evaluation.
 - `Passed = 1` iff `Outcome = Passed`; `NULL` iff `Outcome = Scored`, or `Outcome = Incomplete`
   with no threshold and no gates; otherwise `0`.
 - **Band** = the band with `MinScore ≤ score < MaxScore` (the top band includes 1). Display only.
-- `Confidence` = the `OverallContribution`-weighted mean of leaf confidences that were reported.
+- `Confidence` = the path-weight mean of leaf confidences that were reported. Path weight is the product of effective weights from the leaf to the root, not `OverallContribution`. A group row stores that mean for its descendants, and its own `Completeness`. The evaluation also stores `ScoredCriteriaCount`, `ApplicableCriteriaCount`, and `TotalCriteriaCount`.
 - Stored decimals are rounded to 6 places after computing in double precision.
 
 ---

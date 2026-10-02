@@ -200,6 +200,9 @@ export function RubricRunView(oracleResults: { oracleType?: string; type?: strin
             passThresholdApplied: null,
             bandId: text(details?.BandID ?? details?.bandId) ?? null,
             confidence: null,
+            scoredCriteriaCount: nodes.length,
+            applicableCriteriaCount: nodes.length,
+            totalCriteriaCount: nodes.length,
             scoringEngineVersion: '1.0',
             nodes: nodes.map(node => ({
                 id: node.id, key: node.key, normalizedScore: node.normalizedScore, effectiveWeight: node.weight,
@@ -272,6 +275,9 @@ export function StoredRubricView(
             passThresholdApplied: numberOrNull(evaluation.PassThresholdApplied),
             bandId: text(evaluation.BandID) ?? null,
             confidence: numberOrNull(evaluation.Confidence),
+            scoredCriteriaCount: numberOrNull(evaluation.ScoredCriteriaCount) ?? 0,
+            applicableCriteriaCount: numberOrNull(evaluation.ApplicableCriteriaCount) ?? 0,
+            totalCriteriaCount: numberOrNull(evaluation.TotalCriteriaCount) ?? 0,
             scoringEngineVersion: String(evaluation.ScoringEngineVersion ?? '') as RubricScoreResult['scoringEngineVersion'],
             nodes: nodes.map(node => ({
                 id: node.id, key: node.key, normalizedScore: node.normalizedScore, effectiveWeight: node.weight,

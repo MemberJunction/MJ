@@ -1,5 +1,5 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { RubricScoring, type RubricAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { EvidenceSatisfied, RubricScoring, type RubricAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 export interface SupersedeTarget {
     status: string;
@@ -67,6 +67,8 @@ export interface PersistedScore {
     overallContribution: number | null;
     gateFailed: boolean;
     isComputed: boolean;
+    completeness: number | null;
+    confidence: number | null;
 }
 
 export interface PersistedEvaluation {
@@ -78,6 +80,9 @@ export interface PersistedEvaluation {
     passThresholdApplied: number | null;
     bandId: string | null;
     confidence: number | null;
+    scoredCriteriaCount: number;
+    applicableCriteriaCount: number;
+    totalCriteriaCount: number;
     scoringEngineVersion: '1.0';
     status: 'Submitted';
     submittedAt: Date;
@@ -131,13 +136,16 @@ export function ValidateEvaluationScores(input: SubmitEvaluationInput): void {
         if (score.scaleLevelId && scale && !scale.levels.some(level => UUIDsEqual(level.id, score.scaleLevelId))) {
             throw new RubricEvaluationError(`${node.key} is not on a level of its scale.`);
         }
+        if (typeof score.rawValue === 'number' && Number.isNaN(score.rawValue)) {
+            throw new RubricEvaluationError(`${node.key} needs a numeric value inside its scale.`);
+        }
         if (score.rawValue !== undefined && score.rawValue !== null && scale?.scaleType !== 'Numeric') {
             throw new RubricEvaluationError(`${node.key} does not use a numeric scale.`);
         }
         if (node.rationaleRequired && !score.isNotApplicable && !score.rationale) {
             throw new RubricEvaluationError(`${node.name} requires a rationale.`);
         }
-        if (node.evidenceRequired && !score.isNotApplicable && (score.evidence === undefined || score.evidence === null)) {
+        if (node.evidenceRequired && !score.isNotApplicable && !EvidenceSatisfied(score.evidence)) {
             throw new RubricEvaluationError(`${node.name} requires evidence.`);
         }
     }
@@ -173,6 +181,9 @@ export function SubmitEvaluation(input: SubmitEvaluationInput): { evaluation: Pe
             passThresholdApplied: result.passThresholdApplied,
             bandId: result.bandId,
             confidence: result.confidence,
+            scoredCriteriaCount: result.scoredCriteriaCount,
+            applicableCriteriaCount: result.applicableCriteriaCount,
+            totalCriteriaCount: result.totalCriteriaCount,
             scoringEngineVersion: result.scoringEngineVersion,
             status: 'Submitted',
             submittedAt: new Date(),
@@ -183,6 +194,8 @@ export function SubmitEvaluation(input: SubmitEvaluationInput): { evaluation: Pe
             effectiveWeight: node.effectiveWeight,
             overallContribution: node.overallContribution,
             gateFailed: node.gateFailed,
+            completeness: node.completeness ?? null,
+            confidence: node.confidence ?? null,
             isComputed: input.version.nodes.find(item => UUIDsEqual(item.id, node.id))?.nodeType === 'Group',
         })),
     };

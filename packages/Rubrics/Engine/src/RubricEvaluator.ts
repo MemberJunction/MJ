@@ -37,7 +37,7 @@ export interface RubricEvaluatorOutput {
  * Turns selected leaf candidates into a scored evaluation.
  *
  * The normalized score, outcome, and per-node contributions come only from
- * {@link RubricScoring.compute}. This class does not reimplement the math.
+ * {@link RubricScoring.Compute}. This class does not reimplement the math.
  * The rationale is the candidates' rationales joined in tree order. Evidence
  * refs are the candidates' refs, in that same order, with duplicates kept
  * because each one is tied to a criterion.

@@ -67,6 +67,9 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
                 passThresholdApplied: this.record.PassThresholdApplied ?? null,
                 bandId: this.record.BandID ?? null,
                 confidence: this.record.Confidence ?? null,
+                scoredCriteriaCount: this.record.ScoredCriteriaCount ?? 0,
+                applicableCriteriaCount: this.record.ApplicableCriteriaCount ?? 0,
+                totalCriteriaCount: this.record.TotalCriteriaCount ?? 0,
                 scoringEngineVersion: '1.0',
                 nodes: scores.map(row => ({
                     id: String(row.CriterionID),
@@ -74,6 +77,8 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
                     normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
                     effectiveWeight: Number(row.EffectiveWeight ?? 0),
                     overallContribution: row.OverallContribution == null ? null : Number(row.OverallContribution),
+                    completeness: row.Completeness == null ? null : Number(row.Completeness),
+                    confidence: row.Confidence == null ? null : Number(row.Confidence),
                     gateFailed: row.GateFailed === true || row.GateFailed === 1,
                     isNotApplicable: row.IsNotApplicable === true || row.IsNotApplicable === 1,
                     isAdvisory: row.IsAdvisory === true || row.IsAdvisory === 1,

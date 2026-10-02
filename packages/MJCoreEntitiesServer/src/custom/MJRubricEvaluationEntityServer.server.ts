@@ -34,6 +34,9 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
         this.PassThresholdApplied = written.passThresholdApplied;
         this.BandID = written.bandId;
         this.Confidence = written.confidence;
+        this.ScoredCriteriaCount = written.scoredCriteriaCount;
+        this.ApplicableCriteriaCount = written.applicableCriteriaCount;
+        this.TotalCriteriaCount = written.totalCriteriaCount;
         this.ScoringEngineVersion = written.scoringEngineVersion;
         this.Status = 'Submitted';
         this.SubmittedAt = written.submittedAt;
@@ -116,6 +119,8 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 record.EffectiveWeight = computed.effectiveWeight;
                 record.OverallContribution = computed.overallContribution;
                 record.GateFailed = computed.gateFailed;
+                record.Completeness = computed.completeness;
+                record.Confidence = computed.confidence;
                 record.IsComputed = computed.isComputed;
                 if (computed.isComputed) record.AllowServerComputedWrite = true;
                 writtenIds.add(criterionId);
@@ -132,6 +137,8 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 created.EffectiveWeight = computed.effectiveWeight;
                 created.OverallContribution = computed.overallContribution;
                 created.GateFailed = computed.gateFailed;
+                created.Completeness = computed.completeness;
+                created.Confidence = computed.confidence;
                 created.IsComputed = true;
                 created.AllowServerComputedWrite = true;
                 await saveOrThrow(created, 'the computed score');
@@ -145,6 +152,9 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
             this.PassThresholdApplied = written.passThresholdApplied;
             this.BandID = written.bandId;
             this.Confidence = written.confidence;
+            this.ScoredCriteriaCount = written.scoredCriteriaCount;
+            this.ApplicableCriteriaCount = written.applicableCriteriaCount;
+            this.TotalCriteriaCount = written.totalCriteriaCount;
             this.ScoringEngineVersion = written.scoringEngineVersion;
             this.Status = 'Submitted';
             this.SubmittedAt = written.submittedAt;
