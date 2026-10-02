@@ -26,6 +26,9 @@ describe('rubric CLI', () => {
         const promote = readFileSync(join(directory, 'promote-criteria.ts'), 'utf8');
         expect(report).toContain('if (!found.Success)');
         expect(promote).toContain('if (!found.Success)');
+        expect(cli).not.toMatch(/await import\(/);
+        expect(commands).not.toMatch(/await import\(/);
+        expect(report).not.toMatch(/await import\(/);
     });
 
     it('parses a name, a version label, and a version id', () => {

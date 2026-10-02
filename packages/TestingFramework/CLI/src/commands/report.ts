@@ -6,6 +6,7 @@
 import { UserInfo, RunView } from '@memberjunction/core';
 import { ReportFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
+import { InitializeMJProvider, GetContextUser } from '../lib/mj-provider';
 import { FormatCriterionReport } from './rubric-cli';
 
 /**
@@ -23,7 +24,6 @@ export class ReportCommand {
      */
     async Execute(runId: string | undefined, _flags: ReportFlags, contextUser?: UserInfo): Promise<void> {
         try {
-            const { InitializeMJProvider, GetContextUser } = await import('../lib/mj-provider');
             await InitializeMJProvider();
             contextUser = contextUser ?? await GetContextUser();
             if (!runId) {

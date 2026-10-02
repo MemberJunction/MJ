@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RubricScoring } from '@memberjunction/rubrics-base';
 import { PublishRubricVersion, RubricPublishError, ValidateRubricTree, CloneVersionNodes } from '../custom/rubrics/versionPublish.js';
-import { RubricEvaluationError, SubmitEvaluation } from '../custom/rubrics/evaluationSubmit.js';
+import { AssertCanSupersede, AssertPinnedVersionForCreate, RubricEvaluationError, SubmitEvaluation } from '../custom/rubrics/evaluationSubmit.js';
 import { FrozenScaleChange } from '../custom/rubrics/scaleFreeze.js';
 
 function version(extra: Partial<RubricVersionSnapshot> = {}): RubricVersionSnapshot {
@@ -37,6 +40,11 @@ function version(extra: Partial<RubricVersionSnapshot> = {}): RubricVersionSnaps
 }
 
 describe('rubric version publish', () => {
+    it('imports evaluation helpers statically', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'rubricServer.test.ts'), 'utf8');
+        expect(source).not.toMatch(/await import\(/);
+    });
+
     it('refuses a criterion with no scale, a cycle, and a gate with no minimum', () => {
         const draft = version({
             nodes: [
@@ -215,8 +223,7 @@ describe('rubric evaluation submit', () => {
         expect(scored.evaluation.status).toBe('Submitted');
     });
 
-    it('refuses to create an evaluation pinned to anything but a Published version', async () => {
-        const { AssertPinnedVersionForCreate } = await import('../custom/rubrics/evaluationSubmit.js');
+    it('refuses to create an evaluation pinned to anything but a Published version', () => {
         expect(() => AssertPinnedVersionForCreate('Draft')).toThrow(/Published/);
         expect(() => AssertPinnedVersionForCreate('Retired')).toThrow(/Published/);
         expect(() => AssertPinnedVersionForCreate('Published')).not.toThrow();
@@ -224,8 +231,7 @@ describe('rubric evaluation submit', () => {
 });
 
 describe('supersede', () => {
-    it('refuses a different subject and accepts a matching Submitted row', async () => {
-        const { AssertCanSupersede } = await import('../custom/rubrics/evaluationSubmit.js');
+    it('refuses a different subject and accepts a matching Submitted row', () => {
         const current = { status: 'Submitted', subjectEntityId: 'e', subjectRecordId: 'r', contextEntityId: null, contextRecordId: null, rubricId: 'rubric' };
         expect(() => AssertCanSupersede({ ...current, subjectRecordId: 'other' }, current)).toThrow(/subject/);
         expect(() => AssertCanSupersede({ ...current, status: 'Draft' }, current)).toThrow(/Submitted/);

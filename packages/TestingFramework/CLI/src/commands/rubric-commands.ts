@@ -3,6 +3,7 @@ import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core'
 import { UUIDsEqual } from '@memberjunction/global';
 import { RubricVersionDiff, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { providerRubricEngine } from '@memberjunction/rubrics';
+import { InitializeMJProvider, GetContextUser, GetMJProvider } from '../lib/mj-provider';
 import { FormatVersionDiff, ParseRubricRef, RequireViewSuccess, RubricIdentityFilter, SnapshotFromRows, ValidateSnapshot } from './rubric-cli';
 
 /** Thin database operations behind `mj rubric`. */
@@ -84,7 +85,6 @@ export class RubricCommands {
     }
 
     private async context(): Promise<{ user: UserInfo; provider: IMetadataProvider }> {
-        const { InitializeMJProvider, GetContextUser, GetMJProvider } = await import('../lib/mj-provider');
         await InitializeMJProvider();
         return { user: await GetContextUser(), provider: GetMJProvider() };
     }

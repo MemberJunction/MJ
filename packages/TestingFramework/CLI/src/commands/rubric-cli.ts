@@ -1,4 +1,4 @@
-import type { UserInfo } from '@memberjunction/core';
+import { RunView, type UserInfo } from '@memberjunction/core';
 import { IsValidUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
@@ -201,7 +201,6 @@ export function RequireViewSuccess(result: { Success?: boolean; ErrorMessage?: s
 
 /** Loads the rubric and, when a version was named, that version's id. */
 export async function LookupRubricOverride(ref: string, user: UserInfo): Promise<{ rubricId: string; versionId?: string }> {
-    const { RunView } = await import('@memberjunction/core');
     const parsed = ParseRubricRef(ref);
     const view = new RunView();
     const found = await view.RunView({
