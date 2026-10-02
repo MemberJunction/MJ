@@ -53,6 +53,8 @@ import {
 import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput, type RSUPendingWork } from "@memberjunction/schema-engine";
 import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
 import { IntegrationProgressEmitter, IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
+import { AuthorizeRunArtifact } from "../integration/RunArtifactAuthorization.js";
+import type { RunArtifactAuthorizationResult } from "../integration/RunArtifactAuthorization.js";
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
@@ -911,6 +913,12 @@ class IntegrationRunSummaryArtifactOutput {
     @Field() RunKind: string;
     @Field({ nullable: true }) IntegrationID?: string;
     @Field({ nullable: true }) CompanyIntegrationID?: string;
+    /**
+     * Every connection the run touched. Populated for runs that can span more than one (an RSU
+     * batch); `CompanyIntegrationID` above is set only when this holds exactly one. A client should
+     * read this rather than the singular field when it needs to know what a run covers.
+     */
+    @Field(() => [String], { nullable: true }) CompanyIntegrationIDs?: string[];
     @Field({ nullable: true }) ObjectName?: string;
     @Field({ nullable: true }) TriggerType?: string;
     @Field() StartedAt: string;
@@ -2202,28 +2210,39 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
-     * Authorizes the caller for a single run artifact based on the run's
-     * manifest CompanyIntegrationID. Returns true when the run is tenant-scoped
-     * and the caller is authorized for that CompanyIntegration. Returns false
-     * for tenant-scoped runs the caller may not read, OR for runs with no
-     * CompanyIntegrationID (non-tenant-scoped artifacts are not exposed through
-     * these per-company endpoints).
+     * Authorizes the caller for a single run artifact against EVERY connection the run touched.
+     *
+     * The rule itself — AND over the run's whole connection set, and why anything weaker leaks —
+     * lives in {@link AuthorizeRunArtifact}. This method supplies the per-connection check, which is
+     * the part that needs the caller's context and the data provider's row-level security.
      */
+    private async authorizeRunArtifact(
+        snap: IntegrationRunSnapshot,
+        user: UserInfo,
+        cache: Map<string, boolean>
+    ): Promise<RunArtifactAuthorizationResult> {
+        return AuthorizeRunArtifact(snap.manifest, ciID => this.userCanReadCompanyIntegration(ciID, user, cache));
+    }
+
+    /** Boolean form of {@link authorizeRunArtifact}, for the list path which needs no message. */
     private async userCanReadRunArtifact(
         snap: IntegrationRunSnapshot,
         user: UserInfo,
         cache: Map<string, boolean>
     ): Promise<boolean> {
-        const ciID = snap.manifest.companyIntegrationID;
-        if (!ciID) {
-            return false;
-        }
-        return this.userCanReadCompanyIntegration(ciID, user, cache);
+        return (await this.authorizeRunArtifact(snap, user, cache)).Authorized;
     }
 
     /** Standard authorization-failure message for run-artifact endpoints. */
     private notAuthorizedForCompanyIntegrationMessage(companyIntegrationID: string): string {
         return `Not authorized to access runs for CompanyIntegration '${companyIntegrationID}'`;
+    }
+
+    /** The denial message for a run, naming the connection that blocked it when there is one. */
+    private notAuthorizedForRunMessage(runID: string, deniedCompanyIntegrationID?: string): string {
+        return deniedCompanyIntegrationID
+            ? this.notAuthorizedForCompanyIntegrationMessage(deniedCompanyIntegrationID)
+            : `Not authorized to access run '${runID}'`;
     }
 
     /**
@@ -5243,14 +5262,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const snap = await reader.GetRun(runID);
             if (!snap) return { Success: false, Message: `Run '${runID}' not found` };
 
-            const authorized = await this.userCanReadRunArtifact(snap, user, new Map<string, boolean>());
-            if (!authorized) {
-                const ciID = snap.manifest.companyIntegrationID;
+            const auth = await this.authorizeRunArtifact(snap, user, new Map<string, boolean>());
+            if (!auth.Authorized) {
                 return {
                     Success: false,
-                    Message: ciID
-                        ? this.notAuthorizedForCompanyIntegrationMessage(ciID)
-                        : `Not authorized to access run '${runID}'`,
+                    Message: this.notAuthorizedForRunMessage(runID, auth.DeniedCompanyIntegrationID),
                 };
             }
 
@@ -5284,14 +5300,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const snap = await reader.GetRun(runID);
             if (!snap) return { Success: false, Message: `Run '${runID}' not found`, LatestSeq: sinceSeq ?? 0, IsInFlight: false };
 
-            const authorized = await this.userCanReadRunArtifact(snap, user, new Map<string, boolean>());
-            if (!authorized) {
-                const ciID = snap.manifest.companyIntegrationID;
+            const auth = await this.authorizeRunArtifact(snap, user, new Map<string, boolean>());
+            if (!auth.Authorized) {
                 return {
                     Success: false,
-                    Message: ciID
-                        ? this.notAuthorizedForCompanyIntegrationMessage(ciID)
-                        : `Not authorized to access run '${runID}'`,
+                    Message: this.notAuthorizedForRunMessage(runID, auth.DeniedCompanyIntegrationID),
                     LatestSeq: sinceSeq ?? 0,
                     IsInFlight: false,
                 };
@@ -5329,6 +5342,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             RunKind: s.manifest.runKind,
             IntegrationID: s.manifest.integrationID,
             CompanyIntegrationID: s.manifest.companyIntegrationID,
+            CompanyIntegrationIDs: s.manifest.companyIntegrationIDs,
             ObjectName: s.manifest.objectName,
             TriggerType: s.manifest.triggerType,
             StartedAt: s.manifest.startedAt,

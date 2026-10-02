@@ -61,6 +61,29 @@ class RSUConfig {
   get CompileCommand(): string | undefined {
     return process.env.RSU_COMPILE_COMMAND;
   }
+  /**
+   * How many packages the compile builds at once. ONE by default, deliberately.
+   *
+   * `turbo build` with no `--concurrency` fans out one `tsc` per filtered package — three of them on
+   * a 2 vCPU / 4 GB instance that is also serving the API, beside a heap that has just finished
+   * CodeGen. On the sandbox that took the whole workspace off the air for the duration of the compile
+   * (MJ-RUN-33). A slower compile that leaves the API answering beats a faster one that does not.
+   */
+  get CompileConcurrency(): string {
+    return process.env.RSU_COMPILE_CONCURRENCY || '1';
+  }
+  /** How often the compile reports that it is still alive. */
+  get CompileHeartbeatMs(): number {
+    return parseInt(process.env.RSU_COMPILE_HEARTBEAT_MS || '30000', 10);
+  }
+  /**
+   * Grace between SIGTERM and SIGKILL when a command has to be killed for exceeding its timeout.
+   * Small on purpose: the command is already over budget, and the point of the kill is that the box
+   * gets its CPU back.
+   */
+  get CommandKillGraceMs(): number {
+    return parseInt(process.env.RSU_COMMAND_KILL_GRACE_MS || '5000', 10);
+  }
   get CompilePackages(): string | undefined {
     return process.env.RSU_COMPILE_PACKAGES;
   }
@@ -157,6 +180,21 @@ export interface RSUPipelineInput {
    * User context used for the durable PendingWork writes. Required when PendingWork is set.
    */
   ContextUser?: UserInfo;
+
+  /**
+   * The connection this schema change belongs to.
+   *
+   * This is the run's IDENTITY, not a label: an RSU run artifact is only readable over the API by
+   * callers authorized for the connections it touched, and without this the pipeline has no way to
+   * tell an observer whose run it is (see {@link RSUObserverEvent} `run.start`). A run with no
+   * connection identity at all stays unreadable through the per-connection endpoints — which is
+   * exactly what used to happen to EVERY RSU run.
+   *
+   * Optional because a caller with no post-restart work may omit it; when it is absent the
+   * identity falls back to {@link PendingWork}'s `CompanyIntegrationID`, which every production
+   * caller supplies today. See {@link RuntimeSchemaManager.CollectCompanyIntegrationIDs}.
+   */
+  CompanyIntegrationID?: string;
 }
 
 /**
@@ -199,6 +237,17 @@ export type RSUObserverEvent =
       AffectedTables: string[];
       /** Expected total steps for the run — the denominator of a determinate progress bar. */
       StepTotal: number;
+      /**
+       * Every connection this batch touches, de-duplicated, in input order.
+       *
+       * Carries the run's IDENTITY to the observer. Without it a run artifact has no connection on
+       * it, the per-connection authorization check has nothing to test, and the run is unreadable
+       * over the API — which is what happened to every RSU run before this field existed. May hold
+       * more than one id: a batch legitimately spans connections. May be EMPTY, for a caller that
+       * supplied neither `CompanyIntegrationID` nor `PendingWork`; such a run stays unreadable
+       * through the per-connection endpoints, which is the conservative outcome.
+       */
+      CompanyIntegrationIDs: string[];
     }
   | { Kind: 'step.start'; Name: string; StepIndex?: number; StepTotal?: number }
   | {
@@ -209,6 +258,35 @@ export type RSUObserverEvent =
       Message: string;
       StepIndex?: number;
       StepTotal?: number;
+    }
+  | {
+      /**
+       * The process is about to be killed by its own pipeline.
+       *
+       * Emitted immediately BEFORE the `RestartMJAPI` step, because `RestartMJAPI` never produces a
+       * `step.end`: pm2 kills this process inside it, so `runStep`'s completion path — and the
+       * `run.end` after it — are unreachable. Without this event the stream simply stops at
+       * `step.start RestartMJAPI` and the run is flagged in-flight forever.
+       *
+       * This is the ONE event the pipeline AWAITS (see {@link RSUPipelineObserver}), because an
+       * observer that writes it asynchronously would be racing the kill signal.
+       */
+      Kind: 'restart.pending';
+      /** Steps that will run in the NEXT process, in order. */
+      RemainingSteps: string[];
+      /** 1-based position of `RestartMJAPI` in the executed sequence, for the determinate stepper. */
+      StepIndex?: number;
+      /** Expected total steps for the run, INCLUDING the post-restart ones. */
+      StepTotal?: number;
+      /** Connections whose post-restart work is queued. Same set as `run.start`, restated so a
+       *  post-restart consumer can correlate from the checkpoint alone. */
+      CompanyIntegrationIDs: string[];
+      /** Durable pending-work row IDs registered for this run, for the same correlation. */
+      PendingWorkIDs: string[];
+      /** Migrations attempted in this batch. */
+      TotalCount: number;
+      /** Migrations that succeeded and therefore have post-restart work queued. */
+      SuccessCount: number;
     }
   | {
       Kind: 'run.end';
@@ -225,11 +303,14 @@ export type RSUObserverEvent =
 /**
  * Receives {@link RSUObserverEvent}s for every RSU pipeline run in this process.
  *
- * Synchronous and fire-and-forget by contract: the pipeline never awaits an observer and never
- * fails because one threw. A throw is logged and swallowed — progress reporting must not be able
- * to break a schema migration.
+ * Fire-and-forget by contract: the pipeline never fails because an observer threw. A throw is
+ * logged and swallowed — progress reporting must not be able to break a schema migration.
+ *
+ * An observer MAY return a promise. It is ignored for every event except `restart.pending`, which
+ * the pipeline awaits (bounded — see {@link RuntimeSchemaManager.OBSERVER_DURABLE_TIMEOUT_MS})
+ * because the process is about to be killed and an unflushed write would simply be lost.
  */
-export type RSUPipelineObserver = (event: RSUObserverEvent) => void;
+export type RSUPipelineObserver = (event: RSUObserverEvent) => void | Promise<void>;
 
 /**
  * Result of a full RSU pipeline run.
@@ -300,6 +381,15 @@ interface PostMigrationResult {
   PendingWorkErrors?: Map<RSUPipelineInput, string[]>;
   /** The RunCodeGen failure message, surfaced when CodeGenSucceeded is false. */
   CodeGenError?: string;
+  /**
+   * Whether the run-wide TypeScript compile succeeded. Undefined when the compile was skipped (no
+   * successful migration, or CodeGen already failed). When FALSE the migrations executed and the
+   * entities were generated, but the code on disk was never compiled — so the pipeline STOPS: it does
+   * not commit the migration, and above all it does not restart the API onto an uncompiled tree.
+   */
+  CompileSucceeded?: boolean;
+  /** The CompileTypeScript failure message, surfaced when CompileSucceeded is false. */
+  CompileError?: string;
 }
 
 /**
@@ -506,6 +596,16 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   // ─── State ───────────────────────────────────────────────────────
 
   private _isRunning = false;
+  /**
+   * True from the moment RunPipelineBatch begins until its outer `finally` — the whole pipeline,
+   * not just the DB-mutation window. `_isRunning` is the concurrency MUTEX and is deliberately
+   * released right after ExecuteMigration (the database is consistent from then on), which means
+   * it is false for WriteAdditionalSchemaInfo, RunCodeGen, CompileTypeScript, GitCommitAndPR and
+   * RestartMJAPI — roughly 95% of the pipeline's wall clock. Reporting the mutex as "running" made
+   * the API say no RSU was running while CodeGen was ten minutes in (sandbox, 2026-09-11), and every
+   * consumer that trusted it misjudged the build. Status reports THIS flag; the mutex stays a mutex.
+   */
+  private _pipelineActive = false;
   private _ddlProvider: DatabaseProviderBase | null = null;
   private _codeGenRunner: IRSUCodeGenRunner | null = null;
   private _codeGenOutputPaths: string[] = [];
@@ -901,7 +1001,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   public GetStatus(): RSUStatus {
     return {
       Enabled: this.IsEnabled,
-      Running: this.IsRunning,
+      // The pipeline, not the mutex — see _pipelineActive. Either is enough to be "running".
+      Running: this.IsRunning || this._pipelineActive,
       OutOfSync: this.IsOutOfSync,
       OutOfSyncSince: this._outOfSyncSince,
       LastRunAt: this._lastRunAt,
@@ -921,7 +1022,48 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   private static readonly EXPECTED_STEPS_SHARED_PRE = ['ValidateEnvironment', 'ValidateSQL', 'AcquireLock'] as const;
   private static readonly EXPECTED_STEPS_PER_ITEM = ['WriteMigrationFile', 'ExecuteMigration'] as const;
-  private static readonly EXPECTED_STEPS_SHARED_POST = ['WriteAdditionalSchemaInfo', 'RunCodeGen', 'CompileTypeScript', 'GitCommitAndPR', 'RestartMJAPI'] as const;
+  private static readonly EXPECTED_STEPS_SHARED_POST = [
+    'WriteAdditionalSchemaInfo',
+    'RunCodeGen',
+    'CompileTypeScript',
+    'GitCommitAndPR',
+    'RestartMJAPI',
+  ] as const;
+
+  /**
+   * The steps that run AFTER the pipeline restarts the API on itself, in order.
+   *
+   * They belong to the same run — the setup journey the user is watching is not finished until the
+   * sync starts — but they execute in a DIFFERENT PROCESS, so nothing in this class ever runs them.
+   * They are declared here because this is where the run's shape is defined: they count towards
+   * {@link ExpectedStepTotal}, so the determinate progress bar does not reach 100% and then sit
+   * there while the connector is still not live, and they are named here so the post-restart
+   * consumer and this pipeline cannot drift apart on what the remaining steps are called.
+   */
+  public static readonly EXPECTED_STEPS_POST_RESTART = ['CreateEntityMaps', 'StartSync'] as const;
+
+  /**
+   * The full expected step sequence for a batch of `itemCount` migrations, in execution order —
+   * including the two that run after the restart.
+   *
+   * Public and static so the arithmetic is directly assertable without a live pipeline; the number
+   * it produces is the denominator every progress UI divides by.
+   */
+  public static ExpectedSteps(itemCount: number): string[] {
+    const perItem: string[] = [];
+    for (let i = 0; i < itemCount; i++) perItem.push(...RuntimeSchemaManager.EXPECTED_STEPS_PER_ITEM);
+    return [
+      ...RuntimeSchemaManager.EXPECTED_STEPS_SHARED_PRE,
+      ...perItem,
+      ...RuntimeSchemaManager.EXPECTED_STEPS_SHARED_POST,
+      ...RuntimeSchemaManager.EXPECTED_STEPS_POST_RESTART,
+    ];
+  }
+
+  /** Expected total steps for a batch of `itemCount` migrations. See {@link ExpectedSteps}. */
+  public static ExpectedStepTotal(itemCount: number): number {
+    return RuntimeSchemaManager.ExpectedSteps(itemCount).length;
+  }
 
   private _currentStepName: string | null = null;
   private _currentStepIndex: number | null = null;
@@ -931,10 +1073,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   private beginStepTracking(itemCount: number): void {
     this._currentStepIndex = 0;
     this._currentStepName = null;
-    this._stepTotal =
-      RuntimeSchemaManager.EXPECTED_STEPS_SHARED_PRE.length +
-      itemCount * RuntimeSchemaManager.EXPECTED_STEPS_PER_ITEM.length +
-      RuntimeSchemaManager.EXPECTED_STEPS_SHARED_POST.length;
+    this._stepTotal = RuntimeSchemaManager.ExpectedStepTotal(itemCount);
   }
 
   /** Clears the U11 step counter when the run finishes (status returns to idle). */
@@ -954,16 +1093,96 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   public PipelineObserver: RSUPipelineObserver | null = null;
 
+  /**
+   * How long the pipeline will wait for an observer to make a `restart.pending` event durable.
+   *
+   * Bounded on purpose. The wait exists because the process is seconds from being killed, but an
+   * observer that hangs must not wedge a schema migration — the invariant "progress reporting can
+   * never break a migration" outranks the checkpoint. Five seconds is orders of magnitude more than
+   * appending a few lines to a local file needs, and far less than the restart path's own timeouts.
+   */
+  public static readonly OBSERVER_DURABLE_TIMEOUT_MS = 5_000;
+
   /** Delivers an event to {@link PipelineObserver}, swallowing (but logging) any throw. */
   private notifyObserver(event: RSUObserverEvent): void {
     const observer = this.PipelineObserver;
     if (!observer) return;
     try {
-      observer(event);
+      const maybePromise = observer(event);
+      // An observer may return a promise; for every event but `restart.pending` we do not wait on
+      // it. Attach a catch so a rejection is logged rather than surfacing as an unhandled rejection
+      // (which, depending on the Node flags, can take the process down mid-migration).
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        void maybePromise.catch((error: unknown) =>
+          this.rsuLog(`Pipeline observer rejected on ${event.Kind} (ignored): ${error instanceof Error ? error.message : String(error)}`)
+        );
+      }
     } catch (error: unknown) {
       // Progress reporting must never break a schema migration.
       this.rsuLog(`Pipeline observer threw on ${event.Kind} (ignored): ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * Delivers an event and WAITS for the observer to finish with it, bounded by
+   * {@link OBSERVER_DURABLE_TIMEOUT_MS}. Used for exactly one event: `restart.pending`.
+   *
+   * The ordinary fire-and-forget path is wrong there. The observer's durable write is asynchronous,
+   * and the very next thing the pipeline does is issue a command that kills this process — so a
+   * queued-but-unflushed checkpoint is simply lost, and the whole point of the checkpoint is that it
+   * survives the kill. Errors and timeouts are swallowed exactly as they are on the sync path.
+   */
+  private async notifyObserverDurable(event: RSUObserverEvent): Promise<void> {
+    const observer = this.PipelineObserver;
+    if (!observer) return;
+    try {
+      const maybePromise = observer(event);
+      if (!maybePromise || typeof maybePromise.then !== 'function') return;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(() => {
+          this.rsuLog(`Pipeline observer did not settle ${event.Kind} within ${RuntimeSchemaManager.OBSERVER_DURABLE_TIMEOUT_MS}ms — continuing`);
+          resolve();
+        }, RuntimeSchemaManager.OBSERVER_DURABLE_TIMEOUT_MS);
+        timer.unref?.();
+      });
+      try {
+        await Promise.race([maybePromise, timeout]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch (error: unknown) {
+      this.rsuLog(`Pipeline observer failed on ${event.Kind} (ignored): ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * The de-duplicated set of connections a batch touches, in input order.
+   *
+   * Resolution order per input: the explicit {@link RSUPipelineInput.CompanyIntegrationID} first,
+   * then the `CompanyIntegrationID` of any {@link RSUPipelineInput.PendingWork} entry. The fallback
+   * is not a convenience — it is the compatibility path that gives EVERY production caller today an
+   * identity without changing a single call site, because every one of them registers post-restart
+   * work against a connection. An input with neither contributes nothing, and a batch where no
+   * input has either yields an empty set: that run stays unreadable through the per-connection
+   * endpoints, which is the conservative answer, not a bug.
+   *
+   * Public and static so the identity rule is assertable on its own.
+   */
+  public static CollectCompanyIntegrationIDs(inputs: RSUPipelineInput[]): string[] {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    const add = (id: string | undefined | null): void => {
+      if (!id) return;
+      if (seen.has(id)) return;
+      seen.add(id);
+      ordered.push(id);
+    };
+    for (const input of inputs) {
+      add(input.CompanyIntegrationID);
+      for (const work of input.PendingWork ?? []) add(work.CompanyIntegrationID);
+    }
+    return ordered;
   }
 
   /**
@@ -1065,12 +1284,14 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // U11 — arm the determinate step counter (index of expected total) for this run.
     this.beginStepTracking(inputs.length);
+    this._pipelineActive = true;
     this.notifyObserver({
       Kind: 'run.start',
       ItemCount: inputs.length,
       Descriptions: inputs.map((i) => i.Description),
       AffectedTables: [...new Set(inputs.flatMap((i) => i.AffectedTables))],
       StepTotal: this._stepTotal ?? 0,
+      CompanyIntegrationIDs: RuntimeSchemaManager.CollectCompanyIntegrationIDs(inputs),
     });
 
     // Captured so the `finally` can publish the terminal run boundary on EVERY exit path —
@@ -1096,6 +1317,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       return batchResult;
     } finally {
       this.endStepTracking();
+      this._pipelineActive = false;
       this.notifyRunEnd(batchResult, inputs.length);
     }
   }
@@ -1191,8 +1413,23 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     }
     if (codegenOk) {
       const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
+      result.CompileSucceeded = !!compileOk;
       if (compileOk) {
         this.ClearOutOfSync();
+      } else {
+        // STOP HERE. Everything below assumes the tree on disk matches the migrated database, and a
+        // failed compile is exactly the case where it does not:
+        //  - GitCommitAndPR would publish a migration whose generated code never built (its only
+        //    guard was SkipGitCommit, so it ran regardless);
+        //  - RestartMJAPI would bring the API back up on an UNCOMPILED tree.
+        // On the sandbox that combination presented as a 40-minute outage behind a pipeline that
+        // reported itself complete (MJ-RUN-33). The API stays flagged out-of-sync, no post-restart
+        // work is queued (nothing would consume it), and the caller's result names the step.
+        result.CompileError =
+          sharedSteps.find((s) => s.Name === 'CompileTypeScript' && s.Status === 'failed')?.Message ??
+          'TypeScript compile failed after CodeGen — the API code on disk does not match the migrated database';
+        this.rsuLog(`Compile failed — NOT committing and NOT restarting: ${result.CompileError}`);
+        return result;
       }
     }
 
@@ -1223,6 +1460,22 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // Restart LAST — PM2 restart kills this process, nothing runs after this
     if (!inputs.every((i) => i.SkipRestart)) {
+      // Publish the restart boundary BEFORE issuing it. `runStep('RestartMJAPI', ...)` will emit a
+      // step.start and then never emit a step.end, because pm2 kills us inside restartMJAPI() — so
+      // this is the last chance to tell an observer that the pipeline reached the restart in good
+      // order, and to hand the process on the other side what it needs to pick the run back up.
+      // Awaited (not fire-and-forget) precisely because we are about to be killed.
+      await this.notifyObserverDurable({
+        Kind: 'restart.pending',
+        RemainingSteps: [...RuntimeSchemaManager.EXPECTED_STEPS_POST_RESTART],
+        // +1: the RestartMJAPI step is issued next and its own increment happens inside runStep.
+        StepIndex: this._currentStepIndex === null ? undefined : this._currentStepIndex + 1,
+        StepTotal: this._stepTotal ?? undefined,
+        CompanyIntegrationIDs: RuntimeSchemaManager.CollectCompanyIntegrationIDs(successfulInputs),
+        PendingWorkIDs: [...new Set([...(result.PendingWorkIDs?.values() ?? [])].flat())],
+        TotalCount: inputs.length,
+        SuccessCount: successfulItems.length,
+      });
       const restartOk = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), sharedSteps);
       if (restartOk) result.ApiRestarted = true;
     }
@@ -1241,20 +1494,24 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     // A run-wide CodeGen failure means the migrations applied but the entities may have
     // no stored procedures — treat the run as failed, not success.
     const codeGenFailed = postResult.CodeGenSucceeded === false;
-    this._lastRunResult = successfulItems.length > 0 && !codeGenFailed ? 'success' : 'failed';
+    // A failed compile is the same class of failure one step later: the DDL is committed, the entity
+    // classes were generated, and nothing built them — so the running API cannot use them.
+    const compileFailed = postResult.CompileSucceeded === false;
+    this._lastRunResult = successfulItems.length > 0 && !codeGenFailed && !compileFailed ? 'success' : 'failed';
 
     const results: RSUPipelineResult[] = itemResults.map((item) => {
       const allSteps = [...sharedSteps, ...item.Steps];
       // A migration that executed but whose run-wide CodeGen failed is NOT a success —
       // the entity may have no spCreate/spUpdate procs and would silently skip on sync.
       const codeGenFailedThisCaller = codeGenFailed && item.Success;
+      const compileFailedThisCaller = compileFailed && item.Success;
       // Same reasoning as the CodeGen case above: the migration ran, but work the caller
       // asked to happen after the restart was never persisted, so the restart drops it.
       // Reporting success here would tell the caller their sync is coming when it is not.
       const pendingWorkErrors = postResult.PendingWorkErrors?.get(item.Input) ?? [];
       const pendingWorkFailedThisCaller = pendingWorkErrors.length > 0 && item.Success;
       const result: RSUPipelineResult = {
-        Success: item.Success && successfulItems.length > 0 && !codeGenFailed && !pendingWorkFailedThisCaller,
+        Success: item.Success && successfulItems.length > 0 && !codeGenFailed && !compileFailed && !pendingWorkFailedThisCaller,
         MigrationFilePath: item.FilePath,
         APIRestarted: postResult.ApiRestarted,
         GitCommitSuccess: postResult.GitCommitSuccess,
@@ -1262,16 +1519,20 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         Steps: allSteps,
         ErrorMessage: codeGenFailedThisCaller
           ? postResult.CodeGenError ?? item.Error
-          : pendingWorkFailedThisCaller
-            ? pendingWorkErrors.join('; ')
-            : item.Error,
+          : compileFailedThisCaller
+            ? postResult.CompileError ?? item.Error
+            : pendingWorkFailedThisCaller
+              ? pendingWorkErrors.join('; ')
+              : item.Error,
         ErrorStep: codeGenFailedThisCaller
           ? 'RunCodeGen'
-          : pendingWorkFailedThisCaller
-            ? 'RegisterPendingWork'
-            : item.Error
-              ? item.Steps.find((s) => s.Status === 'failed')?.Name
-              : undefined,
+          : compileFailedThisCaller
+            ? 'CompileTypeScript'
+            : pendingWorkFailedThisCaller
+              ? 'RegisterPendingWork'
+              : item.Error
+                ? item.Steps.find((s) => s.Status === 'failed')?.Name
+                : undefined,
         PendingWorkIDs: postResult.PendingWorkIDs?.get(item.Input),
       };
 
@@ -1790,30 +2051,132 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * environments without turbo).
    */
   private async compileTypeScript(): Promise<boolean> {
-    const { execAsync } = await this.getExecAsync();
     const codegenDir = rsuConfig.CodeGenDir;
     const timeoutMs = rsuConfig.CompileTimeoutMs;
+    const startedAt = Date.now();
+    const elapsedSec = () => Math.round((Date.now() - startedAt) / 1000);
 
-    // Allow full command override
-    const compileCmd = rsuConfig.CompileCommand;
-    if (compileCmd) {
-      await execAsync(`cd "${codegenDir}" && ${compileCmd}`, { timeout: timeoutMs });
+    // A compile is minutes of silence from a process that is also the API. Say so, with the elapsed
+    // time against the budget, so the pm2 log an incident gets read from can distinguish "compiling"
+    // from "hung" — on the sandbox the only record of a 40-minute compile was its failure line.
+    const heartbeat = setInterval(
+      () => this.rsuLog(`CompileTypeScript still running — ${elapsedSec()}s elapsed of a ${Math.round(timeoutMs / 1000)}s budget`),
+      rsuConfig.CompileHeartbeatMs,
+    );
+    heartbeat.unref?.();
+    try {
+      // A full-command override is honoured as-is, but it goes through the same killable runner: the
+      // override exists precisely because the default command was starving small boxes, and the
+      // replacement must be no harder to stop.
+      const compileCmd = rsuConfig.CompileCommand ?? this.defaultCompileCommand();
+      await this.runCommandInOwnProcessGroup(`cd "${codegenDir}" && ${compileCmd}`, { timeoutMs });
+      this.rsuLog(`CompileTypeScript completed in ${elapsedSec()}s`);
       return true;
+    } finally {
+      clearInterval(heartbeat);
     }
+  }
 
-    // Build using turbo with --filter for each package
+  /**
+   * The turbo invocation the compile step uses when nothing overrides it.
+   *
+   * `--concurrency` is the load-bearing part: without it turbo builds every filtered package at once,
+   * which is three `tsc` processes on a 2 vCPU / 4 GB instance that is simultaneously serving the API.
+   * See {@link RSUConfig.CompileConcurrency}.
+   */
+  private defaultCompileCommand(): string {
     const defaultPackages = '@memberjunction/core-entities,@memberjunction/server,mj_api';
     const envPackages = rsuConfig.CompilePackages;
     const rawPackages = envPackages !== undefined ? envPackages : defaultPackages;
-    const packageNames = rawPackages
+    const filterArgs = rawPackages
       .split(',')
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0);
+      .map((pkg) => pkg.trim())
+      .filter((pkg) => pkg.length > 0)
+      .map((pkg) => `--filter="${pkg}"`)
+      .join(' ');
+    return `npx turbo build ${filterArgs} --concurrency=${rsuConfig.CompileConcurrency}`;
+  }
 
-    const filterArgs = packageNames.map((p) => `--filter="${p}"`).join(' ');
-    await execAsync(`cd "${codegenDir}" && npx turbo build ${filterArgs}`, { timeout: timeoutMs });
+  /**
+   * Runs a shell command in its OWN process group, and kills the whole group if it exceeds its
+   * timeout.
+   *
+   * Why this exists rather than `execAsync(cmd, { timeout })`: `promisify(exec)`'s timeout signals the
+   * `/bin/sh` it spawned, NOT the process tree beneath it, and the promise it returns does not settle
+   * until every pipe closes. A `turbo build` that outran its timeout therefore kept its `tsc` children
+   * alive AND left the pipeline awaiting a promise that would never resolve — a 300-second budget that
+   * ran for 40 minutes and ended only when a deploy replaced the release directory underneath it
+   * (MJ-RUN-33). The timeout was decorative.
+   *
+   * Three properties make it real:
+   *  - `detached: true` puts the child in a new process group whose id IS the child's pid, so
+   *    `process.kill(-pid, …)` reaches every descendant — the shell, turbo, and each `tsc`.
+   *  - SIGTERM first, SIGKILL after {@link RSUConfig.CommandKillGraceMs}, so a child that ignores the
+   *    polite signal still loses the CPU.
+   *  - the promise REJECTS as soon as the kill is issued, rather than waiting for pipes that a wedged
+   *    child may never close. Not settling was half the defect.
+   *
+   * Windows has no process groups in this sense; there the child is killed directly.
+   */
+  private runCommandInOwnProcessGroup(
+    command: string,
+    opts: { timeoutMs: number; maxBuffer?: number },
+  ): Promise<{ stdout: string; stderr: string }> {
+    const maxBuffer = opts.maxBuffer ?? 50 * 1024 * 1024; // 50 MB — build output is verbose
+    const posix = process.platform !== 'win32';
+    return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      const child = childProcess.spawn(command, {
+        shell: true,
+        detached: posix,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      child.stdout?.on('data', (chunk: Buffer | string) => {
+        if (stdout.length < maxBuffer) stdout += String(chunk);
+      });
+      child.stderr?.on('data', (chunk: Buffer | string) => {
+        if (stderr.length < maxBuffer) stderr += String(chunk);
+      });
 
-    return true;
+      const killGroup = (signal: NodeJS.Signals): void => {
+        try {
+          if (posix && child.pid !== undefined) process.kill(-child.pid, signal);
+          else child.kill(signal);
+        } catch {
+          /* already gone — nothing to signal */
+        }
+      };
+      const settle = (fn: () => void): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn();
+      };
+
+      const timer = setTimeout(() => {
+        killGroup('SIGTERM');
+        const hardKill = setTimeout(() => killGroup('SIGKILL'), rsuConfig.CommandKillGraceMs);
+        hardKill.unref?.();
+        settle(() =>
+          reject(
+            new RSUError(
+              'COMMAND_TIMEOUT',
+              `Command exceeded its ${opts.timeoutMs}ms timeout and its process group was killed: ${command}` +
+                (stderr ? ` — last stderr: ${stderr.slice(-500)}` : ''),
+            ),
+          ),
+        );
+      }, opts.timeoutMs);
+      timer.unref?.();
+
+      child.on('error', (err) => settle(() => reject(err)));
+      child.on('close', (code, signal) => {
+        if (code === 0) settle(() => resolve({ stdout, stderr }));
+        else settle(() => reject(new RSUError('COMMAND_FAILED', `Command failed (exit ${code ?? signal}): ${command}\n${stderr.slice(-2000)}`)));
+      });
+    });
   }
 
   /**
