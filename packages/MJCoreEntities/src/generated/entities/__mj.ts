@@ -2121,6 +2121,100 @@ export const MJAIAgentRequestSchema = z.object({
 export type MJAIAgentRequestEntityType = z.infer<typeof MJAIAgentRequestSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Rubrics
+ */
+export const MJAIAgentRubricSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    RubricID: z.string().describe(`
+        * * Field Name: RubricID
+        * * Display Name: Rubric ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubrics (vwRubrics.ID)`),
+    Purpose: z.union([z.literal('Evaluation'), z.literal('ProductionSampling'), z.literal('SelfCheck')]).describe(`
+        * * Field Name: Purpose
+        * * Display Name: Purpose
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Evaluation
+    *   * ProductionSampling
+    *   * SelfCheck
+        * * Description: How the agent uses the rubric: Evaluation, SelfCheck or ProductionSampling.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 = the rubric used for this purpose when a caller does not name one.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active links are used; Disabled links are kept but ignored.`),
+    PassThreshold: z.number().nullable().describe(`
+        * * Field Name: PassThreshold
+        * * Display Name: Pass Threshold
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Overrides the rubric version's PassThreshold (0..1) for this agent and purpose. NULL = use the version default.`),
+    SampleRate: z.number().nullable().describe(`
+        * * Field Name: SampleRate
+        * * Display Name: Sample Rate
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Share (0..1) of completed production runs to evaluate. Required for ProductionSampling. Sampling is deterministic on the run ID so it is reproducible.`),
+    MaxSelfCheckAttempts: z.number().nullable().describe(`
+        * * Field Name: MaxSelfCheckAttempts
+        * * Display Name: Max Self Check Attempts
+        * * SQL Data Type: int
+        * * Description: For SelfCheck: how many times the agent may revise its output after a failed self-check before returning anyway (with the failure recorded). NULL = 1.`),
+    EvaluatorConfig: z.any().nullable().describe(`
+        * * Field Name: EvaluatorConfig
+        * * Display Name: Evaluator Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentRubricEntity_IRubricEvaluatorSelection
+        * * Description: JSON (IRubricEvaluatorSelection) naming which evaluator to use and its settings (e.g. judge prompt, model), overriding the defaults.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display and evaluation order when an agent has several rubrics for one purpose.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Rubric: z.string().describe(`
+        * * Field Name: Rubric
+        * * Display Name: Rubric
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJAIAgentRubricEntityType = z.infer<typeof MJAIAgentRubricSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Run Medias
  */
 export const MJAIAgentRunMediaSchema = z.object({
@@ -3519,7 +3613,7 @@ export const MJAIAgentStepSchema = z.object({
     *   * Prompt
     *   * Sub-Agent
     *   * While
-        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`),
+        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`),
     StartingStep: z.boolean().describe(`
         * * Field Name: StartingStep
         * * Display Name: Starting Step
@@ -3626,7 +3720,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.`),
+        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -27418,12 +27512,6 @@ export const MJRecordChangeSchema = z.object({
         * * Display Name: Restore Reason
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.`),
-    ChangeContext: z.any().nullable().describe(`
-        * * Field Name: ChangeContext
-        * * Display Name: Change Context
-        * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: MJRecordChangeEntity_IRecordChangeContext
-        * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -27444,6 +27532,11 @@ export const MJRecordChangeSchema = z.object({
         * * Field Name: RestoredFrom
         * * Display Name: Restored From
         * * SQL Data Type: nvarchar(750)`),
+    ChangeContext: z.string().nullable().describe(`
+        * * Field Name: ChangeContext
+        * * Display Name: Change Context
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.`),
 });
 
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
@@ -27604,11 +27697,10 @@ export const MJRecordCloneLogSchema = z.object({
         * * Display Name: Plan Hash
         * * SQL Data Type: nvarchar(64)
         * * Description: SHA-256 hash of the execution plan used for concurrency validation and provenance.`),
-    PlanJSON: z.any().describe(`
+    PlanJSON: z.string().describe(`
         * * Field Name: PlanJSON
         * * Display Name: Plan JSON
         * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: MJRecordCloneLogEntity_IClonePlan
         * * Description: Serialized JSON execution plan detailing all graph nodes, edges, actions, and options.`),
     OptionsJSON: z.string().nullable().describe(`
         * * Field Name: OptionsJSON
@@ -28932,6 +29024,1057 @@ export const MJRowLevelSecurityFilterSchema = z.object({
 });
 
 export type MJRowLevelSecurityFilterEntityType = z.infer<typeof MJRowLevelSecurityFilterSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubric Bands
+ */
+export const MJRubricBandSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RubricVersionID: z.string().describe(`
+        * * Field Name: RubricVersionID
+        * * Display Name: Rubric Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Versions (vwRubricVersions.ID)`),
+    Label: z.string().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Display label of the band.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What a result in this band means.`),
+    MinScore: z.number().describe(`
+        * * Field Name: MinScore
+        * * Display Name: Min Score
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Inclusive lower bound of the band on the 0..1 normalized scale.`),
+    MaxScore: z.number().describe(`
+        * * Field Name: MaxScore
+        * * Display Name: Max Score
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Exclusive upper bound of the band on the 0..1 normalized scale; the highest band also includes 1.`),
+    DisplayTone: z.union([z.literal('Error'), z.literal('Info'), z.literal('Neutral'), z.literal('Success'), z.literal('Warning')]).describe(`
+        * * Field Name: DisplayTone
+        * * Display Name: Display Tone
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Neutral
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * Info
+    *   * Neutral
+    *   * Success
+    *   * Warning
+        * * Description: Semantic tone the UI maps to design tokens (never a raw color).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order of the band.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJRubricBandEntityType = z.infer<typeof MJRubricBandSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubric Categories
+ */
+export const MJRubricCategorySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the category.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What rubrics in this category are for.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Categories (vwRubricCategories.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRubricCategoryEntityType = z.infer<typeof MJRubricCategorySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubric Criteria
+ */
+export const MJRubricCriterionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RubricVersionID: z.string().describe(`
+        * * Field Name: RubricVersionID
+        * * Display Name: Rubric Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Versions (vwRubricVersions.ID)`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+        * * Description: Parent group node. NULL = a top-level node of the rubric.`),
+    Key: z.string().describe(`
+        * * Field Name: Key
+        * * Display Name: Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Stable machine key, unique within the version and carried unchanged across versions. It is the criterion's identity for comparing and aggregating results over time; renaming it is a removal plus an addition (a major bump).`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the group or criterion.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the node covers.`),
+    Guidance: z.string().nullable().describe(`
+        * * Field Name: Guidance
+        * * Display Name: Guidance
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Instructions to evaluators (human and AI) on how to judge this criterion and what evidence counts.`),
+    NodeType: z.union([z.literal('Criterion'), z.literal('Group')]).describe(`
+        * * Field Name: NodeType
+        * * Display Name: Node Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Criterion
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Criterion
+    *   * Group
+        * * Description: Group: has children, no scale, and a computed score. Criterion: a leaf answered on ScaleID.`),
+    ScaleID: z.string().nullable().describe(`
+        * * Field Name: ScaleID
+        * * Display Name: Scale ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Scales (vwRubricScales.ID)`),
+    Weight: z.number().describe(`
+        * * Field Name: Weight
+        * * Display Name: Weight
+        * * SQL Data Type: decimal(18, 6)
+        * * Default Value: 1
+        * * Description: Relative weight among siblings (normalized within the parent at scoring time). Must be >= 0.`),
+    IsAdvisory: z.boolean().describe(`
+        * * Field Name: IsAdvisory
+        * * Display Name: Is Advisory
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 = recorded and displayed but excluded from every score, gate and pass decision.`),
+    IsGate: z.boolean().describe(`
+        * * Field Name: IsGate
+        * * Display Name: Is Gate
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 = knockout: if this node's normalized score is below GateMinimumScore the whole evaluation fails, whatever its overall score. Also applies to groups.`),
+    GateMinimumScore: z.number().nullable().describe(`
+        * * Field Name: GateMinimumScore
+        * * Display Name: Gate Minimum Score
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Normalized score (0..1) a gate node must reach. Required when IsGate = 1.`),
+    NotApplicablePolicy: z.union([z.literal('CountAsZero'), z.literal('ExcludeAndRedistribute'), z.literal('FailEvaluation'), z.literal('NotAllowed')]).nullable().describe(`
+        * * Field Name: NotApplicablePolicy
+        * * Display Name: Not Applicable Policy
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CountAsZero
+    *   * ExcludeAndRedistribute
+    *   * FailEvaluation
+    *   * NotAllowed
+        * * Description: Overrides the version's NotApplicablePolicy for this node. NULL = inherit.`),
+    RollupMethod: z.union([z.literal('Maximum'), z.literal('Minimum'), z.literal('WeightedMean')]).nullable().describe(`
+        * * Field Name: RollupMethod
+        * * Display Name: Rollup Method
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Maximum
+    *   * Minimum
+    *   * WeightedMean
+        * * Description: How a group combines its children's scores: WeightedMean (default when NULL), Minimum (weakest child), or Maximum (strongest child). Groups only.`),
+    EvidenceRequired: z.boolean().describe(`
+        * * Field Name: EvidenceRequired
+        * * Display Name: Evidence Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 = an evaluation cannot be submitted without evidence for this criterion.`),
+    RationaleRequired: z.boolean().describe(`
+        * * Field Name: RationaleRequired
+        * * Display Name: Rationale Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 = an evaluation cannot be submitted without a written rationale for this criterion.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order among siblings.`),
+    EvaluatorConfig: z.any().nullable().describe(`
+        * * Field Name: EvaluatorConfig
+        * * Display Name: Evaluator Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig
+        * * Description: JSON (IRubricCriterionEvaluatorConfig) of evaluator-specific settings, keyed by evaluator: e.g. a deterministic rule, or hints for AI judges. Changes are treated as scoring changes (major bump) because a deterministic rule decides the score.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    Scale: z.string().nullable().describe(`
+        * * Field Name: Scale
+        * * Display Name: Scale
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRubricCriterionEntityType = z.infer<typeof MJRubricCriterionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubric Criterion Levels
+ */
+export const MJRubricCriterionLevelSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CriterionID: z.string().describe(`
+        * * Field Name: CriterionID
+        * * Display Name: Criterion ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)`),
+    ScaleLevelID: z.string().nullable().describe(`
+        * * Field Name: ScaleLevelID
+        * * Display Name: Scale Level ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Scale Levels (vwRubricScaleLevels.ID)
+        * * Description: The Levels-scale level this anchor describes. Exactly one of ScaleLevelID and AnchorValue is set.`),
+    AnchorValue: z.number().nullable().describe(`
+        * * Field Name: AnchorValue
+        * * Display Name: Anchor Value
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: For a Numeric scale: the value this anchor describes (e.g. 0, 50, 100).`),
+    Descriptor: z.string().describe(`
+        * * Field Name: Descriptor
+        * * Display Name: Descriptor
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The anchor text shown to evaluators and given to AI judges.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Criterion: z.string().describe(`
+        * * Field Name: Criterion
+        * * Display Name: Criterion
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRubricCriterionLevelEntityType = z.infer<typeof MJRubricCriterionLevelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubric Evaluation Scores
+ */
+export const MJRubricEvaluationScoreSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EvaluationID: z.string().describe(`
+        * * Field Name: EvaluationID
+        * * Display Name: Evaluation ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Evaluations (vwRubricEvaluations.ID)`),
+    CriterionID: z.string().describe(`
+        * * Field Name: CriterionID
+        * * Display Name: Criterion ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)`),
+    ScaleLevelID: z.string().nullable().describe(`
+        * * Field Name: ScaleLevelID
+        * * Display Name: Scale Level ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Scale Levels (vwRubricScaleLevels.ID)
+        * * Description: The level chosen, for a criterion on a Levels scale.`),
+    RawValue: z.number().nullable().describe(`
+        * * Field Name: RawValue
+        * * Display Name: Raw Value
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: The number entered, for a criterion on a Numeric scale.`),
+    IsNotApplicable: z.boolean().describe(`
+        * * Field Name: IsNotApplicable
+        * * Display Name: Is Not Applicable
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 = the evaluator judged this criterion not applicable to the subject; handled per the effective NotApplicablePolicy.`),
+    IsComputed: z.boolean().describe(`
+        * * Field Name: IsComputed
+        * * Display Name: Is Computed
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 = a group rollup written by the server at submit, not an evaluator's answer.`),
+    NormalizedScore: z.number().nullable().describe(`
+        * * Field Name: NormalizedScore
+        * * Display Name: Normalized Score
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: The node's score on the 0..1 scale: the answer normalized through its scale, or the group rollup.`),
+    EffectiveWeight: z.number().nullable().describe(`
+        * * Field Name: EffectiveWeight
+        * * Display Name: Effective Weight
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: The node's share of its parent (0..1) after Not Applicable redistribution.`),
+    OverallContribution: z.number().nullable().describe(`
+        * * Field Name: OverallContribution
+        * * Display Name: Overall Contribution
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Points this node contributed to the evaluation's overall NormalizedScore (its score times the product of effective weights to the root). Leaves' contributions sum to the overall score under weighted-mean rollups.`),
+    GateFailed: z.boolean().describe(`
+        * * Field Name: GateFailed
+        * * Display Name: Gate Failed
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 = this node is a gate and scored below its GateMinimumScore.`),
+    Completeness: z.number().nullable().describe(`
+        * * Field Name: Completeness
+        * * Display Name: Completeness
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: For group rows: share (0..1) of applicable descendant criteria that were scored.`),
+    Confidence: z.number().nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Evaluator's confidence in this answer (0..1), e.g. from an AI judge's level probabilities. Low confidence can route the criterion to a human.`),
+    Rationale: z.string().nullable().describe(`
+        * * Field Name: Rationale
+        * * Display Name: Rationale
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The evaluator's reasoning for this answer.`),
+    Evidence: z.any().nullable().describe(`
+        * * Field Name: Evidence
+        * * Display Name: Evidence
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJRubricEvaluationScoreEntity_IRubricEvidence>
+        * * Description: JSON array (IRubricEvidence[]) of evidence items: quotes with spans, conversation turns, file references, URLs, record references.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Criterion: z.string().describe(`
+        * * Field Name: Criterion
+        * * Display Name: Criterion
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRubricEvaluationScoreEntityType = z.infer<typeof MJRubricEvaluationScoreSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubric Evaluations
+ */
+export const MJRubricEvaluationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RubricVersionID: z.string().describe(`
+        * * Field Name: RubricVersionID
+        * * Display Name: Rubric Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Versions (vwRubricVersions.ID)`),
+    SubjectEntityID: z.string().describe(`
+        * * Field Name: SubjectEntityID
+        * * Display Name: Subject Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The entity of the record being evaluated (a test run, an agent run, a submission, a vendor response, ...).`),
+    SubjectRecordID: z.string().describe(`
+        * * Field Name: SubjectRecordID
+        * * Display Name: Subject Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the record being evaluated, in MemberJunction's composite-key string form.`),
+    ContextEntityID: z.string().nullable().describe(`
+        * * Field Name: ContextEntityID
+        * * Display Name: Context Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Optional entity of the record that asked for this evaluation (a test, a review round, a workflow step). Evaluations share a consensus cohort only when their context matches.`),
+    ContextRecordID: z.string().nullable().describe(`
+        * * Field Name: ContextRecordID
+        * * Display Name: Context Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the context record. Set together with ContextEntityID or not at all.`),
+    EvaluatorType: z.union([z.literal('AIPrompt'), z.literal('Agent'), z.literal('Deterministic'), z.literal('External'), z.literal('Human'), z.literal('Self')]).describe(`
+        * * Field Name: EvaluatorType
+        * * Display Name: Evaluator Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AIPrompt
+    *   * Agent
+    *   * Deterministic
+    *   * External
+    *   * Human
+    *   * Self
+        * * Description: Who judged: Human (a user), AIPrompt (an LLM judge), Agent (an agent that may use tools), Deterministic (rules), Self (the subject's own party, e.g. a vendor asserting compliance; excluded from reviewer consensus), External (imported from another system).`),
+    EvaluatorUserID: z.string().nullable().describe(`
+        * * Field Name: EvaluatorUserID
+        * * Display Name: Evaluator User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who evaluated. Required for Human; the responding user for Self.`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: The prompt run that produced an AIPrompt evaluation (model, cost, raw output).`),
+    AIAgentRunID: z.string().nullable().describe(`
+        * * Field Name: AIAgentRunID
+        * * Display Name: AI Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: The agent run that produced an Agent evaluation.`),
+    EvaluatorName: z.string().nullable().describe(`
+        * * Field Name: EvaluatorName
+        * * Display Name: Evaluator Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the evaluator implementation or external source (e.g. the evaluator driver class) for provenance.`),
+    Status: z.union([z.literal('Draft'), z.literal('Failed'), z.literal('Submitted'), z.literal('Superseded'), z.literal('Withdrawn')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Draft
+    *   * Failed
+    *   * Submitted
+    *   * Superseded
+    *   * Withdrawn
+        * * Description: Draft (being filled in), Submitted (final, counted in consensus), Superseded (replaced by a newer evaluation), Withdrawn (retracted, e.g. a conflict of interest), Failed (the evaluator errored; see ErrorMessage).`),
+    SupersedesEvaluationID: z.string().nullable().describe(`
+        * * Field Name: SupersedesEvaluationID
+        * * Display Name: Supersedes Evaluation ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Evaluations (vwRubricEvaluations.ID)
+        * * Description: The earlier evaluation this one corrects. Submitting this one moves that one to Superseded.`),
+    SubmittedAt: z.date().nullable().describe(`
+        * * Field Name: SubmittedAt
+        * * Display Name: Submitted At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the evaluation was submitted and its result computed.`),
+    PassThresholdApplied: z.number().nullable().describe(`
+        * * Field Name: PassThresholdApplied
+        * * Display Name: Pass Threshold Applied
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: The pass threshold used to compute Passed (the version default or a consumer override). Stored so a later change to either never rewrites history.`),
+    NormalizedScore: z.number().nullable().describe(`
+        * * Field Name: NormalizedScore
+        * * Display Name: Normalized Score
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Overall score, 0..1, computed once at submit from the score rows. NULL if nothing applicable was scored.`),
+    Passed: z.boolean().nullable().describe(`
+        * * Field Name: Passed
+        * * Display Name: Passed
+        * * SQL Data Type: bit
+        * * Description: Computed verdict: 1 = passed, 0 = failed, NULL = no threshold applied and no gate or N/A failure (Outcome = Scored).`),
+    Outcome: z.union([z.literal('BelowThreshold'), z.literal('GateFailed'), z.literal('Incomplete'), z.literal('NotApplicableFailure'), z.literal('Passed'), z.literal('Scored')]).nullable().describe(`
+        * * Field Name: Outcome
+        * * Display Name: Outcome
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BelowThreshold
+    *   * GateFailed
+    *   * Incomplete
+    *   * NotApplicableFailure
+    *   * Passed
+    *   * Scored
+        * * Description: Why the evaluation ended as it did: Passed, BelowThreshold, GateFailed, NotApplicableFailure, Incomplete (below MinimumCompleteness or nothing scored), or Scored (no threshold to judge against).`),
+    BandID: z.string().nullable().describe(`
+        * * Field Name: BandID
+        * * Display Name: Band ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Bands (vwRubricBands.ID)
+        * * Description: The band NormalizedScore falls in, for display. Interpretation only.`),
+    GateFailed: z.boolean().describe(`
+        * * Field Name: GateFailed
+        * * Display Name: Gate Failed
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 = at least one gate node scored below its GateMinimumScore.`),
+    Completeness: z.number().nullable().describe(`
+        * * Field Name: Completeness
+        * * Display Name: Completeness
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Share (0..1) of applicable, non-advisory criteria that were scored.`),
+    ScoredCriteriaCount: z.number().nullable().describe(`
+        * * Field Name: ScoredCriteriaCount
+        * * Display Name: Scored Criteria Count
+        * * SQL Data Type: int
+        * * Description: Number of non-advisory criteria that received a score.`),
+    ApplicableCriteriaCount: z.number().nullable().describe(`
+        * * Field Name: ApplicableCriteriaCount
+        * * Display Name: Applicable Criteria Count
+        * * SQL Data Type: int
+        * * Description: Number of non-advisory criteria not answered Not Applicable.`),
+    TotalCriteriaCount: z.number().nullable().describe(`
+        * * Field Name: TotalCriteriaCount
+        * * Display Name: Total Criteria Count
+        * * SQL Data Type: int
+        * * Description: Number of non-advisory criteria (leaves) in the version.`),
+    Confidence: z.number().nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Evaluator's overall confidence (0..1), typically the weighted mean of per-criterion confidences from an AI judge. NULL for evaluators that do not report one.`),
+    Narrative: z.string().nullable().describe(`
+        * * Field Name: Narrative
+        * * Display Name: Narrative
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The evaluator's overall written assessment.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Why the evaluator failed, when Status = Failed.`),
+    ScoringEngineVersion: z.string().nullable().describe(`
+        * * Field Name: ScoringEngineVersion
+        * * Display Name: Scoring Engine Version
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Version of the scoring algorithm that computed the stored result, so a future algorithm change is visible rather than silent.`),
+    Metadata: z.any().nullable().describe(`
+        * * Field Name: Metadata
+        * * Display Name: Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRubricEvaluationEntity_IRubricEvaluationMetadata
+        * * Description: JSON (IRubricEvaluationMetadata) of evaluator provenance not covered by columns: model settings, timings, the consumer that requested it.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SubjectEntity: z.string().describe(`
+        * * Field Name: SubjectEntity
+        * * Display Name: Subject Entity
+        * * SQL Data Type: nvarchar(255)`),
+    ContextEntity: z.string().nullable().describe(`
+        * * Field Name: ContextEntity
+        * * Display Name: Context Entity
+        * * SQL Data Type: nvarchar(255)`),
+    EvaluatorUser: z.string().nullable().describe(`
+        * * Field Name: EvaluatorUser
+        * * Display Name: Evaluator User
+        * * SQL Data Type: nvarchar(100)`),
+    AIPromptRun: z.string().nullable().describe(`
+        * * Field Name: AIPromptRun
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: nvarchar(255)`),
+    AIAgentRun: z.string().nullable().describe(`
+        * * Field Name: AIAgentRun
+        * * Display Name: AI Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+    RubricID: z.string().describe(`
+        * * Field Name: RubricID
+        * * Display Name: Rubric ID
+        * * SQL Data Type: uniqueidentifier`),
+    Rubric: z.string().describe(`
+        * * Field Name: Rubric
+        * * Display Name: Rubric
+        * * SQL Data Type: nvarchar(255)`),
+    RubricMajorVersion: z.number().nullable().describe(`
+        * * Field Name: RubricMajorVersion
+        * * Display Name: Rubric Major Version
+        * * SQL Data Type: int`),
+    RubricVersionLabel: z.string().nullable().describe(`
+        * * Field Name: RubricVersionLabel
+        * * Display Name: Rubric Version Label
+        * * SQL Data Type: nvarchar(122)`),
+    CohortEvaluationCount: z.number().nullable().describe(`
+        * * Field Name: CohortEvaluationCount
+        * * Display Name: Cohort Evaluation Count
+        * * SQL Data Type: int`),
+    CohortScoredCount: z.number().nullable().describe(`
+        * * Field Name: CohortScoredCount
+        * * Display Name: Cohort Scored Count
+        * * SQL Data Type: int`),
+    CohortPassedCount: z.number().nullable().describe(`
+        * * Field Name: CohortPassedCount
+        * * Display Name: Cohort Passed Count
+        * * SQL Data Type: int`),
+    CohortMeanScore: z.number().nullable().describe(`
+        * * Field Name: CohortMeanScore
+        * * Display Name: Cohort Mean Score
+        * * SQL Data Type: decimal(9, 6)`),
+    CohortMinScore: z.number().nullable().describe(`
+        * * Field Name: CohortMinScore
+        * * Display Name: Cohort Min Score
+        * * SQL Data Type: decimal(9, 6)`),
+    CohortMaxScore: z.number().nullable().describe(`
+        * * Field Name: CohortMaxScore
+        * * Display Name: Cohort Max Score
+        * * SQL Data Type: decimal(9, 6)`),
+    CohortScoreStdDev: z.number().nullable().describe(`
+        * * Field Name: CohortScoreStdDev
+        * * Display Name: Cohort Score Std Dev
+        * * SQL Data Type: decimal(9, 6)`),
+    CohortHumanCount: z.number().nullable().describe(`
+        * * Field Name: CohortHumanCount
+        * * Display Name: Cohort Human Count
+        * * SQL Data Type: int`),
+    CohortHumanMeanScore: z.number().nullable().describe(`
+        * * Field Name: CohortHumanMeanScore
+        * * Display Name: Cohort Human Mean Score
+        * * SQL Data Type: decimal(9, 6)`),
+    CohortAICount: z.number().nullable().describe(`
+        * * Field Name: CohortAICount
+        * * Display Name: Cohort AI Count
+        * * SQL Data Type: int`),
+    CohortAIMeanScore: z.number().nullable().describe(`
+        * * Field Name: CohortAIMeanScore
+        * * Display Name: Cohort AI Mean Score
+        * * SQL Data Type: decimal(9, 6)`),
+    SelfAssessmentScore: z.number().nullable().describe(`
+        * * Field Name: SelfAssessmentScore
+        * * Display Name: Self Assessment Score
+        * * SQL Data Type: decimal(9, 6)`),
+    SelfAssessmentCount: z.number().nullable().describe(`
+        * * Field Name: SelfAssessmentCount
+        * * Display Name: Self Assessment Count
+        * * SQL Data Type: int`),
+    DeviationFromCohortMean: z.number().nullable().describe(`
+        * * Field Name: DeviationFromCohortMean
+        * * Display Name: Deviation From Cohort Mean
+        * * SQL Data Type: decimal(9, 6)`),
+});
+
+export type MJRubricEvaluationEntityType = z.infer<typeof MJRubricEvaluationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubric Scale Levels
+ */
+export const MJRubricScaleLevelSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ScaleID: z.string().describe(`
+        * * Field Name: ScaleID
+        * * Display Name: Scale ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Scales (vwRubricScales.ID)`),
+    Label: z.string().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(100)
+        * * Description: What evaluators see and pick, e.g. "Exceeds", "Partially compliant", "4".`),
+    Value: z.number().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: The level's raw value in the scale's own units, e.g. 4 on a 1-5 scale. Display and export only; scoring uses NormalizedValue.`),
+    NormalizedValue: z.number().describe(`
+        * * Field Name: NormalizedValue
+        * * Display Name: Normalized Value
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: The score this level contributes, from 0 (worst) to 1 (best). Explicit rather than derived so non-linear scales (e.g. Partial = 0.4) are expressible.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Generic meaning of the level. Criteria can override it with their own anchor text (RubricCriterionLevel).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display order of the level within its scale, worst to best by convention.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Scale: z.string().describe(`
+        * * Field Name: Scale
+        * * Display Name: Scale
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRubricScaleLevelEntityType = z.infer<typeof MJRubricScaleLevelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubric Scales
+ */
+export const MJRubricScaleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique display name of the scale, e.g. "Likert 1-5" or "Compliance".`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the scale measures and how evaluators should read it.`),
+    ScaleType: z.union([z.literal('Levels'), z.literal('Numeric')]).describe(`
+        * * Field Name: ScaleType
+        * * Display Name: Scale Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Levels
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Levels
+    *   * Numeric
+        * * Description: Levels: answers pick one of the scale's RubricScaleLevel rows, each carrying its own normalized value. Numeric: answers are a number between MinValue and MaxValue, normalized linearly (inverted when HigherIsBetter = 0).`),
+    MinValue: z.number().nullable().describe(`
+        * * Field Name: MinValue
+        * * Display Name: Min Value
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: Lowest allowed answer for a Numeric scale. Required when ScaleType = Numeric.`),
+    MaxValue: z.number().nullable().describe(`
+        * * Field Name: MaxValue
+        * * Display Name: Max Value
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: Highest allowed answer for a Numeric scale. Required when ScaleType = Numeric and must exceed MinValue.`),
+    Step: z.number().nullable().describe(`
+        * * Field Name: Step
+        * * Display Name: Step
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: Optional input increment for a Numeric scale (e.g. 0.5). NULL = any value in range.`),
+    HigherIsBetter: z.boolean().describe(`
+        * * Field Name: HigherIsBetter
+        * * Display Name: Higher Is Better
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: For Numeric scales: 1 = a higher answer is better (normalizes to a higher score); 0 = lower is better (e.g. error counts), so normalization is inverted.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active scales can be chosen for new criteria; Disabled scales stay valid for versions that already use them.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJRubricScaleEntityType = z.infer<typeof MJRubricScaleSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubric Versions
+ */
+export const MJRubricVersionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RubricID: z.string().describe(`
+        * * Field Name: RubricID
+        * * Display Name: Rubric ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubrics (vwRubrics.ID)`),
+    MajorVersion: z.number().nullable().describe(`
+        * * Field Name: MajorVersion
+        * * Display Name: Major Version
+        * * SQL Data Type: int
+        * * Description: Semantic major version, assigned at publish. Evaluations sharing a rubric and major version are directly comparable. NULL while Draft.`),
+    MinorVersion: z.number().nullable().describe(`
+        * * Field Name: MinorVersion
+        * * Display Name: Minor Version
+        * * SQL Data Type: int
+        * * Description: Semantic minor version, assigned at publish. NULL while Draft.`),
+    PatchVersion: z.number().nullable().describe(`
+        * * Field Name: PatchVersion
+        * * Display Name: Patch Version
+        * * SQL Data Type: int
+        * * Description: Semantic patch version, assigned at publish. NULL while Draft.`),
+    Status: z.union([z.literal('Draft'), z.literal('Published'), z.literal('Retired')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Draft
+    *   * Published
+    *   * Retired
+        * * Description: Draft (editable, at most one per rubric), Published (frozen, available for new evaluations), or Retired (frozen, kept for history and for evaluations already pinned to it).`),
+    BasedOnVersionID: z.string().nullable().describe(`
+        * * Field Name: BasedOnVersionID
+        * * Display Name: Based On Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Versions (vwRubricVersions.ID)
+        * * Description: The version this draft was cloned from; the publish-time diff and bump are computed against it.`),
+    Instructions: z.string().nullable().describe(`
+        * * Field Name: Instructions
+        * * Display Name: Instructions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Overall guidance for evaluators (human and AI) applying this version. Wording only: changing it is a patch.`),
+    PassThreshold: z.number().nullable().describe(`
+        * * Field Name: PassThreshold
+        * * Display Name: Pass Threshold
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Default minimum normalized score (0..1) for an evaluation to pass. Consumers (a test, a review round) may override it; the threshold actually used is stored on each evaluation. NULL = no threshold (evaluations report a score and gate results only).`),
+    MinimumCompleteness: z.number().nullable().describe(`
+        * * Field Name: MinimumCompleteness
+        * * Display Name: Minimum Completeness
+        * * SQL Data Type: decimal(9, 6)
+        * * Description: Minimum share (0..1) of applicable scored criteria required for a valid result. Below it the evaluation's Outcome is Incomplete and it does not pass. NULL = no minimum.`),
+    NotApplicablePolicy: z.union([z.literal('CountAsZero'), z.literal('ExcludeAndRedistribute'), z.literal('FailEvaluation'), z.literal('NotAllowed')]).describe(`
+        * * Field Name: NotApplicablePolicy
+        * * Display Name: Not Applicable Policy
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: ExcludeAndRedistribute
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CountAsZero
+    *   * ExcludeAndRedistribute
+    *   * FailEvaluation
+    *   * NotAllowed
+        * * Description: Default handling of a criterion answered Not Applicable (criteria may override): ExcludeAndRedistribute (drop it and share its weight among its siblings), CountAsZero (score it 0), FailEvaluation (allowed, but the evaluation fails), NotAllowed (the evaluation cannot be submitted).`),
+    ScoreDisplayMin: z.number().describe(`
+        * * Field Name: ScoreDisplayMin
+        * * Display Name: Score Display Min
+        * * SQL Data Type: decimal(18, 6)
+        * * Default Value: 0
+        * * Description: Display-only lower bound: the value a normalized score of 0 is shown as (e.g. 0 or 1). Never used in scoring.`),
+    ScoreDisplayMax: z.number().describe(`
+        * * Field Name: ScoreDisplayMax
+        * * Display Name: Score Display Max
+        * * SQL Data Type: decimal(18, 6)
+        * * Default Value: 100
+        * * Description: Display-only upper bound: the value a normalized score of 1 is shown as (e.g. 100 or 5). Never used in scoring.`),
+    RequestedBump: z.union([z.literal('Major'), z.literal('Minor'), z.literal('Patch')]).nullable().describe(`
+        * * Field Name: RequestedBump
+        * * Display Name: Requested Bump
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Major
+    *   * Minor
+    *   * Patch
+        * * Description: Optional bump the author asks for on publish. The server applies the larger of this and the bump it computes; an author can never publish a smaller bump than the change requires.`),
+    ComputedBump: z.union([z.literal('Initial'), z.literal('Major'), z.literal('Minor'), z.literal('Patch')]).nullable().describe(`
+        * * Field Name: ComputedBump
+        * * Display Name: Computed Bump
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Initial
+    *   * Major
+    *   * Minor
+    *   * Patch
+        * * Description: The bump the server computed from the diff at publish (Initial for a rubric's first version).`),
+    AppliedBump: z.union([z.literal('Initial'), z.literal('Major'), z.literal('Minor'), z.literal('Patch')]).nullable().describe(`
+        * * Field Name: AppliedBump
+        * * Display Name: Applied Bump
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Initial
+    *   * Major
+    *   * Minor
+    *   * Patch
+        * * Description: The bump actually applied at publish: the larger of ComputedBump and RequestedBump.`),
+    ChangeSummary: z.string().nullable().describe(`
+        * * Field Name: ChangeSummary
+        * * Display Name: Change Summary
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Author's human-readable summary of what changed in this version.`),
+    ChangeDetails: z.any().nullable().describe(`
+        * * Field Name: ChangeDetails
+        * * Display Name: Change Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRubricVersionEntity_IRubricVersionChangeDetails
+        * * Description: JSON diff produced at publish: every added, removed and changed node and property, each with the bump it required. Explains ComputedBump.`),
+    ContentHash: z.string().nullable().describe(`
+        * * Field Name: ContentHash
+        * * Display Name: Content Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of the version's full canonical content (scoring math plus all wording), computed at publish.`),
+    ScoringHash: z.string().nullable().describe(`
+        * * Field Name: ScoringHash
+        * * Display Name: Scoring Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 of only the scoring-relevant content (tree shape, keys, weights, scales, gates, policies, rollups, evaluator rules). Two versions with equal ScoringHash compute identical scores from identical answers.`),
+    PublishedAt: z.date().nullable().describe(`
+        * * Field Name: PublishedAt
+        * * Display Name: Published At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the version was published.`),
+    PublishedByUserID: z.string().nullable().describe(`
+        * * Field Name: PublishedByUserID
+        * * Display Name: Published By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    RetiredAt: z.date().nullable().describe(`
+        * * Field Name: RetiredAt
+        * * Display Name: Retired At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the version was retired. NULL while Draft or Published.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Rubric: z.string().describe(`
+        * * Field Name: Rubric
+        * * Display Name: Rubric
+        * * SQL Data Type: nvarchar(255)`),
+    PublishedByUser: z.string().nullable().describe(`
+        * * Field Name: PublishedByUser
+        * * Display Name: Published By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJRubricVersionEntityType = z.infer<typeof MJRubricVersionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Rubrics
+ */
+export const MJRubricSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique display name of the rubric.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the rubric evaluates and when to use it.`),
+    CategoryID: z.string().nullable().describe(`
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Categories (vwRubricCategories.ID)`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active rubrics can be assigned and evaluated against; Disabled rubrics keep their history but are not offered for new use.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRubricEntityType = z.infer<typeof MJRubricSchema>;
 
 /**
  * zod schema definition for the entity MJ: SQL Dialects
@@ -32813,6 +33956,11 @@ export const MJTestSuiteRunSchema = z.object({
         * * Display Name: Resolved Variables
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing the variable values provided at suite run level. These values were applied to all tests in the suite run and can be seen on individual TestRun.ResolvedVariables with source="suite".`),
+    Score: z.number().nullable().describe(`
+        * * Field Name: Score
+        * * Display Name: Score
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Suite-level score (0..1): the mean score of the suite's executed (non-skipped) test runs.`),
     Suite: z.string().describe(`
         * * Field Name: Suite
         * * Display Name: Suite
@@ -32956,9 +34104,19 @@ export const MJTestSuiteSchema = z.object({
         * * Display Name: Variables
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.`),
+    RubricID: z.string().nullable().describe(`
+        * * Field Name: RubricID
+        * * Display Name: Rubric ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubrics (vwRubrics.ID)
+        * * Description: Default rubric for tests in this suite and its child suites that do not name their own.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    Rubric: z.string().nullable().describe(`
+        * * Field Name: Rubric
+        * * Display Name: Rubric
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -33136,10 +34294,20 @@ export const MJTestSchema = z.object({
         * * Display Name: Variables
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for which test type variables are exposed by this test, along with test-level defaults, locks, and value restrictions. References variables defined in the parent TestType.VariablesSchema.`),
+    RubricID: z.string().nullable().describe(`
+        * * Field Name: RubricID
+        * * Display Name: Rubric ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubrics (vwRubrics.ID)
+        * * Description: The rubric this test's output is judged by. NULL = inherit from the suite (walking up ParentID). The latest published version is pinned when each run starts.`),
     Type: z.string().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
+    Rubric: z.string().nullable().describe(`
+        * * Field Name: Rubric
+        * * Display Name: Rubric
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJTestEntityType = z.infer<typeof MJTestSchema>;
@@ -41118,6 +42286,373 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
 
 /**
+ * JSON shapes for the rubric columns that store structured bags.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ *
+ * @see plans/rubrics/RUBRICS_PLAN.md §4.1
+ */
+
+export type MJAIAgentRubricEntity_JsonPrimitive = string | number | boolean | null;
+export type MJAIAgentRubricEntity_JsonValue = MJAIAgentRubricEntity_JsonPrimitive | MJAIAgentRubricEntity_JsonValue[] | MJAIAgentRubricEntity_JsonObject;
+export interface MJAIAgentRubricEntity_JsonObject {
+    [key: string]: MJAIAgentRubricEntity_JsonValue;
+}
+
+export interface MJAIAgentRubricEntity_IRubricDeterministicRule {
+    /** JSON path into the subject content. */
+    Path: string;
+    Operator: 'equals' | 'notEquals' | 'in' | 'notIn' | 'contains' | 'exists' | 'between' | 'gte' | 'lte' | 'matches';
+    Values: MJAIAgentRubricEntity_JsonValue[];
+    /** Level label or numeric value when the rule matches. */
+    LevelWhenTrue: string;
+    LevelWhenFalse: string;
+    NotApplicableWhenMissing?: boolean;
+}
+
+/** RubricCriterion.EvaluatorConfig */
+export interface MJAIAgentRubricEntity_IRubricCriterionEvaluatorConfig {
+    Deterministic?: MJAIAgentRubricEntity_IRubricDeterministicRule;
+    AI?: { Hints?: string; RequireQuote?: boolean };
+    /** Keyed by consuming app, for example "Caliber". Changing it is a major bump. */
+    Extensions?: Record<string, MJAIAgentRubricEntity_JsonObject>;
+}
+
+export interface MJAIAgentRubricEntity_IRubricEvidenceQuote {
+    Type: 'Quote';
+    Text: string;
+    Start?: number;
+    End?: number;
+    Verified?: boolean;
+}
+
+export interface MJAIAgentRubricEntity_IRubricEvidenceTurn {
+    Type: 'Turn';
+    ConversationDetailID?: string;
+    TurnIndex: number;
+    Quote?: string;
+}
+
+export interface MJAIAgentRubricEntity_IRubricEvidenceFile {
+    Type: 'File';
+    FileID: string;
+    Page?: number;
+    Note?: string;
+}
+
+export interface MJAIAgentRubricEntity_IRubricEvidenceUrl {
+    Type: 'Url';
+    Url: string;
+    Title?: string;
+}
+
+export interface MJAIAgentRubricEntity_IRubricEvidenceRecord {
+    Type: 'Record';
+    EntityName: string;
+    RecordID: string;
+    Note?: string;
+}
+
+export interface MJAIAgentRubricEntity_IRubricEvidenceMedia {
+    Type: 'Media';
+    FileID: string;
+    StartMs: number;
+    EndMs: number;
+}
+
+/** RubricEvaluationScore.Evidence */
+export type MJAIAgentRubricEntity_IRubricEvidence =
+    | MJAIAgentRubricEntity_IRubricEvidenceQuote
+    | MJAIAgentRubricEntity_IRubricEvidenceTurn
+    | MJAIAgentRubricEntity_IRubricEvidenceFile
+    | MJAIAgentRubricEntity_IRubricEvidenceUrl
+    | MJAIAgentRubricEntity_IRubricEvidenceRecord
+    | MJAIAgentRubricEntity_IRubricEvidenceMedia;
+
+/** RubricEvaluation.Metadata */
+export interface MJAIAgentRubricEntity_IRubricEvaluationMetadata {
+    Evaluator?: { Name?: string; Settings?: MJAIAgentRubricEntity_JsonObject };
+    Samples?: { Count?: number; Spread?: string };
+    Timings?: MJAIAgentRubricEntity_JsonObject;
+    RequestedBy?: { EntityName: string; RecordID: string };
+    DroppedEvidenceCount?: number;
+    Warnings?: string[];
+}
+
+export interface MJAIAgentRubricEntity_IRubricVersionChange {
+    Path: string;
+    Property: string;
+    From: MJAIAgentRubricEntity_JsonValue;
+    To: MJAIAgentRubricEntity_JsonValue;
+    Bump: 'Major' | 'Minor' | 'Patch';
+}
+
+/** RubricVersion.ChangeDetails */
+export interface MJAIAgentRubricEntity_IRubricVersionChangeDetails {
+    BaseVersionID: string | null;
+    Changes: MJAIAgentRubricEntity_IRubricVersionChange[];
+}
+
+/** AIAgentRubric.EvaluatorConfig */
+export interface MJAIAgentRubricEntity_IRubricEvaluatorSelection {
+    EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    EvaluatorName?: string;
+    PromptID?: string;
+    AgentID?: string;
+    ModelID?: string;
+    Samples?: number;
+    Mode?: 'SinglePass' | 'PerCriterion';
+}
+
+/**
+ * MJ: AI Agent Rubrics - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRubric
+ * * Base View: vwAIAgentRubrics
+ * * @description A rubric an agent publishes for how it should be judged: Evaluation (used by agent eval tests), SelfCheck (the agent checks its own output before returning), or ProductionSampling (a share of real runs is evaluated asynchronously to watch for drift).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Rubrics')
+export class MJAIAgentRubricEntity extends BaseEntity<MJAIAgentRubricEntityType> {
+    /**
+    * Loads the MJ: AI Agent Rubrics record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Rubrics record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentRubricEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: RubricID
+    * * Display Name: Rubric ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubrics (vwRubrics.ID)
+    */
+    get RubricID(): string {
+        return this.Get('RubricID');
+    }
+    set RubricID(value: string) {
+        this.Set('RubricID', value);
+    }
+
+    /**
+    * * Field Name: Purpose
+    * * Display Name: Purpose
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Evaluation
+    *   * ProductionSampling
+    *   * SelfCheck
+    * * Description: How the agent uses the rubric: Evaluation, SelfCheck or ProductionSampling.
+    */
+    get Purpose(): 'Evaluation' | 'ProductionSampling' | 'SelfCheck' {
+        return this.Get('Purpose');
+    }
+    set Purpose(value: 'Evaluation' | 'ProductionSampling' | 'SelfCheck') {
+        this.Set('Purpose', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 = the rubric used for this purpose when a caller does not name one.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active links are used; Disabled links are kept but ignored.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: PassThreshold
+    * * Display Name: Pass Threshold
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Overrides the rubric version's PassThreshold (0..1) for this agent and purpose. NULL = use the version default.
+    */
+    get PassThreshold(): number | null {
+        return this.Get('PassThreshold');
+    }
+    set PassThreshold(value: number | null) {
+        this.Set('PassThreshold', value);
+    }
+
+    /**
+    * * Field Name: SampleRate
+    * * Display Name: Sample Rate
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Share (0..1) of completed production runs to evaluate. Required for ProductionSampling. Sampling is deterministic on the run ID so it is reproducible.
+    */
+    get SampleRate(): number | null {
+        return this.Get('SampleRate');
+    }
+    set SampleRate(value: number | null) {
+        this.Set('SampleRate', value);
+    }
+
+    /**
+    * * Field Name: MaxSelfCheckAttempts
+    * * Display Name: Max Self Check Attempts
+    * * SQL Data Type: int
+    * * Description: For SelfCheck: how many times the agent may revise its output after a failed self-check before returning anyway (with the failure recorded). NULL = 1.
+    */
+    get MaxSelfCheckAttempts(): number | null {
+        return this.Get('MaxSelfCheckAttempts');
+    }
+    set MaxSelfCheckAttempts(value: number | null) {
+        this.Set('MaxSelfCheckAttempts', value);
+    }
+
+    /**
+    * * Field Name: EvaluatorConfig
+    * * Display Name: Evaluator Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentRubricEntity_IRubricEvaluatorSelection
+    * * Description: JSON (IRubricEvaluatorSelection) naming which evaluator to use and its settings (e.g. judge prompt, model), overriding the defaults.
+    */
+    get EvaluatorConfig(): string | null {
+        return this.Get('EvaluatorConfig');
+    }
+    set EvaluatorConfig(value: string | null) {
+        this.Set('EvaluatorConfig', value);
+    }
+
+    private _EvaluatorConfigObject_cached: MJAIAgentRubricEntity_IRubricEvaluatorSelection | null | undefined = undefined;
+    private _EvaluatorConfigObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for EvaluatorConfig — returns parsed JSON as MJAIAgentRubricEntity_IRubricEvaluatorSelection.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get EvaluatorConfigObject(): MJAIAgentRubricEntity_IRubricEvaluatorSelection | null {
+        const raw = this.EvaluatorConfig;
+        if (raw !== this._EvaluatorConfigObject_lastRaw) {
+            this._EvaluatorConfigObject_cached = raw ? JSON.parse(raw) : null;
+            this._EvaluatorConfigObject_lastRaw = raw;
+        }
+        return this._EvaluatorConfigObject_cached!;
+    }
+    set EvaluatorConfigObject(value: MJAIAgentRubricEntity_IRubricEvaluatorSelection | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.EvaluatorConfig = raw;
+        this._EvaluatorConfigObject_cached = value;
+        this._EvaluatorConfigObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display and evaluation order when an agent has several rubrics for one purpose.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Rubric
+    * * Display Name: Rubric
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Rubric(): string {
+        return this.Get('Rubric');
+    }
+}
+
+
+/**
  * MJ: AI Agent Run Medias - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentRunMedia
@@ -44927,7 +46462,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     *   * Prompt
     *   * Sub-Agent
     *   * While
-    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).
+    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
     */
     get StepType(): 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
         return this.Get('StepType');
@@ -45172,7 +46707,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.
+    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
@@ -88039,12 +89574,6 @@ export interface MJEntityFieldEntity_IEntityFieldConfiguration {
      * Hierarchy and tree structure configuration for self-referencing foreign keys.
      */
     Hierarchy?: MJEntityFieldEntity_IEntityFieldHierarchyConfig;
-
-    /**
-     * Record cloning configuration for this field.
-     * @see plans/record-cloning/README.md §4.3
-     */
-    Clone?: MJEntityFieldEntity_IEntityFieldCloneConfiguration;
 }
 
 /**
@@ -88060,31 +89589,6 @@ export interface MJEntityFieldEntity_IEntityFieldHierarchyConfig {
      * Optional custom maximum recursion depth guard (defaults to 100).
      */
     MaxDepth?: number;
-}
-
-/**
- * Record cloning configuration for an entity field.
- * @see plans/record-cloning/README.md §4.3
- */
-export interface MJEntityFieldEntity_IEntityFieldCloneConfiguration {
-    /** Copy (default) | Reset (column default, or Value) | Suffix (naming template) | Prompt | Ownership | ServerAllocated | Remap (FK inside the set → new key) | RemapJSON | Transform */
-    Policy?: 'Copy' | 'Reset' | 'Suffix' | 'Prompt' | 'Ownership' | 'ServerAllocated' | 'Remap' | 'RemapJSON' | 'Transform';
-    Value?: unknown;
-    JsonRemap?: MJEntityFieldEntity_IJsonRemapSpec[];
-    Transform?: unknown;
-}
-
-export interface MJEntityFieldEntity_IJsonRemapSpec {
-    /** Path selector: dot segments and [*] for arrays, e.g. 'layout.content[*].componentState.config.viewId'. */
-    Path: string;
-    /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
-    Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
-    /** Entity the ID refers to, for remap. */
-    TargetEntityName?: string;
-    /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
-    OnMissing?: 'reuse' | 'drop';
-    /** Remove arrays and objects left empty by a drop. Default true. */
-    CleanEmptyContainers?: boolean;
 }
 
 /**
@@ -110207,50 +111711,6 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
 
 
 /**
- * Structured provenance context for RecordChange rows.
- *
- * Stored as JSON in `MJ: Record Changes.ChangeContext`. CodeGen emits a
- * typed `ChangeContextObject` accessor on `MJRecordChangeEntity` that
- * returns `MJRecordChangeEntity_IRecordChangeContext | null`.
- *
- * @see plans/record-cloning/README.md §10.2
- */
-
-export interface MJRecordChangeEntity_IRecordChangeCloneContext {
-    /** ID of the RecordCloneLog row coordinating this clone operation. */
-    CloneLogID: string;
-    /** Entity name of the record being cloned. */
-    SourceEntityName: string;
-    /** Compact URL segment of the source key (bare value for single-column keys). */
-    SourceRecordID: string;
-    /** Entity name of the root record of the clone graph. */
-    RootEntityName: string;
-    /** Source key of the root record. */
-    RootSourceRecordID: string;
-    /** Target key of the root record after insertion. */
-    RootTargetRecordID: string;
-    /** Depth within the record graph (0 for root). */
-    Depth: number;
-    /** Relationship route traversed to reach this record. */
-    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
-    /** Kinds and field names only. Values are already in FullRecordJSON and are subject to FLS projection there. */
-    FieldChangeSummary: Array<{ Kind: string; Fields: string[] }>;
-    /** Optional explanation entered at clone time. */
-    Reason?: string;
-}
-
-export interface MJRecordChangeEntity_IRecordChangeContext {
-    /** Shape version. */
-    Version: 1;
-    /** The process that produced the change. Restore keeps its dedicated columns; it is listed so future writers can carry both. */
-    Kind: 'Clone' | 'Merge' | 'Import' | 'Process' | 'Replay' | 'Other';
-    /** Populated when Kind === 'Clone'. */
-    Clone?: MJRecordChangeEntity_IRecordChangeCloneContext;
-    /** Free-form tags for future kinds; never values. */
-    Tags?: string[];
-}
-
-/**
  * MJ: Record Changes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RecordChange
@@ -110545,41 +112005,6 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     }
 
     /**
-    * * Field Name: ChangeContext
-    * * Display Name: Change Context
-    * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: MJRecordChangeEntity_IRecordChangeContext
-    * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.
-    */
-    get ChangeContext(): string | null {
-        return this.Get('ChangeContext');
-    }
-    set ChangeContext(value: string | null) {
-        this.Set('ChangeContext', value);
-    }
-
-    private _ChangeContextObject_cached: MJRecordChangeEntity_IRecordChangeContext | null | undefined = undefined;
-    private _ChangeContextObject_lastRaw: string | null = null;
-    /**
-    * Typed accessor for ChangeContext — returns parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
-    */
-    get ChangeContextObject(): MJRecordChangeEntity_IRecordChangeContext | null {
-        const raw = this.ChangeContext;
-        if (raw !== this._ChangeContextObject_lastRaw) {
-            this._ChangeContextObject_cached = raw ? JSON.parse(raw) : null;
-            this._ChangeContextObject_lastRaw = raw;
-        }
-        return this._ChangeContextObject_cached!;
-    }
-    set ChangeContextObject(value: MJRecordChangeEntity_IRecordChangeContext | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.ChangeContext = raw;
-        this._ChangeContextObject_cached = value;
-        this._ChangeContextObject_lastRaw = raw;
-    }
-
-    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -110622,6 +112047,19 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     */
     get RestoredFrom(): string | null {
         return this.Get('RestoredFrom');
+    }
+
+    /**
+    * * Field Name: ChangeContext
+    * * Display Name: Change Context
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.
+    */
+    get ChangeContext(): string | null {
+        return this.Get('ChangeContext');
+    }
+    set ChangeContext(value: string | null) {
+        this.Set('ChangeContext', value);
     }
 }
 
@@ -110849,112 +112287,6 @@ export class MJRecordCloneLogItemEntity extends BaseEntity<MJRecordCloneLogItemE
 
 
 /**
- * Serialized execution plan for record cloning.
- *
- * Stored as JSON in `MJ: Record Clone Logs.PlanJSON`. CodeGen emits a typed
- * `PlanJSONObject` accessor on `MJRecordCloneLogEntity` that returns
- * `MJRecordCloneLogEntity_IClonePlan | null`.
- *
- * @see plans/record-cloning/README.md §3.4
- */
-
-export interface MJRecordCloneLogEntity_ICloneCompositeKeyKVP {
-    FieldName: string;
-    Value: unknown;
-}
-
-export interface MJRecordCloneLogEntity_ICloneCompositeKeyLike {
-    KeyValuePairs: MJRecordCloneLogEntity_ICloneCompositeKeyKVP[];
-}
-
-export type MJRecordCloneLogEntity_CloneEdgePolicy = 'Deep' | 'Reference' | 'Skip';
-export type MJRecordCloneLogEntity_CloneNodeAction = 'Create' | 'Reference' | 'Skip' | 'Blocked';
-export type MJRecordCloneLogEntity_CloneEdgeKind =
-    | 'IsASubtype' | 'Collection' | 'Embedded' | 'Relationship' | 'InboundFK'
-    | 'ForwardFK' | 'SoftLink' | 'Hierarchy' | 'SelfPointer';
-
-export type MJRecordCloneLogEntity_CloneWarningCode =
-    | 'UNMAPPABLE_REFERENCE_DROPPED' | 'PAYLOAD_DROPPED' | 'ROW_DISABLED' | 'UNIQUE_RENAMED' | 'UNIQUE_PROMPT_REQUIRED'
-    | 'CAP_EXCEEDED' | 'NO_CREATE_PERMISSION' | 'NOT_CLONEABLE' | 'WRITE_ONCE_ENTITY' | 'SERVER_HOOK_SIDE_EFFECT'
-    | 'CONSTRAINT_FORCED_DEEP' | 'LOCKED_EDGE_OVERRIDE_IGNORED' | 'EMBEDDING_REGENERATED' | 'SOURCE_ROW_INVISIBLE';
-
-export interface MJRecordCloneLogEntity_ICloneWarning {
-    Code: MJRecordCloneLogEntity_CloneWarningCode;
-    Severity: 'Info' | 'Warning' | 'Error';
-    NodeKey?: string;
-    Field?: string;
-    Message: string;
-}
-
-export interface MJRecordCloneLogEntity_ICloneFieldChange {
-    Field: string;
-    Kind: 'Copy' | 'Reset' | 'Ownership' | 'Rename' | 'Remap' | 'RemapJSON' | 'Rule' | 'Override' | 'Prompt' | 'Excluded' | 'DeniedRead' | 'DeniedCreate' | 'NotWritable';
-    OldValue: unknown;
-    NewValue: unknown;
-    Reason: string;
-}
-
-export interface MJRecordCloneLogEntity_IClonePlanEdge {
-    FromKey: string;
-    ToKey: string;
-    Kind: MJRecordCloneLogEntity_CloneEdgeKind;
-    RelatedEntityName: string;
-    JoinField: string;
-    RelationshipID?: string;
-    CollectionName?: string;
-    IsSoftLink?: boolean;
-    Policy: MJRecordCloneLogEntity_CloneEdgePolicy;
-    Locked: boolean;
-    PolicySource: 'BuiltIn' | 'Constraint' | 'Entity' | 'Relationship' | 'Descendant' | 'Request';
-}
-
-export interface MJRecordCloneLogEntity_IClonePlanNode {
-    Key: string;
-    EntityName: string;
-    SourceKey: MJRecordCloneLogEntity_ICloneCompositeKeyLike;
-    TargetKey: MJRecordCloneLogEntity_ICloneCompositeKeyLike | null;
-    Action: MJRecordCloneLogEntity_CloneNodeAction;
-    Reason: string;
-    Depth: number;
-    ParentKey: string | null;
-    Via: MJRecordCloneLogEntity_IClonePlanEdge | null;
-    DisplayName: string;
-    IsSubtypeRow?: boolean;
-    FieldChanges: MJRecordCloneLogEntity_ICloneFieldChange[];
-    Warnings: MJRecordCloneLogEntity_ICloneWarning[];
-    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
-}
-
-export interface MJRecordCloneLogEntity_IClonePlanCounts {
-    ByEntity: Record<string, { Create: number; Reference: number; Skip: number }>;
-    Create: number;
-    Total: number;
-}
-
-export interface MJRecordCloneLogEntity_ICloneEffectiveOptions {
-    MaxDepth: number;
-    MaxRecords: number;
-    Subtypes: 'include' | 'exclude';
-    Hierarchy: 'subtree' | 'node';
-    SoftLinks: 'skip' | 'include';
-    EntityActions: 'suppress' | 'fire';
-    AIActions: 'suppress' | 'fire';
-    Embeddings: 'copy' | 'regenerate';
-}
-
-export interface MJRecordCloneLogEntity_IClonePlan {
-    PlanVersion: 1;
-    Hash: string;
-    Roots: string[];
-    Nodes: MJRecordCloneLogEntity_IClonePlanNode[];
-    Edges: MJRecordCloneLogEntity_IClonePlanEdge[];
-    Counts: MJRecordCloneLogEntity_IClonePlanCounts;
-    Warnings: MJRecordCloneLogEntity_ICloneWarning[];
-    Blocked: boolean;
-    EffectiveOptions: MJRecordCloneLogEntity_ICloneEffectiveOptions;
-}
-
-/**
  * MJ: Record Clone Logs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RecordCloneLog
@@ -111117,7 +112449,6 @@ export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityTyp
     * * Field Name: PlanJSON
     * * Display Name: Plan JSON
     * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: MJRecordCloneLogEntity_IClonePlan
     * * Description: Serialized JSON execution plan detailing all graph nodes, edges, actions, and options.
     */
     get PlanJSON(): string {
@@ -111125,27 +112456,6 @@ export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityTyp
     }
     set PlanJSON(value: string) {
         this.Set('PlanJSON', value);
-    }
-
-    private _PlanJSONObject_cached: MJRecordCloneLogEntity_IClonePlan | undefined = undefined;
-    private _PlanJSONObject_lastRaw: string | null = null;
-    /**
-    * Typed accessor for PlanJSON — returns parsed JSON as MJRecordCloneLogEntity_IClonePlan.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
-    */
-    get PlanJSONObject(): MJRecordCloneLogEntity_IClonePlan {
-        const raw = this.PlanJSON;
-        if (raw !== this._PlanJSONObject_lastRaw) {
-            this._PlanJSONObject_cached = raw ? JSON.parse(raw) : null;
-            this._PlanJSONObject_lastRaw = raw;
-        }
-        return this._PlanJSONObject_cached!;
-    }
-    set PlanJSONObject(value: MJRecordCloneLogEntity_IClonePlan) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.PlanJSON = raw;
-        this._PlanJSONObject_cached = value;
-        this._PlanJSONObject_lastRaw = raw;
     }
 
     /**
@@ -114428,6 +115738,3113 @@ export class MJRowLevelSecurityFilterEntity extends BaseEntity<MJRowLevelSecurit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Rubric Bands - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricBand
+ * * Base View: vwRubricBands
+ * * @description A labeled range of the normalized score, e.g. Exemplary / Proficient / Developing. Display and reporting ONLY: bands never decide pass or fail, which is always PassThreshold plus gates.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Bands')
+export class MJRubricBandEntity extends BaseEntity<MJRubricBandEntityType> {
+    /**
+    * Loads the MJ: Rubric Bands record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Bands record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricBandEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RubricVersionID
+    * * Display Name: Rubric Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Versions (vwRubricVersions.ID)
+    */
+    get RubricVersionID(): string {
+        return this.Get('RubricVersionID');
+    }
+    set RubricVersionID(value: string) {
+        this.Set('RubricVersionID', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display label of the band.
+    */
+    get Label(): string {
+        return this.Get('Label');
+    }
+    set Label(value: string) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What a result in this band means.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: MinScore
+    * * Display Name: Min Score
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Inclusive lower bound of the band on the 0..1 normalized scale.
+    */
+    get MinScore(): number {
+        return this.Get('MinScore');
+    }
+    set MinScore(value: number) {
+        this.Set('MinScore', value);
+    }
+
+    /**
+    * * Field Name: MaxScore
+    * * Display Name: Max Score
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Exclusive upper bound of the band on the 0..1 normalized scale; the highest band also includes 1.
+    */
+    get MaxScore(): number {
+        return this.Get('MaxScore');
+    }
+    set MaxScore(value: number) {
+        this.Set('MaxScore', value);
+    }
+
+    /**
+    * * Field Name: DisplayTone
+    * * Display Name: Display Tone
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Neutral
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * Info
+    *   * Neutral
+    *   * Success
+    *   * Warning
+    * * Description: Semantic tone the UI maps to design tokens (never a raw color).
+    */
+    get DisplayTone(): 'Error' | 'Info' | 'Neutral' | 'Success' | 'Warning' {
+        return this.Get('DisplayTone');
+    }
+    set DisplayTone(value: 'Error' | 'Info' | 'Neutral' | 'Success' | 'Warning') {
+        this.Set('DisplayTone', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order of the band.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Rubric Categories - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricCategory
+ * * Base View: vwRubricCategories
+ * * @description Hierarchical folders for organizing rubrics.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Categories')
+export class MJRubricCategoryEntity extends BaseEntity<MJRubricCategoryEntityType> {
+    /**
+    * Loads the MJ: Rubric Categories record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Categories record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricCategoryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the category.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What rubrics in this category are for.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Categories (vwRubricCategories.ID)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+}
+
+
+/**
+ * JSON shapes for the rubric columns that store structured bags.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ *
+ * @see plans/rubrics/RUBRICS_PLAN.md §4.1
+ */
+
+export type MJRubricCriterionEntity_JsonPrimitive = string | number | boolean | null;
+export type MJRubricCriterionEntity_JsonValue = MJRubricCriterionEntity_JsonPrimitive | MJRubricCriterionEntity_JsonValue[] | MJRubricCriterionEntity_JsonObject;
+export interface MJRubricCriterionEntity_JsonObject {
+    [key: string]: MJRubricCriterionEntity_JsonValue;
+}
+
+export interface MJRubricCriterionEntity_IRubricDeterministicRule {
+    /** JSON path into the subject content. */
+    Path: string;
+    Operator: 'equals' | 'notEquals' | 'in' | 'notIn' | 'contains' | 'exists' | 'between' | 'gte' | 'lte' | 'matches';
+    Values: MJRubricCriterionEntity_JsonValue[];
+    /** Level label or numeric value when the rule matches. */
+    LevelWhenTrue: string;
+    LevelWhenFalse: string;
+    NotApplicableWhenMissing?: boolean;
+}
+
+/** RubricCriterion.EvaluatorConfig */
+export interface MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig {
+    Deterministic?: MJRubricCriterionEntity_IRubricDeterministicRule;
+    AI?: { Hints?: string; RequireQuote?: boolean };
+    /** Keyed by consuming app, for example "Caliber". Changing it is a major bump. */
+    Extensions?: Record<string, MJRubricCriterionEntity_JsonObject>;
+}
+
+export interface MJRubricCriterionEntity_IRubricEvidenceQuote {
+    Type: 'Quote';
+    Text: string;
+    Start?: number;
+    End?: number;
+    Verified?: boolean;
+}
+
+export interface MJRubricCriterionEntity_IRubricEvidenceTurn {
+    Type: 'Turn';
+    ConversationDetailID?: string;
+    TurnIndex: number;
+    Quote?: string;
+}
+
+export interface MJRubricCriterionEntity_IRubricEvidenceFile {
+    Type: 'File';
+    FileID: string;
+    Page?: number;
+    Note?: string;
+}
+
+export interface MJRubricCriterionEntity_IRubricEvidenceUrl {
+    Type: 'Url';
+    Url: string;
+    Title?: string;
+}
+
+export interface MJRubricCriterionEntity_IRubricEvidenceRecord {
+    Type: 'Record';
+    EntityName: string;
+    RecordID: string;
+    Note?: string;
+}
+
+export interface MJRubricCriterionEntity_IRubricEvidenceMedia {
+    Type: 'Media';
+    FileID: string;
+    StartMs: number;
+    EndMs: number;
+}
+
+/** RubricEvaluationScore.Evidence */
+export type MJRubricCriterionEntity_IRubricEvidence =
+    | MJRubricCriterionEntity_IRubricEvidenceQuote
+    | MJRubricCriterionEntity_IRubricEvidenceTurn
+    | MJRubricCriterionEntity_IRubricEvidenceFile
+    | MJRubricCriterionEntity_IRubricEvidenceUrl
+    | MJRubricCriterionEntity_IRubricEvidenceRecord
+    | MJRubricCriterionEntity_IRubricEvidenceMedia;
+
+/** RubricEvaluation.Metadata */
+export interface MJRubricCriterionEntity_IRubricEvaluationMetadata {
+    Evaluator?: { Name?: string; Settings?: MJRubricCriterionEntity_JsonObject };
+    Samples?: { Count?: number; Spread?: string };
+    Timings?: MJRubricCriterionEntity_JsonObject;
+    RequestedBy?: { EntityName: string; RecordID: string };
+    DroppedEvidenceCount?: number;
+    Warnings?: string[];
+}
+
+export interface MJRubricCriterionEntity_IRubricVersionChange {
+    Path: string;
+    Property: string;
+    From: MJRubricCriterionEntity_JsonValue;
+    To: MJRubricCriterionEntity_JsonValue;
+    Bump: 'Major' | 'Minor' | 'Patch';
+}
+
+/** RubricVersion.ChangeDetails */
+export interface MJRubricCriterionEntity_IRubricVersionChangeDetails {
+    BaseVersionID: string | null;
+    Changes: MJRubricCriterionEntity_IRubricVersionChange[];
+}
+
+/** AIAgentRubric.EvaluatorConfig */
+export interface MJRubricCriterionEntity_IRubricEvaluatorSelection {
+    EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    EvaluatorName?: string;
+    PromptID?: string;
+    AgentID?: string;
+    ModelID?: string;
+    Samples?: number;
+    Mode?: 'SinglePass' | 'PerCriterion';
+}
+
+/**
+ * MJ: Rubric Criteria - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricCriterion
+ * * Base View: vwRubricCriterions
+ * * @description A node in a rubric version's weighted tree. Groups roll up their children; criteria (leaves) are answered on a scale. Weights are relative among siblings, so a node's share of the total is the product of its and its ancestors' normalized weights.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Criteria')
+export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityType> {
+    /**
+    * Loads the MJ: Rubric Criteria record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Criteria record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricCriterionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RubricVersionID
+    * * Display Name: Rubric Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Versions (vwRubricVersions.ID)
+    */
+    get RubricVersionID(): string {
+        return this.Get('RubricVersionID');
+    }
+    set RubricVersionID(value: string) {
+        this.Set('RubricVersionID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    * * Description: Parent group node. NULL = a top-level node of the rubric.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Key
+    * * Display Name: Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Stable machine key, unique within the version and carried unchanged across versions. It is the criterion's identity for comparing and aggregating results over time; renaming it is a removal plus an addition (a major bump).
+    */
+    get Key(): string {
+        return this.Get('Key');
+    }
+    set Key(value: string) {
+        this.Set('Key', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the group or criterion.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the node covers.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Guidance
+    * * Display Name: Guidance
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Instructions to evaluators (human and AI) on how to judge this criterion and what evidence counts.
+    */
+    get Guidance(): string | null {
+        return this.Get('Guidance');
+    }
+    set Guidance(value: string | null) {
+        this.Set('Guidance', value);
+    }
+
+    /**
+    * * Field Name: NodeType
+    * * Display Name: Node Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Criterion
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Criterion
+    *   * Group
+    * * Description: Group: has children, no scale, and a computed score. Criterion: a leaf answered on ScaleID.
+    */
+    get NodeType(): 'Criterion' | 'Group' {
+        return this.Get('NodeType');
+    }
+    set NodeType(value: 'Criterion' | 'Group') {
+        this.Set('NodeType', value);
+    }
+
+    /**
+    * * Field Name: ScaleID
+    * * Display Name: Scale ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Scales (vwRubricScales.ID)
+    */
+    get ScaleID(): string | null {
+        return this.Get('ScaleID');
+    }
+    set ScaleID(value: string | null) {
+        this.Set('ScaleID', value);
+    }
+
+    /**
+    * * Field Name: Weight
+    * * Display Name: Weight
+    * * SQL Data Type: decimal(18, 6)
+    * * Default Value: 1
+    * * Description: Relative weight among siblings (normalized within the parent at scoring time). Must be >= 0.
+    */
+    get Weight(): number {
+        return this.Get('Weight');
+    }
+    set Weight(value: number) {
+        this.Set('Weight', value);
+    }
+
+    /**
+    * * Field Name: IsAdvisory
+    * * Display Name: Is Advisory
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 = recorded and displayed but excluded from every score, gate and pass decision.
+    */
+    get IsAdvisory(): boolean {
+        return this.Get('IsAdvisory');
+    }
+    set IsAdvisory(value: boolean) {
+        this.Set('IsAdvisory', value);
+    }
+
+    /**
+    * * Field Name: IsGate
+    * * Display Name: Is Gate
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 = knockout: if this node's normalized score is below GateMinimumScore the whole evaluation fails, whatever its overall score. Also applies to groups.
+    */
+    get IsGate(): boolean {
+        return this.Get('IsGate');
+    }
+    set IsGate(value: boolean) {
+        this.Set('IsGate', value);
+    }
+
+    /**
+    * * Field Name: GateMinimumScore
+    * * Display Name: Gate Minimum Score
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Normalized score (0..1) a gate node must reach. Required when IsGate = 1.
+    */
+    get GateMinimumScore(): number | null {
+        return this.Get('GateMinimumScore');
+    }
+    set GateMinimumScore(value: number | null) {
+        this.Set('GateMinimumScore', value);
+    }
+
+    /**
+    * * Field Name: NotApplicablePolicy
+    * * Display Name: Not Applicable Policy
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CountAsZero
+    *   * ExcludeAndRedistribute
+    *   * FailEvaluation
+    *   * NotAllowed
+    * * Description: Overrides the version's NotApplicablePolicy for this node. NULL = inherit.
+    */
+    get NotApplicablePolicy(): 'CountAsZero' | 'ExcludeAndRedistribute' | 'FailEvaluation' | 'NotAllowed' | null {
+        return this.Get('NotApplicablePolicy');
+    }
+    set NotApplicablePolicy(value: 'CountAsZero' | 'ExcludeAndRedistribute' | 'FailEvaluation' | 'NotAllowed' | null) {
+        this.Set('NotApplicablePolicy', value);
+    }
+
+    /**
+    * * Field Name: RollupMethod
+    * * Display Name: Rollup Method
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Maximum
+    *   * Minimum
+    *   * WeightedMean
+    * * Description: How a group combines its children's scores: WeightedMean (default when NULL), Minimum (weakest child), or Maximum (strongest child). Groups only.
+    */
+    get RollupMethod(): 'Maximum' | 'Minimum' | 'WeightedMean' | null {
+        return this.Get('RollupMethod');
+    }
+    set RollupMethod(value: 'Maximum' | 'Minimum' | 'WeightedMean' | null) {
+        this.Set('RollupMethod', value);
+    }
+
+    /**
+    * * Field Name: EvidenceRequired
+    * * Display Name: Evidence Required
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 = an evaluation cannot be submitted without evidence for this criterion.
+    */
+    get EvidenceRequired(): boolean {
+        return this.Get('EvidenceRequired');
+    }
+    set EvidenceRequired(value: boolean) {
+        this.Set('EvidenceRequired', value);
+    }
+
+    /**
+    * * Field Name: RationaleRequired
+    * * Display Name: Rationale Required
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 = an evaluation cannot be submitted without a written rationale for this criterion.
+    */
+    get RationaleRequired(): boolean {
+        return this.Get('RationaleRequired');
+    }
+    set RationaleRequired(value: boolean) {
+        this.Set('RationaleRequired', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order among siblings.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: EvaluatorConfig
+    * * Display Name: Evaluator Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig
+    * * Description: JSON (IRubricCriterionEvaluatorConfig) of evaluator-specific settings, keyed by evaluator: e.g. a deterministic rule, or hints for AI judges. Changes are treated as scoring changes (major bump) because a deterministic rule decides the score.
+    */
+    get EvaluatorConfig(): string | null {
+        return this.Get('EvaluatorConfig');
+    }
+    set EvaluatorConfig(value: string | null) {
+        this.Set('EvaluatorConfig', value);
+    }
+
+    private _EvaluatorConfigObject_cached: MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig | null | undefined = undefined;
+    private _EvaluatorConfigObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for EvaluatorConfig — returns parsed JSON as MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get EvaluatorConfigObject(): MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig | null {
+        const raw = this.EvaluatorConfig;
+        if (raw !== this._EvaluatorConfigObject_lastRaw) {
+            this._EvaluatorConfigObject_cached = raw ? JSON.parse(raw) : null;
+            this._EvaluatorConfigObject_lastRaw = raw;
+        }
+        return this._EvaluatorConfigObject_cached!;
+    }
+    set EvaluatorConfigObject(value: MJRubricCriterionEntity_IRubricCriterionEvaluatorConfig | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.EvaluatorConfig = raw;
+        this._EvaluatorConfigObject_cached = value;
+        this._EvaluatorConfigObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: Scale
+    * * Display Name: Scale
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Scale(): string | null {
+        return this.Get('Scale');
+    }
+}
+
+
+/**
+ * MJ: Rubric Criterion Levels - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricCriterionLevel
+ * * Base View: vwRubricCriterionLevels
+ * * @description Criterion-specific anchor text: what a given level (or numeric value) looks like for THIS criterion, e.g. what "4 - Strong" means for Methodology.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Criterion Levels')
+export class MJRubricCriterionLevelEntity extends BaseEntity<MJRubricCriterionLevelEntityType> {
+    /**
+    * Loads the MJ: Rubric Criterion Levels record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Criterion Levels record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricCriterionLevelEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CriterionID
+    * * Display Name: Criterion ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    */
+    get CriterionID(): string {
+        return this.Get('CriterionID');
+    }
+    set CriterionID(value: string) {
+        this.Set('CriterionID', value);
+    }
+
+    /**
+    * * Field Name: ScaleLevelID
+    * * Display Name: Scale Level ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Scale Levels (vwRubricScaleLevels.ID)
+    * * Description: The Levels-scale level this anchor describes. Exactly one of ScaleLevelID and AnchorValue is set.
+    */
+    get ScaleLevelID(): string | null {
+        return this.Get('ScaleLevelID');
+    }
+    set ScaleLevelID(value: string | null) {
+        this.Set('ScaleLevelID', value);
+    }
+
+    /**
+    * * Field Name: AnchorValue
+    * * Display Name: Anchor Value
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: For a Numeric scale: the value this anchor describes (e.g. 0, 50, 100).
+    */
+    get AnchorValue(): number | null {
+        return this.Get('AnchorValue');
+    }
+    set AnchorValue(value: number | null) {
+        this.Set('AnchorValue', value);
+    }
+
+    /**
+    * * Field Name: Descriptor
+    * * Display Name: Descriptor
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The anchor text shown to evaluators and given to AI judges.
+    */
+    get Descriptor(): string {
+        return this.Get('Descriptor');
+    }
+    set Descriptor(value: string) {
+        this.Set('Descriptor', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Criterion
+    * * Display Name: Criterion
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Criterion(): string {
+        return this.Get('Criterion');
+    }
+}
+
+
+/**
+ * JSON shapes for the rubric columns that store structured bags.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ *
+ * @see plans/rubrics/RUBRICS_PLAN.md §4.1
+ */
+
+export type MJRubricEvaluationScoreEntity_JsonPrimitive = string | number | boolean | null;
+export type MJRubricEvaluationScoreEntity_JsonValue = MJRubricEvaluationScoreEntity_JsonPrimitive | MJRubricEvaluationScoreEntity_JsonValue[] | MJRubricEvaluationScoreEntity_JsonObject;
+export interface MJRubricEvaluationScoreEntity_JsonObject {
+    [key: string]: MJRubricEvaluationScoreEntity_JsonValue;
+}
+
+export interface MJRubricEvaluationScoreEntity_IRubricDeterministicRule {
+    /** JSON path into the subject content. */
+    Path: string;
+    Operator: 'equals' | 'notEquals' | 'in' | 'notIn' | 'contains' | 'exists' | 'between' | 'gte' | 'lte' | 'matches';
+    Values: MJRubricEvaluationScoreEntity_JsonValue[];
+    /** Level label or numeric value when the rule matches. */
+    LevelWhenTrue: string;
+    LevelWhenFalse: string;
+    NotApplicableWhenMissing?: boolean;
+}
+
+/** RubricCriterion.EvaluatorConfig */
+export interface MJRubricEvaluationScoreEntity_IRubricCriterionEvaluatorConfig {
+    Deterministic?: MJRubricEvaluationScoreEntity_IRubricDeterministicRule;
+    AI?: { Hints?: string; RequireQuote?: boolean };
+    /** Keyed by consuming app, for example "Caliber". Changing it is a major bump. */
+    Extensions?: Record<string, MJRubricEvaluationScoreEntity_JsonObject>;
+}
+
+export interface MJRubricEvaluationScoreEntity_IRubricEvidenceQuote {
+    Type: 'Quote';
+    Text: string;
+    Start?: number;
+    End?: number;
+    Verified?: boolean;
+}
+
+export interface MJRubricEvaluationScoreEntity_IRubricEvidenceTurn {
+    Type: 'Turn';
+    ConversationDetailID?: string;
+    TurnIndex: number;
+    Quote?: string;
+}
+
+export interface MJRubricEvaluationScoreEntity_IRubricEvidenceFile {
+    Type: 'File';
+    FileID: string;
+    Page?: number;
+    Note?: string;
+}
+
+export interface MJRubricEvaluationScoreEntity_IRubricEvidenceUrl {
+    Type: 'Url';
+    Url: string;
+    Title?: string;
+}
+
+export interface MJRubricEvaluationScoreEntity_IRubricEvidenceRecord {
+    Type: 'Record';
+    EntityName: string;
+    RecordID: string;
+    Note?: string;
+}
+
+export interface MJRubricEvaluationScoreEntity_IRubricEvidenceMedia {
+    Type: 'Media';
+    FileID: string;
+    StartMs: number;
+    EndMs: number;
+}
+
+/** RubricEvaluationScore.Evidence */
+export type MJRubricEvaluationScoreEntity_IRubricEvidence =
+    | MJRubricEvaluationScoreEntity_IRubricEvidenceQuote
+    | MJRubricEvaluationScoreEntity_IRubricEvidenceTurn
+    | MJRubricEvaluationScoreEntity_IRubricEvidenceFile
+    | MJRubricEvaluationScoreEntity_IRubricEvidenceUrl
+    | MJRubricEvaluationScoreEntity_IRubricEvidenceRecord
+    | MJRubricEvaluationScoreEntity_IRubricEvidenceMedia;
+
+/** RubricEvaluation.Metadata */
+export interface MJRubricEvaluationScoreEntity_IRubricEvaluationMetadata {
+    Evaluator?: { Name?: string; Settings?: MJRubricEvaluationScoreEntity_JsonObject };
+    Samples?: { Count?: number; Spread?: string };
+    Timings?: MJRubricEvaluationScoreEntity_JsonObject;
+    RequestedBy?: { EntityName: string; RecordID: string };
+    DroppedEvidenceCount?: number;
+    Warnings?: string[];
+}
+
+export interface MJRubricEvaluationScoreEntity_IRubricVersionChange {
+    Path: string;
+    Property: string;
+    From: MJRubricEvaluationScoreEntity_JsonValue;
+    To: MJRubricEvaluationScoreEntity_JsonValue;
+    Bump: 'Major' | 'Minor' | 'Patch';
+}
+
+/** RubricVersion.ChangeDetails */
+export interface MJRubricEvaluationScoreEntity_IRubricVersionChangeDetails {
+    BaseVersionID: string | null;
+    Changes: MJRubricEvaluationScoreEntity_IRubricVersionChange[];
+}
+
+/** AIAgentRubric.EvaluatorConfig */
+export interface MJRubricEvaluationScoreEntity_IRubricEvaluatorSelection {
+    EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    EvaluatorName?: string;
+    PromptID?: string;
+    AgentID?: string;
+    ModelID?: string;
+    Samples?: number;
+    Mode?: 'SinglePass' | 'PerCriterion';
+}
+
+/**
+ * MJ: Rubric Evaluation Scores - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricEvaluationScore
+ * * Base View: vwRubricEvaluationScores
+ * * @description One node of one evaluation: an evaluator's answer to a criterion, or (IsComputed = 1) a group's computed rollup. Writable only while the evaluation is a Draft.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Evaluation Scores')
+export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluationScoreEntityType> {
+    /**
+    * Loads the MJ: Rubric Evaluation Scores record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Evaluation Scores record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricEvaluationScoreEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EvaluationID
+    * * Display Name: Evaluation ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Evaluations (vwRubricEvaluations.ID)
+    */
+    get EvaluationID(): string {
+        return this.Get('EvaluationID');
+    }
+    set EvaluationID(value: string) {
+        this.Set('EvaluationID', value);
+    }
+
+    /**
+    * * Field Name: CriterionID
+    * * Display Name: Criterion ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    */
+    get CriterionID(): string {
+        return this.Get('CriterionID');
+    }
+    set CriterionID(value: string) {
+        this.Set('CriterionID', value);
+    }
+
+    /**
+    * * Field Name: ScaleLevelID
+    * * Display Name: Scale Level ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Scale Levels (vwRubricScaleLevels.ID)
+    * * Description: The level chosen, for a criterion on a Levels scale.
+    */
+    get ScaleLevelID(): string | null {
+        return this.Get('ScaleLevelID');
+    }
+    set ScaleLevelID(value: string | null) {
+        this.Set('ScaleLevelID', value);
+    }
+
+    /**
+    * * Field Name: RawValue
+    * * Display Name: Raw Value
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: The number entered, for a criterion on a Numeric scale.
+    */
+    get RawValue(): number | null {
+        return this.Get('RawValue');
+    }
+    set RawValue(value: number | null) {
+        this.Set('RawValue', value);
+    }
+
+    /**
+    * * Field Name: IsNotApplicable
+    * * Display Name: Is Not Applicable
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 = the evaluator judged this criterion not applicable to the subject; handled per the effective NotApplicablePolicy.
+    */
+    get IsNotApplicable(): boolean {
+        return this.Get('IsNotApplicable');
+    }
+    set IsNotApplicable(value: boolean) {
+        this.Set('IsNotApplicable', value);
+    }
+
+    /**
+    * * Field Name: IsComputed
+    * * Display Name: Is Computed
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 = a group rollup written by the server at submit, not an evaluator's answer.
+    */
+    get IsComputed(): boolean {
+        return this.Get('IsComputed');
+    }
+    set IsComputed(value: boolean) {
+        this.Set('IsComputed', value);
+    }
+
+    /**
+    * * Field Name: NormalizedScore
+    * * Display Name: Normalized Score
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: The node's score on the 0..1 scale: the answer normalized through its scale, or the group rollup.
+    */
+    get NormalizedScore(): number | null {
+        return this.Get('NormalizedScore');
+    }
+    set NormalizedScore(value: number | null) {
+        this.Set('NormalizedScore', value);
+    }
+
+    /**
+    * * Field Name: EffectiveWeight
+    * * Display Name: Effective Weight
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: The node's share of its parent (0..1) after Not Applicable redistribution.
+    */
+    get EffectiveWeight(): number | null {
+        return this.Get('EffectiveWeight');
+    }
+    set EffectiveWeight(value: number | null) {
+        this.Set('EffectiveWeight', value);
+    }
+
+    /**
+    * * Field Name: OverallContribution
+    * * Display Name: Overall Contribution
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Points this node contributed to the evaluation's overall NormalizedScore (its score times the product of effective weights to the root). Leaves' contributions sum to the overall score under weighted-mean rollups.
+    */
+    get OverallContribution(): number | null {
+        return this.Get('OverallContribution');
+    }
+    set OverallContribution(value: number | null) {
+        this.Set('OverallContribution', value);
+    }
+
+    /**
+    * * Field Name: GateFailed
+    * * Display Name: Gate Failed
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 = this node is a gate and scored below its GateMinimumScore.
+    */
+    get GateFailed(): boolean {
+        return this.Get('GateFailed');
+    }
+    set GateFailed(value: boolean) {
+        this.Set('GateFailed', value);
+    }
+
+    /**
+    * * Field Name: Completeness
+    * * Display Name: Completeness
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: For group rows: share (0..1) of applicable descendant criteria that were scored.
+    */
+    get Completeness(): number | null {
+        return this.Get('Completeness');
+    }
+    set Completeness(value: number | null) {
+        this.Set('Completeness', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Evaluator's confidence in this answer (0..1), e.g. from an AI judge's level probabilities. Low confidence can route the criterion to a human.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+
+    /**
+    * * Field Name: Rationale
+    * * Display Name: Rationale
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The evaluator's reasoning for this answer.
+    */
+    get Rationale(): string | null {
+        return this.Get('Rationale');
+    }
+    set Rationale(value: string | null) {
+        this.Set('Rationale', value);
+    }
+
+    /**
+    * * Field Name: Evidence
+    * * Display Name: Evidence
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJRubricEvaluationScoreEntity_IRubricEvidence>
+    * * Description: JSON array (IRubricEvidence[]) of evidence items: quotes with spans, conversation turns, file references, URLs, record references.
+    */
+    get Evidence(): string | null {
+        return this.Get('Evidence');
+    }
+    set Evidence(value: string | null) {
+        this.Set('Evidence', value);
+    }
+
+    private _EvidenceObject_cached: Array<MJRubricEvaluationScoreEntity_IRubricEvidence> | null | undefined = undefined;
+    private _EvidenceObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Evidence — returns parsed JSON as Array<MJRubricEvaluationScoreEntity_IRubricEvidence>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get EvidenceObject(): Array<MJRubricEvaluationScoreEntity_IRubricEvidence> | null {
+        const raw = this.Evidence;
+        if (raw !== this._EvidenceObject_lastRaw) {
+            this._EvidenceObject_cached = raw ? JSON.parse(raw) : null;
+            this._EvidenceObject_lastRaw = raw;
+        }
+        return this._EvidenceObject_cached!;
+    }
+    set EvidenceObject(value: Array<MJRubricEvaluationScoreEntity_IRubricEvidence> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Evidence = raw;
+        this._EvidenceObject_cached = value;
+        this._EvidenceObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Criterion
+    * * Display Name: Criterion
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Criterion(): string {
+        return this.Get('Criterion');
+    }
+}
+
+
+/**
+ * JSON shapes for the rubric columns that store structured bags.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ *
+ * @see plans/rubrics/RUBRICS_PLAN.md §4.1
+ */
+
+export type MJRubricEvaluationEntity_JsonPrimitive = string | number | boolean | null;
+export type MJRubricEvaluationEntity_JsonValue = MJRubricEvaluationEntity_JsonPrimitive | MJRubricEvaluationEntity_JsonValue[] | MJRubricEvaluationEntity_JsonObject;
+export interface MJRubricEvaluationEntity_JsonObject {
+    [key: string]: MJRubricEvaluationEntity_JsonValue;
+}
+
+export interface MJRubricEvaluationEntity_IRubricDeterministicRule {
+    /** JSON path into the subject content. */
+    Path: string;
+    Operator: 'equals' | 'notEquals' | 'in' | 'notIn' | 'contains' | 'exists' | 'between' | 'gte' | 'lte' | 'matches';
+    Values: MJRubricEvaluationEntity_JsonValue[];
+    /** Level label or numeric value when the rule matches. */
+    LevelWhenTrue: string;
+    LevelWhenFalse: string;
+    NotApplicableWhenMissing?: boolean;
+}
+
+/** RubricCriterion.EvaluatorConfig */
+export interface MJRubricEvaluationEntity_IRubricCriterionEvaluatorConfig {
+    Deterministic?: MJRubricEvaluationEntity_IRubricDeterministicRule;
+    AI?: { Hints?: string; RequireQuote?: boolean };
+    /** Keyed by consuming app, for example "Caliber". Changing it is a major bump. */
+    Extensions?: Record<string, MJRubricEvaluationEntity_JsonObject>;
+}
+
+export interface MJRubricEvaluationEntity_IRubricEvidenceQuote {
+    Type: 'Quote';
+    Text: string;
+    Start?: number;
+    End?: number;
+    Verified?: boolean;
+}
+
+export interface MJRubricEvaluationEntity_IRubricEvidenceTurn {
+    Type: 'Turn';
+    ConversationDetailID?: string;
+    TurnIndex: number;
+    Quote?: string;
+}
+
+export interface MJRubricEvaluationEntity_IRubricEvidenceFile {
+    Type: 'File';
+    FileID: string;
+    Page?: number;
+    Note?: string;
+}
+
+export interface MJRubricEvaluationEntity_IRubricEvidenceUrl {
+    Type: 'Url';
+    Url: string;
+    Title?: string;
+}
+
+export interface MJRubricEvaluationEntity_IRubricEvidenceRecord {
+    Type: 'Record';
+    EntityName: string;
+    RecordID: string;
+    Note?: string;
+}
+
+export interface MJRubricEvaluationEntity_IRubricEvidenceMedia {
+    Type: 'Media';
+    FileID: string;
+    StartMs: number;
+    EndMs: number;
+}
+
+/** RubricEvaluationScore.Evidence */
+export type MJRubricEvaluationEntity_IRubricEvidence =
+    | MJRubricEvaluationEntity_IRubricEvidenceQuote
+    | MJRubricEvaluationEntity_IRubricEvidenceTurn
+    | MJRubricEvaluationEntity_IRubricEvidenceFile
+    | MJRubricEvaluationEntity_IRubricEvidenceUrl
+    | MJRubricEvaluationEntity_IRubricEvidenceRecord
+    | MJRubricEvaluationEntity_IRubricEvidenceMedia;
+
+/** RubricEvaluation.Metadata */
+export interface MJRubricEvaluationEntity_IRubricEvaluationMetadata {
+    Evaluator?: { Name?: string; Settings?: MJRubricEvaluationEntity_JsonObject };
+    Samples?: { Count?: number; Spread?: string };
+    Timings?: MJRubricEvaluationEntity_JsonObject;
+    RequestedBy?: { EntityName: string; RecordID: string };
+    DroppedEvidenceCount?: number;
+    Warnings?: string[];
+}
+
+export interface MJRubricEvaluationEntity_IRubricVersionChange {
+    Path: string;
+    Property: string;
+    From: MJRubricEvaluationEntity_JsonValue;
+    To: MJRubricEvaluationEntity_JsonValue;
+    Bump: 'Major' | 'Minor' | 'Patch';
+}
+
+/** RubricVersion.ChangeDetails */
+export interface MJRubricEvaluationEntity_IRubricVersionChangeDetails {
+    BaseVersionID: string | null;
+    Changes: MJRubricEvaluationEntity_IRubricVersionChange[];
+}
+
+/** AIAgentRubric.EvaluatorConfig */
+export interface MJRubricEvaluationEntity_IRubricEvaluatorSelection {
+    EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    EvaluatorName?: string;
+    PromptID?: string;
+    AgentID?: string;
+    ModelID?: string;
+    Samples?: number;
+    Mode?: 'SinglePass' | 'PerCriterion';
+}
+
+/**
+ * MJ: Rubric Evaluations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricEvaluation
+ * * Base View: vwRubricEvaluations
+ * * @description One evaluator's judgment of one record (the subject) against one pinned rubric version. Editable while Draft; on submit the server computes and stores the result once, after which the row is immutable. Several evaluations of the same subject in the same context form a cohort whose consensus is exposed by the base view.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Evaluations')
+export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntityType> {
+    /**
+    * Loads the MJ: Rubric Evaluations record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Evaluations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricEvaluationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RubricVersionID
+    * * Display Name: Rubric Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Versions (vwRubricVersions.ID)
+    */
+    get RubricVersionID(): string {
+        return this.Get('RubricVersionID');
+    }
+    set RubricVersionID(value: string) {
+        this.Set('RubricVersionID', value);
+    }
+
+    /**
+    * * Field Name: SubjectEntityID
+    * * Display Name: Subject Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity of the record being evaluated (a test run, an agent run, a submission, a vendor response, ...).
+    */
+    get SubjectEntityID(): string {
+        return this.Get('SubjectEntityID');
+    }
+    set SubjectEntityID(value: string) {
+        this.Set('SubjectEntityID', value);
+    }
+
+    /**
+    * * Field Name: SubjectRecordID
+    * * Display Name: Subject Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the record being evaluated, in MemberJunction's composite-key string form.
+    */
+    get SubjectRecordID(): string {
+        return this.Get('SubjectRecordID');
+    }
+    set SubjectRecordID(value: string) {
+        this.Set('SubjectRecordID', value);
+    }
+
+    /**
+    * * Field Name: ContextEntityID
+    * * Display Name: Context Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Optional entity of the record that asked for this evaluation (a test, a review round, a workflow step). Evaluations share a consensus cohort only when their context matches.
+    */
+    get ContextEntityID(): string | null {
+        return this.Get('ContextEntityID');
+    }
+    set ContextEntityID(value: string | null) {
+        this.Set('ContextEntityID', value);
+    }
+
+    /**
+    * * Field Name: ContextRecordID
+    * * Display Name: Context Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the context record. Set together with ContextEntityID or not at all.
+    */
+    get ContextRecordID(): string | null {
+        return this.Get('ContextRecordID');
+    }
+    set ContextRecordID(value: string | null) {
+        this.Set('ContextRecordID', value);
+    }
+
+    /**
+    * * Field Name: EvaluatorType
+    * * Display Name: Evaluator Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AIPrompt
+    *   * Agent
+    *   * Deterministic
+    *   * External
+    *   * Human
+    *   * Self
+    * * Description: Who judged: Human (a user), AIPrompt (an LLM judge), Agent (an agent that may use tools), Deterministic (rules), Self (the subject's own party, e.g. a vendor asserting compliance; excluded from reviewer consensus), External (imported from another system).
+    */
+    get EvaluatorType(): 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self' {
+        return this.Get('EvaluatorType');
+    }
+    set EvaluatorType(value: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self') {
+        this.Set('EvaluatorType', value);
+    }
+
+    /**
+    * * Field Name: EvaluatorUserID
+    * * Display Name: Evaluator User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who evaluated. Required for Human; the responding user for Self.
+    */
+    get EvaluatorUserID(): string | null {
+        return this.Get('EvaluatorUserID');
+    }
+    set EvaluatorUserID(value: string | null) {
+        this.Set('EvaluatorUserID', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: The prompt run that produced an AIPrompt evaluation (model, cost, raw output).
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: AIAgentRunID
+    * * Display Name: AI Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: The agent run that produced an Agent evaluation.
+    */
+    get AIAgentRunID(): string | null {
+        return this.Get('AIAgentRunID');
+    }
+    set AIAgentRunID(value: string | null) {
+        this.Set('AIAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: EvaluatorName
+    * * Display Name: Evaluator Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the evaluator implementation or external source (e.g. the evaluator driver class) for provenance.
+    */
+    get EvaluatorName(): string | null {
+        return this.Get('EvaluatorName');
+    }
+    set EvaluatorName(value: string | null) {
+        this.Set('EvaluatorName', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Draft
+    *   * Failed
+    *   * Submitted
+    *   * Superseded
+    *   * Withdrawn
+    * * Description: Draft (being filled in), Submitted (final, counted in consensus), Superseded (replaced by a newer evaluation), Withdrawn (retracted, e.g. a conflict of interest), Failed (the evaluator errored; see ErrorMessage).
+    */
+    get Status(): 'Draft' | 'Failed' | 'Submitted' | 'Superseded' | 'Withdrawn' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Draft' | 'Failed' | 'Submitted' | 'Superseded' | 'Withdrawn') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: SupersedesEvaluationID
+    * * Display Name: Supersedes Evaluation ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Evaluations (vwRubricEvaluations.ID)
+    * * Description: The earlier evaluation this one corrects. Submitting this one moves that one to Superseded.
+    */
+    get SupersedesEvaluationID(): string | null {
+        return this.Get('SupersedesEvaluationID');
+    }
+    set SupersedesEvaluationID(value: string | null) {
+        this.Set('SupersedesEvaluationID', value);
+    }
+
+    /**
+    * * Field Name: SubmittedAt
+    * * Display Name: Submitted At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the evaluation was submitted and its result computed.
+    */
+    get SubmittedAt(): Date | null {
+        return this.Get('SubmittedAt');
+    }
+    set SubmittedAt(value: Date | null) {
+        this.Set('SubmittedAt', value);
+    }
+
+    /**
+    * * Field Name: PassThresholdApplied
+    * * Display Name: Pass Threshold Applied
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: The pass threshold used to compute Passed (the version default or a consumer override). Stored so a later change to either never rewrites history.
+    */
+    get PassThresholdApplied(): number | null {
+        return this.Get('PassThresholdApplied');
+    }
+    set PassThresholdApplied(value: number | null) {
+        this.Set('PassThresholdApplied', value);
+    }
+
+    /**
+    * * Field Name: NormalizedScore
+    * * Display Name: Normalized Score
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Overall score, 0..1, computed once at submit from the score rows. NULL if nothing applicable was scored.
+    */
+    get NormalizedScore(): number | null {
+        return this.Get('NormalizedScore');
+    }
+    set NormalizedScore(value: number | null) {
+        this.Set('NormalizedScore', value);
+    }
+
+    /**
+    * * Field Name: Passed
+    * * Display Name: Passed
+    * * SQL Data Type: bit
+    * * Description: Computed verdict: 1 = passed, 0 = failed, NULL = no threshold applied and no gate or N/A failure (Outcome = Scored).
+    */
+    get Passed(): boolean | null {
+        return this.Get('Passed');
+    }
+    set Passed(value: boolean | null) {
+        this.Set('Passed', value);
+    }
+
+    /**
+    * * Field Name: Outcome
+    * * Display Name: Outcome
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BelowThreshold
+    *   * GateFailed
+    *   * Incomplete
+    *   * NotApplicableFailure
+    *   * Passed
+    *   * Scored
+    * * Description: Why the evaluation ended as it did: Passed, BelowThreshold, GateFailed, NotApplicableFailure, Incomplete (below MinimumCompleteness or nothing scored), or Scored (no threshold to judge against).
+    */
+    get Outcome(): 'BelowThreshold' | 'GateFailed' | 'Incomplete' | 'NotApplicableFailure' | 'Passed' | 'Scored' | null {
+        return this.Get('Outcome');
+    }
+    set Outcome(value: 'BelowThreshold' | 'GateFailed' | 'Incomplete' | 'NotApplicableFailure' | 'Passed' | 'Scored' | null) {
+        this.Set('Outcome', value);
+    }
+
+    /**
+    * * Field Name: BandID
+    * * Display Name: Band ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Bands (vwRubricBands.ID)
+    * * Description: The band NormalizedScore falls in, for display. Interpretation only.
+    */
+    get BandID(): string | null {
+        return this.Get('BandID');
+    }
+    set BandID(value: string | null) {
+        this.Set('BandID', value);
+    }
+
+    /**
+    * * Field Name: GateFailed
+    * * Display Name: Gate Failed
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 = at least one gate node scored below its GateMinimumScore.
+    */
+    get GateFailed(): boolean {
+        return this.Get('GateFailed');
+    }
+    set GateFailed(value: boolean) {
+        this.Set('GateFailed', value);
+    }
+
+    /**
+    * * Field Name: Completeness
+    * * Display Name: Completeness
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Share (0..1) of applicable, non-advisory criteria that were scored.
+    */
+    get Completeness(): number | null {
+        return this.Get('Completeness');
+    }
+    set Completeness(value: number | null) {
+        this.Set('Completeness', value);
+    }
+
+    /**
+    * * Field Name: ScoredCriteriaCount
+    * * Display Name: Scored Criteria Count
+    * * SQL Data Type: int
+    * * Description: Number of non-advisory criteria that received a score.
+    */
+    get ScoredCriteriaCount(): number | null {
+        return this.Get('ScoredCriteriaCount');
+    }
+    set ScoredCriteriaCount(value: number | null) {
+        this.Set('ScoredCriteriaCount', value);
+    }
+
+    /**
+    * * Field Name: ApplicableCriteriaCount
+    * * Display Name: Applicable Criteria Count
+    * * SQL Data Type: int
+    * * Description: Number of non-advisory criteria not answered Not Applicable.
+    */
+    get ApplicableCriteriaCount(): number | null {
+        return this.Get('ApplicableCriteriaCount');
+    }
+    set ApplicableCriteriaCount(value: number | null) {
+        this.Set('ApplicableCriteriaCount', value);
+    }
+
+    /**
+    * * Field Name: TotalCriteriaCount
+    * * Display Name: Total Criteria Count
+    * * SQL Data Type: int
+    * * Description: Number of non-advisory criteria (leaves) in the version.
+    */
+    get TotalCriteriaCount(): number | null {
+        return this.Get('TotalCriteriaCount');
+    }
+    set TotalCriteriaCount(value: number | null) {
+        this.Set('TotalCriteriaCount', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Evaluator's overall confidence (0..1), typically the weighted mean of per-criterion confidences from an AI judge. NULL for evaluators that do not report one.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+
+    /**
+    * * Field Name: Narrative
+    * * Display Name: Narrative
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The evaluator's overall written assessment.
+    */
+    get Narrative(): string | null {
+        return this.Get('Narrative');
+    }
+    set Narrative(value: string | null) {
+        this.Set('Narrative', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Why the evaluator failed, when Status = Failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ScoringEngineVersion
+    * * Display Name: Scoring Engine Version
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Version of the scoring algorithm that computed the stored result, so a future algorithm change is visible rather than silent.
+    */
+    get ScoringEngineVersion(): string | null {
+        return this.Get('ScoringEngineVersion');
+    }
+    set ScoringEngineVersion(value: string | null) {
+        this.Set('ScoringEngineVersion', value);
+    }
+
+    /**
+    * * Field Name: Metadata
+    * * Display Name: Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRubricEvaluationEntity_IRubricEvaluationMetadata
+    * * Description: JSON (IRubricEvaluationMetadata) of evaluator provenance not covered by columns: model settings, timings, the consumer that requested it.
+    */
+    get Metadata(): string | null {
+        return this.Get('Metadata');
+    }
+    set Metadata(value: string | null) {
+        this.Set('Metadata', value);
+    }
+
+    private _MetadataObject_cached: MJRubricEvaluationEntity_IRubricEvaluationMetadata | null | undefined = undefined;
+    private _MetadataObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Metadata — returns parsed JSON as MJRubricEvaluationEntity_IRubricEvaluationMetadata.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get MetadataObject(): MJRubricEvaluationEntity_IRubricEvaluationMetadata | null {
+        const raw = this.Metadata;
+        if (raw !== this._MetadataObject_lastRaw) {
+            this._MetadataObject_cached = raw ? JSON.parse(raw) : null;
+            this._MetadataObject_lastRaw = raw;
+        }
+        return this._MetadataObject_cached!;
+    }
+    set MetadataObject(value: MJRubricEvaluationEntity_IRubricEvaluationMetadata | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Metadata = raw;
+        this._MetadataObject_cached = value;
+        this._MetadataObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SubjectEntity
+    * * Display Name: Subject Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SubjectEntity(): string {
+        return this.Get('SubjectEntity');
+    }
+
+    /**
+    * * Field Name: ContextEntity
+    * * Display Name: Context Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ContextEntity(): string | null {
+        return this.Get('ContextEntity');
+    }
+
+    /**
+    * * Field Name: EvaluatorUser
+    * * Display Name: Evaluator User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get EvaluatorUser(): string | null {
+        return this.Get('EvaluatorUser');
+    }
+
+    /**
+    * * Field Name: AIPromptRun
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPromptRun(): string | null {
+        return this.Get('AIPromptRun');
+    }
+
+    /**
+    * * Field Name: AIAgentRun
+    * * Display Name: AI Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIAgentRun(): string | null {
+        return this.Get('AIAgentRun');
+    }
+
+    /**
+    * * Field Name: RubricID
+    * * Display Name: Rubric ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RubricID(): string {
+        return this.Get('RubricID');
+    }
+
+    /**
+    * * Field Name: Rubric
+    * * Display Name: Rubric
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Rubric(): string {
+        return this.Get('Rubric');
+    }
+
+    /**
+    * * Field Name: RubricMajorVersion
+    * * Display Name: Rubric Major Version
+    * * SQL Data Type: int
+    */
+    get RubricMajorVersion(): number | null {
+        return this.Get('RubricMajorVersion');
+    }
+
+    /**
+    * * Field Name: RubricVersionLabel
+    * * Display Name: Rubric Version Label
+    * * SQL Data Type: nvarchar(122)
+    */
+    get RubricVersionLabel(): string | null {
+        return this.Get('RubricVersionLabel');
+    }
+
+    /**
+    * * Field Name: CohortEvaluationCount
+    * * Display Name: Cohort Evaluation Count
+    * * SQL Data Type: int
+    */
+    get CohortEvaluationCount(): number | null {
+        return this.Get('CohortEvaluationCount');
+    }
+
+    /**
+    * * Field Name: CohortScoredCount
+    * * Display Name: Cohort Scored Count
+    * * SQL Data Type: int
+    */
+    get CohortScoredCount(): number | null {
+        return this.Get('CohortScoredCount');
+    }
+
+    /**
+    * * Field Name: CohortPassedCount
+    * * Display Name: Cohort Passed Count
+    * * SQL Data Type: int
+    */
+    get CohortPassedCount(): number | null {
+        return this.Get('CohortPassedCount');
+    }
+
+    /**
+    * * Field Name: CohortMeanScore
+    * * Display Name: Cohort Mean Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CohortMeanScore(): number | null {
+        return this.Get('CohortMeanScore');
+    }
+
+    /**
+    * * Field Name: CohortMinScore
+    * * Display Name: Cohort Min Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CohortMinScore(): number | null {
+        return this.Get('CohortMinScore');
+    }
+
+    /**
+    * * Field Name: CohortMaxScore
+    * * Display Name: Cohort Max Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CohortMaxScore(): number | null {
+        return this.Get('CohortMaxScore');
+    }
+
+    /**
+    * * Field Name: CohortScoreStdDev
+    * * Display Name: Cohort Score Std Dev
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CohortScoreStdDev(): number | null {
+        return this.Get('CohortScoreStdDev');
+    }
+
+    /**
+    * * Field Name: CohortHumanCount
+    * * Display Name: Cohort Human Count
+    * * SQL Data Type: int
+    */
+    get CohortHumanCount(): number | null {
+        return this.Get('CohortHumanCount');
+    }
+
+    /**
+    * * Field Name: CohortHumanMeanScore
+    * * Display Name: Cohort Human Mean Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CohortHumanMeanScore(): number | null {
+        return this.Get('CohortHumanMeanScore');
+    }
+
+    /**
+    * * Field Name: CohortAICount
+    * * Display Name: Cohort AI Count
+    * * SQL Data Type: int
+    */
+    get CohortAICount(): number | null {
+        return this.Get('CohortAICount');
+    }
+
+    /**
+    * * Field Name: CohortAIMeanScore
+    * * Display Name: Cohort AI Mean Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get CohortAIMeanScore(): number | null {
+        return this.Get('CohortAIMeanScore');
+    }
+
+    /**
+    * * Field Name: SelfAssessmentScore
+    * * Display Name: Self Assessment Score
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get SelfAssessmentScore(): number | null {
+        return this.Get('SelfAssessmentScore');
+    }
+
+    /**
+    * * Field Name: SelfAssessmentCount
+    * * Display Name: Self Assessment Count
+    * * SQL Data Type: int
+    */
+    get SelfAssessmentCount(): number | null {
+        return this.Get('SelfAssessmentCount');
+    }
+
+    /**
+    * * Field Name: DeviationFromCohortMean
+    * * Display Name: Deviation From Cohort Mean
+    * * SQL Data Type: decimal(9, 6)
+    */
+    get DeviationFromCohortMean(): number | null {
+        return this.Get('DeviationFromCohortMean');
+    }
+}
+
+
+/**
+ * MJ: Rubric Scale Levels - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricScaleLevel
+ * * Base View: vwRubricScaleLevels
+ * * @description One level of a Levels-type rubric scale.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Scale Levels')
+export class MJRubricScaleLevelEntity extends BaseEntity<MJRubricScaleLevelEntityType> {
+    /**
+    * Loads the MJ: Rubric Scale Levels record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Scale Levels record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricScaleLevelEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ScaleID
+    * * Display Name: Scale ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Scales (vwRubricScales.ID)
+    */
+    get ScaleID(): string {
+        return this.Get('ScaleID');
+    }
+    set ScaleID(value: string) {
+        this.Set('ScaleID', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(100)
+    * * Description: What evaluators see and pick, e.g. "Exceeds", "Partially compliant", "4".
+    */
+    get Label(): string {
+        return this.Get('Label');
+    }
+    set Label(value: string) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Value
+    * * Display Name: Value
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: The level's raw value in the scale's own units, e.g. 4 on a 1-5 scale. Display and export only; scoring uses NormalizedValue.
+    */
+    get Value(): number {
+        return this.Get('Value');
+    }
+    set Value(value: number) {
+        this.Set('Value', value);
+    }
+
+    /**
+    * * Field Name: NormalizedValue
+    * * Display Name: Normalized Value
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: The score this level contributes, from 0 (worst) to 1 (best). Explicit rather than derived so non-linear scales (e.g. Partial = 0.4) are expressible.
+    */
+    get NormalizedValue(): number {
+        return this.Get('NormalizedValue');
+    }
+    set NormalizedValue(value: number) {
+        this.Set('NormalizedValue', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Generic meaning of the level. Criteria can override it with their own anchor text (RubricCriterionLevel).
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order of the level within its scale, worst to best by convention.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Scale
+    * * Display Name: Scale
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Scale(): string {
+        return this.Get('Scale');
+    }
+}
+
+
+/**
+ * MJ: Rubric Scales - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricScale
+ * * Base View: vwRubricScales
+ * * @description A reusable response scale that criteria are answered on: either ordered Levels (e.g. 1-5, Pass/Fail, Compliant/Partial/Non-compliant) or a Numeric range. Every answer is converted to a normalized 0..1 score. A scale used by a published rubric version is frozen in everything that affects scoring.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Scales')
+export class MJRubricScaleEntity extends BaseEntity<MJRubricScaleEntityType> {
+    /**
+    * Loads the MJ: Rubric Scales record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Scales record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricScaleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique display name of the scale, e.g. "Likert 1-5" or "Compliance".
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the scale measures and how evaluators should read it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ScaleType
+    * * Display Name: Scale Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Levels
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Levels
+    *   * Numeric
+    * * Description: Levels: answers pick one of the scale's RubricScaleLevel rows, each carrying its own normalized value. Numeric: answers are a number between MinValue and MaxValue, normalized linearly (inverted when HigherIsBetter = 0).
+    */
+    get ScaleType(): 'Levels' | 'Numeric' {
+        return this.Get('ScaleType');
+    }
+    set ScaleType(value: 'Levels' | 'Numeric') {
+        this.Set('ScaleType', value);
+    }
+
+    /**
+    * * Field Name: MinValue
+    * * Display Name: Min Value
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: Lowest allowed answer for a Numeric scale. Required when ScaleType = Numeric.
+    */
+    get MinValue(): number | null {
+        return this.Get('MinValue');
+    }
+    set MinValue(value: number | null) {
+        this.Set('MinValue', value);
+    }
+
+    /**
+    * * Field Name: MaxValue
+    * * Display Name: Max Value
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: Highest allowed answer for a Numeric scale. Required when ScaleType = Numeric and must exceed MinValue.
+    */
+    get MaxValue(): number | null {
+        return this.Get('MaxValue');
+    }
+    set MaxValue(value: number | null) {
+        this.Set('MaxValue', value);
+    }
+
+    /**
+    * * Field Name: Step
+    * * Display Name: Step
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: Optional input increment for a Numeric scale (e.g. 0.5). NULL = any value in range.
+    */
+    get Step(): number | null {
+        return this.Get('Step');
+    }
+    set Step(value: number | null) {
+        this.Set('Step', value);
+    }
+
+    /**
+    * * Field Name: HigherIsBetter
+    * * Display Name: Higher Is Better
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: For Numeric scales: 1 = a higher answer is better (normalizes to a higher score); 0 = lower is better (e.g. error counts), so normalization is inverted.
+    */
+    get HigherIsBetter(): boolean {
+        return this.Get('HigherIsBetter');
+    }
+    set HigherIsBetter(value: boolean) {
+        this.Set('HigherIsBetter', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active scales can be chosen for new criteria; Disabled scales stay valid for versions that already use them.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * JSON shapes for the rubric columns that store structured bags.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ *
+ * @see plans/rubrics/RUBRICS_PLAN.md §4.1
+ */
+
+export type MJRubricVersionEntity_JsonPrimitive = string | number | boolean | null;
+export type MJRubricVersionEntity_JsonValue = MJRubricVersionEntity_JsonPrimitive | MJRubricVersionEntity_JsonValue[] | MJRubricVersionEntity_JsonObject;
+export interface MJRubricVersionEntity_JsonObject {
+    [key: string]: MJRubricVersionEntity_JsonValue;
+}
+
+export interface MJRubricVersionEntity_IRubricDeterministicRule {
+    /** JSON path into the subject content. */
+    Path: string;
+    Operator: 'equals' | 'notEquals' | 'in' | 'notIn' | 'contains' | 'exists' | 'between' | 'gte' | 'lte' | 'matches';
+    Values: MJRubricVersionEntity_JsonValue[];
+    /** Level label or numeric value when the rule matches. */
+    LevelWhenTrue: string;
+    LevelWhenFalse: string;
+    NotApplicableWhenMissing?: boolean;
+}
+
+/** RubricCriterion.EvaluatorConfig */
+export interface MJRubricVersionEntity_IRubricCriterionEvaluatorConfig {
+    Deterministic?: MJRubricVersionEntity_IRubricDeterministicRule;
+    AI?: { Hints?: string; RequireQuote?: boolean };
+    /** Keyed by consuming app, for example "Caliber". Changing it is a major bump. */
+    Extensions?: Record<string, MJRubricVersionEntity_JsonObject>;
+}
+
+export interface MJRubricVersionEntity_IRubricEvidenceQuote {
+    Type: 'Quote';
+    Text: string;
+    Start?: number;
+    End?: number;
+    Verified?: boolean;
+}
+
+export interface MJRubricVersionEntity_IRubricEvidenceTurn {
+    Type: 'Turn';
+    ConversationDetailID?: string;
+    TurnIndex: number;
+    Quote?: string;
+}
+
+export interface MJRubricVersionEntity_IRubricEvidenceFile {
+    Type: 'File';
+    FileID: string;
+    Page?: number;
+    Note?: string;
+}
+
+export interface MJRubricVersionEntity_IRubricEvidenceUrl {
+    Type: 'Url';
+    Url: string;
+    Title?: string;
+}
+
+export interface MJRubricVersionEntity_IRubricEvidenceRecord {
+    Type: 'Record';
+    EntityName: string;
+    RecordID: string;
+    Note?: string;
+}
+
+export interface MJRubricVersionEntity_IRubricEvidenceMedia {
+    Type: 'Media';
+    FileID: string;
+    StartMs: number;
+    EndMs: number;
+}
+
+/** RubricEvaluationScore.Evidence */
+export type MJRubricVersionEntity_IRubricEvidence =
+    | MJRubricVersionEntity_IRubricEvidenceQuote
+    | MJRubricVersionEntity_IRubricEvidenceTurn
+    | MJRubricVersionEntity_IRubricEvidenceFile
+    | MJRubricVersionEntity_IRubricEvidenceUrl
+    | MJRubricVersionEntity_IRubricEvidenceRecord
+    | MJRubricVersionEntity_IRubricEvidenceMedia;
+
+/** RubricEvaluation.Metadata */
+export interface MJRubricVersionEntity_IRubricEvaluationMetadata {
+    Evaluator?: { Name?: string; Settings?: MJRubricVersionEntity_JsonObject };
+    Samples?: { Count?: number; Spread?: string };
+    Timings?: MJRubricVersionEntity_JsonObject;
+    RequestedBy?: { EntityName: string; RecordID: string };
+    DroppedEvidenceCount?: number;
+    Warnings?: string[];
+}
+
+export interface MJRubricVersionEntity_IRubricVersionChange {
+    Path: string;
+    Property: string;
+    From: MJRubricVersionEntity_JsonValue;
+    To: MJRubricVersionEntity_JsonValue;
+    Bump: 'Major' | 'Minor' | 'Patch';
+}
+
+/** RubricVersion.ChangeDetails */
+export interface MJRubricVersionEntity_IRubricVersionChangeDetails {
+    BaseVersionID: string | null;
+    Changes: MJRubricVersionEntity_IRubricVersionChange[];
+}
+
+/** AIAgentRubric.EvaluatorConfig */
+export interface MJRubricVersionEntity_IRubricEvaluatorSelection {
+    EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    EvaluatorName?: string;
+    PromptID?: string;
+    AgentID?: string;
+    ModelID?: string;
+    Samples?: number;
+    Mode?: 'SinglePass' | 'PerCriterion';
+}
+
+/**
+ * MJ: Rubric Versions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricVersion
+ * * Base View: vwRubricVersions
+ * * @description An immutable-once-published snapshot of a rubric's content. Edits happen on the single Draft; publishing freezes it and assigns a semantic version whose bump is computed by the server from a diff against the previous published version: Major = scores are not comparable (weights, scales, gates, tree shape, N/A policy, rollup, evaluator rules), Minor = scores comparable but verdicts or interpretation may differ (threshold, bands, advisory criteria, required evidence), Patch = wording only.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Versions')
+export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType> {
+    /**
+    * Loads the MJ: Rubric Versions record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Versions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricVersionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RubricID
+    * * Display Name: Rubric ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubrics (vwRubrics.ID)
+    */
+    get RubricID(): string {
+        return this.Get('RubricID');
+    }
+    set RubricID(value: string) {
+        this.Set('RubricID', value);
+    }
+
+    /**
+    * * Field Name: MajorVersion
+    * * Display Name: Major Version
+    * * SQL Data Type: int
+    * * Description: Semantic major version, assigned at publish. Evaluations sharing a rubric and major version are directly comparable. NULL while Draft.
+    */
+    get MajorVersion(): number | null {
+        return this.Get('MajorVersion');
+    }
+    set MajorVersion(value: number | null) {
+        this.Set('MajorVersion', value);
+    }
+
+    /**
+    * * Field Name: MinorVersion
+    * * Display Name: Minor Version
+    * * SQL Data Type: int
+    * * Description: Semantic minor version, assigned at publish. NULL while Draft.
+    */
+    get MinorVersion(): number | null {
+        return this.Get('MinorVersion');
+    }
+    set MinorVersion(value: number | null) {
+        this.Set('MinorVersion', value);
+    }
+
+    /**
+    * * Field Name: PatchVersion
+    * * Display Name: Patch Version
+    * * SQL Data Type: int
+    * * Description: Semantic patch version, assigned at publish. NULL while Draft.
+    */
+    get PatchVersion(): number | null {
+        return this.Get('PatchVersion');
+    }
+    set PatchVersion(value: number | null) {
+        this.Set('PatchVersion', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Draft
+    *   * Published
+    *   * Retired
+    * * Description: Draft (editable, at most one per rubric), Published (frozen, available for new evaluations), or Retired (frozen, kept for history and for evaluations already pinned to it).
+    */
+    get Status(): 'Draft' | 'Published' | 'Retired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Draft' | 'Published' | 'Retired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: BasedOnVersionID
+    * * Display Name: Based On Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Versions (vwRubricVersions.ID)
+    * * Description: The version this draft was cloned from; the publish-time diff and bump are computed against it.
+    */
+    get BasedOnVersionID(): string | null {
+        return this.Get('BasedOnVersionID');
+    }
+    set BasedOnVersionID(value: string | null) {
+        this.Set('BasedOnVersionID', value);
+    }
+
+    /**
+    * * Field Name: Instructions
+    * * Display Name: Instructions
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Overall guidance for evaluators (human and AI) applying this version. Wording only: changing it is a patch.
+    */
+    get Instructions(): string | null {
+        return this.Get('Instructions');
+    }
+    set Instructions(value: string | null) {
+        this.Set('Instructions', value);
+    }
+
+    /**
+    * * Field Name: PassThreshold
+    * * Display Name: Pass Threshold
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Default minimum normalized score (0..1) for an evaluation to pass. Consumers (a test, a review round) may override it; the threshold actually used is stored on each evaluation. NULL = no threshold (evaluations report a score and gate results only).
+    */
+    get PassThreshold(): number | null {
+        return this.Get('PassThreshold');
+    }
+    set PassThreshold(value: number | null) {
+        this.Set('PassThreshold', value);
+    }
+
+    /**
+    * * Field Name: MinimumCompleteness
+    * * Display Name: Minimum Completeness
+    * * SQL Data Type: decimal(9, 6)
+    * * Description: Minimum share (0..1) of applicable scored criteria required for a valid result. Below it the evaluation's Outcome is Incomplete and it does not pass. NULL = no minimum.
+    */
+    get MinimumCompleteness(): number | null {
+        return this.Get('MinimumCompleteness');
+    }
+    set MinimumCompleteness(value: number | null) {
+        this.Set('MinimumCompleteness', value);
+    }
+
+    /**
+    * * Field Name: NotApplicablePolicy
+    * * Display Name: Not Applicable Policy
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: ExcludeAndRedistribute
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CountAsZero
+    *   * ExcludeAndRedistribute
+    *   * FailEvaluation
+    *   * NotAllowed
+    * * Description: Default handling of a criterion answered Not Applicable (criteria may override): ExcludeAndRedistribute (drop it and share its weight among its siblings), CountAsZero (score it 0), FailEvaluation (allowed, but the evaluation fails), NotAllowed (the evaluation cannot be submitted).
+    */
+    get NotApplicablePolicy(): 'CountAsZero' | 'ExcludeAndRedistribute' | 'FailEvaluation' | 'NotAllowed' {
+        return this.Get('NotApplicablePolicy');
+    }
+    set NotApplicablePolicy(value: 'CountAsZero' | 'ExcludeAndRedistribute' | 'FailEvaluation' | 'NotAllowed') {
+        this.Set('NotApplicablePolicy', value);
+    }
+
+    /**
+    * * Field Name: ScoreDisplayMin
+    * * Display Name: Score Display Min
+    * * SQL Data Type: decimal(18, 6)
+    * * Default Value: 0
+    * * Description: Display-only lower bound: the value a normalized score of 0 is shown as (e.g. 0 or 1). Never used in scoring.
+    */
+    get ScoreDisplayMin(): number {
+        return this.Get('ScoreDisplayMin');
+    }
+    set ScoreDisplayMin(value: number) {
+        this.Set('ScoreDisplayMin', value);
+    }
+
+    /**
+    * * Field Name: ScoreDisplayMax
+    * * Display Name: Score Display Max
+    * * SQL Data Type: decimal(18, 6)
+    * * Default Value: 100
+    * * Description: Display-only upper bound: the value a normalized score of 1 is shown as (e.g. 100 or 5). Never used in scoring.
+    */
+    get ScoreDisplayMax(): number {
+        return this.Get('ScoreDisplayMax');
+    }
+    set ScoreDisplayMax(value: number) {
+        this.Set('ScoreDisplayMax', value);
+    }
+
+    /**
+    * * Field Name: RequestedBump
+    * * Display Name: Requested Bump
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Major
+    *   * Minor
+    *   * Patch
+    * * Description: Optional bump the author asks for on publish. The server applies the larger of this and the bump it computes; an author can never publish a smaller bump than the change requires.
+    */
+    get RequestedBump(): 'Major' | 'Minor' | 'Patch' | null {
+        return this.Get('RequestedBump');
+    }
+    set RequestedBump(value: 'Major' | 'Minor' | 'Patch' | null) {
+        this.Set('RequestedBump', value);
+    }
+
+    /**
+    * * Field Name: ComputedBump
+    * * Display Name: Computed Bump
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Initial
+    *   * Major
+    *   * Minor
+    *   * Patch
+    * * Description: The bump the server computed from the diff at publish (Initial for a rubric's first version).
+    */
+    get ComputedBump(): 'Initial' | 'Major' | 'Minor' | 'Patch' | null {
+        return this.Get('ComputedBump');
+    }
+    set ComputedBump(value: 'Initial' | 'Major' | 'Minor' | 'Patch' | null) {
+        this.Set('ComputedBump', value);
+    }
+
+    /**
+    * * Field Name: AppliedBump
+    * * Display Name: Applied Bump
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Initial
+    *   * Major
+    *   * Minor
+    *   * Patch
+    * * Description: The bump actually applied at publish: the larger of ComputedBump and RequestedBump.
+    */
+    get AppliedBump(): 'Initial' | 'Major' | 'Minor' | 'Patch' | null {
+        return this.Get('AppliedBump');
+    }
+    set AppliedBump(value: 'Initial' | 'Major' | 'Minor' | 'Patch' | null) {
+        this.Set('AppliedBump', value);
+    }
+
+    /**
+    * * Field Name: ChangeSummary
+    * * Display Name: Change Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Author's human-readable summary of what changed in this version.
+    */
+    get ChangeSummary(): string | null {
+        return this.Get('ChangeSummary');
+    }
+    set ChangeSummary(value: string | null) {
+        this.Set('ChangeSummary', value);
+    }
+
+    /**
+    * * Field Name: ChangeDetails
+    * * Display Name: Change Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRubricVersionEntity_IRubricVersionChangeDetails
+    * * Description: JSON diff produced at publish: every added, removed and changed node and property, each with the bump it required. Explains ComputedBump.
+    */
+    get ChangeDetails(): string | null {
+        return this.Get('ChangeDetails');
+    }
+    set ChangeDetails(value: string | null) {
+        this.Set('ChangeDetails', value);
+    }
+
+    private _ChangeDetailsObject_cached: MJRubricVersionEntity_IRubricVersionChangeDetails | null | undefined = undefined;
+    private _ChangeDetailsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ChangeDetails — returns parsed JSON as MJRubricVersionEntity_IRubricVersionChangeDetails.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ChangeDetailsObject(): MJRubricVersionEntity_IRubricVersionChangeDetails | null {
+        const raw = this.ChangeDetails;
+        if (raw !== this._ChangeDetailsObject_lastRaw) {
+            this._ChangeDetailsObject_cached = raw ? JSON.parse(raw) : null;
+            this._ChangeDetailsObject_lastRaw = raw;
+        }
+        return this._ChangeDetailsObject_cached!;
+    }
+    set ChangeDetailsObject(value: MJRubricVersionEntity_IRubricVersionChangeDetails | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ChangeDetails = raw;
+        this._ChangeDetailsObject_cached = value;
+        this._ChangeDetailsObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: ContentHash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of the version's full canonical content (scoring math plus all wording), computed at publish.
+    */
+    get ContentHash(): string | null {
+        return this.Get('ContentHash');
+    }
+    set ContentHash(value: string | null) {
+        this.Set('ContentHash', value);
+    }
+
+    /**
+    * * Field Name: ScoringHash
+    * * Display Name: Scoring Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 of only the scoring-relevant content (tree shape, keys, weights, scales, gates, policies, rollups, evaluator rules). Two versions with equal ScoringHash compute identical scores from identical answers.
+    */
+    get ScoringHash(): string | null {
+        return this.Get('ScoringHash');
+    }
+    set ScoringHash(value: string | null) {
+        this.Set('ScoringHash', value);
+    }
+
+    /**
+    * * Field Name: PublishedAt
+    * * Display Name: Published At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the version was published.
+    */
+    get PublishedAt(): Date | null {
+        return this.Get('PublishedAt');
+    }
+    set PublishedAt(value: Date | null) {
+        this.Set('PublishedAt', value);
+    }
+
+    /**
+    * * Field Name: PublishedByUserID
+    * * Display Name: Published By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get PublishedByUserID(): string | null {
+        return this.Get('PublishedByUserID');
+    }
+    set PublishedByUserID(value: string | null) {
+        this.Set('PublishedByUserID', value);
+    }
+
+    /**
+    * * Field Name: RetiredAt
+    * * Display Name: Retired At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the version was retired. NULL while Draft or Published.
+    */
+    get RetiredAt(): Date | null {
+        return this.Get('RetiredAt');
+    }
+    set RetiredAt(value: Date | null) {
+        this.Set('RetiredAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Rubric
+    * * Display Name: Rubric
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Rubric(): string {
+        return this.Get('Rubric');
+    }
+
+    /**
+    * * Field Name: PublishedByUser
+    * * Display Name: Published By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PublishedByUser(): string | null {
+        return this.Get('PublishedByUser');
+    }
+}
+
+
+/**
+ * MJ: Rubrics - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Rubric
+ * * Base View: vwRubrics
+ * * @description The stable identity of a rubric: weighted, nested criteria that records are evaluated against. The content lives in immutable, semantically versioned RubricVersion rows.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubrics')
+export class MJRubricEntity extends BaseEntity<MJRubricEntityType> {
+    /**
+    * Loads the MJ: Rubrics record from the database
+    * @param ID: string - primary key value to load the MJ: Rubrics record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique display name of the rubric.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the rubric evaluates and when to use it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CategoryID
+    * * Display Name: Category ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Categories (vwRubricCategories.ID)
+    */
+    get CategoryID(): string | null {
+        return this.Get('CategoryID');
+    }
+    set CategoryID(value: string | null) {
+        this.Set('CategoryID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active rubrics can be assigned and evaluated against; Disabled rubrics keep their history but are not offered for new use.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Category(): string | null {
+        return this.Get('Category');
     }
 }
 
@@ -123291,11 +127708,12 @@ export class MJTemplateEntity extends BaseEntity<MJTemplateEntityType> {
  * * Schema: __mj
  * * Base Table: TestRubric
  * * Base View: vwTestRubrics
- * * @description Reusable evaluation criteria (rubrics) for consistent scoring across tests. Rubrics define structured evaluation dimensions and can include LLM prompts for automated judgment. Particularly useful for LLM-as-judge patterns where consistent evaluation criteria are critical.
+ * * @description DEPRECATED: superseded by MJ: Rubrics (Rubric, RubricVersion, RubricCriterion). This entity was never read by the test engine, links to nothing and has no seed rows; it is scheduled for removal in the next major version. Assign a rubric to a test with Test.RubricID or TestSuite.RubricID instead. See plans/rubrics/RUBRICS_PLAN.md.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Test Rubrics')
 export class MJTestRubricEntity extends BaseEntity<MJTestRubricEntityType> {
@@ -124915,6 +129333,19 @@ export class MJTestSuiteRunEntity extends BaseEntity<MJTestSuiteRunEntityType> {
     }
 
     /**
+    * * Field Name: Score
+    * * Display Name: Score
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Suite-level score (0..1): the mean score of the suite's executed (non-skipped) test runs.
+    */
+    get Score(): number | null {
+        return this.Get('Score');
+    }
+    set Score(value: number | null) {
+        this.Set('Score', value);
+    }
+
+    /**
     * * Field Name: Suite
     * * Display Name: Suite
     * * SQL Data Type: nvarchar(255)
@@ -125266,12 +129697,35 @@ export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
     }
 
     /**
+    * * Field Name: RubricID
+    * * Display Name: Rubric ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubrics (vwRubrics.ID)
+    * * Description: Default rubric for tests in this suite and its child suites that do not name their own.
+    */
+    get RubricID(): string | null {
+        return this.Get('RubricID');
+    }
+    set RubricID(value: string | null) {
+        this.Set('RubricID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: Rubric
+    * * Display Name: Rubric
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Rubric(): string | null {
+        return this.Get('Rubric');
     }
 
     /**
@@ -125965,12 +130419,35 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
     }
 
     /**
+    * * Field Name: RubricID
+    * * Display Name: Rubric ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubrics (vwRubrics.ID)
+    * * Description: The rubric this test's output is judged by. NULL = inherit from the suite (walking up ParentID). The latest published version is pinned when each run starts.
+    */
+    get RubricID(): string | null {
+        return this.Get('RubricID');
+    }
+    set RubricID(value: string | null) {
+        this.Set('RubricID', value);
+    }
+
+    /**
     * * Field Name: Type
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {
         return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: Rubric
+    * * Display Name: Rubric
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Rubric(): string | null {
+        return this.Get('Rubric');
     }
 }
 

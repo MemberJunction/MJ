@@ -1153,12 +1153,13 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
 
         try {
-            // Use KnowledgeHubMetadataEngine for cached vector DBs, indexes, and entity docs
+            // Entity docs come from KnowledgeHubMetadataEngine; vector DBs and indexes from AIEngineBase
             const engine = KnowledgeHubMetadataEngine.Instance;
             await engine.Config(false);
+            await AIEngineBase.Instance.EnsureLoaded();
 
             this.loadVectorDBProvidersFromEngine(AIEngineBase.Instance.VectorDatabases);
-            this.loadVectorIndexesFromEngine(engine.VectorIndexes);
+            this.loadVectorIndexesFromEngine(AIEngineBase.Instance.VectorIndexes);
             this.loadEntityDocumentsAndThresholds(engine.GetActiveEntityDocuments());
 
             // AI Models and Credentials come from different domains — fetch via RunView
