@@ -116,6 +116,27 @@ export function EnsureImplicitRubricOracle(oracles: OracleConfigLike[] | undefin
     return [...list, { type: 'rubric', config: pinned }];
 }
 
+/**
+ * Adds the rubric named by `--rubric` or `Test.RubricID`, and pins an explicit
+ * rubric oracle already on the list. Weights on the existing oracles stay.
+ */
+export function OraclesWithNamedRubric<T extends OracleConfigLike>(
+    oracles: readonly T[] | undefined,
+    input: { runRubricId?: string; runVersionId?: string; testRubricId?: string | null },
+): T[] {
+    const list = [...(oracles ?? [])];
+    const named = list.find(oracle => oracle.type === 'rubric')?.config;
+    const choice = ResolveRubric({
+        run: input.runRubricId ? { rubricId: input.runRubricId, versionId: input.runVersionId } : undefined,
+        oracle: named ? {
+            rubricId: typeof named.rubricId === 'string' ? named.rubricId : undefined,
+            rubricVersionId: typeof named.rubricVersionId === 'string' ? named.rubricVersionId : undefined,
+        } : undefined,
+        testRubricId: input.testRubricId,
+    });
+    return EnsureImplicitRubricOracle(list, choice, choice.VersionId) as T[];
+}
+
 /** @deprecated Use {@link EnsureImplicitRubricOracle}. */
 export function ensureImplicitRubricOracle(oracles: OracleConfigLike[] | undefined, choice: RubricChoice, versionId?: string, versionLabel?: string): OracleConfigLike[] {
     return EnsureImplicitRubricOracle(oracles, choice, versionId, versionLabel);

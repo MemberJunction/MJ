@@ -7,7 +7,10 @@ vi.mock('@memberjunction/rubrics', () => ({
     providerRubricEngine: () => ({ EvaluateRecord: evaluateRecord, evaluateRecord }),
 }));
 
-import { PublishedVersionPin, EnsureImplicitRubricOracle, ResolveRubric, WeightsForImplicitRubric } from '../oracles/rubric-resolution.js';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PublishedVersionPin, EnsureImplicitRubricOracle, OraclesWithNamedRubric, ResolveRubric, WeightsForImplicitRubric } from '../oracles/rubric-resolution.js';
 import { RubricOracle } from '../oracles/RubricOracle.js';
 
 const suites = [
@@ -16,6 +19,25 @@ const suites = [
 ];
 
 describe('rubric resolution', () => {
+    it('honors a test rubric and a run override on the drivers that score a test run', () => {
+        expect(OraclesWithNamedRubric([{ type: 'trace-no-errors', weight: 1 }], { testRubricId: 'from-test' })).toEqual([
+            { type: 'trace-no-errors', weight: 1 },
+            { type: 'rubric', config: { rubricId: 'from-test' } },
+        ]);
+        expect(OraclesWithNamedRubric([], { runRubricId: 'from-flag', runVersionId: 'v9' })).toEqual([
+            { type: 'rubric', config: { rubricId: 'from-flag', rubricVersionId: 'v9' } },
+        ]);
+        const directory = dirname(fileURLToPath(import.meta.url));
+        for (const file of ['../drivers/PromptEvalDriver.ts', '../drivers/DecisionEvalDriver.ts']) {
+            const source = readFileSync(join(directory, file), 'utf8');
+            expect(source).toMatch(/OraclesWithNamedRubric/);
+            expect(source).toMatch(/testRunId: context\.testRun\.ID/);
+        }
+        const computerUse = readFileSync(join(directory, '../../../../AI/MJComputerUse/src/test-driver/ComputerUseTestDriver.ts'), 'utf8');
+        expect(computerUse).toMatch(/OraclesWithNamedRubric/);
+        expect(computerUse).toMatch(/testRunId: context\.testRun\.ID/);
+    });
+
     it('uses the first source that names a rubric', () => {
         expect(ResolveRubric({
             run: { rubricId: 'run' },
@@ -89,7 +111,7 @@ describe('rubric resolution', () => {
             { test: { ID: 'test-1' } as never, testRunId: 'run-1', contextUser: {} as never },
             { rubricId: 'rubric', rubricVersionId: 'v1', versionLabel: '1.0.0' } as never,
         );
-        expect(seen).toEqual([{
+        expect(seen[0]).toMatchObject({
             rubricId: 'rubric',
             subjectEntityName: 'MJ: Test Runs',
             subjectRecordId: 'run-1',
@@ -98,7 +120,14 @@ describe('rubric resolution', () => {
             versionId: 'v1',
             passThreshold: null,
             evaluator: 'LLM',
-        }]);
+        });
+        const refused = await oracle.evaluate(
+            { test: { ID: 'test-1' } as never, contextUser: {} as never },
+            { rubricId: 'rubric' } as never,
+        );
+        expect(refused.passed).toBe(false);
+        expect(refused.message).toBe('subject not found or not readable');
+        expect(seen).toHaveLength(1);
         expect(result.passed).toBe(true);
         expect(result.message).toBe('rubric v1.0.0: Passed (75)');
         expect(result.details).toMatchObject({ RubricEvaluationID: 'eval-1', Criteria: [{ Key: 'clarity', Rationale: 'Clear.' }] });

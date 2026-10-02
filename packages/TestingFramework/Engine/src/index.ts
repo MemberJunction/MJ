@@ -33,6 +33,8 @@ export * from './oracles/promote-criteria';
 export * from './oracles/DecisionJudgeOracle';
 export * from './oracles/ExactMatchOracle';
 export * from './oracles/SQLValidatorOracle';
+export * from './oracles/RubricOracle';
+export * from './oracles/rubric-resolution';
 
 // Types and interfaces
 export * from './types';

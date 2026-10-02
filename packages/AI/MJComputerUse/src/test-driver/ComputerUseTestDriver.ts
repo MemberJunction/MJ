@@ -57,6 +57,7 @@ import {
     TestRunOutputItem,
     ReplayTelemetry,
     inlineOracleFromVerdicts,
+    OraclesWithNamedRubric,
 } from '@memberjunction/testing-engine';
 
 import {
@@ -1600,7 +1601,11 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         actualOutput: Record<string, unknown>,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
-        const oracleConfigs = config.oracles ?? [];
+        const oracleConfigs = OraclesWithNamedRubric(config.oracles, {
+            runRubricId: context.options.rubricId,
+            runVersionId: context.options.rubricVersionId,
+            testRubricId: context.test.RubricID,
+        });
         const verdicts = actualOutput.criteriaVerdicts as { criterion: string; met: boolean; evidence?: string }[] | undefined;
         if (oracleConfigs.length === 0 && !(verdicts && verdicts.length > 0)) {
             this.logToTestRun(context, 'info', 'No oracles configured — skipping evaluation');
@@ -1657,6 +1662,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         try {
             const oracleInput: OracleInput = {
                 test: context.test,
+                testRunId: context.testRun.ID,
                 expectedOutput: expected,
                 actualOutput,
                 contextUser: context.contextUser

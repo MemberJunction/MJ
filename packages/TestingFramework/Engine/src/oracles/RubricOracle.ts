@@ -39,11 +39,14 @@ export class RubricOracle implements IOracle {
         if (!engine) {
             return { oracleType: this.type, passed: false, score: 0, message: 'No rubric engine is configured.' };
         }
+        if (!input.testRunId) {
+            return { oracleType: this.type, passed: false, score: 0, message: 'subject not found or not readable' };
+        }
         const result = await engine.EvaluateRecord({
             rubricId: settings.rubricId,
             versionId: settings.rubricVersionId,
             subjectEntityName: 'MJ: Test Runs',
-            subjectRecordId: input.testRunId ?? '',
+            subjectRecordId: input.testRunId,
             contextEntityName: 'MJ: Tests',
             contextRecordId: input.test?.ID,
             passThreshold: settings.passThreshold ?? null,
