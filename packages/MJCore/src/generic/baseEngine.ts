@@ -1941,7 +1941,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             _fromEngine: true,   // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
             CacheLocalTTL: config.CacheLocalTTL,
-            IncludeBinaryFields: this.ResolveConfigIncludeBinaryFields(config),
+            // Present only when true. RunViewParams.Equals treats undefined and false alike, so
+            // fingerprints are unaffected, and an engine that never asked for binary fields sends
+            // the same request shape it always did (a network provider forwards any key that is set).
+            ...(this.ResolveConfigIncludeBinaryFields(config) ? { IncludeBinaryFields: true } : {}),
             BypassCache: bypassCache
         } as RunViewParams;
     }

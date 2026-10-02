@@ -48,7 +48,7 @@
  */
 
 import { BaseSingleton, EscapeSQLString, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
-import { BaseEntity, BaseEntityEvent, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, LogError, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import type { RemoteInvalidatePayload } from '@memberjunction/core';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import type {
@@ -427,7 +427,13 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         if (this.remoteRefreshTimer) return;
         this.remoteRefreshTimer = setTimeout(() => {
             this.remoteRefreshTimer = null;
-            void this.refreshQueuedRows();
+            // Nothing awaits this timer-driven refresh. Without the catch a throw would be an
+            // unhandled rejection, and the IDs already taken off the queue would be lost until the
+            // TTL reload. Same contract as a failed load: log, and serve stale until a reload.
+            this.refreshQueuedRows().catch((e: unknown) => {
+                LogError(`SimpleVectorIndexCache: re-reading changed EntityRecordDocument rows failed: ${e instanceof Error ? e.message : String(e)}`);
+                this.MarkAllStale();
+            });
         }, REMOTE_REFRESH_DEBOUNCE_MS);
     }
 
@@ -457,14 +463,22 @@ export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache
         includeUser: (user: UserInfo | undefined) => boolean
     ): Promise<boolean> {
         const inList = ids.map(id => `'${EscapeSQLString(id)}'`).join(',');
-        const result = await new RunView().RunView<RecordDocumentVectorRow>({
-            EntityName: ENTITY_RECORD_DOCUMENTS,
-            ExtraFilter: `ID IN (${inList})`,
-            // Naming the binary column requests it (RunView omits binary columns otherwise).
-            Fields: ['ID', 'EntityDocumentID', 'RecordID', 'VectorJSON', 'VectorBinary'],
-            ResultType: 'simple',
-            BypassCache: true,
-        }, contextUser);
+        let result: RunViewResult<RecordDocumentVectorRow>;
+        try {
+            result = await new RunView().RunView<RecordDocumentVectorRow>({
+                EntityName: ENTITY_RECORD_DOCUMENTS,
+                ExtraFilter: `ID IN (${inList})`,
+                // Naming the binary column requests it (RunView omits binary columns otherwise).
+                Fields: ['ID', 'EntityDocumentID', 'RecordID', 'VectorJSON', 'VectorBinary'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, contextUser);
+        } catch (e) {
+            // A provider that throws (connection lost, transport error) is handled like one that
+            // reports failure: the caller marks every index stale and stops this batch run.
+            LogError(`SimpleVectorIndexCache: re-reading ${ids.length} changed EntityRecordDocument row(s) threw: ${e instanceof Error ? e.message : String(e)}`);
+            return false;
+        }
         if (!result.Success) {
             LogError(`SimpleVectorIndexCache: re-reading ${ids.length} changed EntityRecordDocument row(s) failed: ${result.ErrorMessage}`);
             return false;

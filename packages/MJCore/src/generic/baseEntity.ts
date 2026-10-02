@@ -520,9 +520,9 @@ export class EntityField {
             return;
         }
         const byteLength = Base64DecodedByteLength(value);
-        if (ef.Length > 0 && byteLength > ef.Length) {
+        if (ef.MaxByteLength > 0 && byteLength > ef.MaxByteLength) {
             result.Success = false;
-            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be longer than ${ef.Length} bytes. Current value is ${byteLength} bytes`, this.Value));
+            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be longer than ${ef.MaxByteLength} bytes. Current value is ${byteLength} bytes`, this.Value));
         }
     }
 

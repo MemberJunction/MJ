@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import {
+import { BINARY_CHANGE_VALUE_PREFIX, FormatBinaryChangeValue, IsBinaryChangeValue,
     Base64Codecs,
     Base64ToBytes,
     Base64ToFloat32Vector,
@@ -265,5 +265,29 @@ describe('float32 vectors', () => {
     it('encodes an empty vector as zero bytes', () => {
         expect(Float32VectorToBytes([]).length).toBe(0);
         expect(Float32VectorToBase64([])).toBe('');
+    });
+});
+
+describe('FormatBinaryChangeValue / IsBinaryChangeValue (change-log text for a binary value)', () => {
+    it('reports the decoded size with a thousands separator, never the content', () => {
+        expect(FormatBinaryChangeValue('AQID')).toBe('[binary: 3 bytes]');
+        expect(FormatBinaryChangeValue('AQIDBA==')).toBe('[binary: 4 bytes]');
+        expect(FormatBinaryChangeValue('A'.repeat(8192))).toBe('[binary: 6,144 bytes]');
+        expect(FormatBinaryChangeValue('')).toBe('[binary: 0 bytes]');
+    });
+
+    it('reports invalid base64 as such instead of throwing', () => {
+        expect(FormatBinaryChangeValue('not base64!')).toBe('[binary: invalid base64]');
+        expect(FormatBinaryChangeValue('data:image/png;base64,AAAA')).toBe('[binary: invalid base64]');
+    });
+
+    it('recognises its own output and nothing else', () => {
+        expect(IsBinaryChangeValue(FormatBinaryChangeValue('AQID'))).toBe(true);
+        expect(IsBinaryChangeValue('[binary: invalid base64]')).toBe(true);
+        expect(IsBinaryChangeValue('AQID')).toBe(false);
+        expect(IsBinaryChangeValue('[binary')).toBe(false);
+        expect(IsBinaryChangeValue(null)).toBe(false);
+        expect(IsBinaryChangeValue(42)).toBe(false);
+        expect(FormatBinaryChangeValue('AQID').startsWith(BINARY_CHANGE_VALUE_PREFIX)).toBe(true);
     });
 });

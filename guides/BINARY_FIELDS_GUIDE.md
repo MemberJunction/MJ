@@ -77,6 +77,10 @@ await file.Save();
 - **Saving.** The provider binds the decoded bytes. SQL Server inlines a `0x…` hex literal, so the
   value never round-trips through `nvarchar`. PostgreSQL binds a `Buffer` parameter; inside a
   transaction group it inlines `'\x…'::bytea`.
+- **Size.** On SQL Server the literal is part of the save batch, and with Record Changes on the same
+  bytes also go into the change log as base64, so a save refuses a value above
+  `SQLServerDataProvider.MaxInlineBinaryBytes` (32 MB by default) with a message that says so.
+  Large content belongs in file storage, not a binary column.
 - **CodeGen.** A binary parameter is declared `varbinary(MAX)` when the column has no fixed length.
   The old declaration was a bare `varbinary`, which T-SQL reads as `varbinary(1)` and silently
   truncates to one byte.

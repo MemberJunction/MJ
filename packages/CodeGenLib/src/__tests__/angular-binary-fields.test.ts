@@ -11,6 +11,9 @@ class TestableAngularGenerator extends AngularClientGeneratorBase {
     public SectionHTML(entity: EntityInfo, section: AngularFormSectionInfo): string {
         return this.generateSectionHTMLForAngular(entity, section);
     }
+    public Sections(entity: EntityInfo): AngularFormSectionInfo[] {
+        return this.generateAngularAdditionalSections(entity, 0, null);
+    }
 }
 
 const ENTITY_ID = 'E1';
@@ -97,5 +100,66 @@ describe('AngularClientGeneratorBase — binary fields are skipped in generated 
 
         expect(section.Fields).toEqual([]);
         expect(html).not.toContain('<mj-form-field');
+    });
+});
+
+describe('AngularClientGeneratorBase — a section is created only for fields that render', () => {
+    const gen = new TestableAngularGenerator();
+    const names = (sections: AngularFormSectionInfo[]) => sections.map(s => `${s.Type}:${s.Name}`).sort();
+    const category = (name: string, type: string, seq: number, cat: string) =>
+        field(name, type, seq, { GeneratedFormSection: 'Category', Category: cat });
+
+    it('does not create a Details section when its only field is binary (the empty-panel case)', () => {
+        const entity = buildEntity([
+            category('Name', 'nvarchar', 1, 'Main'),
+            field('EmbeddingVectorBinary', 'varbinary', 2), // Details
+        ]);
+        const sections = gen.Sections(entity);
+        expect(names(sections)).toEqual([`${GeneratedFormSectionType.Category}:Main`]);
+        expect(sections.some(s => s.TabCode.includes('SectionKey="details"'))).toBe(false);
+        expect(sections.every(s => (s.Fields?.length ?? 0) > 0)).toBe(true);
+    });
+
+    it('still creates Details when a non-binary field lives there', () => {
+        const entity = buildEntity([
+            category('Name', 'nvarchar', 1, 'Main'),
+            field('Notes', 'nvarchar', 2),
+            field('EmbeddingVectorBinary', 'varbinary', 3),
+        ]);
+        const sections = gen.Sections(entity);
+        expect(names(sections)).toEqual([`${GeneratedFormSectionType.Category}:Main`, `${GeneratedFormSectionType.Details}:Details`]);
+        const details = sections.find(s => s.Type === GeneratedFormSectionType.Details)!;
+        expect(details.Fields!.map(f => f.Name)).toEqual(['Notes']);
+        expect(details.TabCode).toContain('FieldName="Notes"');
+        expect(details.TabCode).not.toContain('EmbeddingVectorBinary');
+    });
+
+    it('does not create a category whose only field is binary', () => {
+        const entity = buildEntity([
+            category('Name', 'nvarchar', 1, 'Main'),
+            category('Thumbnail', 'image', 2, 'Media'),
+        ]);
+        expect(names(gen.Sections(entity))).toEqual([`${GeneratedFormSectionType.Category}:Main`]);
+    });
+
+    it('does not create a section for the ID column alone', () => {
+        const entity = buildEntity([
+            category('Name', 'nvarchar', 1, 'Main'),
+            field('ID', 'uniqueidentifier', 0),
+        ]);
+        expect(names(gen.Sections(entity))).toEqual([`${GeneratedFormSectionType.Category}:Main`]);
+    });
+
+    it('agrees with the HTML walk: every section it creates renders at least one field', () => {
+        const entity = buildEntity([
+            category('Name', 'nvarchar', 1, 'Main'),
+            category('Blob', 'bytea', 2, 'Payload'),
+            field('Description', 'nvarchar', 3),
+            field('VectorBinary', 'varbinary', 4),
+        ]);
+        for (const section of gen.Sections(entity)) {
+            if (section.Type === GeneratedFormSectionType.Top) continue;
+            expect(gen.SectionHTML(entity, section)).toContain('<mj-form-field');
+        }
     });
 });

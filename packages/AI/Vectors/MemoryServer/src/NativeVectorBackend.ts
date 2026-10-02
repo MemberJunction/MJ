@@ -239,9 +239,18 @@ export class NativeVectorBackend extends BaseSingleton<NativeVectorBackend> {
       return null;
     }
     if (!state.Ready) return null;
-    if (!this.catchUp(state, snapshot, job.Source)) return null;
-    state.LastUsed = Date.now();
-    return this.searchAnn(state, job, ann.Oversample);
+    try {
+      if (!this.catchUp(state, snapshot, job.Source)) return null;
+      state.LastUsed = Date.now();
+      return this.searchAnn(state, job, ann.Oversample);
+    } catch (e) {
+      // Same contract as SearchRows and the HNSW build: a native failure never fails the search.
+      // Drop this store's index so the next search rebuilds it, and let the caller scan exactly.
+      LogError(`Vector acceleration: HNSW search failed, falling back to exact search: ${e instanceof Error ? e.message : String(e)}`);
+      this.annIndexes.delete(snapshot.StoreID);
+      this.annBuilds.delete(snapshot.StoreID);
+      return null;
+    }
   }
 
   private searchAnn(state: AnnIndexState, job: VectorSearchJob, oversample: number): ScoredRows | null {

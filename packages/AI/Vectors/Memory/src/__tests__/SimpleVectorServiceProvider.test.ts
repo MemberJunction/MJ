@@ -1042,6 +1042,28 @@ describe('SimpleVectorServiceProvider', () => {
                 expect(recordIds(await query([1, 0, 0], 2))).toEqual(['Z']);
             });
 
+            it('treats a re-read that throws like one that fails: logs, marks indexes stale, reloads on the next query', async () => {
+                await loadDoc1();
+                vi.useFakeTimers();
+                runViewMock.mockRejectedValueOnce(new Error('network down'));
+
+                send(keyOnlySave('erd-1'));
+                await vi.advanceTimersByTimeAsync(REMOTE_REFRESH_DEBOUNCE_MS);
+                await flush();
+
+                expect(runViewMock).toHaveBeenCalledTimes(2); // the re-read was attempted once
+                expect(LogError).toHaveBeenCalledWith(
+                    'SimpleVectorIndexCache: re-reading 1 changed EntityRecordDocument row(s) threw: network down'
+                );
+
+                // The index is stale: it still answers, and the next query starts a reload.
+                runViewMock.mockResolvedValueOnce(viewResult(reloadedRows));
+                expect(recordIds(await query([1, 0, 0], 2))).toEqual(['A', 'B']);
+                await flush();
+                expect(runViewMock).toHaveBeenCalledTimes(3);
+                expect(recordIds(await query([1, 0, 0], 2))).toEqual(['Z']);
+            });
+
             it('treats a successful re-read without a Results array as every queued row having been deleted', async () => {
                 await loadDoc1();
                 vi.useFakeTimers();

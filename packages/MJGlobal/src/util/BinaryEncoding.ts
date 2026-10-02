@@ -245,6 +245,28 @@ export function Base64DecodedByteLength(base64: string): number {
     return Math.floor((dataChars * 3) / 4);
 }
 
+/** Prefix of the text recorded in a change log in place of a binary value. See {@link FormatBinaryChangeValue}. */
+export const BINARY_CHANGE_VALUE_PREFIX = '[binary:';
+
+/**
+ * The text a change log records, and change history shows, in place of a binary field's base64
+ * value: `[binary: 6,144 bytes]`. The bytes themselves stay in the record snapshot
+ * (`FullRecordJSON`), which restore reads; only the per-field diff (`ChangesJSON`) and its
+ * on-screen rendering use this, so a change to an embedding or a file is visible without carrying
+ * the content twice more per save. Invalid base64 is reported as such rather than thrown on.
+ *
+ * @param base64 - The field's value as held above the database.
+ */
+export function FormatBinaryChangeValue(base64: string): string {
+    if (!IsValidBase64(base64)) return `${BINARY_CHANGE_VALUE_PREFIX} invalid base64]`;
+    return `${BINARY_CHANGE_VALUE_PREFIX} ${Base64DecodedByteLength(base64).toLocaleString('en-US')} bytes]`;
+}
+
+/** Whether `value` is text produced by {@link FormatBinaryChangeValue}, so it is shown as-is and never decoded. */
+export function IsBinaryChangeValue(value: unknown): value is string {
+    return typeof value === 'string' && value.startsWith(BINARY_CHANGE_VALUE_PREFIX) && value.endsWith(']');
+}
+
 /**
  * Encodes bytes as standard, padded base64 using the fastest implementation the host offers.
  *

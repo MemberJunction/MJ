@@ -4,7 +4,7 @@ import { IMetadataProvider } from "./interfaces"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
-import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
+import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
@@ -2116,6 +2116,14 @@ export class EntityFieldInfo extends BaseInfo {
 
     get MaxLength(): number {
         return SQLMaxLength(this.Type, this.Length);
+    }
+
+    /**
+     * Byte cap of a binary column (`binary(n)` / `varbinary(n)`), or 0 when it has none
+     * (`varbinary(MAX)`, `image`, `bytea`). The binary counterpart of {@link MaxLength}.
+     */
+    get MaxByteLength(): number {
+        return SQLMaxByteLength(this.Type, this.Length);
     }
 
     get ReadOnly(): boolean {

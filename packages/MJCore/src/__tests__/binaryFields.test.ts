@@ -33,6 +33,7 @@ import { EntityFieldInfo, EntityInfo, RecordMergeRequest, RecordMergeResult } fr
 import { TransactionGroupBase } from '../generic/transactionGroup';
 import { EntityField } from '../generic/baseEntity';
 import { RunViewParams } from '../views/runView';
+import { SQLMaxByteLength } from '../generic/util';
 
 const ENTITY_ID = 'entity-documents';
 
@@ -366,5 +367,41 @@ describe('RunView binary field selection — edge cases', () => {
         await provider.preProcessRunView(params);
         expect(params.IncludeBinaryFields).toBe(true);
         expect(params.Fields).toEqual(['ID', 'Name', 'VectorBinary', 'Hash', 'VectorJSON']);
+    });
+});
+
+describe('binary byte caps follow the column type, not the raw catalog length', () => {
+    function fieldOf(type: string, length: number): EntityFieldInfo {
+        return new EntityFieldInfo({ ID: 'f', EntityID: 'e', Entity: 'Legacy', Name: 'Photo', Type: type, Length: length, Sequence: 1, AllowsNull: true, AllowUpdateAPI: true });
+    }
+    function validateBytes(field: EntityFieldInfo, bytes: number) {
+        const ef = new EntityField(field);
+        ef.Value = Buffer.alloc(bytes, 7).toString('base64');
+        return ef.Validate();
+    }
+
+    it('SQLMaxByteLength: fixed binary columns cap, MAX / image / bytea do not', () => {
+        expect(SQLMaxByteLength('varbinary', 512)).toBe(512);
+        expect(SQLMaxByteLength('binary', 16)).toBe(16);
+        expect(SQLMaxByteLength('varbinary', -1)).toBe(0);
+        expect(SQLMaxByteLength('image', 16)).toBe(0);   // sys.columns reports the 16-byte text pointer
+        expect(SQLMaxByteLength('bytea', 0)).toBe(0);
+        expect(SQLMaxByteLength(' VarBinary ', 8)).toBe(8);
+    });
+
+    it('MaxByteLength is exposed on the field info', () => {
+        expect(fieldOf('image', 16).MaxByteLength).toBe(0);
+        expect(fieldOf('varbinary', 512).MaxByteLength).toBe(512);
+    });
+
+    it('an image column accepts a value far larger than the 16 the catalog reports', () => {
+        expect(validateBytes(fieldOf('image', 16), 100).Success).toBe(true);
+        expect(validateBytes(fieldOf('image', 16), 1_000_000).Success).toBe(true);
+    });
+
+    it('a fixed-size binary column still rejects an oversized value, naming the cap', () => {
+        const r = validateBytes(fieldOf('binary', 16), 17);
+        expect(r.Success).toBe(false);
+        expect(r.Errors[0].Message).toContain('cannot be longer than 16 bytes. Current value is 17 bytes');
     });
 });

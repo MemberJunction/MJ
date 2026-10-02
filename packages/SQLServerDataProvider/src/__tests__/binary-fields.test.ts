@@ -218,6 +218,35 @@ describe('SQLServerDataProvider.RenderSaveCallBinding — binary fields', () => 
     expect(b.callArgsSQL).toMatch(/@Content=@Content_[0-9a-f]+/);
   });
 
+  it('renders the hex literal once per binary field and reuses it for SET and the simple-params form', () => {
+    const spy = vi.spyOn(provider as unknown as { FormatBinaryLiteral: (f: EntityFieldInfo, v: unknown) => string }, 'FormatBinaryLiteral');
+    try {
+      const b = binding([['Name', 'Doc'], ['Content', 'AQL/']]);
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(b.setSQL).toMatch(/SET @Content_[0-9a-f]+ = 0x0102FF/);
+      expect(b.simpleParamsSQL).toContain('@Content=0x0102FF');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('refuses a binary value larger than MaxInlineBinaryBytes with a message naming the field, size and limit', () => {
+    const previous = SQLServerDataProvider.MaxInlineBinaryBytes;
+    SQLServerDataProvider.MaxInlineBinaryBytes = 4;
+    try {
+      expect(() => binding([['Name', 'Doc'], ['Content', Buffer.alloc(5, 1).toString('base64')]])).toThrow(
+        /Field "Content" holds 5 bytes, more than the 4-byte limit .*MaxInlineBinaryBytes/,
+      );
+      expect(binding([['Name', 'Doc'], ['Content', Buffer.alloc(4, 1).toString('base64')]]).setSQL).toMatch(/0x01010101/);
+    } finally {
+      SQLServerDataProvider.MaxInlineBinaryBytes = previous;
+    }
+  });
+
+  it('ships a default limit of 32 MB', () => {
+    expect(SQLServerDataProvider.MaxInlineBinaryBytes).toBe(32 * 1024 * 1024);
+  });
+
   it('handles fixed-length binary(n) the same way', () => {
     const b = binding([['Name', 'Doc'], ['Hash', Buffer.from([1, 2, 3, 4]).toString('base64')]]);
     expect(b.setSQL).toMatch(/SET @Hash_[0-9a-f]+ = 0x01020304/);

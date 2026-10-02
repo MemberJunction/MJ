@@ -242,6 +242,21 @@ export function SQLMaxLength(sqlBaseType: string, sqlLength: number): number {
     }
 }
 
+/**
+ * Byte cap of a binary column, or 0 when it has none. `varbinary(MAX)` reports -1 and PostgreSQL
+ * `bytea` reports no length. SQL Server `image` reports 16 in `sys.columns.max_length`, which is the
+ * size of its text pointer rather than a limit, so it is unbounded here too.
+ */
+export function SQLMaxByteLength(sqlBaseType: string, sqlLength: number): number {
+    switch (sqlBaseType.trim().toLowerCase()) {
+        case 'binary':
+        case 'varbinary':
+            return sqlLength > 0 ? sqlLength : 0; // -1 means MAX
+        default:
+            return 0; // image, bytea and anything else: no byte cap
+    }
+}
+
 const _stopwords = [
     "a", "about", "above", "after", "again", "against", "ain", "all", "am", "an", "and", "any", "are", "aren", "aren't", "as", "at",
     "be", "because", "been", "before", "being", "below", "between", "both", "but", "by",

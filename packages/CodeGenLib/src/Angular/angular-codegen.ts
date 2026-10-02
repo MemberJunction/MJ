@@ -661,13 +661,30 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
           let index = startIndex;
           const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
           for (const field of sortedFields) {
-              if (field.IncludeInGeneratedForm) {
-                  if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== ''  && field.IncludeInGeneratedForm)
+              // A section exists because a RENDERED field lands in it. Use the same predicate the
+              // HTML walk uses, so a section whose only members are skipped (a binary column, an
+              // FK's virtual name field) is never created — the HTML and the component's section
+              // list both come from this array, so an empty panel here would also be a dangling key.
+              if (this.isFieldRenderedInForm(entity, field)) {
+                  if (field.GeneratedFormSectionType === GeneratedFormSectionType.Category && field.Category && field.Category !== '')
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Category, field.Category, field.Sequence);
                   else if (field.GeneratedFormSectionType === GeneratedFormSectionType.Details)
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Details, "Details", field.Sequence);
                   else if (field.GeneratedFormSectionType === GeneratedFormSectionType.Top)
                       this.AddSectionIfNeeded(entity, sections, GeneratedFormSectionType.Top, "Top", field.Sequence);
+              }
+          }
+          // Section ORDER is unchanged by the rule above: a skipped field still contributes its
+          // sequence to a section that exists (it always did), so an FK's virtual name field or a
+          // binary column that happens to be first in its section keeps that section where it was.
+          for (const field of sortedFields) {
+              if (!field.IncludeInGeneratedForm || this.isFieldRenderedInForm(entity, field)) continue;
+              const type = field.GeneratedFormSectionType;
+              const name = type === GeneratedFormSectionType.Category ? field.Category : type === GeneratedFormSectionType.Details ? 'Details' : type === GeneratedFormSectionType.Top ? 'Top' : null;
+              if (!name) continue;
+              const section = sections.find(s => s.Name === name && s.Type === type);
+              if (section && field.Sequence != null && (section.MinSequence == null || field.Sequence < section.MinSequence)) {
+                  section.MinSequence = field.Sequence;
               }
           }
 
@@ -769,7 +786,7 @@ ${indentedFormHTML}
           section.Fields = [];
           const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
           for (const field of sortedFields) {
-              if (field.IncludeInGeneratedForm) {
+              if (this.isFieldRenderedInForm(entity, field)) {
                   let bMatch: boolean = false;
                   if (field.GeneratedFormSectionType === GeneratedFormSectionType.Top && section.Type === GeneratedFormSectionType.Top) {
                       // match, include the field in the output
@@ -783,19 +800,7 @@ ${indentedFormHTML}
                       // match, include the field in the output
                       bMatch = true;
                   }
-                  if (bMatch && field.Name.toLowerCase() !== 'id') {
-                      // Skip virtual fields that are the name-field-map of an FK field.
-                      // The FK field itself will display the name via RelatedEntityNameFieldMap
-                      // at runtime, so emitting the virtual field would be redundant.
-                      if (field.IsVirtual && this.isVirtualNameFieldForFK(entity, field)) {
-                          continue;
-                      }
-                      // Skip binary fields (varbinary / bytea). Their value is base64-encoded data
-                      // — an embedding, a file — that a form can neither display nor edit
-                      // meaningfully, and rendering it would put kilobytes of base64 in a textarea.
-                      if (field.IsBinaryFieldType) {
-                          continue;
-                      }
+                  if (bMatch) {
                       section.Fields.push(field) // add the field to the section fields array
                   }
               }
@@ -865,6 +870,28 @@ ${indentedFormHTML}
           }
       
           return html;
+      }
+
+      /**
+       * Whether a field is rendered on the generated form at all. This is the single rule behind
+       * both section derivation ({@link generateAngularAdditionalSections}) and field placement
+       * ({@link generateSectionHTMLForAngular}): a section is created only for fields that pass,
+       * so no section is ever emitted empty.
+       *
+       * Excluded:
+       *  - fields not flagged `IncludeInGeneratedForm`, and the `ID` column;
+       *  - virtual fields that are the name-field-map of an FK on the same entity — the FK field
+       *    shows the name at runtime via `RelatedEntityNameFieldMap`, so this would be redundant;
+       *  - binary fields (varbinary / bytea / binary / image). Their value is base64-encoded data —
+       *    an embedding, a file — that a form can neither display nor edit meaningfully, and
+       *    rendering it would put kilobytes of base64 in a textarea.
+       */
+      protected isFieldRenderedInForm(entity: EntityInfo, field: EntityFieldInfo): boolean {
+          if (!field.IncludeInGeneratedForm) return false;
+          if (field.Name.toLowerCase() === 'id') return false;
+          if (field.IsVirtual && this.isVirtualNameFieldForFK(entity, field)) return false;
+          if (field.IsBinaryFieldType) return false;
+          return true;
       }
 
       /**

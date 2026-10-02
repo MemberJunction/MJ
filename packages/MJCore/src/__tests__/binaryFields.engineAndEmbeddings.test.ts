@@ -124,14 +124,16 @@ describe('BaseEngine.BuildRunViewParamsForConfig and IncludeBinaryFields', () =>
 
         const networkEngine = new BinaryTestEngine();
         networkEngine.BindProviderForTest(fakeProvider(ProviderType.Network));
-        expect(networkEngine.BuildForTest(config('DatabaseProviderOnly')).IncludeBinaryFields).toBe(false);
+        expect(networkEngine.BuildForTest(config('DatabaseProviderOnly')).IncludeBinaryFields).toBeUndefined();
     });
 
-    it('passes true through and maps unset/false to false', () => {
+    it('passes true through and leaves the key out for unset/false, so the default request shape is unchanged', () => {
         engine.BindProviderForTest(fakeProvider(ProviderType.Network));
         expect(engine.BuildForTest(config(true)).IncludeBinaryFields).toBe(true);
-        expect(engine.BuildForTest(config(false)).IncludeBinaryFields).toBe(false);
-        expect(engine.BuildForTest(config()).IncludeBinaryFields).toBe(false);
+        // Not `false`: a network provider forwards any key that is set, and an older server
+        // rejects an input field it does not know. Absent means "as before".
+        expect('IncludeBinaryFields' in engine.BuildForTest(config(false))).toBe(false);
+        expect('IncludeBinaryFields' in engine.BuildForTest(config())).toBe(false);
     });
 
     it('produces identical params on every call, independent of bypassCache, so fingerprints stay stable', () => {

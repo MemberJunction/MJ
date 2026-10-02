@@ -402,14 +402,20 @@ export class RunViewParams {
      * `BaseEntity` holds; convert with `Base64ToBytes` / `Base64ToFloat32Vector` from
      * `@memberjunction/global`.
      *
-     * Binary columns are left out by default **when the view runs over a network transport**
-     * (`GraphQLDataProvider` in the browser or another client), because they are usually large
-     * and most lists, grids and lookups never read them. A field named explicitly in
-     * {@link Fields} is always included, whatever this flag says, so a caller that wants one
-     * specific binary column can ask for just that column.
+     * Binary columns are left out by default on **every** provider, server-side database
+     * providers included: the provider emits an explicit column list instead of `SELECT *`, so the
+     * values are never read from the database, let alone sent over the wire. They are usually
+     * large and most lists, grids and lookups never need them. A `simple` row then has no key
+     * for the column, and an `entity_object` row marks the field `NotLoaded`, which a later
+     * `Save()` leaves out so the stored value is never wiped.
      *
-     * Server-side database providers read binary columns from the database in every case; the
-     * flag only controls what crosses the wire.
+     * To get them, set this flag, or name the binary field in {@link Fields} — the provider sets
+     * the flag for you in that case. A single-record `BaseEntity.Load()` always includes them. An
+     * engine that caches the entity opts in through its config's `IncludeBinaryFields`
+     * (`true`, or `'DatabaseProviderOnly'` to load them on the server but not in the browser).
+     *
+     * The flag is part of the result-cache fingerprint, so a request with it never shares a slot
+     * with one without. See `guides/BINARY_FIELDS_GUIDE.md`.
      *
      * @default false
      */

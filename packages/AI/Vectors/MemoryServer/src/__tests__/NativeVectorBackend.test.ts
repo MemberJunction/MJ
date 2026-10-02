@@ -393,3 +393,29 @@ describe('approximate (HNSW) search', () => {
     await waitFor(() => stores.every(s => native.IsAnnReady(s.StoreID)));
   });
 });
+
+describe('HNSW search failure', () => {
+  it('falls back to exact search, logs once, and drops the index so the next search rebuilds it', async () => {
+    VectorAccelerationSettings.Instance.Configure({ ANN: { Enabled: true, MinRows: 50, BuildSliceMs: 0 } });
+    const store = randomStore(700, 8, 5);
+    const query = store.CopyRow(10);
+    expect(native.SearchApproximate(annJob(store, query))).toBeNull(); // starts the build
+    await waitFor(() => native.IsAnnReady(store.StoreID));
+
+    const search = vi.spyOn(usearch.Index.prototype, 'search').mockImplementation(() => {
+      throw new Error('index.search exploded');
+    });
+    try {
+      expect(native.SearchApproximate(annJob(store, query, { TopK: 10 }))).toBeNull();
+      expect(mocks.LogError).toHaveBeenCalledWith(expect.stringContaining('HNSW search failed, falling back to exact search: index.search exploded'));
+      expect(native.IsAnnReady(store.StoreID)).toBe(false);
+    } finally {
+      search.mockRestore();
+    }
+
+    // The next search starts a fresh build and, once ready, answers again.
+    expect(native.SearchApproximate(annJob(store, query))).toBeNull();
+    await waitFor(() => native.IsAnnReady(store.StoreID));
+    expect(native.SearchApproximate(annJob(store, query, { TopK: 10 }))).not.toBeNull();
+  });
+});

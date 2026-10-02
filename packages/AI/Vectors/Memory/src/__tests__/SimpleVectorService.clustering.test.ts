@@ -259,3 +259,42 @@ describe('RunClusterJob (the worker-side entry point)', () => {
     expect(service.ExpectedDimensions).toBeNull();
   });
 });
+
+describe('async clustering with a write that lands while the job is off-thread', () => {
+  /** Runs the job, then applies a write before the service maps rows back to keys — the cross-thread window. */
+  function raced(onComputed: (service: SimpleVectorService<Meta>) => void): SimpleVectorService<Meta> {
+    let service!: SimpleVectorService<Meta>;
+    class RacingCluster extends BaseVectorAccelerator {
+      public override ClusterAsync(job: VectorClusterJob): Promise<VectorClusterJobResult | null> {
+        const computed = SimpleVectorService.RunClusterJob(job);
+        onComputed(service);
+        return Promise.resolve(computed);
+      }
+    }
+    service = new SimpleVectorService<Meta>({ Accelerator: new RacingCluster() });
+    service.LoadVectors([
+      { key: 'a', vector: [1, 0, 0], metadata: { group: 1 } },
+      { key: 'b', vector: [0.9, 0.1, 0], metadata: { group: 2 } },
+      { key: 'c', vector: [0, 1, 0], metadata: { group: 1 } },
+      { key: 'd', vector: [0, 0, 1], metadata: { group: 2 } },
+    ]);
+    return service;
+  }
+
+  it('KMeansClusterAsync drops a row removed mid-job instead of returning a null key', async () => {
+    const result = await raced(s => s.RemoveVector('a')).KMeansClusterAsync(2, 50, 'euclidean');
+    const keys = [...result.clusters.values()].flat();
+    expect(keys).not.toContain(null);
+    expect(keys).not.toContain('a');
+    expect(keys.sort()).toEqual(['b', 'c', 'd']);
+  });
+
+  it('DBSCANClusterAsync drops a removed row from clusters and outliers alike', async () => {
+    const result = await raced(s => s.RemoveVector('d')).DBSCANClusterAsync(0.2, 1, 'euclidean');
+    const keys = [...result.clusters.values()].flat();
+    expect(keys).not.toContain(null);
+    expect(keys).not.toContain('d');
+    expect(result.outliers ?? []).not.toContain(null);
+    expect([...keys, ...(result.outliers ?? [])].sort()).toEqual(['a', 'b', 'c']);
+  });
+});

@@ -2174,7 +2174,16 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     keysAtDispatch: ReadonlyArray<string | null>,
     metric: DistanceMetric
   ): ClusterResult<TMetadata> {
-    const toKeys = (rows: Int32Array): string[] => Array.from(rows, row => keysAtDispatch[row] as string);
+    // A row removed while the job ran off-thread has a null key here: VectorStore.Remove nulls the
+    // dispatch-time key array in place. Drop it, as the search path does when it re-scores.
+    const toKeys = (rows: Int32Array): string[] => {
+      const keys: string[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const key = keysAtDispatch[rows[i]];
+        if (key !== null && key !== undefined) keys.push(key);
+      }
+      return keys;
+    };
     const clusters = new Map<number, string[]>();
     result.Clusters.forEach((rows, id) => clusters.set(id, toKeys(rows)));
     const mapped: ClusterResult<TMetadata> = {
