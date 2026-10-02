@@ -18,7 +18,14 @@ export class RubricComparisonMatrixComponent implements OnChanges {
     @Input() RubricId = '';
     @Input() Major: number | null = null;
     @Input() SubjectEntityId = '';
+    /** The viewer's own evaluation. Draft hides cohort figures and other people's rationales. */
+    @Input() ViewerStatus = '';
+    @Input() ViewerEvaluationId = '';
     public CohortMean: number | null = null;
+
+    public get ShowCohort(): boolean {
+        return this.ViewerStatus !== 'Draft';
+    }
 
     /** One column per submitted evaluation. AIPrompt and Agent stay separate columns. */
     public get Shown(): MatrixColumn[] {
@@ -49,6 +56,7 @@ export class RubricComparisonMatrixComponent implements OnChanges {
     }
 
     public RationaleText(column: MatrixColumn, key: string): string {
+        if (!this.ShowCohort && column.id !== this.ViewerEvaluationId) return '';
         return column.scores.find(item => item.key === key)?.rationale || '';
     }
 

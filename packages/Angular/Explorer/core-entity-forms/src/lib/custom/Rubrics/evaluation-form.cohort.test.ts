@@ -10,6 +10,10 @@ describe('evaluation form cohort', () => {
         expect(source).toContain('[RubricId]="Form.record.RubricID"');
         expect(source).toContain('[Major]="Form.record.RubricMajorVersion"');
         expect(source).toContain('[SubjectEntityId]="Form.record.SubjectEntityID"');
+        expect(source).toContain('[ViewerStatus]="Form.record.Status"');
+        expect(source).toContain('[ViewerEvaluationId]="Form.record.ID"');
+        expect(source).toContain('evaluation-draft');
+        expect(source).toContain('fieldname^="Cohort"');
         expect(source).not.toContain('SubjectRecordID=');
         expect(source).not.toContain('RubricVersionID=\'${this.record.RubricVersionID}\' AND ContextRecordID');
         expect(source).not.toMatch(/cohort\.map/);

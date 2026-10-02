@@ -12,6 +12,11 @@ import { MJRubricEvaluationFormComponent } from '../../generated/Entities/MJRubr
     standalone: false,
     selector: 'mj-rubric-evaluation-form',
     templateUrl: '../../generated/Entities/MJRubricEvaluation/mjrubricevaluation.form.component.html',
+    host: { '[class.evaluation-draft]': 'record?.Status === "Draft"' },
+    styles: [`
+        :host.evaluation-draft mj-form-field[fieldname^="Cohort"],
+        :host.evaluation-draft mj-form-field[fieldname="DeviationFromCohortMean"] { display: none; }
+    `],
 })
 export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationFormComponent {
     public override record!: MJRubricEvaluationEntity;
@@ -146,7 +151,7 @@ export class RubricEvaluationResultPanel extends BaseFormPanel<MJRubricEvaluatio
         @if (Form.Loading) {
           <p>Loading the cohort...</p>
         } @else {
-          <mj-rubric-comparison-matrix [Provider]="Form.ProviderToUse" [RubricId]="Form.record.RubricID" [Major]="Form.record.RubricMajorVersion" [SubjectEntityId]="Form.record.SubjectEntityID"></mj-rubric-comparison-matrix>
+          <mj-rubric-comparison-matrix [Provider]="Form.ProviderToUse" [RubricId]="Form.record.RubricID" [Major]="Form.record.RubricMajorVersion" [SubjectEntityId]="Form.record.SubjectEntityID" [ViewerStatus]="Form.record.Status" [ViewerEvaluationId]="Form.record.ID"></mj-rubric-comparison-matrix>
         }
       </mj-collapsible-panel>
     `,

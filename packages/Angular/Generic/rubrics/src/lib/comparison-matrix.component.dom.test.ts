@@ -41,6 +41,23 @@ describe('RubricComparisonMatrixComponent (DOM)', () => {
         expect(host.textContent).toContain('The figure is right.');
     });
 
+    it('hides cohort figures and peer rationales while the viewer is still drafting', () => {
+        const host = render(component => {
+            component.Keys = ['clarity'];
+            component.ViewerStatus = 'Draft';
+            component.ViewerEvaluationId = 'mine';
+            component.CohortMean = 0.4;
+            component.Columns = [
+                { id: 'mine', name: 'Me', evaluatorType: 'Human', status: 'Draft', scores: [{ key: 'clarity', normalizedScore: 1, rationale: 'My note.' }] },
+                { id: 'peer', name: 'Ada', evaluatorType: 'Human', status: 'Submitted', scores: [{ key: 'clarity', normalizedScore: 0, rationale: 'Peer note.' }] },
+            ];
+        });
+        expect(host.textContent).toContain('My note.');
+        expect(host.textContent).not.toContain('Peer note.');
+        expect(host.textContent).not.toContain('Cohort mean');
+        expect(host.textContent).not.toContain('Human mean');
+    });
+
     it('leaves an unanswered criterion empty beside a scored one', () => {
         const host = render(component => {
             component.Keys = ['clarity', 'sourcing'];
