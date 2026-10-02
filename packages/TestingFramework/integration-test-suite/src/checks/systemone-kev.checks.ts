@@ -39,9 +39,12 @@
  * that answer `/v1/systemone` the way Kev's server does, and stop them after the check. For the whole
  * bundle, `OpenRouterDecision` is replaced by a subclass that overrides only `SendRequest` (as IT99 does
  * for Cloudflare): it answers only when a check arms it (KV8, KV9) and refuses otherwise, so a failover
- * to Kev-4B's OpenRouter row can never leave the process. KV4 registers the shared scripted decision
- * driver over every decision driver class, as IT97 does. The environment variables that would give a
- * decision driver a real base URL or account ID are unset for the bundle and restored after it.
+ * to Kev-4B's OpenRouter row can never leave the process. `CloudflareDecision` is replaced the same way
+ * by a guard that records the URL and refuses every request, so KV7's Clef candidate cannot reach
+ * Cloudflare even if its missing-account check regressed, and KV7 can assert it sent nothing. KV4
+ * registers the shared scripted decision driver over every decision driver class, as IT97 does. The
+ * environment variables that would give a decision driver a real base URL or account ID are unset for
+ * the bundle and restored after it.
  * Everything else is real: the prompt, model and vendor rows, candidate selection, credential resolution
  * (legacy `apiKeys` entries in KV3, `MJ: Credentials` rows with `MJ: AI Credential Bindings` in KV4–KV8),
  * the drivers' URL, header and body building, the fetch, the answer mapping, `BaseDecision`'s
@@ -317,6 +320,24 @@ class ScriptedOpenRouterDecision extends OpenRouterDecision {
         return openRouter.Armed
             ? new Response(JSON.stringify(KEV_4B_OPENROUTER_RESPONSE), { status: 200, headers: { 'Content-Type': 'application/json' } })
             : new Response(JSON.stringify({ error: { message: 'The integration-test OpenRouter stand-in is not armed' } }), { status: 500 });
+    }
+}
+
+// ─── The Cloudflare guard ────────────────────────────────────────────────────────────────────────
+
+/** The URLs the Cloudflare guard was asked for. No check in this bundle should reach it. */
+const cloudflareRequests: string[] = [];
+
+/**
+ * The real `CloudflareDecision` with only its network call replaced: it records the URL and refuses
+ * with a Workers AI failure envelope. KV7's Clef candidate runs the real driver and must fail before
+ * any request; if that check ever regressed, the request would otherwise go to Cloudflare.
+ */
+class RefusingCloudflareDecision extends CloudflareDecision {
+    protected async SendRequest(url: string): Promise<Response> {
+        cloudflareRequests.push(url);
+        const refusal = { result: null, success: false, errors: [{ code: 0, message: 'The integration-test Cloudflare guard refuses every request' }], messages: [] };
+        return new Response(JSON.stringify(refusal), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 }
 
@@ -811,8 +832,10 @@ async function checkFailoverPastMisconfigured(ctx: IntegrationCheckContext, serv
         params.apiKeys = [{ driverClass: DRIVER_CLASS, apiKey: 'it-kv7-token-without-endpoint' }];
         const probe = new DecisionRunnerProbe();
         const before = server.Requests.length;
+        const cloudflareBefore = cloudflareRequests.length;
         const result = await runDecision(probe, params, id => fixtures.TrackPromptRun(id));
 
+        AssertEqual(cloudflareRequests.length - cloudflareBefore, 0, 'KV7: requests Clef sent with no account ID');
         assertAnsweredBy(result, 'Kev-27B', VENDOR_NAME, DRIVER_CLASS, 'KV7');
         assertServed(server, before, KV7_TOKEN, 'KV7');
         assertKevAnswers(result, 'KV7');
@@ -1047,8 +1070,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('systemone-kev', {
         createdPromptRunIDs.length = 0;
         openRouter.Requests.length = 0;
         openRouter.Armed = false;
+        cloudflareRequests.length = 0;
         bundleRestores.push(ClearEnvironment(DRIVER_ENVIRONMENT));
         bundleRestores.push(RegisterDecisionStandIn('OpenRouterDecision', ScriptedOpenRouterDecision, OpenRouterDecision));
+        bundleRestores.push(RegisterDecisionStandIn('CloudflareDecision', RefusingCloudflareDecision, CloudflareDecision));
     },
     Teardown: async (ctx: IntegrationCheckContext): Promise<void> => {
         await DecisionFixtures.CleanupAll();
@@ -1057,6 +1082,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('systemone-kev', {
         }
         openRouter.Armed = false;
         openRouter.Requests.length = 0;
+        cloudflareRequests.length = 0;
         for (const restore of bundleRestores.splice(0).reverse()) {
             restore();
         }
