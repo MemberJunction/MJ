@@ -105,7 +105,7 @@ export const AGENT_RUN_AWAITING_HUMAN_STATUSES: readonly string[] = ['AwaitingFe
  * message at all — which is exactly how it ended up rendered as
  * "failed — Unknown error".
  */
-export function isAgentRunAwaitingHuman(result: AgentFailureSource): boolean {
+export function IsAgentRunAwaitingHuman(result: AgentFailureSource): boolean {
     const status = result?.agentRun?.Status;
     return typeof status === 'string' && AGENT_RUN_AWAITING_HUMAN_STATUSES.includes(status);
 }
@@ -134,7 +134,7 @@ export function agentFailureDisposition(  // case-violation-ok-legacy-back-compa
     result: AgentFailureSource,
     fallback?: string
 ): AgentFailureDisposition {
-    if (isAgentRunAwaitingHuman(result)) {
+    if (IsAgentRunAwaitingHuman(result)) {
         return { status: 'Awaiting-Input', message: result?.agentRun?.Message?.trim() ?? '' };
     }
     const message = AgentFailureMessage(result, fallback);

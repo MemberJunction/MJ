@@ -4,7 +4,7 @@ import {
     agentFailureDisposition,
     AgentFailureMessage,
     CoerceFailedExecuteAgentResult,
-    isAgentRunAwaitingHuman,
+    IsAgentRunAwaitingHuman,
     IsDisconnectWhileAgentMayStillBeRunning,
 } from '../agent-failure-message';
 
@@ -148,23 +148,23 @@ describe('agentFailureDisposition — a run parked on a human is not a failure',
     });
 });
 
-describe('isAgentRunAwaitingHuman', () => {
+describe('IsAgentRunAwaitingHuman', () => {
     it('is true only for the alive-and-waiting statuses', () => {
-        expect(isAgentRunAwaitingHuman({ agentRun: { Status: 'AwaitingFeedback' } })).toBe(true);
-        expect(isAgentRunAwaitingHuman({ agentRun: { Status: 'Paused' } })).toBe(true);
+        expect(IsAgentRunAwaitingHuman({ agentRun: { Status: 'AwaitingFeedback' } })).toBe(true);
+        expect(IsAgentRunAwaitingHuman({ agentRun: { Status: 'Paused' } })).toBe(true);
         expect(AGENT_RUN_AWAITING_HUMAN_STATUSES).toEqual(['AwaitingFeedback', 'Paused']);
     });
 
     it('is false for terminal statuses, a missing run, and a missing status', () => {
-        expect(isAgentRunAwaitingHuman({ agentRun: { Status: 'Failed' } })).toBe(false);
-        expect(isAgentRunAwaitingHuman({ agentRun: { Status: 'Cancelled' } })).toBe(false);
-        expect(isAgentRunAwaitingHuman({ agentRun: { Status: 'Completed' } })).toBe(false);
-        expect(isAgentRunAwaitingHuman({ agentRun: { ErrorMessage: 'boom' } })).toBe(false);
-        expect(isAgentRunAwaitingHuman({ errorMessage: 'boom' })).toBe(false);
-        expect(isAgentRunAwaitingHuman(null)).toBe(false);
+        expect(IsAgentRunAwaitingHuman({ agentRun: { Status: 'Failed' } })).toBe(false);
+        expect(IsAgentRunAwaitingHuman({ agentRun: { Status: 'Cancelled' } })).toBe(false);
+        expect(IsAgentRunAwaitingHuman({ agentRun: { Status: 'Completed' } })).toBe(false);
+        expect(IsAgentRunAwaitingHuman({ agentRun: { ErrorMessage: 'boom' } })).toBe(false);
+        expect(IsAgentRunAwaitingHuman({ errorMessage: 'boom' })).toBe(false);
+        expect(IsAgentRunAwaitingHuman(null)).toBe(false);
     });
 
     it('is false for a Running run — that one is neither failed nor waiting on a human', () => {
-        expect(isAgentRunAwaitingHuman({ agentRun: { Status: 'Running' } })).toBe(false);
+        expect(IsAgentRunAwaitingHuman({ agentRun: { Status: 'Running' } })).toBe(false);
     });
 });
