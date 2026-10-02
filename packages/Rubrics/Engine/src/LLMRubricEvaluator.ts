@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { ScoreAnswer, ScoreQuestion } from '@memberjunction/ai';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { RegisterClass } from '@memberjunction/global';
+import { CleanAndParseJSON, RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
 import { BaseRubricEvaluator, type EvidenceRef, type RubricEvaluatorOutput } from './RubricEvaluator.js';
 
@@ -31,7 +31,7 @@ export function ScoreQuestionForCriterion(version: RubricVersionSnapshot, node: 
     if (levels.length < 2) return null;
     return {
         Kind: 'Score',
-        Instructions: [node.name, node.guidance ?? ''].filter(part => part.length > 0).join('\n\n'),
+        Instructions: renderCriterion(version, node),
         Levels: levels.map(level => level.label),
     };
 }
@@ -192,7 +192,8 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
 
         private async singlePass(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
         const raw = await this.runner.run(BuildRubricEvaluatorMessages(version, content, 'SinglePass'));
-        const parsed = JSON.parse(raw) as { decisions?: LLMDecision[] } | LLMDecision[];
+        const parsed = CleanAndParseJSON<{ decisions?: LLMDecision[] } | LLMDecision[]>(raw);
+        if (!parsed) return [];
         return Array.isArray(parsed) ? parsed : parsed.decisions ?? [];
     }
 
@@ -217,15 +218,19 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
                 continue;
             }
             const raw = await this.runner.run(BuildRubricEvaluatorMessages(version, content, 'PerCriterion', node));
-            const parsed = JSON.parse(raw) as LLMDecision;
-            decisions.push({ ...parsed, key: node.key });
+            const parsed = CleanAndParseJSON<LLMDecision>(raw);
+            decisions.push({ ...(parsed ?? {}), key: node.key });
         }
         return decisions;
     }
 }
 
-/** Shipped next to src and dist, so an installed package does not read the MJ repo. */
+/** Shipped next to src and dist, so an installed package does not read the MJ repo. Read once, not on every render. */
 const TEMPLATE_URL = new URL('../templates/rubric-evaluator.md', import.meta.url);
+const TEMPLATE_TEXT = readFileSync(TEMPLATE_URL, 'utf8');
+
+/** The rendered prompt, system plus user, stays within this many characters. The subject is what gets cut. */
+export const RUBRIC_PROMPT_BUDGET = 24_000;
 
 const SUBJECT_HEADING = '## Subject content';
 
@@ -238,7 +243,7 @@ export function BuildRubricEvaluatorMessages(
 ): RubricEvaluatorMessages {
     const body = SubjectBody(content);
     const nonce = UniqueNonce(body);
-    const filled = FillRubricEvaluatorTemplate(readFileSync(TEMPLATE_URL, 'utf8'), version, content, mode, only, nonce);
+    const filled = FillRubricEvaluatorTemplate(TEMPLATE_TEXT, version, content, mode, only, nonce);
     const cut = filled.indexOf(SUBJECT_HEADING);
     if (cut < 0) {
         return { system: filled, user: DelimitSubject(body, nonce) };
@@ -253,7 +258,7 @@ export function RenderRubricEvaluatorPrompt(
     mode: RubricPromptMode,
     only?: RubricNodeSnapshot,
 ): string {
-    return FillRubricEvaluatorTemplate(readFileSync(TEMPLATE_URL, 'utf8'), version, content, mode, only);
+    return FillRubricEvaluatorTemplate(TEMPLATE_TEXT, version, content, mode, only);
 }
 
 /** Fills {{instructions}}, {{criteria}}, and {{content}} in one pass. The subject is inside a nonce delimiter. */
@@ -267,17 +272,25 @@ export function FillRubricEvaluatorTemplate(
 ): string {
     const nodes = only ? [only] : version.nodes.filter(node => node.nodeType === 'Criterion');
     const criteria = nodes.map(node => renderCriterion(version, node)).join('\n\n');
-    const body = SubjectBody(content);
-    const token = nonce ?? UniqueNonce(body);
     const ask = mode === 'SinglePass'
         ? 'Return JSON {"decisions":[{"key","level","value","notApplicable","rationale","evidence":[{"quote"}],"confidence"}]} for every criterion.'
         : `Return JSON {"chosen","probabilities","rationale","evidence":[{"quote"}]} for ${only?.key}. confidence is probabilities[chosen].`;
+    const reserved = ask.length + criteria.length + (version.instructions ?? '').length;
+    const body = fitBudget(SubjectBody(content), Math.max(0, RUBRIC_PROMPT_BUDGET - reserved));
+    const token = nonce ?? UniqueNonce(body);
     const values: Record<string, string> = {
         '{{instructions}}': [ask, version.instructions ?? ''].filter(part => part.length > 0).join('\n\n'),
         '{{criteria}}': criteria,
         '{{content}}': DelimitSubject(body, token),
     };
     return template.replace(/\{\{(?:instructions|criteria|content)\}\}/g, tokenName => values[tokenName] ?? tokenName);
+}
+
+function fitBudget(text: string, room: number): string {
+    if (text.length <= room) return text;
+    const note = '\n[truncated to the prompt budget]';
+    const keep = Math.max(0, room - note.length);
+    return text.slice(0, keep) + note;
 }
 
 function SubjectBody(content: RubricSubjectContent): string {
@@ -319,7 +332,23 @@ function renderCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapsho
     const numeric = scale?.scaleType === 'Numeric'
         ? `Numeric ${scale.minValue}..${scale.maxValue}, step ${scale.step ?? 'any'}, higher is better: ${scale.higherIsBetter}`
         : levels;
-    return `### ${node.name} (${node.key})\n\nGuidance: ${node.guidance ?? ''}\n\nNot applicable: ${notApplicableLine(version, node)}\n\n${numeric}`;
+    const ai = aiConfig(node);
+    return [
+        `### ${node.name} (${node.key})`,
+        node.description ? `Description: ${node.description}` : '',
+        `Guidance: ${node.guidance ?? ''}`,
+        ai?.Hints ? `Hints: ${ai.Hints}` : '',
+        ai?.RequireQuote ? 'A quote from the subject is required.' : '',
+        `Not applicable: ${notApplicableLine(version, node)}`,
+        numeric,
+    ].filter(part => part.length > 0).join('\n\n');
+}
+
+function aiConfig(node: RubricNodeSnapshot): { Hints?: string; RequireQuote?: boolean } | undefined {
+    const config = node.evaluatorConfig;
+    if (!config || typeof config !== 'object') return undefined;
+    const ai = (config as { AI?: { Hints?: string; RequireQuote?: boolean } }).AI;
+    return ai && typeof ai === 'object' ? ai : undefined;
 }
 
 function labelOf(mode: RubricPromptMode, decision: LLMDecision | undefined): string | undefined {

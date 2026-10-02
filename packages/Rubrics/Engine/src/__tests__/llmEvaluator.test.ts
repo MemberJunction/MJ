@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { RubricScoring, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { BuildRubricEvaluatorMessages, FillRubricEvaluatorTemplate, LLMRubricEvaluator, type RubricEvaluatorMessages } from '../LLMRubricEvaluator.js';
+import { BuildRubricEvaluatorMessages, FillRubricEvaluatorTemplate, LLMRubricEvaluator, RUBRIC_PROMPT_BUDGET, type RubricEvaluatorMessages } from '../LLMRubricEvaluator.js';
 
 function version(): RubricVersionSnapshot {
     return {
@@ -57,6 +57,27 @@ describe('Rubric Evaluator prompt', () => {
         expect(messages.user).toContain(`</rubric-subject ${nonce}>`);
         const again = BuildRubricEvaluatorMessages(tree, content, 'SinglePass');
         expect(again.user).not.toBe(messages.user);
+        const source = readFileSync(new URL('../LLMRubricEvaluator.ts', import.meta.url), 'utf8');
+        const reads = source.split('\n').filter(line => line.includes('readFileSync('));
+        expect(reads).toHaveLength(1);
+        expect(reads[0]).toContain('TEMPLATE_TEXT');
+        expect(source).not.toContain('JSON.parse');
+        expect(source).toContain('CleanAndParseJSON');
+    });
+
+    it('includes the description, hints, quote rule, and not-applicable policy, and cuts the subject to the budget', () => {
+        const tree = version();
+        tree.nodes[0].description = 'Whether the writing is clear.';
+        tree.nodes[0].evaluatorConfig = { AI: { Hints: 'Quote the sentence.', RequireQuote: true } };
+        const huge = 'x'.repeat(RUBRIC_PROMPT_BUDGET);
+        const messages = BuildRubricEvaluatorMessages(tree, { text: huge }, 'SinglePass');
+        expect(messages.system).toContain('Whether the writing is clear.');
+        expect(messages.system).toContain('Quote the sentence.');
+        expect(messages.system).toContain('A quote from the subject is required.');
+        expect(messages.system).toContain('Not applicable is allowed. Exclude this criterion and redistribute its weight.');
+        expect(messages.user).toContain('[truncated to the prompt budget]');
+        expect(messages.user.length).toBeLessThan(huge.length);
+        expect(messages.system.length + messages.user.length).toBeLessThanOrEqual(RUBRIC_PROMPT_BUDGET + 800);
     });
 
     it('keeps a dollar sign in the subject and the criterion instead of expanding it', () => {
@@ -72,6 +93,13 @@ describe('Rubric Evaluator prompt', () => {
 });
 
 describe('LLMRubricEvaluator', () => {
+    it('parses a markdown JSON fence', async () => {
+        const runner = { async run() { return '```json\n{"decisions":[{"key":"clarity","level":"High","rationale":"Clear.","evidence":[{"quote":"Easy"}]}]}\n```'; } };
+        const output = await new LLMRubricEvaluator(runner).EvaluateContent(version(), { text: 'Easy to read.' });
+        expect(output.answers[0].scaleLevelId).toBe('high');
+        expect(output.normalizedScore).toBe(1);
+    });
+
     it('runs SinglePass once, drops an unknown key, and scores the rest', async () => {
         const calls: string[] = [];
         const runner = { async run(prompt: RubricEvaluatorMessages) { calls.push(prompt); return JSON.stringify({ decisions: [
