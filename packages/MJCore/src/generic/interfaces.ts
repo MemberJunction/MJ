@@ -580,27 +580,23 @@ export interface ILocalStorageProvider {
     readonly SharesReferences?: boolean;
 
     /**
-     * Whether a value written here can be read back by a DIFFERENT process, or by this one after
-     * a restart — Redis, or a browser's localStorage/IndexedDB surviving a reload.
+     * Whether a value written here can be read back by another process, or by this one after a
+     * restart.
      *
-     * - `true` — the store outlives the process that wrote to it.
+     * - `true` — the store outlives the process that wrote to it (Redis, or a browser's
+     *   localStorage / IndexedDB surviving a reload).
      * - `false` — an in-process store whose contents die with the process.
      *
-     * **Why callers care**: `ProviderBase` persists a snapshot of ALL metadata here on every
-     * metadata reload. On a persistent store that snapshot is a genuine cross-process cache. On an
-     * in-process one the only possible reader is the heap that already holds the live objects, so
-     * the save spends a full `JSON.stringify` of the entire metadata graph (131M characters on a
-     * large tenant), a `Blob` copy, a gzip pass and a base64 encode to produce something nothing
-     * will ever read — and the load spends a `JSON.parse` plus a rebuild of every `EntityInfo` and
-     * `EntityFieldInfo` to read it back. That cost is what made a large tenant's MJAPI run out of
-     * heap: ~1.2GB of transient allocation per refresh against a 2.2GB steady state, with the
-     * final flatten of the JSON string needing one contiguous ~500MB allocation.
+     * `ProviderBase` reads this before saving its metadata snapshot. That save serializes, gzips and
+     * base64-encodes the whole metadata graph, which on a large tenant is expensive enough to
+     * exhaust the heap, and an in-process store can only ever hand the result back to the heap that
+     * already holds those objects — so it is skipped. Declaring `false` therefore removes real work;
+     * declaring it wrongly on a persistent store would leave the cold-start cache unpopulated.
      *
-     * **Optional, but always declare it.** When it is `undefined` the provider is treated as
-     * persistent — the conservative direction, since the cost of a pointless save is wasted work
-     * while the cost of a skipped necessary one is a cache that never populates. It is optional
-     * purely so that adding this contract does not break existing external implementations at
-     * compile time; every in-repo provider declares it.
+     * Optional, but every in-repo provider declares it. `undefined` is treated as persistent, which
+     * is the safer default of the two: a pointless save wastes work, while a skipped necessary one
+     * breaks the cache. It is optional only so that adding this contract did not break external
+     * implementations at compile time.
      */
     readonly SupportsCrossProcessPersistence?: boolean;
 

@@ -6198,15 +6198,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Used for compressed metadata storage/retrieval.
      */
     protected static base64ToArrayBuffer(base64: string): ArrayBuffer {
-        // Node decodes base64 natively in O(n). The `atob` path below allocates a multi-megabyte
-        // intermediate string and then fills the array one byte at a time.
+        // Node decodes natively; the atob path below allocates an intermediate string and fills the
+        // array a byte at a time.
         if (typeof Buffer !== 'undefined') {
             const buf = Buffer.from(base64, 'base64');
-            // Copy into an exact-size ArrayBuffer rather than returning `buf.buffer`: Node hands
-            // back a view into a shared pool that is usually much larger than the payload, so the
-            // raw buffer would carry unrelated bytes and a wrong byteLength. A copy is also what
-            // `.slice()` would do, and it avoids `buf.buffer` typing as ArrayBufferLike
-            // (ArrayBuffer | SharedArrayBuffer), which is not assignable to the declared return.
+            // Copy into an exact-size buffer: `buf.buffer` is a view into a shared pool, usually
+            // larger than the payload, so returning it directly would carry unrelated bytes and a
+            // wrong byteLength. It is also typed ArrayBufferLike and will not assign to the
+            // declared return type.
             const exact = new ArrayBuffer(buf.byteLength);
             new Uint8Array(exact).set(buf);
             return exact;
@@ -6224,9 +6223,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Used for compressed metadata storage/retrieval.
      */
     protected static arrayBufferToBase64(buffer: ArrayBuffer): string {
-        // `binary += String.fromCharCode(b)` per byte builds a rope the size of the payload and then
-        // forces a flatten — measured at 3702ms for an 8.6MB buffer under heap pressure, against
-        // 191ms cold. Node encodes the same bytes natively.
+        // Node encodes natively. The loop below concatenates one character per byte, building a rope
+        // the size of the payload that then has to be flattened.
         if (typeof Buffer !== 'undefined') {
             return Buffer.from(buffer).toString('base64');
         }
@@ -6248,21 +6246,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * Whether persisting the metadata snapshot to the local storage provider can ever pay off —
-     * i.e. whether anything will be able to read it back.
+     * Whether anything could read the metadata snapshot back, and therefore whether saving it is
+     * worth the cost.
      *
-     * The snapshot exists so a cold process can start from a cached copy of the metadata instead of
-     * querying for it. That only works if the store outlives the writer. When it does not, the save
-     * path spends a full `JSON.stringify` of ALL metadata (131M characters on a large tenant), a
-     * `Blob` copy, a gzip pass and a base64 encode to hand the heap a copy of objects it already
-     * holds, and the load path spends a `JSON.parse` plus a rebuild of every `EntityInfo` and
-     * `EntityFieldInfo` to read it back. Measured on a 791-entity tenant: ~10s and ~1.2GB of
-     * transient heap per refresh, against a 2.2GB steady state — and the final flatten of that JSON
-     * string needs a single contiguous ~500MB allocation, which is where MJAPI ran out of heap.
+     * The snapshot lets a cold process start from a cached copy of the metadata instead of querying
+     * for it, which only works if the store outlives the writer. Where it does not, both halves of
+     * the round trip are pure cost: the save serializes, gzips and base64-encodes the entire
+     * metadata graph, and the load parses it and rebuilds every `EntityInfo` and `EntityFieldInfo`
+     * from a copy of objects the heap already holds. On a large tenant that is expensive enough to
+     * exhaust the heap.
      *
      * A provider that does not declare {@link ILocalStorageProvider.SupportsCrossProcessPersistence}
-     * is treated as persistent. That is the conservative direction: a pointless save wastes work,
-     * whereas wrongly skipping a necessary one would leave a cache that never populates.
+     * is treated as persistent, which fails in the safer direction.
      */
     public get MetadataSnapshotPersistenceEnabled(): boolean {
         const ls = this.LocalStorageProvider;
