@@ -42,21 +42,37 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         });
     }
 
+    /*
+     * Every accessor below reads through `this._metadata`, which is only assigned once
+     * {@link Config} has loaded the `Template_Metadata` dataset. Before that — an engine
+     * that was never configured, a Config() that threw, or a caller that reaches the
+     * engine while the cache is still warming — `this._metadata` is `undefined` and an
+     * unguarded `this._metadata.X` throws a TypeError out of a property read.
+     *
+     * That crash lands in surfaces whose whole job is to let the user fix the problem
+     * (the template form the error message points at), so it takes the remedy down with
+     * the fault. An empty array is the honest answer to "what is cached?" when nothing
+     * is cached yet, and every consumer already handles an empty collection.
+     *
+     * The guard is applied to ALL of these accessors, not just the one that was observed
+     * crashing: they are the same shape over the same object, so any of them is reachable
+     * on the same unwarmed engine.
+     */
     public get Templates(): MJTemplateEntityExtended[] {
-        return this._metadata.Templates;
+        return this._metadata?.Templates ?? [];
     }
 
     public get TemplateContentTypes(): MJTemplateContentTypeEntity[] {
-        return this._metadata.TemplateContentTypes;
+        return this._metadata?.TemplateContentTypes ?? [];
     }
     public get TemplateCategories(): MJTemplateCategoryEntity[] {
-        return this._metadata.TemplateCategories;
+        return this._metadata?.TemplateCategories ?? [];
     }
     public get TemplateContents(): MJTemplateContentEntity[] {
-        return this._metadata.TemplateContents;
+        return this._metadata?.TemplateContents ?? [];
     }
     public get TemplateParams(): MJTemplateParamEntity[] {
-        return this._metadata.TemplateParams;
+        return this._metadata?.TemplateParams ?? [];
     }
 
     /**
