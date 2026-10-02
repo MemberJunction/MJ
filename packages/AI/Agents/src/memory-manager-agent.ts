@@ -1,5 +1,5 @@
 import { BaseAgent } from './base-agent';
-import { RegisterClass, CleanAndParseJSON } from '@memberjunction/global';
+import { RegisterClass, CleanAndParseJSON, IsPlainObject } from '@memberjunction/global';
 import { UserInfo, RunView, RunQuery, LogError, LogStatus, LogStatusEx, IMetadataProvider } from '@memberjunction/core';
 import {
     MJConversationDetailEntity,
@@ -529,12 +529,19 @@ export class MemoryManagerAgent extends BaseAgent {
     private _contextUser: UserInfo | null = null;
     /** Flag to enable typed decision gate instead of self-confidence threshold */
     private _enableDecisionGate: boolean = false;
+    /**
+     * The run's merged agent-type prompt params, read when the run starts. They carry the master
+     * switch for decision-model use ({@link DecisionsEnabled}), which the note gate needs.
+     */
+    private _runPromptParams: Record<string, unknown> | undefined;
     /** The run's cancellation signal, passed to the decision gate's calls */
     private _cancellationToken: AbortSignal | undefined;
 
     /**
      * Whether the typed decision gate is enabled for filtering extracted memory notes.
      * When false (default), uses the self-reported confidence filter (confidence >= 80).
+     * The gate also needs the master switch: the run's agent-type prompt params must set
+     * `decisionsEnabled: true` ({@link DecisionsEnabled}), or the confidence filter is used.
      */
     public get EnableDecisionGate(): boolean {
         return this._enableDecisionGate;
@@ -1200,9 +1207,9 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Filters candidate notes using either the typed decision gate (if enabled, and the notes are ones
-     * it was measured on) or the traditional self-reported confidence and length filters.
-     * Protected so a test can run the gate the way extraction does.
+     * Filters candidate notes using either the typed decision gate (if enabled, with the master switch
+     * on, and the notes are ones it was measured on) or the traditional self-reported confidence and
+     * length filters. Protected so a test can run the gate the way extraction does.
      *
      * @param decisionGateApplies Whether these notes may be gated: conversation notes only.
      */
@@ -1212,7 +1219,7 @@ export class MemoryManagerAgent extends BaseAgent {
         contextUser: UserInfo,
         decisionGateApplies: boolean
     ): Promise<ExtractedNote[]> {
-        if (!this._enableDecisionGate || !decisionGateApplies) {
+        if (!this._enableDecisionGate || !this.DecisionsEnabled(this._runPromptParams) || !decisionGateApplies) {
             return this.filterByConfidenceAndLength(notes);
         }
         return this.filterWithDecisionGate(notes, conversationThreads, contextUser);
@@ -3975,6 +3982,17 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
+     * The run's merged agent-type prompt params: the agent type's defaults, then the Memory Manager
+     * agent's own `AgentTypePromptParams`, then the run's `data.__agentTypePromptParams`. This agent
+     * renders no Loop prompt, so it merges them itself, once per run.
+     */
+    private runPromptParams(params: ExecuteAgentParams): Record<string, unknown> {
+        const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID));
+        const override = params.data?.__agentTypePromptParams;
+        return this.buildAgentTypePromptParams(agentType, params.agent, IsPlainObject(override) ? override : undefined);
+    }
+
+    /**
      * Main execution method called by scheduler
      */
     protected async executeAgentInternal<P = any>(
@@ -3987,6 +4005,7 @@ export class MemoryManagerAgent extends BaseAgent {
             if (typeof params.data?.enableDecisionGate === 'boolean') {
                 this._enableDecisionGate = params.data.enableDecisionGate;
             }
+            this._runPromptParams = this.runPromptParams(params);
             this._cancellationToken = params.cancellationToken;
 
             // Initialize observability state for this run
