@@ -4902,7 +4902,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 continue; // the roll-up moves with any item; the per-item rows decide
             }
             const l = local.find(m => norm(m.Type) === norm(r.Type));
-            if (l && !ProviderBase.MetadataStampChanged(l, r)) {
+            if (l && !ProviderBase.metadataStampChanged(l, r)) {
                 continue;
             }
             const owners = items.filter(i => norm(i.EntityName) === norm(r.Type));
@@ -4921,7 +4921,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return codes.length > 0 ? codes : null;
     }
 
-    private static MetadataStampChanged(local: MetadataInfo, remote: MetadataInfo): boolean {
+    private static metadataStampChanged(local: MetadataInfo, remote: MetadataInfo): boolean {
         if (!local.UpdatedAt && !remote.UpdatedAt) {
             return false;
         }
@@ -6298,7 +6298,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // An in-process store can only ever hand back a copy of the metadata this heap already
             // holds, at the cost of rebuilding every metadata object.
             if (!this.MetadataSnapshotPersistenceEnabled) {
-                this.LogMetadataSnapshotDisabledOnce();
+                this.logMetadataSnapshotDisabledOnce();
                 return;
             }
 
@@ -6462,7 +6462,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _metadataSnapshotSkipLogged = false;
 
     /** Explains the skipped snapshot once per provider, not once per refresh. */
-    private LogMetadataSnapshotDisabledOnce(): void {
+    private logMetadataSnapshotDisabledOnce(): void {
         if (this._metadataSnapshotSkipLogged) return;
         this._metadataSnapshotSkipLogged = true;
         const name = this.LocalStorageProvider?.constructor?.name ?? 'the local storage provider';
@@ -6482,7 +6482,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (!ls) return;
             // Nothing can ever read this snapshot back — skip the serialize/compress/encode pass.
             if (!this.MetadataSnapshotPersistenceEnabled) {
-                this.LogMetadataSnapshotDisabledOnce();
+                this.logMetadataSnapshotDisabledOnce();
                 return;
             }
 
