@@ -1103,7 +1103,7 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
     const SHORT_SUMMARY = 'Short.';
     const REASONING = 'The user asked for a one-line summary, so I am shortening it.';
     const CHANGE_REASONING = 'Replace the long summary with one line.';
-    const CHECK_ON = JSON.stringify({ payloadFeedbackCheck: true });
+    const CHECK_ON = JSON.stringify({ decisionsEnabled: true, payloadFeedbackCheck: true });
 
     const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
 
@@ -1146,7 +1146,9 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
 
     it.each([
         ['the agent does not set it', null],
-        ['the agent sets it to false', JSON.stringify({ payloadFeedbackCheck: false })],
+        ['the agent does not set it, with the master switch on', JSON.stringify({ decisionsEnabled: true })],
+        ['the agent sets it to false', JSON.stringify({ decisionsEnabled: true, payloadFeedbackCheck: false })],
+        ['the agent sets it without the master switch (decisionsEnabled)', JSON.stringify({ payloadFeedbackCheck: true })],
     ])('when %s, a flagged change behaves exactly as today: no decision, no message, no extra step', async (_label, promptParams) => {
         harness.agent = makeAgentRow({ AgentTypePromptParams: promptParams });
         const turns: string[][] = [];
@@ -1204,7 +1206,7 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
         });
 
         it('uses the agent\'s decisionPromptName', async () => {
-            harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ payloadFeedbackCheck: true, decisionPromptName: 'Custom Decision' }) });
+            harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ decisionsEnabled: true, payloadFeedbackCheck: true, decisionPromptName: 'Custom Decision' }) });
             const { agent } = makeAgent(truncatingScript([]));
             const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.9));
 
@@ -1437,8 +1439,8 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
     /** Asked only the decision requests, never the gate. */
     const decisionCalls = (ask: ReturnType<typeof answerDecisions>) => ask.mock.calls.filter(([args]) => !('q1' in args.Questions));
 
-    /** The agent's own prompt params: decisions are opt-in, so every agent here opts in. */
-    const DECISIONS_ON = JSON.stringify({ includeDecisionsDocs: true });
+    /** The agent's own prompt params: decisions are opt-in, and need the master switch, so every agent here turns both on. */
+    const DECISIONS_ON = JSON.stringify({ decisionsEnabled: true, includeDecisionsDocs: true });
 
     /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
     function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
@@ -1505,7 +1507,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
     });
 
     it('skips the decisions of an agent that has not opted in, and still runs the rest of the turn', async () => {
-        harness.agent = makeAgentRow();
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ decisionsEnabled: true }) });
         const ask = answerDecisions();
         const { agent, runner } = makeAgent([
             () => llmEnvelope(actionsEnvelope({ decisions: [TRIAGE] })),
@@ -1521,6 +1523,41 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(runner.Calls[0].data).toMatchObject({
             __agentTypePromptParams: { includeDecisionsDocs: false, includeResponseTypeDefinition: { decisions: false } },
         });
+    });
+
+    it('skips the decisions of an agent without the master switch, even with the docs and the response field set explicitly', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ includeDecisionsDocs: true, includeResponseTypeDefinition: { decisions: true } }) });
+        const ask = answerDecisions();
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope({ decisions: [TRIAGE] })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(ask).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Prompt']);
+        expect(runner.Calls[0].data).toMatchObject({
+            __agentTypePromptParams: { includeDecisionsDocs: false, includeResponseTypeDefinition: { decisions: false, finishIf: false } },
+        });
+    });
+
+    it('asks neither a finishIf gate nor the decisions without the master switch, whatever finishIfMode says', async () => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ includeDecisionsDocs: true }) });
+        const ask = answerDecisions(0.95);
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(gateParams('on'));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(ask).not.toHaveBeenCalled();
+        expect(harness.steps.some((s) => s.StepType === 'Decision')).toBe(false);
+        expect(runner.Calls[0].data).toMatchObject({ __agentTypePromptParams: { includeFinishIfDocs: false } });
     });
 
     it('answers a decisions field that is not an array with one failed result, and keeps the rest of the turn', async () => {

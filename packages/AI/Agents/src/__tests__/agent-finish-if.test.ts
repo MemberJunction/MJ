@@ -135,8 +135,9 @@ describe('finishIf', () => {
         agent['_effectiveActions'] = [{ ID: '11111111-1111-1111-1111-111111111111', Name: 'Create Record' }] as MJActionEntityExtended[];
         agent['_activeProvider'] = new MockMetadataProvider(async () => new MockStepEntity('step-1') as MJAIAgentRunStepEntityExtended) as IMetadataProvider;
         agent['_agentRun'] = new MockAgentRun() as MJAIAgentRunEntityExtended;
-        // These tests exercise a live gate; gates are opt-in (finishIfMode defaults to 'off').
-        agent['_agentTypePromptParams'] = { finishIfMode: 'on' };
+        // These tests exercise a live gate; gates are opt-in (finishIfMode defaults to 'off'), and need
+        // the master switch for decision-model use (decisionsEnabled defaults to false).
+        agent['_agentTypePromptParams'] = { decisionsEnabled: true, finishIfMode: 'on' };
         decisions = new AgentDecisionService();
         agent.SetDecisionService(decisions);
         vi.spyOn(agent, 'validateSuccessNextStep').mockImplementation(async (_params, nextStep) => nextStep);
@@ -165,8 +166,8 @@ describe('finishIf', () => {
             expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.finishIfThreshold).toBe(0.9);
         });
 
-        it('with finishIfMode unset or off, the docs and the field are off', () => {
-            for (const params of [{}, { finishIfMode: 'off' }, { finishIfMode: 'bogus' }, { finishIfMode: 'off', includeFinishIfDocs: true }] as Record<string, unknown>[]) {
+        it('with finishIfMode unset or off, the docs and the field are off, even with the master switch on', () => {
+            for (const params of [{ decisionsEnabled: true }, { decisionsEnabled: true, finishIfMode: 'off' }, { decisionsEnabled: true, finishIfMode: 'bogus' }, { decisionsEnabled: true, finishIfMode: 'off', includeFinishIfDocs: true }] as Record<string, unknown>[]) {
                 agent.TestApplyResponseTypeAutoAlignment(params);
                 expect(params.includeFinishIfDocs).toBe(false);
                 expect((params.includeResponseTypeDefinition as Record<string, unknown>).finishIf).toBe(false);
@@ -174,18 +175,18 @@ describe('finishIf', () => {
         });
 
         it.each(['shadow', 'on'])('with finishIfMode %s, the docs and the field are on', (mode) => {
-            const params: Record<string, unknown> = { finishIfMode: mode };
+            const params: Record<string, unknown> = { decisionsEnabled: true, finishIfMode: mode };
             agent.TestApplyResponseTypeAutoAlignment(params);
             expect(params.includeFinishIfDocs).not.toBe(false);
             expect((params.includeResponseTypeDefinition as Record<string, unknown>).finishIf).toBe(true);
         });
 
         it('includeFinishIfDocs: false turns the field off, unless it is set explicitly', () => {
-            const off: Record<string, unknown> = { finishIfMode: 'on', includeFinishIfDocs: false };
+            const off: Record<string, unknown> = { decisionsEnabled: true, finishIfMode: 'on', includeFinishIfDocs: false };
             agent.TestApplyResponseTypeAutoAlignment(off);
             expect((off.includeResponseTypeDefinition as Record<string, unknown>).finishIf).toBe(false);
 
-            const explicit: Record<string, unknown> = { finishIfMode: 'on', includeFinishIfDocs: false, includeResponseTypeDefinition: { finishIf: true } };
+            const explicit: Record<string, unknown> = { decisionsEnabled: true, finishIfMode: 'on', includeFinishIfDocs: false, includeResponseTypeDefinition: { finishIf: true } };
             agent.TestApplyResponseTypeAutoAlignment(explicit, { finishIf: true });
             expect((explicit.includeResponseTypeDefinition as Record<string, unknown>).finishIf).toBe(true);
         });
@@ -257,7 +258,7 @@ describe('finishIf', () => {
         });
 
         it('records a passing gate in shadow mode, and continues as it would have without the gate', async () => {
-            agent['_agentTypePromptParams'] = { finishIfMode: 'shadow' };
+            agent['_agentTypePromptParams'] = { decisionsEnabled: true, finishIfMode: 'shadow' };
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.95));
 
@@ -277,9 +278,12 @@ describe('finishIf', () => {
             expect(finishChecks).toEqual([expect.objectContaining({ passed: true, mode: 'on', endedRun: true })]);
         });
 
-        it.each([
-            ['unset', undefined],
-            ['off', { finishIfMode: 'off' }],
+        it.each<[string, Record<string, unknown> | undefined]>([
+            ['unset', { decisionsEnabled: true }],
+            ['unset, with no prompt params', undefined],
+            ['off', { decisionsEnabled: true, finishIfMode: 'off' }],
+            ['on, without decisionsEnabled', { finishIfMode: 'on' }],
+            ['on, with decisionsEnabled set to the string "true"', { decisionsEnabled: 'true', finishIfMode: 'on' }],
         ])('never asks, and records nothing, with finishIfMode %s', async (_label, promptParams) => {
             agent['_agentTypePromptParams'] = promptParams;
             actionSucceeds();
@@ -360,7 +364,7 @@ describe('finishIf', () => {
         });
 
         it('is never evaluated when includeResponseTypeDefinition.finishIf is false', async () => {
-            agent['_agentTypePromptParams'] = { finishIfMode: 'on', includeResponseTypeDefinition: { finishIf: false } };
+            agent['_agentTypePromptParams'] = { decisionsEnabled: true, finishIfMode: 'on', includeResponseTypeDefinition: { finishIf: false } };
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask');
 
@@ -371,7 +375,7 @@ describe('finishIf', () => {
         });
 
         it('reads the threshold and the decision prompt from the merged prompt params', async () => {
-            agent['_agentTypePromptParams'] = { finishIfMode: 'on', finishIfThreshold: 0.8, decisionPromptName: 'Custom Decision' };
+            agent['_agentTypePromptParams'] = { decisionsEnabled: true, finishIfMode: 'on', finishIfThreshold: 0.8, decisionPromptName: 'Custom Decision' };
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.85));
 
@@ -417,7 +421,7 @@ describe('finishIf', () => {
         });
 
         it('records a passing gate in shadow mode, and returns the sub-agent step unchanged, so the run continues', async () => {
-            agent['_agentTypePromptParams'] = { finishIfMode: 'shadow' };
+            agent['_agentTypePromptParams'] = { decisionsEnabled: true, finishIfMode: 'shadow' };
             subAgentSucceeded();
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.97));
 
@@ -496,7 +500,7 @@ describe('finishIf', () => {
             ['the default threshold', undefined, 0.9],
             ['a configured threshold', 0.8, 0.8],
         ])('passes a probability exactly at %s', async (_label, configured, probability) => {
-            agent['_agentTypePromptParams'] = configured === undefined ? { finishIfMode: 'on' } : { finishIfMode: 'on', finishIfThreshold: configured };
+            agent['_agentTypePromptParams'] = configured === undefined ? { decisionsEnabled: true, finishIfMode: 'on' } : { decisionsEnabled: true, finishIfMode: 'on', finishIfThreshold: configured };
             actionSucceeds();
             vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(probability));
 
@@ -513,7 +517,7 @@ describe('finishIf', () => {
             ['a negative number', -0.2],
             ['a number above 1', 1.5],
         ])('falls back to the 0.9 threshold when finishIfThreshold is %s', async (_label, threshold) => {
-            agent['_agentTypePromptParams'] = { finishIfMode: 'on', finishIfThreshold: threshold };
+            agent['_agentTypePromptParams'] = { decisionsEnabled: true, finishIfMode: 'on', finishIfThreshold: threshold };
             actionSucceeds();
             vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.85));
 
