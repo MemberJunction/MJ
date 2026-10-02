@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseLLM } from '../generic/baseLLM';
-import { ChatParams, ChatResult, ChatResultData } from '../generic/chat.types';
+import { ChatMessage, ChatParams, ChatResult, ChatResultData } from '../generic/chat.types';
 import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
 import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
 
@@ -55,6 +55,16 @@ class TestLLM extends BaseLLM {
 
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
         throw new Error('Not implemented');
+    }
+}
+
+/** A driver that DOES implement the tool mapping, for exercising the tool-aware base-class paths. */
+class ToolCapableTestLLM extends TestLLM {
+    public override get SupportsStreaming(): boolean {
+        return true;
+    }
+    public override get SupportsTools(): boolean {
+        return true;
     }
 }
 
@@ -419,5 +429,121 @@ describe('BaseLLM', () => {
             // Calling reset on a vanilla TestLLM doesn't throw and has no observable effect.
             expect(() => (llm as unknown as { resetStreamingState(): void }).resetStreamingState()).not.toThrow();
         });
+    });
+});
+
+describe('BaseLLM — native tool calling', () => {
+    describe('SupportsTools', () => {
+        it('defaults to false so a driver without the mapping never receives tools', () => {
+            expect(new TestLLM().SupportsTools).toBe(false);
+        });
+
+        it('is true on a driver that implements the mapping', () => {
+            expect(new ToolCapableTestLLM().SupportsTools).toBe(true);
+        });
+    });
+
+    describe('streaming + tools (non-streaming only)', () => {
+        const toolParams = (): ChatParams => {
+            const params = new ChatParams();
+            params.messages = [{ role: 'user', content: 'hi' }];
+            params.tools = [{ name: 'get_weather', inputSchema: { type: 'object' } }];
+            params.streaming = true;
+            params.streamingCallbacks = { OnContent: vi.fn(), OnComplete: vi.fn(), OnError: vi.fn() };
+            return params;
+        };
+
+        it('takes the non-streaming path and flags the downgrade when tools are declared', async () => {
+            const llm = new ToolCapableTestLLM();
+            const result = await llm.ChatCompletion(toolParams());
+
+            expect(result.data.choices[0].message.content).toBe('test response');
+            expect(result.modelSpecificResponseDetails?.streamingSuppressedForTools).toBe(true);
+        });
+
+        it('does not invoke the streaming callbacks when it downgrades', async () => {
+            const llm = new ToolCapableTestLLM();
+            const params = toolParams();
+            await llm.ChatCompletion(params);
+
+            expect(params.streamingCallbacks!.OnContent).not.toHaveBeenCalled();
+            expect(params.streamingCallbacks!.OnComplete).not.toHaveBeenCalled();
+        });
+
+        it('still streams when no tools are declared', async () => {
+            const llm = new ToolCapableTestLLM();
+            const params = toolParams();
+            params.tools = undefined;
+
+            const result = await llm.ChatCompletion(params);
+
+            expect(result.data.choices[0].message.content).toBe('chunk1chunk2');
+            expect(result.modelSpecificResponseDetails?.streamingSuppressedForTools).toBeUndefined();
+        });
+
+        it('still streams when the driver cannot map tools — its tools are ignored, not a reason to downgrade', async () => {
+            class StreamingOnlyLLM extends TestLLM {
+                public override get SupportsStreaming(): boolean {
+                    return true;
+                }
+            }
+            const params = toolParams();
+
+            const result = await new StreamingOnlyLLM().ChatCompletion(params);
+
+            expect(result.data.choices[0].message.content).toBe('chunk1chunk2');
+        });
+
+        it('leaves a non-streaming tool request unflagged — nothing was downgraded', async () => {
+            const params = toolParams();
+            params.streaming = false;
+
+            const result = await new ToolCapableTestLLM().ChatCompletion(params);
+
+            expect(result.modelSpecificResponseDetails?.streamingSuppressedForTools).toBeUndefined();
+        });
+    });
+});
+
+describe('BaseLLM — trailing volatile-state seam', () => {
+    /** Exposes the protected extension points so the contract can be asserted without a provider. */
+    class SeamLLM extends TestLLM {
+        public IsVolatile(message: ChatMessage | undefined): boolean { return this.isVolatileStateMessage(message); }
+        public Index(messages: ChatMessage[]): number { return this.trailingVolatileStateIndex(messages); }
+        public Split(messages: ChatMessage[]): { head: ChatMessage[]; tail: ChatMessage[] } | null { return this.splitTrailingVolatileState(messages); }
+    }
+    const volatile: ChatMessage = { role: 'user', content: '<mj-runtime-state>...</mj-runtime-state>', metadata: { volatileState: true } };
+    const plain = (content: string, role: 'user' | 'assistant' = 'user'): ChatMessage => ({ role, content });
+
+    it('recognises a message only by the volatileState metadata flag (text is not inspected here)', () => {
+        const llm = new SeamLLM();
+        expect(llm.IsVolatile(volatile)).toBe(true);
+        expect(llm.IsVolatile(plain('<mj-runtime-state>looks volatile</mj-runtime-state>'))).toBe(false);
+        expect(llm.IsVolatile({ role: 'user', content: 'x', metadata: { volatileState: false } })).toBe(false);
+        expect(llm.IsVolatile(undefined)).toBe(false);
+    });
+
+    it('finds the fragment last, or second-last under an assistant prefill, and never at index 0', () => {
+        const llm = new SeamLLM();
+        expect(llm.Index([plain('history'), volatile])).toBe(1);
+        expect(llm.Index([plain('history'), plain('more'), volatile, plain('{', 'assistant')])).toBe(2);
+        // Nothing precedes it: no stable history to cache ahead of the fragment.
+        expect(llm.Index([volatile])).toBe(-1);
+        expect(llm.Index([volatile, plain('{', 'assistant')])).toBe(-1);
+        // A user message after the fragment is not a prefill; the fragment is then not trailing.
+        expect(llm.Index([plain('history'), volatile, plain('later')])).toBe(-1);
+        expect(llm.Index([plain('history'), plain('no fragment')])).toBe(-1);
+    });
+
+    it('splits into the cacheable head and the volatile tail without copying messages', () => {
+        const llm = new SeamLLM();
+        const h1 = plain('h1'); const h2 = plain('h2', 'assistant'); const prefill = plain('{', 'assistant');
+        const split = llm.Split([h1, h2, volatile, prefill]);
+        expect(split).not.toBeNull();
+        expect(split!.head).toEqual([h1, h2]);
+        expect(split!.tail).toEqual([volatile, prefill]);
+        expect(split!.head[0]).toBe(h1);
+        expect(llm.Split([h1, h2])).toBeNull();
+        expect(llm.Split([volatile])).toBeNull();
     });
 });

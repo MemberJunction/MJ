@@ -35,7 +35,7 @@ vi.mock('@memberjunction/ai', () => {
   };
 });
 
-import { CohereReranker, createCohereReranker } from '../models/CohereReranker';
+import { CohereReranker, CreateCohereReranker } from '../models/CohereReranker';
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -164,12 +164,12 @@ describe('CohereReranker', () => {
   /* ---- createCohereReranker factory ---- */
   describe('createCohereReranker', () => {
     it('should create a CohereReranker instance', () => {
-      const instance = createCohereReranker('key123');
+      const instance = CreateCohereReranker('key123');
       expect(instance).toBeInstanceOf(CohereReranker);
     });
 
     it('should pass model name to constructor', () => {
-      const instance = createCohereReranker('key123', 'custom-model');
+      const instance = CreateCohereReranker('key123', 'custom-model');
       expect((instance as unknown as Record<string, unknown>)['_modelName']).toBe('custom-model');
     });
   });

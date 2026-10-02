@@ -6,11 +6,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildEntityAdminAgentContext,
-    buildEntityNotFoundError,
-    entityDisplayName,
-    resolveEntityByIdOrName,
-    stripMJPrefix,
+    BuildEntityAdminAgentContext,
+    BuildEntityNotFoundError,
+    EntityDisplayName,
+    ResolveEntityByIdOrName,
+    StripMJPrefix,
     EntityAdminAgentContextInput,
     EntityNameCandidate,
     ENTITY_ADMIN_NAME_LIST_CAP,
@@ -39,7 +39,7 @@ function makeInput(overrides: Partial<EntityAdminAgentContextInput> = {}): Entit
 
 describe('buildEntityAdminAgentContext', () => {
     it('passes through the salient ERD-browser fields', () => {
-        const ctx = buildEntityAdminAgentContext(makeInput({
+        const ctx = BuildEntityAdminAgentContext(makeInput({
             TotalEntityCount: 200,
             FilteredEntityCount: 12,
             SelectedEntityId: 'AAA-111',
@@ -56,28 +56,28 @@ describe('buildEntityAdminAgentContext', () => {
     });
 
     it('reports HasActiveFilters=true when the filtered count is below the total', () => {
-        const ctx = buildEntityAdminAgentContext(makeInput({ TotalEntityCount: 200, FilteredEntityCount: 50 }));
+        const ctx = BuildEntityAdminAgentContext(makeInput({ TotalEntityCount: 200, FilteredEntityCount: 50 }));
         expect(ctx['HasActiveFilters']).toBe(true);
     });
 
     it('reports HasActiveFilters=true when a filter value is set even with equal counts', () => {
-        const ctx = buildEntityAdminAgentContext(makeInput({ TotalEntityCount: 5, FilteredEntityCount: 5, SearchText: 'user' }));
+        const ctx = BuildEntityAdminAgentContext(makeInput({ TotalEntityCount: 5, FilteredEntityCount: 5, SearchText: 'user' }));
         expect(ctx['HasActiveFilters']).toBe(true);
         expect(ctx['SearchText']).toBe('user');
     });
 
     it('reports HasActiveFilters=false when nothing is filtered out', () => {
-        const ctx = buildEntityAdminAgentContext(makeInput({ TotalEntityCount: 200, FilteredEntityCount: 200 }));
+        const ctx = BuildEntityAdminAgentContext(makeInput({ TotalEntityCount: 200, FilteredEntityCount: 200 }));
         expect(ctx['HasActiveFilters']).toBe(false);
     });
 
     it('reports HasActiveFilters=false when both counts are zero (no data loaded yet)', () => {
-        const ctx = buildEntityAdminAgentContext(makeInput({ TotalEntityCount: 0, FilteredEntityCount: 0 }));
+        const ctx = BuildEntityAdminAgentContext(makeInput({ TotalEntityCount: 0, FilteredEntityCount: 0 }));
         expect(ctx['HasActiveFilters']).toBe(false);
     });
 
     it('represents the no-selection (home) state with null selection fields and no detail', () => {
-        const ctx = buildEntityAdminAgentContext(makeInput({ SelectedEntityId: null, SelectedEntityName: null }));
+        const ctx = BuildEntityAdminAgentContext(makeInput({ SelectedEntityId: null, SelectedEntityName: null }));
         expect(ctx['SelectedEntityId']).toBeNull();
         expect(ctx['SelectedEntityName']).toBeNull();
         expect('SelectedEntitySchema' in ctx).toBe(false);
@@ -85,7 +85,7 @@ describe('buildEntityAdminAgentContext', () => {
     });
 
     it('surfaces selected-entity detail and bounded relationship summaries when selected', () => {
-        const ctx = buildEntityAdminAgentContext(makeInput({
+        const ctx = BuildEntityAdminAgentContext(makeInput({
             SelectedEntityId: 'E1',
             SelectedEntityName: 'Users',
             SelectedEntityDisplayName: 'Users',
@@ -109,13 +109,13 @@ describe('buildEntityAdminAgentContext', () => {
 
     it('caps the available-entity name list and surfaces the true total when truncated', () => {
         const names = Array.from({ length: ENTITY_ADMIN_NAME_LIST_CAP + 3 }, (_, i) => `Entity ${i}`);
-        const ctx = buildEntityAdminAgentContext(makeInput({ AvailableEntityNames: names }));
+        const ctx = BuildEntityAdminAgentContext(makeInput({ AvailableEntityNames: names }));
         expect((ctx['AvailableEntities'] as string[]).length).toBe(ENTITY_ADMIN_NAME_LIST_CAP);
         expect(ctx['AvailableEntityCount']).toBe(names.length);
     });
 
     it('publishes the schema-grouping landscape', () => {
-        const ctx = buildEntityAdminAgentContext(makeInput({
+        const ctx = BuildEntityAdminAgentContext(makeInput({
             SchemaGroups: [
                 { SchemaName: '__mj', EntityCount: 120 },
                 { SchemaName: 'crm', EntityCount: 30 },
@@ -128,7 +128,7 @@ describe('buildEntityAdminAgentContext', () => {
     });
 
     it('surfaces active filter values only when set', () => {
-        const ctx = buildEntityAdminAgentContext(makeInput({ SchemaFilter: 'crm', StatusFilter: 'Active' }));
+        const ctx = BuildEntityAdminAgentContext(makeInput({ SchemaFilter: 'crm', StatusFilter: 'Active' }));
         expect(ctx['SchemaFilter']).toBe('crm');
         expect(ctx['StatusFilter']).toBe('Active');
         expect('SearchText' in ctx).toBe(false);
@@ -137,14 +137,14 @@ describe('buildEntityAdminAgentContext', () => {
 
 describe('stripMJPrefix / entityDisplayName', () => {
     it('strips the "MJ: " prefix', () => {
-        expect(stripMJPrefix('MJ: AI Models')).toBe('AI Models');
-        expect(stripMJPrefix('Users')).toBe('Users');
+        expect(StripMJPrefix('MJ: AI Models')).toBe('AI Models');
+        expect(StripMJPrefix('Users')).toBe('Users');
     });
 
     it('prefers DisplayName, else the prefix-stripped Name', () => {
-        expect(entityDisplayName('MJ: AI Models', null)).toBe('AI Models');
-        expect(entityDisplayName('MJ: AI Models', 'My Models')).toBe('My Models');
-        expect(entityDisplayName('Users')).toBe('Users');
+        expect(EntityDisplayName('MJ: AI Models', null)).toBe('AI Models');
+        expect(EntityDisplayName('MJ: AI Models', 'My Models')).toBe('My Models');
+        expect(EntityDisplayName('Users')).toBe('Users');
     });
 });
 
@@ -156,32 +156,32 @@ describe('resolveEntityByIdOrName', () => {
     ];
 
     it('resolves by exact ID (case-insensitive)', () => {
-        expect(resolveEntityByIdOrName('aaa-111', candidates)?.Name).toBe('MJ: AI Models');
+        expect(ResolveEntityByIdOrName('aaa-111', candidates)?.Name).toBe('MJ: AI Models');
     });
 
     it('resolves by exact registered name (case-insensitive)', () => {
-        expect(resolveEntityByIdOrName('users', candidates)?.ID).toBe('BBB-222');
+        expect(ResolveEntityByIdOrName('users', candidates)?.ID).toBe('BBB-222');
     });
 
     it('resolves by display name the user sees (prefix stripped)', () => {
-        expect(resolveEntityByIdOrName('AI Models', candidates)?.ID).toBe('AAA-111');
+        expect(ResolveEntityByIdOrName('AI Models', candidates)?.ID).toBe('AAA-111');
     });
 
     it('resolves by an explicit DisplayName', () => {
-        expect(resolveEntityByIdOrName('Machine Learning Models', candidates)?.ID).toBe('CCC-333');
+        expect(ResolveEntityByIdOrName('Machine Learning Models', candidates)?.ID).toBe('CCC-333');
     });
 
     it('resolves an input that itself carries the "MJ: " prefix', () => {
-        expect(resolveEntityByIdOrName('MJ: AI Models', candidates)?.ID).toBe('AAA-111');
+        expect(ResolveEntityByIdOrName('MJ: AI Models', candidates)?.ID).toBe('AAA-111');
     });
 
     it('falls back to a partial (contains) match on the display name', () => {
-        expect(resolveEntityByIdOrName('Model', candidates)?.ID).toBe('AAA-111');
+        expect(ResolveEntityByIdOrName('Model', candidates)?.ID).toBe('AAA-111');
     });
 
     it('returns null on a miss and on empty input', () => {
-        expect(resolveEntityByIdOrName('Nope', candidates)).toBeNull();
-        expect(resolveEntityByIdOrName('   ', candidates)).toBeNull();
+        expect(ResolveEntityByIdOrName('Nope', candidates)).toBeNull();
+        expect(ResolveEntityByIdOrName('   ', candidates)).toBeNull();
     });
 });
 
@@ -191,13 +191,13 @@ describe('buildEntityNotFoundError', () => {
             { ID: '1', Name: 'MJ: AI Models', DisplayName: null },
             { ID: '2', Name: 'Users', DisplayName: null },
         ];
-        const msg = buildEntityNotFoundError('Foo', candidates);
+        const msg = BuildEntityNotFoundError('Foo', candidates);
         expect(msg).toContain('No entity matches "Foo"');
         expect(msg).toContain('AI Models');
         expect(msg).toContain('Users');
     });
 
     it('handles an empty candidate list', () => {
-        expect(buildEntityNotFoundError('Foo', [])).toContain('(none)');
+        expect(BuildEntityNotFoundError('Foo', [])).toContain('(none)');
     });
 });

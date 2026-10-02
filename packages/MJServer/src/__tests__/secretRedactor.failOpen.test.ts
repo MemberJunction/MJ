@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IMetadataProvider } from '@memberjunction/core';
-import { redactArg, ResetUnboundCrudInputWarnings } from '../logging/secretRedactor.js';
+import { RedactArg, ResetUnboundCrudInputWarnings } from '../logging/secretRedactor.js';
 
 /**
  * `redactArg` binds a GraphQL input type to an entity by NAME:
@@ -42,7 +42,7 @@ afterEach(() => {
 
 describe('redactArg — entity-bound inputs (the codegen case)', () => {
     it('redacts an encrypted column, keeping the rest', () => {
-        const out = redactArg({
+        const out = RedactArg({
             inputTypeName: 'CreateMJCredentialInput',
             rawValue: { Name: 'Stripe', Values: SECRET },
             provider: CREDENTIAL_ENTITY,
@@ -55,7 +55,7 @@ describe('redactArg — entity-bound inputs (the codegen case)', () => {
     });
 
     it('emits no warning, because the binding resolved', () => {
-        redactArg({
+        RedactArg({
             inputTypeName: 'CreateMJCredentialInput',
             rawValue: { Values: SECRET },
             provider: CREDENTIAL_ENTITY,
@@ -76,14 +76,14 @@ describe('redactArg — name matches the convention but no entity exists', () =>
     };
 
     it('falls open — values are logged, which is the defect being surfaced', () => {
-        const out = redactArg({ ...unbound });
+        const out = RedactArg({ ...unbound });
         // Documents current behaviour: no entity binding and no @NoLog means no
         // redaction source, so the value survives into the log.
         expect(JSON.stringify(out)).toContain(SECRET);
     });
 
     it('now warns, naming the input type and what to do about it', () => {
-        redactArg({ ...unbound });
+        RedactArg({ ...unbound });
 
         expect(console.warn).toHaveBeenCalledTimes(1);
         const message = vi.mocked(console.warn).mock.calls[0][0] as string;
@@ -94,22 +94,22 @@ describe('redactArg — name matches the convention but no entity exists', () =>
     });
 
     it('warns only once per input type, however hot the mutation is', () => {
-        redactArg({ ...unbound });
-        redactArg({ ...unbound });
-        redactArg({ ...unbound });
+        RedactArg({ ...unbound });
+        RedactArg({ ...unbound });
+        RedactArg({ ...unbound });
         expect(console.warn).toHaveBeenCalledTimes(1);
     });
 
     it('warns separately for a different unbound input type', () => {
-        redactArg({ ...unbound });
-        redactArg({ ...unbound, inputTypeName: 'CreateScheduleInput' });
+        RedactArg({ ...unbound });
+        RedactArg({ ...unbound, inputTypeName: 'CreateScheduleInput' });
         expect(console.warn).toHaveBeenCalledTimes(2);
     });
 });
 
 describe('redactArg — @NoLog closes the gap the metadata cannot', () => {
     it('redacts a marked field on an input with no entity binding', () => {
-        const out = redactArg({
+        const out = RedactArg({
             inputTypeName: 'CreateConnectionInput',
             rawValue: { CredentialName: 'acme', CredentialValues: SECRET },
             provider: CREDENTIAL_ENTITY,
@@ -123,7 +123,7 @@ describe('redactArg — @NoLog closes the gap the metadata cannot', () => {
     });
 
     it('a parameter-level mark redacts the whole arg regardless of binding', () => {
-        const out = redactArg({
+        const out = RedactArg({
             inputTypeName: 'CreateConnectionInput',
             rawValue: { CredentialValues: SECRET },
             provider: CREDENTIAL_ENTITY,

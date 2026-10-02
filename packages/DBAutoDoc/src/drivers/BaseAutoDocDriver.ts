@@ -30,17 +30,17 @@ export abstract class BaseAutoDocDriver {
   /**
    * Connect to the database
    */
-  public abstract connect(): Promise<void>;
+  public abstract connect(): Promise<void>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
   /**
    * Test database connectivity
    */
-  public abstract test(): Promise<AutoDocConnectionTestResult>;
+  public abstract test(): Promise<AutoDocConnectionTestResult>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
   /**
    * Close database connection
    */
-  public abstract close(): Promise<void>;
+  public abstract close(): Promise<void>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
   // ============================================================================
   // SCHEMA INTROSPECTION
@@ -49,7 +49,7 @@ export abstract class BaseAutoDocDriver {
   /**
    * Get all schemas with filtered tables
    */
-  public abstract getSchemas(
+  public abstract getSchemas(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     schemaFilter: AutoDocSchemaFilter,
     tableFilter: AutoDocTableFilter
   ): Promise<AutoDocSchema[]>;
@@ -74,7 +74,7 @@ export abstract class BaseAutoDocDriver {
    * Get existing descriptions from database metadata
    * (e.g., MS_Description for SQL Server, COMMENT for MySQL/PostgreSQL)
    */
-  public abstract getExistingDescriptions(
+  public abstract getExistingDescriptions(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     schemaName: string,
     tableName: string
   ): Promise<AutoDocExistingDescription[]>;
@@ -86,7 +86,7 @@ export abstract class BaseAutoDocDriver {
   /**
    * Get column statistics (cardinality, null count, etc.)
    */
-  public abstract getColumnStatistics(
+  public abstract getColumnStatistics(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     schemaName: string,
     tableName: string,
     columnName: string,
@@ -117,7 +117,7 @@ export abstract class BaseAutoDocDriver {
   /**
    * Get sample values from a column
    */
-  public abstract getSampleValues(
+  public abstract getSampleValues(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     schemaName: string,
     tableName: string,
     columnName: string,
@@ -132,7 +132,7 @@ export abstract class BaseAutoDocDriver {
    * Get simplified column statistics for discovery
    * Uses existing getColumnStatistics but with simpler parameters
    */
-  public async getColumnStatisticsForDiscovery(
+  public async GetColumnStatisticsForDiscovery(
     schemaName: string,
     tableName: string,
     columnName: string,
@@ -166,10 +166,21 @@ export abstract class BaseAutoDocDriver {
     };
   }
 
+  /** @deprecated Use {@link GetColumnStatisticsForDiscovery}. */
+  public async getColumnStatisticsForDiscovery(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    columnType: string,
+    maxSampleSize: number = 1000
+  ): Promise<import('../types/discovery.js').ColumnStatistics> {
+    return this.GetColumnStatisticsForDiscovery(schemaName, tableName, columnName, columnType, maxSampleSize);
+  }
+
   /**
    * Get column information (for FK detection)
    */
-  public abstract getColumnInfo(
+  public abstract getColumnInfo(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     schemaName: string,
     tableName: string,
     columnName: string
@@ -179,7 +190,7 @@ export abstract class BaseAutoDocDriver {
    * Test value overlap between two columns (for FK detection)
    * Returns percentage of source values that exist in target (0-1)
    */
-  public abstract testValueOverlap(
+  public abstract testValueOverlap(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     sourceTable: string,  // format: "schema.table"
     sourceColumn: string,
     targetTable: string,  // format: "schema.table"
@@ -190,7 +201,7 @@ export abstract class BaseAutoDocDriver {
   /**
    * Check if a combination of columns is unique (for composite PK detection)
    */
-  public abstract checkColumnCombinationUniqueness(
+  public abstract checkColumnCombinationUniqueness(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     schemaName: string,
     tableName: string,
     columnNames: string[],
@@ -206,7 +217,7 @@ export abstract class BaseAutoDocDriver {
    * @param query SQL query to execute
    * @param maxRetries Number of retry attempts for transient errors
    */
-  public abstract executeQuery<T = any>(
+  public abstract executeQuery<T = any>(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     query: string,
     maxRetries?: number
   ): Promise<AutoDocQueryResult<T>>;
@@ -320,7 +331,12 @@ export abstract class BaseAutoDocDriver {
   /**
    * Get database provider name
    */
-  public getProviderName(): string {
+  public GetProviderName(): string {
     return this.config.provider;
+  }
+
+  /** @deprecated Use {@link GetProviderName}. */
+  public getProviderName(): string {
+    return this.GetProviderName();
   }
 }

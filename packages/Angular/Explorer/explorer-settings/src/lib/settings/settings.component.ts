@@ -39,22 +39,85 @@ export interface SearchableItem {
 })
 @RegisterClass(BaseNavigationComponent, 'Settings')
 export class SettingsComponent extends BaseNavigationComponent implements OnInit, OnDestroy {
-  @Output() stateChange = new EventEmitter<SettingsComponentState>();
+  @Output() StateChange = new EventEmitter<SettingsComponentState>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
 
   // State management
-  public activeTab = 'general';
-  public searchTerm$ = new BehaviorSubject<string>('');
+  public ActiveTab = 'general';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  public get activeTab() {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  public set activeTab(value) {
+    this.ActiveTab = value;
+  }
+  public SearchTerm$ = new BehaviorSubject<string>('');
+
+  /** @deprecated Use {@link SearchTerm$}. */
+  public get searchTerm$() {
+    return this.SearchTerm$;
+  }
+  /** @deprecated Use {@link SearchTerm$}. */
+  public set searchTerm$(value) {
+    this.SearchTerm$ = value;
+  }
   public isLoading = false;
   public error: string | null = null;
 
   // Search state
-  public filteredTabs: SettingsTab[] = [];
-  public searchResults: SearchableItem[] = [];
-  public isSearching = false;
-  public showSearchResults = false;
+  public FilteredTabs: SettingsTab[] = [];
+
+  /** @deprecated Use {@link FilteredTabs}. */
+  public get filteredTabs(): SettingsTab[] {
+    return this.FilteredTabs;
+  }
+  /** @deprecated Use {@link FilteredTabs}. */
+  public set filteredTabs(value: SettingsTab[]) {
+    this.FilteredTabs = value;
+  }
+  public SearchResults: SearchableItem[] = [];
+
+  /** @deprecated Use {@link SearchResults}. */
+  public get searchResults(): SearchableItem[] {
+    return this.SearchResults;
+  }
+  /** @deprecated Use {@link SearchResults}. */
+  public set searchResults(value: SearchableItem[]) {
+    this.SearchResults = value;
+  }
+  public IsSearching = false;
+
+  /** @deprecated Use {@link IsSearching}. */
+  public get isSearching() {
+    return this.IsSearching;
+  }
+  /** @deprecated Use {@link IsSearching}. */
+  public set isSearching(value) {
+    this.IsSearching = value;
+  }
+  public ShowSearchResults = false;
+
+  /** @deprecated Use {@link ShowSearchResults}. */
+  public get showSearchResults() {
+    return this.ShowSearchResults;
+  }
+  /** @deprecated Use {@link ShowSearchResults}. */
+  public set showSearchResults(value) {
+    this.ShowSearchResults = value;
+  }
 
   // Tab configuration - User-focused tabs only
-  public tabs: SettingsTab[] = [
+  public Tabs: SettingsTab[] = [
     {
       id: 'general',
       label: 'General',
@@ -81,6 +144,15 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       disabled: true
     }
   ];
+
+  /** @deprecated Use {@link Tabs}. */
+  public get tabs(): SettingsTab[] {
+    return this.Tabs;
+  }
+  /** @deprecated Use {@link Tabs}. */
+  public set tabs(value: SettingsTab[]) {
+    this.Tabs = value;
+  }
 
   // Searchable content registry - User settings only
   private searchableItems: SearchableItem[] = [
@@ -131,11 +203,38 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   ];
 
   // Section expansion state
-  public expandedSections: string[] = ['profile', 'account'];
+  public ExpandedSections: string[] = ['profile', 'account'];
+
+  /** @deprecated Use {@link ExpandedSections}. */
+  public get expandedSections(): string[] {
+    return this.ExpandedSections;
+  }
+  /** @deprecated Use {@link ExpandedSections}. */
+  public set expandedSections(value: string[]) {
+    this.ExpandedSections = value;
+  }
 
   // Mobile state
-  public isMobile = window.innerWidth < 768;
-  public isMobileNavOpen = false;
+  public IsMobile = window.innerWidth < 768;
+
+  /** @deprecated Use {@link IsMobile}. */
+  public get isMobile() {
+    return this.IsMobile;
+  }
+  /** @deprecated Use {@link IsMobile}. */
+  public set isMobile(value) {
+    this.IsMobile = value;
+  }
+  public IsMobileNavOpen = false;
+
+  /** @deprecated Use {@link IsMobileNavOpen}. */
+  public get isMobileNavOpen() {
+    return this.IsMobileNavOpen;
+  }
+  /** @deprecated Use {@link IsMobileNavOpen}. */
+  public set isMobileNavOpen(value) {
+    this.IsMobileNavOpen = value;
+  }
 
   private destroy$ = new Subject<void>();
 
@@ -145,9 +244,9 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   }
 
   ngOnInit(): void {
-    this.filteredTabs = [...this.tabs];
+    this.FilteredTabs = [...this.Tabs];
     this.setupSearchFilter();
-    this.loadInitialData();
+    this.LoadInitialData();
   }
 
   ngOnDestroy(): void {
@@ -157,7 +256,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   }
 
   private setupSearchFilter(): void {
-    this.searchTerm$
+    this.SearchTerm$
       .pipe(
         debounceTime(200),
         distinctUntilChanged(),
@@ -169,7 +268,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       });
   }
 
-  public async loadInitialData(): Promise<void> {
+  public async LoadInitialData(): Promise<void> {
     try {
       this.isLoading = true;
       await this.simulateDataLoad();
@@ -186,36 +285,56 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     }
   }
 
+  /** @deprecated Use {@link LoadInitialData}. */
+  public async loadInitialData(): Promise<void> {
+    return this.LoadInitialData();
+  }
+
   private async simulateDataLoad(): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, 300));
   }
 
-  public onTabChange(tabId: string): void {
-    const tab = this.tabs.find(t => t.id === tabId);
+  public OnTabChange(tabId: string): void {
+    const tab = this.Tabs.find(t => t.id === tabId);
     if (tab?.disabled) {
       return; // Don't switch to disabled tabs
     }
-    this.activeTab = tabId;
+    this.ActiveTab = tabId;
     this.emitStateChange();
   }
 
-  public onSearchChange(event: Event): void {
+  /** @deprecated Use {@link OnTabChange}. */
+  public onTabChange(tabId: string): void {
+    return this.OnTabChange(tabId);
+  }
+
+  public OnSearchChange(event: Event): void {
     const term = (event.target as HTMLInputElement).value;
-    this.searchTerm$.next(term);
+    this.SearchTerm$.next(term);
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
+  public onSearchChange(event: Event): void {
+    return this.OnSearchChange(event);
   }
 
   public toggleSection(sectionId: string): void {
-    const index = this.expandedSections.indexOf(sectionId);
+    const index = this.ExpandedSections.indexOf(sectionId);
     if (index === -1) {
-      this.expandedSections.push(sectionId);
+      this.ExpandedSections.push(sectionId);
     } else {
-      this.expandedSections.splice(index, 1);
+      this.ExpandedSections.splice(index, 1);
     }
     this.emitStateChange();
   }
 
+  public IsSectionExpanded(sectionId: string): boolean {
+    return this.ExpandedSections.includes(sectionId);
+  }
+
+  /** @deprecated Use {@link IsSectionExpanded}. */
   public isSectionExpanded(sectionId: string): boolean {
-    return this.expandedSections.includes(sectionId);
+    return this.IsSectionExpanded(sectionId);
   }
 
   /**
@@ -223,17 +342,17 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
    */
   private filterContent(term: string): void {
     if (!term || term.trim() === '') {
-      this.showSearchResults = false;
-      this.searchResults = [];
-      this.filteredTabs = [...this.tabs];
+      this.ShowSearchResults = false;
+      this.SearchResults = [];
+      this.FilteredTabs = [...this.Tabs];
       return;
     }
 
     const searchLower = term.toLowerCase().trim();
-    this.isSearching = true;
+    this.IsSearching = true;
 
     // Filter searchable items
-    this.searchResults = this.searchableItems.filter(item => {
+    this.SearchResults = this.searchableItems.filter(item => {
       const matchesLabel = item.label.toLowerCase().includes(searchLower);
       const matchesKeywords = item.keywords.some(kw => kw.toLowerCase().includes(searchLower));
       const matchesDescription = item.description?.toLowerCase().includes(searchLower) || false;
@@ -241,107 +360,147 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     });
 
     // Get unique tabs that have matching results
-    const matchingTabIds = new Set(this.searchResults.map(r => r.tabId));
-    this.filteredTabs = this.tabs.filter(tab => matchingTabIds.has(tab.id));
+    const matchingTabIds = new Set(this.SearchResults.map(r => r.tabId));
+    this.FilteredTabs = this.Tabs.filter(tab => matchingTabIds.has(tab.id));
 
-    this.showSearchResults = true;
-    this.isSearching = false;
+    this.ShowSearchResults = true;
+    this.IsSearching = false;
   }
 
   /**
    * Navigates to a search result
    */
-  public navigateToSearchResult(result: SearchableItem): void {
-    const tab = this.tabs.find(t => t.id === result.tabId);
+  public NavigateToSearchResult(result: SearchableItem): void {
+    const tab = this.Tabs.find(t => t.id === result.tabId);
     if (tab?.disabled) {
       return; // Don't navigate to disabled tabs
     }
 
-    this.activeTab = result.tabId;
+    this.ActiveTab = result.tabId;
 
     // Expand the section if applicable
-    if (result.sectionId && !this.expandedSections.includes(result.sectionId)) {
-      this.expandedSections.push(result.sectionId);
+    if (result.sectionId && !this.ExpandedSections.includes(result.sectionId)) {
+      this.ExpandedSections.push(result.sectionId);
     }
 
-    this.clearSearch();
+    this.ClearSearch();
     this.emitStateChange();
+  }
+
+  /** @deprecated Use {@link NavigateToSearchResult}. */
+  public navigateToSearchResult(result: SearchableItem): void {
+    return this.NavigateToSearchResult(result);
   }
 
   /**
    * Clears the search and resets the view
    */
+  public ClearSearch(): void {
+    this.SearchTerm$.next('');
+    this.ShowSearchResults = false;
+    this.SearchResults = [];
+    this.FilteredTabs = [...this.Tabs];
+  }
+
+  /** @deprecated Use {@link ClearSearch}. */
   public clearSearch(): void {
-    this.searchTerm$.next('');
-    this.showSearchResults = false;
-    this.searchResults = [];
-    this.filteredTabs = [...this.tabs];
+    return this.ClearSearch();
   }
 
   /**
    * Toggles the mobile navigation rail
    */
+  public ToggleMobileNav(): void {
+    this.IsMobileNavOpen = !this.IsMobileNavOpen;
+  }
+
+  /** @deprecated Use {@link ToggleMobileNav}. */
   public toggleMobileNav(): void {
-    this.isMobileNavOpen = !this.isMobileNavOpen;
+    return this.ToggleMobileNav();
   }
 
   /**
    * Closes the mobile navigation rail
    */
+  public CloseMobileNav(): void {
+    this.IsMobileNavOpen = false;
+  }
+
+  /** @deprecated Use {@link CloseMobileNav}. */
   public closeMobileNav(): void {
-    this.isMobileNavOpen = false;
+    return this.CloseMobileNav();
   }
 
   /**
    * Closes the settings page and navigates back
    */
-  public closeSettings(): void {
+  public CloseSettings(): void {
     this.location.back();
+  }
+
+  /** @deprecated Use {@link CloseSettings}. */
+  public closeSettings(): void {
+    return this.CloseSettings();
   }
 
   /**
    * Handles tab change on mobile
    */
+  public OnMobileTabChange(tabId: string): void {
+    this.OnTabChange(tabId);
+    this.CloseMobileNav();
+  }
+
+  /** @deprecated Use {@link OnMobileTabChange}. */
   public onMobileTabChange(tabId: string): void {
-    this.onTabChange(tabId);
-    this.closeMobileNav();
+    return this.OnMobileTabChange(tabId);
   }
 
   private handleResize(): void {
-    this.isMobile = window.innerWidth < 768;
-    if (!this.isMobile) {
-      this.isMobileNavOpen = false;
+    this.IsMobile = window.innerWidth < 768;
+    if (!this.IsMobile) {
+      this.IsMobileNavOpen = false;
     }
   }
 
   private emitStateChange(): void {
     const state: SettingsComponentState = {
-      activeTab: this.activeTab,
-      searchTerm: this.searchTerm$.value,
-      expandedSections: [...this.expandedSections]
+      activeTab: this.ActiveTab,
+      searchTerm: this.SearchTerm$.value,
+      expandedSections: [...this.ExpandedSections]
     };
-    this.stateChange.emit(state);
+    this.StateChange.emit(state);
   }
 
-  public loadUserState(state: Partial<SettingsComponentState>): void {
+  public LoadUserState(state: Partial<SettingsComponentState>): void {
     if (state.activeTab) {
-      this.activeTab = state.activeTab;
+      this.ActiveTab = state.activeTab;
     }
     if (state.searchTerm !== undefined) {
-      this.searchTerm$.next(state.searchTerm);
+      this.SearchTerm$.next(state.searchTerm);
     }
     if (state.expandedSections) {
-      this.expandedSections = [...state.expandedSections];
+      this.ExpandedSections = [...state.expandedSections];
     }
   }
 
-  public getTabIcon(tab: SettingsTab): string {
+  /** @deprecated Use {@link LoadUserState}. */
+  public loadUserState(state: Partial<SettingsComponentState>): void {
+    return this.LoadUserState(state);
+  }
+
+  public GetTabIcon(tab: SettingsTab): string {
     return tab.icon;
   }
 
-  public getTabClass(tab: SettingsTab): string {
+  /** @deprecated Use {@link GetTabIcon}. */
+  public getTabIcon(tab: SettingsTab): string {
+    return this.GetTabIcon(tab);
+  }
+
+  public GetTabClass(tab: SettingsTab): string {
     const classes = ['settings-tab'];
-    if (this.activeTab === tab.id) {
+    if (this.ActiveTab === tab.id) {
       classes.push('active');
     }
     if (tab.disabled) {
@@ -353,7 +512,17 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     return classes.join(' ');
   }
 
-  public isTabDisabled(tab: SettingsTab): boolean {
+  /** @deprecated Use {@link GetTabClass}. */
+  public getTabClass(tab: SettingsTab): string {
+    return this.GetTabClass(tab);
+  }
+
+  public IsTabDisabled(tab: SettingsTab): boolean {
     return tab.disabled || false;
+  }
+
+  /** @deprecated Use {@link IsTabDisabled}. */
+  public isTabDisabled(tab: SettingsTab): boolean {
+    return this.IsTabDisabled(tab);
   }
 }

@@ -18,7 +18,7 @@ mutation WidgetRelayRealtimeTool($agentSessionId: String!, $callId: String!, $to
 }`;
 
 /** Builds the relay fn the voice controller calls for non-channel tools (returns the tool result JSON). */
-export function createGuestToolRelay(): RelayToolFn {
+export function CreateGuestToolRelay(): RelayToolFn {
     return async (agentSessionId: string, callId: string, toolName: string, argsJson: string): Promise<string> => {
         const data = (await GraphQLDataProvider.Instance.ExecuteGQL(EXECUTE_TOOL_MUTATION, {
             agentSessionId,
@@ -28,4 +28,9 @@ export function createGuestToolRelay(): RelayToolFn {
         })) as { ExecuteRealtimeSessionTool: string };
         return data.ExecuteRealtimeSessionTool ?? '{}';
     };
+}
+
+/** @deprecated Use {@link CreateGuestToolRelay}. */
+export function createGuestToolRelay(): RelayToolFn {
+  return CreateGuestToolRelay();
 }

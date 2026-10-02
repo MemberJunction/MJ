@@ -64,36 +64,36 @@ export interface DataTableMetadata {
  */
 export class DataTable {
     /** Unique name for this table within a collection */
-    name!: string;
+    name!: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Human-readable description of what this table contains */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** How this table's data was produced */
-    source?: 'query' | 'view' | 'computed' | 'static' | 'other';
+    source?: 'query' | 'view' | 'computed' | 'static' | 'other';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Column definitions with type information and entity lineage */
-    columns: MJColumnDescriptor[] = [];
+    columns: MJColumnDescriptor[] = [];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** The actual row data */
-    rows: Record<string, unknown>[] = [];
+    rows: Record<string, unknown>[] = [];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** How the data was produced, how much there is, how long it took */
-    metadata?: DataTableMetadata;
+    metadata?: DataTableMetadata;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     // ─── PER-TABLE STATE (each table has its own) ───
 
     /** Pre-computed aggregations for this table's data */
-    computations?: DataComputation[];
+    computations?: DataComputation[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Current sort state applied to this table */
-    sorting?: Array<{ field: string; direction: 'asc' | 'desc' }>;
+    sorting?: Array<{ field: string; direction: 'asc' | 'desc' }>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Currently selected rows in this table */
-    selectedRows?: Array<{ rowIndex: number; rowKey?: string; rowData?: Record<string, unknown> }>;
+    selectedRows?: Array<{ rowIndex: number; rowKey?: string; rowData?: Record<string, unknown> }>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Current page number (1-based) */
-    pageNumber?: number;
+    pageNumber?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Create from a single-table DataSnapshot (legacy format) */
     static FromLegacySpec(spec: {

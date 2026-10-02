@@ -5,14 +5,14 @@ import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface EntitySelectorConfig {
-    entityName: string;
-    title: string;
-    displayField: string;
-    descriptionField?: string;
-    statusField?: string;
-    filters?: string;
-    orderBy?: string;
-    icon?: string;
+    EntityName: string;
+    Title: string;
+    DisplayField: string;
+    DescriptionField?: string;
+    StatusField?: string;
+    Filters?: string;
+    OrderBy?: string;
+    Icon?: string;
 }
 
 @Component({
@@ -21,9 +21,9 @@ export interface EntitySelectorConfig {
     template: `
         <div class="dialog-wrapper">
           <div class="dialog-header">
-            <h3>@if (config.icon) {
-              <i [class]="config.icon"></i>
-            } {{ config.title }}</h3>
+            <h3>@if (config.Icon) {
+              <i [class]="config.Icon"></i>
+            } {{ config.Title }}</h3>
           </div>
           <div class="dialog-content">
             <!-- Search Bar -->
@@ -38,7 +38,7 @@ export interface EntitySelectorConfig {
             @if (isLoading) {
               <div class="loading-state">
                 <i class="fa-solid fa-spinner fa-spin"></i>
-                <p>Loading {{ config.entityName }}...</p>
+                <p>Loading {{ config.EntityName }}...</p>
               </div>
             }
 
@@ -56,17 +56,17 @@ export interface EntitySelectorConfig {
                         [class.selected]="IsEntitySelected(entity)"
                         (click)="selectEntity(entity)">
                         <div class="item-icon">
-                          <i [class]="config.icon || 'fa-solid fa-file'"></i>
+                          <i [class]="config.Icon || 'fa-solid fa-file'"></i>
                         </div>
                         <div class="item-content">
-                          <div class="item-title">{{ entity[config.displayField] || 'Untitled' }}</div>
-                          @if (config.descriptionField && entity[config.descriptionField]) {
-                            <div class="item-description">{{ entity[config.descriptionField] }}</div>
+                          <div class="item-title">{{ entity[config.DisplayField] || 'Untitled' }}</div>
+                          @if (config.DescriptionField && entity[config.DescriptionField]) {
+                            <div class="item-description">{{ entity[config.DescriptionField] }}</div>
                           }
-                          @if (config.statusField && entity[config.statusField]) {
+                          @if (config.StatusField && entity[config.StatusField]) {
                             <div class="item-status">
-                              <span class="status-badge" [class.active]="entity[config.statusField] === 'Active'">
-                                {{ entity[config.statusField] }}
+                              <span class="status-badge" [class.active]="entity[config.StatusField] === 'Active'">
+                                {{ entity[config.StatusField] }}
                               </span>
                             </div>
                           }
@@ -261,10 +261,46 @@ export interface EntitySelectorConfig {
 export class EntitySelectorDialogComponent extends BaseAngularComponent implements OnInit {
     @Input() config!: EntitySelectorConfig;
 
-    public entities: any[] = [];
-    public filteredEntities: any[] = [];
-    public selectedEntity: any = null;
-    public searchText: string = '';
+    public Entities: any[] = [];
+
+    /** @deprecated Use {@link Entities}. */
+    public get entities(): any[] {
+      return this.Entities;
+    }
+    /** @deprecated Use {@link Entities}. */
+    public set entities(value: any[]) {
+      this.Entities = value;
+    }
+    public FilteredEntities: any[] = [];
+
+    /** @deprecated Use {@link FilteredEntities}. */
+    public get filteredEntities(): any[] {
+      return this.FilteredEntities;
+    }
+    /** @deprecated Use {@link FilteredEntities}. */
+    public set filteredEntities(value: any[]) {
+      this.FilteredEntities = value;
+    }
+    public SelectedEntity: any = null;
+
+    /** @deprecated Use {@link SelectedEntity}. */
+    public get selectedEntity(): any {
+      return this.SelectedEntity;
+    }
+    /** @deprecated Use {@link SelectedEntity}. */
+    public set selectedEntity(value: any) {
+      this.SelectedEntity = value;
+    }
+    public SearchText: string = '';
+
+    /** @deprecated Use {@link SearchText}. */
+    public get searchText(): string {
+      return this.SearchText;
+    }
+    /** @deprecated Use {@link SearchText}. */
+    public set searchText(value: string) {
+      this.SearchText = value;
+    }
     public isLoading: boolean = true;
 
     @Output() DialogClosed = new EventEmitter<Record<string, unknown> | null>();
@@ -276,66 +312,91 @@ export class EntitySelectorDialogComponent extends BaseAngularComponent implemen
 
     /** Title for the empty/no-results placeholder, echoing the active search term when narrowed. */
     public get EmptyStateTitle(): string {
-        return this.searchText
-            ? `No ${this.config.entityName} match "${this.searchText}"`
-            : `No ${this.config.entityName} found`;
+        return this.SearchText
+            ? `No ${this.config.EntityName} match "${this.SearchText}"`
+            : `No ${this.config.EntityName} found`;
     }
 
     async ngOnInit() {
-        await this.loadEntities();
+        await this.LoadEntities();
     }
 
-    async loadEntities() {
+    async LoadEntities() {
         this.isLoading = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
-                EntityName: this.config.entityName,
-                ExtraFilter: this.config.filters,
-                OrderBy: this.config.orderBy 
+                EntityName: this.config.EntityName,
+                ExtraFilter: this.config.Filters,
+                OrderBy: this.config.OrderBy 
             });
 
-            this.entities = result.Results;
-            this.filteredEntities = [...this.entities];
+            this.Entities = result.Results;
+            this.FilteredEntities = [...this.Entities];
         } catch (error) {
             console.error('Error loading entities:', error);
-            this.entities = [];
-            this.filteredEntities = [];
+            this.Entities = [];
+            this.FilteredEntities = [];
         } finally {
             this.isLoading = false;
         }
     }
 
-    onSearchChange() {
-        if (!this.searchText) {
-            this.filteredEntities = [...this.entities];
+    /** @deprecated Use {@link LoadEntities}. */
+    async loadEntities() {
+      return this.LoadEntities();
+    }
+
+    OnSearchChange() {
+        if (!this.SearchText) {
+            this.FilteredEntities = [...this.Entities];
         } else {
-            const searchLower = this.searchText.toLowerCase();
-            this.filteredEntities = this.entities.filter(entity => {
-                const displayValue = entity[this.config.displayField] || '';
-                const descriptionValue = this.config.descriptionField ? (entity[this.config.descriptionField] || '') : '';
+            const searchLower = this.SearchText.toLowerCase();
+            this.FilteredEntities = this.Entities.filter(entity => {
+                const displayValue = entity[this.config.DisplayField] || '';
+                const descriptionValue = this.config.DescriptionField ? (entity[this.config.DescriptionField] || '') : '';
                 return displayValue.toLowerCase().includes(searchLower) || 
                        descriptionValue.toLowerCase().includes(searchLower);
             });
         }
     }
 
-    selectEntity(entity: any) {
-        this.selectedEntity = entity;
+    /** @deprecated Use {@link OnSearchChange}. */
+    onSearchChange() {
+      return this.OnSearchChange();
     }
 
-    onSelect() {
-        if (this.selectedEntity) {
-            this.DialogClosed.emit({ entity: this.selectedEntity });
+    SelectEntity(entity: any) {
+        this.SelectedEntity = entity;
+    }
+
+    /** @deprecated Use {@link SelectEntity}. */
+    selectEntity(entity: any) {
+      return this.SelectEntity(entity);
+    }
+
+    OnSelect() {
+        if (this.SelectedEntity) {
+            this.DialogClosed.emit({ entity: this.SelectedEntity });
         }
     }
 
-    createNew() {
+    /** @deprecated Use {@link OnSelect}. */
+    onSelect() {
+      return this.OnSelect();
+    }
+
+    CreateNew() {
         this.DialogClosed.emit({ createNew: true });
     }
 
+    /** @deprecated Use {@link CreateNew}. */
+    createNew() {
+      return this.CreateNew();
+    }
+
     IsEntitySelected(entity: Record<string, unknown>): boolean {
-        return UUIDsEqual(this.selectedEntity?.ID, entity.ID as string);
+        return UUIDsEqual(this.SelectedEntity?.ID, entity.ID as string);
     }
 
     onCancel() {

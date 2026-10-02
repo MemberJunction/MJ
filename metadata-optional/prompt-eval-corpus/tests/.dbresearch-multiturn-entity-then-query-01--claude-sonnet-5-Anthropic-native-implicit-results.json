@@ -1,0 +1,108 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "dbresearch-multiturn-entity-then-query-01 [claude-sonnet-5 · Anthropic · native-implicit-results]",
+    "Description": "The entity details came back as a tool result; the next step is the query. Written in the neutral tool form — native-results arms see the call and result as tool turns, every other arm sees the corpus's [Action Result] prose.",
+    "InputDefinition": {
+      "payload": {
+        "question": "How many AI agents are active?",
+        "findings": []
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "How many AI agents are currently active?"
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "call_0",
+              "name": "get_entity_details",
+              "arguments": {
+                "EntityName": "MJ: AI Agents"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": [
+            {
+              "type": "tool_result",
+              "toolCallId": "call_0",
+              "toolName": "get_entity_details",
+              "isError": false,
+              "content": "Entity MJ: AI Agents — view vwAIAgents. Fields: ID (uniqueidentifier), Name (nvarchar), Status (nvarchar: Active | Disabled | Pending), TypeID (uniqueidentifier), __mj_CreatedAt (datetimeoffset)."
+            }
+          ]
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "dbresearch-multiturn-entity-then-query-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Run Ad-hoc Query",
+            "params": {
+              "Query": {
+                "matcher": "regex",
+                "pattern": "count\\(|Status\\s*=\\s*'Active'",
+                "flags": "i"
+              }
+            }
+          }
+        ],
+        "allowAdditionalActions": false
+      }
+    },
+    "Configuration": {
+      "agentName": "Database Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Run Ad-hoc Query",
+                "params": {
+                  "Query": {
+                    "matcher": "regex",
+                    "pattern": "count\\(|Status\\s*=\\s*'Active'",
+                    "flags": "i"
+                  }
+                }
+              }
+            ],
+            "allowAdditionalActions": false
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0F2D532E-1359-4F2F-AD14-59F4901559F6"
+  }
+}

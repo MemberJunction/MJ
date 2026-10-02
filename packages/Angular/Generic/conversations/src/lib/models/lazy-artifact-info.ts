@@ -17,18 +17,78 @@ import { Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
  */
 export class LazyArtifactInfo {
   // Display data (always available from initial query - no lazy loading needed)
-  public readonly conversationDetailId: string;
-  public readonly direction: string;
-  public readonly artifactVersionId: string;
-  public readonly versionNumber: number;
-  public readonly versionName: string | null;
-  public readonly versionDescription: string | null;
-  public readonly versionCreatedAt: Date;
-  public readonly artifactId: string;
-  public readonly artifactName: string;
-  public readonly artifactType: string;
-  public readonly artifactDescription: string;
-  public readonly visibility: string;
+  public readonly ConversationDetailId: string;
+
+  /** @deprecated Use {@link ConversationDetailId}. */
+  public get conversationDetailId(): string {
+    return this.ConversationDetailId;
+  }
+  public readonly Direction: string;
+
+  /** @deprecated Use {@link Direction}. */
+  public get direction(): string {
+    return this.Direction;
+  }
+  public readonly ArtifactVersionId: string;
+
+  /** @deprecated Use {@link ArtifactVersionId}. */
+  public get artifactVersionId(): string {
+    return this.ArtifactVersionId;
+  }
+  public readonly VersionNumber: number;
+
+  /** @deprecated Use {@link VersionNumber}. */
+  public get versionNumber(): number {
+    return this.VersionNumber;
+  }
+  public readonly VersionName: string | null;
+
+  /** @deprecated Use {@link VersionName}. */
+  public get versionName(): string | null {
+    return this.VersionName;
+  }
+  public readonly VersionDescription: string | null;
+
+  /** @deprecated Use {@link VersionDescription}. */
+  public get versionDescription(): string | null {
+    return this.VersionDescription;
+  }
+  public readonly VersionCreatedAt: Date;
+
+  /** @deprecated Use {@link VersionCreatedAt}. */
+  public get versionCreatedAt(): Date {
+    return this.VersionCreatedAt;
+  }
+  public readonly ArtifactId: string;
+
+  /** @deprecated Use {@link ArtifactId}. */
+  public get artifactId(): string {
+    return this.ArtifactId;
+  }
+  public readonly ArtifactName: string;
+
+  /** @deprecated Use {@link ArtifactName}. */
+  public get artifactName(): string {
+    return this.ArtifactName;
+  }
+  public readonly ArtifactType: string;
+
+  /** @deprecated Use {@link ArtifactType}. */
+  public get artifactType(): string {
+    return this.ArtifactType;
+  }
+  public readonly ArtifactDescription: string;
+
+  /** @deprecated Use {@link ArtifactDescription}. */
+  public get artifactDescription(): string {
+    return this.ArtifactDescription;
+  }
+  public readonly Visibility: string;
+
+  /** @deprecated Use {@link Visibility}. */
+  public get visibility(): string {
+    return this.Visibility;
+  }
 
   // Fallback entities loaded directly when engine doesn't have them yet
   private _fallbackArtifact: MJArtifactEntity | null = null;
@@ -49,18 +109,18 @@ export class LazyArtifactInfo {
   ) {
     // Populate display data from query result
     // These fields come from GetConversationComplete query
-    this.conversationDetailId = queryResult.ConversationDetailID as string;
-    this.direction = queryResult.Direction as string;
-    this.artifactVersionId = queryResult.ArtifactVersionID as string;
-    this.versionNumber = queryResult.VersionNumber as number;
-    this.versionName = (queryResult.VersionName as string) || null;
-    this.versionDescription = (queryResult.VersionDescription as string) || null;
-    this.versionCreatedAt = queryResult.VersionCreatedAt ? new Date(queryResult.VersionCreatedAt as string) : new Date();
-    this.artifactId = queryResult.ArtifactID as string;
-    this.artifactName = queryResult.ArtifactName as string;
-    this.artifactType = queryResult.ArtifactType as string;
-    this.artifactDescription = (queryResult.ArtifactDescription as string) || '';
-    this.visibility = (queryResult.Visibility as string) || 'User';
+    this.ConversationDetailId = queryResult.ConversationDetailID as string;
+    this.Direction = queryResult.Direction as string;
+    this.ArtifactVersionId = queryResult.ArtifactVersionID as string;
+    this.VersionNumber = queryResult.VersionNumber as number;
+    this.VersionName = (queryResult.VersionName as string) || null;
+    this.VersionDescription = (queryResult.VersionDescription as string) || null;
+    this.VersionCreatedAt = queryResult.VersionCreatedAt ? new Date(queryResult.VersionCreatedAt as string) : new Date();
+    this.ArtifactId = queryResult.ArtifactID as string;
+    this.ArtifactName = queryResult.ArtifactName as string;
+    this.ArtifactType = queryResult.ArtifactType as string;
+    this.ArtifactDescription = (queryResult.ArtifactDescription as string) || '';
+    this.Visibility = (queryResult.Visibility as string) || 'User';
 
     // If entities were pre-loaded via batch query, store as fallbacks
     if (preloadedArtifact) {
@@ -75,11 +135,11 @@ export class LazyArtifactInfo {
    * Gets the full Artifact entity.
    * Checks ArtifactMetadataEngine first (always fresh), falls back to direct load.
    */
-  async getArtifact(): Promise<MJArtifactEntity> {
+  async GetArtifact(): Promise<MJArtifactEntity> {
     // Try the engine first — it stays in sync via BaseEntity events
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const fromEngine = engine.FindCachedArtifactByID(this.artifactId);
+      const fromEngine = engine.FindCachedArtifactByID(this.ArtifactId);
       if (fromEngine) {
         return fromEngine;
       }
@@ -89,15 +149,20 @@ export class LazyArtifactInfo {
     return this.loadArtifactFallback();
   }
 
+  /** @deprecated Use {@link GetArtifact}. */
+  async getArtifact(): Promise<MJArtifactEntity> {
+    return this.GetArtifact();
+  }
+
   /**
    * Gets the full ArtifactVersion entity including Content field.
    * Checks ArtifactMetadataEngine first (always fresh), falls back to direct load.
    */
-  async getVersion(): Promise<MJArtifactVersionEntity> {
+  async GetVersion(): Promise<MJArtifactVersionEntity> {
     // Try the engine first — it stays in sync via BaseEntity events
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const fromEngine = engine.FindCachedArtifactVersionByID(this.artifactVersionId);
+      const fromEngine = engine.FindCachedArtifactVersionByID(this.ArtifactVersionId);
       if (fromEngine) {
         return fromEngine;
       }
@@ -107,15 +172,20 @@ export class LazyArtifactInfo {
     return this.loadVersionFallback();
   }
 
+  /** @deprecated Use {@link GetVersion}. */
+  async getVersion(): Promise<MJArtifactVersionEntity> {
+    return this.GetVersion();
+  }
+
   /**
    * Checks if the artifact entities can be accessed without triggering a load.
    * True if the engine has them or fallbacks are populated.
    */
-  get isLoaded(): boolean {
+  get IsLoaded(): boolean {
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const hasArtifact = !!engine.FindCachedArtifactByID(this.artifactId);
-      const hasVersion = !!engine.FindCachedArtifactVersionByID(this.artifactVersionId);
+      const hasArtifact = !!engine.FindCachedArtifactByID(this.ArtifactId);
+      const hasVersion = !!engine.FindCachedArtifactVersionByID(this.ArtifactVersionId);
       if (hasArtifact && hasVersion) {
         return true;
       }
@@ -123,11 +193,21 @@ export class LazyArtifactInfo {
     return this._fallbackArtifact !== null && this._fallbackVersion !== null;
   }
 
+  /** @deprecated Use {@link IsLoaded}. */
+  get isLoaded(): boolean {
+    return this.IsLoaded;
+  }
+
   /**
    * Checks if a fallback load is currently in progress.
    */
-  get isLoading(): boolean {
+  get IsLoading(): boolean {
     return this._fallbackLoadPromise !== null;
+  }
+
+  /** @deprecated Use {@link IsLoading}. */
+  get isLoading(): boolean {
+    return this.IsLoading;
   }
 
   /**
@@ -196,13 +276,13 @@ export class LazyArtifactInfo {
 
   private async loadSingleArtifact(md: IMetadataProvider): Promise<MJArtifactEntity> {
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
-    await artifact.Load(this.artifactId);
+    await artifact.Load(this.ArtifactId);
     return artifact;
   }
 
   private async loadSingleVersion(md: IMetadataProvider): Promise<MJArtifactVersionEntity> {
     const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
-    await version.Load(this.artifactVersionId);
+    await version.Load(this.ArtifactVersionId);
     return version;
   }
 }

@@ -22,7 +22,7 @@ export class PKDetector {
    * A column is PK-eligible if it has zero nulls, zero blanks, and 100% unique values.
    * This list constrains what the LLM is allowed to recommend as PKs.
    */
-  public getPKEligibleColumns(schemaName: string, tableName: string): string[] {
+  public GetPKEligibleColumns(schemaName: string, tableName: string): string[] {
     const tableStats = this.statsCache.getTableStats(schemaName, tableName);
     if (!tableStats) return [];
     return Array.from(tableStats.columns.values())
@@ -30,10 +30,15 @@ export class PKDetector {
       .map(col => col.columnName);
   }
 
+  /** @deprecated Use {@link GetPKEligibleColumns}. */
+  public getPKEligibleColumns(schemaName: string, tableName: string): string[] {
+    return this.GetPKEligibleColumns(schemaName, tableName);
+  }
+
   /**
    * Detect primary key candidates for a table
    */
-  public async detectPKCandidates(
+  public async DetectPKCandidates(
     schemaName: string,
     table: TableDefinition,
     iteration: number
@@ -114,6 +119,15 @@ export class PKDetector {
 
     // Sort by confidence descending
     return candidates.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /** @deprecated Use {@link DetectPKCandidates}. */
+  public async detectPKCandidates(
+    schemaName: string,
+    table: TableDefinition,
+    iteration: number
+  ): Promise<PKCandidate[]> {
+    return this.DetectPKCandidates(schemaName, table, iteration);
   }
 
   /**

@@ -385,8 +385,17 @@ export class SyncRolesAndUsersResolver {
         if (await user.Delete()) {
             return;
         }
-        // FK constraint fallback: when the user has dependent records that block hard delete,
-        // we mark the user inactive instead. A failure to soft-delete IS a real error and rolls back.
+        // Fallback when the hard delete does not happen. TWO distinct causes reach here, and this
+        // path deliberately treats them the same way:
+        //   1. FK constraints — the user has dependent records that block a hard delete.
+        //   2. Authorization — `MJUserEntityServer` (issue #4260) refuses a delete outright for any
+        //      caller whose `Type` is not 'Owner'. This mutation carries `@RequireSystemUser()` and
+        //      `getSystemUser()` resolves the seeded Owner, so cause 2 does not arise on a default
+        //      install; it does on a deployment whose system user is not an Owner.
+        // Soft-deleting is the right response to (1) and an acceptable one to (2) — but note the
+        // subsequent Save() is subject to the SAME guard, so under cause 2 it fails too and the
+        // error below is what the operator sees. Read `LatestResult` rather than assuming FK.
+        // A failure to soft-delete IS a real error and rolls back.
         user.IsActive = false;
         if (!await user.Save()) {
             throw new Error(`Failed to delete or deactivate user '${user.Email}': ${user.LatestResult?.CompleteMessage ?? 'unknown error'}`);

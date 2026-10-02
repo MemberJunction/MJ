@@ -1,10 +1,24 @@
-import { Component, Input, Output, EventEmitter, forwardRef, HostBinding, ElementRef, ViewChild, OnDestroy, inject, ChangeDetectorRef } from '@angular/core';
+import { AfterViewInit, Component, Input, Output, EventEmitter, forwardRef, HostBinding, ElementRef, ViewChild, OnDestroy, inject, ChangeDetectorRef } from '@angular/core';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLabel } from '../calendar/calendar-utils';
+import { MJNamedControlBase } from '../a11y/named-control.base';
+import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-datepicker — Date picker with calendar popup. Replaces `<kendo-datepicker>`.
+ *
+ * Without an accessible name the date field announces as "edit, blank" and its calendar popup as a
+ * generic "Calendar" — so a form with a start date and an end date presents two identical grids
+ * (WCAG 2.1 4.1.2). Use {@link MJNamedControlBase.AriaLabelledBy} when a visible label exists,
+ * {@link MJNamedControlBase.AriaLabel} when none does; the toggle button and the calendar take
+ * their names from the same source. The field is a real `<input>`, so
+ * {@link MJNamedControlBase.InputId} IS a valid `<label for>` target.
+ *
+ * @example
+ * ```html
+ * <mj-datepicker AriaLabel="Due date" [(ngModel)]="dueDate" [Min]="minDate" />
+ * ```
  */
 @Component({
   selector: 'mj-datepicker',
@@ -14,10 +28,28 @@ import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLab
     <div class="mj-datepicker" #trigger cdkOverlayOrigin #overlayOrigin="cdkOverlayOrigin"
       [class.mj-datepicker--disabled]="IsDisabled">
       <input #dateInput class="mj-input mj-datepicker-input" type="text"
+        [attr.id]="InputId || null"
+        [attr.aria-label]="AriaLabel || null"
+        [attr.aria-labelledby]="AriaLabelledBy || null"
+        [attr.aria-describedby]="AriaDescribedBy || null"
         [placeholder]="Placeholder" [disabled]="IsDisabled" [value]="DisplayValue"
         (input)="OnInputChange($event)" (blur)="OnBlur()" (keydown)="OnKeyDown($event)" />
+      <!--
+        The fixed words live in hidden spans rather than in concatenated strings so the
+        AriaLabelledBy path can name the toggle and the calendar from the same visible label that
+        names the field: aria-labelledby takes an ID LIST, so the word plus the label's own text is
+        composed by the accessibility tree without this component ever seeing that text. The
+        calendar's word sits here, outside the overlay, because ids resolve document-wide.
+        A hidden node that is DIRECTLY referenced by aria-labelledby is still included in the name
+        (accname §4.1), so aria-hidden keeps the word out of the reading order without costing the
+        composed name.
+      -->
+      <span class="mj-datepicker-sr-only" aria-hidden="true" [attr.id]="SecondaryWordId('toggle-word')">Open calendar for</span>
+      <span class="mj-datepicker-sr-only" aria-hidden="true" [attr.id]="SecondaryWordId('calendar-word')">Calendar for</span>
       <button type="button" class="mj-datepicker-toggle" tabindex="-1" [disabled]="IsDisabled"
-        (click)="Toggle()" aria-label="Open calendar">
+        (click)="Toggle()"
+        [attr.aria-labelledby]="ToggleLabelledBy || null"
+        [attr.aria-label]="ToggleLabelledBy ? null : ToggleLabel">
         <i class="fa-solid fa-calendar"></i>
       </button>
     </div>
@@ -25,7 +57,10 @@ import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLab
       [cdkConnectedOverlayOpen]="IsOpen" [cdkConnectedOverlayPositions]="Positions"
       [cdkConnectedOverlayHasBackdrop]="true" cdkConnectedOverlayBackdropClass="mj-dropdown-backdrop"
       (backdropClick)="Close()" (detach)="Close()">
-      <div class="mj-calendar" role="grid" aria-label="Calendar">
+      <div class="mj-calendar" role="grid"
+        [attr.aria-labelledby]="CalendarLabelledBy || null"
+        [attr.aria-label]="CalendarLabelledBy ? null : CalendarLabel"
+        (keydown)="OnCalendarKeyDown($event)">
         <div class="mj-calendar-header">
           <button type="button" (click)="PreviousMonth()" aria-label="Previous month" class="mj-calendar-nav">
             <i class="fa-solid fa-chevron-left"></i></button>
@@ -54,16 +89,47 @@ import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLab
       </div>
     </ng-template>
   `,
+  styles: [`
+  /*
+   * Component-scoped ON PURPOSE, unlike the rest of this control's styling, which ships as a global
+   * stylesheet the host application imports. A host that skips that import gets unstyled chrome —
+   * survivable — but a hidden-word span that is not hidden renders its word as literal text in the
+   * middle of the field. The rule that hides it therefore has to travel with the component.
+   *
+   * Not display:none or visibility:hidden — both remove the element from the accessibility tree,
+   * which is the one thing this element exists to be in.
+   */
+  .mj-datepicker-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  `],
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MJDatepickerComponent), multi: true }]
 })
-export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
+export class MJDatepickerComponent extends MJNamedControlBase implements ControlValueAccessor, AfterViewInit, OnDestroy {
   @Input() Min: Date | null = null;
   @Input() Max: Date | null = null;
   @Input() Format = 'MM/dd/yyyy';
   @Input() Placeholder = '';
-  @Input() Disabled = false;
+  /**
+   * Host-driven disable. Composed with Angular Forms' `setDisabledState()` into `IsDisabled`
+   * (the actual gate) — see `syncDisabled`. A setter, not a bare field, because this input is
+   * routinely bound to an expression that changes over the control's lifetime, and the gate has
+   * to follow it every time.
+   */
+  @Input()
+  set Disabled(value: boolean) { this.disabledInput = value; this.syncDisabled(); }
+  get Disabled(): boolean { return this.disabledInput; }
   @Output() ValueChange = new EventEmitter<Date | null>();
   @ViewChild('trigger') private triggerEl!: ElementRef<HTMLElement>;
+  @ViewChild('dateInput') private dateInputEl: ElementRef<HTMLInputElement> | undefined;
   @HostBinding('class.mj-datepicker-host') readonly hostClass = true;
   private cdr = inject(ChangeDetectorRef);
 
@@ -80,6 +146,20 @@ export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
 
   get MonthYearLabel(): string { return GetMonthYearLabel(this.viewDate); }
 
+  /** `aria-labelledby` id list for the toggle button when a VISIBLE label names the field. */
+  get ToggleLabelledBy(): string { return this.SecondaryLabelledBy('toggle-word'); }
+
+  /** `aria-label` for the toggle button in the no-visible-label case. */
+  get ToggleLabel(): string { return this.SecondaryLabel('Open calendar for', 'Open calendar'); }
+
+  /** `aria-labelledby` id list for the calendar grid when a VISIBLE label names the field. */
+  get CalendarLabelledBy(): string { return this.SecondaryLabelledBy('calendar-word'); }
+
+  /** `aria-label` for the calendar grid in the no-visible-label case. */
+  get CalendarLabel(): string { return this.SecondaryLabel('Calendar for', 'Calendar'); }
+
+  ngAfterViewInit(): void { WarnIfUnnamed(this.dateInputEl?.nativeElement, 'mj-datepicker'); }
+
   Toggle(): void { if (this.IsDisabled) return; this.IsOpen ? this.Close() : this.Open(); }
   Open(): void {
     if (this.IsDisabled || this.IsOpen) return;
@@ -87,6 +167,31 @@ export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
     this.Weeks = BuildCalendarWeeks(this.viewDate); this.IsOpen = true; this.cdr.detectChanges();
   }
   Close(): void { if (!this.IsOpen) return; this.IsOpen = false; this.cdr.detectChanges(); }
+
+  /** Backing field for the `Disabled` input. */
+  private disabledInput = false;
+  /** The forms-driven disabled state, kept SEPARATE so neither source can stomp the other. */
+  private formDisabled = false;
+
+  /**
+   * Recompute the gate from both of its sources. Called whenever either changes.
+   *
+   * `IsDisabled` is derived state, and the only thing that assigned it was `setDisabledState()`.
+   * The forms-driven half was in fact fine — `setUpControl` also wires `registerOnDisabledChange`,
+   * so that hook fires on every `control.disable()`/`enable()`, not just at registration. What had
+   * no recompute path at all was the `Disabled` @Input: a plain field, so the gate froze at
+   * whatever the first compose produced and every later change to the input was dropped.
+   *
+   * Closes the calendar directly rather than via `Close()`: this can run from an @Input setter,
+   * i.e. DURING the parent's CD pass, where a nested `detectChanges()` trips NG0100.
+   */
+  private syncDisabled(): void {
+    const disabled = this.disabledInput || this.formDisabled;
+    if (disabled === this.IsDisabled) return;
+    this.IsDisabled = disabled;
+    if (disabled) this.IsOpen = false;
+    this.cdr.markForCheck();
+  }
   PreviousMonth(): void { this.viewDate = new Date(this.viewDate.getFullYear(), this.viewDate.getMonth() - 1, 1); this.Weeks = BuildCalendarWeeks(this.viewDate); }
   NextMonth(): void { this.viewDate = new Date(this.viewDate.getFullYear(), this.viewDate.getMonth() + 1, 1); this.Weeks = BuildCalendarWeeks(this.viewDate); }
 
@@ -118,6 +223,18 @@ export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
   OnKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') this.Close();
     else if (event.key === 'Enter' && !this.IsOpen) this.Open();
+    else if (event.key === 'Tab') this.returnTabToField();
+  }
+
+  /** Tab in the calendar closes it and returns to the field. The key is not cancelled, so the browser moves on from that field. */
+  OnCalendarKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Tab') this.returnTabToField();
+  }
+
+  private returnTabToField(): void {
+    if (!this.IsOpen) return;
+    this.dateInputEl?.nativeElement.focus();
+    this.Close();
   }
   writeValue(value: Date | string | null): void {
     if (value == null) { this.selectedDate = null; this.DisplayValue = ''; }
@@ -125,6 +242,6 @@ export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
   }
   registerOnChange(fn: (value: Date | null) => void): void { this.onChange = fn; }
   registerOnTouched(fn: () => void): void { this.onTouched = fn; }
-  setDisabledState(isDisabled: boolean): void { this.IsDisabled = isDisabled || this.Disabled; }
+  setDisabledState(isDisabled: boolean): void { this.formDisabled = isDisabled; this.syncDisabled(); }
   ngOnDestroy(): void { this.Close(); }
 }

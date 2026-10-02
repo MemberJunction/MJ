@@ -44,6 +44,19 @@ vi.mock('@memberjunction/core', () => {
     }
     static DefaultValueDelimiter = '|';
     static DefaultFieldDelimiter = '||';
+    // The static constructors the constants helpers now delegate to (see CompositeKey in core).
+    static FromID(id: unknown) {
+      return new FakeCompositeKey([{ FieldName: 'ID', Value: id }]);
+    }
+    static FromEntityRecord(entity: { PrimaryKeys: { Name: string }[] }, record: Record<string, unknown>) {
+      return new FakeCompositeKey(entity.PrimaryKeys.map(pk => ({ FieldName: pk.Name, Value: record[pk.Name] })));
+    }
+    static FromURLSegment(entity: { FirstPrimaryKey?: { Name: string } } | null | undefined, segment: string) {
+      if (!segment.includes('|')) {
+        return new FakeCompositeKey([{ FieldName: entity?.FirstPrimaryKey?.Name ?? 'ID', Value: segment }]);
+      }
+      return new FakeCompositeKey(segment.split('||').map(p => { const [FieldName, Value] = p.split('|'); return { FieldName, Value }; }));
+    }
   }
   return {
     Metadata: FakeMetadata,
@@ -71,11 +84,11 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 import {
   escapeSqlString,
-  sqlEquals,
-  sqlContains,
-  sqlIn,
-  sqlNotIn,
-  buildIdKey,
+  SqlEquals,
+  SqlContains,
+  SqlIn,
+  SqlNotIn,
+  BuildIdKey,
 } from '../constants';
 
 import { DiffEngine } from '../DiffEngine';
@@ -103,35 +116,35 @@ describe('escapeSqlString', () => {
 
 describe('sqlEquals', () => {
   it('should produce a safe equality filter', () => {
-    expect(sqlEquals('Name', "O'Brien")).toBe("Name = 'O''Brien'");
+    expect(SqlEquals('Name', "O'Brien")).toBe("Name = 'O''Brien'");
   });
 });
 
 describe('sqlContains', () => {
   it('should produce a LIKE filter', () => {
-    expect(sqlContains('Title', 'test')).toBe("Title LIKE '%test%'");
+    expect(SqlContains('Title', 'test')).toBe("Title LIKE '%test%'");
   });
 });
 
 describe('sqlIn', () => {
   it('should produce an IN clause', () => {
-    expect(sqlIn('ID', ['a', 'b'])).toBe("ID IN ('a', 'b')");
+    expect(SqlIn('ID', ['a', 'b'])).toBe("ID IN ('a', 'b')");
   });
 
   it('should escape values in the IN clause', () => {
-    expect(sqlIn('Name', ["O'Brien", 'Smith'])).toBe("Name IN ('O''Brien', 'Smith')");
+    expect(SqlIn('Name', ["O'Brien", 'Smith'])).toBe("Name IN ('O''Brien', 'Smith')");
   });
 });
 
 describe('sqlNotIn', () => {
   it('should produce a NOT IN clause', () => {
-    expect(sqlNotIn('ID', ['x'])).toBe("ID NOT IN ('x')");
+    expect(SqlNotIn('ID', ['x'])).toBe("ID NOT IN ('x')");
   });
 });
 
 describe('buildIdKey', () => {
   it('should create a CompositeKey with FieldName=ID', () => {
-    const key = buildIdKey('abc-123');
+    const key = BuildIdKey('abc-123');
     expect(key.KeyValuePairs).toEqual([{ FieldName: 'ID', Value: 'abc-123' }]);
   });
 });

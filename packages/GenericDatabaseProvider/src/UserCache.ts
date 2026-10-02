@@ -1,7 +1,6 @@
 import { LogError, UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
-
-const SYSTEM_USER_ID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
+import { IsSystemUser, SystemUserID } from './systemUser.js';
 
 /**
  * Shape of a single row returned from `vwUsers`. Only `ID` is read directly here — the rest of the
@@ -43,7 +42,7 @@ export class UserCache extends BaseSingleton<UserCache> {
     }
 
     public get SYSTEM_USER_ID(): string {
-      return SYSTEM_USER_ID;
+      return SystemUserID;
     }
 
     /**

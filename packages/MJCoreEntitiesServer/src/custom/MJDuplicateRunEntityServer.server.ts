@@ -1,4 +1,4 @@
-import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, IMetadataProvider, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
+import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
 import { RegisterClass, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJDuplicateRunEntity, MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
@@ -46,8 +46,8 @@ const PHASE_TO_STAGE: Record<DuplicateDetectionProgress['Phase'], string> = {
 
 @RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
 export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
-    public async Save(): Promise<boolean> {
-        const saveResult: boolean = await super.Save();
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const saveResult: boolean = await super.Save(options);
 
         // Only kick off detection on the INITIAL save of an unfinished run, and never
         // while a detection pass for this run is already in flight. The detector saves

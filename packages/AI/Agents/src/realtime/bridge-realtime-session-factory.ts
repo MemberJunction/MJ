@@ -17,9 +17,9 @@
  * @author MemberJunction.com
  */
 
-import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, GetAIAPIKey } from '@memberjunction/ai';
+import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, AIAPIKeyResolver, MakeAIAPIKeyResolver } from '@memberjunction/ai';
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
@@ -233,11 +233,15 @@ export interface RealtimeModelVoices {
  *
  * @param contextUser The user the engine config runs as (server-side).
  * @param provider The request-scoped metadata provider (multi-provider safe).
+ * @param resolveAPIKey Key-resolution seam deciding which vendors count as runnable. Defaults to the
+ *   platform lookup (`AI_VENDOR_API_KEY__<driver>`); the voice-picker query has no run context and
+ *   passes none, so today the list always reflects the platform's keys.
  * @returns Active realtime models, each with its driver's voices.
  */
 export async function GetRealtimeModelVoices(
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
+    resolveAPIKey: AIAPIKeyResolver = MakeAIAPIKeyResolver(),
 ): Promise<RealtimeModelVoices[]> {
     await AIEngine.Instance.Config(false, contextUser, provider);
     const isRealtime = (t: string | null | undefined): boolean =>
@@ -248,14 +252,40 @@ export async function GetRealtimeModelVoices(
 
     const out: RealtimeModelVoices[] = [];
     for (const model of models) {
-        const driverClass = SelectRealtimeVendorForModel(model.ID)?.DriverClass ?? null;
+        const selection = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
+        const driverClass = selection?.DriverClass ?? null;
         if (!driverClass) {
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel, driverClass, GetAIAPIKey(driverClass),
+
+        // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions)
+        const modelPersonas = AIEngine.Instance.GetModelPersonas(model.ID, 'Audio', selection.VendorID);
+        const voices: RealtimeVoiceOption[] = modelPersonas.map((rp) => ({
+            ID: rp.PersonaVendor.APIName,
+            Name: rp.Persona.Name,
+        }));
+
+        // Collect explicitly excluded voice IDs (IsSupported === false) for this model and vendor
+        const excludedVoiceApiNames = new Set(
+            AIEngine.Instance.GetModelPersonaExclusions(model.ID, 'Audio', selection.VendorID)
+                .map((name) => name.toLowerCase())
         );
-        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: instance?.SupportedVoices ?? [] });
+
+        // 2. Union with driver SupportedVoices: append any driver voices not already present or explicitly excluded
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
+            BaseRealtimeModel, driverClass, resolveAPIKey(driverClass),
+        );
+        for (const dv of instance?.SupportedVoices ?? []) {
+            const dvIdLower = dv.ID.toLowerCase();
+            if (excludedVoiceApiNames.has(dvIdLower)) {
+                continue;
+            }
+            if (!voices.some((v) => v.ID.toLowerCase() === dvIdLower)) {
+                voices.push(dv);
+            }
+        }
+
+        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: voices });
     }
     return out;
 }

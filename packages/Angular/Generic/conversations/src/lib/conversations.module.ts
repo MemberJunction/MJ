@@ -247,4 +247,4 @@ const COMPONENTS = [
     RealtimeEvidencePlaybackComponent
   ]
 })
-export class ConversationsModule { }
+export class ConversationsModule {}

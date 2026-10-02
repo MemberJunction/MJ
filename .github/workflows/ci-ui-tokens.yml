@@ -1,4 +1,4 @@
-name: UI design tokens — hardcoded color enforcement
+name: UI design tokens — hardcoded colors + focus-ring misuse
 
 on:
   pull_request:
@@ -7,13 +7,15 @@ on:
     paths:
       - 'packages/Angular/**/*.css'
       - 'packages/Angular/**/*.scss'
+      - 'packages/Angular/**/*.ts'
       - '.github/scripts/check-css-hex-tokens.sh'
+      - '.github/scripts/check-focus-ring.sh'
       - '.github/scripts/ci/hex-allowlist.txt'
       - '.github/workflows/ci-ui-tokens.yml'
 
 jobs:
   check-hex-tokens:
-    name: Check changed CSS/SCSS for hardcoded colors
+    name: Check changed CSS/SCSS/TS for token misuse
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR
@@ -30,3 +32,9 @@ jobs:
       - name: Check changed files for hardcoded colors
         run: |
           ./.github/scripts/check-css-hex-tokens.sh --base "$BASE_REF"
+
+      # --mj-focus-ring is a box-shadow value; used as an outline it renders NOTHING,
+      # silently removing the focus indicator. Cheap to write, invisible in review.
+      - name: Check changed files for --mj-focus-ring outline misuse
+        run: |
+          ./.github/scripts/check-focus-ring.sh --base "$BASE_REF"

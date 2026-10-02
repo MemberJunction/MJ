@@ -228,14 +228,27 @@ describe('EntityCRUDHandler.getEntity', () => {
         expect(result.error).toBe('Customers with ID ghost not found');
     });
 
-    it('fails cleanly for composite-primary-key entities instead of guessing', async () => {
+    it('loads a composite-primary-key entity from a "Field|Value||Field|Value" id segment', async () => {
         entity = makeEntity({ primaryKeys: [{ Name: 'A' }, { Name: 'B' }] });
 
-        const result = await EntityCRUDHandler.getEntity('LinkTable', 'a|b', null, makeUser());
+        const result = await EntityCRUDHandler.getEntity('LinkTable', 'A|a||B|b', null, makeUser());
 
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('Composite primary keys are not supported');
-        expect(entity.InnerLoad).not.toHaveBeenCalled();
+        expect(result.success).toBe(true);
+        const [key] = entity.InnerLoad.mock.calls[0] as [CompositeKey];
+        expect(key.KeyValuePairs).toEqual([
+            { FieldName: 'A', Value: 'a' },
+            { FieldName: 'B', Value: 'b' },
+        ]);
+    });
+
+    it('maps a bare id onto a single primary key that is not named ID', async () => {
+        entity = makeEntity({ primaryKeys: [{ Name: 'individual_id' }] });
+        (entity.EntityInfo as { FirstPrimaryKey?: { Name: string } }).FirstPrimaryKey = { Name: 'individual_id' };
+
+        await EntityCRUDHandler.getEntity('Individuals', '42', null, makeUser());
+
+        const [key] = entity.InnerLoad.mock.calls[0] as [CompositeKey];
+        expect(key.KeyValuePairs).toEqual([{ FieldName: 'individual_id', Value: '42' }]);
     });
 });
 

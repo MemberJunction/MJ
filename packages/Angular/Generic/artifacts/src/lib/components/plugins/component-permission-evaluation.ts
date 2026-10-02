@@ -7,11 +7,11 @@ import { QueryEngine } from '@memberjunction/core-entities';
  */
 export interface PermissionEvaluationResult {
     /** Whether the user can run all data operations the component requires */
-    canRun: boolean;
+    canRun: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Entity names the user lacks read permission for */
-    missingEntities: string[];
+    missingEntities: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Query names the user lacks permission to execute */
-    missingQueries: string[];
+    missingQueries: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -71,7 +71,7 @@ function evaluateComponentPermissionsSingle(
  * Recursively evaluates permissions for a component and all its dependencies.
  * Walks the full dependency tree, deduplicating results.
  */
-export function evaluateComponentPermissions(
+export function EvaluateComponentPermissions(
     spec: ComponentSpec,
     currentUser: UserInfo,
     provider?: IMetadataProvider
@@ -79,7 +79,7 @@ export function evaluateComponentPermissions(
     const result = evaluateComponentPermissionsSingle(spec, currentUser, provider);
 
     for (const dep of spec.dependencies ?? []) {
-        const depResult = evaluateComponentPermissions(dep, currentUser, provider);
+        const depResult = EvaluateComponentPermissions(dep, currentUser, provider);
         result.missingEntities.push(...depResult.missingEntities);
         result.missingQueries.push(...depResult.missingQueries);
     }
@@ -90,4 +90,13 @@ export function evaluateComponentPermissions(
     result.canRun = result.missingEntities.length === 0 && result.missingQueries.length === 0;
 
     return result;
+}
+
+/** @deprecated Use {@link EvaluateComponentPermissions}. */
+export function evaluateComponentPermissions(
+    spec: ComponentSpec,
+    currentUser: UserInfo,
+    provider?: IMetadataProvider
+): PermissionEvaluationResult {
+    return EvaluateComponentPermissions(spec, currentUser, provider);
 }

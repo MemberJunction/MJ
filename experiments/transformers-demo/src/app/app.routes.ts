@@ -13,5 +13,9 @@ export const routes: Routes = [
   {
     path: 'audio-chat',
     loadComponent: () => import('./audio-chat/audio-chat.component').then(m => m.AudioChatComponent)
+  },
+  {
+    path: 'builtin-chat',
+    loadComponent: () => import('./builtin-chat/builtin-chat.component').then(m => m.BuiltInChatComponent)
   }
 ];

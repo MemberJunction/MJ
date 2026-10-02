@@ -333,6 +333,84 @@ describe('EntityInfo RLS Exemption (centralized in GetUserRowLevelSecurityWhereC
         });
     });
 
+    describe('Exemption requires the row to GRANT the operation (Can* flags)', () => {
+        // A permission row confers an RLS exemption only for an operation it grants. A row that
+        // does not grant an operation carries no filter for it either, and that absence means
+        // "not applicable", not "unrestricted". Before this guard, a read-only row (CanCreate=false,
+        // hence CreateRLSFilterID=null) made every holder of that role exempt from CREATE RLS —
+        // and a read-only role is exactly the shape of the 'UI' role every authenticated user holds.
+        it('a read-only row does NOT exempt the user from Create/Update/Delete RLS', () => {
+            const entity = buildEntityInfo([
+                buildPermission({
+                    RoleID: UI_ROLE_ID,
+                    CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false,
+                    ReadRLSFilterID: READ_RLS_FILTER_ID,
+                }),
+            ]);
+            const user = buildUser(USER_ID, [UI_ROLE_ID]);
+
+            expect(entity.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)).toBe(false);
+            expect(entity.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Update)).toBe(false);
+            expect(entity.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Delete)).toBe(false);
+        });
+
+        it('a read-only row does NOT exempt the user from Read RLS when CanRead is false either', () => {
+            const entity = buildEntityInfo([
+                buildPermission({
+                    RoleID: UI_ROLE_ID,
+                    CanRead: false, CanCreate: false, CanUpdate: false, CanDelete: false,
+                }),
+            ]);
+            const user = buildUser(USER_ID, [UI_ROLE_ID]);
+
+            expect(entity.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)).toBe(false);
+        });
+
+        it('a filter-less row that GRANTS the operation still exempts (unchanged behaviour)', () => {
+            const entity = buildEntityInfo([
+                buildPermission({ RoleID: INTEGRATION_ROLE_ID, CanCreate: true, CreateRLSFilterID: null }),
+            ]);
+            const user = buildUser(USER_ID, [INTEGRATION_ROLE_ID]);
+
+            expect(entity.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)).toBe(true);
+        });
+
+        it('the real shape: UI (read-only, filtered) + Org Admin (filtered create) is NOT create-exempt', () => {
+            // The multi-tenant case this guards: an org admin holds the UI role (read-only) and a
+            // tenant role whose Create is bound to their own organization. The read-only UI row must
+            // not lift the tenant bound.
+            const entity = buildEntityInfo([
+                buildPermission({
+                    RoleID: UI_ROLE_ID,
+                    CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false,
+                    ReadRLSFilterID: READ_RLS_FILTER_ID,
+                }),
+                buildPermission({
+                    RoleID: DEV_ROLE_ID,
+                    CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false,
+                    ReadRLSFilterID: READ_RLS_FILTER_ID,
+                    CreateRLSFilterID: CREATE_RLS_FILTER_ID,
+                    UpdateRLSFilterID: CREATE_RLS_FILTER_ID,
+                }),
+            ]);
+            const user = buildUser(USER_ID, [UI_ROLE_ID, DEV_ROLE_ID]);
+
+            expect(entity.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)).toBe(false);
+            const clause = entity.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, 'AND');
+            expect(clause).toContain('DepartmentID');
+        });
+
+        it('the same read-only row leaves READ exemption semantics untouched', () => {
+            // Read is granted and unfiltered on this row: exemption for Read still applies.
+            const entity = buildEntityInfo([
+                buildPermission({ RoleID: UI_ROLE_ID, CanRead: true, CanCreate: false, ReadRLSFilterID: null }),
+            ]);
+            const user = buildUser(USER_ID, [UI_ROLE_ID]);
+
+            expect(entity.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)).toBe(true);
+        });
+    });
+
     describe('Permission type isolation', () => {
         it('Read RLS does not affect Create checks', () => {
             const entity = buildEntityInfo([

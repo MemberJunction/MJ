@@ -6,15 +6,16 @@ How MemberJunction answers **"can this user do this?"** across every kind of res
 
 ---
 
-## 1. The mental model: three concerns, one unifier
+## 1. The mental model: four concerns, one unifier
 
-"Permissions" in MJ is not one thing. It's **three distinct concerns**, and conflating them is the #1 source of confusion:
+"Permissions" in MJ is not one thing. It's **four distinct concerns**, and conflating them is the #1 source of confusion:
 
 | Concern | Question it answers | Mechanism | Where it lives |
 |---|---|---|---|
 | **Capability** | "Is this user *allowed the feature* at all?" | **Authorizations** (named, hierarchical grants) | `MJ: Authorizations` + `AuthorizationEvaluator` |
 | **Row visibility (CRUD)** | "Which *rows* of this entity can this user read/create/update/delete?" | **Entity Permissions / RLS** (SQL WHERE injection) | `MJ: Entity Permissions` + `getRowLevelSecurityWhereClause` |
 | **Per-resource access / sharing** | "Can this user *use / view / edit / own* this specific record?" | **Permission Providers** → the **PermissionEngine** | `PermissionProviderBase` + `PermissionEngine` |
+| **Column visibility** | "Which *fields* of this entity can this user read/update/create?" | **Field-Level Security** (opt-in per entity) | `MJ: Entity Field Permissions` + [Field-Level Security Guide](FIELD_LEVEL_SECURITY_GUIDE.md) |
 
 The **third concern is the one that's "unified"** — and it's the subject of this guide. Every domain that has per-record access (an agent you can run, an artifact shared with you, a dashboard someone gave you Edit on) exposes its answer through **one common interface** so that sharing UIs, audit timelines, and programmatic checks treat them all identically.
 
@@ -28,13 +29,17 @@ flowchart TB
     A -->|"…use the Skills FEATURE?"| CAP["Authorizations<br/>AuthorizationEvaluator.UserCanExecuteWithAncestors"]
     A -->|"…SEE these entity rows?"| RLS["Entity RLS<br/>getRowLevelSecurityWhereClause"]
     A -->|"…RUN / VIEW / EDIT this specific record?"| PE["PermissionEngine<br/>(unified across all domains)"]
+    A -->|"…read/write this COLUMN?"| FLS["Field-Level Security<br/>EntityInfo.GetDeniedReadFields"]
 
     style CAP fill:#7c5295,stroke:#563a6b,color:#fff
     style RLS fill:#b8762f,stroke:#8a5722,color:#fff
     style PE fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style FLS fill:#a33b3b,stroke:#7a2b2b,color:#fff
 ```
 
-> **Rule of thumb.** Gate a *button/feature* → **Authorization**. Filter a *list query* → **Entity RLS**. Check access to a *specific record* → **PermissionEngine**. They compose: e.g. the skill Share button is gated by the `Can Share Skills` **Authorization**, while who a skill is shared *with* is a **PermissionEngine** domain.
+> **Rule of thumb.** Gate a *button/feature* → **Authorization**. Filter a *list query* → **Entity RLS**. Check access to a *specific record* → **PermissionEngine**. Hide a *column* → **Field-Level Security**. They compose: e.g. the skill Share button is gated by the `Can Share Skills` **Authorization**, while who a skill is shared *with* is a **PermissionEngine** domain.
+
+> **Field-Level Security is off by default and opt-in per entity** (`Entity.EnableFieldLevelSecurity`), so it costs one boolean test on entities that have not enabled it. It is the **column** axis to Entity RLS's **row** axis, and unlike the other three it has **no exempt user** — not even the MJ system user. If you are building on an entity that has it enabled, read [its guide](FIELD_LEVEL_SECURITY_GUIDE.md) first: `BaseEntity.Get()` throws for a denied field, so display code must ask before it reads.
 
 ---
 

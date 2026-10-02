@@ -136,21 +136,11 @@ export class GetListRecordsAction extends BaseAction {
               // For single PK, RecordID is just the raw value
               // For composite PK, RecordID is the concatenated string
               const recordMap = new Map<string, Record<string, unknown>>();
-              const isSinglePK = entityInfo.PrimaryKeys.length === 1;
 
               for (const rec of recordsResult.Results) {
-                let keyString: string;
-                if (isSinglePK) {
-                  // Single PK: use raw value
-                  const pkField = entityInfo.PrimaryKeys[0].Name;
-                  keyString = String(rec.Get ? rec.Get(pkField) : rec[pkField]);
-                } else {
-                  // Composite PK: use concatenated format
-                  const compositeKey = new CompositeKey();
-                  compositeKey.LoadFromEntityInfoAndRecord(entityInfo, rec);
-                  keyString = compositeKey.ToConcatenatedString();
-                }
-                recordMap.set(keyString, rec.GetAll ? rec.GetAll() : rec);
+                const data = rec.GetAll ? rec.GetAll() : rec;
+                // Compact CompositeKey segment — exactly how ListDetail.RecordID is written.
+                recordMap.set(CompositeKey.FromEntityRecord(entityInfo, data).ToCompactURLSegment(), data);
               }
 
               // Attach record details

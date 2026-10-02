@@ -1,6 +1,6 @@
 import { cosmiconfig } from 'cosmiconfig';
 import { createRequire } from 'node:module';
-import { mergeConfigs, MergeOptions } from './config-merger';
+import { MergeConfigs, MergeOptions } from './config-merger';
 
 // Use createRequire to load CommonJS config files
 const require = createRequire(import.meta.url);
@@ -74,7 +74,7 @@ export interface LoadConfigResult<T = Record<string, any>> {
  * @param options - Configuration loading options
  * @returns Merged configuration result
  */
-export async function loadMJConfig<T = Record<string, any>>(
+export async function LoadMJConfig<T = Record<string, any>>(
   options: LoadConfigOptions = {}
 ): Promise<LoadConfigResult<T>> {
   const {
@@ -129,7 +129,7 @@ export async function loadMJConfig<T = Record<string, any>>(
 
   // Merge user config into defaults
   const userConfig = searchResult.config;
-  const mergedConfig = mergeConfigs(defaultConfig, userConfig, mergeOptions);
+  const mergedConfig = MergeConfigs(defaultConfig, userConfig, mergeOptions);
 
   // Identify overridden keys for logging
   const overriddenKeys = identifyOverriddenKeys(defaultConfig, userConfig);
@@ -153,6 +153,13 @@ export async function loadMJConfig<T = Record<string, any>>(
     hasUserConfig: true,
     overriddenKeys
   };
+}
+
+/** @deprecated Use {@link LoadMJConfig}. */
+export async function loadMJConfig<T = Record<string, any>>(
+  options: LoadConfigOptions = {}
+): Promise<LoadConfigResult<T>> {
+  return LoadMJConfig(options);
 }
 
 /**
@@ -179,7 +186,7 @@ function identifyOverriddenKeys(
  * @param configPath - Explicit path to config file
  * @param options - Loading options
  */
-export function loadMJConfigSync<T = Record<string, any>>(
+export function LoadMJConfigSync<T = Record<string, any>>(
   configPath: string,
   options: Omit<LoadConfigOptions, 'searchFrom' | 'requireConfigFile'> = {}
 ): T {
@@ -187,11 +194,19 @@ export function loadMJConfigSync<T = Record<string, any>>(
 
   try {
     const userConfig = require(configPath);
-    const mergedConfig = mergeConfigs(defaultConfig, userConfig, mergeOptions);
+    const mergedConfig = MergeConfigs(defaultConfig, userConfig, mergeOptions);
     return mergedConfig as T;
   } catch (error: any) {
     throw new Error(`Failed to load config from ${configPath}: ${error.message}`);
   }
+}
+
+/** @deprecated Use {@link LoadMJConfigSync}. */
+export function loadMJConfigSync<T = Record<string, any>>(
+  configPath: string,
+  options: Omit<LoadConfigOptions, 'searchFrom' | 'requireConfigFile'> = {}
+): T {
+  return LoadMJConfigSync(configPath, options);
 }
 
 /**
@@ -202,7 +217,7 @@ export function loadMJConfigSync<T = Record<string, any>>(
  * @param userConfigOverrides - Optional user overrides
  * @returns Merged configuration
  */
-export function buildMJConfig(
+export function BuildMJConfig(
   packageDefaults: {
     codegen?: Record<string, any>;
     server?: Record<string, any>;
@@ -217,16 +232,16 @@ export function buildMJConfig(
 
   // Merge each package's defaults
   if (packageDefaults.codegen) {
-    config = mergeConfigs(config, packageDefaults.codegen);
+    config = MergeConfigs(config, packageDefaults.codegen);
   }
   if (packageDefaults.server) {
-    config = mergeConfigs(config, packageDefaults.server);
+    config = MergeConfigs(config, packageDefaults.server);
   }
   if (packageDefaults.mcpServer) {
-    config = mergeConfigs(config, packageDefaults.mcpServer);
+    config = MergeConfigs(config, packageDefaults.mcpServer);
   }
   if (packageDefaults.a2aServer) {
-    config = mergeConfigs(config, packageDefaults.a2aServer);
+    config = MergeConfigs(config, packageDefaults.a2aServer);
   }
   if (packageDefaults.queryGen) {
     config = { ...config, queryGen: packageDefaults.queryGen };
@@ -234,8 +249,22 @@ export function buildMJConfig(
 
   // Apply user overrides
   if (userConfigOverrides) {
-    config = mergeConfigs(config, userConfigOverrides);
+    config = MergeConfigs(config, userConfigOverrides);
   }
 
   return config;
+}
+
+/** @deprecated Use {@link BuildMJConfig}. */
+export function buildMJConfig(
+  packageDefaults: {
+    codegen?: Record<string, any>;
+    server?: Record<string, any>;
+    mcpServer?: Record<string, any>;
+    a2aServer?: Record<string, any>;
+    queryGen?: Record<string, any>;
+  },
+  userConfigOverrides?: Record<string, any>
+): Record<string, any> {
+  return BuildMJConfig(packageDefaults, userConfigOverrides);
 }

@@ -200,6 +200,32 @@ describe('EntityField', () => {
             expect(result.Success).toBe(true);
         });
 
+        it('JSON ExtendedType fails on invalid JSON and passes on valid JSON', () => {
+            const fieldInfo = createMockFieldInfo({ ExtendedType: 'JSON' });
+            const bad = new EntityField(fieldInfo, '{nope}');
+            expect(bad.Validate().Success).toBe(false);
+            const good = new EntityField(fieldInfo, '{"ok":true}');
+            expect(good.Validate().Success).toBe(true);
+        });
+
+        it('Color ExtendedType fails on non-colors and passes on hex', () => {
+            const fieldInfo = createMockFieldInfo({ ExtendedType: 'Color' });
+            const bad = new EntityField(fieldInfo, 'not-a-color');
+            expect(bad.Validate().Success).toBe(false);
+            const good = new EntityField(fieldInfo, '#aabbcc');
+            expect(good.Validate().Success).toBe(true);
+        });
+
+        it('Image ExtendedType rejects javascript: URLs and accepts data URIs and https', () => {
+            const fieldInfo = createMockFieldInfo({ ExtendedType: 'Image', MaxLength: 0 });
+            const bad = new EntityField(fieldInfo, 'javascript:alert(1)');
+            expect(bad.Validate().Success).toBe(false);
+            const url = new EntityField(fieldInfo, 'https://cdn.example.com/a.png');
+            expect(url.Validate().Success).toBe(true);
+            const data = new EntityField(fieldInfo, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+            expect(data.Validate().Success).toBe(true);
+        });
+
         // Active-status (deprecated/disabled) enforcement lives at BaseEntity.Get/Set/SetMany — NOT on
         // the low-level EntityField accessors. So EntityField.Value / Dirty / Validate must NEVER emit a
         // deprecation warning, even for a deprecated field: they are framework-internal value machinery.

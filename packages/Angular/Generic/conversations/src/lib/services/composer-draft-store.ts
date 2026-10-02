@@ -1,3 +1,4 @@
+import { LogStatusEx } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
 /**
@@ -69,7 +70,9 @@ export class ComposerDraftStore {
             this.drafts.set(key, text);
             this.evictBeyondCap();
         }
-        console.log(`[Drafts] SetDraft('${key}'): ${text.length} chars → debounced persist (${this.drafts.size} draft(s))`);
+        // verboseOnly: this runs on EVERY character typed into the composer, so it is the single
+        // largest source of console noise in the app. Still available with verbose logging on.
+        LogStatusEx({ message: `[Drafts] SetDraft('${key}'): ${text.length} chars → debounced persist (${this.drafts.size} draft(s))`, verboseOnly: true });
         UserInfoEngine.Instance.SetSettingDebounced(ComposerDraftStore.COMPOSER_DRAFTS_SETTING, this.serialize());
     }
 
@@ -86,7 +89,7 @@ export class ComposerDraftStore {
         if (!this.loaded) {
             return; // nothing ever read or written
         }
-        console.log(`[Drafts] Flush: persisting ${this.drafts.size} draft(s) immediately`);
+        LogStatusEx({ message: `[Drafts] Flush: persisting ${this.drafts.size} draft(s) immediately`, verboseOnly: true });
         void UserInfoEngine.Instance.SetSetting(ComposerDraftStore.COMPOSER_DRAFTS_SETTING, this.serialize())
             .then((ok) => { if (!ok) console.warn('[Drafts] Flush: SetSetting reported failure'); })
             .catch((e) => console.warn('[Drafts] Flush: SetSetting threw', e));

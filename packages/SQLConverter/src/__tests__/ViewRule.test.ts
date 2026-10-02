@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { ViewRule } from '../rules/ViewRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new ViewRule();
-const context = createConversionContext('tsql', 'postgres');
+const context = CreateConversionContext('tsql', 'postgres');
 
 function convert(sql: string): string {
   return rule.PostProcess!(sql, sql, context);
@@ -105,7 +105,7 @@ SELECT [ID] FROM [__mj].[Foo]`;
     });
 
     it('should use same DO block pattern regardless of HasDDLChanges', () => {
-      const ddlContext = createConversionContext('tsql', 'postgres');
+      const ddlContext = CreateConversionContext('tsql', 'postgres');
       ddlContext.HasDDLChanges = true;
       const sql = `CREATE OR ALTER VIEW [__mj].[vwFoo] AS
 SELECT [ID] FROM [__mj].[Foo]`;
