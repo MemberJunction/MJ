@@ -1,6 +1,6 @@
 /**
  * Every path that REPLACES a config's rows must rebuild derived state before it notifies anyone
- * (plan §22, found in the second review).
+ * (found in the second review).
  *
  * The invariant is stated in `OnExternalCacheChange`: a subscriber must never observe the property
  * before the state derived from it is rebuilt, because a reload swaps in new entity instances and

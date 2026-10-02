@@ -2,7 +2,7 @@
  * cache-fleet-replica.ts — ONE replica process for the fleet baseline rig
  * (`rigs/cache-fleet-baseline.ts`). SCRATCH MEASUREMENT TOOL — not part of any suite.
  *
- * Boots exactly the way MJAPI / Skip boot (plans/engine-cache-architecture-plan.md §1.2):
+ * Boots exactly the way MJAPI / Skip boot:
  *   1. in-process SQL Server provider + StartupManager (engines load on the in-memory provider)
  *   2. RedisLocalStorageProvider installed on the data provider, pub/sub wired to DispatchCacheChange
  *   3. LocalCacheManager.SetStorageProvider(redis) — the migration that publishes every entry
@@ -283,7 +283,7 @@ function census(engine: AIEngineBase): Census {
 // ────────────────────────────────────────────────────────────────────────────────────────────
 // A lazily-loaded engine over the SAME slot AIEngineBase uses for `MJ: AI Models`
 // (no Filter/OrderBy ⇒ identical fingerprint). Loaded AFTER Redis is installed, so it is the
-// "stale reader" shape from the brief §7 — an engine whose first read comes from Redis.
+// "stale reader" shape — an engine whose first read comes from Redis.
 // ────────────────────────────────────────────────────────────────────────────────────────────
 
 class FleetLazyModelsEngine extends BaseEngine<FleetLazyModelsEngine> {
@@ -585,7 +585,7 @@ async function cmdClearSharedCache(args: Args): Promise<{ keys: number }> {
         Connection: { url: str(args, 'redisUrl'), keyPrefix: str(args, 'prefix') },
         Categories: SHARED_CACHE_WRITE_CATEGORIES,
         // What the CLI ships does remove the metadata snapshot; without this the rig measured a
-        // weaker clear than production performs (plan §16.3 #25).
+        // weaker clear than production performs.
         IncludeMetadataSnapshot: true,
     });
     return { keys: results.reduce((n, r) => n + r.KeyCount, 0) };
@@ -684,7 +684,7 @@ async function cmdStopSweeper(): Promise<{ ok: true }> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────────────────────
-// Readers: what a server does while a CLI command runs (plan §14)
+// Readers: what a server does while a CLI command runs
 // ────────────────────────────────────────────────────────────────────────────────────────────
 
 interface ReaderKindStats { ok: number; failed: number; empty: number; maxMs: number; errors: string[]; firstFailureAt: number | null; lastFailureAt: number | null }
@@ -757,7 +757,7 @@ async function cmdStopReaders(): Promise<ReaderStats | null> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────────────────────
-// Users: does a user created on another process reach this one? (plan §15)
+// Users: does a user created on another process reach this one?
 // ────────────────────────────────────────────────────────────────────────────────────────────
 
 const USERS_ENTITY = 'MJ: Users';

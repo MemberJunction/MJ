@@ -1,5 +1,5 @@
 /**
- * Dataset cache entries must expire, and their proxy key must expire FIRST (plan §22.3, §25).
+ * Dataset cache entries must expire, and their proxy key must expire FIRST.
  *
  * Dataset blobs are written to the `default` category, which this branch made never-expire because
  * that category holds proxy keys — entries that vouch for other entries, where a proxy outliving its

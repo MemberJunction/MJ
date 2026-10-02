@@ -558,7 +558,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         // The lease's TTL doubles as the maximum another server waits for it, so a holder that
         // takes longer than the TTL to load its engines has already let the others through — the
         // herd re-forms against a cold database, which is what the lease exists to prevent. Renew
-        // it while the load runs (plan §16.3 #21).
+        // it while the load runs.
         const renewal = warmup ? this.startWarmupRenewal(warmupLeaseMs) : null;
         try {
             loaded = await this.loadSyncGroups(groups, contextUser, provider);
@@ -695,7 +695,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         // together (they were both `leaseMs`) meant every waiter gave up at the moment the holder
         // renewed, so a warm-up slower than one TTL let the whole herd through at once. A holder
         // that releases early is picked up on the next poll, so a longer bound costs nothing in the
-        // normal case (plan §22).
+        // normal case.
         const maxWaitMs = leaseMs * StartupManager.WarmupWaitLeaseMultiple;
         const turn = await LocalCacheManager.Instance.WaitForSharedLease(STARTUP_WARMUP_LEASE, leaseMs, maxWaitMs);
         if (turn.WaitedMs > 0) {

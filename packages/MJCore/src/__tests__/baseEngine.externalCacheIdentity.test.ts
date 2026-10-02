@@ -6,7 +6,7 @@ import { IMetadataProvider, RunViewResult } from '../generic/interfaces';
 import { CacheChangedEvent } from '../generic/localCacheManager';
 
 /**
- * Skipping cross-server payloads that carry the rows an engine already holds (plan §4 Idea C,
+ * Skipping cross-server payloads that carry the rows an engine already holds (plan Idea C,
  * item 1.3).
  *
  * A replica warming its cache republishes every config it loads, and almost all of those payloads

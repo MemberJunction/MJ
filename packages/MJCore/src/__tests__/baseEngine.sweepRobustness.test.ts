@@ -1,5 +1,5 @@
 /**
- * Three ways the engine/database sweep misbehaved, all found in review (plan §16.3 #6, #10, #20).
+ * Three ways the engine/database sweep misbehaved, all found in review (#10, #20).
  *
  * The existing sweep tests drive the happy path: rows differ, the config reloads. None of them has
  * a row with a null `__mj_UpdatedAt`, an entity without that column, a peer holding the slot lock,
@@ -32,7 +32,7 @@ function entityInfo(hasUpdatedAt: boolean): EntityInfo {
         Name: ENTITY,
         SchemaName: '__mj',
         BaseView: 'vwAIModels',
-        // Declares that rows can change without an event — the only case the sweep visits (§26).
+        // Declares that rows can change without an event — the only case the sweep visits.
         TrustServerCacheCompletely: false,
         PrimaryKeys: [{ Name: 'ID' }],
         Fields: hasUpdatedAt ? [{ Name: '__mj_UpdatedAt', IsUpdatedAtField: true }] : [{ Name: 'ID', IsUpdatedAtField: false }],

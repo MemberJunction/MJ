@@ -1,6 +1,6 @@
 /**
  * oclif entry for `mj codegen`. The logic lives in {@link CodeGenPlugin} in
- * `@memberjunction/codegen-lib/plugins` (plan §3; see sync/push.ts for the shim rationale); this
+ * `@memberjunction/codegen-lib/plugins` (plan; see sync/push.ts for the shim rationale); this
  * subclass only adds the shared-cache clear that must follow a database change (#4083).
  */
 import { Flags } from '@oclif/core';
@@ -33,7 +33,7 @@ export default class CodeGen extends CodeGenPlugin {
     // clears — including a FAILED run: codegen applies views, stored procedures and entity metadata
     // as it goes, so a run that fails at a later stage has already changed the database, and the
     // servers that cached the old shape never find out (the same policy `mj migrate` and
-    // `mj sync push` follow; plan §22).
+    // `mj sync push` follow).
     if (flags.skipdb) {
       return result;
     }

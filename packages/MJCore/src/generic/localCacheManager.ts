@@ -461,7 +461,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * caller is still applied**. That matters because a database provider initializes this manager
      * from inside its own `Config()` — before the host has a chance to pass anything — so a host
      * that hands its settings to `StartupManager` would otherwise have them silently dropped, and
-     * every `cacheSettings` knob would be inert (plan §16.3 #1). The host's explicit settings win
+     * every `cacheSettings` knob would be inert. The host's explicit settings win
      * over the provider's implicit initialization, whichever runs first.
      *
      * @param storageProvider - The local storage provider to use for persistence
@@ -962,7 +962,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // `UpdatedAt` is the fallback an entity whose view predates the `__mj_` prefix carries.
             // Both cache-write funnels must agree on the stamp they compute, or the same rows get
             // different slot timestamps depending on which path wrote them and every currency check
-            // between them misfires (plan §16.3 #19).
+            // between them misfires.
             const record = row as Record<string, unknown>;
             const raw = record['__mj_UpdatedAt'] !== undefined ? record['__mj_UpdatedAt'] : record['UpdatedAt'];
             if (raw === undefined) {
@@ -1070,7 +1070,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // next save invalidates it, which is what publishes the `removed` those peers reload
             // on (plan F9, pinned by localCacheManager.sharedIndex.test.ts). The invalidation then
             // drops it from the index, so that costs one notice per slot, once — not per save.
-            // Reviewed as §16.3 #18 and rejected on that evidence; see §21.
+            // Reviewed as and rejected on that evidence
             for (const fp of shared) {
                 this.addToEntityIndex(fp);
             }
@@ -1230,7 +1230,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * The event-driven path already reads-modifies-writes under that lock; a writer that replaces
      * the same slot outside it can land between a peer's read and its write, and whichever `SET`
      * lands second wins — the engine sweep's fresh rows lost, or the peer's delta lost, and either
-     * way the losing state is published to the fleet (plan §16.3 #6).
+     * way the losing state is published to the fleet.
      */
     public async ReplaceRunViewResultLocked(
         fingerprint: string,
@@ -1245,7 +1245,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         // Carry the slot's existing expiry across the replace. An external-data-source slot has one,
         // and a rewrite that dropped it would turn a bounded cache entry into a permanent one
-        // (plan §22).
+        //.
         const ttlMs = this.remainingTTLForSlot(fingerprint);
         return this.maintainSlotLocked(fingerprint, async () => {
             await this.SetRunViewResult(fingerprint, params, results, maxUpdatedAt, undefined, totalRowCount, provider, ttlMs);
@@ -1269,7 +1269,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * released with a transaction still open, or a transaction handle reset after a failure. The
      * buffered rows may or may not have reached the database, so the affected slots are invalidated
      * rather than written, and the entities stop counting as pending — a batch left open makes
-     * every cached read of its entities miss, for the life of the process (plan §16.3 #5).
+     * every cached read of its entities miss, for the life of the process.
      *
      * Never throws. Safe when no batch is open.
      */
@@ -2752,7 +2752,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * fallback. On a process-local store there is nothing to gain (no peers to notify, and every
      * slot in it was written by this process, so it is already indexed) and something to lose: a
      * non-empty index SUPPRESSES that fallback scan, which is what finds persisted slots the index
-     * does not know about. Plan §25.5.
+     * does not know about.
      * @internal
      */
     private indexSlotThisProcessDidNotWrite(fingerprint: string): void {
@@ -2960,7 +2960,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         } catch (e) {
             // Distinguish "another process holds this slot" (expected contention — the caller
             // invalidates instead of writing) from a fault inside the work itself, which is a bug
-            // and must be reported as one rather than filed under lock contention (§16.3 #12). The
+            // and must be reported as one rather than filed under lock contention. The
             // storage provider owns those error types, and it depends on this package, so they are
             // recognised by name rather than imported.
             const name = e instanceof Error ? e.name : '';
@@ -3314,7 +3314,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const now = Date.now();
         // Keep the expiry a rewrite found, exactly as the RunView path does: recomputing it from
         // `now` on every write pushes a bounded entry's expiry forward for as long as anything keeps
-        // rewriting it, so it never expires at all (plan §22).
+        // rewriting it, so it never expires at all.
         const existingExpiry = this._registry.get(fingerprint)?.expiresAt;
         const expiresAt = existingExpiry ?? (ttlMs ? now + ttlMs : undefined);
 
@@ -3322,7 +3322,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // The expiry must reach the STORE, not just this process's registry: another server
             // reading this slot has no registry entry for it, so a store-side TTL is the only thing
             // that bounds it there. Without it an external-data-source query result was served
-            // forever by every server except the one that wrote it (plan §22).
+            // forever by every server except the one that wrote it.
             await this._storageProvider.SetItem(fingerprint, data, CacheCategory.RunQueryCache,
                 expiresAt ? { TTLSeconds: Math.max(1, Math.ceil((expiresAt - now) / 1000)) } : undefined);
 
@@ -3973,7 +3973,6 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // peers would reload every affected engine — a fleet-wide deletion and reload storm for
         // entries the store already expires itself (the Redis provider sets a per-key TTL). The
         // local TTL stays in force for process-private stores, where nothing else can expire them.
-        // Plan §16.3 #9.
         const sharedStore = this._storageProvider.SharedAcrossProcesses === true;
         const ttlMs = sharedStore ? 0 : this._config.defaultTTLMs;
         if (sharedStore && this._config.defaultTTLMs > 0 && !this._sharedTTLWarned) {
@@ -3987,7 +3986,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // removes the same key on its own clock and publishes a `removed` for it, and every peer
         // reloads the affected engine — the storm the TTL branch above already avoids, in miniature.
         // Forgetting it locally still matters: otherwise this registry records slots the store no
-        // longer has (plan §22.3).
+        // longer has.
         const toForget: string[] = [];
 
         for (const [key, entry] of this._registry) {

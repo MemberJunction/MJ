@@ -1,5 +1,5 @@
 /**
- * A freshness claim with nothing behind it must not be believed (plan §16.3 #3, found in review).
+ * A freshness claim with nothing behind it must not be believed (found in review).
  *
  * The metadata snapshot is written as a payload followed by a timestamps key, deliberately in that
  * order so a half-written snapshot reads as obsolete. Under a per-key expiry the same order works

@@ -1,5 +1,5 @@
 /**
- * The fleet sweeper must not pay for engines that have nothing to sweep (plan §30).
+ * The fleet sweeper must not pay for engines that have nothing to sweep.
  *
  * Each engine costs a cross-process lease per interval — a Redis round trip — before anything is
  * compared. Since the sweep visits only entities that declare `TrustServerCacheCompletely = false`,

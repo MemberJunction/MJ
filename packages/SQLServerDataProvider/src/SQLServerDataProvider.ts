@@ -865,7 +865,7 @@ export class SQLServerDataProvider
       // One bad statement fails the WHOLE batch on SQL Server, which used to mark every item
       // failed — so a single problematic entity blinded the sweep for its entire engine. Fall back
       // to the per-item path, which runs each probe on its own and fails only what deserves it
-      // (plan §16.3 #10).
+      //.
       LogStatusEx({
         message: `SQLServerDataProvider.getBatchedServerCacheStatus: batched probe failed (${e instanceof Error ? e.message : String(e)}) — retrying ${items.length} probe(s) individually`,
         verboseOnly: true,

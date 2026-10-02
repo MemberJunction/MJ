@@ -1,5 +1,5 @@
 /**
- * Derived-state rebuilds must be idempotent (plan §10, Phase 5).
+ * Derived-state rebuilds must be idempotent (Phase 5).
  *
  * `AdditionalLoading` runs again after every reload and cross-server cache payload, against the
  * parent objects already in place. A rebuild that appends instead of replacing grows derived state

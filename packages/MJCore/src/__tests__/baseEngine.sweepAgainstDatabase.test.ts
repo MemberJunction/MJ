@@ -69,7 +69,7 @@ function provider(status: RunViewDatabaseStatus | ((params: RunViewParams[]) => 
         AllowCaching: true,
         // The sweep only visits entities that DECLARE they can change without firing an event, which
         // is what `TrustServerCacheCompletely: false` says. Every test here is about detecting such a
-        // change, so the fixture declares it (plan §26).
+        // change, so the fixture declares it.
         TrustServerCacheCompletely: false,
         PrimaryKeys: [{ Name: 'ID' }],
         Fields: [{ Name: 'ID', IsUpdatedAtField: false }, ...(options.hasUpdatedAt === false ? [] : [{ Name: '__mj_UpdatedAt', IsUpdatedAtField: true }])],
@@ -245,7 +245,7 @@ describe('BaseEngineSweeper', () => {
 });
 
 /**
- * The sweep is a periodic database query, and a periodic query is not free (plan §26).
+ * The sweep is a periodic database query, and a periodic query is not free.
  *
  * On Azure SQL serverless a recurring query prevents auto-pause outright, and the interval does not
  * help — auto-pause needs sustained inactivity, so 3600 s is no better than 300 s. Several installs

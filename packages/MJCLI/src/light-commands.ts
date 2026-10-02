@@ -19,7 +19,7 @@
  * kept because they read the way the command is invoked, but each one is paired with its colon id,
  * which is what `Command.id` actually equals at runtime. Without the colon form the entry never
  * matches and the command silently pays the full bootstrap: `cache clear` measured 4.4-7.4 s
- * against 0.19-0.29 s (plan §16.3 #14). `light-commands.ids.test.ts` fails on a space-only entry.
+ * against 0.19-0.29 s. `light-commands.ids.test.ts` fails on a space-only entry.
  */
 export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // Built-in oclif plugins

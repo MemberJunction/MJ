@@ -2,7 +2,7 @@
  * cache-architecture.checks.ts — the 'cache-architecture' bundle (CA1…).
  *
  * DETERMINISTIC tier, server transport. Regression pins for the engine / cache / event-bus work
- * recorded in plans/engine-cache-architecture-plan.md. Each check names the plan item it pins.
+ * Each check names the plan item it pins.
  * The measurements behind these items came from a multi-process rig (rigs/cache-fleet-baseline.ts);
  * what can be asserted inside one process lives here, through `mj test`.
  *
@@ -263,7 +263,7 @@ export const CacheArchitectureChecks: NamedCheck[] = [
     {
         Id: 'cache-architecture.CA5',
         RequiresMutation: true,
-        Name: 'CA5: a failed statement does not strand its pooled connection for the next caller (plan §9, brief item 7)',
+        Name: 'CA5: a failed statement does not strand its pooled connection for the next caller',
         Fn: async (ctx): Promise<void> => {
             const provider = databaseProviderOf(ctx);
             AssertEqual(provider.TransactionDepth, 0, 'precondition: no ambient transaction');

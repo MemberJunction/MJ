@@ -75,7 +75,7 @@ function status(rowCount: number, latestUpdate: Date = CACHED_AT): DatasetStatus
     };
 }
 
-/** A server status with nothing to compare — the §4 / plan §24.1 case. */
+/** A server status with nothing to compare — the / plan case. */
 function statusWithNoCounts(latestUpdate: Date = CACHED_AT): DatasetStatusResultType {
     return { ...status(0, latestUpdate), EntityUpdateDates: [] };
 }
@@ -275,7 +275,7 @@ describe('ProviderBase dataset freshness — the comparison the dead category ma
     });
 
     /**
-     * INVARIANT PIN (plan §24.1). A status with no per-entity counts never touches the blob and is
+     * INVARIANT PIN. A status with no per-entity counts never touches the blob and is
      * judged on its timestamp alone, so it is up to date. An early `return false` for an unreadable
      * blob looked strictly safer and was a regression: it made such a dataset permanently stale,
      * reloading on every check. `dataset-cache.DS2` caught that; no unit test described the case,
@@ -294,7 +294,7 @@ describe('ProviderBase dataset freshness — the comparison the dead category ma
     /**
      * INVARIANT PIN. The blob and its `_date` proxy expire independently and a clear removes them in
      * order, so a date can outlive its blob. With a count to compare and no blob the comparison
-     * cannot be made, which is "not up to date" — refetch (plan §16.3 #3).
+     * cannot be made, which is "not up to date" — refetch.
      */
     it('reports not-up-to-date when a count must be compared but the blob is gone', async () => {
         expect(provider.RowCountsMatch(null, status(2))).toBe(false);

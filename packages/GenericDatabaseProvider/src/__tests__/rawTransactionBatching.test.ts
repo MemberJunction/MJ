@@ -1,6 +1,6 @@
 /**
  * Cache maintenance must batch for a RAW transaction, not only for `BeginEntityTransaction`
- * (plan §16.3 #4, found in review), and a batch whose owner goes away must not leak (#5).
+ * (found in review), and a batch whose owner goes away must not leak (#5).
  *
  * Why the existing coverage missed both: `localCacheManager.entityEventBatch.test.ts` drives
  * `BeginEntityTransaction` through a hand-written stub whose `BeginTransaction()` does nothing but
@@ -205,7 +205,7 @@ describe('a rollback for a begin that never happened', () => {
      * `EntityEventBatchSet.Close` already returns null when the owner has no batch. The review
      * expected the outer unit of work to be left un-batched here; it is not — and where the outer
      * batch does close, that is correct, because the same rollback rolled the OUTER transaction
-     * back at the physical level (depth was 1). See plan §23.
+     * back at the physical level (depth was 1).
      */
     class SavepointFailsProvider extends TxProvider {
         public FailSavepoint = false;

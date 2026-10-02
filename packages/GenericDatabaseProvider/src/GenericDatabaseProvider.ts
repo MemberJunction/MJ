@@ -3105,7 +3105,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * The freshness probe for one view: a row count, plus the newest `__mj_UpdatedAt` **when the
      * entity has that column**. Selecting it unconditionally made the probe fail outright for an
      * entity whose view does not carry it, instead of comparing by count alone the way
-     * `BaseEngine.SweepAgainstDatabase` documents (plan §16.3 #10).
+     * `BaseEngine.SweepAgainstDatabase` documents.
      */
     protected BuildCacheStatusSQL(entityInfo: EntityInfo, effectiveView: string, whereSQL: string): string {
         const from = `FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
@@ -6207,7 +6207,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
         await this.drainIdlePostCommitTasks();
         // The frames are gone, so no settle will ever close this instance's batch. Drop it here or
-        // its entities count as pending forever and every cached read of them misses (§16.3 #5).
+        // its entities count as pending forever and every cached read of them misses.
         this._openBatchLevels = 0;
         await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
     }
@@ -6222,7 +6222,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * `BeginTransaction()` directly, including new-user creation on first login, the magic-link
      * service, the roles/users sync resolver, `MergeRecords` and every generated cascade-delete
      * override. Those saves each published their own cache write, and a rollback left rows in the
-     * shared cache that were never committed (plan §16.3 #4). `BeginEntityTransaction` still opens
+     * shared cache that were never committed. `BeginEntityTransaction` still opens
      * its own level on top; the levels are depth-counted, so the batch applies once, at the
      * outermost settle, either way.
      */
@@ -6241,7 +6241,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * catch to roll back, and the seventeen generated cascade-delete overrides are written exactly
      * that way. Closing an outer unit of work's batch early un-batches the rest of its saves, which
      * then write to the shared cache one by one — the uncommitted-rows-in-the-fleet failure the
-     * batch exists to prevent (plan §22).
+     * batch exists to prevent.
      */
     private _openBatchLevels = 0;
 

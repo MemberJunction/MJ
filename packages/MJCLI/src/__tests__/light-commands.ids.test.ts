@@ -1,5 +1,5 @@
 /**
- * Every LIGHT_COMMANDS entry must be spelled the way oclif spells command ids (plan §16.3 #14).
+ * Every LIGHT_COMMANDS entry must be spelled the way oclif spells command ids.
  *
  * oclif ids are colon-separated — `cache:clear` — regardless of `topicSeparator: ' '`, which only
  * affects how a user types the command. The prerun hook matches `options.Command.id` against this

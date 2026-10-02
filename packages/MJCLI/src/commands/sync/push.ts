@@ -1,6 +1,6 @@
 /**
  * oclif entry for `mj sync push`. The logic lives in {@link SyncPushPlugin} in
- * `@memberjunction/metadata-sync/plugins` (plan §3, open-question #2 "shim" approach); this
+ * `@memberjunction/metadata-sync/plugins` (open-question #2 "shim" approach); this
  * subclass only adds the shared-cache clear that must follow a database write (#4083), before the
  * plugin's Cleanup() ends the process.
  *

@@ -17,7 +17,7 @@ import type { SaveSQLResult, DeleteSQLResult } from '../GenericDatabaseProvider'
 const WIDGETS = {
     Name: 'Widgets', SchemaName: '__mj', BaseView: 'vwWidgets',
     // A real entity always carries its fields, and the probe reads them to decide whether the view
-    // has a __mj_UpdatedAt column to take a MAX of (plan §16.3 #10).
+    // has a __mj_UpdatedAt column to take a MAX of.
     Fields: [{ Name: '__mj_UpdatedAt', IsUpdatedAtField: true }],
 } as unknown as EntityInfo;
 

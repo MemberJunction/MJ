@@ -300,7 +300,7 @@ describe('LocalCacheManager — cross-process lock for in-place rewrites (plan N
 });
 
 /**
- * F9, the half that only held for whichever process FILLED the slot (plan §25.5).
+ * F9, the half that only held for whichever process FILLED the slot.
  *
  * An engine loads its rows once and never reads its slot again — by design. The slot is a boot
  * shortcut and a propagation channel, not a read-through cache. Correctness comes from events.

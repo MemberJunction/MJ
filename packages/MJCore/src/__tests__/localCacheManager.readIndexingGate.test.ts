@@ -1,5 +1,5 @@
 /**
- * Indexing a warm read is for SHARED stores only (plan §25.5).
+ * Indexing a warm read is for SHARED stores only.
  *
  * On a provider with a shared per-entity index, `resolveFingerprintsForEntity` answers from that
  * index and nothing else. On a provider without one it falls back to listing the whole category —

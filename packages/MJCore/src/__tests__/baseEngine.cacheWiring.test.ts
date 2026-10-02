@@ -8,7 +8,6 @@ import { IMetadataProvider, RunViewResult } from '../generic/interfaces';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 
 /**
- * Item 1.5 of plans/engine-cache-architecture-plan.md:
  *  - N10: degradations are logged at a level production keeps.
  *  - F3:  a peer's cache payload never fills a config the current user cannot read.
  *  - F4:  an engine that loaded before LocalCacheManager was initialized still registers its
