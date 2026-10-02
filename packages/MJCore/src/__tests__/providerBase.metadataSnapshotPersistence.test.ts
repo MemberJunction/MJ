@@ -1,5 +1,5 @@
 /**
- * The metadata snapshot is only worth writing if something can read it back (#4882).
+ * The metadata snapshot is only worth writing if something can read it back.
  *
  * `ProviderBase` persists a snapshot of ALL metadata to its local storage provider on every
  * metadata reload. On Redis or a browser store that is a real cross-process cache. On an

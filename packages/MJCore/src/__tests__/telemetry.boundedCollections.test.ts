@@ -1,5 +1,5 @@
 /**
- * Telemetry's derived collections have to be bounded too (#4882, "Secondary").
+ * Telemetry's derived collections have to be bounded too.
  *
  * `trimIfNeeded()` only ever trimmed `_events`. Three collections derived from those events were
  * never released for the life of the process:

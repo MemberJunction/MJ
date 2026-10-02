@@ -6258,7 +6258,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * holds, and the load path spends a `JSON.parse` plus a rebuild of every `EntityInfo` and
      * `EntityFieldInfo` to read it back. Measured on a 791-entity tenant: ~10s and ~1.2GB of
      * transient heap per refresh, against a 2.2GB steady state — and the final flatten of that JSON
-     * string needs a single contiguous ~500MB allocation, which is where MJAPI died (#4882).
+     * string needs a single contiguous ~500MB allocation, which is where MJAPI ran out of heap.
      *
      * A provider that does not declare {@link ILocalStorageProvider.SupportsCrossProcessPersistence}
      * is treated as persistent. That is the conservative direction: a pointless save wastes work,
@@ -6301,7 +6301,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (!ls) return;
 
             // Nothing could ever read this snapshot back, so the entire serialize/compress/encode
-            // pass buys nothing. See MetadataSnapshotPersistenceEnabled (#4882).
+            // pass buys nothing. See MetadataSnapshotPersistenceEnabled.
             if (!this.MetadataSnapshotPersistenceEnabled) {
                 this.logMetadataSnapshotDisabledOnce();
                 return;

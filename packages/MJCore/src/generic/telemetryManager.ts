@@ -1884,7 +1884,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         // the process: `_insights` by one entry per emitted warning, `_patterns` by one per distinct
         // fingerprint (every new filter combination is a new fingerprint), and `_insightDedupeWindow`
         // by one per dedupe key. On a long-lived server that is unbounded retention — a measurable
-        // share of the heap drift seen in #4882. Bound them on the same schedule as the events they
+        // share of the heap drift measured before an out-of-memory crash. Bound them on the same
+        // schedule as the events they
         // come from.
         const maxInsights = this._settings.autoTrim.maxInsights ?? 1000;
         if (maxInsights && this._insights.length > maxInsights) {
