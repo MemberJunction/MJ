@@ -7,8 +7,9 @@ export { GetAgreement, GetConsensus, GetDiagnostics, KrippendorffAlpha, Quadrati
 export { BuildRubricEvaluatorMessages, LLMRubricEvaluator, RenderRubricEvaluatorPrompt, type LLMDecision, type LLMRubricResult, type RubricEvaluatorMessages, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 export { AIRubricEvaluator, type AgentCriterionResult, type AgentScaleView, type RubricAgent, type RubricEvaluatorConfig } from './AIRubricEvaluator.js';
 export { AgentRubricEvaluator, type EvaluationAgentDecision, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
-export { RUBRIC_WORLD, DraftWorld, PublishedWorld, RubricWorldCriteria, ScorePublishedMet } from './rubricWorld.js';
 export { CritiqueRubric, ImportMatrix, type ImportedCriterion } from './architect.js';
+export { RubricCommands } from './rubricCommands.js';
+export { FormatCriterionReport, FormatVersionDiff, ParseRubricRef, RequireViewSuccess, ResolveRubricRef, RubricIdentityFilter, SnapshotFromRows, ValidateSnapshot } from './rubricCli.js';
 export { AGENT_RUN_SUBJECT, EvaluateSampledAgentRuns, DriftDeltas, DriftSeries, EvaluatedRubricRuns, KeepSample, ProductionSamplingJob, ProductionSamplingLinks, ProductionSamplingLoader, RubricIdFromVersion, SampleBucket, SelectSampledRuns, type AgentRubricLinkRow, type AgentRunRow, type DriftEvaluationRow, type DriftRunRow, type DriftScoreRow, type ProductionSamplingCatalog, type SamplingLink } from './sampling.js';
 export { DraftFromDescription, DraftFromImport, ImproveFromData, PublishImportedDraft, SaveImportedDraft } from './architect.js';
 export { PeriodMeans } from './sampling.js';

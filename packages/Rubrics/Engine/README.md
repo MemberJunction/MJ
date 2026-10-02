@@ -42,7 +42,7 @@ Publishing a version is the publish path, or the publication metadata for the se
 
 ## CLI
 
-`mj rubric` is a shim in `@memberjunction/cli`. The commands are implemented in `@memberjunction/testing-cli`.
+`mj rubric` is a shim in `@memberjunction/cli`. The commands are implemented here, in `@memberjunction/rubrics`. The shim opens the provider and closes it.
 
 ```
 mj rubric list

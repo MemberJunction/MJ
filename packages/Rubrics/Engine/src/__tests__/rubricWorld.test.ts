@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { DraftWorld, PublishedWorld, RUBRIC_WORLD, RubricWorldCriteria, ScorePublishedMet } from '../rubricWorld.js';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { DraftWorld, PublishedWorld, RUBRIC_WORLD, RubricWorldCriteria, ScorePublishedMet } from './rubricWorld.js';
 
 describe('rubric world', () => {
+    it('is not part of the production package', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../index.ts'), 'utf8');
+        expect(source).not.toContain('rubricWorld');
+    });
+
     it('names a stable world a person can open in Explorer', () => {
         expect(RUBRIC_WORLD.rubric).toBe('IT World — Agent evaluation');
         expect(RubricWorldCriteria().map(criterion => criterion.Key)).toEqual(['accuracy', 'sourcing', 'completeness']);

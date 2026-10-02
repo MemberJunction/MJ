@@ -21,7 +21,8 @@ describe('rubric CLI', () => {
         expect(cli).not.toMatch(/OR Name=/);
         expect(commands).not.toMatch(/OR Name=/);
         expect(cli).toMatch(/RequireViewSuccess/);
-        expect(commands).toMatch(/RequireViewSuccess/);
+        expect(commands).toContain("@memberjunction/rubrics");
+        expect(commands).not.toContain('MJ: Rubrics');
         const report = readFileSync(join(directory, 'report.ts'), 'utf8');
         const promote = readFileSync(join(directory, 'promote-criteria.ts'), 'utf8');
         expect(report).toContain('if (!found.Success)');
