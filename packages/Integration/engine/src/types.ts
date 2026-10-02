@@ -393,6 +393,15 @@ export interface SyncProgressSnapshot {
      */
     RecordsSkipped: number;
     TriggerType: string;
+    /**
+     * The run this progress belongs to, when it is known.
+     *
+     * Optional because the in-process fallback snapshot predates the durable run row and a
+     * pre-6.1.x tenant has no ProgressJSON to read an id back out of. A caller that wants to
+     * TAIL the run (or name it in a message) needs the id, and re-deriving it from a second
+     * query races the run ending between the two reads.
+     */
+    RunID?: string;
 }
 
 /** Notification event type — what triggered the notification */
