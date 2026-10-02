@@ -144,7 +144,7 @@ type SelectModelResult = {
   vendorDriverClass?: string;
   vendorApiName?: string;
   selectionInfo?: {
-    modelsConsidered: Array<{ model: { ID: string }; vendor?: { ID: string }; available: boolean; unavailableReason?: string }>;
+    modelsConsidered: Array<{ model: { ID: string }; vendor?: { ID: string }; available: boolean; unavailableReason?: string; driverClass?: string }>;
     selectionReason: string;
     fallbackUsed: boolean;
   };
@@ -339,6 +339,23 @@ describe('selectModel — credential gating, short-circuit & forceFullModelEvalu
     expect(notEvaluated.length).toBe(0);
     // With all common drivers configured, more than one candidate is available.
     expect(considered.filter(c => c.available).length).toBeGreaterThan(1);
+  });
+
+  it('records the driver class on every considered row, probed and short-circuited alike', async () => {
+    // The driver class is what makes a long candidate list readable: 101 rows over ONE class is
+    // a key-delivery problem, 101 rows over twelve is a chain problem, and the message that an
+    // operator reads (buildNoModelFoundMessage) can only say which if selection records it.
+    //
+    // BOTH push sites matter. The short-circuited tail is pushed from a different statement to
+    // the probed candidates, and it is the tail that dominates a long list — miss it and the
+    // count that gets reported is a handful of rows, not the 101 the operator is looking at.
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    const considered = r.selectionInfo!.modelsConsidered;
+    const notEvaluated = considered.filter(c => (c.unavailableReason ?? '').startsWith('Not evaluated'));
+
+    expect(considered.length).toBeGreaterThan(1);
+    expect(notEvaluated.length).toBeGreaterThan(0);
+    expect(considered.every(c => typeof c.driverClass === 'string' && c.driverClass.length > 0)).toBe(true);
   });
 
   it('short-circuit still returns the correct first-available model when the top candidate is uncredentialed', async () => {

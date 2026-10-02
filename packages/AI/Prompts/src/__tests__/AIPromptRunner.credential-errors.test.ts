@@ -7,10 +7,16 @@
  * so downstream consumers (e.g., isFatalPromptError) can detect fatal errors.
  *
  * @since 5.6.0 (credential error classification fix)
+ *
+ * The message builder used to be a private method on AIPromptRunner and was RE-IMPLEMENTED in
+ * this file, so these tests asserted against a copy: the production method could change freely
+ * and they would stay green. It now lives in `../no-model-found-message` and is imported here,
+ * which is what makes the driver-class summary below real coverage.
  */
 
 import { describe, it, expect } from 'vitest';
 import { AIErrorInfo, AIErrorType, ErrorSeverity, ErrorAnalyzer } from '@memberjunction/ai';
+import { BuildNoModelFoundMessage, NOT_EVALUATED_REASON } from '../no-model-found-message';
 
 // ============================================================================
 // Mock Types
@@ -33,7 +39,8 @@ interface MockVendor {
 }
 
 /**
- * Mock AIModelSelectionInfo structure matching the real class
+ * Mock AIModelSelectionInfo structure. Only the fields the message reads are needed —
+ * `NoModelFoundSelectionInfo` is structural for exactly this reason.
  */
 interface MockSelectionInfo {
     modelsConsidered: Array<{
@@ -42,40 +49,9 @@ interface MockSelectionInfo {
         priority: number;
         available: boolean;
         unavailableReason?: string;
+        driverClass?: string;
     }>;
     selectionReason: string;
-}
-
-// ============================================================================
-// Standalone Implementation of buildNoModelFoundMessage for Testing
-// This mirrors the AIPromptRunner.buildNoModelFoundMessage() implementation
-// ============================================================================
-
-/**
- * Builds a descriptive error message when no model could be selected for a prompt.
- */
-function buildNoModelFoundMessage(promptName: string, selectionInfo?: MockSelectionInfo): string {
-    const base = `No suitable model found for prompt ${promptName}`;
-
-    if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
-        return `${base}. No model-vendor candidates were available. Please ensure AI models are configured for this prompt.`;
-    }
-
-    // Check if all models were unavailable due to missing credentials
-    const unavailableModels = selectionInfo.modelsConsidered.filter(m => !m.available);
-    if (unavailableModels.length === selectionInfo.modelsConsidered.length) {
-        const triedSummary = unavailableModels.slice(0, 5).map(m => {
-            const vendorName = m.vendor?.Name || 'default';
-            return `${m.model.Name}/${vendorName}`;
-        }).join(', ');
-
-        const suffix = unavailableModels.length > 5 ? ` (${unavailableModels.length} total)` : '';
-        return `${base}. No valid API credentials/keys are configured for any of the candidate model-vendor combinations. ` +
-            `Tried: ${triedSummary}${suffix}. ` +
-            `Please configure API credentials in your environment or AI Credential settings.`;
-    }
-
-    return `${base}. ${selectionInfo.selectionReason || 'Unknown reason'}`;
 }
 
 // ============================================================================
@@ -112,7 +88,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'No API keys found for any model-vendor combination'
             };
 
-            const message = buildNoModelFoundMessage('Sage - System Prompt', selectionInfo);
+            const message = BuildNoModelFoundMessage('Sage - System Prompt', selectionInfo);
 
             expect(message).toContain('No suitable model found');
             expect(message).toContain('Sage - System Prompt');
@@ -129,7 +105,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'No suitable model candidates found'
             };
 
-            const message = buildNoModelFoundMessage('My Prompt', selectionInfo);
+            const message = BuildNoModelFoundMessage('My Prompt', selectionInfo);
 
             expect(message).toContain('No suitable model found');
             expect(message).toContain('No model-vendor candidates were available');
@@ -137,7 +113,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
         });
 
         it('should handle undefined selectionInfo', () => {
-            const message = buildNoModelFoundMessage('My Prompt', undefined);
+            const message = BuildNoModelFoundMessage('My Prompt', undefined);
 
             expect(message).toContain('No suitable model found');
             expect(message).toContain('No model-vendor candidates were available');
@@ -163,7 +139,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'Model filtered out by configuration constraints'
             };
 
-            const message = buildNoModelFoundMessage('Test Prompt', selectionInfo);
+            const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
 
             // Should use the selectionReason since not ALL models are unavailable
             expect(message).toContain('Model filtered out by configuration constraints');
@@ -184,7 +160,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'No API keys found'
             };
 
-            const message = buildNoModelFoundMessage('Test', selectionInfo);
+            const message = BuildNoModelFoundMessage('Test', selectionInfo);
 
             expect(message).toContain('Model-0/Vendor-0');
             expect(message).toContain('Model-4/Vendor-4');
@@ -206,7 +182,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
                 selectionReason: 'No API keys found'
             };
 
-            const message = buildNoModelFoundMessage('Prompt', selectionInfo);
+            const message = BuildNoModelFoundMessage('Prompt', selectionInfo);
 
             expect(message).toContain('GPT-4/default');
         });
@@ -217,7 +193,7 @@ describe('AIPromptRunner Credential Error Handling', () => {
             // Simulate what happens in ExecutePrompt's catch block:
             // 1. buildNoModelFoundMessage creates the error message
             // 2. ErrorAnalyzer.analyzeError classifies it
-            const errorMessage = buildNoModelFoundMessage('System Prompt', {
+            const errorMessage = BuildNoModelFoundMessage('System Prompt', {
                 modelsConsidered: [
                     {
                         model: { ID: 'm1', Name: 'GPT-4' },
@@ -239,12 +215,115 @@ describe('AIPromptRunner Credential Error Handling', () => {
         });
 
         it('should classify errors from empty model list as NoCredentials', () => {
-            const errorMessage = buildNoModelFoundMessage('Test Prompt', undefined);
+            const errorMessage = BuildNoModelFoundMessage('Test Prompt', undefined);
             const error = new Error(errorMessage);
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'AIPromptRunner');
 
             expect(errorInfo.errorType).toBe('NoCredentials');
             expect(errorInfo.severity).toBe('Fatal');
         });
+    });
+});
+
+// ============================================================================
+// The driver-class summary.
+//
+// A candidate count on its own misleads. A tenant running on platform credits has one metered
+// provider in front of every model, so its failure reads "101 candidates" — which looks like a
+// badly configured chain and sends an operator to rebuild it, when all 101 rows are one driver
+// class with no key and the fix is delivering that key.
+// ============================================================================
+describe('BuildNoModelFoundMessage — naming the provider implementations', () => {
+    /** The observed shape: one driver class repeated across a long candidate list, no key. */
+    function platformCreditTenant(rows: number): MockSelectionInfo {
+        return {
+            modelsConsidered: Array.from({ length: rows }, (_, i) => ({
+                model: { ID: `m${i}`, Name: `Model ${i}` },
+                vendor: { ID: 'v-or', Name: 'OpenRouter' },
+                priority: 100 - i,
+                available: false,
+                driverClass: 'OpenRouterLLM',
+                unavailableReason: 'No credentials configured for driver OpenRouterLLM'
+            })),
+            selectionReason: 'No API keys found for any model-vendor combination'
+        };
+    }
+
+    it('collapses a long one-provider list to the fact that actually explains it', () => {
+        const message = BuildNoModelFoundMessage('DbAutoDoc - Describe Table', platformCreditTenant(101));
+
+        expect(message).toContain('101 candidates over 1 driver class (OpenRouterLLM)');
+        expect(message).toContain('credentialed: none');
+    });
+
+    it('names which classes DO hold credentials when some do', () => {
+        // The mixed case: the message must not read as "no keys anywhere" when one provider is
+        // keyed and simply lost on priority or was filtered out.
+        const selectionInfo: MockSelectionInfo = {
+            modelsConsidered: [
+                { model: { ID: 'm1', Name: 'GPT-4' }, vendor: { ID: 'v1', Name: 'OpenAI' }, priority: 100, available: true, driverClass: 'OpenAILLM' },
+                { model: { ID: 'm2', Name: 'Claude' }, vendor: { ID: 'v2', Name: 'Anthropic' }, priority: 90, available: false, driverClass: 'AnthropicLLM' }
+            ],
+            selectionReason: 'Model filtered out by configuration constraints'
+        };
+
+        const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
+
+        expect(message).toContain('2 candidates over 2 driver classes (OpenAILLM, AnthropicLLM)');
+        expect(message).toContain('credentialed: OpenAILLM');
+    });
+
+    it('says how many candidates were never probed, so "none" is not over-read', () => {
+        // Selection stops credential-probing once a candidate is chosen, so the tail carries
+        // available:false without anyone having looked. Reporting that as "credentialed: none"
+        // with nothing else said would be a false negative about a provider that may well have
+        // a key.
+        const selectionInfo: MockSelectionInfo = {
+            modelsConsidered: [
+                { model: { ID: 'm1', Name: 'GPT-4' }, vendor: { ID: 'v1', Name: 'OpenAI' }, priority: 100, available: false, driverClass: 'OpenAILLM', unavailableReason: 'No credentials configured for driver OpenAILLM' },
+                { model: { ID: 'm2', Name: 'Claude' }, vendor: { ID: 'v2', Name: 'Anthropic' }, priority: 90, available: false, driverClass: 'AnthropicLLM', unavailableReason: NOT_EVALUATED_REASON }
+            ],
+            selectionReason: 'No API keys found'
+        };
+
+        const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
+
+        expect(message).toContain('credentialed: none (1 not probed)');
+    });
+
+    it('truncates a genuinely wide spread instead of printing every class', () => {
+        const classes = ['OpenAILLM', 'AnthropicLLM', 'GroqLLM', 'MistralLLM', 'CohereLLM'];
+        const selectionInfo: MockSelectionInfo = {
+            modelsConsidered: classes.map((driverClass, i) => ({
+                model: { ID: `m${i}`, Name: `Model ${i}` },
+                vendor: { ID: `v${i}`, Name: `Vendor ${i}` },
+                priority: 100 - i,
+                available: false,
+                driverClass
+            })),
+            selectionReason: 'No API keys found'
+        };
+
+        const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
+
+        expect(message).toContain('(OpenAILLM, AnthropicLLM, GroqLLM, +2 more)');
+        expect(message).not.toContain('CohereLLM');
+    });
+
+    it('adds nothing at all when no candidate recorded a driver class', () => {
+        // Back-compat pin. Callers that do not record one — and every stored message written
+        // before this shipped — must read exactly as they did.
+        const selectionInfo: MockSelectionInfo = {
+            modelsConsidered: [
+                { model: { ID: 'm1', Name: 'GPT-4' }, vendor: { ID: 'v1', Name: 'OpenAI' }, priority: 100, available: false }
+            ],
+            selectionReason: 'No API keys found'
+        };
+
+        const message = BuildNoModelFoundMessage('Test Prompt', selectionInfo);
+
+        expect(message).not.toContain('driver class');
+        expect(message).toContain('Tried: GPT-4/OpenAI.');
+        expect(message).toContain('Please configure API credentials');
     });
 });
