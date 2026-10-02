@@ -92,6 +92,12 @@ export class RealtimeComposerComponent {
    */
   @Input() IsOutputMuted = false;
 
+  /**
+   * Whether the speaker control renders at all. Off by default: it is a demo-oriented control
+   * the user opts into via the overlay's gear popover ("Speaker mute button"), persisted per user.
+   */
+  @Input() ShowSpeaker = false;
+
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement | HTMLTextAreaElement>;
 
   private realtime = inject(RealtimeSessionService);

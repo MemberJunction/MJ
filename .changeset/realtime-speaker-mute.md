@@ -15,3 +15,6 @@ to the provider, so muting can never interrupt the agent (the demo-call control)
 - `RealtimeSessionRuntime.SetOutputMuted` / `ToggleOutputMute` / `IsOutputMuted`, per session.
 - Composer speaker control in all three dock shapes, focus-pill button, overlay
   `SetOutputMuted` / `ToggleOutputMute`, `(OutputMuteChanged)` output, `ControlInvoked('speaker')`.
+- The button is **opt-in**, off by default: gear popover → "Speaker mute button", persisted per
+  user under `mj.realtimeVoice.speakerMute.v1`. Hiding it while muted restores the sound. The
+  imperative API works regardless of the setting.

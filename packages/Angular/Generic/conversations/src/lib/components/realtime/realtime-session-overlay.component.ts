@@ -521,6 +521,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   private static readonly captionsPrefKey = 'mj.realtimeVoice.captions.v1';
 
   /**
+   * Whether the SPEAKER MUTE button renders on the call controls (dock + focus pill). A
+   * demo-oriented setting: off by default, toggled from the gear popover, persisted per user
+   * under {@link speakerMutePrefKey}. The imperative {@link SetOutputMuted} works regardless.
+   */
+  public ShowSpeakerMute = false;
+
+  /** UserInfoEngine key for the persisted speaker-mute-button setting. */
+  private static readonly speakerMutePrefKey = 'mj.realtimeVoice.speakerMute.v1';
+
+  /**
    * Whether developer affordances (open-record links) are revealed. Per-session view
    * state on this shell — off by default, reset with the overlay, never persisted.
    */
@@ -613,6 +623,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.loadPanelWidthPref();
     this.loadDisclosurePref();
     this.loadCaptionsPref();
+    this.loadSpeakerMutePref();
     this.State.Attach(this.realtime);
     this.subs.push(
       // Re-render on merged-state changes; content arrival raises the disclosure level.
@@ -1046,6 +1057,38 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     } catch {
       // engine unavailable — the preference still applies for this session
     }
+  }
+
+  /** Reads the persisted speaker-mute-button setting (tolerant; default = hidden). */
+  private loadSpeakerMutePref(): void {
+    try {
+      this.ShowSpeakerMute = UserInfoEngine.Instance.GetSetting(RealtimeSessionOverlayComponent.speakerMutePrefKey) === 'true';
+    } catch {
+      // UserInfoEngine not configured — the control stays hidden.
+    }
+  }
+
+  /** Persists the speaker-mute-button setting (debounced, best-effort). */
+  private persistSpeakerMutePref(): void {
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(RealtimeSessionOverlayComponent.speakerMutePrefKey, String(this.ShowSpeakerMute));
+    } catch {
+      // engine unavailable — the setting still applies for this session
+    }
+  }
+
+  /**
+   * The gear popover toggled the speaker-mute button setting. Applies it to every affordance,
+   * persists it, and — when hiding the control while the speaker is muted — restores the
+   * sound, so the agent can never be left silenced with no visible way to undo it.
+   */
+  public OnSpeakerMuteSettingToggled(on: boolean): void {
+    this.ShowSpeakerMute = on;
+    if (!on && this.OutputMuted) {
+      this.SetOutputMuted(false);
+    }
+    this.persistSpeakerMutePref();
+    this.cdr.markForCheck();
   }
 
   /** Persists the disclosure milestones server-side (debounced, best-effort). */

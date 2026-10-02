@@ -22,6 +22,7 @@
         [AgentName]="AgentName"
         [ModelName]="IsReviewing ? null : (ModelName$ | async)"
         [DevMode]="DevMode"
+        [ShowSpeakerMute]="ShowSpeakerMute"
         [SessionID]="IsReviewing ? ReviewSessionID : SessionID"
         [ReviewMode]="IsReviewing"
         [ReviewStartedAt]="ReviewStartedAt"
@@ -33,6 +34,7 @@
         [Density]="Disclosure.Milestones.Density"
         (OpenSessionRequested)="OnOpenSessionRequested($event)"
         (DevModeToggled)="OnDevModeToggled($event)"
+        (SpeakerMuteSettingToggled)="OnSpeakerMuteSettingToggled($event)"
         (DensityChanged)="OnDensityChanged($event)"
         (MinimizeRequested)="OnMinimize()"
         (StartLiveRequested)="OnStartLive()"
@@ -104,6 +106,7 @@
           [CaptionsOn]="ShowCaptions"
           [IsMuted]="Muted"
           [IsOutputMuted]="OutputMuted"
+          [ShowSpeaker]="ShowSpeakerMute"
           [ShowDetails]="ShowDetailsControl"
           [DetailsOn]="DetailsPeek"
           (CaptionsToggled)="OnCaptionsToggled($event)"
@@ -165,15 +168,17 @@
                 [attr.aria-label]="FocusPillMuted ? 'Unmute microphone' : 'Mute microphone'">
           <i class="fa-solid" [class.fa-microphone]="!FocusPillMuted" [class.fa-microphone-slash]="FocusPillMuted" aria-hidden="true"></i>
         </button>
-        <!-- Speaker: silence the agent's voice locally; the call continues untouched. -->
-        <button type="button" class="board-focus-pill__btn board-focus-pill__btn--speaker"
-                [class.board-focus-pill__btn--active]="OutputMuted"
-                (click)="OnFocusPillOutputMute()"
-                [title]="OutputMuted ? 'Unmute speaker' : 'Mute speaker (the agent keeps going, you just won\'t hear it)'"
-                [attr.aria-label]="OutputMuted ? 'Unmute speaker' : 'Mute speaker'"
-                [attr.aria-pressed]="OutputMuted">
-          <i class="fa-solid" [class.fa-volume-high]="!OutputMuted" [class.fa-volume-xmark]="OutputMuted" aria-hidden="true"></i>
-        </button>
+        @if (ShowSpeakerMute) {
+          <!-- Speaker: silence the agent's voice locally; the call continues untouched. -->
+          <button type="button" class="board-focus-pill__btn board-focus-pill__btn--speaker"
+                  [class.board-focus-pill__btn--active]="OutputMuted"
+                  (click)="OnFocusPillOutputMute()"
+                  [title]="OutputMuted ? 'Unmute speaker' : 'Mute speaker (the agent keeps going, you just won\'t hear it)'"
+                  [attr.aria-label]="OutputMuted ? 'Unmute speaker' : 'Mute speaker'"
+                  [attr.aria-pressed]="OutputMuted">
+            <i class="fa-solid" [class.fa-volume-high]="!OutputMuted" [class.fa-volume-xmark]="OutputMuted" aria-hidden="true"></i>
+          </button>
+        }
         <button type="button" class="board-focus-pill__btn"
                 (click)="OnFocusPillExit()"
                 title="Show thread" aria-label="Show the conversation thread">

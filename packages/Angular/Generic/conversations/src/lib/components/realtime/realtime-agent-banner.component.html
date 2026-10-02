@@ -139,6 +139,12 @@
           <i class="fa-solid" [ngClass]="DevMode ? 'fa-toggle-on' : 'fa-toggle-off'" aria-hidden="true"></i>
           Developer links {{ DevMode ? 'on' : 'off' }}
         </button>
+        <!-- Speaker-mute button setting: a demo control, opt-in, persisted per user by the overlay. -->
+        <button type="button" class="gp-link gp-link--speaker" (click)="ToggleSpeakerMuteSetting()" [attr.aria-pressed]="ShowSpeakerMute">
+          <i class="fa-solid" [ngClass]="ShowSpeakerMute ? 'fa-toggle-on' : 'fa-toggle-off'" aria-hidden="true"></i>
+          Speaker mute button {{ ShowSpeakerMute ? 'on' : 'off' }}
+        </button>
+        <div class="gp-note">For demos: adds a button that silences the agent for you without pausing or interrupting it.</div>
       </div>
     }
   }

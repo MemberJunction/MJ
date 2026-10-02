@@ -111,21 +111,37 @@ describe('RealtimeComposerComponent (DOM)', () => {
 
   // ── Speaker mute — the demo-call control: silence the agent locally, never interrupt it ──
 
-  // TestBed is single-use per spec, so each shape gets its own `it` (one render each).
-  it('renders a speaker control on the phone-call strip', () => {
-    expect(query(render(), '.strip .ctrl--speaker')).not.toBeNull();
+  // The speaker control is OPT-IN (ShowSpeaker, fed from the gear-popover setting): hidden by
+  // default so the everyday call UI is unchanged. TestBed is single-use per spec, so each shape
+  // gets its own `it` (one render each).
+  it('hides the speaker control by default (ShowSpeaker off) in every shape', () => {
+    const f = render();
+    expect(query(f, '.ctrl--speaker')).toBeNull();
+    f.componentRef.setInput('Compact', true);
+    f.detectChanges();
+    expect(query(f, '.lean-ctrl--speaker')).toBeNull();
+    f.componentRef.setInput('Compact', false);
+    f.componentRef.setInput('Open', true);
+    f.detectChanges();
+    expect(query(f, '.mini--speaker')).toBeNull();
+    // The mic control is always there regardless.
+    expect(query(f, '.dock .mini .fa-microphone')).not.toBeNull();
   });
 
-  it('renders a speaker control in the compact lean dock', () => {
-    expect(query(render({ Compact: true }), '.dock-lean .lean-ctrl--speaker')).not.toBeNull();
+  it('renders a speaker control on the phone-call strip when ShowSpeaker is on', () => {
+    expect(query(render({ ShowSpeaker: true }), '.strip .ctrl--speaker')).not.toBeNull();
   });
 
-  it('renders a speaker control in the fused level-2 dock', () => {
-    expect(query(render({ Open: true }), '.dock .mini--speaker')).not.toBeNull();
+  it('renders a speaker control in the compact lean dock when ShowSpeaker is on', () => {
+    expect(query(render({ Compact: true, ShowSpeaker: true }), '.dock-lean .lean-ctrl--speaker')).not.toBeNull();
+  });
+
+  it('renders a speaker control in the fused level-2 dock when ShowSpeaker is on', () => {
+    expect(query(render({ Open: true, ShowSpeaker: true }), '.dock .mini--speaker')).not.toBeNull();
   });
 
   it('reflects the speaker-muted state on the strip speaker control, independently of the mic', () => {
-    const f = render({ IsOutputMuted: true, IsMuted: false });
+    const f = render({ ShowSpeaker: true, IsOutputMuted: true, IsMuted: false });
     const speaker = query(f, '.strip .ctrl--speaker');
     expect(speaker?.getAttribute('aria-pressed')).toBe('true');
     expect(speaker?.classList.contains('ctrl--muted')).toBe(true);
@@ -136,14 +152,14 @@ describe('RealtimeComposerComponent (DOM)', () => {
   });
 
   it('shows the speaker as audible by default', () => {
-    const f = render();
+    const f = render({ ShowSpeaker: true });
     const speaker = query(f, '.strip .ctrl--speaker');
     expect(speaker?.getAttribute('aria-pressed')).toBe('false');
     expect(speaker?.querySelector('i')?.classList.contains('fa-volume-high')).toBe(true);
   });
 
   it('toggles the speaker through the service and emits OutputMuteChanged — NOT MuteChanged', () => {
-    const f = render({ IsOutputMuted: false }, makeService(true, true));
+    const f = render({ ShowSpeaker: true, IsOutputMuted: false }, makeService(true, true));
     const outputChanges = capture(f.componentInstance.OutputMuteChanged);
     const micChanges = capture(f.componentInstance.MuteChanged);
     click(f, '.strip .ctrl--speaker');
@@ -154,14 +170,14 @@ describe('RealtimeComposerComponent (DOM)', () => {
   });
 
   it('toggles the speaker from the compact lean dock', () => {
-    const lean = render({ Compact: true }, makeService(true, true));
+    const lean = render({ Compact: true, ShowSpeaker: true }, makeService(true, true));
     const leanChanges = capture(lean.componentInstance.OutputMuteChanged);
     click(lean, '.dock-lean .lean-ctrl--speaker');
     expect(leanChanges).toEqual([true]);
   });
 
   it('toggles the speaker from the fused dock (reflecting the service\'s returned state)', () => {
-    const dock = render({ Open: true, IsOutputMuted: true }, makeService(true, false));
+    const dock = render({ Open: true, ShowSpeaker: true, IsOutputMuted: true }, makeService(true, false));
     const dockChanges = capture(dock.componentInstance.OutputMuteChanged);
     click(dock, '.dock .mini--speaker');
     expect(dockChanges).toEqual([false]);
@@ -169,7 +185,7 @@ describe('RealtimeComposerComponent (DOM)', () => {
   });
 
   it('spells out in the tooltip that muting the speaker does not stop the agent', () => {
-    const f = render();
+    const f = render({ ShowSpeaker: true });
     expect(query(f, '.strip .ctrl--speaker')?.getAttribute('title')).toMatch(/agent keeps going/i);
   });
 });
