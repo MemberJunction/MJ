@@ -20,7 +20,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import * as coreModule from '@memberjunction/core';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJActionParamEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, MJLruCache } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
@@ -174,6 +174,10 @@ class TestableService extends RealtimeClientSessionService {
     public ExposeParseActionParams(argumentsJson?: string): Record<string, unknown> {
         return this.parseActionParams(argumentsJson);
     }
+    /** Public passthroughs to the session-scoped tool-projection caches (Round 16 leak fix). */
+    public ExposeSessionWireActionMaps() { return this.sessionWireActionMaps; }
+    public ExposeTargetWireActionMaps() { return this.targetWireActionMaps; }
+    public ExposeSessionDirectConfigs() { return this.sessionDirectConfigs; }
     protected override async delegateToTarget(
         _input: ExecuteRelayedToolInput,
         request: DelegateToTargetRequest
@@ -2615,5 +2619,84 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             expect(taskResult.Success).toBe(false);
             expect(taskResult.Output).toContain('not enabled for direct voice invocation');
         });
+    });
+});
+
+/**
+ * Round 16 memory-leak fix: `sessionWireActionMaps`/`targetWireActionMaps`/`sessionDirectConfigs`
+ * were plain `Map`s populated once per session/target but never deleted, on an instance held for the
+ * process lifetime by `RealtimeClientSessionResolver`. Every voice session or target agent ever
+ * projected left a permanent entry. Fixed by converting all three to `MJLruCache` (mirroring the same
+ * file's `promptRunWriteChains`), bounded at 5,000 entries / 4h TTL.
+ */
+describe('RealtimeClientSessionService — session-scoped tool caches are bounded (Round 16 leak fix)', () => {
+    const mockAction = {
+        ID: 'act-bounded-1',
+        Name: 'DoThing',
+        Description: 'Does a thing.',
+        Params: { Items: [] }
+    } as unknown as MJActionEntityExtended;
+
+    const directActionsConfig: RealtimeCoAgentConfig = {
+        realtime: { directActions: { enabled: true, actionNames: ['*'] } }
+    };
+
+    class DynamicDriverModel extends BaseRealtimeModel {
+        public static override SupportsDynamicToolSet = true;
+    }
+
+    beforeAll(() => {
+        MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, DynamicDriverModel, 'BoundedCacheTestDriver', 10);
+    });
+
+    it('backs sessionWireActionMaps, targetWireActionMaps, and sessionDirectConfigs with MJLruCache, not a plain Map', () => {
+        const service = new TestableService();
+        expect(service.ExposeSessionWireActionMaps()).toBeInstanceOf(MJLruCache);
+        expect(service.ExposeTargetWireActionMaps()).toBeInstanceOf(MJLruCache);
+        expect(service.ExposeSessionDirectConfigs()).toBeInstanceOf(MJLruCache);
+    });
+
+    it('still projects and executes a direct action for a session after BuildDirectActionTools populates the caches', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockAction];
+
+        const tools = service.BuildDirectActionTools('target-bounded', directActionsConfig, 'BoundedCacheTestDriver', 'session-bounded-1');
+
+        expect(tools.map(t => t.Name)).toEqual(['DoThing']);
+        expect(service.ExposeSessionWireActionMaps().Get('session-bounded-1')?.has('DoThing')).toBe(true);
+        expect(service.ExposeTargetWireActionMaps().Get('target-bounded')?.has('DoThing')).toBe(true);
+        expect(service.ExposeSessionDirectConfigs().Get('session-bounded-1')).toEqual({
+            enabled: true,
+            actionNames: ['*'],
+            timeoutMs: 10_000
+        });
+    });
+
+    it('re-projecting the same session id updates the entry in place rather than growing the cache', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockAction];
+
+        service.BuildDirectActionTools('target-bounded', directActionsConfig, 'BoundedCacheTestDriver', 'session-repeat');
+        const sizeAfterFirst = service.ExposeSessionWireActionMaps().Size;
+        service.BuildDirectActionTools('target-bounded', directActionsConfig, 'BoundedCacheTestDriver', 'session-repeat');
+        const sizeAfterSecond = service.ExposeSessionWireActionMaps().Size;
+
+        expect(sizeAfterSecond).toBe(sizeAfterFirst);
+    });
+
+    it('never grows sessionWireActionMaps past its configured maxSize, evicting the oldest session', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockAction];
+        const maxSize = service.ExposeSessionWireActionMaps().MaxSize;
+
+        for (let i = 0; i < maxSize + 5; i++) {
+            service.BuildDirectActionTools('target-bounded', directActionsConfig, 'BoundedCacheTestDriver', `session-${i}`);
+        }
+
+        expect(service.ExposeSessionWireActionMaps().Size).toBeLessThanOrEqual(maxSize);
+        // The very first session projected should have been evicted (oldest/least-recently-used).
+        expect(service.ExposeSessionWireActionMaps().Get('session-0')).toBeUndefined();
+        // A recently-projected session should still be present.
+        expect(service.ExposeSessionWireActionMaps().Get(`session-${maxSize + 4}`)).toBeDefined();
     });
 });

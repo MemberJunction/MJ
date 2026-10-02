@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Administer Rubric Evaluations",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "56B4A1EF-FE43-4FE6-81D1-08780E2956BC"
+    }
+  }
+]

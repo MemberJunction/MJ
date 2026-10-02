@@ -56,6 +56,8 @@ import {
     ValidationWarning,
     TestRunOutputItem,
     ReplayTelemetry,
+    InlineOracleFromVerdicts,
+    OraclesWithNamedRubric,
 } from '@memberjunction/testing-engine';
 
 import {
@@ -104,6 +106,7 @@ import {
     FormatConsoleLine,
     ReadSuiteComputerUseConfig,
     MergeComputerUseConfig,
+    InlineVerdictIsAdvisory,
     IsOracleAdvisory,
     PartitionGatingOracles,
     ClassifyFailure,
@@ -1201,6 +1204,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             output.interactiveElements = lastElements.map(e => ({ role: e.Role, name: e.Name, selector: e.Selector }));
         }
 
+        if (result.FinalJudgeVerdict?.CriteriaVerdicts?.length) {
+            output.criteriaVerdicts = result.FinalJudgeVerdict.CriteriaVerdicts;
+        }
+
         // Include judge verdict if available
         if (result.FinalJudgeVerdict) {
             output.finalJudgeVerdict = {
@@ -1594,8 +1601,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         actualOutput: Record<string, unknown>,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
-        const oracleConfigs = config.oracles ?? [];
-        if (oracleConfigs.length === 0) {
+        const oracleConfigs = OraclesWithNamedRubric(config.oracles, {
+            runRubricId: context.options.rubricId,
+            runVersionId: context.options.rubricVersionId,
+            testRubricId: context.test.RubricID,
+        });
+        const verdicts = actualOutput.criteriaVerdicts as { criterion: string; met: boolean; evidence?: string }[] | undefined;
+        if (oracleConfigs.length === 0 && !(verdicts && verdicts.length > 0)) {
             this.logToTestRun(context, 'info', 'No oracles configured — skipping evaluation');
             return [];
         }
@@ -1605,6 +1617,17 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         for (const oracleConfig of oracleConfigs) {
             const result = await this.runSingleOracle(oracleConfig, expected, actualOutput, context);
             results.push(result);
+        }
+
+        if (verdicts && verdicts.length > 0) {
+            const inline = InlineOracleFromVerdicts(verdicts);
+            inline.advisory = InlineVerdictIsAdvisory(config);
+            results.push(inline);
+            this.logToTestRun(
+                context,
+                inline.passed ? 'info' : 'warn',
+                `Oracle llm-judge (inline)${inline.advisory ? ' (advisory)' : ''}: ${inline.passed ? 'PASSED' : 'FAILED'} (Score: ${inline.score.toFixed(2)})`,
+            );
         }
 
         return results;
@@ -1639,6 +1662,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         try {
             const oracleInput: OracleInput = {
                 test: context.test,
+                testRunId: context.testRun.ID,
                 expectedOutput: expected,
                 actualOutput,
                 contextUser: context.contextUser

@@ -256,6 +256,21 @@ describe('RegisterTestLLM — real ClassFactory resolution', () => {
     expect(after).not.toBe(llm);
   });
 
+  // The restore re-registers the production class above the TestLLM. A check (or a bundle) that
+  // registers again later in the same process must still win, or its "scripted" calls reach the
+  // real provider.
+  it('a registration after an earlier restore wins over the restored class', () => {
+    class ProductionOpenAILLM extends TestLLM {}
+    MJGlobal.Instance.ClassFactory.Register(BaseLLM, ProductionOpenAILLM, 'OpenAILLM');
+    RegisterTestLLM(new TestLLM(), 'OpenAILLM')();
+
+    const restore = RegisterTestLLM(llm, 'OpenAILLM');
+    expect(MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'OpenAILLM', 'sk-test')).toBe(llm);
+
+    restore();
+    expect(MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'OpenAILLM', 'sk-test')).toBeInstanceOf(ProductionOpenAILLM);
+  });
+
   it('scripting applies to factory-created references (they ARE the scripted instance)', async () => {
     RegisterTestLLM(llm, 'GroqLLM');
     llm.Script({ kind: 'fail', error: new Error('Service temporarily unavailable') });

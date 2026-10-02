@@ -1,0 +1,36 @@
+{
+  "fields": {
+    "Name": "Binary (Met / Not met)",
+    "ScaleType": "Levels",
+    "HigherIsBetter": true,
+    "Status": "Active",
+    "Description": "Met is 1. Not met is 0."
+  },
+  "primaryKey": {
+    "ID": "E6ED0222-49AF-44A4-ABDB-AC0238355E08"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Scale Levels": [
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Not met",
+          "Value": 0,
+          "NormalizedValue": 0,
+          "Sequence": 0
+        },
+        "primaryKey": { "ID": "C0D6600D-067B-4204-8626-93E54F290706" }
+      },
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Met",
+          "Value": 1,
+          "NormalizedValue": 1,
+          "Sequence": 1
+        },
+        "primaryKey": { "ID": "C81357B9-4FB9-49DD-B274-ECD0B570630D" }
+      }
+    ]
+  }
+}

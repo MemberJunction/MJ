@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
-import { NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
     MJConversationEntity,
@@ -15,6 +15,7 @@ import {
     MJUserEntityType,
     MJProjectEntity
 } from "../generated/entity_subclasses";
+import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
 
@@ -116,6 +117,12 @@ export interface ConversationWindowSourceRow {
     Role: string | null;
     Message: string | null;
     SummaryOfEarlierConversation: string | null;
+    /**
+     * When the row was written. Read only by an assembly with a history floor
+     * (`historyFrom`), which drops rows written before it; optional so callers that build
+     * rows by hand for an unfloored assembly need not supply it.
+     */
+    __mj_CreatedAt?: Date | string | null;
 }
 
 /**
@@ -124,7 +131,7 @@ export interface ConversationWindowSourceRow {
  * from the assembler's requirements.
  */
 export const ConversationWindowFields: readonly (keyof ConversationWindowSourceRow)[] =
-    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation'];
+    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt'];
 
 export interface SharedByInfo {
     /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
@@ -133,6 +140,18 @@ export interface SharedByInfo {
     Email: string | null;
     /** Level the current user was granted on this conversation. */
     Level: 'View' | 'Edit' | 'Owner';
+}
+
+/** Per-item outcome of a bulk conversation operation. */
+export interface ConversationBulkResult {
+    Successful: string[];
+    Failed: Array<{ ID: string; Name: string; Error: string }>;
+}
+
+/** Fields a bulk conversation update may write. */
+export interface ConversationBulkUpdate {
+    ProjectID?: MJConversationEntity['ProjectID'];
+    IsPinned?: MJConversationEntity['IsPinned'];
 }
 
 // ========================================================================
@@ -470,6 +489,63 @@ function mergeArtifactJSON(
 }
 
 /**
+ * The row filter that decides which folders a user may see: SHARED ones (no owner)
+ * plus their OWN.
+ *
+ * Exported and used by every list read of 'MJ: Projects', because the rule being in
+ * one place is the point. It first shipped inline in LoadProjects, and review caught
+ * ProjectSelectorComponent running its own RunView with no ownership clause at all —
+ * so personal folder names were still listed in the chat area's Assign Project modal,
+ * which is precisely the exposure OwnerUserID exists to close. Gating one reader never
+ * gates the others; a second copy of a predicate is a second place to forget it.
+ *
+ * NOT for the Explorer entity-admin surfaces (the Projects record view and its
+ * hierarchy panel). Those are the raw entity browser, where an admin sees every row of
+ * every entity, and narrowing them here would be inconsistent with how MJ treats
+ * entity administration generally.
+ *
+ * A missing user gets SHARED ONLY, never every personal folder in the environment:
+ * without an identity there is nobody to be the owner of, and widening on absent input
+ * is how a personal folder reaches a stranger's list.
+ */
+export function BuildProjectVisibilityFilter(userId: string | null | undefined): string {
+    const id = String(userId ?? '').trim();
+    return id.length > 0
+        ? `(OwnerUserID IS NULL OR OwnerUserID='${EscapeSQLString(id)}')`
+        : `OwnerUserID IS NULL`;
+}
+
+/**
+ * Turns a failed folder delete into something the person reading it can act on.
+ *
+ * `Project.ParentID` and `Conversation.ProjectID` are RESTRICT foreign keys, so the delete
+ * fails while anything still points at the row. `DeleteProject` clears everything it can
+ * reach first, which leaves exactly one interesting residue: a referencing row the caller
+ * is not permitted to read, and therefore could not reparent. The raw message for that is a
+ * constraint name, about a record whose existence is deliberately hidden from them.
+ *
+ * The constraint name is the signal, and it is kept in the text — a support engineer needs
+ * it — but it is no longer the whole message.
+ */
+export function ExplainProjectDeleteFailure(dbMessage: string | null | undefined): string {
+    const raw = (dbMessage ?? '').trim();
+    if (!raw) {
+        return 'Failed to delete folder.';
+    }
+    const blockedByTree = /FK_Project_Parent/i.test(raw);
+    // Constraint names only. A bare /ProjectID/ also matched things like "Invalid column
+    // name 'ProjectID'", and answering an unrelated error with "conversations you do not
+    // have access to" is worse than passing the raw message through.
+    const blockedByConversation = /FK_Conversation_Project/i.test(raw);
+    if (blockedByTree || blockedByConversation) {
+        const what = blockedByTree ? 'subfolders' : 'conversations';
+        return `This folder still contains ${what} that you do not have access to, so it cannot be deleted. `
+            + `Ask someone who can see them to move or remove them first. (${raw})`;
+    }
+    return raw;
+}
+
+/**
  * ConversationEngine provides centralized, reactive caching for conversations,
  * conversation details (messages), and peripheral data (agent runs, artifacts).
  *
@@ -559,6 +635,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /** Track the environment ID used for the last projects (folders) load */
     private _lastProjectsEnvironmentId: string | null = null;
+    /**
+     * The user the cached projects were loaded FOR. Part of the cache key because
+     * the project read is now user-dependent (personal folders): keyed on the
+     * environment alone, a second user in the same process — a server-side caller,
+     * an impersonated context — would be served the first user's personal folders
+     * from cache and never issue a read of their own.
+     */
+    private _lastProjectsUserId: string | null = null;
 
     /**
      * Monotonic ticket for conversation loads, to keep the newest ANSWER rather than the
@@ -587,6 +671,31 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public GetSharedByInfo(conversationId: string): SharedByInfo | null {
         return this._sharedByByConversationId.get(NormalizeUUID(conversationId)) ?? null;
+    }
+
+    /**
+     * True when the user may grant others access to the conversation: they own it,
+     * or hold an Owner-level grant on it. Mirrors the server's share gate in
+     * `MJResourcePermissionEntityExtended`, so the UI never offers a share the save
+     * would refuse.
+     */
+    public CanShareConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        return this.GetSharedByInfo(conversation.ID)?.Level === 'Owner';
+    }
+
+    /**
+     * True when the user may change the conversation's folder and pin: they own
+     * it, or hold an Edit or Owner grant on it. A View grant is read-only.
+     */
+    public CanEditConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        const level = this.GetSharedByInfo(conversation.ID)?.Level;
+        return level === 'Edit' || level === 'Owner';
     }
 
     /**
@@ -651,31 +760,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // the newest one — see _conversationsLoadGeneration.
         const generation = ++this._conversationsLoadGeneration;
 
-        // Include conversations the user has been granted access to via
-        // `MJ: Resource Permissions`. ResourcePermissionEngine caches the full
-        // permission table; GetUserAvailableResources filters it to approved
-        // grants (direct + role-inherited) for this user + resource type.
-        await ResourcePermissionEngine.Instance.Config(false, contextUser);
-        const sharedPermissions = ResourcePermissionEngine.Instance
-            .GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
-        const sharedConversationIds = sharedPermissions.map((p) => p.ResourceRecordID);
+        const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const filter = this.buildVisibleConversationsFilter(
+            environmentId,
+            contextUser.ID,
+            sharedPermissions.map((p) => p.ResourceRecordID),
+            options
+        );
 
         const rv = new RunView();
-        const ownershipClause = `UserID='${contextUser.ID}'`;
-        const sharedClause =
-            sharedConversationIds.length > 0
-                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
-                : '';
-        // Default main-chat view shows Global + Both. App-scoped
-        // conversations live inside their owning Application's embedded
-        // surface and are filtered out here. Callers that want to surface
-        // them (e.g. an "Include app conversations" toggle) pass
-        // includeApplicationScoped=true to drop the scope predicate.
-        const scopeClause = options?.includeApplicationScoped
-            ? ''
-            : ` AND ApplicationScope IN ('Global', 'Both')`;
-        const filter = `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
-
         const result = await rv.RunView<MJConversationEntity>(
             {
                 EntityName: 'MJ: Conversations',
@@ -730,6 +823,60 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // delayed) and after the early-return guard above; LoadProjects has its
         // own per-environment guard to avoid redundant reloads.
         await this.LoadProjects(environmentId, contextUser, forceRefresh);
+    }
+
+    /**
+     * Returns an `ExtraFilter` for `MJ: Conversations` that matches exactly the conversations
+     * {@link LoadConversations} shows the user: owned by the user or shared with them, not
+     * archived, and (unless `includeApplicationScoped`) Global or Both scope.
+     *
+     * Use it anywhere that reads conversations for display (search, pickers) so those reads
+     * cannot show more than the conversation list does. It is not capped, unlike the list load.
+     *
+     * @param environmentId - The environment to filter conversations by
+     * @param contextUser - The user whose conversations to match
+     * @param options - `includeApplicationScoped` also matches app-scoped conversations
+     */
+    public async GetVisibleConversationsFilter(
+        environmentId: string,
+        contextUser: UserInfo,
+        options?: { includeApplicationScoped?: boolean }
+    ): Promise<string> {
+        const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        return this.buildVisibleConversationsFilter(
+            environmentId,
+            contextUser.ID,
+            sharedPermissions.map((p) => p.ResourceRecordID),
+            options
+        );
+    }
+
+    /**
+     * Approved conversation grants (direct and role-inherited) for the user, from
+     * `MJ: Resource Permissions`. ResourcePermissionEngine caches the full permission table.
+     */
+    private async getSharedConversationPermissions(contextUser: UserInfo): Promise<MJResourcePermissionEntity[]> {
+        await ResourcePermissionEngine.Instance.Config(false, contextUser);
+        return ResourcePermissionEngine.Instance.GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
+    }
+
+    private buildVisibleConversationsFilter(
+        environmentId: string,
+        userId: string,
+        sharedConversationIds: string[],
+        options?: { includeApplicationScoped?: boolean }
+    ): string {
+        const ownershipClause = `UserID='${userId}'`;
+        const sharedClause =
+            sharedConversationIds.length > 0
+                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
+                : '';
+        // The main chat view shows Global and Both. App-scoped conversations live inside
+        // their owning Application's embedded surface.
+        const scopeClause = options?.includeApplicationScoped
+            ? ''
+            : ` AND ApplicationScope IN ('Global', 'Both')`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
     }
 
     /**
@@ -791,28 +938,41 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Loads the projects (conversation folders) for an environment and emits via Projects$.
-     * Projects are environment-scoped (not user-scoped) and small, so the full active set
-     * is cached. Skips reloading when already loaded for the same environment unless forced.
+     * Loads the projects (conversation folders) visible to a user in an environment and
+     * emits via Projects$.
+     *
+     * Visible means SHARED (OwnerUserID IS NULL — every folder that existed before
+     * ownership was expressible) plus the user's OWN personal folders. A personal folder
+     * never reaches anyone else's sidebar. The set is small, so it is cached whole;
+     * reloading is skipped only when both the environment AND the user match, because the
+     * read now depends on both.
      *
      * @param environmentId - The environment to filter projects by
-     * @param contextUser - The current user context
-     * @param forceRefresh - If true, reloads even if already cached for this environment
+     * @param contextUser - The current user context; also decides which personal folders load
+     * @param forceRefresh - If true, reloads even if already cached for this environment/user
      */
     public async LoadProjects(
         environmentId: string,
         contextUser: UserInfo,
         forceRefresh: boolean = false
     ): Promise<void> {
-        if (!forceRefresh && this._lastProjectsEnvironmentId === environmentId) {
+        const userId = contextUser?.ID ?? null;
+        if (!forceRefresh
+            && this._lastProjectsEnvironmentId === environmentId
+            && this._lastProjectsUserId === userId) {
             return;
         }
+
+        // Shared folders, plus this user's own. One definition, shared with every other
+        // list read of this entity — see BuildProjectVisibilityFilter.
+        const ownership = BuildProjectVisibilityFilter(userId);
 
         const rv = new RunView();
         const result = await rv.RunView<MJProjectEntity>(
             {
                 EntityName: 'MJ: Projects',
-                ExtraFilter: `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`,
+                ExtraFilter: `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`
+                    + ` AND ${ownership}`,
                 OrderBy: 'Name ASC',
                 MaxRows: 1000,
                 ResultType: 'entity_object',
@@ -828,6 +988,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         if (result.Success) {
             this._lastProjectsEnvironmentId = environmentId;
+            this._lastProjectsUserId = userId;
             this._projects$.next(result.Results || []);
         } else {
             console.error('[ConversationEngine] Failed to load projects:', result.ErrorMessage);
@@ -914,6 +1075,19 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public async DeleteProject(id: string, contextUser: UserInfo): Promise<boolean> {
         const md = this.ProviderToUse;
 
+        // 0. Resolve the folder itself FIRST. Its ParentID is where the children go, and the
+        // cached copy may not be there at all — the cache is narrowed by ownership, and a
+        // principal allowed to delete a folder is not necessarily one whose sidebar lists it.
+        let project = this._projects$.value.find(p => UUIDsEqual(p.ID, id));
+        if (!project) {
+            project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', contextUser);
+            const loaded = await project.Load(id);
+            if (!loaded) {
+                throw new Error('Folder not found');
+            }
+        }
+        const newParentId = project.ParentID ?? null;
+
         // 1. Unassign conversations directly in this folder
         const directConversations = this._conversations$.value.filter(
             c => c.ProjectID && UUIDsEqual(c.ProjectID, id)
@@ -922,12 +1096,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             await this.SaveConversation(conv.ID, { ProjectID: null }, contextUser);
         }
 
-        // 2. Reparent direct child folders to this folder's parent
-        const target = this._projects$.value.find(p => UUIDsEqual(p.ID, id));
-        const newParentId = target?.ParentID ?? null;
-        const childFolders = this._projects$.value.filter(
-            p => p.ParentID && UUIDsEqual(p.ParentID, id)
-        );
+        // 2. Reparent direct child folders one level up.
+        //
+        // The child set comes from a READ keyed on ParentID, never from `_projects$`. That
+        // cache is narrowed to shared-plus-mine by BuildProjectVisibilityFilter, and a
+        // structural operation on the tree cannot be driven by a view of the tree that is
+        // missing rows. Someone else's personal folder under a shared parent does not appear
+        // in the cache, so it would never be reparented — and `Project.ParentID` is a
+        // RESTRICT foreign key with no ON DELETE clause, so the delete below would then fail
+        // with a raw constraint message, about a row the user is not allowed to know exists.
+        //
+        // The read carries NO ownership clause, deliberately. Deleting a folder needs
+        // CanDelete on the entity, which the UI role does not hold; the roles that do also
+        // hold unfiltered read, which makes them exempt from the row-level filter — so this
+        // read returns the complete child set for every principal that can actually reach
+        // here. Should a deployment grant delete to a filtered role anyway, the server still
+        // narrows the read, and step 3's guard turns the resulting FK failure into something
+        // legible rather than "Failed to save project".
+        const childFolders = await this.readChildFolders(id, contextUser);
         if (childFolders.length > 0) {
             this._selfMutating = true;
             try {
@@ -941,20 +1127,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             } finally {
                 this._selfMutating = false;
             }
-            // Children were mutated in place — re-emit so subscribers re-read the tree
+            // Children were mutated in place — re-emit so subscribers re-read the tree.
+            // Reparented children the caller cannot see are not in `_projects$` and stay out
+            // of it; the emit is for the ones that are.
             this._projects$.next([...this._projects$.value]);
         }
 
-        // 3. Delete the now-unreferenced folder
-        let project = target;
-        if (!project) {
-            project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', contextUser);
-            const loaded = await project.Load(id);
-            if (!loaded) {
-                throw new Error('Folder not found');
-            }
-        }
-
+        // 3. Delete the now-unreferenced folder.
+        //
         // Remove from the cached list BEFORE calling Delete(). BaseEntity.Delete() calls
         // NewRecord() which wipes the entity's fields — including ID — so filtering the list
         // by ID *after* the delete wouldn't match the (now-blank) cached entity and the folder
@@ -974,10 +1154,50 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (!deleted) {
             // Restore the list on failure (the entity wasn't deleted, so its fields are intact)
             this._projects$.next(projectsBeforeDelete);
-            throw new Error(project.LatestResult?.CompleteMessage || 'Failed to delete folder');
+            throw new Error(ExplainProjectDeleteFailure(project.LatestResult?.CompleteMessage));
         }
 
         return true;
+    }
+
+    /**
+     * Every direct child of a folder, read by ParentID with no ownership clause.
+     *
+     * Separate from `LoadProjects` on purpose: that one answers "what may this user SEE",
+     * and this one answers "what actually REFERENCES this row". Only the second is a safe
+     * basis for a delete, because an unseen child still holds the foreign key.
+     */
+    private async readChildFolders(parentId: string, contextUser: UserInfo): Promise<MJProjectEntity[]> {
+        // Validated rather than escaped-and-hoped: EscapeSQLString turns an empty value into
+        // `ParentID = ''`, which matches nothing — and "no children" is precisely the wrong
+        // answer here, because it reads as permission to delete.
+        const id = (parentId ?? '').trim();
+        if (!id) {
+            throw new Error('Cannot read subfolders without a folder id.');
+        }
+
+        // The engine's own provider, as DeleteProject uses for the folder itself. `new RunView()`
+        // would be the process-global default, which in a multi-provider client can be a
+        // different server from the one this delete runs against.
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJProjectEntity>(
+            {
+                EntityName: 'MJ: Projects',
+                ExtraFilter: `ParentID='${EscapeSQLString(id)}'`,
+                // This read has to be COMPLETE, not merely representative: one child left out
+                // is one FK left pointing at the row. Omitting MaxRows is not enough — the
+                // entity's own UserViewMaxRows would then apply and truncate silently.
+                IgnoreMaxRows: true,
+                ResultType: 'entity_object'
+            },
+            contextUser
+        );
+        if (!result.Success) {
+            throw new Error(
+                `Could not read the folder's subfolders, so it cannot be safely deleted: ${result.ErrorMessage}`
+            );
+        }
+        return result.Results || [];
     }
 
     /**
@@ -1337,6 +1557,122 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this.removeMultipleFromList(successful);
 
         return { Successful: successful, Failed: failed };
+    }
+
+    /**
+     * Moves multiple conversations into a folder (project), or out of every folder
+     * when projectId is null. Emits the updated list once for the whole batch.
+     *
+     * @param ids - Conversation IDs to move
+     * @param projectId - Target folder ID, or null for no folder
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async MoveMultipleConversationsToProject(
+        ids: string[],
+        projectId: string | null,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { ProjectID: projectId }, contextUser);
+    }
+
+    /**
+     * Pins or unpins multiple conversations. Emits the re-sorted list once for the
+     * whole batch, so pinned conversations move to the top in a single UI update.
+     *
+     * @param ids - Conversation IDs to pin or unpin
+     * @param isPinned - True to pin, false to unpin
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async PinMultipleConversations(
+        ids: string[],
+        isPinned: boolean,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { IsPinned: isPinned }, contextUser);
+    }
+
+    /**
+     * Applies the same field updates to several conversations, one save at a time so
+     * a single rejection cannot fail the batch, then re-emits the list once.
+     * A conversation whose save fails keeps its previous field values in memory.
+     * Conversations the user holds only View access to are refused without a save.
+     */
+    private async saveMultipleConversations(
+        ids: string[],
+        updates: ConversationBulkUpdate,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        const successful: string[] = [];
+        const failed: Array<{ ID: string; Name: string; Error: string }> = [];
+        if (ids.length === 0) {
+            return { Successful: successful, Failed: failed };
+        }
+
+        const md = this.ProviderToUse;
+        this._selfMutating = true;
+        try {
+            for (const id of ids) {
+                let conversation = this.GetConversation(id);
+                try {
+                    if (!conversation) {
+                        const entity = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+                        const loaded = await entity.Load(id);
+                        if (!loaded) {
+                            failed.push({ ID: id, Name: 'Unknown', Error: 'Conversation not found' });
+                            continue;
+                        }
+                        conversation = entity;
+                    }
+
+                    if (!this.CanEditConversation(conversation, contextUser.ID)) {
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: 'You have View access only'
+                        });
+                        continue;
+                    }
+
+                    const previous: ConversationBulkUpdate = {
+                        ProjectID: conversation.ProjectID,
+                        IsPinned: conversation.IsPinned
+                    };
+                    this.applyBulkUpdate(conversation, updates);
+
+                    const saved = await conversation.Save();
+                    if (saved) {
+                        successful.push(conversation.ID);
+                    } else {
+                        this.applyBulkUpdate(conversation, previous);
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: conversation.LatestResult?.Message || 'Failed to update conversation'
+                        });
+                    }
+                } catch (error) {
+                    failed.push({
+                        ID: id,
+                        Name: conversation?.Name || 'Unknown',
+                        Error: error instanceof Error ? error.message : 'Unknown error'
+                    });
+                }
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        if (successful.length > 0) {
+            this._conversations$.next(this.sortConversations(this._conversations$.value));
+        }
+        return { Successful: successful, Failed: failed };
+    }
+
+    private applyBulkUpdate(conversation: MJConversationEntity, updates: ConversationBulkUpdate): void {
+        if (updates.ProjectID !== undefined) conversation.ProjectID = updates.ProjectID;
+        if (updates.IsPinned !== undefined) conversation.IsPinned = updates.IsPinned;
     }
 
     // ========================================================================
@@ -2019,6 +2355,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *   the most recent N messages. Ignored when a boundary exists — the summary already
      *   covers everything before it, and cutting into the post-boundary tail would create
      *   a coverage gap.
+     * @param options.historyFrom - A history floor: see {@link AssembleContextWindow}.
      * @returns Messages in chronological order, each stamped with
      *   {@link ConversationContextMetadata}
      */
@@ -2028,6 +2365,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         options?: {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
+            historyFrom?: Date | null;
         }
     ): Promise<ConversationContextMessage[]> {
         await this.Config(false, contextUser);
@@ -2047,18 +2385,26 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param conversationId - The conversation whose detail rows to load
      * @param contextUser - The requesting user (entity RLS is applied under this user)
      * @param provider - Optional per-request metadata provider; falls back to the global default
+     * @param historyFrom - Optional history floor: only rows written at or after it are loaded,
+     *   so nothing before it leaves the database. Pair it with the same `historyFrom` on
+     *   {@link AssembleContextWindow}, which also drops the summary of earlier messages.
      * @returns The conversation's rows in Sequence order, shaped for {@link AssembleContextWindow}
-     * @throws When the underlying RunView reports failure (never returns a silent empty set)
+     * @throws When the underlying RunView reports failure (never returns a silent empty set),
+     *   or when `historyFrom` is an invalid date
      */
     public static async LoadWindowRowsFresh(
         conversationId: string,
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        historyFrom?: Date | null
     ): Promise<ConversationWindowSourceRow[]> {
         const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const conversationFilter = `ConversationID='${conversationId}'`;
         const rows = await rv.RunView<ConversationWindowSourceRow>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}'`,
+            ExtraFilter: historyFrom
+                ? `${conversationFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
+                : conversationFilter,
             OrderBy: 'Sequence ASC',
             Fields: [...ConversationWindowFields],
             ResultType: 'simple',
@@ -2080,20 +2426,30 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *
      * Accepts the minimal {@link ConversationWindowSourceRow} shape, satisfied by full
      * entities AND `ResultType: 'simple'` rows selecting {@link ConversationWindowFields}.
+     *
+     * **History floor.** With `options.historyFrom` set, the window starts there: rows written
+     * before it are dropped, and so is any persisted summary. A summary folds in the
+     * conversation from its first message — exactly what the floor excludes — so under a
+     * floor none is used, and the window is the most recent `maxTailMessages` rows at or
+     * after the floor. A row whose `__mj_CreatedAt` is missing or unreadable can't be shown
+     * to be after the floor, so it is dropped too.
      */
     public static AssembleContextWindow(
         details: ReadonlyArray<ConversationWindowSourceRow>,
         options?: {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
+            historyFrom?: Date | null;
         }
     ): ConversationContextMessage[] {
         const excluded = new Set((options?.excludeDetailIds || []).map(id => NormalizeUUID(id)));
+        const floor = options?.historyFrom ?? null;
         const ordered = details
             .filter(d => !excluded.has(NormalizeUUID(d.ID)))
+            .filter(d => !floor || ConversationEngine.isAtOrAfter(d.__mj_CreatedAt, floor))
             .sort((a, b) => a.Sequence - b.Sequence);
 
-        const boundary = ConversationEngine.findSummaryBoundary(ordered);
+        const boundary = floor ? undefined : ConversationEngine.findSummaryBoundary(ordered);
         if (boundary) {
             const tail = ordered.filter(d => d.Sequence >= boundary.Sequence);
             return [ConversationEngine.buildSummaryMessage(boundary), ...tail.map(d => ConversationEngine.detailToContextMessage(d))];
@@ -2102,6 +2458,29 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const all = ordered.map(d => ConversationEngine.detailToContextMessage(d));
         const cap = options?.maxTailMessages;
         return cap && all.length > cap ? all.slice(-cap) : all;
+    }
+
+    /**
+     * The `ExtraFilter` predicate for a history floor: rows written at or after `historyFrom`.
+     * Shared by every reader that honours a floor, so they agree on what it means.
+     *
+     * @param historyFrom The first moment that may be read.
+     * @param column The timestamp column to compare, when the predicate runs against a view
+     *   or subquery that names it differently.
+     * @throws RangeError when `historyFrom` is an invalid date — a floor that can't be written
+     *   down must fail rather than silently read everything.
+     */
+    public static HistoryFromFilter(historyFrom: Date, column: string = '__mj_CreatedAt'): string {
+        return `${column} >= '${historyFrom.toISOString()}'`;
+    }
+
+    /** True when a row's timestamp is at or after the floor; false when it is missing or unreadable. */
+    private static isAtOrAfter(createdAt: Date | string | null | undefined, floor: Date): boolean {
+        if (createdAt == null) {
+            return false;
+        }
+        const time = createdAt instanceof Date ? createdAt.getTime() : Date.parse(createdAt);
+        return !Number.isNaN(time) && time >= floor.getTime();
     }
 
     /**
@@ -2268,6 +2647,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this._detailCache.clear();
         this._lastEnvironmentId = null;
         this._lastProjectsEnvironmentId = null;
+        this._lastProjectsUserId = null;
     }
 
     // ========================================================================
@@ -2696,7 +3076,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return true;
         }
 
-        // save — only track projects in the loaded environment; drop archived ones.
+        // save — the cached list holds folders that are in the loaded environment, not
+        // archived, AND visible to this user. All three are conditions the save can change,
+        // so all three are re-evaluated here rather than only the first two.
         // No `?.` past the guard above: `data` is non-null here, and optional chaining would say
         // otherwise. It is also what let `mergeDataOntoRecord(…, data)` accept a nullable argument
         // without complaint, since `strictNullChecks` is off in this package.
@@ -2706,14 +3088,30 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             !this._lastProjectsEnvironmentId ||
             (environmentId != null && UUIDsEqual(environmentId, this._lastProjectsEnvironmentId));
 
+        // Ownership, the third condition, and the one the folder dialog's confirm promises.
+        // When someone makes a shared folder personal, every OTHER session holding it must
+        // drop it — merging and keeping would leave the folder in their sidebar until reload,
+        // which is the opposite of what that confirm just told the user would happen.
+        // Mirrors BuildProjectVisibilityFilter: no owner is shared, my id is mine, anything
+        // else is someone else's. An unknown viewer sees shared only, never every personal
+        // folder in the environment — widening on absent input is the failure mode worth
+        // avoiding, and it is the same rule the read path applies.
+        const ownerUserId = data['OwnerUserID'] as string | null | undefined;
+        const isVisibleToViewer =
+            ownerUserId == null || ownerUserId === ''
+                ? true
+                : !!this._lastProjectsUserId && UUIDsEqual(ownerUserId, this._lastProjectsUserId);
+
+        const belongsInList = !isArchived && inLoadedEnvironment && isVisibleToViewer;
+
         if (existingIdx >= 0) {
-            if (isArchived || !inLoadedEnvironment) {
+            if (!belongsInList) {
                 this._projects$.next(current.filter(p => !UUIDsEqual(p.ID, id)));
             } else {
                 this.mergeDataOntoRecord(current[existingIdx], data);
                 this._projects$.next([...current]);
             }
-        } else if (event.baseEntity && !isArchived && inLoadedEnvironment) {
+        } else if (event.baseEntity && belongsInList) {
             // New folder from a local event — append the entity object
             this._projects$.next([...current, event.baseEntity as MJProjectEntity]);
         }

@@ -138,6 +138,21 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 
 Conversational agent that runs in a loop: prompt -> decide -> act -> repeat. Best for interactive, chat-based agents. The LLM decides the next step at each iteration by producing a structured JSON response.
 
+##### Decision models
+
+An agent can ask a fast decision model typed questions in six places on its own. One master switch governs all of them: the Loop prompt param **`decisionsEnabled`**, `false` by default. Unless it is `true`, the agent never asks a decision model on its own, whatever the other settings say: their docs stay out of the prompt and the runtime refuses the call. With it `true`, each use still needs its own setting, and each of those is off by default too:
+
+| Use | Its own setting |
+|---|---|
+| Inline `decisions` on a turn | `includeDecisionsDocs: true` |
+| `finishIf` gates on an Actions or Sub-Agent step | `finishIfMode: 'shadow'` or `'on'` |
+| Decision discovery (suggest an agent before the first prompt) | `decisionDiscovery: true` |
+| Payload change check | `payloadFeedbackCheck: true` |
+| Catalog narrowing | `maxActionsInPrompt` / `maxSubAgentsInPrompt` > 0 |
+| Memory Manager note gate | run `data.enableDecisionGate: true` |
+
+Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finishIfMode": "shadow"}`) or for one run in `data.__agentTypePromptParams`. Uses someone placed explicitly do not read it: a Flow or task-graph Decision step, the Run Decision action, and other direct callers of `AgentDecisionService`. See the [Decision Models guide](./docs/loop-agent-decisions.md).
+
 #### FlowAgentType
 
 Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.
@@ -150,6 +165,8 @@ Consequences worth knowing before you debug one:
 - **A run that needs the result walks the flow in-process.** A sub-agent run (one with `parentRun`) does this automatically, and a top-level caller opts in with `agentTypeParams.executionMode: 'inRun'` (`FlowAgentExecuteParams`). The run returns the flow's final payload, as in 5.x, and `startAtStep` works. A dispatched run that reaches the walker by mistake is refused at its choke point.
 - **The mode is on the run.** A completed `Decision` step named "Workflow runs in this run" or "Workflow runs on the task-graph dispatcher" records which engine ran it and why.
 - **A dispatched `Sub-Agent` node starts its own `AIAgentRun`**, linked from `Task.AgentRunID` and parented to the submitting run. If that sub-agent is itself a Flow agent, it runs in-process and returns its result to the task.
+- **A `Decision` step routes the same way in both modes.** Paths read its answers only through `decisions.<key>.<question>`; its `stepResult.result` is the payload, which carries no answers. A flow with a Decision step is compiled and validated before its first step in-run too, so an incomplete Choice fork, a decision read before it can answer, or one read through the payload is refused in both modes. An answer below its `minConfidence` stops an in-run flow (the dispatcher holds the fork, and `Retry` on the step asks again). A failed decision call is a failed step: the paths that read its answers are passed over, and a recovery path such as `stepResult.Success === false` is taken whatever its rank.
+- **Answers live in the run, not the payload.** A run started with `startAtStep` past a Decision step has no answers from it, so every path that reads that decision stops the run with the reason. Start at or before the Decision step to route on it.
 
 See the **[Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)** for the full model: node kinds, exclusive groups, payload mappings, loops, failure semantics, observability, and a worked configuration example.
 
@@ -460,6 +477,17 @@ The Memory Manager runs on a schedule (every ~15 minutes). `AIEngineBase` alread
 * **Single source of truth for status**: note status filtering reuses `IsInjectableNoteStatus()` from `@memberjunction/core-entities` (Active + Provisional), the same predicate the read-path injection/scoping queries use, so the maintenance set can never drift from the injectable set.
 * **Intentional exceptions** (still hit the DB): the **hardening pass** loads `entity_object` provisional notes *specifically to mutate them*, so it reads fresh, owned entities; the resolved-source-chain loader keeps a targeted `RunView` **only** for note IDs the cache misses; and `MJ: AI Agent Runs` reads stay as queries because runs are transactional and not cached by `AIEngineBase`.
 
+### 6. Trailing Runtime State (prompt-cache layout)
+The Loop agent's volatile per-iteration state — current date/time, Scratchpad State and Payload — is never rendered in the system prompt. `preparePromptParams` builds it into a `<mj-runtime-state>` fragment (`RuntimeStateFragmentBuilder`) appended as the **final user message** of each request, and the system prompt carries a static `## Runtime State` pointer. Provider prompt caching is a prefix match over `tools → system → messages`, so a byte-stable system prompt lets the entire history cache incrementally: measured on Sage, 0% → 78–90% cached on Anthropic and OpenAI, 21% → 91% on xAI, 30–65% → 66–96% on Gemini and Cerebras, with prompt cost per million tokens down 37–80%.
+
+* **Per-provider retention** — providers with a byte-prefix cache (OpenAI, xAI) need prior fragments *retained* and the new one appended; block-cache providers (Anthropic, Gemini, Cerebras) get the previous fragment *replaced*. The choice is the model catalog's `ModelConfiguration.LLM.PrefixPromptCache` flag, set under the vendor row's `Configuration.ModelDefaults` and inherited by every model it serves unless a model-vendor row overrides it (`BaseAgent.resolvePrefixPromptCache` → `AIEngine.GetEffectiveModelConfiguration`, cascade Model Types < Models < Vendors' `Configuration.ModelDefaults` < Model Vendors), decided once per run and frozen. No provider names live in code.
+* **Escaping at send time** — the fragment tag literals are escaped in every non-system message of the outgoing *copy* of the history, so no tool result, user turn or tool-call argument can pose as framework state; the stored history is never mutated.
+* **Delivery gate** — the fragment is only sent when the system prompt template carries the pointer; a template still embedding the old blocks (unsynced database) or one with neither (Flow, custom prompts) gets none. Markers: `VOLATILE_TEMPLATE_MARKERS`, overridable via the protected `volatileTemplateMarkers` getter.
+* **Specialization placement** — `specializationPlacement: auto` relocates a child prompt into the fragment (`<mj-agent-specialization>`) only when its unrendered template references a volatile placeholder, handing the runner the pre-rendered text via `AIPromptParams.PreRenderedChildTemplates`.
+* **Anthropic breakpoint** — `BaseLLM.splitTrailingVolatileState` lets `AnthropicLLM` place its `cache_control` breakpoint on the last real history message and send the fragment uncached.
+
+All placeholder names, tag literals and headings are in [`src/constants.ts`](./src/constants.ts). Full mechanism: [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md); numbers: [Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
+
 ## Cross-Turn Conversation Compaction & History Retrieval
 
 Long conversations no longer grow the agent's context without bound. Two cooperating layers (design: [`plans/agent-conversation-compaction.md`](../../../plans/agent-conversation-compaction.md)) activate **only when a run carries `ExecuteAgentParams.conversationId`** — programmatic runs, sub-agents, and tests without a conversation are untouched:
@@ -472,6 +500,18 @@ Long conversations no longer grow the agent's context without bound. Two coopera
 
 **Prior-turn tool-result carry-forward.** Because each turn rebuilds its messages from the conversation window, a tool result paged in on turn N would be gone on turn N+1. `injectPriorTurnToolResults` re-injects the same agent's immediately previous settled root run's successful read-tool results (eligibility decided by the `toolFamily` stamped in each Tool step's `OutputData`) as one transient, compactable message — one-turn memory by construction, scoped by `AgentID` so parallel agents in one conversation never inherit each other's results. The per-turn prior-run lookup is served by `PriorTurnToolResultCache` (a `BaseSingleton` wrapping `MJLruCache`, keyed by conversation + agent): the settling root run publishes its own Tool-step projections from memory at finalize — an empty array for tool-free runs, so the common case costs **zero DB queries per turn** — and the loader falls back to the original RunView pair only on a cache miss. Both loaders share one entity-typed predicate (`BaseAgent.carryForwardPredicate` + `settledRunStatuses`) so the SQL filter and the in-memory projection cannot drift; freshness semantics and the multi-node staleness bound are documented on the cache class.
 
+## Action Failure Circuit Breaker
+
+`executeActionsStep` now reports an action's real outcome (`ActionResult.Success`, result code, message) — previously a failed action was reported to the model as a success and agents retried unconfigured tools until the run timed out. On top of that, `ExecuteSingleAction` applies a run-scoped breaker before dispatching, checked fatal → identical-arguments → budget:
+
+| Rule | Trigger | Effect |
+|---|---|---|
+| Fatal lockout | One credential / service-configuration failure (`isFatalActionError`; parameter-level "not configured" messages are deliberately non-fatal) | Action disabled for the run, any arguments |
+| Identical arguments | `IDENTICAL_FAILURE_THRESHOLD` (2) failures with the same normalized arguments | Calls with those arguments blocked; other arguments dispatch |
+| Attempt budget | `ACTION_FAILURE_BUDGET` (5) consecutive failures, any arguments | Action disabled for the run |
+
+A success clears both counters. A blocked call returns a `CircuitBreakerActionResult` (carrying `Reason`) in ~0 ms without reaching the action engine, and the model receives a `[CRITICAL/ACTION_UNAVAILABLE | REPEATED_IDENTICAL_CALL | ATTEMPTS_EXHAUSTED]` directive as a user message (a `[WARNING/ACTION_FAILURE]` with an "attempt N of 5" counter otherwise). Argument identity is `normalizeActionParams` (three protected layers: outer → per-entry → recursive value). The pipeline registry and the ForEach / While operators pass `{ skipCircuitBreaker: true }` and bypass every rule, leaving the history untouched. Evidence and thresholds: [Performance and Cost Briefing §4](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
+
 ## Documentation
 
 Detailed guides are available in the [`docs/`](./docs/) directory:
@@ -479,6 +519,9 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | Guide | Description |
 |---|---|
 | [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Decision Models](./docs/loop-agent-decisions.md) | The `decisionsEnabled` master switch, then each automatic use: inline decisions, finishIf gates, discovery, the payload change check, catalog narrowing, the Memory Manager note gate |
+| [Prompt-Cache Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md) | Before/after cached share and cost per model and topology for the trailing runtime-state layout; the action circuit breaker's before/after; what to re-measure |
+| [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md) | Repo-level guide: the trailing-state layout, the `PrefixPromptCache` flag from the model catalog, the Anthropic breakpoint seam, specialization placement, the circuit breaker |
 | [Client Tools Guide](./docs/CLIENT_TOOLS_GUIDE.md) | Browser-side tool invocation, runtime decoration, timeout config, prompt design, security |
 | [Sub-Agents Guide](./docs/sub-agents-guide.md) | Child agents, related agents, payload flow, context propagation, loops |
 | [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md) | Feedback requests, assignment strategies, request lifecycle |

@@ -1,0 +1,187 @@
+{
+  "fields": {
+    "Name": "Schema proposal",
+    "Status": "Active",
+    "Description": "Judges a schema proposal: every requested column is present, and the reply is a proposal rather than a migration that already ran."
+  },
+  "primaryKey": {
+    "ID": "30B5EF00-379B-4174-8BB6-F0256F7C23EE"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Score each criterion Meets, Partial, or Miss. Partial is below the gate, so a gate scored Partial fails the proposal. Not applicable is not allowed: every criterion applies to the reply. Use the guidance and the anchors."
+        },
+        "primaryKey": {
+          "ID": "8DA16A0A-8124-4203-9BD8-D94BF8908B71"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "includes-every-requested-column",
+                "Name": "Every column the person asked for is in the proposal",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The requested columns are the ones the person named. A close name is not that column."
+              },
+              "primaryKey": {
+                "ID": "1E532C3A-BCCC-4939-B387-CF584BE97227"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Every column the person asked for is in the proposal."
+                    },
+                    "primaryKey": {
+                      "ID": "64BB14A9-5763-4B14-8F38-05114AD34811"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The proposal includes some of the requested columns and omits others."
+                    },
+                    "primaryKey": {
+                      "ID": "24DF065B-1C54-421E-9924-71187B5FF8B1"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The proposal omits the columns the person asked for."
+                    },
+                    "primaryKey": {
+                      "ID": "0B4A6CED-B3D1-4F1D-A0D6-6091F6D3778C"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "relationships-are-named",
+                "Name": "Names each relationship, or says the proposal has none",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "A relationship in the proposal has a name. A proposal with no relationship says that it has none."
+              },
+              "primaryKey": {
+                "ID": "1CAF23CB-6063-421D-902F-55E633B6850E"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Every relationship is named, or the proposal says it has none."
+                    },
+                    "primaryKey": {
+                      "ID": "E128C83D-0AE1-4A4D-ABD5-9E939040616B"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Some relationships are named and at least one is not."
+                    },
+                    "primaryKey": {
+                      "ID": "1F766AC6-B950-4858-A1FD-C57D15DA6C37"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Relationships are present and unnamed, or the proposal is silent about whether it has any."
+                    },
+                    "primaryKey": {
+                      "ID": "0C7BA1DB-335A-4FAF-A852-38B262BAA297"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "proposal-not-an-applied-migration",
+                "Name": "The reply is a proposal, not a migration that already ran",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The reply proposes a change. It does not claim the migration has already been applied."
+              },
+              "primaryKey": {
+                "ID": "1872B9D9-A55A-4190-8A06-27F83F4C801D"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The reply is a proposal and does not say a migration already ran."
+                    },
+                    "primaryKey": {
+                      "ID": "8BCD7A48-F7ED-4EFD-B498-F08E275F94FF"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The reply is mostly a proposal and also says part of the change already ran."
+                    },
+                    "primaryKey": {
+                      "ID": "F44CCF9B-DF1A-4C1F-8698-BBEFE7A544D1"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The reply is a migration that already ran."
+                    },
+                    "primaryKey": {
+                      "ID": "A5072129-63A8-4FFB-9AEE-6FDB41339A94"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
