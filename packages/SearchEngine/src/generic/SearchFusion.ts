@@ -282,10 +282,6 @@ export class SearchFusion {
     }
 
     /**
-     * Create a fallback SearchResultItem for a fused candidate that has
-     * no matching full result item (defensive).
-     */
-    /**
      * Map RRF scores onto a readable 0-1 display scale WITHOUT changing the order.
      *
      * Raw RRF values are tiny (1/61 ≈ 0.016 at the top) and mean nothing to a person, but the
@@ -315,6 +311,10 @@ export class SearchFusion {
         return best;
     }
 
+    /**
+     * Create a fallback SearchResultItem for a fused candidate that has
+     * no matching full result item (defensive).
+     */
     private createFallbackItem(candidate: ScoredCandidate): SearchResultItem {
         // If the ID is a compound key (EntityName::RecordID) used by CrossScopeFusion,
         // split it back out for readability.
