@@ -27,7 +27,16 @@ const LIST_RESOURCE_TYPE_NAME = 'Lists';
 })
 export class ListSharingService {
   private loadingSubject = new BehaviorSubject<boolean>(false);
-  public loading$: Observable<boolean> = this.loadingSubject.asObservable();
+  public Loading$: Observable<boolean> = this.loadingSubject.asObservable();
+
+  /** @deprecated Use {@link Loading$}. */
+  public get loading$(): Observable<boolean> {
+    return this.Loading$;
+  }
+  /** @deprecated Use {@link Loading$}. */
+  public set loading$(value: Observable<boolean>) {
+    this.Loading$ = value;
+  }
 
   // Cache for users and roles (for autocomplete)
   private usersCache: MJUserEntity[] | null = null;
@@ -67,7 +76,7 @@ export class ListSharingService {
   /**
    * Get all shares for a specific list
    */
-  async getListShares(listId: string): Promise<ListShareInfo[]> {
+  async GetListShares(listId: string): Promise<ListShareInfo[]> {
     this.loadingSubject.next(true);
 
     try {
@@ -99,10 +108,15 @@ export class ListSharingService {
     }
   }
 
+  /** @deprecated Use {@link GetListShares}. */
+  async getListShares(listId: string): Promise<ListShareInfo[]> {
+    return this.GetListShares(listId);
+  }
+
   /**
    * Get permission level for a specific user on a specific list
    */
-  async getUserPermissionLevel(listId: string, userId: string): Promise<ListPermissionLevel | null> {
+  async GetUserPermissionLevel(listId: string, userId: string): Promise<ListPermissionLevel | null> {
     const resourceTypeId = await this.resolveListResourceTypeId();
     const rv = RunView.FromMetadataProvider(this.Provider);
 
@@ -122,10 +136,15 @@ export class ListSharingService {
     return null;
   }
 
+  /** @deprecated Use {@link GetUserPermissionLevel}. */
+  async getUserPermissionLevel(listId: string, userId: string): Promise<ListPermissionLevel | null> {
+    return this.GetUserPermissionLevel(listId, userId);
+  }
+
   /**
    * Share a list with a user
    */
-  async shareListWithUser(
+  async ShareListWithUser(
     listId: string,
     userId: string,
     permissionLevel: ListPermissionLevel,
@@ -175,10 +194,20 @@ export class ListSharingService {
     }
   }
 
+  /** @deprecated Use {@link ShareListWithUser}. */
+  async shareListWithUser(
+    listId: string,
+    userId: string,
+    permissionLevel: ListPermissionLevel,
+    sharedByUserId: string
+  ): Promise<ListShareResult> {
+    return this.ShareListWithUser(listId, userId, permissionLevel, sharedByUserId);
+  }
+
   /**
    * Share a list with a role
    */
-  async shareListWithRole(
+  async ShareListWithRole(
     listId: string,
     roleId: string,
     permissionLevel: ListPermissionLevel,
@@ -228,10 +257,20 @@ export class ListSharingService {
     }
   }
 
+  /** @deprecated Use {@link ShareListWithRole}. */
+  async shareListWithRole(
+    listId: string,
+    roleId: string,
+    permissionLevel: ListPermissionLevel,
+    sharedByUserId: string
+  ): Promise<ListShareResult> {
+    return this.ShareListWithRole(listId, roleId, permissionLevel, sharedByUserId);
+  }
+
   /**
    * Update permission level for an existing share
    */
-  async updateSharePermission(
+  async UpdateSharePermission(
     shareId: string,
     newPermissionLevel: ListPermissionLevel
   ): Promise<ListShareResult> {
@@ -264,10 +303,18 @@ export class ListSharingService {
     }
   }
 
+  /** @deprecated Use {@link UpdateSharePermission}. */
+  async updateSharePermission(
+    shareId: string,
+    newPermissionLevel: ListPermissionLevel
+  ): Promise<ListShareResult> {
+    return this.UpdateSharePermission(shareId, newPermissionLevel);
+  }
+
   /**
    * Remove a share (revoke access)
    */
-  async removeShare(shareId: string): Promise<ListShareResult> {
+  async RemoveShare(shareId: string): Promise<ListShareResult> {
     try {
       const md = this.Provider;
       const permission = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
@@ -295,10 +342,15 @@ export class ListSharingService {
     }
   }
 
+  /** @deprecated Use {@link RemoveShare}. */
+  async removeShare(shareId: string): Promise<ListShareResult> {
+    return this.RemoveShare(shareId);
+  }
+
   /**
    * Get lists shared with the current user (that they don't own)
    */
-  async getListsSharedWithUser(userId: string): Promise<string[]> {
+  async GetListsSharedWithUser(userId: string): Promise<string[]> {
     const resourceTypeId = await this.resolveListResourceTypeId();
     const rv = RunView.FromMetadataProvider(this.Provider);
 
@@ -316,10 +368,15 @@ export class ListSharingService {
     return result.Results.map((r: { ResourceRecordID: string }) => r.ResourceRecordID);
   }
 
+  /** @deprecated Use {@link GetListsSharedWithUser}. */
+  async getListsSharedWithUser(userId: string): Promise<string[]> {
+    return this.GetListsSharedWithUser(userId);
+  }
+
   /**
    * Get lists that the user has shared with others
    */
-  async getListsSharedByUser(userId: string): Promise<Map<string, number>> {
+  async GetListsSharedByUser(userId: string): Promise<Map<string, number>> {
     // First get all lists owned by the user
     const rv = RunView.FromMetadataProvider(this.Provider);
 
@@ -359,10 +416,15 @@ export class ListSharingService {
     return shareCountMap;
   }
 
+  /** @deprecated Use {@link GetListsSharedByUser}. */
+  async getListsSharedByUser(userId: string): Promise<Map<string, number>> {
+    return this.GetListsSharedByUser(userId);
+  }
+
   /**
    * Check if user can share a list (must be owner or have Owner permission)
    */
-  async canUserShareList(listId: string, userId: string): Promise<boolean> {
+  async CanUserShareList(listId: string, userId: string): Promise<boolean> {
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Check if user is the owner
@@ -377,14 +439,19 @@ export class ListSharingService {
     }
 
     // Check if user has Owner permission
-    const permissionLevel = await this.getUserPermissionLevel(listId, userId);
+    const permissionLevel = await this.GetUserPermissionLevel(listId, userId);
     return permissionLevel === 'Owner';
+  }
+
+  /** @deprecated Use {@link CanUserShareList}. */
+  async canUserShareList(listId: string, userId: string): Promise<boolean> {
+    return this.CanUserShareList(listId, userId);
   }
 
   /**
    * Search users for sharing autocomplete
    */
-  async searchUsers(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
+  async SearchUsers(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     const result = await rv.RunView<MJUserEntity>({
@@ -407,10 +474,15 @@ export class ListSharingService {
     }));
   }
 
+  /** @deprecated Use {@link SearchUsers}. */
+  async searchUsers(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
+    return this.SearchUsers(searchTerm, limit);
+  }
+
   /**
    * Search roles for sharing autocomplete
    */
-  async searchRoles(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
+  async SearchRoles(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     const result = await rv.RunView<MJRoleEntity>({
@@ -432,10 +504,15 @@ export class ListSharingService {
     }));
   }
 
+  /** @deprecated Use {@link SearchRoles}. */
+  async searchRoles(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
+    return this.SearchRoles(searchTerm, limit);
+  }
+
   /**
    * Get all available users (cached)
    */
-  async getAllUsers(forceRefresh: boolean = false): Promise<MJUserEntity[]> {
+  async GetAllUsers(forceRefresh: boolean = false): Promise<MJUserEntity[]> {
     if (!forceRefresh && this.usersCache) {
       return this.usersCache;
     }
@@ -456,10 +533,15 @@ export class ListSharingService {
     return [];
   }
 
+  /** @deprecated Use {@link GetAllUsers}. */
+  async getAllUsers(forceRefresh: boolean = false): Promise<MJUserEntity[]> {
+    return this.GetAllUsers(forceRefresh);
+  }
+
   /**
    * Get all available roles (cached)
    */
-  async getAllRoles(forceRefresh: boolean = false): Promise<MJRoleEntity[]> {
+  async GetAllRoles(forceRefresh: boolean = false): Promise<MJRoleEntity[]> {
     if (!forceRefresh && this.rolesCache) {
       return this.rolesCache;
     }
@@ -477,6 +559,11 @@ export class ListSharingService {
     }
 
     return [];
+  }
+
+  /** @deprecated Use {@link GetAllRoles}. */
+  async getAllRoles(forceRefresh: boolean = false): Promise<MJRoleEntity[]> {
+    return this.GetAllRoles(forceRefresh);
   }
 
   /**
@@ -561,7 +648,7 @@ export class ListSharingService {
   /**
    * Get sharing summary for a single list
    */
-  async getListSharingSummary(listId: string): Promise<{ listId: string; totalShares: number; userShares: number; roleShares: number; isSharedWithMe: boolean; isSharedByMe: boolean }> {
+  async GetListSharingSummary(listId: string): Promise<{ listId: string; totalShares: number; userShares: number; roleShares: number; isSharedWithMe: boolean; isSharedByMe: boolean }> {
     const resourceTypeId = await this.resolveListResourceTypeId();
     const rv = RunView.FromMetadataProvider(this.Provider);
 
@@ -596,11 +683,21 @@ export class ListSharingService {
     };
   }
 
+  /** @deprecated Use {@link GetListSharingSummary}. */
+  async getListSharingSummary(listId: string): Promise<{ listId: string; totalShares: number; userShares: number; roleShares: number; isSharedWithMe: boolean; isSharedByMe: boolean }> {
+    return this.GetListSharingSummary(listId);
+  }
+
   /**
    * Clear internal caches
    */
-  clearCache(): void {
+  ClearCache(): void {
     this.usersCache = null;
     this.rolesCache = null;
+  }
+
+  /** @deprecated Use {@link ClearCache}. */
+  clearCache(): void {
+    return this.ClearCache();
   }
 }

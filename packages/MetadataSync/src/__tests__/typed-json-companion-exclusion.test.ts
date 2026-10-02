@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isTypedJsonCompanion } from '../lib/EntityPropertyExtractor.js';
+import { IsTypedJsonCompanion } from '../lib/EntityPropertyExtractor.js';
 
 /**
  * CodeGen emits a typed accessor beside every JSON-typed column: a `Configuration`
@@ -23,24 +23,24 @@ describe('isTypedJsonCompanion', () => {
     const fields = ['ID', 'Name', 'Configuration', 'ExpectedOutcomes'];
 
     it('identifies the typed companion of a real JSON field', () => {
-        expect(isTypedJsonCompanion('ConfigurationObject', fields)).toBe(true);
+        expect(IsTypedJsonCompanion('ConfigurationObject', fields)).toBe(true);
     });
 
     it('leaves a real field alone', () => {
-        expect(isTypedJsonCompanion('Configuration', fields)).toBe(false);
+        expect(IsTypedJsonCompanion('Configuration', fields)).toBe(false);
     });
 
     it('leaves an unrelated virtual property alone', () => {
         // A genuine computed property pull SHOULD keep.
-        expect(isTypedJsonCompanion('DisplayName', fields)).toBe(false);
+        expect(IsTypedJsonCompanion('DisplayName', fields)).toBe(false);
     });
 
     it('does not strip a property merely because it ends in Object', () => {
         // No `Business` field exists, so `BusinessObject` is not a companion.
-        expect(isTypedJsonCompanion('BusinessObject', fields)).toBe(false);
+        expect(IsTypedJsonCompanion('BusinessObject', fields)).toBe(false);
     });
 
     it('matches case-insensitively, as entity field names are compared elsewhere', () => {
-        expect(isTypedJsonCompanion('configurationObject', fields)).toBe(true);
+        expect(IsTypedJsonCompanion('configurationObject', fields)).toBe(true);
     });
 });

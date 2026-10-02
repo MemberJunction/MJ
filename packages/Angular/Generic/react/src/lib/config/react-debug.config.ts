@@ -43,7 +43,7 @@ export class ReactDebugConfig {
    * 2. Static DEBUG_MODE property (set via setDebugMode() or environment)
    * Defaults to false if none are set.
    */
-  static getDebugMode(): boolean {
+  static GetDebugMode(): boolean {
     // Check if a global override has been set
     if (typeof window !== 'undefined' && (window as any).__MJ_REACT_DEBUG_MODE__ !== undefined) {
       return (window as any).__MJ_REACT_DEBUG_MODE__;
@@ -53,13 +53,23 @@ export class ReactDebugConfig {
     return ReactDebugConfig.DEBUG_MODE;
   }
 
+  /** @deprecated Use {@link GetDebugMode}. */
+  static getDebugMode(): boolean {
+    return this.GetDebugMode();
+  }
+
   /**
    * Set the debug mode (must be called before React loads)
    */
-  static setDebugMode(debug: boolean): void {
+  static SetDebugMode(debug: boolean): void {
     ReactDebugConfig.DEBUG_MODE = debug;
     if (typeof window !== 'undefined') {
       (window as any).__MJ_REACT_DEBUG_MODE__ = debug;
     }
+  }
+
+  /** @deprecated Use {@link SetDebugMode}. */
+  static setDebugMode(debug: boolean): void {
+    return this.SetDebugMode(debug);
   }
 }

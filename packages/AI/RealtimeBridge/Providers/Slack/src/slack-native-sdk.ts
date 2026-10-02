@@ -55,13 +55,18 @@ import {
  * underneath it when the native addon recycles its capture buffer. Defined here (the Slack package has no
  * shared PCM helper to reuse) and exported for direct testing.
  */
-export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function ToArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     if (data instanceof ArrayBuffer) {
         return data;
     }
     const copy = new Uint8Array(data.byteLength);
     copy.set(data);
     return copy.buffer;
+}
+
+/** @deprecated Use {@link ToArrayBuffer}. */
+export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+    return ToArrayBuffer(data);
 }
 
 /** One raw per-attendee audio frame the native addon surfaces (inbound hearing + diarization). */
@@ -189,7 +194,7 @@ export interface SlackNativeSdkConfig {
 }
 
 /** Normalizes the addon's free-form role string onto the bridge's {@link SlackParticipantRole}. */
-export function mapNativeRole(role?: string): SlackParticipantRole {
+export function MapNativeRole(role?: string): SlackParticipantRole {
     switch ((role ?? '').trim().toLowerCase()) {
         case 'host':
             return 'Host';
@@ -201,30 +206,45 @@ export function mapNativeRole(role?: string): SlackParticipantRole {
     }
 }
 
+/** @deprecated Use {@link MapNativeRole}. */
+export function mapNativeRole(role?: string): SlackParticipantRole {
+    return MapNativeRole(role);
+}
+
 /**
  * **Pure mapping** of one native participant onto the bridge's {@link SlackParticipant}. Isolated from the
  * addon and from I/O so it is unit-tested directly.
  */
-export function mapNativeParticipant(p: NativeParticipant): SlackParticipant {
+export function MapNativeParticipant(p: NativeParticipant): SlackParticipant {
     return {
         ParticipantId: String(p.userId),
         DisplayName: p.displayName,
-        Role: mapNativeRole(p.role),
+        Role: MapNativeRole(p.role),
         IsSelf: p.isSelf,
     };
+}
+
+/** @deprecated Use {@link MapNativeParticipant}. */
+export function mapNativeParticipant(p: NativeParticipant): SlackParticipant {
+    return MapNativeParticipant(p);
 }
 
 /**
  * **Pure mapping** of one native inbound audio frame onto the bridge's diarized {@link SlackAudioFrame}.
  * Copies the PCM (see {@link toArrayBuffer}) and resolves the speaker label. Isolated for direct testing.
  */
-export function mapNativeAudioFrame(frame: NativeAudioFrame): SlackAudioFrame {
+export function MapNativeAudioFrame(frame: NativeAudioFrame): SlackAudioFrame {
     return {
-        Pcm: toArrayBuffer(frame.data),
+        Pcm: ToArrayBuffer(frame.data),
         ParticipantId: String(frame.userId),
         DisplayName: frame.displayName,
         TimestampMs: typeof frame.timestampMs === 'number' ? frame.timestampMs : Date.now(),
     };
+}
+
+/** @deprecated Use {@link MapNativeAudioFrame}. */
+export function mapNativeAudioFrame(frame: NativeAudioFrame): SlackAudioFrame {
+    return MapNativeAudioFrame(frame);
 }
 
 /**
@@ -262,7 +282,7 @@ function unwrapDefault(mod: unknown): unknown {
  * VERIFY against the native Slack huddle media addon: the module's default/namespace interop + that it
  * exposes `createClient`.
  */
-export const defaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
+export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
     try {
         // Dynamic import — category 5 (runtime plugin discovery from config): the addon specifier is
         // deployment-supplied and unknown at build time, so a static import is impossible.
@@ -282,6 +302,9 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
         );
     }
 };
+
+/** @deprecated Use {@link DefaultNativeLoader}. */
+export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
 
 /**
  * A **real, two-way** {@link ISlackHuddleSdk} over the native Slack huddle media addon (Chime-backed
@@ -321,7 +344,7 @@ export class SlackNativeMeetingSdk implements ISlackHuddleSdk {
      * @param config Resolved credentials + media opts + the native module specifier.
      * @param loadModule The native-addon loader (defaults to the lazy specifier loader).
      */
-    constructor(config: SlackNativeSdkConfig, loadModule: NativeModuleLoader = defaultNativeLoader) {
+    constructor(config: SlackNativeSdkConfig, loadModule: NativeModuleLoader = DefaultNativeLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -420,7 +443,7 @@ export class SlackNativeMeetingSdk implements ISlackHuddleSdk {
             return [];
         }
         const natives = await this.client.getParticipants();
-        return natives.map(mapNativeParticipant);
+        return natives.map(MapNativeParticipant);
     }
 
     /** Registers the huddle-ended handler. */
@@ -454,8 +477,8 @@ export class SlackNativeMeetingSdk implements ISlackHuddleSdk {
 
     /** Wires the native client's callbacks to this adapter's handlers, mapping native shapes to the seam. */
     private wireClient(client: NativeMeetingClient): void {
-        client.onAudioFrame((frame) => this.audioHandler?.(mapNativeAudioFrame(frame)));
-        client.onParticipantJoin((p) => this.joinHandler?.(mapNativeParticipant(p)));
+        client.onAudioFrame((frame) => this.audioHandler?.(MapNativeAudioFrame(frame)));
+        client.onParticipantJoin((p) => this.joinHandler?.(MapNativeParticipant(p)));
         client.onParticipantLeave((id) => this.leaveHandler?.(String(id)));
         client.onHandRaise((id, raised) => this.handRaiseHandler?.(String(id), raised));
         client.onMeetingEnded(() => this.endedHandler?.());
@@ -479,9 +502,9 @@ export class SlackNativeMeetingSdk implements ISlackHuddleSdk {
  * @returns A factory `(config) => SlackNativeMeetingSdk`.
  */
 export function BindSlackNative(
-    loadModule: NativeModuleLoader = defaultNativeLoader,
+    loadModule: NativeModuleLoader = DefaultNativeLoader,
 ): (config?: Record<string, unknown>) => SlackNativeMeetingSdk {
-    return (config?: Record<string, unknown>) => new SlackNativeMeetingSdk(readNativeConfig(config), loadModule);
+    return (config?: Record<string, unknown>) => new SlackNativeMeetingSdk(ReadNativeConfig(config), loadModule);
 }
 
 /**
@@ -490,7 +513,7 @@ export function BindSlackNative(
  * partially-resolved object (and {@link SlackNativeMeetingSdk.join} then throws a precise error if the
  * required specifier is absent) rather than a half-typed blob.
  */
-export function readNativeConfig(config?: Record<string, unknown>): SlackNativeSdkConfig {
+export function ReadNativeConfig(config?: Record<string, unknown>): SlackNativeSdkConfig {
     const cfg = config ?? {};
     return {
         BotToken: readString(cfg.BotToken),
@@ -502,6 +525,11 @@ export function readNativeConfig(config?: Record<string, unknown>): SlackNativeS
         Channels: readNumber(cfg.Channels),
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
     };
+}
+
+/** @deprecated Use {@link ReadNativeConfig}. */
+export function readNativeConfig(config?: Record<string, unknown>): SlackNativeSdkConfig {
+    return ReadNativeConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */

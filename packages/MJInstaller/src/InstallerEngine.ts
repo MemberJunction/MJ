@@ -43,7 +43,7 @@ import { SmokeTestPhase } from './phases/SmokeTestPhase.js';
 import { ClaudePackDoctor } from './diagnostics/ClaudePackDoctor.js';
 import { InstallPlan, type CreatePlanInput, type RunOptions, type DoctorOptions, type InstallResult } from './models/InstallPlan.js';
 import { InstallState } from './models/InstallState.js';
-import { InstallConfigDefaults, resolveFromEnvironment, loadConfigFile, mergeConfigs, type PartialInstallConfig } from './models/InstallConfig.js';
+import { InstallConfigDefaults, ResolveFromEnvironment, LoadConfigFile, MergeConfigs, type PartialInstallConfig } from './models/InstallConfig.js';
 import { PackageManagerCommands } from './models/PackageManager.js';
 import { EventLogger } from './logging/EventLogger.js';
 import { ReportGenerator, type ReportData, type ServiceLogCapture } from './logging/ReportGenerator.js';
@@ -251,7 +251,7 @@ export class InstallerEngine {
     // ── Config chain: Defaults → Env vars → Config file → Plan → RunOptions ──
     const configSources: PartialInstallConfig[] = [plan.Config];
 
-    const envConfig = resolveFromEnvironment();
+    const envConfig = ResolveFromEnvironment();
     if (Object.keys(envConfig).length > 0) {
       configSources.push(envConfig);
       this.emitter.Emit('log', {
@@ -262,7 +262,7 @@ export class InstallerEngine {
     }
 
     if (options?.ConfigFile) {
-      const fileConfig = await loadConfigFile(options.ConfigFile);
+      const fileConfig = await LoadConfigFile(options.ConfigFile);
       configSources.push(fileConfig);
       this.emitter.Emit('log', {
         Type: 'log',
@@ -275,7 +275,7 @@ export class InstallerEngine {
       configSources.push(options.Config);
     }
 
-    const config = mergeConfigs(...configSources);
+    const config = MergeConfigs(...configSources);
 
     // ── Prompt safety net (non-interactive mode) ──────────────────────────
     // In --yes mode, install a catch-all listener that auto-resolves any

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
-import { PredictiveStudioEngineVersion, isModelingPlanApproved } from '../index';
+import { PredictiveStudioEngineVersion, IsModelingPlanApproved } from '../index';
 
 /**
  * Starter test for the Predictive Studio engine scaffold. Proves the dependency
@@ -24,7 +24,7 @@ describe('predictive-studio engine scaffold', () => {
       ProposedBudget: { MaxRuns: 10 },
     };
 
-    expect(isModelingPlanApproved(base)).toBe(false);
-    expect(isModelingPlanApproved({ ...base, Approved: true })).toBe(true);
+    expect(IsModelingPlanApproved(base)).toBe(false);
+    expect(IsModelingPlanApproved({ ...base, Approved: true })).toBe(true);
   });
 });

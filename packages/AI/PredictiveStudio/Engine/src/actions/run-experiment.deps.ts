@@ -20,7 +20,7 @@ import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { resolveActiveFileStorageProviderId, buildArtifactStore } from '../training/artifact-store';
+import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
 import type { TrainingDeps } from '../training/types';
 import {
   SystemClock,
@@ -62,17 +62,17 @@ export class UnresolvedPipelineResolver implements IPipelineResolver {
  * @param contextUser request user — threaded for isolation/audit
  * @param provider optional provider for multi-provider correctness
  */
-export async function buildProductionExperimentDeps(
+export async function BuildProductionExperimentDeps(
   contextUser?: UserInfo,
   provider?: IMetadataProvider,
 ): Promise<ExperimentDeps> {
   const entityFactory = new MetadataEntityFactory(provider);
-  const providerId = await resolveActiveFileStorageProviderId(contextUser, provider);
+  const providerId = await ResolveActiveFileStorageProviderId(contextUser, provider);
   const trainingDeps: TrainingDeps = {
     entityFactory,
     recordLoader: new RunViewRecordLoader(),
     sidecar: new MJSidecarTrainer(),
-    artifactStore: buildArtifactStore(providerId, entityFactory),
+    artifactStore: BuildArtifactStore(providerId, entityFactory),
     contextUser,
     provider,
   };
@@ -90,4 +90,12 @@ export async function buildProductionExperimentDeps(
     contextUser,
     provider,
   };
+}
+
+/** @deprecated Use {@link BuildProductionExperimentDeps}. */
+export async function buildProductionExperimentDeps(
+  contextUser?: UserInfo,
+  provider?: IMetadataProvider,
+): Promise<ExperimentDeps> {
+  return BuildProductionExperimentDeps(contextUser, provider);
 }

@@ -6,7 +6,7 @@
 
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
 import { LogError, IMetadataProvider } from '@memberjunction/core';
-import { TelephonyResolverContext, getUserFromPayload, getReadWriteProvider } from '../types.js';
+import { TelephonyResolverContext, GetUserFromPayload, GetReadWriteProvider } from '../types.js';
 import { GetRingCentralTelephonyService } from '../telephony/ringcentral-runtime.js';
 
 /** Result of an outbound RingCentral place-call attempt. */
@@ -36,7 +36,7 @@ export class RingCentralTelephonyResolver {
     ): Promise<PlaceRingCentralCallResult> {
         const failure = (msg: string): PlaceRingCentralCallResult => ({ Success: false, ErrorMessage: msg, SessionId: '' });
         try {
-            const user = getUserFromPayload(context.userPayload);
+            const user = GetUserFromPayload(context.userPayload);
             if (!user) {
                 return failure('Unable to determine current user.');
             }
@@ -44,7 +44,7 @@ export class RingCentralTelephonyResolver {
             if (!service) {
                 return failure('RingCentral telephony is not configured on this server.');
             }
-            const provider = getReadWriteProvider(context.providers);
+            const provider = GetReadWriteProvider(context.providers);
             if (!provider) {
                 return failure('Database provider is not available.');
             }

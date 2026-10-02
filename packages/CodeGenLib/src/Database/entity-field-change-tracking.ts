@@ -65,7 +65,7 @@ export interface EntityFieldChange {
  * - Numbers: number or null
  * - Strings: trimmed
  */
-export function normalizeSnapshotValue(column: FieldChangeReason, value: unknown): unknown {
+export function NormalizeSnapshotValue(column: FieldChangeReason, value: unknown): unknown {
    if (column === 'Description' || column === 'DefaultValue' || column === 'RelatedEntityFieldName') {
       if (value === null || value === undefined) return '';
       return String(value).trim();
@@ -104,6 +104,11 @@ export function normalizeSnapshotValue(column: FieldChangeReason, value: unknown
    return value;
 }
 
+/** @deprecated Use {@link NormalizeSnapshotValue}. */
+export function normalizeSnapshotValue(column: FieldChangeReason, value: unknown): unknown {
+   return NormalizeSnapshotValue(column, value);
+}
+
 /**
  * Compares before and after snapshots of EntityField rows.
  * Rows keyed by ID. A row only in `after` is new this run and is not a change;
@@ -111,7 +116,7 @@ export function normalizeSnapshotValue(column: FieldChangeReason, value: unknown
  * A row only in `before` was deleted and is ignored.
  * Returns changes sorted by entityName then fieldName using ordinalCompare.
  */
-export function diffEntityFieldSnapshots(
+export function DiffEntityFieldSnapshots(
    before: ReadonlyMap<string, EntityFieldSnapshotRow>,
    after: ReadonlyMap<string, EntityFieldSnapshotRow>,
    isNew: (entityID: string, name: string) => boolean,
@@ -132,8 +137,8 @@ export function diffEntityFieldSnapshots(
 
       const reasons: FieldChangeReason[] = [];
       for (const col of TRACKED_FIELD_COLUMNS) {
-         const bVal = normalizeSnapshotValue(col, beforeRow[col]);
-         const aVal = normalizeSnapshotValue(col, afterRow[col]);
+         const bVal = NormalizeSnapshotValue(col, beforeRow[col]);
+         const aVal = NormalizeSnapshotValue(col, afterRow[col]);
          if (bVal !== aVal) {
             reasons.push(col);
          }
@@ -156,4 +161,13 @@ export function diffEntityFieldSnapshots(
       if (entityCmp !== 0) return entityCmp;
       return ordinalCompare(a.fieldName, b.fieldName);
    });
+}
+
+/** @deprecated Use {@link DiffEntityFieldSnapshots}. */
+export function diffEntityFieldSnapshots(
+   before: ReadonlyMap<string, EntityFieldSnapshotRow>,
+   after: ReadonlyMap<string, EntityFieldSnapshotRow>,
+   isNew: (entityID: string, name: string) => boolean,
+): EntityFieldChange[] {
+   return DiffEntityFieldSnapshots(before, after, isNew);
 }

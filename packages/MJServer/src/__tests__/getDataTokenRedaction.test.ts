@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider } from '@memberjunction/core';
-import { redactArg } from '../logging/secretRedactor.js';
-import { NoLog, getNoLogFields } from '../logging/NoLog.js';
+import { RedactArg } from '../logging/secretRedactor.js';
+import { NoLog, GetNoLogFields } from '../logging/NoLog.js';
 
 /**
  * Test 4 (unit form): the `@NoLog`-decorated `Token` field on GetDataInputType is redacted
@@ -27,7 +27,7 @@ describe('Test 4: GetData Token redaction via field-level @NoLog', () => {
   const provider = { Entities: [] } as unknown as IMetadataProvider;
 
   it('getNoLogFields picks up the Token field mark', () => {
-    const fields = getNoLogFields(GetDataInputType);
+    const fields = GetNoLogFields(GetDataInputType);
     expect(fields.has('Token')).toBe(true);
     expect(fields.has('Queries')).toBe(false);
   });
@@ -40,12 +40,12 @@ describe('Test 4: GetData Token redaction via field-level @NoLog', () => {
       Entities: [{ ClassName: 'Something', EncryptedFields: [] }],
     } as unknown as IMetadataProvider;
 
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'GetDataInput', // not entity-bound — regex won't match
       rawValue: { Token: 'FAKE_SYSTEM_TOKEN_DO_NOT_USE', Queries: ['SELECT 1', 'SELECT 2'] },
       provider: providerWithEntities,
       noLogParameter: false,
-      noLogFields: getNoLogFields(GetDataInputType),
+      noLogFields: GetNoLogFields(GetDataInputType),
     });
 
     expect(result).toEqual({ Token: '<redacted>', Queries: ['SELECT 1', 'SELECT 2'] });
@@ -58,7 +58,7 @@ describe('Test 4: GetData Token redaction via field-level @NoLog', () => {
       Entities: [{ ClassName: 'GetDataThing', EncryptedFields: [] }],
     } as unknown as IMetadataProvider;
 
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'CreateGetDataThingInput',
       rawValue: { Token: 'FAKE_SYSTEM_TOKEN_DO_NOT_USE', Queries: ['SELECT 1'] },
       provider: providerWithEntity,
@@ -72,7 +72,7 @@ describe('Test 4: GetData Token redaction via field-level @NoLog', () => {
 
   it('parameter-level @NoLog masks the entire arg regardless of shape', () => {
     // If Token were a top-level @Arg with @NoLog (parameter form), noLogParameter=true masks it whole.
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'String',
       rawValue: 'FAKE_SYSTEM_TOKEN_DO_NOT_USE',
       provider,

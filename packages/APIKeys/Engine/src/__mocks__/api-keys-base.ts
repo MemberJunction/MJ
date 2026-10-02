@@ -20,39 +20,74 @@ let _keyApplications: MJAPIKeyApplicationEntity[] = [];
 let _keyScopes: MJAPIKeyScopeEntity[] = [];
 
 // ---- Test helpers ----
-export function setMockBaseScopes(scopes: MJAPIScopeEntity[]): void {
+export function SetMockBaseScopes(scopes: MJAPIScopeEntity[]): void {
     _scopes = scopes;
 }
 
-export function setMockBaseApplications(apps: MJAPIApplicationEntity[]): void {
+/** @deprecated Use {@link SetMockBaseScopes}. */
+export function setMockBaseScopes(scopes: MJAPIScopeEntity[]): void {
+    return SetMockBaseScopes(scopes);
+}
+
+export function SetMockBaseApplications(apps: MJAPIApplicationEntity[]): void {
     _applications = apps;
 }
 
-export function setMockBaseApplicationScopes(appScopes: MJAPIApplicationScopeEntity[]): void {
+/** @deprecated Use {@link SetMockBaseApplications}. */
+export function setMockBaseApplications(apps: MJAPIApplicationEntity[]): void {
+    return SetMockBaseApplications(apps);
+}
+
+export function SetMockBaseApplicationScopes(appScopes: MJAPIApplicationScopeEntity[]): void {
     _applicationScopes = appScopes;
 }
 
-export function setMockBaseKeyApplications(keyApps: MJAPIKeyApplicationEntity[]): void {
+/** @deprecated Use {@link SetMockBaseApplicationScopes}. */
+export function setMockBaseApplicationScopes(appScopes: MJAPIApplicationScopeEntity[]): void {
+    return SetMockBaseApplicationScopes(appScopes);
+}
+
+export function SetMockBaseKeyApplications(keyApps: MJAPIKeyApplicationEntity[]): void {
     _keyApplications = keyApps;
 }
 
-export function setMockBaseKeyScopes(keyScopes: MJAPIKeyScopeEntity[]): void {
+/** @deprecated Use {@link SetMockBaseKeyApplications}. */
+export function setMockBaseKeyApplications(keyApps: MJAPIKeyApplicationEntity[]): void {
+    return SetMockBaseKeyApplications(keyApps);
+}
+
+export function SetMockBaseKeyScopes(keyScopes: MJAPIKeyScopeEntity[]): void {
     _keyScopes = keyScopes;
+}
+
+/** @deprecated Use {@link SetMockBaseKeyScopes}. */
+export function setMockBaseKeyScopes(keyScopes: MJAPIKeyScopeEntity[]): void {
+    return SetMockBaseKeyScopes(keyScopes);
 }
 
 let _loaded = true;
 
-export function setMockBaseLoaded(loaded: boolean): void {
+export function SetMockBaseLoaded(loaded: boolean): void {
     _loaded = loaded;
 }
 
-export function clearMockBaseState(): void {
+/** @deprecated Use {@link SetMockBaseLoaded}. */
+export function setMockBaseLoaded(loaded: boolean): void {
+    return SetMockBaseLoaded(loaded);
+}
+
+export function ClearMockBaseState(): void {
     _scopes = [];
     _applications = [];
     _applicationScopes = [];
     _keyApplications = [];
     _keyScopes = [];
     _loaded = true;
+}
+
+/** @deprecated Use {@link ClearMockBaseState}. */
+export function clearMockBaseState(): void {
+    return ClearMockBaseState();
 }
 
 // ---- Mock APIKeysEngineBase ----

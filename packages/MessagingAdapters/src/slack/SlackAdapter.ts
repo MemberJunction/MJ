@@ -16,8 +16,8 @@ import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-
 import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseMessagingAdapter, type UploadableFile } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
-import { buildRichResponse, buildErrorBlocks, buildAgentContextBlock, buildDivider } from './slack-block-builder.js';
-import { markdownToBlocks } from './slack-formatter.js';
+import { BuildRichResponse, BuildErrorBlocks, BuildAgentContextBlock, BuildDivider } from './slack-block-builder.js';
+import { MarkdownToBlocks } from './slack-formatter.js';
 
 /**
  * Slack-specific adapter that implements all platform operations
@@ -404,7 +404,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
         const identity = this.buildAgentIdentity(agent);
 
         // Build rich Block Kit layout
-        const blocks = buildRichResponse(result, agent, responseText, {
+        const blocks = BuildRichResponse(result, agent, responseText, {
             explorerBaseURL: this.settings.ExplorerBaseURL,
             artifactId: metadata?.ArtifactId,
             conversationId: metadata?.ConversationId,

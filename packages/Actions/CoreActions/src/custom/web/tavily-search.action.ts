@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { HttpError, HttpPost, IsHttpError } from "@memberjunction/network-utils";
-import { getApiIntegrationsConfig } from "../../config";
+import { GetApiIntegrationsConfig } from "../../config";
 
 /** One result from Tavily's /search endpoint. */
 export interface TavilySearchResultItem {
@@ -118,7 +118,7 @@ export class TavilySearchAction extends BaseAction {
             return this.createErrorResult("Query parameter is required", "MISSING_QUERY");
         }
 
-        const apiKey = getApiIntegrationsConfig().tavilyApiKey;
+        const apiKey = GetApiIntegrationsConfig().tavilyApiKey;
         if (!apiKey) {
             return this.createErrorResult(
                 "Tavily API key not found. Set tavilyApiKey in mj.config.cjs or the TAVILY_API_KEY environment variable",

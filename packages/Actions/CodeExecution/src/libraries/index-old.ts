@@ -22,23 +22,33 @@ export type AllowedModule = typeof ALLOWED_MODULES[number];
 /**
  * Check if a module is allowed
  */
-export function isModuleAllowed(moduleName: string): moduleName is AllowedModule {
+export function IsModuleAllowed(moduleName: string): moduleName is AllowedModule {
     return ALLOWED_MODULES.includes(moduleName as AllowedModule);
+}
+
+/** @deprecated Use {@link IsModuleAllowed}. */
+export function isModuleAllowed(moduleName: string): moduleName is AllowedModule {
+    return IsModuleAllowed(moduleName);
 }
 
 /**
  * Get list of all allowed module names
  */
-export function getAllowedModuleNames(): string[] {
+export function GetAllowedModuleNames(): string[] {
     return [...ALLOWED_MODULES];
+}
+
+/** @deprecated Use {@link GetAllowedModuleNames}. */
+export function getAllowedModuleNames(): string[] {
+    return GetAllowedModuleNames();
 }
 
 /**
  * Get the source code for a library module
  * Returns JavaScript code that evaluates to the module exports
  */
-export function getLibrarySource(moduleName: string): string | null {
-    if (!isModuleAllowed(moduleName)) {
+export function GetLibrarySource(moduleName: string): string | null {
+    if (!IsModuleAllowed(moduleName)) {
         return null;
     }
 
@@ -54,6 +64,11 @@ export function getLibrarySource(moduleName: string): string | null {
         default:
             return null;
     }
+}
+
+/** @deprecated Use {@link GetLibrarySource}. */
+export function getLibrarySource(moduleName: string): string | null {
+    return GetLibrarySource(moduleName);
 }
 
 /**

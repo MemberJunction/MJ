@@ -16,9 +16,9 @@ const DEFAULT_ENVIRONMENT_ID = 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
 /** A selectable agent (from the `MJ: AI Agents` entity) the user can address. */
 export type AgentOption = {
-    id: string;
-    name: string;
-    description: string | null;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -96,19 +96,19 @@ export async function ResolveTargetAgent(
 
 /** Progress update emitted while an agent run is in flight (via the push channel). */
 export type SendProgress = {
-    currentStep: string;
-    percentage?: number;
-    message: string;
+    CurrentStep: string;
+    Percentage?: number;
+    message: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /** Outcome of {@link SendMessage}: the saved user message id, the placeholder AI reply id, and whether completion must be polled. */
 export type SendResult = {
-    success: boolean;
-    errorMessage?: string;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** The user message we created (already saved). */
-    userMessageId: string;
+    UserMessageId: string;
     /** The in-progress AI response detail we created (server fills it). */
-    aiMessageId?: string;
+    AiMessageId?: string;
 };
 
 /**
@@ -154,7 +154,7 @@ export async function SendMessage(args: {
         status: 'Complete',
     });
     if (!userDetail) {
-        return { success: false, errorMessage: 'Failed to save message.', userMessageId: '' };
+        return { success: false, errorMessage: 'Failed to save message.', UserMessageId: '' };
     }
 
     // Anything the run must be able to see has to land here — between the user's row existing and
@@ -168,7 +168,7 @@ export async function SendMessage(args: {
             return {
                 success: false,
                 errorMessage: error instanceof Error ? error.message : String(error),
-                userMessageId: userDetail.ID,
+                UserMessageId: userDetail.ID,
             };
         }
     }
@@ -185,7 +185,7 @@ export async function SendMessage(args: {
         return {
             success: false,
             errorMessage: 'Failed to prepare the agent response.',
-            userMessageId: userDetail.ID,
+            UserMessageId: userDetail.ID,
         };
     }
 
@@ -216,7 +216,7 @@ export async function SendMessage(args: {
             explicitAgentId: mentions.agentMention?.id ?? agentId ?? null,
             ...(requestedSkillIDs.length ? { requestedSkillIDs } : {}),
             onProgress: onProgress
-                ? (p) => onProgress({ currentStep: p.step ?? 'working', message: p.message ?? '' })
+                ? (p) => onProgress({ CurrentStep: p.step ?? 'working', message: p.message ?? '' })
                 : undefined,
         });
 
@@ -229,22 +229,22 @@ export async function SendMessage(args: {
             return {
                 success: false,
                 errorMessage: 'No agent was available to respond.',
-                userMessageId: userDetail.ID,
-                aiMessageId: aiDetail.ID,
+                UserMessageId: userDetail.ID,
+                AiMessageId: aiDetail.ID,
             };
         }
         return {
             success: result.success !== false,
             errorMessage: result.success === false ? result.errorMessage ?? 'The agent run failed.' : undefined,
-            userMessageId: userDetail.ID,
-            aiMessageId: aiDetail.ID,
+            UserMessageId: userDetail.ID,
+            AiMessageId: aiDetail.ID,
         };
     } catch (error) {
         return {
             success: false,
             errorMessage: error instanceof Error ? error.message : String(error),
-            userMessageId: userDetail.ID,
-            aiMessageId: aiDetail.ID,
+            UserMessageId: userDetail.ID,
+            AiMessageId: aiDetail.ID,
         };
     }
 }

@@ -93,6 +93,19 @@ describe('MessageItemComponent — pending artifact placeholders', () => {
     expect(c.pendingArtifactPlaceholders).toEqual([]);
   });
 
+  it('keeps the surviving placeholders in their pending order', () => {
+    const c = item({
+      pendingArtifacts: [pending('chart'), pending('report'), pending('image')],
+      artifacts: [loaded('report')],
+    });
+    expect(c.pendingArtifactPlaceholders.map(p => p.artifactId)).toEqual(['chart', 'image']);
+  });
+
+  it('keeps every placeholder while no artifact has loaded yet', () => {
+    const c = item({ pendingArtifacts: [pending('report'), pending('image')] });
+    expect(c.pendingArtifactPlaceholders.map(p => p.artifactId)).toEqual(['report', 'image']);
+  });
+
   it('allocates nothing while nothing is pending — the getter is on a per-second refresh path', () => {
     const c = item({});
     expect(c.pendingArtifactPlaceholders).toBe(c.pendingArtifactPlaceholders);

@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -25,7 +25,7 @@ export class StringTemplateValidationRule extends BaseLintRule {
   Test(ast: t.File, _componentName: string): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       // Check for malformed template literals
       TemplateLiteral(path: NodePath<t.TemplateLiteral>) {
         // Template literals are parsed correctly by Babel, so if we're here it's valid

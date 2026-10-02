@@ -19,9 +19,13 @@ export type ExportData = ExportDataRow[];
 export type SamplingMode = 'all' | 'top' | 'bottom' | 'every-nth' | 'random';
 
 /**
- * Column data type hint for formatting
+ * Column data type hint for formatting.
+ *
+ * `dateonly` is a calendar day with no time and no zone (a SQL `date` column), as distinct from
+ * `date`, which is an instant. The driver delivers a calendar day as UTC midnight, so it is written
+ * by its UTC day: `YYYY-MM-DD` in CSV and JSON (ISO 8601), and a real date cell in Excel.
  */
-export type ColumnDataType = 'string' | 'number' | 'date' | 'boolean' | 'currency' | 'percentage';
+export type ColumnDataType = 'string' | 'number' | 'date' | 'dateonly' | 'boolean' | 'currency' | 'percentage';
 
 /**
  * Cell border line style
@@ -687,7 +691,7 @@ export const CommonStyles = {
 /**
  * Helper function to merge cell styles
  */
-export function mergeCellStyles(...styles: (CellStyle | undefined)[]): CellStyle {
+export function MergeCellStyles(...styles: (CellStyle | undefined)[]): CellStyle {
   const result: CellStyle = {};
 
   for (const style of styles) {
@@ -711,4 +715,9 @@ export function mergeCellStyles(...styles: (CellStyle | undefined)[]): CellStyle
   }
 
   return result;
+}
+
+/** @deprecated Use {@link MergeCellStyles}. */
+export function mergeCellStyles(...styles: (CellStyle | undefined)[]): CellStyle {
+  return MergeCellStyles(...styles);
 }

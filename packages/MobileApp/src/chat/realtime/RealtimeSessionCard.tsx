@@ -37,8 +37,10 @@ export type MJRealtimeSessionCardProps = {
     Meta: RealtimeSessionTimelineMeta | null;
     /** The session's visible turns, oldest first. */
     Turns: AdaptedMessage[];
-    /** Display name used for the user's own turns, matching the thread's sender names. */
+    /** Label for the user's turns when `CurrentUserID` is not given. */
     UserName?: string;
+    /** The signed-in user's id, so the user's turns say "You" on the viewer's own call and name the caller on anyone else's. */
+    CurrentUserID?: string | null;
 };
 
 /** Chip tone → its foreground and background. Live and error are the only ones that draw attention. */
@@ -55,11 +57,12 @@ const CHIP_TONE: Record<RealtimeSessionStatusChip['Tone'], { fg: string; bg: str
  * @param Group The collapsed block.
  * @param Meta Session-row enrichment, or null when the lookup was unavailable.
  * @param Turns The session's visible turns, oldest first.
- * @param UserName Display name for the user's own turns.
+ * @param UserName Label for the user's turns when `CurrentUserID` is not given.
+ * @param CurrentUserID The signed-in user's id.
  */
-export function MJRealtimeSessionCard({ Group, Meta, Turns, UserName = 'You' }: MJRealtimeSessionCardProps) {
+export function MJRealtimeSessionCard({ Group, Meta, Turns, UserName = 'You', CurrentUserID = null }: MJRealtimeSessionCardProps) {
     const [expanded, setExpanded] = useState(false);
-    const view = BuildRealtimeSessionCardView(Group, Meta, Turns.length, UserName);
+    const view = BuildRealtimeSessionCardView(Group, Meta, Turns.length, UserName, CurrentUserID);
 
     return (
         <View style={styles.card}>
@@ -68,7 +71,7 @@ export function MJRealtimeSessionCard({ Group, Meta, Turns, UserName = 'You' }: 
                 disabled={!view.CanExpand}
                 accessibilityRole={view.CanExpand ? 'button' : undefined}
                 accessibilityState={view.CanExpand ? { expanded } : undefined}
-                accessibilityLabel={`${view.Title}, ${view.TurnLabel}`}
+                accessibilityLabel={`${view.Title}, ${view.MessageCountLabel}`}
                 onPress={() => setExpanded((v) => !v)}
             >
                 <View style={styles.icon}>
@@ -110,10 +113,10 @@ export function MJRealtimeSessionCard({ Group, Meta, Turns, UserName = 'You' }: 
                     {Turns.map((turn) => (
                         <View key={turn.id} style={styles.turn}>
                             <Text style={styles.turnRole}>
-                                {turn.kind === 'user' ? UserName : (turn.agent.name || 'Agent')}
+                                {turn.kind === 'user' ? view.UserTurnLabel : (turn.Agent.name || 'Agent')}
                             </Text>
                             <Text style={styles.turnText}>
-                                {turn.kind === 'user' ? turn.text : turn.body}
+                                {turn.kind === 'user' ? turn.text : turn.Body}
                             </Text>
                         </View>
                     ))}

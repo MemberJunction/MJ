@@ -14,41 +14,41 @@ export class DataSnapshot {
     // ─── TABLES ───
 
     /** Named datasets — the core payload */
-    tables?: DataTable[];
+    tables?: DataTable[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     // ─── SHARED CONTEXT ───
 
     /** Display title */
-    title?: string;
+    title?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** How the data was obtained (markdown, may include Mermaid diagrams) */
-    plan?: string;
+    plan?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** What the data MEANS — patterns, insights, key takeaways */
-    interpretation?: string;
+    interpretation?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Cross-table computations (rare — most computations live on individual DataTables) */
-    computations?: DataComputation[];
+    computations?: DataComputation[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     // ─── COMPONENT-LEVEL STATE (spans all tables) ───
 
     /** Drill-down breadcrumb path: ["All Regions", "West", "California"] */
-    drillPath?: string[];
+    drillPath?: string[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Which tab/view/section is currently active */
-    activeTab?: string;
+    activeTab?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Search/filter text entered by user (component-wide) */
-    searchText?: string;
+    searchText?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Component-specific state not covered above */
-    custom?: Record<string, unknown>;
+    custom?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     // ─── QUERY SAVE TRACKING ───
 
-    savedQueryId?: string;
-    savedQueryName?: string;
-    savedAtVersionNumber?: number;
+    savedQueryId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    savedQueryName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    savedAtVersionNumber?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     // ─── GETTERS ───
 

@@ -31,10 +31,10 @@ import {
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 
 export interface FieldSelectionItem {
-  field: EntityFieldInfo;
-  selected: boolean;
-  isDenyList: boolean;
-  isTarget: boolean;
+  field: EntityFieldInfo;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  selected: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  isDenyList: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  isTarget: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
@@ -394,122 +394,475 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
 })
 export class PSPipelineWizardComponent implements OnInit {
   @Input() provider: IMetadataProvider | null = null;
-  @Input() currentUser: UserInfo | null = null;
+  @Input() CurrentUser: UserInfo | null = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | null) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
   @Input() engine: PredictiveStudioEngine | null = null;
-  @Input() initialAlgorithmName?: string;
-  @Input() initialAlgorithmId?: string;
-  @Input() cloneFromPipeline?: MJMLTrainingPipelineEntity;
-  @Input() set cloneFrom(p: MJMLTrainingPipelineEntity | null | undefined) {
-    this.cloneFromPipeline = p ?? undefined;
+  @Input() InitialAlgorithmName?: string;
+
+  /** @deprecated Use {@link InitialAlgorithmName}. */
+  @Input() set initialAlgorithmName(value: string | undefined) {
+    this.InitialAlgorithmName = value;
+  }
+  /** @deprecated Use {@link InitialAlgorithmName}. */
+  get initialAlgorithmName(): string | undefined {
+    return this.InitialAlgorithmName;
+  }
+  @Input() InitialAlgorithmId?: string;
+
+  /** @deprecated Use {@link InitialAlgorithmId}. */
+  @Input() set initialAlgorithmId(value: string | undefined) {
+    this.InitialAlgorithmId = value;
+  }
+  /** @deprecated Use {@link InitialAlgorithmId}. */
+  get initialAlgorithmId(): string | undefined {
+    return this.InitialAlgorithmId;
+  }
+  @Input() CloneFromPipeline?: MJMLTrainingPipelineEntity;
+
+  /** @deprecated Use {@link CloneFromPipeline}. */
+  @Input() set cloneFromPipeline(value: MJMLTrainingPipelineEntity | undefined) {
+    this.CloneFromPipeline = value;
+  }
+  /** @deprecated Use {@link CloneFromPipeline}. */
+  get cloneFromPipeline(): MJMLTrainingPipelineEntity | undefined {
+    return this.CloneFromPipeline;
+  }
+  @Input() set CloneFrom(p: MJMLTrainingPipelineEntity | null | undefined) {
+    this.CloneFromPipeline = p ?? undefined;
   }
 
-  @Output() closed = new EventEmitter<void>();
-  @Output() saved = new EventEmitter<MJMLTrainingPipelineEntity>();
-  @Output() trainRequested = new EventEmitter<MJMLTrainingPipelineEntity>();
+  /** @deprecated Use {@link CloneFrom}. */
+  @Input() set cloneFrom(value: MJMLTrainingPipelineEntity | null | undefined) {
+    this.CloneFrom = value;
+  }
+
+  @Output() Closed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
+  @Output() Saved = new EventEmitter<MJMLTrainingPipelineEntity>();
+
+  /**
+   * @deprecated Use {@link Saved}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (saved) keeps working. Must stay AFTER Saved: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() saved = this.Saved;
+  @Output() TrainRequested = new EventEmitter<MJMLTrainingPipelineEntity>();
+
+  /**
+   * @deprecated Use {@link TrainRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (trainRequested) keeps working. Must stay AFTER TrainRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() trainRequested = this.TrainRequested;
 
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly notifications = inject(MJNotificationService);
 
-  public currentStep: WizardStep = 'goal';
-  public busy = false;
-  public isEditing = false;
+  public CurrentStep: WizardStep = 'goal';
+
+  /** @deprecated Use {@link CurrentStep}. */
+  public get currentStep(): WizardStep {
+    return this.CurrentStep;
+  }
+  /** @deprecated Use {@link CurrentStep}. */
+  public set currentStep(value: WizardStep) {
+    this.CurrentStep = value;
+  }
+  public Busy = false;
+
+  /** @deprecated Use {@link Busy}. */
+  public get busy() {
+    return this.Busy;
+  }
+  /** @deprecated Use {@link Busy}. */
+  public set busy(value) {
+    this.Busy = value;
+  }
+  public IsEditing = false;
+
+  /** @deprecated Use {@link IsEditing}. */
+  public get isEditing() {
+    return this.IsEditing;
+  }
+  /** @deprecated Use {@link IsEditing}. */
+  public set isEditing(value) {
+    this.IsEditing = value;
+  }
 
   // Step 1: Goal & Target
-  public pipelineName = '';
-  public pipelineDescription = '';
-  public selectedEntityId = '';
-  public targetVariable = '';
-  public problemType: ProblemType = 'classification';
-  public evaluationMetric = 'AUC';
-  public asOfMode: 'none' | 'column' | 'offset' = 'none';
-  public asOfColumn = '';
-  public asOfOffsetDays = 30;
+  public PipelineName = '';
+
+  /** @deprecated Use {@link PipelineName}. */
+  public get pipelineName() {
+    return this.PipelineName;
+  }
+  /** @deprecated Use {@link PipelineName}. */
+  public set pipelineName(value) {
+    this.PipelineName = value;
+  }
+  public PipelineDescription = '';
+
+  /** @deprecated Use {@link PipelineDescription}. */
+  public get pipelineDescription() {
+    return this.PipelineDescription;
+  }
+  /** @deprecated Use {@link PipelineDescription}. */
+  public set pipelineDescription(value) {
+    this.PipelineDescription = value;
+  }
+  public SelectedEntityId = '';
+
+  /** @deprecated Use {@link SelectedEntityId}. */
+  public get selectedEntityId() {
+    return this.SelectedEntityId;
+  }
+  /** @deprecated Use {@link SelectedEntityId}. */
+  public set selectedEntityId(value) {
+    this.SelectedEntityId = value;
+  }
+  public TargetVariable = '';
+
+  /** @deprecated Use {@link TargetVariable}. */
+  public get targetVariable() {
+    return this.TargetVariable;
+  }
+  /** @deprecated Use {@link TargetVariable}. */
+  public set targetVariable(value) {
+    this.TargetVariable = value;
+  }
+  public ProblemType: ProblemType = 'classification';
+
+  /** @deprecated Use {@link ProblemType}. */
+  public get problemType(): ProblemType {
+    return this.ProblemType;
+  }
+  /** @deprecated Use {@link ProblemType}. */
+  public set problemType(value: ProblemType) {
+    this.ProblemType = value;
+  }
+  public EvaluationMetric = 'AUC';
+
+  /** @deprecated Use {@link EvaluationMetric}. */
+  public get evaluationMetric() {
+    return this.EvaluationMetric;
+  }
+  /** @deprecated Use {@link EvaluationMetric}. */
+  public set evaluationMetric(value) {
+    this.EvaluationMetric = value;
+  }
+  public AsOfMode: 'none' | 'column' | 'offset' = 'none';
+
+  /** @deprecated Use {@link AsOfMode}. */
+  public get asOfMode(): 'none' | 'column' | 'offset' {
+    return this.AsOfMode;
+  }
+  /** @deprecated Use {@link AsOfMode}. */
+  public set asOfMode(value: 'none' | 'column' | 'offset') {
+    this.AsOfMode = value;
+  }
+  public AsOfColumn = '';
+
+  /** @deprecated Use {@link AsOfColumn}. */
+  public get asOfColumn() {
+    return this.AsOfColumn;
+  }
+  /** @deprecated Use {@link AsOfColumn}. */
+  public set asOfColumn(value) {
+    this.AsOfColumn = value;
+  }
+  public AsOfOffsetDays = 30;
+
+  /** @deprecated Use {@link AsOfOffsetDays}. */
+  public get asOfOffsetDays() {
+    return this.AsOfOffsetDays;
+  }
+  /** @deprecated Use {@link AsOfOffsetDays}. */
+  public set asOfOffsetDays(value) {
+    this.AsOfOffsetDays = value;
+  }
 
   // Step 2: Features
-  public fieldItems: FieldSelectionItem[] = [];
-  public fieldSearchFilter = '';
-  public dominanceThreshold = DOMINANCE_THRESHOLD_DEFAULT;
+  public FieldItems: FieldSelectionItem[] = [];
+
+  /** @deprecated Use {@link FieldItems}. */
+  public get fieldItems(): FieldSelectionItem[] {
+    return this.FieldItems;
+  }
+  /** @deprecated Use {@link FieldItems}. */
+  public set fieldItems(value: FieldSelectionItem[]) {
+    this.FieldItems = value;
+  }
+  public FieldSearchFilter = '';
+
+  /** @deprecated Use {@link FieldSearchFilter}. */
+  public get fieldSearchFilter() {
+    return this.FieldSearchFilter;
+  }
+  /** @deprecated Use {@link FieldSearchFilter}. */
+  public set fieldSearchFilter(value) {
+    this.FieldSearchFilter = value;
+  }
+  public DominanceThreshold = DOMINANCE_THRESHOLD_DEFAULT;
+
+  /** @deprecated Use {@link DominanceThreshold}. */
+  public get dominanceThreshold() {
+    return this.DominanceThreshold;
+  }
+  /** @deprecated Use {@link DominanceThreshold}. */
+  public set dominanceThreshold(value) {
+    this.DominanceThreshold = value;
+  }
 
   // Step 3: Preprocessing
-  public categoricalEncoding: 'onehot' | 'none' = 'onehot';
-  public imputeStrategy: 'mean' | 'median' | 'mode' | 'constant' = 'median';
-  public standardizeStrategy: 'standard' | 'minmax' | 'none' = 'standard';
+  public CategoricalEncoding: 'onehot' | 'none' = 'onehot';
+
+  /** @deprecated Use {@link CategoricalEncoding}. */
+  public get categoricalEncoding(): 'onehot' | 'none' {
+    return this.CategoricalEncoding;
+  }
+  /** @deprecated Use {@link CategoricalEncoding}. */
+  public set categoricalEncoding(value: 'onehot' | 'none') {
+    this.CategoricalEncoding = value;
+  }
+  public ImputeStrategy: 'mean' | 'median' | 'mode' | 'constant' = 'median';
+
+  /** @deprecated Use {@link ImputeStrategy}. */
+  public get imputeStrategy(): 'mean' | 'median' | 'mode' | 'constant' {
+    return this.ImputeStrategy;
+  }
+  /** @deprecated Use {@link ImputeStrategy}. */
+  public set imputeStrategy(value: 'mean' | 'median' | 'mode' | 'constant') {
+    this.ImputeStrategy = value;
+  }
+  public StandardizeStrategy: 'standard' | 'minmax' | 'none' = 'standard';
+
+  /** @deprecated Use {@link StandardizeStrategy}. */
+  public get standardizeStrategy(): 'standard' | 'minmax' | 'none' {
+    return this.StandardizeStrategy;
+  }
+  /** @deprecated Use {@link StandardizeStrategy}. */
+  public set standardizeStrategy(value: 'standard' | 'minmax' | 'none') {
+    this.StandardizeStrategy = value;
+  }
 
   // Step 4: Algorithm & Validation
-  public selectedAlgorithmId = '';
-  public hyperparamEstimators = 100;
-  public hyperparamMaxDepth = 6;
-  public hyperparamLearningRate = 0.1;
-  public validationStrategyType: 'train_test_split' | 'kfold' = 'train_test_split';
-  public testSplitRatio = 0.2;
-  public kFolds = 5;
+  public SelectedAlgorithmId = '';
+
+  /** @deprecated Use {@link SelectedAlgorithmId}. */
+  public get selectedAlgorithmId() {
+    return this.SelectedAlgorithmId;
+  }
+  /** @deprecated Use {@link SelectedAlgorithmId}. */
+  public set selectedAlgorithmId(value) {
+    this.SelectedAlgorithmId = value;
+  }
+  public HyperparamEstimators = 100;
+
+  /** @deprecated Use {@link HyperparamEstimators}. */
+  public get hyperparamEstimators() {
+    return this.HyperparamEstimators;
+  }
+  /** @deprecated Use {@link HyperparamEstimators}. */
+  public set hyperparamEstimators(value) {
+    this.HyperparamEstimators = value;
+  }
+  public HyperparamMaxDepth = 6;
+
+  /** @deprecated Use {@link HyperparamMaxDepth}. */
+  public get hyperparamMaxDepth() {
+    return this.HyperparamMaxDepth;
+  }
+  /** @deprecated Use {@link HyperparamMaxDepth}. */
+  public set hyperparamMaxDepth(value) {
+    this.HyperparamMaxDepth = value;
+  }
+  public HyperparamLearningRate = 0.1;
+
+  /** @deprecated Use {@link HyperparamLearningRate}. */
+  public get hyperparamLearningRate() {
+    return this.HyperparamLearningRate;
+  }
+  /** @deprecated Use {@link HyperparamLearningRate}. */
+  public set hyperparamLearningRate(value) {
+    this.HyperparamLearningRate = value;
+  }
+  public ValidationStrategyType: 'train_test_split' | 'kfold' = 'train_test_split';
+
+  /** @deprecated Use {@link ValidationStrategyType}. */
+  public get validationStrategyType(): 'train_test_split' | 'kfold' {
+    return this.ValidationStrategyType;
+  }
+  /** @deprecated Use {@link ValidationStrategyType}. */
+  public set validationStrategyType(value: 'train_test_split' | 'kfold') {
+    this.ValidationStrategyType = value;
+  }
+  public TestSplitRatio = 0.2;
+
+  /** @deprecated Use {@link TestSplitRatio}. */
+  public get testSplitRatio() {
+    return this.TestSplitRatio;
+  }
+  /** @deprecated Use {@link TestSplitRatio}. */
+  public set testSplitRatio(value) {
+    this.TestSplitRatio = value;
+  }
+  public KFolds = 5;
+
+  /** @deprecated Use {@link KFolds}. */
+  public get kFolds() {
+    return this.KFolds;
+  }
+  /** @deprecated Use {@link KFolds}. */
+  public set kFolds(value) {
+    this.KFolds = value;
+  }
 
   public ngOnInit(): void {
     this.initFromDefaults();
   }
 
-  public get availableEntities(): EntityInfo[] {
+  public get AvailableEntities(): EntityInfo[] {
     if (!this.provider) return [];
     return this.provider.Entities.filter((e) => !e.VirtualEntity && e.AllowUserSearchAPI)
       .sort((a, b) => a.Name.localeCompare(b.Name));
   }
 
+  /** @deprecated Use {@link AvailableEntities}. */
+  public get availableEntities(): EntityInfo[] {
+    return this.AvailableEntities;
+  }
+
+  public get SelectedEntity(): EntityInfo | null {
+    if (!this.SelectedEntityId || !this.provider) return null;
+    return this.provider.Entities.find((e) => UUIDsEqual(e.ID, this.SelectedEntityId)) ?? null;
+  }
+
+  /** @deprecated Use {@link SelectedEntity}. */
   public get selectedEntity(): EntityInfo | null {
-    if (!this.selectedEntityId || !this.provider) return null;
-    return this.provider.Entities.find((e) => UUIDsEqual(e.ID, this.selectedEntityId)) ?? null;
+    return this.SelectedEntity;
   }
 
+  public get AvailableFields(): EntityFieldInfo[] {
+    return this.SelectedEntity?.Fields ?? [];
+  }
+
+  /** @deprecated Use {@link AvailableFields}. */
   public get availableFields(): EntityFieldInfo[] {
-    return this.selectedEntity?.Fields ?? [];
+    return this.AvailableFields;
   }
 
+  public get DateFields(): EntityFieldInfo[] {
+    return this.AvailableFields.filter((f) => f.Type?.toLowerCase().includes('date') || f.Type?.toLowerCase().includes('time'));
+  }
+
+  /** @deprecated Use {@link DateFields}. */
   public get dateFields(): EntityFieldInfo[] {
-    return this.availableFields.filter((f) => f.Type?.toLowerCase().includes('date') || f.Type?.toLowerCase().includes('time'));
+    return this.DateFields;
   }
 
-  public get availableMetrics(): string[] {
-    if (this.problemType === 'classification') {
+  public get AvailableMetrics(): string[] {
+    if (this.ProblemType === 'classification') {
       return ['AUC', 'Accuracy', 'F1', 'Log Loss', 'Precision', 'Recall'];
     }
     return ['RMSE', 'MAE', 'R2', 'MSE'];
   }
 
-  public get availableAlgorithms(): MJMLAlgorithmEntity[] {
+  /** @deprecated Use {@link AvailableMetrics}. */
+  public get availableMetrics(): string[] {
+    return this.AvailableMetrics;
+  }
+
+  public get AvailableAlgorithms(): MJMLAlgorithmEntity[] {
     return this.engine?.Algorithms ?? [];
   }
 
+  /** @deprecated Use {@link AvailableAlgorithms}. */
+  public get availableAlgorithms(): MJMLAlgorithmEntity[] {
+    return this.AvailableAlgorithms;
+  }
+
+  public get FilteredFieldItems(): FieldSelectionItem[] {
+    const q = this.FieldSearchFilter.trim().toLowerCase();
+    if (!q) return this.FieldItems;
+    return this.FieldItems.filter((item) => item.field.Name.toLowerCase().includes(q) || item.field.Type?.toLowerCase().includes(q));
+  }
+
+  /** @deprecated Use {@link FilteredFieldItems}. */
   public get filteredFieldItems(): FieldSelectionItem[] {
-    const q = this.fieldSearchFilter.trim().toLowerCase();
-    if (!q) return this.fieldItems;
-    return this.fieldItems.filter((item) => item.field.Name.toLowerCase().includes(q) || item.field.Type?.toLowerCase().includes(q));
+    return this.FilteredFieldItems;
   }
 
+  public get SelectedFeaturesCount(): number {
+    return this.FieldItems.filter((i) => i.selected && !i.isDenyList && !i.isTarget).length;
+  }
+
+  /** @deprecated Use {@link SelectedFeaturesCount}. */
   public get selectedFeaturesCount(): number {
-    return this.fieldItems.filter((i) => i.selected && !i.isDenyList && !i.isTarget).length;
+    return this.SelectedFeaturesCount;
   }
 
+  public get DenyListCount(): number {
+    return this.FieldItems.filter((i) => i.isDenyList).length;
+  }
+
+  /** @deprecated Use {@link DenyListCount}. */
   public get denyListCount(): number {
-    return this.fieldItems.filter((i) => i.isDenyList).length;
+    return this.DenyListCount;
   }
 
-  public onEntitySelected(entityId: string): void {
-    this.selectedEntityId = entityId;
-    this.targetVariable = '';
+  public OnEntitySelected(entityId: string): void {
+    this.SelectedEntityId = entityId;
+    this.TargetVariable = '';
     this.populateFieldItems();
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnEntitySelected}. */
+  public onEntitySelected(entityId: string): void {
+    return this.OnEntitySelected(entityId);
+  }
+
+  public OnProblemTypeChange(): void {
+    this.EvaluationMetric = this.ProblemType === 'classification' ? 'AUC' : 'RMSE';
+    this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnProblemTypeChange}. */
   public onProblemTypeChange(): void {
-    this.evaluationMetric = this.problemType === 'classification' ? 'AUC' : 'RMSE';
+    return this.OnProblemTypeChange();
+  }
+
+  public OnAlgorithmSelected(algoId: string): void {
+    this.SelectedAlgorithmId = algoId;
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnAlgorithmSelected}. */
   public onAlgorithmSelected(algoId: string): void {
-    this.selectedAlgorithmId = algoId;
-    this.cdr.detectChanges();
+    return this.OnAlgorithmSelected(algoId);
   }
 
-  public toggleDenyList(item: FieldSelectionItem): void {
+  public ToggleDenyList(item: FieldSelectionItem): void {
     item.isDenyList = !item.isDenyList;
     if (item.isDenyList) {
       item.selected = false;
@@ -517,8 +870,13 @@ export class PSPipelineWizardComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  public selectAllFields(val: boolean): void {
-    for (const item of this.fieldItems) {
+  /** @deprecated Use {@link ToggleDenyList}. */
+  public toggleDenyList(item: FieldSelectionItem): void {
+    return this.ToggleDenyList(item);
+  }
+
+  public SelectAllFields(val: boolean): void {
+    for (const item of this.FieldItems) {
       if (!item.isTarget && !item.isDenyList) {
         item.selected = val;
       }
@@ -526,8 +884,13 @@ export class PSPipelineWizardComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  public excludeAuditFields(): void {
-    for (const item of this.fieldItems) {
+  /** @deprecated Use {@link SelectAllFields}. */
+  public selectAllFields(val: boolean): void {
+    return this.SelectAllFields(val);
+  }
+
+  public ExcludeAuditFields(): void {
+    for (const item of this.FieldItems) {
       const name = item.field.Name.toLowerCase();
       if (
         name === 'id' ||
@@ -542,106 +905,156 @@ export class PSPipelineWizardComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  public isStepDone(step: WizardStep): boolean {
+  /** @deprecated Use {@link ExcludeAuditFields}. */
+  public excludeAuditFields(): void {
+    return this.ExcludeAuditFields();
+  }
+
+  public IsStepDone(step: WizardStep): boolean {
     switch (step) {
       case 'goal':
-        return Boolean(this.pipelineName.trim() && this.selectedEntityId && this.targetVariable);
+        return Boolean(this.PipelineName.trim() && this.SelectedEntityId && this.TargetVariable);
       case 'features':
-        return this.selectedFeaturesCount > 0;
+        return this.SelectedFeaturesCount > 0;
       case 'preprocessing':
         return true;
       case 'algorithm':
-        return Boolean(this.selectedAlgorithmId);
+        return Boolean(this.SelectedAlgorithmId);
     }
   }
 
-  public canProceed(): boolean {
-    return this.isStepDone(this.currentStep);
+  /** @deprecated Use {@link IsStepDone}. */
+  public isStepDone(step: WizardStep): boolean {
+    return this.IsStepDone(step);
   }
 
-  public canSave(): boolean {
+  public CanProceed(): boolean {
+    return this.IsStepDone(this.CurrentStep);
+  }
+
+  /** @deprecated Use {@link CanProceed}. */
+  public canProceed(): boolean {
+    return this.CanProceed();
+  }
+
+  public CanSave(): boolean {
     return (
-      Boolean(this.pipelineName.trim()) &&
-      Boolean(this.selectedEntityId) &&
-      Boolean(this.targetVariable) &&
-      Boolean(this.selectedAlgorithmId) &&
-      this.selectedFeaturesCount > 0
+      Boolean(this.PipelineName.trim()) &&
+      Boolean(this.SelectedEntityId) &&
+      Boolean(this.TargetVariable) &&
+      Boolean(this.SelectedAlgorithmId) &&
+      this.SelectedFeaturesCount > 0
     );
   }
 
+  /** @deprecated Use {@link CanSave}. */
+  public canSave(): boolean {
+    return this.CanSave();
+  }
+
+  public GoToStep(step: WizardStep): void {
+    this.CurrentStep = step;
+    this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link GoToStep}. */
   public goToStep(step: WizardStep): void {
-    this.currentStep = step;
+    return this.GoToStep(step);
+  }
+
+  public NextStep(): void {
+    if (this.CurrentStep === 'goal') this.CurrentStep = 'features';
+    else if (this.CurrentStep === 'features') this.CurrentStep = 'preprocessing';
+    else if (this.CurrentStep === 'preprocessing') this.CurrentStep = 'algorithm';
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link NextStep}. */
   public nextStep(): void {
-    if (this.currentStep === 'goal') this.currentStep = 'features';
-    else if (this.currentStep === 'features') this.currentStep = 'preprocessing';
-    else if (this.currentStep === 'preprocessing') this.currentStep = 'algorithm';
+    return this.NextStep();
+  }
+
+  public PrevStep(): void {
+    if (this.CurrentStep === 'algorithm') this.CurrentStep = 'preprocessing';
+    else if (this.CurrentStep === 'preprocessing') this.CurrentStep = 'features';
+    else if (this.CurrentStep === 'features') this.CurrentStep = 'goal';
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link PrevStep}. */
   public prevStep(): void {
-    if (this.currentStep === 'algorithm') this.currentStep = 'preprocessing';
-    else if (this.currentStep === 'preprocessing') this.currentStep = 'features';
-    else if (this.currentStep === 'features') this.currentStep = 'goal';
-    this.cdr.detectChanges();
+    return this.PrevStep();
   }
 
   public cancel(): void {
-    this.closed.emit();
+    this.Closed.emit();
   }
 
-  public onBackdropClick(event: MouseEvent): void {
+  public OnBackdropClick(event: MouseEvent): void {
     if ((event.target as HTMLElement).classList.contains('ps-modal-backdrop')) {
       this.cancel();
     }
   }
 
-  public async saveDraft(): Promise<MJMLTrainingPipelineEntity | null> {
+  /** @deprecated Use {@link OnBackdropClick}. */
+  public onBackdropClick(event: MouseEvent): void {
+    return this.OnBackdropClick(event);
+  }
+
+  public async SaveDraft(): Promise<MJMLTrainingPipelineEntity | null> {
     return this.persistPipeline(false);
   }
 
-  public async saveAndTrain(): Promise<void> {
+  /** @deprecated Use {@link SaveDraft}. */
+  public async saveDraft(): Promise<MJMLTrainingPipelineEntity | null> {
+    return this.SaveDraft();
+  }
+
+  public async SaveAndTrain(): Promise<void> {
     const pipeline = await this.persistPipeline(true);
     if (!pipeline) return;
-    this.trainRequested.emit(pipeline);
+    this.TrainRequested.emit(pipeline);
+  }
+
+  /** @deprecated Use {@link SaveAndTrain}. */
+  public async saveAndTrain(): Promise<void> {
+    return this.SaveAndTrain();
   }
 
   private async persistPipeline(andTrain: boolean): Promise<MJMLTrainingPipelineEntity | null> {
-    if (!this.canSave()) {
+    if (!this.CanSave()) {
       this.notifications.CreateSimpleNotification('Please complete required fields before saving.', 'warning', 3000);
       return null;
     }
 
-    this.busy = true;
+    this.Busy = true;
     this.cdr.detectChanges();
 
     try {
       const prov = this.provider ?? Metadata.Provider;
-      const p = await prov.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', this.currentUser ?? undefined);
+      const p = await prov.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', this.CurrentUser ?? undefined);
       p.NewRecord();
-      p.Name = this.pipelineName.trim();
-      p.Description = this.pipelineDescription.trim();
+      p.Name = this.PipelineName.trim();
+      p.Description = this.PipelineDescription.trim();
       p.Version = 1;
       p.Status = 'Draft';
-      p.TargetEntityID = this.selectedEntityId;
-      p.TargetVariable = this.targetVariable;
-      p.ProblemType = this.problemType;
-      p.AlgorithmID = this.selectedAlgorithmId;
+      p.TargetEntityID = this.SelectedEntityId;
+      p.TargetVariable = this.TargetVariable;
+      p.ProblemType = this.ProblemType;
+      p.AlgorithmID = this.SelectedAlgorithmId;
 
       // Source Bindings
       const sourceBindings: SourceBinding[] = [
         {
           Kind: 'Entity',
-          Ref: this.selectedEntity?.Name ?? this.selectedEntityId,
+          Ref: this.SelectedEntity?.Name ?? this.SelectedEntityId,
           Alias: 'src_primary',
         },
       ];
       p.SourceBindings = JSON.stringify(sourceBindings);
 
       // Feature Steps
-      const selectedColumns = this.fieldItems
+      const selectedColumns = this.FieldItems
         .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
         .map((i) => i.field.Name);
 
@@ -655,8 +1068,8 @@ export class PSPipelineWizardComponent implements OnInit {
         },
       ];
 
-      if (this.categoricalEncoding === 'onehot') {
-        const catCols = this.fieldItems
+      if (this.CategoricalEncoding === 'onehot') {
+        const catCols = this.FieldItems
           .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
           .filter((i) => {
             const t = i.field.Type?.toLowerCase() ?? '';
@@ -675,8 +1088,8 @@ export class PSPipelineWizardComponent implements OnInit {
         }
       }
 
-      if (this.standardizeStrategy !== 'none') {
-        const numCols = this.fieldItems
+      if (this.StandardizeStrategy !== 'none') {
+        const numCols = this.FieldItems
           .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
           .filter((i) => {
             const t = i.field.Type?.toLowerCase() ?? '';
@@ -705,26 +1118,26 @@ export class PSPipelineWizardComponent implements OnInit {
 
       // As-Of Strategy
       const asOf: AsOfStrategy = {
-        Mode: this.asOfMode,
-        ...(this.asOfMode === 'column' ? { Column: this.asOfColumn } : {}),
-        ...(this.asOfMode === 'offset' ? { OffsetDays: this.asOfOffsetDays } : {}),
+        Mode: this.AsOfMode,
+        ...(this.AsOfMode === 'column' ? { Column: this.AsOfColumn } : {}),
+        ...(this.AsOfMode === 'offset' ? { OffsetDays: this.AsOfOffsetDays } : {}),
       };
       p.AsOfStrategy = JSON.stringify(asOf);
 
       // Leakage Guard
-      const denyList = this.fieldItems.filter((i) => i.isDenyList).map((i) => i.field.Name);
+      const denyList = this.FieldItems.filter((i) => i.isDenyList).map((i) => i.field.Name);
       const leakageGuard: LeakageGuard = {
         DenyFields: denyList,
-        SingleFeatureDominanceThreshold: this.dominanceThreshold,
+        SingleFeatureDominanceThreshold: this.DominanceThreshold,
       };
       p.LeakageGuard = JSON.stringify(leakageGuard);
 
       // Validation Strategy
       const valStrategy: ValidationStrategy = {
-        Strategy: this.validationStrategyType,
+        Strategy: this.ValidationStrategyType,
         LockedHoldoutFraction: 0.15,
-        ...(this.validationStrategyType === 'train_test_split' ? { TestSize: this.testSplitRatio } : {}),
-        ...(this.validationStrategyType === 'kfold' ? { K: this.kFolds } : {}),
+        ...(this.ValidationStrategyType === 'train_test_split' ? { TestSize: this.TestSplitRatio } : {}),
+        ...(this.ValidationStrategyType === 'kfold' ? { K: this.KFolds } : {}),
       };
       p.ValidationStrategy = JSON.stringify(valStrategy);
 
@@ -737,43 +1150,43 @@ export class PSPipelineWizardComponent implements OnInit {
         'success',
         3000
       );
-      this.saved.emit(p);
+      this.Saved.emit(p);
       return p;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.notifications.CreateSimpleNotification(`Error saving pipeline: ${msg}`, 'error', 5000);
       return null;
     } finally {
-      this.busy = false;
+      this.Busy = false;
       this.cdr.detectChanges();
     }
   }
 
   private initFromDefaults(): void {
     // If initial algorithm requested (e.g. from Catalog)
-    if (this.initialAlgorithmId) {
-      this.selectedAlgorithmId = this.initialAlgorithmId;
-    } else if (this.initialAlgorithmName && (this.engine?.Algorithms.length ?? 0) > 0) {
+    if (this.InitialAlgorithmId) {
+      this.SelectedAlgorithmId = this.InitialAlgorithmId;
+    } else if (this.InitialAlgorithmName && (this.engine?.Algorithms.length ?? 0) > 0) {
       const match = this.engine!.Algorithms.find(
         (a) =>
-          a.Name.toLowerCase() === this.initialAlgorithmName!.toLowerCase() ||
-          a.DriverClass?.toLowerCase() === this.initialAlgorithmName!.toLowerCase()
+          a.Name.toLowerCase() === this.InitialAlgorithmName!.toLowerCase() ||
+          a.DriverClass?.toLowerCase() === this.InitialAlgorithmName!.toLowerCase()
       );
-      if (match) this.selectedAlgorithmId = match.ID;
+      if (match) this.SelectedAlgorithmId = match.ID;
     } else if ((this.engine?.Algorithms.length ?? 0) > 0) {
-      this.selectedAlgorithmId = this.engine!.Algorithms[0].ID;
+      this.SelectedAlgorithmId = this.engine!.Algorithms[0].ID;
     }
 
     // If cloning from existing pipeline
-    if (this.cloneFromPipeline) {
-      const cp = this.cloneFromPipeline;
-      this.isEditing = false; // clone creates new
-      this.pipelineName = `${cp.Name} (Copy)`;
-      this.pipelineDescription = cp.Description || '';
-      this.selectedEntityId = cp.TargetEntityID;
-      this.targetVariable = cp.TargetVariable;
-      this.problemType = (cp.ProblemType as ProblemType) || 'classification';
-      if (cp.AlgorithmID) this.selectedAlgorithmId = cp.AlgorithmID;
+    if (this.CloneFromPipeline) {
+      const cp = this.CloneFromPipeline;
+      this.IsEditing = false; // clone creates new
+      this.PipelineName = `${cp.Name} (Copy)`;
+      this.PipelineDescription = cp.Description || '';
+      this.SelectedEntityId = cp.TargetEntityID;
+      this.TargetVariable = cp.TargetVariable;
+      this.ProblemType = (cp.ProblemType as ProblemType) || 'classification';
+      if (cp.AlgorithmID) this.SelectedAlgorithmId = cp.AlgorithmID;
 
       this.populateFieldItems();
 
@@ -784,7 +1197,7 @@ export class PSPipelineWizardComponent implements OnInit {
           const deny = (lg['DenyFields'] ?? lg['DenyList']) as string[] | undefined;
           if (Array.isArray(deny)) {
             const denySet = new Set(deny.map((d) => d.toLowerCase()));
-            for (const item of this.fieldItems) {
+            for (const item of this.FieldItems) {
               if (denySet.has(item.field.Name.toLowerCase())) {
                 item.isDenyList = true;
                 item.selected = false;
@@ -792,7 +1205,7 @@ export class PSPipelineWizardComponent implements OnInit {
             }
           }
           if (typeof lg['SingleFeatureDominanceThreshold'] === 'number') {
-            this.dominanceThreshold = lg['SingleFeatureDominanceThreshold'];
+            this.DominanceThreshold = lg['SingleFeatureDominanceThreshold'];
           }
         }
       } catch {
@@ -802,12 +1215,12 @@ export class PSPipelineWizardComponent implements OnInit {
   }
 
   private populateFieldItems(): void {
-    if (!this.selectedEntity) {
-      this.fieldItems = [];
+    if (!this.SelectedEntity) {
+      this.FieldItems = [];
       return;
     }
-    const targetLower = (this.targetVariable || '').toLowerCase();
-    this.fieldItems = this.selectedEntity.Fields.map((f) => {
+    const targetLower = (this.TargetVariable || '').toLowerCase();
+    this.FieldItems = this.SelectedEntity.Fields.map((f) => {
       const nameLower = f.Name.toLowerCase();
       const isTarget = Boolean(targetLower && nameLower === targetLower);
       const isSystem =
