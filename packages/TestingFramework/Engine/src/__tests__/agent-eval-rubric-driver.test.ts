@@ -1,18 +1,32 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { AgentEvalDriver, type AgentEvalConfig } from '../drivers/AgentEvalDriver.js';
 import type { DriverExecutionContext } from '../types.js';
-import type { RubricSuiteRow } from '../oracles/rubric-resolution.js';
 
 class SuiteProbe extends AgentEvalDriver {
+    public readonly reads: { entity: string; filter: string }[] = [];
+
     public async resolve(config: AgentEvalConfig, context: DriverExecutionContext) {
         return this.withResolvedRubric(config, context);
     }
 
-    protected override async loadSuiteChain(): Promise<RubricSuiteRow[]> {
-        return [
-            { Id: 'child', ParentId: 'parent', RubricId: null },
-            { Id: 'parent', ParentId: null, RubricId: 'parent-rubric' },
-        ];
+    protected override async readOne(_context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
+        this.reads.push({ entity: entityName, filter });
+        if (entityName === 'MJ: Test Suite Runs') return { ID: 'suite-run', SuiteID: 'child' };
+        return undefined;
+    }
+
+    protected override async readMany(_context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown>[]> {
+        this.reads.push({ entity: entityName, filter });
+        if (entityName === 'MJ: Test Suites') {
+            return [
+                { ID: 'child', ParentID: 'parent', RubricID: null },
+                { ID: 'parent', ParentID: null, RubricID: 'parent-rubric' },
+            ];
+        }
+        return [];
     }
 
     protected override async loadAgentEvaluationRubric(): Promise<string | undefined> {
@@ -26,10 +40,12 @@ class SuiteProbe extends AgentEvalDriver {
 
 describe('agent eval rubric driver', () => {
     it('uses the parent suite rubric and the version the lookup returned', async () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../drivers/AgentEvalDriver.ts'), 'utf8');
+        expect(source).not.toMatch(/TestSuiteID/);
         const driver = new SuiteProbe();
         const config: AgentEvalConfig = { agentId: 'agent', oracles: [] };
         const context = {
-            test: { ID: 'test', TestSuiteID: 'child', RubricID: null },
+            test: { ID: 'test', RubricID: null },
             testRun: { ID: 'run', TestSuiteRunID: 'suite-run' },
             options: {},
             contextUser: {},
@@ -37,6 +53,15 @@ describe('agent eval rubric driver', () => {
         } as unknown as DriverExecutionContext;
         const resolved = await driver.resolve(config, context);
         expect(resolved.oracles).toEqual([{ type: 'rubric', config: { rubricId: 'parent-rubric', rubricVersionId: 'version-4', versionLabel: '1.2.0' } }]);
+        expect(driver.reads.filter(read => read.entity === 'MJ: Test Suite Runs').map(read => read.filter)).toEqual(["ID='suite-run'"]);
+        expect(driver.reads.filter(read => read.entity === 'MJ: Test Suites')).toHaveLength(1);
+        const ignored = new SuiteProbe();
+        const withoutSuiteRun = await ignored.resolve(config, {
+            ...context,
+            test: { ID: 'test', TestSuiteID: 'child', RubricID: null },
+            testRun: { ID: 'run' },
+        } as DriverExecutionContext);
+        expect(withoutSuiteRun.oracles).toEqual([]);
     });
 
     it('labels an explicit version without pinning it', async () => {
@@ -46,8 +71,8 @@ describe('agent eval rubric driver', () => {
                 return this.withResolvedRubric(config, context);
             }
 
-            protected override async loadSuiteChain(): Promise<RubricSuiteRow[]> {
-                return [];
+            protected override async loadSuites(): Promise<{ suiteId?: string; suites: [] }> {
+                return { suites: [] };
             }
 
             protected override async loadAgentEvaluationRubric(): Promise<string | undefined> {

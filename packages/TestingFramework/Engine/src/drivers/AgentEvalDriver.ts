@@ -850,13 +850,13 @@ export class AgentEvalDriver extends BaseTestDriver {
 
     protected async withResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
         const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string } | undefined;
-        const suites = await this.loadSuiteChain(context);
+        const loaded = await this.loadSuites(context);
         const choice = ResolveRubric({
             run: context.options.rubricId ? { rubricId: context.options.rubricId, versionId: context.options.rubricVersionId } : undefined,
             oracle: named,
-            testRubricId: (context.test as { RubricID?: string | null }).RubricID,
-            suites,
-            suiteId: (context.test as { TestSuiteID?: string }).TestSuiteID,
+            testRubricId: context.test.RubricID,
+            suites: loaded.suites,
+            suiteId: loaded.suiteId,
             agentRubricId: context.options.agentEvaluationRubricId ?? await this.loadAgentEvaluationRubric(context, config.agentId),
         });
         const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
@@ -879,25 +879,26 @@ export class AgentEvalDriver extends BaseTestDriver {
         return { ...config, oracles, scoringWeights: WeightsForImplicitRubric(config.scoringWeights, oracles.length > (config.oracles?.length ?? 0) && !hadRubric) };
     }
 
-    /** The suite and its parents, nearest first. A test subclass can supply this without a database. */
-    protected async loadSuiteChain(context: DriverExecutionContext): Promise<RubricSuiteRow[]> {
-        const start = (context.test as { TestSuiteID?: string }).TestSuiteID;
-        if (!start) return [];
-        const rows: RubricSuiteRow[] = [];
-        const seen = new Set<string>();
-        let current: string | undefined = start;
-        while (current && !seen.has(current)) {
-            seen.add(current);
-            const row = await this.readOne(context, 'MJ: Test Suites', `ID='${current}'`);
-            if (!row) break;
-            rows.push({
-                Id: String(row.ID),
+    /**
+     * Suites for this run, loaded once. The suite id comes from the test run's
+     * Test Suite Run. MJ: Tests has no suite id. ResolveRubric walks ParentID
+     * on these rows in memory. A test subclass can supply this without a database.
+     */
+    protected async loadSuites(context: DriverExecutionContext): Promise<{ suiteId?: string; suites: RubricSuiteRow[] }> {
+        const suiteRunId = context.testRun.TestSuiteRunID;
+        if (!suiteRunId) return { suites: [] };
+        const suiteRun = await this.readOne(context, 'MJ: Test Suite Runs', `ID='${suiteRunId.replace(/'/g, "''")}'`);
+        const suiteId = suiteRun?.SuiteID == null || suiteRun.SuiteID === '' ? undefined : String(suiteRun.SuiteID);
+        if (!suiteId) return { suites: [] };
+        const rows = await this.readMany(context, 'MJ: Test Suites', '', 5000);
+        return {
+            suiteId,
+            suites: rows.map(row => ({
+                Id: String(row.ID ?? ''),
                 ParentId: row.ParentID == null ? null : String(row.ParentID),
                 RubricId: row.RubricID == null ? null : String(row.RubricID),
-            });
-            current = row.ParentID == null ? undefined : String(row.ParentID);
-        }
-        return rows;
+            })).filter(row => row.Id.length > 0),
+        };
     }
 
     /** The agent's Active default Evaluation rubric, when this test is an agent eval. */
@@ -922,14 +923,14 @@ export class AgentEvalDriver extends BaseTestDriver {
         return `${row.MajorVersion ?? 0}.${row.MinorVersion ?? 0}.${row.PatchVersion ?? 0}`;
     }
 
-    private async readOne(context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
+    protected async readOne(context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
         const rows = await this.readMany(context, entityName, filter);
         return rows[0];
     }
 
-    private async readMany(context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown>[]> {
+    protected async readMany(context: DriverExecutionContext, entityName: string, filter: string, maxRows = 100): Promise<Record<string, unknown>[]> {
         const view = new RunView();
-        const found = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 100 }, context.contextUser);
+        const found = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: maxRows }, context.contextUser);
         return (found.Results ?? []) as Record<string, unknown>[];
     }
 
