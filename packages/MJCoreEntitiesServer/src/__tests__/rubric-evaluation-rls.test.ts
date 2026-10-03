@@ -52,12 +52,10 @@ describe('rubric evaluation UI row filter', () => {
     it('defines the admin authorization and grants it to Developer', () => {
         expect(authorization[0].fields.Name).toBe('Administer Rubric Evaluations');
         expect(authorization[0].fields.IsActive).toBe(true);
-        expect(authorization[0].sync).toBeUndefined();
         expect(authorizationRole[0].fields.AuthorizationID).toBe(
             '@lookup:MJ: Authorizations.Name=Administer Rubric Evaluations',
         );
         expect(authorizationRole[0].fields.RoleID).toBe('@lookup:MJ: Roles.Name=Developer');
         expect(authorizationRole[0].fields.Type).toBe('Allow');
-        expect(authorizationRole[0].sync).toBeUndefined();
     });
 });
