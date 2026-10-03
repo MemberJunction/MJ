@@ -16,7 +16,7 @@ import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunctio
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ExportColumnTypeForSQLType } from '../utils/export-column.util';
-import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
+import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
@@ -1225,11 +1225,80 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
+   * Whether `_gridState` can be believed to describe the CURRENT entity.
+   *
+   * The evidence is the one `buildAgColumnDefs()` already relies on: a `columnSettings` list none
+   * of whose names resolve to a field of this entity did not come from this entity. A state with
+   * no `columnSettings` at all is no evidence either way, so it is trusted — refusing there would
+   * break a perfectly valid aggregates-only state.
+   *
+   * Deliberately NOT a check of the aggregate expressions themselves. Those are raw SQL
+   * (`SUM(OrderTotal)`, `COUNT(*)`), so validating them means parsing SQL and would reject valid
+   * expressions over joins or literals. The column list is the honest, already-computed signal.
+   */
+  private gridStateDescribesCurrentEntity(): boolean {
+    const settings = this._gridState?.columnSettings;
+    if (!this._entityInfo || !settings?.length) {
+      return true;
+    }
+    return settings.some(col =>
+      this._entityInfo!.Fields.some(f => f.Name.toLowerCase() === col.Name.toLowerCase())
+    );
+  }
+
+  /**
+   * The aggregates to write into CAPTURED state, as distinct from the ones to compute.
+   *
+   * These differ in exactly one case. {@link effectiveAggregatesConfig} returns `undefined` when it
+   * refuses a foreign grid state, which is right for computing — but `persistGridStateToView()` and
+   * `persistUserDefaultGridState()` both assign `aggregates` unconditionally, so `undefined` does not mean
+   * "no opinion", it means "this view has no aggregates". A single column resize would then erase
+   * the loaded view's real aggregates. Refusing the wrong numbers only to delete the right ones is
+   * not an improvement (raised by @rkihm-BC reviewing #4656).
+   *
+   * So on refusal — and ONLY on refusal, so that nothing about a non-refused state changes — fall
+   * back to what the loaded view record legitimately holds.
+   *
+   * Which hosts this protects. It serves a host that binds `mj-entity-data-grid` DIRECTLY with a
+   * saved-view `[Params]` (`ViewID`/`ViewName`) and a separate `[GridState]`: only there does the
+   * grid hold a `_viewEntity` whose aggregates can differ from the state's. It does NOT reach the
+   * `mj-entity-viewer` path. There `mj-grid-view-renderer` hands the grid `{ EntityName }` unless a
+   * view-type config supplies `params` (nothing in-repo does), so `_viewEntity` is null; and both
+   * in-repo hosts parse the `[GridState]` they bind from the very record the viewer saves to. A
+   * foreign state on that path is therefore a POLLUTED record whose aggregates are the foreign
+   * ones, and capturing `undefined` is what removes them — which is the intended outcome.
+   *
+   * The user-default path needs no equivalent: `loadUserDefaultGridState()` adopts its aggregates
+   * into `_aggregatesConfig`, which outranks the grid state and so never reaches a refusal.
+   */
+  private get capturableAggregatesConfig(): ViewGridAggregatesConfig | undefined {
+    const refusedForeignState =
+      !this._aggregatesConfig &&
+      !!this._gridState?.aggregates &&
+      !this.gridStateDescribesCurrentEntity();
+
+    if (refusedForeignState) {
+      return this._viewEntity?.GridStateObject?.aggregates ?? undefined;
+    }
+    return this.effectiveAggregatesConfig ?? undefined;
+  }
+
+  /**
    * Returns the effective aggregates config, preferring _aggregatesConfig but falling back to _gridState.aggregates.
    * This ensures aggregates work regardless of whether they came from explicit config or from view's GridState.
+   *
+   * The fallback is refused when the grid state is not this entity's. Aggregates are raw SQL
+   * expressions carrying their own labels, so a foreign state does not fail visibly the way a
+   * foreign column list does — `COUNT(*)` evaluates against any entity, so a card reading
+   * "Open Orders" renders a real count of whatever this grid is actually showing. A plausible
+   * number under someone else's label is worse than a blank one, because nothing looks wrong.
+   * An explicit `[AggregatesConfig]` is the host's instruction and always wins.
    */
   private get effectiveAggregatesConfig(): ViewGridAggregatesConfig | null | undefined {
-    return this._aggregatesConfig || this._gridState?.aggregates;
+    if (this._aggregatesConfig) {
+      return this._aggregatesConfig;
+    }
+    return this.gridStateDescribesCurrentEntity() ? this._gridState?.aggregates : undefined;
   }
 
   /**
@@ -2311,11 +2380,23 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         }
       }
 
-      // Apply aggregates from GridState if present and fetch their values
-      if (this._gridState.aggregates) {
+      // Apply aggregates from GridState if present and fetch their values. Skipped for a state
+      // that is not this entity's — adopting them here would COPY the foreign config into
+      // `_aggregatesConfig`, which outranks every later check.
+      if (this._gridState.aggregates && this.gridStateDescribesCurrentEntity()) {
         this._aggregatesConfig = this._gridState.aggregates;
         // Fetch aggregate values when gridState aggregates change
         this.RefreshAggregates();
+      } else if (this._gridState.aggregates) {
+        // The refusal is otherwise silent — the cards simply do not appear — so say so, once per
+        // grid-state change, to make a "my aggregates vanished" report traceable. Deliberately
+        // here and NOT in `gridStateDescribesCurrentEntity()`, which runs on every aggregates read
+        // and would flood the console (suggested by @rkihm-BC reviewing #4656).
+        const refusedCount = this._gridState.aggregates.expressions?.length ?? 0;
+        LogStatus(
+          `[entity-data-grid] Ignored ${refusedCount} aggregate(s) from a grid state that names none of ` +
+          `"${this._entityInfo.Name}"'s fields; it describes a different entity.`
+        );
       }
 
       // Clear suppression after AG Grid's async events have been processed.
@@ -4616,7 +4697,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return {
       columnSettings,
       sortSettings,
-      aggregates: this._aggregatesConfig || this._gridState?.aggregates
+      // Via the getter, so a foreign state's aggregates are not captured into THIS entity's saved
+      // view. Without it one column resize makes the wrong numbers durable.
+      aggregates: this.capturableAggregatesConfig
     };
   }
 
