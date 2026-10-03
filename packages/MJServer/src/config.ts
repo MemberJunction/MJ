@@ -470,10 +470,20 @@ const twilioTelephonySchema = z.object({
   apiKeySecret: z.string().optional(),
   /** The publicly reachable `wss://…/telephony/twilio/media` URL Twilio's <Connect><Stream> connects to. */
   streamPublicUrl: z.string(),
-  /** Optional shared secret gating the public webhook/WSS endpoints (defense-in-depth beyond signature verification). */
+  /**
+   * Reserved; currently unused. The Media-Streams websocket is authenticated by a per-call token MJ mints and
+   * embeds in the TwiML (`<Parameter name="mjToken">`), and webhooks by `X-Twilio-Signature`.
+   */
   webhookSigningSecret: z.string().optional(),
-  /** Optional status-callback URL Twilio posts call lifecycle events to. */
+  /**
+   * URL Twilio posts outbound-call lifecycle events to. Defaults to `<public URL>/telephony/twilio/status`, the
+   * route that ends the bridge session when a call is busy / unanswered / failed / completed.
+   */
   statusCallbackUrl: z.string().optional(),
+  /** URL Twilio posts the async answering-machine verdict to. Defaults to `<public URL>/telephony/twilio/amd`. */
+  amdStatusCallbackUrl: z.string().optional(),
+  /** What to do when a machine or fax answers an outbound call: `hangup` (default) ends it, `continue` only logs the verdict. */
+  onMachine: z.enum(['hangup', 'continue']).optional(),
 }).passthrough();
 
 /**
@@ -495,8 +505,14 @@ const vonageTelephonySchema = z.object({
   mediaPublicUrl: z.string(),
   /** Vonage account signature secret — HMAC key for signed-request `sig` AND HS256 webhook-JWT verification. */
   signatureSecret: z.string().optional(),
-  /** Optional event-webhook URL Vonage posts call lifecycle events to (passed on outbound createCall). */
+  /**
+   * Event-webhook URL Vonage posts call lifecycle events to (passed on outbound createCall). Defaults to
+   * `<public URL>/telephony/vonage/event`, the route that ends the bridge session when a call is busy /
+   * unanswered / failed / completed.
+   */
   eventUrl: z.string().optional(),
+  /** What to do when a machine answers an outbound call — Vonage's `machine_detection`: `hangup` (default) or `continue`. */
+  onMachine: z.enum(['hangup', 'continue']).optional(),
 }).passthrough();
 
 /**
@@ -550,9 +566,35 @@ const teamsMeetingsSchema = z.object({
   modelSampleRate: z.coerce.number().optional().default(16000),
 }).passthrough();
 
+/**
+ * Outbound-call policy applied to every `PlaceTwilioCall` / `PlaceVonageCall` / `PlaceRingCentralCall`
+ * mutation, on top of the caller's right to run the agent. Defaults are deliberately conservative.
+ * The rate limiter is in-memory and therefore PER PROCESS: with N MJAPI instances a user can place up to
+ * N × `maxCallsPerUserPerHour` calls.
+ */
+const outboundTelephonySchema = z.object({
+  /** Destination prefixes a call may go to (E.164, e.g. `+1`). An empty list refuses every destination. Defaults to `['+1']`. */
+  allowedPrefixes: z.array(z.string()).optional().default(['+1']),
+  /** Destination prefixes that are always refused, even when an allowed prefix matches. Defaults to NANP premium-rate (`+1900`, `+1976`). */
+  blockedPrefixes: z.array(z.string()).optional().default(['+1900', '+1976']),
+  /** Max outbound calls one user may place per rolling hour (per process). Defaults to 20. */
+  maxCallsPerUserPerHour: z.coerce.number().int().positive().optional().default(20),
+}).passthrough();
+
 const telephonySchema = z.object({
   /** Master switch. When false (or when no vendor block is present), telephony routes are not mounted. */
   enabled: zodBooleanWithTransforms().default(false),
+  /**
+   * Email of the user INBOUND calls run as. A caller is an anonymous member of the public, so the call needs a
+   * principal to create its agent session and run the agent. Point this at a DEDICATED LEAST-PRIVILEGE user.
+   * There is deliberately no fallback: if unset, unknown, inactive, or the system user, inbound calls are
+   * rejected with a polite message and the rejection is logged. Applies to Twilio, Vonage and RingCentral.
+   */
+  inboundRunAsUserEmail: z.string().optional(),
+  /** Maximum length of one phone call, in seconds. The bridge session is stopped (and the call hung up) at the cap. Defaults to 1800. */
+  maxCallSeconds: z.coerce.number().int().positive().optional().default(1800),
+  /** Outbound destination policy + per-user rate limit (see {@link outboundTelephonySchema}). */
+  outbound: outboundTelephonySchema.optional().default({}),
   /** Twilio Programmable Voice + Media Streams binding. */
   twilio: twilioTelephonySchema.optional(),
   /** Vonage Voice + WebSocket-media binding. */
