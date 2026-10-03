@@ -152,7 +152,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
         ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
         ['agent-note-cache-types', AgentNoteCacheTypeChecks, 5], // NC1-NC3 entity_object cache-event invariant, NC4-NC5 identical-payload skip (IT84)
-        ['cache-architecture', CacheArchitectureChecks, 5], // CA1-CA5 engine/cache architecture pins (IT97)
+        ['cache-architecture', CacheArchitectureChecks, 6], // CA1-CA6 engine/cache architecture pins (IT97)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
@@ -258,7 +258,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-wiring': 10,
         'auth-validation': 7,
         'binary-fields': 6,
-        'cache-architecture': 5,
+        'cache-architecture': 6,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'class-resolution': 5,

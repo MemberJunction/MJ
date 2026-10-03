@@ -9,14 +9,15 @@
  * Every check asserts on observable cache state (LocalCacheManager's fingerprint index, the storage
  * provider's keys) or on derived engine state, never on row counts alone.
  */
-import { LocalCacheManager, RunInEntityTransaction, RunView } from '@memberjunction/core';
-import type { EngineStateCensus, IEntityDataProvider, RunViewParams } from '@memberjunction/core';
+import { BaseEngine, BaseEngineRegistry, LocalCacheManager, RunInEntityTransaction, RunView } from '@memberjunction/core';
+import type { BaseEnginePropertyConfig, EngineStateCensus, IEntityDataProvider, IRunViewProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { uuidv4 } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import type { MJAIAgentNoteEntity, MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { UserRoutineDispatcherDriver, ScheduledJobExecutionContext } from '@memberjunction/scheduling-engine';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SEEDED_SCOPED_A_EMAIL } from '@memberjunction/testing-integration';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -46,6 +47,39 @@ async function makeDispatcherContext(ctx: IntegrationCheckContext): Promise<Sche
 async function storedKeysForEntity(ctx: IntegrationCheckContext, entityName: string): Promise<string[]> {
     const keys = await ctx.Storage.GetCategoryKeys('RunViewCache');
     return keys.filter(k => k.startsWith(`${entityName}|`));
+}
+
+/** The members of a loaded engine CA6 reads; the key and params builders are protected. */
+interface EngineCacheKeyAccess {
+    Configs: BaseEnginePropertyConfig[];
+    ContextUser: UserInfo;
+    RunViewProviderToUse: IRunViewProvider;
+    configFingerprint(config: BaseEnginePropertyConfig): string;
+    BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig): RunViewParams;
+}
+
+/** The members of a provider CA6 reads to rebuild the key it stores a RunView under. */
+interface ProviderCacheKeyAccess {
+    InstanceConnectionString: string;
+    ComputeRunViewRLSWhereClause(params: RunViewParams, contextUser?: UserInfo): string;
+    ComputeRunViewFLSFingerprintKey(params: RunViewParams): string | undefined;
+}
+
+/**
+ * The key a server provider stores a RunView's rows under for a user: the formula PreRunView and
+ * every RunViews path share (row-filter clause for that user, then the field-security key).
+ */
+function providerSlotKey(provider: ProviderCacheKeyAccess, params: RunViewParams, user: UserInfo): string {
+    return LocalCacheManager.Instance.GenerateRunViewFingerprint(
+        params, provider.InstanceConnectionString, provider.ComputeRunViewRLSWhereClause(params, user), undefined,
+        provider.ComputeRunViewFLSFingerprintKey(params));
+}
+
+/** Every engine in this process that has finished loading. */
+function loadedEngines(): Array<{ Name: string; Engine: EngineCacheKeyAccess }> {
+    return BaseEngineRegistry.Instance.GetAllEngines()
+        .filter((e): e is BaseEngine<unknown> => e instanceof BaseEngine && e.Loaded)
+        .map(e => ({ Name: e.constructor.name, Engine: e as unknown as EngineCacheKeyAccess }));
 }
 
 const NOTES_ENTITY = 'MJ: AI Agent Notes';
@@ -258,6 +292,41 @@ export const CacheArchitectureChecks: NamedCheck[] = [
                 }
                 await LocalCacheManager.Instance.InvalidateRunViewResult(fingerprint);
             }
+        }
+    },
+    {
+        Id: 'cache-architecture.CA6',
+        Name: 'CA6: every loaded engine computes the cache key its provider stores the rows under',
+        Fn: async (ctx): Promise<void> => {
+            const mismatches: string[] = [];
+            let compared = 0;
+            let storedUnderEngineKey = 0;
+            for (const { Name, Engine } of loadedEngines()) {
+                const provider = Engine.RunViewProviderToUse as unknown as ProviderCacheKeyAccess;
+                for (const config of Engine.Configs.filter(c => c.Type === 'entity')) {
+                    const engineKey = Engine.configFingerprint(config);
+                    const slotKey = providerSlotKey(provider, Engine.BuildRunViewParamsForConfig(config), Engine.ContextUser);
+                    compared++;
+                    if (engineKey !== slotKey) {
+                        mismatches.push(`${Name}.${config.PropertyName} (${config.EntityName}): engine ${engineKey} vs provider ${slotKey}`);
+                    }
+                    if (await ctx.Storage.GetItem(engineKey, 'RunViewCache')) {
+                        storedUnderEngineKey++;
+                    }
+                }
+            }
+            Assert(compared > 0, 'precondition: at least one engine is loaded with an entity config');
+            AssertEqual(mismatches.join('; '), '', `engine keys that differ from the provider's (${compared} configs compared)`);
+            Assert(storedUnderEngineKey > 0, `engine keys must reach stored slots: ${storedUnderEngineKey} of ${compared} configs found rows under their engine key`);
+
+            // Control: the comparison is sensitive to a row filter. A user whose only role reads
+            // MJ: AI Agent Runs through a row filter must get a different key than the system user.
+            const scoped = UserCache.Instance.Users.find(u => u.Email?.toLowerCase() === SEEDED_SCOPED_A_EMAIL);
+            Assert(!!scoped, `control: seeded row-filtered user ${SEEDED_SCOPED_A_EMAIL} is in the user cache`);
+            const controlParams: RunViewParams = { EntityName: 'MJ: AI Agent Runs', IgnoreMaxRows: true };
+            const provider = ctx.Provider as unknown as ProviderCacheKeyAccess;
+            Assert(providerSlotKey(provider, controlParams, scoped!) !== providerSlotKey(provider, controlParams, ctx.User),
+                'control: a row-filtered user must get a different key than the system user');
         }
     },
     {
