@@ -1,8 +1,7 @@
-# Local hand-off — work that needs a database
+# Local hand-off notes: PR 4 (turn-taking + test bed)
 
-Items here were deliberately left out of their PRs because they need a migration, a new entity, CodeGen or a
-metadata change, and those PRs were built without a database. Each section is self-contained: it says what was
-built, what is missing, and what to do locally. Append your own section; do not edit another PR's.
+PR 4's deferred items. The ordered, program-wide guide is `LOCAL-HANDOFF.md` (on the schema branch); this file holds
+the detail for the items it references.
 
 ---
 
