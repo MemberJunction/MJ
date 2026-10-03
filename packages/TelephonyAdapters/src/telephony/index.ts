@@ -4,6 +4,14 @@
  * @module @memberjunction/telephony-adapters
  */
 
+// ── Shared carrier plumbing: run-as identity, outbound gate, media-socket auth, call lifecycle ──
+export * from './runAsIdentity.js';
+export * from './outboundCallPolicy.js';
+export * from './mediaSocketAuth.js';
+export * from './callLifecycleTracker.js';
+export * from './callEndObserver.js';
+export * from './telephonySettings.js';
+
 // ── Twilio Programmable Voice + Media Streams ──────────────────────────────────────────
 export { TwilioCallMediaRegistry } from './twilioMediaRegistry.js';
 export { TwilioTelephonyService, type TwilioTelephonyServiceDeps } from './TwilioTelephonyService.js';

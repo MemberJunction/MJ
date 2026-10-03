@@ -18,6 +18,7 @@
   "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/ai-agents": "6.2.0-edge.1",
+    "@memberjunction/ai-engine-base": "6.2.0-edge.1",
     "@memberjunction/ai-bridge-base": "6.2.0-edge.1",
     "@memberjunction/ai-bridge-ringcentral": "6.2.0-edge.1",
     "@memberjunction/ai-bridge-server": "6.2.0-edge.1",

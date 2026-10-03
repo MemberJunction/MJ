@@ -1,10 +1,31 @@
 import { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import type { OutboundPolicySettings } from './telephony/outboundCallPolicy.js';
+
+/**
+ * Settings that apply to every carrier. They are configured once under `telephony` and merged into each
+ * carrier's extension settings by the host (a carrier block may override them).
+ */
+export interface TelephonySharedSettings {
+    /**
+     * Email of the user INBOUND calls run as. Required for inbound calls: if unset, unknown, inactive, or the
+     * system user, the call is rejected (there is deliberately no fallback to a privileged user). Point it at a
+     * dedicated least-privilege account.
+     */
+    inboundRunAsUserEmail?: string;
+    /** Maximum length of one phone call in seconds (default 1800). The session is stopped at the cap. */
+    maxCallSeconds?: number;
+    /** Outbound destination policy and per-user rate limit applied to every `Place*Call` mutation. */
+    outbound?: OutboundPolicySettings;
+}
+
+/** What to do when answering-machine detection says a machine (or fax) answered an outbound call. */
+export type OnMachineAction = 'hangup' | 'continue';
 
 /**
  * Twilio Programmable Voice + Media Streams telephony binding configuration.
  */
-export interface TwilioTelephonyConfig {
+export interface TwilioTelephonyConfig extends TelephonySharedSettings {
     /** Twilio Account SID (`AC…`). */
     accountSid: string;
     /** Account auth token — REST auth (when no API key pair) AND the HMAC key for X-Twilio-Signature verification. */
@@ -15,16 +36,26 @@ export interface TwilioTelephonyConfig {
     apiKeySecret?: string;
     /** The publicly reachable `wss://…/telephony/twilio/media` URL Twilio's <Connect><Stream> connects to. */
     streamPublicUrl: string;
-    /** Optional shared secret gating the public webhook/WSS endpoints. */
+    /**
+     * Reserved; currently unused. The media websocket is authenticated by a per-call token minted by MJ (see
+     * `mediaSocketAuth.ts`), and webhooks by `X-Twilio-Signature`.
+     */
     webhookSigningSecret?: string;
-    /** Optional status-callback URL Twilio posts call lifecycle events to. */
+    /**
+     * URL Twilio posts outbound-call lifecycle events to. Defaults to `<public URL>/telephony/twilio/status`
+     * (the route that ends the session when a call is busy / unanswered / failed / completed).
+     */
     statusCallbackUrl?: string;
+    /** URL Twilio posts the async answering-machine verdict to. Defaults to `<public URL>/telephony/twilio/amd`. */
+    amdStatusCallbackUrl?: string;
+    /** What to do when a machine or fax answers an outbound call (default `'hangup'`). */
+    onMachine?: OnMachineAction;
 }
 
 /**
  * Vonage Voice + WebSocket-media telephony binding configuration.
  */
-export interface VonageTelephonyConfig {
+export interface VonageTelephonyConfig extends TelephonySharedSettings {
     /** Vonage Application ID (UUID) — the JWT-auth identity for the Voice API. */
     applicationId?: string;
     /** The application's RSA private key (PEM) used to sign Voice-API JWTs. */
@@ -37,14 +68,19 @@ export interface VonageTelephonyConfig {
     mediaPublicUrl: string;
     /** Vonage account signature secret — HMAC key for signed-request `sig` AND HS256 webhook-JWT verification. */
     signatureSecret?: string;
-    /** Optional event-webhook URL Vonage posts call lifecycle events to. */
+    /**
+     * Event-webhook URL Vonage posts call lifecycle events to. Defaults to `<public URL>/telephony/vonage/event`
+     * (the route that ends the session when a call is busy / unanswered / failed / completed).
+     */
     eventUrl?: string;
+    /** What to do when a machine answers an outbound call — Vonage's `machine_detection` (default `'hangup'`). */
+    onMachine?: OnMachineAction;
 }
 
 /**
  * RingCentral SIP softphone telephony binding configuration.
  */
-export interface RingCentralTelephonyConfig {
+export interface RingCentralTelephonyConfig extends TelephonySharedSettings {
     /** SIP domain (e.g. `sip.ringcentral.com`). */
     sipDomain: string;
     /** SIP outbound proxy (`host:port`, e.g. `sip10.ringcentral.com:5096`). */
@@ -84,7 +120,7 @@ export interface TeamsMeetingsConfig {
 /**
  * Full telephony section configuration shape.
  */
-export interface TelephonyConfig {
+export interface TelephonyConfig extends TelephonySharedSettings {
     enabled: boolean;
     twilio?: TwilioTelephonyConfig;
     vonage?: VonageTelephonyConfig;
