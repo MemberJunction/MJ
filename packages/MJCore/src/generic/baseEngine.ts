@@ -1758,8 +1758,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         const entity = event.baseEntity;
         // Inside a batch the cache manager records this change and rewrites every slot indexed for
-        // the entity — this config's included — once, when the batch closes.
-        if (LocalCacheManager.Instance.IsBatchingEntityEvents(entity?.ProviderToUse)) {
+        // the entity — this config's included — once, when the batch closes. The event is checked
+        // as well as the provider because this runs after an await, by which time a batch that
+        // took the event may already have closed.
+        const cache = LocalCacheManager.Instance;
+        if (cache.IsBatchingEntityEvents(entity?.ProviderToUse) || cache.WasTakenByEntityEventBatch(event)) {
             return;
         }
 

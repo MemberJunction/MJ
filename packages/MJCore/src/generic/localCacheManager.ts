@@ -435,6 +435,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
     /** Open entity-event batches. See {@link BeginEntityEventBatch}. */
     private _entityEventBatches = new EntityEventBatchSet();
+    /** Save/delete events a batch took when they were raised. See {@link WasTakenByEntityEventBatch}. */
+    private _eventsTakenByBatch = new WeakSet<BaseEntityEvent>();
 
     private readonly REGISTRY_KEY = '__MJ_CACHE_REGISTRY__';
 
@@ -1388,6 +1390,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * True when a batch took `entityEvent` as it was raised, so closing that batch maintains every
+     * slot indexed for the entity. A listener that reaches its cache write only after an `await`
+     * asks this instead of {@link IsBatchingEntityEvents}: by then the batch may have closed, and
+     * a write of its own would rewrite the slot once per event.
+     */
+    public WasTakenByEntityEventBatch(entityEvent: BaseEntityEvent): boolean {
+        return this._eventsTakenByBatch.has(entityEvent);
+    }
+
+    /**
      * Runs `work` inside an entity-event batch for `owner` and applies the batch when it finishes
      * (as a failure when `work` throws). Use for bulk writes that do not already run in a
      * transaction.
@@ -1413,7 +1425,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._entityEventBatches.Find(owner)) {
             return false;
         }
-        return this._entityEventBatches.Record(owner, this.captureEntityChange(entityEvent));
+        const taken = this._entityEventBatches.Record(owner, this.captureEntityChange(entityEvent));
+        if (taken) {
+            this._eventsTakenByBatch.add(entityEvent);
+        }
+        return taken;
     }
 
     /**
