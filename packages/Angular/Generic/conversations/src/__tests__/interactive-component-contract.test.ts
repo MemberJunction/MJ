@@ -220,6 +220,34 @@ describe('DeriveComponentContract: events and inputs', () => {
     });
 });
 
+describe('DeriveComponentContract: which verbs return the component\'s data', () => {
+    it('get_data_state, validate and is_dirty return state; the verbs that only act do not', () => {
+        const contract = DeriveComponentContract(
+            MakeSpec({ methods: methods({ standardMethodsSupported: { refresh: true, getCurrentDataState: true, validate: true, isDirty: true, reset: true, print: true, scrollTo: true, focus: true } }) })
+        );
+        const flags = Object.fromEntries(contract.Verbs.map((v) => [v.Verb.Name, v.Verb.ReturnsChannelData ?? null]));
+        expect(flags).toEqual({ refresh: null, get_data_state: 'state', validate: 'state', is_dirty: 'state', reset: null, print: null, scroll_to: null, focus: null });
+    });
+
+    it('a custom method that returns anything is treated as returning data; a void one is not', () => {
+        const contract = DeriveComponentContract(
+            MakeSpec({
+                methods: methods({
+                    customMethods: [
+                        { name: 'total', description: 'x', parameters: [], returnType: 'number' },
+                        { name: 'odd', description: 'x', parameters: [], returnType: 'Promise<Row[]>' },
+                        { name: 'go', description: 'x', parameters: [], returnType: 'void' },
+                        { name: 'goAsync', description: 'x', parameters: [], returnType: 'Promise<void>' },
+                        { name: 'unknown', description: 'x', parameters: [], returnType: '' },
+                    ],
+                }),
+            })
+        );
+        const flags = Object.fromEntries(contract.Verbs.map((v) => [v.Verb.Name, v.Verb.ReturnsChannelData ?? null]));
+        expect(flags).toEqual({ total: 'state', odd: 'state', go: null, goAsync: null, unknown: null });
+    });
+});
+
 describe('MergeVerbOffers', () => {
     const verb = (props: Record<string, unknown>, required?: string[]) => ({
         Name: 'setFilter',
@@ -242,6 +270,16 @@ describe('MergeVerbOffers', () => {
         expect(merged.ParametersSchema['required']).toBeUndefined();
         expect(merged.Description).toContain('Revenue: region');
         expect(merged.Description).toContain('Pipeline: stage, owner');
+    });
+
+    it('the merged verb is withheld only when EVERY component would withhold it (the exact check runs per component)', () => {
+        const flagged = { ...verb({ a: { type: 'string' } }), ReturnsChannelData: 'state' as const };
+        const flaggedPixels = { ...verb({ b: { type: 'string' } }), ReturnsChannelData: 'pixels' as const };
+        const plain = verb({ c: { type: 'string' } });
+        expect(MergeVerbOffers([{ Component: 'A', Verb: flagged }, { Component: 'B', Verb: plain }]).ReturnsChannelData).toBeUndefined();
+        expect(MergeVerbOffers([{ Component: 'A', Verb: flagged }, { Component: 'B', Verb: flaggedPixels }]).ReturnsChannelData).toBe('state');
+        expect(MergeVerbOffers([{ Component: 'A', Verb: flaggedPixels }, { Component: 'B', Verb: flaggedPixels }]).ReturnsChannelData).toBe('pixels');
+        expect(MergeVerbOffers([{ Component: 'A', Verb: flagged }]).ReturnsChannelData).toBe('state');
     });
 
     it('the first component wins when two declare the same parameter differently', () => {

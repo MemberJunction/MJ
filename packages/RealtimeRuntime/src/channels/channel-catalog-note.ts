@@ -18,6 +18,7 @@
 
 import {
     DescribeExposureLimit,
+    WithheldVerbs,
     REALTIME_CHANNEL_LEGACY_CONTRACT_VERSION,
     type RealtimeChannelDescriptor,
     type RealtimeChannelExposure,
@@ -143,8 +144,12 @@ function renderVisibilityLimits(entries: ReadonlyArray<ChannelCatalogEntry>): st
     for (const entry of entries) {
         const limit = entry.ExposureLimit;
         const sentence = limit ? DescribeExposureLimit(limit.Effective, limit.Ceiling, limit.Reasons) : null;
-        if (sentence) {
+        if (limit && sentence) {
             lines.push(`- ${entry.Descriptor.DisplayName} (channel "${entry.Descriptor.Key}"): ${sentence}`);
+            const withheld = WithheldVerbs(entry.Descriptor.Verbs, limit.Effective).map((v) => v.Name);
+            if (withheld.length > 0) {
+                lines.push(`    unavailable right now, because their results would show you what you may not perceive: ${withheld.join(', ')}`);
+            }
         }
     }
     return lines.length > 0 ? ['[channels] Visibility limits — what you perceive of these channels without asking:', ...lines] : [];

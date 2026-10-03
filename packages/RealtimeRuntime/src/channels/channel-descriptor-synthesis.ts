@@ -49,11 +49,14 @@ export function VerbNameForTool(toolName: string, toolNamePrefix: string): strin
  * @param tools The channel's current tool declarations (`GetToolDefinitions()`).
  * @param toolNamePrefix The channel's shared tool-name prefix.
  * @param invokableBy Who may invoke these verbs (default `'agent'` — native tools are agent tools).
+ * @param returnsChannelData Native tool name to the exposure its RESULT requires, for the tools whose result carries what
+ *   the channel holds (see `RealtimeChannelVerb.ReturnsChannelData`); tools not listed only act.
  */
 export function BuildToolBackedVerbs(
     tools: ReadonlyArray<RealtimeToolDefinition>,
     toolNamePrefix: string,
     invokableBy: RealtimeChannelInvoker = 'agent',
+    returnsChannelData: Readonly<Record<string, 'state' | 'pixels'>> = {},
 ): RealtimeChannelVerb[] {
     return tools.map((tool) => ({
         Name: VerbNameForTool(tool.Name, toolNamePrefix),
@@ -61,6 +64,7 @@ export function BuildToolBackedVerbs(
         ParametersSchema: tool.ParametersSchema,
         InvokableBy: invokableBy,
         NativeToolName: tool.Name,
+        ...(returnsChannelData[tool.Name] ? { ReturnsChannelData: returnsChannelData[tool.Name] } : {}),
     }));
 }
 

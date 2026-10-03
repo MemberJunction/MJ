@@ -103,6 +103,7 @@ export type RealtimeContextErrorCode =
     | 'not_invokable_by_agent'
     | 'invalid_params'
     | 'open_failed'
+    | 'exposure_restricted'
     | 'verb_failed';
 
 /** The outcome of a targeted `ContextTool` call. */

@@ -2,6 +2,7 @@ import type { ComponentSpec } from '@memberjunction/interactive-component-types'
 import type { JSONObject } from '@memberjunction/ai';
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { RealtimeChannelContext } from '@memberjunction/realtime-runtime';
+import type { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
 import {
     ComponentArtifactError,
     type IComponentArtifactSource,
@@ -119,7 +120,7 @@ export interface ChannelLog {
 }
 
 /** A minimal channel context that records the notes sent to the model. */
-export function MakeContext(log: ChannelLog, config: JSONObject = {}): RealtimeChannelContext {
+export function MakeContext(log: ChannelLog, config: JSONObject = {}, client: BaseRealtimeClient | null = null): RealtimeChannelContext {
     return {
         AgentName: 'Sage',
         Provider: null as IMetadataProvider | null,
@@ -130,5 +131,34 @@ export function MakeContext(log: ChannelLog, config: JSONObject = {}): RealtimeC
         AgentSessionID: null,
         ExecuteServerAction: async () => null,
         ChannelConfig: config,
+        Client: client,
     };
+}
+
+/** A model connection that accepts one inbound video stream, recording the frames and notes it is sent. */
+export class FakeVideoClient {
+    public readonly MaxInboundVideoStreams = 1;
+    public readonly InboundVideoRate: number | undefined = 4;
+    public readonly EstablishedTracks: ReadonlyArray<{ Descriptor: { Modality: string; Direction: string; Rate?: number } }> = [
+        { Descriptor: { Modality: 'video', Direction: 'inbound', Rate: 4 } },
+    ];
+    public VideoUp = true;
+    public Frames: Array<{ Data: string; SourceID: string | undefined }> = [];
+    public Notes: string[] = [];
+
+    public IsTrackEstablished(modality: string, direction: string): boolean {
+        return this.VideoUp && modality === 'video' && direction === 'inbound';
+    }
+    public SendVideoFrame(data: string, _mime?: string, sourceId?: string): boolean {
+        this.Frames.push({ Data: data, SourceID: sourceId });
+        return true;
+    }
+    public SendContextNote(text: string): void {
+        this.Notes.push(text);
+    }
+
+    /** The connection as the channel context types it (the channel only touches the members above). */
+    public AsClient(): BaseRealtimeClient {
+        return this as unknown as BaseRealtimeClient;
+    }
 }

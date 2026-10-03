@@ -37,6 +37,7 @@
     "@memberjunction/ng-explorer-service-worker": "6.2.0-edge.1",
     "@memberjunction/ng-feedback": "6.2.0-edge.1",
     "@memberjunction/ng-notifications": "6.2.0-edge.1",
+    "@memberjunction/ng-realtime-channels": "6.2.0-edge.1",
     "@memberjunction/ng-shared": "6.2.0-edge.1",
     "@memberjunction/ng-workspace-initializer": "6.2.0-edge.1"
   },

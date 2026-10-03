@@ -30,6 +30,7 @@ import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService, RealtimeSessionService } from '@memberjunction/ng-conversations';
+import { EnableChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { AppContextSnapshot, ClientToolMetadata } from '@memberjunction/ai-core-plus';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
@@ -594,6 +595,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   ngOnInit() {
     SetProductionStatus(this.environment.production);
+
+    // Explorer opts in to letting a realtime agent SEE interactive components (a picture of the component, sent only while
+    // the user allows pixels and the model has a video track). Registered before any session is minted: whether the
+    // channel can source video is decided at mint. Hosts that do not call this keep state-only perception.
+    EnableChannelFrameCapture();
 
     // Check if this is the OAuth callback route - used for conditional rendering in template
     // Note: We still run setupAuth() to restore the user's session

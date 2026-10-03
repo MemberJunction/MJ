@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
     CompareExposure,
     DescribeExposureLimit,
+    DescribeWithheldVerb,
+    IsVerbWithheld,
+    WithheldVerbs,
     IsExposureLevel,
     MinExposure,
     REALTIME_EXPOSURE_ORDER,
@@ -183,5 +186,39 @@ describe('UserExposureReason', () => {
         const resolved = ResolveChannelExposure({ Ceiling: 'pixels', User: 'state' });
         expect(resolved.Limits).toEqual([{ Source: 'user', Level: 'state', Reason: UserExposureReason('state') }]);
         expect(UserExposureReason('none')).toBe("the user chose to share only 'none' of this channel with the agent");
+    });
+});
+
+describe('verbs that return channel data', () => {
+    const act = { ReturnsChannelData: undefined };
+    const readState = { ReturnsChannelData: 'state' as const };
+    const readPixels = { ReturnsChannelData: 'pixels' as const };
+
+    it('a verb that does not return channel data is never withheld', () => {
+        expect(IsVerbWithheld(act, 'none')).toBe(false);
+    });
+
+    it("a 'state' verb needs at least state; a 'pixels' verb needs pixels", () => {
+        expect(IsVerbWithheld(readState, 'none')).toBe(true);
+        expect(IsVerbWithheld(readState, 'state')).toBe(false);
+        expect(IsVerbWithheld(readState, 'pixels')).toBe(false);
+        expect(IsVerbWithheld(readPixels, 'state')).toBe(true);
+        expect(IsVerbWithheld(readPixels, 'pixels')).toBe(false);
+    });
+
+    it('lists exactly the verbs withheld at an exposure', () => {
+        const verbs = [{ Name: 'a' }, { Name: 'b', ...readState }, { Name: 'c', ...readPixels }];
+        expect(WithheldVerbs(verbs, 'none').map((v) => v.Name)).toEqual(['b', 'c']);
+        expect(WithheldVerbs(verbs, 'state').map((v) => v.Name)).toEqual(['c']);
+        expect(WithheldVerbs(verbs, 'pixels')).toEqual([]);
+    });
+
+    it('tells the agent what is unavailable, why, and what to do', () => {
+        const sentence = DescribeWithheldVerb('get_data_state', 'Interactive Components', 'none', ['the user chose to share only none']);
+        expect(sentence).toContain('"get_data_state" is unavailable right now');
+        expect(sentence).toContain("only 'none'");
+        expect(sentence).toContain('the user chose to share only none');
+        expect(sentence).toContain('Tell the user');
+        expect(DescribeWithheldVerb('x', 'X', 'state', [])).not.toContain('()');
     });
 });

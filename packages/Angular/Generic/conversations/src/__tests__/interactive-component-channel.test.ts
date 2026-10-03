@@ -9,11 +9,12 @@ import {
     InteractiveComponentChannel,
     LoadRealtimeInteractiveComponentChannel,
 } from '../lib/components/realtime/interactive-component/interactive-component-channel';
-import { InteractiveComponentFrameCapture } from '../lib/components/realtime/interactive-component/interactive-component-frame-capture';
+import { ChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
 import { ComponentArtifactError } from '../lib/components/realtime/interactive-component/interactive-component-types';
 import {
     FakeArtifactSource,
     FakeHandle,
+    FakeVideoClient,
     MakeArtifact,
     MakeContext,
     MakeSpec,
@@ -31,6 +32,9 @@ class TestChannel extends InteractiveComponentChannel {
     }
     public Flush(): void {
         this.FlushPerception();
+    }
+    public Capture(): Promise<string | null> {
+        return this.CaptureActiveFrame();
     }
 }
 
@@ -187,7 +191,7 @@ describe('InteractiveComponentChannel: open', () => {
 
     it('requires exactly one of artifactId and artifactVersionId', async () => {
         const { Channel } = makeRig();
-        for (const inputs of [{}, { artifactId: A1, artifactVersionId: V1 }]) {
+        for (const inputs of [{}, { artifactId: A1, artifactVersionId: V1 }] as JSONObject[]) {
             const result = await Channel.Open(inputs);
             expect(result).toMatchObject({ Success: false, ErrorCode: 'invalid_params' });
             expect(result.Error).toContain('exactly one');
@@ -670,15 +674,83 @@ describe('InteractiveComponentChannel: exposure policy', () => {
         expect(Source.Calls.length).toBeGreaterThan(0);
     });
 
-    it("at 'state' an agent-invoked verb still returns the component's data (exposure gates what is volunteered, not what is asked for)", async () => {
+    it("at 'state' the data-returning verbs work", async () => {
         const { Channel } = makeRig();
         Channel.ApplyExposure({ Policy: 'state' });
         await open(Channel, V1, { inputs: { year: 1 } });
         const handle = mount(Channel, 'c1');
+        handle.Methods.add('setRegion');
         handle.DataState = { title: 'Asked for' };
-        const result = await Channel.ApplyVerb('get_data_state', {}, 'agent');
-        expect(result.Result).toMatchObject({ data: { title: 'Asked for' } });
+        expect((await Channel.ApplyVerb('get_data_state', {}, 'agent')).Result).toMatchObject({ data: { title: 'Asked for' } });
         expect(Channel.Exposure).toBe('state');
+    });
+
+    it("at 'none' every verb whose result carries the component's data is refused, and the component is never touched", async () => {
+        const { Channel } = makeRig();
+        await open(Channel, V1, { inputs: { year: 1 } });
+        const handle = mount(Channel, 'c1');
+        handle.Methods.add('setRegion');
+        handle.DataState = { title: 'secret' };
+        Channel.ApplyExposure({ Policy: 'none', Reasons: ['this agent requires a zero-data-retention model'] });
+        for (const [verb, args] of [['get_data_state', {}], ['validate', {}], ['is_dirty', {}], ['setRegion', { region: 'EMEA' }]] as const) {
+            const result = await Channel.ApplyVerb(verb, args, 'agent');
+            expect(result).toMatchObject({ Success: false, ErrorCode: 'exposure_restricted', Details: ['this agent requires a zero-data-retention model'] });
+            expect(result.Error).toContain(`"${verb}" is unavailable right now`);
+            expect(JSON.stringify(result)).not.toContain('secret');
+        }
+        expect(handle.Calls).toEqual([]);
+    });
+
+    it("at 'none' the verbs that only act still work (the agent may drive a component it cannot see)", async () => {
+        const { Channel } = makeRig();
+        await open(Channel, V1, { inputs: { year: 1 } });
+        const handle = mount(Channel, 'c1');
+        Channel.ApplyExposure({ Policy: 'none' });
+        expect((await Channel.ApplyVerb('refresh', {}, 'agent')).Success).toBe(true);
+        expect((await Channel.ApplyVerb('reset', {}, 'agent')).Success).toBe(true);
+        expect(handle.Calls).toEqual(['refresh', 'reset']);
+    });
+
+    it('the user turning the agent\'s view off takes the data verbs away; turning it back on returns them', async () => {
+        const { Channel } = makeRig();
+        await open(Channel, V1, { inputs: { year: 1 } });
+        mount(Channel, 'c1').DataState = { title: 'x' };
+        Channel.ApplyExposure({ Policy: 'pixels', User: 'none' });
+        expect(await Channel.ApplyVerb('get_data_state', {}, 'agent')).toMatchObject({ ErrorCode: 'exposure_restricted' });
+        Channel.ApplyExposure({ Policy: 'pixels' });
+        expect((await Channel.ApplyVerb('get_data_state', {}, 'agent')).Success).toBe(true);
+    });
+
+    it('a user acting through the surface is not restricted', async () => {
+        const { Channel } = makeRig();
+        await open(Channel, V1, { inputs: { year: 1 } });
+        mount(Channel, 'c1').DataState = { title: 'x' };
+        Channel.ApplyExposure({ Policy: 'none' });
+        expect((await Channel.ApplyVerb('get_data_state', {}, 'user')).Success).toBe(true);
+    });
+
+    it('the descriptor marks the data-returning verbs, and a void custom method as not returning data', async () => {
+        const { Channel } = makeRig();
+        await open(Channel, V1, { inputs: { year: 1 } });
+        await open(Channel, P1);
+        const verbs = new Map(Channel.GetDescriptor().Verbs.map((v) => [v.Name, v.ReturnsChannelData]));
+        expect(verbs.get('get_data_state')).toBe('state');
+        expect(verbs.get('validate')).toBe('state');
+        expect(verbs.get('is_dirty')).toBe('state');
+        expect(verbs.get('refresh')).toBeUndefined();
+        expect(verbs.get('show_version')).toBeUndefined();
+        // Revenue's setRegion returns string; Pipeline's returns void: the merged verb is refused only if EVERY component would refuse it.
+        expect(verbs.get('setRegion')).toBeUndefined();
+    });
+
+    it('a delegated newer version is not announced to a model that may not perceive the channel', async () => {
+        const { Channel, Log } = makeRig();
+        await open(Channel, V1, { inputs: { year: 1 } });
+        Channel.ApplyExposure({ Policy: 'none' });
+        Log.Notes.length = 0;
+        await Channel.OnDelegationArtifacts([{ ArtifactID: A1, ArtifactVersionID: V2, Name: 'Revenue dashboard' }]);
+        Channel.Flush();
+        expect(Log.Notes.join('\n')).not.toContain(V2);
     });
 });
 
@@ -780,7 +852,7 @@ describe('InteractiveComponentChannel: delegated artifacts', () => {
 describe('InteractiveComponentChannel: pixels and lifecycle', () => {
     beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => undefined));
     afterEach(() => {
-        InteractiveComponentFrameCapture.Instance.Register(null);
+        ChannelFrameCapture.Instance.Register(null);
         vi.restoreAllMocks();
     });
 
@@ -790,14 +862,14 @@ describe('InteractiveComponentChannel: pixels and lifecycle', () => {
     });
 
     it('sources the inbound video track once a frame capturer is registered', () => {
-        InteractiveComponentFrameCapture.Instance.Register(async () => 'jpeg');
+        ChannelFrameCapture.Instance.Register(async () => 'jpeg');
         const { Channel } = makeRig();
         expect(Channel.GetSourcedTracks()).toHaveLength(1);
         expect(Channel.GetSourcedTracks()[0]).toMatchObject({ Modality: 'video', Direction: 'inbound' });
     });
 
     it('the frame capture holder is a singleton', () => {
-        expect(InteractiveComponentFrameCapture.Instance).toBe(InteractiveComponentFrameCapture.Instance);
+        expect(ChannelFrameCapture.Instance).toBe(ChannelFrameCapture.Instance);
     });
 
     it('binds a surface to the engine and wires its activity hook back to the channel', async () => {
@@ -810,6 +882,14 @@ describe('InteractiveComponentChannel: pixels and lifecycle', () => {
         surface.ActivityHandler?.('c1', { Kind: 'closed' });
         expect(Channel.Engine.Instances).toHaveLength(0);
         Channel.UnbindSurface();
+    });
+
+    it('is live-only: nothing is saved with the session and a resumed session restores nothing', async () => {
+        const { Channel } = makeRig();
+        await open(Channel, V1, { inputs: { year: 1 } });
+        expect(Channel.SerializeState()).toBeNull();
+        expect(Channel.RestoreState(JSON.stringify({ components: { c1: {} } }))).toBe(false);
+        expect(Channel.Engine.Instances).toHaveLength(1); // untouched
     });
 
     it('is described to the user the first time they see it', () => {
@@ -826,5 +906,99 @@ describe('InteractiveComponentChannel: pixels and lifecycle', () => {
         Channel.Dispose();
         expect(completed).toBe(true);
         expect(Channel.Engine.Instances).toHaveLength(0);
+    });
+});
+
+describe('InteractiveComponentChannel: showing the model a picture of the component', () => {
+    const element = { tag: 'the active pane' } as unknown as HTMLElement;
+    type Surface = Parameters<InteractiveComponentChannel['BindSurface']>[0];
+
+    beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => undefined));
+    afterEach(() => {
+        ChannelFrameCapture.Instance.Register(null);
+        vi.restoreAllMocks();
+    });
+
+    /** A channel with a capturer registered, a video-capable connection, and a surface whose active pane is `element`. */
+    function pictureRig(capturer: (el: HTMLElement) => Promise<string | null>) {
+        ChannelFrameCapture.Instance.Register(capturer);
+        const client = new FakeVideoClient();
+        const log: ChannelLog = { Notes: [] };
+        const channel = new TestChannel();
+        channel.SetArtifactSource(new FakeArtifactSource().Add(MakeArtifact(A1, V1, 1, REVENUE_SPEC)));
+        channel.Initialize(MakeContext(log, {}, client.AsClient()));
+        const surface = { Engine: null, AgentName: '', Provider: null, ActivityHandler: null, GetActiveElement: () => element } as unknown as Surface;
+        channel.BindSurface(surface);
+        const events: RealtimeChannelEvent[] = [];
+        channel.Events$.subscribe((e) => events.push(e));
+        return { channel, client, events };
+    }
+
+    it('hands the active pane to the host rasterizer and returns its frame', async () => {
+        const capturer = vi.fn(async () => 'JPEGDATA');
+        const { channel } = pictureRig(capturer);
+        expect(await channel.Capture()).toBe('JPEGDATA');
+        expect(capturer).toHaveBeenCalledWith(element);
+    });
+
+    it("never rasterizes unless exposure is 'pixels' (the costly part is skipped, whoever asks)", async () => {
+        const capturer = vi.fn(async () => 'JPEGDATA');
+        const { channel } = pictureRig(capturer);
+        for (const policy of ['state', 'none'] as const) {
+            channel.ApplyExposure({ Policy: policy });
+            expect(await channel.Capture()).toBeNull();
+        }
+        channel.ApplyExposure({ Policy: 'pixels', User: 'state' });
+        expect(await channel.Capture()).toBeNull();
+        expect(capturer).not.toHaveBeenCalled();
+    });
+
+    it('never rasterizes without an inbound video track', async () => {
+        const capturer = vi.fn(async () => 'JPEGDATA');
+        const { channel, client } = pictureRig(capturer);
+        client.VideoUp = false;
+        expect(await channel.Capture()).toBeNull();
+        expect(capturer).not.toHaveBeenCalled();
+    });
+
+    it('sends nothing when no surface is bound or nothing is on screen', async () => {
+        const capturer = vi.fn(async () => 'JPEGDATA');
+        const { channel } = pictureRig(capturer);
+        channel.UnbindSurface();
+        expect(await channel.Capture()).toBeNull();
+        expect(capturer).not.toHaveBeenCalled();
+    });
+
+    it('a rasterizer that throws costs the model a frame, never the session, and is logged', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { channel } = pictureRig(async () => {
+            throw new Error('tainted canvas');
+        });
+        expect(await channel.Capture()).toBeNull();
+        expect(error.mock.calls.some((c) => String(c[0]).includes('tainted canvas'))).toBe(true);
+    });
+
+    it('end to end: a change the user makes reaches the model as a frame tagged with the change id of the state it shows', async () => {
+        const { channel, client, events } = pictureRig(async () => 'FRAME-1');
+        await channel.Open({ artifactVersionId: V1, inputs: { year: 1 } });
+        channel.OnComponentActivity('c1', { Kind: 'event', Name: 'rowSelected', Payload: { rowId: 'r1' } });
+        await vi.waitFor(() => expect(client.Frames.length).toBeGreaterThan(0));
+        expect(client.Frames[0]).toMatchObject({ Data: 'FRAME-1', SourceID: 'InteractiveComponent#all' });
+        const pushed = events.find((e) => e.Name === 'frame_pushed');
+        const changed = events.find((e) => e.Name === 'state_changed'); // the user's change; a later settle re-read is a separate change
+        expect(pushed?.ChangeId).toBeDefined();
+        expect(pushed?.ChangeId).toBe(changed?.ChangeId);
+        expect(client.Notes.filter((n) => n.includes('frame_pushed'))).toEqual([]); // a frame is a picture, not a note
+    });
+
+    it('end to end: no frame flows while exposure is state, and one flows again when the user allows pixels', async () => {
+        const { channel, client } = pictureRig(async () => 'FRAME-2');
+        await channel.Open({ artifactVersionId: V1, inputs: { year: 1 } });
+        channel.ApplyExposure({ Policy: 'pixels', User: 'state' });
+        channel.OnComponentActivity('c1', { Kind: 'event', Name: 'rowSelected', Payload: { rowId: 'r2' } });
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        expect(client.Frames).toEqual([]);
+        channel.ApplyExposure({ Policy: 'pixels' });
+        await vi.waitFor(() => expect(client.Frames.length).toBeGreaterThan(0));
     });
 });

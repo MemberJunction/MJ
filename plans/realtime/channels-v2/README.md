@@ -143,31 +143,31 @@ The effective channel set for a session is computed once at mint and can grow mi
 
 ### WS4: The Angular adapter (wrap an existing component)
 
-`RealtimeChannelAdapter` (in `ng-conversations`, or a small new `ng-realtime-channels` package if the dependency weight demands it) turns an Angular component into a channel surface **without rewriting the component**.
-
-A host declares a descriptor plus small binding functions:
+**Built.** `AngularComponentChannel<TComponent>` (in the new small package `@memberjunction/ng-realtime-channels`, not in `ng-conversations`, to keep embeds light) turns an Angular component into a channel surface **without rewriting the component**. A host declares a descriptor plus small binding functions:
 
 ```ts
 @RegisterClass(BaseRealtimeChannelClient, 'SudokuChannel')
 export class SudokuChannel extends AngularComponentChannel<SudokuComponent> {
-    protected readonly component = SudokuComponent;
-    protected readonly descriptor = { Key: 'Sudoku', Instructions: '…', Nouns: [...], Verbs: [...], … };
-    protected readState(c: SudokuComponent) { return { board: c.Board, moves: c.MoveCount }; }
-    protected applyVerb(c: SudokuComponent, verb: string, args: Record<string, unknown>) { … }
-    protected events(c: SudokuComponent) { return merge(c.CellChanged.pipe(map(…)), …); }
+    protected readonly ComponentClass: Type<SudokuComponent> = SudokuComponent;
+    protected readonly Descriptor: RealtimeChannelDescriptor = { Key: 'Sudoku', Instructions: '…', Nouns: [...], Verbs: [...], … };
+    protected ReadSurfaceState(c: SudokuComponent): JSONObject { return { board: c.Board, moves: c.MoveCount }; }
+    protected ApplySurfaceVerb(c: SudokuComponent, verb: string, args: JSONObject, actor: RealtimeChannelActor): RealtimeChannelVerbResult { … }
+    protected SurfaceEvents(c: SudokuComponent): Observable<ChannelSurfaceEvent> { return merge(c.CellChanged.pipe(map(…)), …); }
 }
 ```
 
 The adapter handles:
-- binding and unbinding the surface;
-- running verbs when no surface is bound, via a headless instance or a queued apply, documented;
-- state snapshots and change-driven perception;
-- the visual frame provider (WS6), through a DOM rasteriser it owns.
+- binding and unbinding the surface (a collapsed and re-expanded panel creates a new component, so the last state is kept by the channel and restored through `OnSurfaceBound`);
+- state snapshots and change-driven perception: every event and every successful verb becomes a recorded change, and an event emitted while the agent's verb runs is attributed to the agent;
+- the visual frame provider (WS6), through the opt-in DOM rasterizer that ships in the same package (`EnableChannelFrameCapture`);
+- **a verb that arrives before the surface exists.** Decision: the call *waits* for the surface, bounded (5 s), runs against the real component once it binds (calls are serialized), and fails with `surface_unavailable` and a message the agent can act on if it never does. Rejected: a hidden headless instance (it would hold state the user is not looking at, and the two would diverge) and queue-and-acknowledge (the agent needs the real outcome, since a move can be refused, and an acknowledgement that later proves wrong is worse than a short wait). Seed inputs of `open` are applied when the surface binds, because there is nothing to report back.
 
-**Deliverables:**
-- The adapter.
-- A **reference example**: a small self-contained game channel shipped as a sample package, so the doc has something real to point at.
-- A guide: **`guides/REALTIME_CHANNELS_GUIDE.md`**. It covers writing a channel from scratch, wrapping an existing component, scoping, and publishing a channel from an Open App: metadata row via a release migration, `Load*()` anti-tree-shake, and how `mj app install` brings it in.
+**Verb results and exposure.** Added in the same phase, because the adapter makes it easy to write a verb that returns the component's data. A verb declares `ReturnsChannelData: 'state' | 'pixels'`, and below that exposure the dispatcher (and the native-tool route) refuses the whole call with `exposure_restricted`; the catalog and the `exposure_changed` note list the verb as unavailable. It is policy, not redaction.
+
+**Deliverables (done):**
+- The adapter and rasterizer: `packages/Angular/Generic/realtime-channels` (`@memberjunction/ng-realtime-channels`).
+- A **reference example**, a tic-tac-toe channel built only through the adapter, in `packages/Angular/Generic/realtime-channel-examples` (`@memberjunction/ng-realtime-channel-examples`). It is not a dependency of anything and loads only when a host imports it. Its tests play whole games with the real component and interleaved agent and user moves.
+- The guide: **[`guides/REALTIME_CHANNELS_GUIDE.md`](../../../guides/REALTIME_CHANNELS_GUIDE.md)**. It covers the contract, writing a channel from scratch, wrapping an existing component (walking through the sample), scoping, opening on demand, visual perception, the Interactive Component channel, publishing a channel from an Open App (metadata row via a release migration, `Load*()` anti-tree-shake, and how `mj app install` brings it in), and testing.
 
 ### WS5: The Interactive Component channel (ComponentSpec)
 
@@ -422,7 +422,7 @@ Whichever PR merges second rebases. The table is the contract for that merge.
 
 ## 8. Open questions
 
-1. Does the Angular adapter live in `ng-conversations` or in a new `ng-realtime-channels` package? Decide by dependency weight during WS4. The default is a new small package, to keep embeds light.
+1. ~~Does the Angular adapter live in `ng-conversations` or in a new `ng-realtime-channels` package?~~ Resolved in WS4: a new small package, `@memberjunction/ng-realtime-channels`, so an embed or an Open App can use the adapter without the conversations stack. The rasterizer moved there too, since it is the same opt-in.
 2. Should the Interactive Component channel auto-open delegated component artifacts by default (`true` in Explorer, configurable in embeds)?
 3. What is the size and update path of the consumer-domain list? Ship a curated list in code that config can override.
 

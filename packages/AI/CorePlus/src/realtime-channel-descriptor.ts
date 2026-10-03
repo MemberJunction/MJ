@@ -110,6 +110,19 @@ export interface RealtimeChannelVerb {
     /** Conditions that must hold for the verb to succeed, in plain language for the model. */
     Preconditions?: string[];
     /**
+     * The least exposure the channel must have for this verb's RESULT to be given to the agent, for a verb whose
+     * result carries what the channel holds (a component's data, a page's text, a board's contents). Omit it for a verb
+     * that only acts and reports success.
+     *
+     * Exposure (`'none' < 'state' < 'pixels'`) limits what the model may perceive of a channel; a verb the agent
+     * calls could otherwise hand it exactly what the user (or a zero-data-retention policy) held back. When the channel's
+     * effective exposure is below this level the dispatcher refuses the call with an `'exposure_restricted'` error the
+     * agent can read, and the catalog tells it the verb is unavailable and why. This is policy, not redaction: the verb is
+     * refused whole, its result is never filtered. `'state'` is for results that describe the channel's contents as data;
+     * `'pixels'` for results derived from what it looks like.
+     */
+    ReturnsChannelData?: 'state' | 'pixels';
+    /**
      * The native provider tool this verb is ALSO exposed as, when the channel is mounted at
      * session start (e.g. `'Whiteboard_AddNote'`). Present so prompts and transcripts that
      * already know the tool name stay valid, and so the dispatcher can route a proxy call to the

@@ -1987,6 +1987,13 @@ export class RealtimeSessionRuntime {
       // tool applies. Record the channel as USED so the overlay tabs it (channels other
       // than the whiteboard are tab-less until they're first used).
       this.noteChannelActivity(plugin);
+      // A native tool whose result would show the agent what exposure policy withholds is refused here, as it is on the
+      // ContextTool route; the legacy tool-result shape carries the reason.
+      const withheld = plugin.FindVerbForNativeTool(toolName);
+      const refusal = withheld ? plugin.RefuseVerbForExposure(withheld) : null;
+      if (refusal) {
+        return JSON.stringify({ success: false, errorCode: 'exposure_restricted', error: refusal });
+      }
       return plugin.ApplyAgentTool(toolName, argsJson);
     });
   }
