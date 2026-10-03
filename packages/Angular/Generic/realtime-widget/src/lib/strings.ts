@@ -60,7 +60,10 @@ export function ResolveWidgetStrings(locale: string | null): WidgetStrings {
   return { ...ENGLISH_STRINGS, ...table };
 }
 
-/** Substitutes `{agent}` in a string. */
+/**
+ * Substitutes `{agent}` in a string. The replacement is a function so the name is inserted literally:
+ * a string replacement would expand `$&`, `$'`, `$1` and friends inside an agent name.
+ */
 export function FormatWidgetString(text: string, agentName: string): string {
-  return text.replace(/\{agent\}/g, agentName);
+  return text.replace(/\{agent\}/g, () => agentName);
 }

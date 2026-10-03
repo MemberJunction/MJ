@@ -15,7 +15,7 @@
  */
 
 import type { UserInfo } from '@memberjunction/core';
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, TrimTrailingSlashes } from '@memberjunction/global';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -38,7 +38,7 @@ const PRINCIPAL_PURPOSE = 'RealtimeVerification';
 function resolvePublicBaseUrl(explicit: string | undefined): string | undefined {
     const candidate =
         explicit?.trim() || configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
-    return candidate ? candidate.replace(/\/+$/, '') : undefined;
+    return candidate ? TrimTrailingSlashes(candidate) : undefined;
 }
 
 /** The shortest `hmacSecret` accepted. */

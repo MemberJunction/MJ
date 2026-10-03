@@ -3,7 +3,7 @@ import { renderComponentFixture, query, queryAll, text, attr, click } from '@mem
 import { ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import type { RealtimeChannelVerbResult } from '@memberjunction/realtime-runtime';
 import { IdentityVerificationModel, type IdentityVerificationService } from './identity-verification-model';
-import { IdentityVerificationSurfaceComponent } from './identity-verification-surface.component';
+import { IdentityVerificationSurfaceComponent, type IdentityVerificationDispatch } from './identity-verification-surface.component';
 
 /**
  * DOM spec for <mj-identity-verification-surface>. The surface owns no rules (the model does — see the
@@ -21,13 +21,13 @@ function service(): IdentityVerificationService {
 function render(configure: (m: IdentityVerificationModel) => void = () => undefined) {
   const model = new IdentityVerificationModel(service());
   configure(model);
-  const dispatch = vi.fn(async (verb: string, args: Record<string, unknown>): Promise<RealtimeChannelVerbResult> => {
+  const dispatch = vi.fn<IdentityVerificationDispatch>(async (verb, args): Promise<RealtimeChannelVerbResult> => {
     // behave like the channel: user-initiated verbs run as the user
-    if (verb === 'fill') return model.Fill(args as never, 'user');
-    if (verb === 'confirm') return model.Confirm(args as never, 'user');
+    if (verb === 'fill') return model.Fill(args, 'user');
+    if (verb === 'confirm') return model.Confirm(args, 'user');
     if (verb === 'submit') return model.Submit();
     if (verb === 'resend') return model.Resend();
-    return model.EnterCode(args as never);
+    return model.EnterCode(args);
   });
   const fixture = renderComponentFixture(IdentityVerificationSurfaceComponent, {
     inputs: { Model: model, Dispatch: dispatch, AgentName: 'Sage' },

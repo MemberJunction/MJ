@@ -51,4 +51,8 @@ describe('widget strings', () => {
   it('substitutes the agent name', () => {
     expect(FormatWidgetString('Talk to {agent} — {agent}', 'Sage')).toBe('Talk to Sage — Sage');
   });
+
+  it('inserts a name containing $ patterns literally', () => {
+    expect(FormatWidgetString('Talk to {agent}', "Pay$& $' $1 $$")).toBe("Talk to Pay$& $' $1 $$");
+  });
 });

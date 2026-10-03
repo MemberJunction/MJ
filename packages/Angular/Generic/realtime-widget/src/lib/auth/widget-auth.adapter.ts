@@ -16,6 +16,7 @@
  * production wires the browser `fetch` and `GraphQLDataProvider` (`widget-auth.browser.ts`).
  */
 import { LogError } from '@memberjunction/core';
+import { TrimTrailingSlashes } from '@memberjunction/global';
 
 /** Raw-invite prefix — mirrors MJ's `MAGIC_LINK_TOKEN_PREFIX`. */
 export const INVITE_TOKEN_PREFIX = 'mj_ml_';
@@ -81,7 +82,7 @@ export class WidgetAuthAdapter {
   public constructor(deps: WidgetAuthAdapterDeps) {
     // MJ's own convention carries a trailing slash (`GRAPHQL_URI: 'http://localhost:4111/'`) and a host page
     // will paste exactly that into `api-url`; normalise so path joins stay clean.
-    this.apiUrl = deps.apiUrl?.replace(/\/+$/, '') ?? null;
+    this.apiUrl = (deps.apiUrl != null ? TrimTrailingSlashes(deps.apiUrl) : null);
     this.provider = deps.provider;
     this.post = deps.post;
     this.refresh = deps.refresh ?? null;

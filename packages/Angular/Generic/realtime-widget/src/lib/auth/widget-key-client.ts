@@ -8,6 +8,7 @@
  * response — the application, the pinned agent, the voice ceiling, the channels the instance enables — is
  * what the server decided, and is returned as such.
  */
+import { TrimTrailingSlashes } from '@memberjunction/global';
 
 /** Modalities a widget instance may expose. */
 export type WidgetKeyModality = 'Text' | 'Voice' | 'Both';
@@ -56,7 +57,7 @@ export class WidgetKeyClient {
     private readonly widgetKey: string,
     private readonly fetchImpl: FetchLike = (input, init) => fetch(input, init)
   ) {
-    this.baseUrl = apiUrl.replace(/\/+$/, '');
+    this.baseUrl = TrimTrailingSlashes(apiUrl);
   }
 
   /** Mints a fresh guest session. Throws {@link WidgetKeyError}. */

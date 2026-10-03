@@ -978,12 +978,13 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (24 classes)
+// @memberjunction/ai-agents (25 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
+    ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
@@ -2068,6 +2069,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
+    ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
@@ -2152,11 +2154,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
-    MJAIAgentCoAgentEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
@@ -2356,11 +2358,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     UnshareListAction,
     UpdateListItemStatusAction,
     UpdateRecordAction,
-    ValidateAddressAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
     VoidSignatureRequestAction,
@@ -2394,7 +2396,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1017;
+export const CLASS_REGISTRATIONS_COUNT = 1018;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
