@@ -83,6 +83,7 @@ export * from './realtime/realtime-channel-policy';
 export * from './realtime/whiteboard-channel-server';
 export * from './realtime/client-context-channel-server';
 export * from './realtime/identity-verification-channel-server';
+export * from './realtime/interactive-component-channel-server';
 export * from './realtime/meeting-controls-state';
 export * from './realtime/meeting-controls-channel-server';
 export * from './realtime/media-channel-server';

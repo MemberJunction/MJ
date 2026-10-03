@@ -1112,6 +1112,29 @@ describe('per-model Live legality', () => {
             expect(sc['supportsBlocking']).toBe(true);
         });
 
+        it('mints the inbound video stream count: one for the 3.8 video models, zero for a model without video', async () => {
+            const driver = new ClientDirectTestable('k');
+            for (const [model, expected] of [
+                ['gemini-3.8-live', 1],
+                ['gemini-3.8-live-extended-thinking', 1],
+                ['gemini-3.1-flash-live-preview', 0],
+                ['some-unknown-live-model', 0],
+            ] as const) {
+                const cfg = await driver.CreateClientSession(makeParams({ Model: model }));
+                const sc = cfg.SessionConfig as Record<string, unknown>;
+                expect(sc['maxInboundVideoStreams'], model).toBe(expected);
+            }
+        });
+
+        it('reports MaxInboundVideoStreams in the session capabilities, consistent with the inbound video track', async () => {
+            const d = new TestGeminiRealtime('k');
+            const video = await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));
+            expect(video.Capabilities?.MaxInboundVideoStreams).toBe(1);
+            expect(video.Capabilities?.SupportedInboundTracks?.some((t) => t.Modality === 'video')).toBe(true);
+            const audioOnly = await new TestGeminiRealtime('k').StartSession(makeParams({ Model: 'gemini-3.1-flash-live-preview' }));
+            expect(audioOnly.Capabilities?.MaxInboundVideoStreams).toBe(0);
+        });
+
         it('attaches scheduling on SendToolResult when model supports scheduling (gemini-3.8-live)', async () => {
             const d = new TestGeminiRealtime('k');
             const session = await d.StartSession(makeParams({ Model: 'gemini-3.8-live' }));

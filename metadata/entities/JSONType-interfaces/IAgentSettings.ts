@@ -83,6 +83,12 @@ export interface IAgentSettings {
             Config?: { [channelKey: string]: { [key: string]: unknown } } | null;
             /** Per-channel display override, keyed by channel key. */
             DisplayPolicy?: { [channelKey: string]: 'open-on-start' | 'on-demand' | 'headless' } | null;
+            /**
+             * Exposure levels that need a zero-data-retention model. When the session model's configuration
+             * does not declare `Privacy.ZeroDataRetention: true`, exposure is lowered to below the lowest level
+             * listed, and the agent is told why. Applies to every channel in the session.
+             */
+            RequireZeroDataRetentionFor?: Array<'state' | 'pixels'> | null;
         } | null;
     } | null;
 }

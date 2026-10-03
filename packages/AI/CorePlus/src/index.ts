@@ -21,6 +21,7 @@ export * from './client-tool-resolver';
 export * from './agent-settings';
 export * from './json-schema-subset';
 export * from './realtime-channel-descriptor';
+export * from './realtime-channel-exposure';
 export * from './realtime-channel-scope';
 export * from './realtime-session-policy';
 export * from './realtime-session-events';

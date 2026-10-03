@@ -123,6 +123,48 @@ describe('ParseRealtimeSessionClientPolicy', () => {
         expect(ParseRealtimeSessionClientPolicy(JSON.stringify(policy))).toEqual(policy);
     });
 
+    it('round-trips the server-decided exposure and its limits', () => {
+        const withExposure: RealtimeSessionClientPolicy = {
+            Version: 1,
+            Channels: [
+                {
+                    Key: 'Whiteboard',
+                    DisplayPolicy: 'open-on-start',
+                    MaxExposure: 'pixels',
+                    Exposure: 'state',
+                    ExposureLimits: [{ Source: 'zero-data-retention', Level: 'state', Reason: 'because' }],
+                    Source: 'default',
+                },
+            ],
+        };
+        expect(ParseRealtimeSessionClientPolicy(JSON.stringify(withExposure))).toEqual(withExposure);
+    });
+
+    it('an older server policy with no Exposure still parses (readers fall back to MaxExposure)', () => {
+        const parsed = ParseRealtimeSessionClientPolicy(JSON.stringify(policy));
+        expect(parsed?.Channels[0].Exposure).toBeUndefined();
+    });
+
+    it('drops an invalid Exposure and malformed limits rather than trusting them', () => {
+        const parsed = ParseRealtimeSessionClientPolicy(
+            JSON.stringify({
+                Version: 1,
+                Channels: [
+                    {
+                        Key: 'W',
+                        DisplayPolicy: 'open-on-start',
+                        MaxExposure: 'pixels',
+                        Exposure: 'everything',
+                        ExposureLimits: [{ Source: 'agent', Level: 'bogus', Reason: 'x' }, { Source: 'nope', Level: 'state', Reason: 'x' }, 'junk'],
+                        Source: 'default',
+                    },
+                ],
+            })
+        );
+        expect(parsed?.Channels[0].Exposure).toBeUndefined();
+        expect(parsed?.Channels[0].ExposureLimits).toBeUndefined();
+    });
+
     it('returns null for anything unusable, so the caller falls back to local resolution', () => {
         expect(ParseRealtimeSessionClientPolicy(undefined)).toBeNull();
         expect(ParseRealtimeSessionClientPolicy('')).toBeNull();

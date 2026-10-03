@@ -7,14 +7,17 @@ import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import {
   AppContextSnapshot,
+  CompareExposure,
   DeclaresNativeTools,
   IsIdentityVerifiedEventPayload,
   NormalizeChannelKey,
   ParseRealtimeSessionClientPolicy,
   ResolveClientTools,
   SelectNativeChannelTools,
+  UserExposureReason,
   type ClientToolMetadata,
   type IdentityVerifiedEventPayload,
+  type RealtimeChannelExposure,
   type RealtimeChannelScopeResult,
   type RealtimeSessionClientTools,
   type ResolvedRealtimeChannel
@@ -32,7 +35,9 @@ import {
   RealtimeClientState,
   RealtimeClientToolCall,
   RealtimeClientTranscript,
-  RealtimeClientUsage
+  RealtimeClientUsage,
+  VideoSourceArbiter,
+  type VideoSourceState
 } from '@memberjunction/ai-realtime-client';
 import { DefaultRealtimeSessionLauncher, type IRealtimeSessionLauncher } from './session-launcher';
 import { ClientSessionDeadline } from './client-session-deadline';
@@ -45,6 +50,7 @@ import { ChannelActionDispatcher, type DispatchableChannel } from '../channels/c
 import { BuildChannelCatalogNote, type ChannelCatalogEntry } from '../channels/channel-catalog-note';
 import type { RealtimeContextActionRequest, RealtimeContextActionResult } from '../channels/channel-contract-types';
 import { AppClientToolRegistry, DEFAULT_APP_TOOL_OWNER, type AppClientToolRegistration } from './app-client-tool-registry';
+import { UserSettingsExposurePreferences, type IChannelExposurePreferences } from './channel-exposure-preferences';
 import {
   BuildChannelCandidate,
   FindPreparedChannel,
@@ -483,6 +489,15 @@ export class RealtimeSessionRuntime {
    * one surface tab per plugin — it never knows any concrete channel type.
    */
   public readonly ActiveChannels$: Observable<BaseRealtimeChannelClient[]> = this._activeChannels$.asObservable();
+
+  private readonly _videoSources$ = new BehaviorSubject<readonly VideoSourceState[]>([]);
+  /**
+   * The video sources the agent is perceiving or could perceive right now (a whiteboard, a remote browser, a
+   * shared screen), with whether each is on and whether its frames are reaching the model. Empty when no
+   * session is live or nothing has offered a frame source. This is what the "agent can see" control renders;
+   * toggle one with {@link SetVideoSourceEnabled}.
+   */
+  public readonly VideoSources$: Observable<readonly VideoSourceState[]> = this._videoSources$.asObservable();
 
   /**
    * Channel requests to enter / leave the FOCUS layout (see
@@ -1205,6 +1220,7 @@ export class RealtimeSessionRuntime {
 
       const client = this.createRealtimeClient(session.Provider);
       this.client = client;
+      this.watchVideoSources(client);
       this.wireClientHandlers(client);
 
       // Everything past here awaits on hardware and the network, during which the host may end the
@@ -1299,6 +1315,7 @@ export class RealtimeSessionRuntime {
     // Only clear the shared slots when they still point at THIS attempt — a newer start may
     // already have replaced them.
     if (this.client === client) {
+      this.unwatchVideoSources();
       this.client = null;
     }
     // Close the server session only if teardown has NOT already done so. It nulls `agentSessionId`
@@ -1739,6 +1756,133 @@ export class RealtimeSessionRuntime {
     return this.resolvedChannels.get(NormalizeChannelKey(channelName)) ?? null;
   }
 
+  /** Where the user's per-channel "how much can the agent see" choices are kept. Replace with {@link SetExposurePreferences}. */
+  private exposurePreferences: IChannelExposurePreferences = new UserSettingsExposurePreferences(() => this.canPersistUserSettings());
+
+  /**
+   * Replaces the store the user's per-channel exposure choices are kept in. The default persists them in
+   * the signed-in user's settings (`mj.realtime.visualPerception.v1`) and keeps them in memory for an
+   * anonymous principal or a connect-only embed; a host that remembers them somewhere else supplies its own.
+   */
+  public SetExposurePreferences(preferences: IChannelExposurePreferences): void {
+    this.exposurePreferences = preferences;
+  }
+
+  /** Whether user settings can be written: a signed-in user on a provider that has entity metadata. */
+  private canPersistUserSettings(): boolean {
+    const provider = this.Provider;
+    return Boolean(provider?.CurrentUser?.ID) && (provider?.Entities?.length ?? 0) > 0;
+  }
+
+  /**
+   * How much of a channel the model may perceive right now: the channel's ceiling, lowered by the server's
+   * policy and the user's choice. `null` when the channel is not in this session.
+   *
+   * @param channelName The channel's key (case-insensitive).
+   */
+  public GetChannelExposure(channelName: string): RealtimeChannelExposure | null {
+    return this.findDispatchableChannel(channelName)?.Plugin.Exposure ?? null;
+  }
+
+  /**
+   * The user's own choice of how much of a channel the agent may perceive. Takes effect immediately
+   * (frames and notes the new level forbids stop, and the model is told), and is remembered per channel key
+   * for next time. The level can only LOWER what the server's policy allows; choosing `'pixels'` for a channel
+   * the agent's policy capped at `'state'` changes nothing.
+   *
+   * @param channelName The channel's key (case-insensitive).
+   * @param level The user's choice; `undefined` clears it (back to what policy allows).
+   * @returns `false` when the channel is not in this session (nothing is applied, but the choice is still remembered).
+   */
+  public SetUserChannelExposure(channelName: string, level: RealtimeChannelExposure | undefined): boolean {
+    this.exposurePreferences.Set(channelName, level);
+    const channel = this.findDispatchableChannel(channelName);
+    if (!channel) {
+      return false;
+    }
+    this.applyChannelExposure(channel.Plugin);
+    return true;
+  }
+
+  /** Pushes a channel's current exposure inputs (server policy, user choice) into the channel. */
+  private applyChannelExposure(plugin: BaseRealtimeChannelClient): void {
+    const resolved = this.GetResolvedChannel(plugin.ChannelName);
+    const user = this.exposurePreferences.Get(plugin.ChannelName);
+    const reasons = (resolved?.ExposureLimits ?? []).map((limit) => limit.Reason);
+    // The user's limit binds only when it is lower than what the server allows; otherwise it changes nothing
+    // and the agent should not be told about it.
+    const allowed = resolved?.Exposure ?? plugin.GetDescriptor().MaxExposure;
+    if (user !== undefined && CompareExposure(user, allowed) < 0) {
+      reasons.push(UserExposureReason(user));
+    }
+    plugin.ApplyExposure({ Policy: resolved?.Exposure, User: user, Reasons: reasons });
+  }
+
+  /** Follows the session client's video-source arbiter so {@link VideoSources$} reflects it. */
+  private watchVideoSources(client: BaseRealtimeClient): void {
+    this.unwatchVideoSources();
+    const arbiter = VideoSourceArbiter.ForSink(client);
+    arbiter.SetFocusedChannel(this.focusedChannelKey);
+    this.stopWatchingVideoSources = arbiter.OnChange(() => this._videoSources$.next(arbiter.GetSources()));
+    this._videoSources$.next(arbiter.GetSources());
+  }
+
+  /** The channel whose surface the user is looking at, kept so it applies to an arbiter created after it was set. */
+  private focusedChannelKey: string | null = null;
+
+  /**
+   * Tells the session which channel's surface the user is looking at (`null` for none, e.g. the activity tab).
+   * When the model can see only one video source and several are live, the one the user is looking at is the one
+   * it sees (after an explicit pick, and after a camera or screen share the user started). Safe to call before the
+   * session is live: it applies when the connection comes up.
+   *
+   * @param channelKey The focused channel's key, as it appears on {@link VideoSources$} entries' `ChannelKey`.
+   */
+  public SetFocusedChannel(channelKey: string | null): void {
+    this.focusedChannelKey = channelKey;
+    if (this.client) {
+      VideoSourceArbiter.ForSink(this.client).SetFocusedChannel(channelKey);
+    }
+  }
+
+  /** Stops following the arbiter and clears {@link VideoSources$}. Safe to call when nothing is watched. */
+  private unwatchVideoSources(): void {
+    this.stopWatchingVideoSources?.();
+    this.stopWatchingVideoSources = null;
+    if (this._videoSources$.value.length > 0) {
+      this._videoSources$.next([]);
+    }
+  }
+
+  private stopWatchingVideoSources: (() => void) | null = null;
+
+  /**
+   * Turns the agent's view of one video source on or off — what the "agent can see" control calls.
+   *
+   * A source that belongs to a channel goes through {@link SetUserChannelExposure}, so the choice is
+   * remembered per channel and the channel itself tells the model. Any other source (a camera or screen
+   * share that is not a channel) is switched at the arbiter, which tells the model.
+   *
+   * @param sourceId The source's id (from {@link VideoSources$}).
+   * @param enabled Whether the agent may see it.
+   * @returns `false` when there is no such source.
+   */
+  public SetVideoSourceEnabled(sourceId: string, enabled: boolean): boolean {
+    const client = this.client;
+    if (!client) {
+      return false;
+    }
+    const arbiter = VideoSourceArbiter.ForSink(client);
+    const source = arbiter.GetSources().find((s) => s.SourceID === sourceId);
+    if (!source) {
+      return false;
+    }
+    if (source.ChannelKey && this.findDispatchableChannel(source.ChannelKey)) {
+      return this.SetUserChannelExposure(source.ChannelKey, enabled ? undefined : 'state');
+    }
+    return arbiter.SetSourceEnabled(sourceId, enabled);
+  }
+
   /**
    * The `on-demand` channels that are in the session but not open yet — what the agent can open
    * through `ContextTool`. A fresh array; empty before a session starts and after teardown.
@@ -1863,6 +2007,9 @@ export class RealtimeSessionRuntime {
     const mounted: BaseRealtimeChannelClient[] = [];
     for (const { Prepared, Resolved } of reconciled.InSession) {
       this.resolvedChannels.set(NormalizeChannelKey(Resolved.Key), Resolved);
+      // Exposure is applied BEFORE the channel initializes, so what it requests of the model (a video
+      // track, in particular) already reflects what policy allows.
+      this.applyChannelExposure(Prepared.Plugin);
       if (Resolved.DisplayPolicy === 'on-demand') {
         this.advertisedChannels.push(Prepared);
       } else {
@@ -2095,11 +2242,16 @@ export class RealtimeSessionRuntime {
   /** One catalog entry: a channel's descriptor, whether it is open, and whether its tools were declared natively. */
   private catalogEntry(plugin: BaseRealtimeChannelClient, isOpen: boolean): ChannelCatalogEntry {
     const display = this.GetResolvedChannel(plugin.ChannelName)?.DisplayPolicy;
-    return {
-      Descriptor: plugin.GetDescriptor(),
+    const descriptor = plugin.GetDescriptor();
+    const entry: ChannelCatalogEntry = {
+      Descriptor: descriptor,
       IsOpen: isOpen,
       HasNativeTools: isOpen && display !== undefined && DeclaresNativeTools(display) && plugin.GetToolDefinitions().length > 0,
     };
+    if (CompareExposure(plugin.Exposure, descriptor.MaxExposure) < 0) {
+      entry.ExposureLimit = { Effective: plugin.Exposure, Ceiling: descriptor.MaxExposure, Reasons: [...plugin.ExposureReasons] };
+    }
+    return entry;
   }
 
   /** Builds the host-services context one channel plugin sees (its only line to the session). */
@@ -2851,6 +3003,40 @@ export class RealtimeSessionRuntime {
       RunID: parsed.RunID,
       Artifacts: parsed.Artifacts
     });
+    if (parsed.Success && parsed.Artifacts && parsed.Artifacts.length > 0) {
+      void this.offerDelegationArtifacts(parsed.Artifacts);
+    }
+  }
+
+  /**
+   * Offers a delegated run's artifacts to the channels that host artifacts (an Interactive Component channel
+   * shows a component artifact, or swaps in a newer version of one it already shows). Each channel is asked
+   * first whether it wants them; an advertised, unopened channel that does is mounted before it is handed
+   * them. One channel failing never stops the others, and nothing here can fail the delegation result,
+   * which has already been emitted.
+   */
+  private async offerDelegationArtifacts(artifacts: readonly ParsedDelegationArtifact[]): Promise<void> {
+    const candidates: Array<{ Plugin: BaseRealtimeChannelClient; IsOpen: boolean }> = [
+      ...this._activeChannels$.value.map((plugin) => ({ Plugin: plugin, IsOpen: true })),
+      ...this.advertisedChannels.map((prepared) => ({ Plugin: prepared.Plugin, IsOpen: false }))
+    ];
+    for (const { Plugin: plugin, IsOpen: isOpen } of candidates) {
+      try {
+        const config = this.GetResolvedChannel(plugin.ChannelName)?.Config ?? {};
+        if (!plugin.AcceptsDelegationArtifacts(artifacts, config)) {
+          continue;
+        }
+        if (!isOpen) {
+          await this.mountAdvertisedChannel(plugin);
+        }
+        await plugin.OnDelegationArtifacts(artifacts);
+        if (!isOpen) {
+          this.noteChannelActivity(plugin); // the channel was mounted for this: reveal its tab
+        }
+      } catch (error) {
+        console.error(`[RealtimeSession] Channel '${plugin.ChannelName}' failed to take a delegated run's artifacts:`, error);
+      }
+    }
   }
 
   // ── Explicit delegation cancellation (server cancel channel) ───────────────
@@ -3536,6 +3722,7 @@ export class RealtimeSessionRuntime {
 
     if (this.client) {
       await this.client.Disconnect();
+      this.unwatchVideoSources();
       this.client = null;
     }
 

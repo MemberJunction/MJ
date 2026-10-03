@@ -85,6 +85,23 @@ export class ChannelPerceptionCoalescer {
         this.baseline = state;
     }
 
+    /**
+     * Forgets what the model was told, so the NEXT note is a full snapshot. Used when the model starts
+     * seeing the channel again after exposure was withdrawn: whatever it was last told is stale.
+     */
+    public ResetBaseline(): void {
+        this.baseline = null;
+    }
+
+    /** Drops any pending note without sending it (exposure was withdrawn: the model is no longer to be told). */
+    public CancelPending(): void {
+        if (this.timer !== null) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        this.pendingChanges = 0;
+    }
+
     /** Sends the pending note now, if anything is pending. Safe to call at any time. */
     public Flush(): void {
         if (this.timer !== null) {

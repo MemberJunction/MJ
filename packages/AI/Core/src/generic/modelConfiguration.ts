@@ -325,6 +325,23 @@ export interface DecisionConfigurationSettings {
 }
 
 /**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
  * The per-modality bag common to every AI configuration column. Sections are optional and
  * per-modality so one row can configure everything the thing it describes does.
  */
@@ -339,6 +356,8 @@ export interface AIConfigurationSections {
     Audio?: AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -463,6 +482,16 @@ function mergeInto(target: JSONObject, source: JSONObject): void {
             target[key] = incoming;
         }
     }
+}
+
+/**
+ * Whether an effective model configuration declares the model is served under zero data retention
+ * (`Privacy.ZeroDataRetention === true`). Absent, `null` and `false` all read as "not declared". Read
+ * it through {@link ResolveEffectiveModelConfiguration} (or `AIEngineBase.GetEffectiveModelConfiguration`)
+ * so the most specific layer's answer wins.
+ */
+export function IsZeroDataRetention(config: AIModelConfiguration | null | undefined): boolean {
+    return config?.Privacy?.ZeroDataRetention === true;
 }
 
 /**

@@ -379,6 +379,20 @@ export interface RealtimeSessionTuningConfig {
      * so a shared config stays safe on every provider.
      */
     turnDetection?: RealtimeTurnDetectionSettings;
+    /**
+     * The longest an UNVERIFIED (anonymous or magic-link guest) realtime session may run, in seconds. A
+     * positive integer. This is an MJ session limit, not a provider knob: it is deliberately NOT projected
+     * onto the driver Config bag by {@link GetSessionTuningSettings}. It is read from the effective
+     * config by the server session service (the mid-session identity-verification work), which falls back
+     * to its own default when absent.
+     */
+    unverifiedMaxSeconds?: number;
+    /**
+     * The longest a VERIFIED realtime session may run, in seconds — the deadline a successful mid-session
+     * verification extends the session to. A positive integer; like {@link unverifiedMaxSeconds} it is an
+     * MJ session limit and never reaches the driver Config bag.
+     */
+    verifiedMaxSeconds?: number;
 }
 
 /**
@@ -878,6 +892,7 @@ export function BuildAppRealtimeOverridesJson(
             Exclude?: string[] | null;
             Config?: Record<string, JSONObjectLike> | null;
             DisplayPolicy?: Record<string, RealtimeChannelDisplayPolicy> | null;
+            RequireZeroDataRetentionFor?: Array<'state' | 'pixels'> | null;
         } | null;
     } | null,
     relevantAgents?: RealtimeAllowedAgent[] | null
@@ -931,6 +946,7 @@ function mapAppChannels(
             exclude: channels.Exclude ?? undefined,
             config: channels.Config ?? undefined,
             displayPolicy: channels.DisplayPolicy ?? undefined,
+            requireZeroDataRetentionFor: channels.RequireZeroDataRetentionFor ?? undefined,
         },
     ]);
 }
@@ -1069,7 +1085,21 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
         tuning.turnDetection = turnDetection;
     }
 
+    const unverifiedMaxSeconds = readPositiveInteger(raw['unverifiedMaxSeconds']);
+    if (unverifiedMaxSeconds !== undefined) {
+        tuning.unverifiedMaxSeconds = unverifiedMaxSeconds;
+    }
+    const verifiedMaxSeconds = readPositiveInteger(raw['verifiedMaxSeconds']);
+    if (verifiedMaxSeconds !== undefined) {
+        tuning.verifiedMaxSeconds = verifiedMaxSeconds;
+    }
+
     return Object.keys(tuning).length > 0 ? tuning : undefined;
+}
+
+/** A finite, positive, whole number — or `undefined` for anything else (a limit of 0, -5 or 1.5 is a typo, not a limit). */
+function readPositiveInteger(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 /**

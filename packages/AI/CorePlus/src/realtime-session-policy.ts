@@ -29,6 +29,7 @@
 import type { JSONObject, RealtimeToolDefinition } from '@memberjunction/ai';
 import { IsPlainObject } from '@memberjunction/global';
 import type { ClientToolMetadata } from './agent-types';
+import type { RealtimeExposureLimit } from './realtime-channel-exposure';
 import type {
     RealtimeChannelAvailability,
     RealtimeChannelDisplayPolicy,
@@ -258,7 +259,32 @@ function readResolvedChannel(raw: unknown): ResolvedRealtimeChannel | null {
     if (IsPlainObject(raw['Config'])) {
         channel.Config = raw['Config'] as JSONObject;
     }
+    if (IsRealtimeChannelExposure(raw['Exposure'])) {
+        channel.Exposure = raw['Exposure'];
+    }
+    const limits = readExposureLimits(raw['ExposureLimits']);
+    if (limits.length > 0) {
+        channel.ExposureLimits = limits;
+    }
     return channel;
+}
+
+/** Reads a channel's exposure limits off the wire, dropping malformed entries. */
+function readExposureLimits(raw: unknown): RealtimeExposureLimit[] {
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    const limits: RealtimeExposureLimit[] = [];
+    for (const item of raw) {
+        if (!IsPlainObject(item) || !IsRealtimeChannelExposure(item['Level']) || typeof item['Reason'] !== 'string') {
+            continue;
+        }
+        const source = item['Source'];
+        if (source === 'agent' || source === 'zero-data-retention' || source === 'user') {
+            limits.push({ Source: source, Level: item['Level'], Reason: item['Reason'] });
+        }
+    }
+    return limits;
 }
 
 /** Reads a client-tool metadata list off the wire, dropping malformed entries. */

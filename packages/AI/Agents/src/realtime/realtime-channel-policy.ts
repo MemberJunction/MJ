@@ -13,7 +13,12 @@
  * 2. **Scoping** is `ResolveRealtimeChannelScope` (`@memberjunction/ai-core-plus`) — the SAME pure
  *    function the browser runs locally when no server policy comes back — fed the cascade's folded
  *    `channels` section (agent layers + the app's `AgentSettings.Realtime.Channels`).
- * 3. **Native tools** are re-derived from the decision: the tools the client declared are narrowed to
+ * 3. **Exposure** (how much of each channel the model may perceive: nothing, state, or pixels) is the
+ *    channel's ceiling lowered by the agent's per-channel `maxExposure` and by the agent's
+ *    `requireZeroDataRetentionFor` when the session model does not declare zero data retention. It is
+ *    decided HERE, on the server, and rides in the policy; the browser can only lower it further with
+ *    the user's own choice.
+ * 4. **Native tools** are re-derived from the decision: the tools the client declared are narrowed to
  *    those of in-scope channels that declare natively, and the in-scope channels' tools are added by
  *    name even if the client did not list them (an `'opt-in'` channel the agent included). Tools
  *    that do not belong to any candidate (the host's own) pass through untouched.
@@ -56,6 +61,12 @@ export interface SessionChannelPolicyInput {
     ClientTools?: ReadonlyArray<RealtimeToolDefinition> | null;
     /** The app/static client-tool tiers to hand back to the browser, when resolved. */
     ClientToolTiers?: RealtimeSessionClientTools;
+    /**
+     * Whether the session model's configuration declares `Privacy.ZeroDataRetention: true`. Feeds the
+     * agent's `requireZeroDataRetentionFor` exposure downgrade; leave unset (treated as `false`) when
+     * the model could not be resolved, so the downgrade fails closed.
+     */
+    ModelHasZeroDataRetention?: boolean;
 }
 
 /** The outcome of {@link BuildSessionChannelPolicy}. */
@@ -91,6 +102,7 @@ export function BuildSessionChannelPolicy(input: SessionChannelPolicyInput): Ses
             Registry: ResolveCandidateRegistryState(candidate.Key, input.Registry),
         })),
         Config: input.ChannelsConfig ?? null,
+        ModelHasZeroDataRetention: input.ModelHasZeroDataRetention === true,
     });
     const toolsByKey = new Map(input.Candidates.map((c) => [c.Key, c.Tools] as const));
     const inScopeNative = SelectNativeChannelTools(scope.Channels, toolsByKey);

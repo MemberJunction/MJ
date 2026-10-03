@@ -6719,6 +6719,9 @@ importers:
       '@memberjunction/ng-notifications':
         specifier: 6.2.0-edge.1
         version: link:../notifications
+      '@memberjunction/ng-react':
+        specifier: 6.2.0-edge.1
+        version: link:../react
       '@memberjunction/ng-resource-permissions':
         specifier: 6.2.0-edge.1
         version: link:../resource-permissions

@@ -24,7 +24,7 @@
  * @author MemberJunction.com
  */
 
-import type { RealtimeIdleSignal, RealtimeToolingSettings, RealtimeTurnCoverage } from '@memberjunction/ai';
+import { ResolveMaxInboundVideoStreams, type RealtimeIdleSignal, type RealtimeToolingSettings, type RealtimeTurnCoverage } from '@memberjunction/ai';
 
 /** Thinking levels the Live API accepts. `'minimal'` is legal on 3.1 but NOT on 3.8 Extended Thinking. */
 export type GeminiThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
@@ -101,6 +101,26 @@ export interface GeminiLiveModelProfile {
      * declare it for every video-capable model.
      */
     MaxInboundVideoRate?: number;
+
+    /**
+     * How many concurrent inbound video streams this model accepts when {@link SupportsInboundVideo} is
+     * true. Read it through {@link ResolveGeminiMaxInboundVideoStreams}, which returns `0` for a model
+     * that does not accept video at all and `1` when a video model declares no limit.
+     *
+     * Every Live model shipped so far takes ONE stream, so a source arbiter chooses which of several
+     * sources the model sees and tells it on each switch. A future model that accepts several says so
+     * HERE and the arbiter passes sources through untouched; no consumer hardcodes the number.
+     */
+    MaxInboundVideoStreams?: number;
+}
+
+/**
+ * The inbound video stream count a profile ACTUALLY allows: `0` when the model accepts no video (whatever
+ * the table says, so a stale number on a non-video row cannot enable streams), else its declared maximum
+ * or `1`.
+ */
+export function ResolveGeminiMaxInboundVideoStreams(profile: GeminiLiveModelProfile): number {
+    return ResolveMaxInboundVideoStreams(profile.SupportsInboundVideo, profile.MaxInboundVideoStreams);
 }
 
 /**
@@ -122,6 +142,7 @@ export const GEMINI_LIVE_MODEL_PROFILES: readonly GeminiLiveModelProfile[] = [
         ProviderDefaultTurnCoverage: 'audioActivityAndAllVideo',
         SupportsInboundVideo: true,
         MaxInboundVideoRate: 1,
+        MaxInboundVideoStreams: 1,
     },
     {
         MatchPrefix: 'gemini-3.8-live',
@@ -137,6 +158,7 @@ export const GEMINI_LIVE_MODEL_PROFILES: readonly GeminiLiveModelProfile[] = [
         ProviderDefaultTurnCoverage: 'audioActivityAndAllVideo',
         SupportsInboundVideo: true,
         MaxInboundVideoRate: 1,
+        MaxInboundVideoStreams: 1,
     },
     {
         // The legacy preview model. Retained deliberately: the capability table is what makes
@@ -172,6 +194,10 @@ export const GEMINI_LIVE_FALLBACK_PROFILE: GeminiLiveModelProfile = {
     ProactiveAudioAlwaysOn: false,
     ProviderDefaultTurnCoverage: 'audioActivityOnly',
     SupportsInboundVideo: false,
+    // The stream count the model WOULD take if it accepted video. The effective value is still 0 while
+    // SupportsInboundVideo is false (ResolveGeminiMaxInboundVideoStreams), so a newer unknown model that
+    // turns out to take video is one profile row away from working, with the count already stated.
+    MaxInboundVideoStreams: 1,
 };
 
 /**

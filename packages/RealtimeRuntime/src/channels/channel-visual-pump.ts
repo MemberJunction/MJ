@@ -42,6 +42,11 @@ export interface VisualPerceptionPumpHost {
     GetSink(): VisualFrameSink | null;
     /** Whether the session has an established inbound video track — without one the pump is inert. */
     IsInboundVideoEstablished(): boolean;
+    /**
+     * Whether exposure policy currently lets this channel show the model pixels. Optional: absent means
+     * permitted. While `false` the pump captures and sends nothing and drops any pending settle.
+     */
+    IsPermitted?(): boolean;
     /** The frame cadence the track negotiated, in ms (the caller clamps it to its floor). */
     GetCadenceMs(): number;
     /** Renders the current frame as a base64 JPEG, or `null` when none is available. */
@@ -124,9 +129,14 @@ export class VisualPerceptionPump {
         this.lastPushedFrame = null;
     }
 
-    /** Whether a frame can be pushed right now (a sink exists and the video track is up). */
+    /** Whether a frame can be pushed right now (permitted, a sink exists and the video track is up). */
     private canPush(): boolean {
-        return this.host.GetSink() !== null && this.host.IsInboundVideoEstablished();
+        return this.isPermitted() && this.host.GetSink() !== null && this.host.IsInboundVideoEstablished();
+    }
+
+    /** Exposure policy's verdict; a host that has no policy permits everything. */
+    private isPermitted(): boolean {
+        return this.host.IsPermitted ? this.host.IsPermitted() : true;
     }
 
     /** Captures the current frame and pushes it unless it duplicates the last one. */
@@ -152,7 +162,7 @@ export class VisualPerceptionPump {
     /** The trailing settle: push the resting frame if the track is still up and it changed. */
     private async settle(): Promise<void> {
         try {
-            if (!this.host.IsInboundVideoEstablished()) {
+            if (!this.isPermitted() || !this.host.IsInboundVideoEstablished()) {
                 return;
             }
             await this.captureAndPush('settle');
