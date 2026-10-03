@@ -2,9 +2,8 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass, SQLExpressionValidator } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
-import { BaseEntity, LogError } from "@memberjunction/core";
+import { BaseEntity, DatabasePlatform, DatabaseProviderBase, LogError, ResolvePlatformKey } from "@memberjunction/core";
 import { QueryCompositionEngine, QueryPagingEngine } from "@memberjunction/generic-database-provider";
-import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -99,7 +98,10 @@ export class RunAdhocQueryAction extends BaseAction {
             // Ensure query returns limited results
             const limitedQuery = this.ensureRowLimit(resolvedQuery, maxRows);
 
-            const dataProvider = BaseEntity.Provider as SQLServerDataProvider;
+            // Typed as the platform-agnostic base, not SQLServerDataProvider: `ExecuteSQL`
+            // is declared on DatabaseProviderBase, so this path already worked on any
+            // platform — only the type assertion claimed otherwise.
+            const dataProvider = BaseEntity.Provider as unknown as DatabaseProviderBase;
 
             try {
                 // Execute the query with timeout
@@ -262,15 +264,25 @@ export class RunAdhocQueryAction extends BaseAction {
      */
     private ensureRowLimit(query: string, maxRows: number): string {
         try {
-            const provider = BaseEntity.Provider as SQLServerDataProvider;
-            const platform = (provider?.PlatformKey ?? 'sqlserver') as 'sqlserver' | 'postgresql';
-            return QueryPagingEngine.WrapWithMaxRows(query, maxRows, platform);
+            return QueryPagingEngine.WrapWithMaxRows(query, maxRows, this.resolvePlatform());
         } catch {
             // Ultimate safety net: if WrapWithMaxRows throws, fall back to a
             // DISTINCT-aware regex (still better than the original).
+            //
+            // The safety net is reached precisely when the AST path could not
+            // understand the SQL, so it must ALSO respect the tenant's dialect.
+            // Emitting `TOP` unconditionally here handed a PostgreSQL tenant SQL
+            // that cannot parse at all — the cap turned a query that merely
+            // confused the parser into one the database rejected outright.
             const hasTop = /SELECT\s+TOP\s+\d+/i.test(query);
             const hasOffsetFetch = /OFFSET\s+\d+\s+ROWS\s+FETCH/i.test(query);
-            if (hasTop || hasOffsetFetch) return query;
+            const hasLimit = /\bLIMIT\s+\d+/i.test(query);
+            if (hasTop || hasOffsetFetch || hasLimit) return query;
+            if (this.resolvePlatform() === 'postgresql') {
+                // Trailing `;`/whitespace is stripped first so the clause does not
+                // land after the statement terminator.
+                return `${query.replace(/\s*;?\s*$/, '')} LIMIT ${maxRows}`;
+            }
             return query.replace(/^(\s*SELECT\s+(?:DISTINCT\s+|ALL\s+)?)/i, `$1TOP ${maxRows} `);
         }
     }
@@ -482,13 +494,36 @@ export class RunAdhocQueryAction extends BaseAction {
             return sql;
         }
 
+        // The composed CTEs are assembled in the target platform's syntax. Passing a
+        // literal 'sqlserver' here produced T-SQL CTE assembly on every tenant,
+        // including PostgreSQL ones, where the resulting SQL simply failed to run.
         const result = engine.ResolveComposition(
             sql,
-            'sqlserver',
+            this.resolvePlatform(),
             params.ContextUser
         );
 
         return result.ResolvedSQL;
+    }
+
+    /**
+     * The platform this action's SQL will actually be executed against.
+     *
+     * One resolution point for the whole action: the row cap, the composition
+     * assembly and anything added later all read the same answer, so they cannot
+     * drift into disagreeing about the dialect. Falls back to SQL Server only when
+     * no provider is configured — the historical default.
+     *
+     * `BaseEntity.Provider` THROWS when there is no global object store, so the
+     * read is guarded: composition resolution never touched the provider before
+     * this change and must not start failing in provider-less contexts.
+     */
+    private resolvePlatform(): DatabasePlatform {
+        try {
+            return ResolvePlatformKey(BaseEntity.Provider);
+        } catch {
+            return ResolvePlatformKey(undefined);
+        }
     }
 
     /**

@@ -1,5 +1,5 @@
 /**
- * `ExecuteAdhocQuery` runs a raw `SELECT` straight on the read-only pool: no `RunView`, no
+ * `ExecuteAdhocQuery` runs a raw `SELECT` straight on the read-only connection: no `RunView`, no
  * entity permissions, no row-level security, and therefore no magic-link scope. The
  * confinement a scope-limited session relies on is expressed purely as RLS filter tokens
  * substituted on the entity-read path, so on this path it simply does not exist — a
@@ -7,7 +7,7 @@
  *
  * These tests pin the predicate that classifies such principals, and that the resolver
  * consults it before it touches a data source. The resolver itself needs a very heavy mock
- * graph to instantiate (type-graphql decorators, mssql, AppContext, config, providers), so
+ * graph to instantiate (type-graphql decorators, AppContext, config, providers), so
  * the ordering assertion is a source-shape test — the same hybrid strategy the existing
  * `AdhocQueryResolver.bugs.test.ts` uses for this resolver.
  */
@@ -71,14 +71,18 @@ describe('AdhocQueryResolver scope guard placement', () => {
         expect(/\bIsScopeLimitedPrincipal\s*\(/.test(src)).toBe(true);
     });
 
-    it('refuses the principal BEFORE acquiring a data source', () => {
+    it('refuses the principal BEFORE acquiring a connection', () => {
         // Authorization must gate the work, not run alongside it: if the guard landed after
-        // the pool were acquired (or the SQL executed), a scope-limited caller would already
-        // have reached the database.
+        // the connection were acquired (or the SQL executed), a scope-limited caller would
+        // already have reached the database.
+        //
+        // The connection is now acquired as the read-only PROVIDER rather than an mssql
+        // pool (the resolver must work on PostgreSQL too), so this pins the ordering
+        // against that acquisition point.
         const guardAt = src.indexOf('IsScopeLimitedPrincipal(');
-        const dataSourceAt = src.indexOf('GetReadOnlyDataSource(');
+        const connectionAt = src.indexOf('GetReadOnlyProvider(');
         expect(guardAt).toBeGreaterThan(-1);
-        expect(dataSourceAt).toBeGreaterThan(-1);
-        expect(guardAt).toBeLessThan(dataSourceAt);
+        expect(connectionAt).toBeGreaterThan(-1);
+        expect(guardAt).toBeLessThan(connectionAt);
     });
 });

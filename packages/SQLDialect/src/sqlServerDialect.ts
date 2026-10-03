@@ -131,6 +131,15 @@ export class SQLServerDialect extends SQLDialect {
         return 'TransactSQL';
     }
 
+    get DisplayName(): string {
+        return 'Microsoft SQL Server (T-SQL)';
+    }
+
+    /** `sql-formatter` ships T-SQL under the `tsql` language key. */
+    get FormatterLanguage(): string {
+        return 'tsql';
+    }
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
