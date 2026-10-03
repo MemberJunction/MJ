@@ -23,7 +23,8 @@ capabilities, not by prescribing specific business applications.
 | 2026-08-14 | Universal Approval Gates for Actions, Agents & Workflows · Unified Resource Governance Engine · Consent & Data Rights Primitive | [#4009](https://github.com/MemberJunction/MJ/pull/4009) (open, unmerged — plan docs not yet in this branch) |
 | [2026-08-29](./2026-08-29/) | Data Health & Trust Layer · Localization-by-Default Framework Layer · Operation Safety Net (undo for bulk & agent-driven changes) | (no follow-up PR filed) |
 | [2026-09-05](./2026-09-05/) | Federated Hierarchy & Roll-Up Governance Layer · Communication Suppression & Sensitive-Context Safety Engine · Data Access Sentinel (anomalous access/export detection) | (no follow-up PR filed) |
-| [2026-09-12](./2026-09-12/) | Execution Trace & Observability Layer · Tenant Isolation Guarantee Layer · Agent Behavioral Drift & Regression Detection Engine | _(this week's PR)_ |
+| [2026-09-12](./2026-09-12/) | Execution Trace & Observability Layer · Tenant Isolation Guarantee Layer · Agent Behavioral Drift & Regression Detection Engine | (decision 2026-09-14: not current priorities) |
+| [2026-10-03](./2026-10-03/) | Governed Metrics & Goals Layer · Safe Sandbox Data (masked/synthetic packs) · Import Copilot (guided reversible file import) | _(this week's PR)_ |
 
 ## Before starting a new week
 
