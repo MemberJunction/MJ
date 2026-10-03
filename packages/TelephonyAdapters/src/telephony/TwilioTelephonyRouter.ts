@@ -31,6 +31,7 @@ import type { TwilioTelephonyConfig } from '../types.js';
 import { TwilioCallMediaRegistry } from './twilioMediaRegistry.js';
 import { TwilioTelephonyService } from './TwilioTelephonyService.js';
 import { ResolveInboundContext } from './runAsIdentity.js';
+import { TrimTrailingSlashes } from './telephonySettings.js';
 
 /** The mount path for the Twilio telephony public router. */
 export const TWILIO_TELEPHONY_MOUNT_PATH = '/telephony/twilio';
@@ -107,7 +108,7 @@ export function createTwilioTelephonyHandler(
  */
 function verifyTwilioRequest(config: TwilioTelephonyConfig, publicUrl: string, req: Request, res: Response): Record<string, string> | null {
     const params = coerceParams(req.body);
-    const fullUrl = `${publicUrl.replace(/\/+$/, '')}${req.originalUrl}`;
+    const fullUrl = `${TrimTrailingSlashes(publicUrl)}${req.originalUrl}`;
     if (!config.authToken || !verifyTwilioSignature(config.authToken, req.get('X-Twilio-Signature'), fullUrl, params)) {
         res.status(403).type('text/plain').send('Invalid Twilio signature.');
         return null;

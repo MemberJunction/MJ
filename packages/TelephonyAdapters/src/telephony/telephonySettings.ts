@@ -33,7 +33,19 @@ export function ResolveOnMachine(raw: string | undefined): OnMachineAction {
  * call back (e.g. `https://api.example.com` + `/telephony/twilio` + `/status`).
  */
 export function BuildCallbackUrl(publicUrl: string, rootPath: string, route: string): string {
-    const base = publicUrl.replace(/\/+$/, '');
+    const base = TrimTrailingSlashes(publicUrl);
     const mount = rootPath.startsWith('/') ? rootPath : `/${rootPath}`;
-    return `${base}${mount.replace(/\/+$/, '')}${route}`;
+    return `${base}${TrimTrailingSlashes(mount)}${route}`;
+}
+
+/**
+ * Removes every trailing `/` from a string in a single linear scan. Used on operator- and request-supplied
+ * URLs instead of a `/\/+$/` regex, whose backtracking is polynomial on inputs with many slashes.
+ */
+export function TrimTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 47 /* '/' */) {
+        end--;
+    }
+    return value.slice(0, end);
 }

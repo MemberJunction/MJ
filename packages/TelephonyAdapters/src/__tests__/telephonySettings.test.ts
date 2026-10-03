@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BuildCallbackUrl, ReadSharedTelephonySettings, ResolveOnMachine } from '../telephony/telephonySettings.js';
+import { BuildCallbackUrl, ReadSharedTelephonySettings, ResolveOnMachine, TrimTrailingSlashes } from '../telephony/telephonySettings.js';
 
 describe('ReadSharedTelephonySettings', () => {
     it('picks only the shared fields', () => {
@@ -36,5 +36,22 @@ describe('BuildCallbackUrl', () => {
 
     it('tolerates a mount path without a leading slash', () => {
         expect(BuildCallbackUrl('https://api.acme.com', 'telephony/vonage', '/event')).toBe('https://api.acme.com/telephony/vonage/event');
+    });
+});
+
+describe('TrimTrailingSlashes', () => {
+    it('removes every trailing slash and nothing else', () => {
+        expect(TrimTrailingSlashes('https://api.example.com///')).toBe('https://api.example.com');
+        expect(TrimTrailingSlashes('https://api.example.com/graphql')).toBe('https://api.example.com/graphql');
+        expect(TrimTrailingSlashes('/')).toBe('');
+        expect(TrimTrailingSlashes('')).toBe('');
+    });
+
+    it('stays linear on a pathological run of slashes', () => {
+        const input = 'a' + '/'.repeat(200_000) + 'b';
+        const start = Date.now();
+        expect(TrimTrailingSlashes(input)).toBe(input);
+        expect(TrimTrailingSlashes(input + '/'.repeat(200_000))).toBe(input);
+        expect(Date.now() - start).toBeLessThan(500);
     });
 });
