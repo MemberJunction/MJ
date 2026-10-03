@@ -20,7 +20,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeToolDefinition, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
@@ -2622,9 +2622,14 @@ export class BaseAgent {
         const selfNames = Array.isArray(params.data?.realtimeSelfNames)
             ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
             : undefined;
+        const hostTools = Array.isArray(params.data?.realtimeHostTools) ? (params.data?.realtimeHostTools as RealtimeToolDefinition[]) : undefined;
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
+            HostTools: hostTools,
+            HostFraming: (params.data?.realtimeHostFraming as string | undefined)?.trim() || undefined,
+            PriorTranscript: (params.data?.realtimePriorTranscript as string | undefined)?.trim() || undefined,
+            ConversationID: (params.data?.conversationId as string | undefined)?.trim() || undefined,
             // The run's runtime API keys, so the bridged voice session mints on the caller's key when
             // the run carries one for the realtime driver (the same run-key → platform order as
             // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.
