@@ -109,11 +109,28 @@ widget: {
 // Gate on ANY configured vendor so one block can carry several.
 telephony: {
   enabled: !!(process.env.TWILIO_ACCOUNT_SID || process.env.VONAGE_APPLICATION_ID || process.env.RINGCENTRAL_SIP_USERNAME),
+
+  // REQUIRED for inbound calls (all carriers). The user inbound calls run as — see "Inbound run-as user" below.
+  // Point it at a DEDICATED, LEAST-PRIVILEGE account. There is no fallback: unset / unknown / inactive / the
+  // system user ⇒ every inbound call is rejected with a polite message and a logged error.
+  inboundRunAsUserEmail: process.env.TELEPHONY_INBOUND_RUN_AS_USER_EMAIL || undefined,
+  // Hard cap on one call's length, in seconds (default 1800 = 30 min). The session is stopped at the cap.
+  maxCallSeconds: 1800,
+  // Outbound (`Place*Call`) policy — defaults shown. Applies on top of the caller's right to run the agent.
+  outbound: {
+    allowedPrefixes: ['+1'],               // E.164 prefixes a call may go to; [] refuses everything
+    blockedPrefixes: ['+1900', '+1976'],   // always refused, even if an allowed prefix matches
+    maxCallsPerUserPerHour: 20,            // in-memory sliding window — PER PROCESS (N instances ⇒ N× the limit)
+  },
+
   twilio: process.env.TWILIO_ACCOUNT_SID ? {
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,         // also the HMAC key for webhook signature verify
     streamPublicUrl: process.env.TWILIO_STREAM_PUBLIC_URL, // wss://<public-host>/telephony/twilio/media
-    webhookSigningSecret: process.env.TWILIO_WEBHOOK_SIGNING_SECRET || undefined,
+    webhookSigningSecret: process.env.TWILIO_WEBHOOK_SIGNING_SECRET || undefined, // reserved — currently unused (see below)
+    // onMachine: 'hangup' (default) | 'continue' — what to do when answering-machine detection says a machine
+    // or fax answered an OUTBOUND call. 'hangup' ends the session; 'continue' only logs the verdict.
+    // statusCallbackUrl / amdStatusCallbackUrl default to <MJAPI_PUBLIC_URL>/telephony/twilio/{status,amd}.
   } : undefined,
 
   // Vonage — Voice API auth is application-scoped (Application ID + RSA private key → signed JWTs).
@@ -130,7 +147,8 @@ telephony: {
     apiSecret: process.env.VONAGE_API_SECRET || undefined,
     signatureSecret: process.env.VONAGE_SIGNATURE_SECRET || process.env.VONAGE_API_SECRET || undefined,
     mediaPublicUrl: process.env.VONAGE_MEDIA_PUBLIC_URL, // wss://<public-host>/telephony/vonage/media
-    eventUrl: process.env.VONAGE_EVENT_URL || undefined,
+    eventUrl: process.env.VONAGE_EVENT_URL || undefined, // defaults to <MJAPI_PUBLIC_URL>/telephony/vonage/event
+    // onMachine: 'hangup' (default) | 'continue' — Vonage's machine_detection for OUTBOUND calls.
   } : undefined,
 
   // RingCentral — SIP softphone (the ONLY RingCentral transport that carries bidirectional call audio;
@@ -149,6 +167,25 @@ telephony: {
 },
 ```
 
+### Inbound run-as user (required) and what protects the telephony endpoints
+
+A phone caller is anonymous — there is no MJ session to inherit a user from — yet the call still needs a
+principal to create its agent session and run the agent. Earlier builds fell back to the **system user** (or the
+first Owner), so every stranger who dialed a number ran an agent with the platform's highest privileges. There is
+**no such fallback any more**: inbound calls run as the user named by `telephony.inboundRunAsUserEmail`.
+
+- Create a **dedicated, least-privilege** user (not the system user, not an Owner) with only what the pinned
+  agents need, and put its email in `TELEPHONY_INBOUND_RUN_AS_USER_EMAIL`.
+- If it is unset, matches no user, names an inactive user, or names the system user, the call is **rejected**
+  (Twilio: a short spoken apology + hang-up; Vonage: a `talk` NCCO; RingCentral: the SIP INVITE is declined) and
+  an error naming the dialed number is logged. After upgrading, inbound calls stop working until this is set.
+
+The carrier media websockets are authenticated per call. MJ mints a random token when it accepts or places a call
+and embeds it in the TwiML `<Parameter name="mjToken">` (Twilio) or the websocket URI `mj_token` (Vonage); a socket
+that names an unknown call, presents the wrong/no token, or targets a call that already has a socket is closed and
+logged. `webhookSigningSecret` is **reserved and currently unused** — the voice/status webhooks are authenticated by
+`X-Twilio-Signature` / the Vonage signed-webhook JWT, and the media sockets by the per-call token.
+
 The widget **reuses the magic-link RS256 key + auth provider**, initialized idempotently inside
 `createWidgetHandler` even when `magicLink.enabled` is `false`. So the widget stands on its own — you
 do NOT need to enable magic-link unless you want the guest→verified **upgrade** path (then set
@@ -166,7 +203,8 @@ signing secret or public URL (it needs no ngrok). See §6b for where the five SI
 | `AI_VENDOR_API_KEY__OpenAIRealtime` | **voice (widget + telephony)** | **driverClass-specific** — the realtime driver is `OpenAIRealtime`, NOT `OpenAILLM`. A key under the wrong name → "no usable Realtime model". |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Twilio | live = billable; test creds only work with magic numbers |
 | `TWILIO_STREAM_PUBLIC_URL` | Twilio media | `wss://<ngrok-host>/telephony/twilio/media` |
-| `MJAPI_PUBLIC_URL` | Twilio/Vonage inbound | MUST match the ngrok host — the inbound webhook signature is verified against the full public URL |
+| `TELEPHONY_INBOUND_RUN_AS_USER_EMAIL` | **all carriers (inbound)** | **REQUIRED** — email of the dedicated least-privilege user inbound calls run as. Unset ⇒ inbound calls are rejected (no System/Owner fallback). Feeds `telephony.inboundRunAsUserEmail`. |
+| `MJAPI_PUBLIC_URL` | Twilio/Vonage | MUST match the ngrok host — webhook signatures are verified against the full public URL, **and** the outbound status / AMD / event callback URLs are derived from it |
 | `TWILIO_TEST_ACCOUNT_SID` / `_AUTH_TOKEN` / `_FROM` / `_TO` | the credential-gated integration test | absent → test self-skips |
 | `VONAGE_APPLICATION_ID` | Vonage | the Voice app UUID — also the `enabled` gate for the Vonage block |
 | `VONAGE_PRIVATE_KEY_PATH` | Vonage | absolute path to the app's `private.key` (PEM). Read into config at boot — keeps the multi-line key out of `.env`. (`VONAGE_PRIVATE_KEY` with the inline PEM is the fallback.) |
@@ -188,6 +226,10 @@ signing secret or public URL (it needs no ngrok). See §6b for where the five SI
    `MJAPI_PUBLIC_URL` and the `wss://…/telephony/twilio/media` in `TWILIO_STREAM_PUBLIC_URL`. **These
    cycle** every ngrok restart — re-point all three (env + the Twilio number's webhook).
 2. **Twilio number** → set its Voice webhook to `https://<public-host>/telephony/twilio/voice` (POST).
+   Outbound calls need nothing in the console: MJ passes the status callback (`…/telephony/twilio/status`) and the
+   async answering-machine callback (`…/telephony/twilio/amd`) on each `calls.create`. Optionally also set the
+   number's **Status Callback URL** to `…/telephony/twilio/status` so an INBOUND call that ends before its media
+   socket connects still ends its session (a connected call ends on the stream `stop` frame regardless).
 3. **OpenAI Realtime** API key under the env name in §5.
 
 The widget needs none of this — it's same-origin-to-MJAPI over normal HTTPS.
@@ -199,7 +241,9 @@ Same ngrok in §6.1 applies (point it at MJAPI's port). Then:
 1. **Create a Voice application** — Dashboard → Applications → *Create*, enable **Voice**. Set:
    - **Answer URL** → `https://<public-host>/telephony/vonage/answer`, **method POST** (Vonage defaults
      answer to GET — you MUST switch it to POST or the ingress 404s the GET).
-   - **Event URL** → `https://<public-host>/telephony/vonage/event`, **method POST**.
+   - **Event URL** → `https://<public-host>/telephony/vonage/event`, **method POST**. MJ ends a call's session on
+     a terminal event here (busy / failed / rejected / timeout / cancelled / unanswered / completed) — an
+     unanswered outbound call never opens a media socket, so this is what stops it.
 
    This yields the **Application ID** and a one-time **`private.key`** download → save it and point
    `VONAGE_PRIVATE_KEY_PATH` at it. (Scriptable instead of the dashboard: `POST
@@ -327,6 +371,9 @@ The things that cost real time during bring-up — each is now either fixed in c
 | **Vonage: can't buy a number (`number/buy` 401)** | free-trial accounts get one number but can't provision more via API, and only interact with verified numbers | use the trial number; verify your cell as a test number; test inbound, not outbound (§6a trial note) |
 | Twilio **31920** / WS upgrade **400** | two `WebSocketServer({server})` (GraphQL + media) fight over the HTTP `upgrade` event in ws 8.x | fixed in code — single path-routing upgrade dispatcher + `noServer:true` |
 | Audio **deep / slowed down** | model PCM is 24 kHz, Twilio Media Streams are 8 kHz μ-law — played at the wrong rate | fixed in code — `BaseTelephonyBridge` resamples both legs |
+| **Inbound call: "unable to take your call right now"**, log says `inboundRunAsUserEmail … not configured / does not match any user / inactive / is the system user` | `telephony.inboundRunAsUserEmail` is unset or unusable — inbound calls are deliberately refused rather than run as a privileged user | create a dedicated least-privilege user and set `TELEPHONY_INBOUND_RUN_AS_USER_EMAIL` (§4) |
+| Media socket closed immediately; log says `refusing media socket … unknown-call / bad-token / already-attached` | the socket named a call MJ never registered, presented the wrong/no per-call token, or the call already has a socket | expected for scanners/replays. For a real call it means the carrier is not echoing the token: check the TwiML `<Parameter name="mjToken">` (Twilio) / the websocket URI query (Vonage) reaches the carrier unmodified |
+| `PlaceTwilioCall` etc. returns "outside the allowed calling ranges" / "blocked range" / "limit reached" / "permission to run this agent" | the outbound gate refused the call | adjust `telephony.outbound` (§4) or the caller's agent run permission; every refusal is logged with the masked destination |
 | Outbound rejected, Twilio **21210** | caller-ID (the agent identity's number) isn't provisioned on the Twilio account | use a number you own on the account as the agent identity's `IdentityValue` |
 | entity-permissions push fails on `@lookup …RLS Filters` | pushed before the RLS-filter migration ran | migrate first, then push metadata (§2 ordering) |
 | Guest tokens won't validate | `widget.audience` ≠ `magicLink.audience` | keep both `mj-magic-link` (§4) |
