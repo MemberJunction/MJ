@@ -20,7 +20,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeToolDefinition, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
@@ -53,6 +53,7 @@ import {
 import { SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
 import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
 import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
+import { ReadHostTools, ReadTrimmedString } from './realtime/bridge-host-params';
 import { RealtimeRecordingController, RealtimeRecordingMedia } from './realtime/realtime-recording-capture';
 import { ResolveRecordingStorageAccountID, StoreRealtimeRecording } from './realtime/realtime-recording-store';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -2622,14 +2623,14 @@ export class BaseAgent {
         const selfNames = Array.isArray(params.data?.realtimeSelfNames)
             ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
             : undefined;
-        const hostTools = Array.isArray(params.data?.realtimeHostTools) ? (params.data?.realtimeHostTools as RealtimeToolDefinition[]) : undefined;
+        const hostTools = ReadHostTools(params.data?.realtimeHostTools);
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
             HostTools: hostTools,
-            HostFraming: (params.data?.realtimeHostFraming as string | undefined)?.trim() || undefined,
-            PriorTranscript: (params.data?.realtimePriorTranscript as string | undefined)?.trim() || undefined,
-            ConversationID: (params.data?.conversationId as string | undefined)?.trim() || undefined,
+            HostFraming: ReadTrimmedString(params.data?.realtimeHostFraming, 'realtimeHostFraming'),
+            PriorTranscript: ReadTrimmedString(params.data?.realtimePriorTranscript, 'realtimePriorTranscript'),
+            ConversationID: ReadTrimmedString(params.data?.conversationId, 'conversationId'),
             // The run's runtime API keys, so the bridged voice session mints on the caller's key when
             // the run carries one for the realtime driver (the same run-key → platform order as
             // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.

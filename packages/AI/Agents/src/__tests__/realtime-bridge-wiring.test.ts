@@ -220,6 +220,29 @@ describe('WireBridgeRealtimeSession — runtime handle', () => {
         const runtime = await wire();
         expect(runtime.CancelInFlightDelegations()).toBe(0);
     });
+
+    it('CancelPendingNarration drops a queued spoken update but leaves the delegation running (the barge-in policy)', async () => {
+        vi.useFakeTimers();
+        const runtime = await wire();
+        let aborted = false;
+        service.RelayImpl = async (relayed) => {
+            relayed.AbortSignal?.addEventListener('abort', () => { aborted = true; });
+            relayed.OnProgress?.({ step: 'prompt_execution', message: 'Looking up your account' });
+            runtime.CancelPendingNarration(); // the caller talked over the agent
+            await vi.advanceTimersByTimeAsync(10000);
+            return { ResultJson: '{"ok":true}', Success: true };
+        };
+        await session.ToolHandler?.(call('invoke-target-agent', 'c9'));
+
+        expect(session.Spoken).toEqual([]); // the stale progress line was never voiced
+        expect(aborted).toBe(false); // ...and the work the caller asked for was not killed
+        expect(session.Results.at(-1)).toEqual({ callID: 'c9', output: '{"ok":true}' });
+    });
+
+    it('CancelPendingNarration is harmless with nothing pending', async () => {
+        const runtime = await wire();
+        expect(() => runtime.CancelPendingNarration()).not.toThrow();
+    });
 });
 
 describe('WireBridgeRealtimeSession — spoken progress', () => {

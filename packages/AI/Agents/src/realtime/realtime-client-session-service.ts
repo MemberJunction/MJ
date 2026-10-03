@@ -425,10 +425,18 @@ export interface BridgeRealtimeRuntime {
     /** Finalizes the co-agent + prompt run. Idempotent; safe to call from multiple teardown paths. */
     Finalize: (success: boolean) => Promise<void>;
     /**
-     * Aborts every delegated run currently in flight for this session — the bridge's barge-in cancel. Returns
-     * how many were aborted (0 when nothing was running; never throws).
+     * Aborts every delegated run currently in flight for this session (and drops pending narration). This is the
+     * EXPLICIT cancel — on a phone it backs the `cancel_pending_work` tool — and is deliberately NOT what a
+     * barge-in does (see {@link CancelPendingNarration}). Returns how many were aborted (0 when nothing was
+     * running; never throws).
      */
     CancelInFlightDelegations: () => number;
+    /**
+     * Drops any queued spoken progress update without touching the delegated work — what a barge-in does. The
+     * caller took the floor, so a pending "still working on it" is stale, but the jobs they asked for keep
+     * running. Never throws.
+     */
+    CancelPendingNarration: () => void;
     /**
      * Installs (or clears, with `undefined`) the host's local tool handler. A tool call whose name the handler
      * {@link BridgeLocalToolHandler.Handles} is executed by the host instead of the shared delegation path.
@@ -856,6 +864,7 @@ export class RealtimeClientSessionService {
                 narrator.Cancel(); // a stale "still working on it" line must not be spoken over the caller
                 return this.CancelInFlightDelegations(input.AgentSessionID);
             },
+            CancelPendingNarration: () => narrator.Cancel(),
             SetLocalToolHandler: (handler) => { localToolHandler = handler; },
         };
         bridgeRuntimes.set(session, runtime);
@@ -877,6 +886,7 @@ export class RealtimeClientSessionService {
         const runtime: BridgeRealtimeRuntime = {
             Finalize: async () => { /* nothing to finalize */ },
             CancelInFlightDelegations: () => 0,
+            CancelPendingNarration: () => { /* nothing is narrated */ },
             SetLocalToolHandler: () => { /* no tool path to extend */ },
         };
         bridgeRuntimes.set(session, runtime);

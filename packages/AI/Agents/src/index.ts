@@ -81,6 +81,7 @@ export * from './realtime/realtime-vendor-resolution';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-delegation-narrator';
 export * from './realtime/realtime-coagent-resolution';
+export * from './realtime/bridge-host-params';
 export * from './realtime/realtime-channel-server-host';
 export * from './realtime/whiteboard-channel-server';
 export * from './realtime/client-context-channel-server';

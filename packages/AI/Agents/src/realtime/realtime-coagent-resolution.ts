@@ -102,6 +102,14 @@ export async function ResolveRealtimeCoAgentID(
  * unattended telephony run-as user) the run's own `CanRun` check sees that principal, so this is the one place
  * the caller's own authority is applied to a colleague. It therefore runs for EVERY host.
  *
+ * **Which user each host passes** (so nobody "fixes" the telephony case later — it is correct as written):
+ * the principal is whoever the session runs as, i.e. the one whose authority the colleagues may use.
+ * - browser: the signed-in user;
+ * - LiveKit bridge: the user who started the session;
+ * - telephony inbound: the configured `telephony.inboundRunAsUserEmail` user (a phone caller has no MJ identity of
+ *   their own, so the dedicated least-privilege run-as user IS the principal);
+ * - telephony outbound: the user who placed the call.
+ *
  * `HasPermission` reads in-memory caches and fails closed on error, so an unresolvable agent drops OUT of the
  * union rather than becoming runnable. A filtered-out colleague is not an error: the delegation layer reports it
  * as "not available in this session", the same answer the model gets for a typo.
@@ -177,7 +185,7 @@ async function FindTypeDefaultCoAgentID(agentTypeID: string, contextUser: UserIn
         return candidates[0]?.CoAgentID;
     } catch (error) {
         LogError(
-            `Realtime co-agent resolution: AI Agent Co Agents cache read failed while resolving the type-level default ` +
+            `Realtime co-agent resolution: MJ: AI Agent Co Agents cache read failed while resolving the type-level default ` +
                 `co-agent for agent type ${agentTypeID} (${(error as Error).message}) — falling through.`,
         );
         return undefined;

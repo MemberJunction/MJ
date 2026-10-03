@@ -404,8 +404,11 @@ export interface StartBridgeSessionParams {
     TranscriptSink?: BridgeTranscriptSink;
 
     /**
-     * Called when the caller/participant talks over the agent (a true barge-in). The telephony host uses it to
-     * cancel delegated work that is now stale. Must not throw; a throw is logged and swallowed.
+     * Called when the caller/participant talks over the agent (a true barge-in). The telephony host uses it to drop
+     * queued spoken progress, which is now stale. It must NOT abort delegated work: the host policy (mirroring the
+     * browser runtime, `RealtimeSessionRuntime.ts` ~L1956-1963) is that the user keeps talking while delegated work
+     * runs, and cancelling on speech would kill exactly the jobs they asked for. Explicit cancellation is a separate
+     * act (the phone's `cancel_pending_work` tool). Must not throw; a throw is logged and swallowed.
      */
     OnBargeIn?: () => void;
 
@@ -1187,7 +1190,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         this.notifyBargeIn(active);
     }
 
-    /** Tells the host about a barge-in so it can cancel now-stale delegated work. A hook failure is logged, never fatal. */
+    /** Tells the host about a barge-in so it can drop now-stale narration (never delegated work). A hook failure is logged, never fatal. */
     private notifyBargeIn(active: ActiveBridgeSession): void {
         try {
             active.OnBargeIn?.();
