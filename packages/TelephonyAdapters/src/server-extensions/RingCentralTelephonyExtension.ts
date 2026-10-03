@@ -17,6 +17,7 @@ import type { RingCentralTelephonyConfig } from '../types.js';
 import {
     RingCentralTelephonyService,
     SetRingCentralTelephonyService,
+    ReadSharedTelephonySettings,
 } from '../telephony/index.js';
 
 @RegisterClass(BaseServerExtension, 'RingCentralTelephonyExtension')
@@ -51,6 +52,7 @@ export class RingCentralTelephonyExtension extends BaseServerExtension {
             sipAuthorizationId: rawSettings.sipAuthorizationId ?? '',
             codec: rawSettings.codec,
             ignoreTlsCertErrors: rawSettings.ignoreTlsCertErrors,
+            ...ReadSharedTelephonySettings(rawSettings),
         };
         this.config = config;
 
