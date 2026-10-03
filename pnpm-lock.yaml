@@ -14214,6 +14214,9 @@ importers:
         specifier: 6.2.0-edge.1
         version: link:../Base
     devDependencies:
+      nunjucks:
+        specifier: 3.2.4
+        version: 3.2.4(chokidar@3.6.0)
       tsc-alias:
         specifier: ^1.8.16
         version: 1.8.16

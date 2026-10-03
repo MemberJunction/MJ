@@ -12,7 +12,7 @@ reference:
 | Layer | Package | What it is |
 |---|---|---|
 | Math | [`@memberjunction/rubrics-base`](../packages/Rubrics/Base/README.md) | `RubricScoring`, `RubricVersionDiff`, snapshots. Pure functions, browser-safe |
-| Engine + evaluators | [`@memberjunction/rubrics`](../packages/Rubrics/Engine/README.md) | `RubricEngine`, the LLM / agent / deterministic / human evaluators, actions, `mj rubric` |
+| Engine + evaluators | [`@memberjunction/rubrics`](../packages/Rubrics/Engine/README.md) | `RubricEngine`, the evaluator registry and the LLM / Decision / Agent / Deterministic / Human evaluators, actions, `mj rubric` |
 | Server rules | `@memberjunction/core-entities-server` | Publish, submit, supersede, and validation on the entity subclasses |
 | Widgets | [`@memberjunction/ng-rubrics`](../packages/Angular/Generic/rubrics/README.md) | Author, answer, result, publish, diff, and comparison widgets |
 | Testing | [`@memberjunction/testing-engine`](../packages/TestingFramework/Engine/README.md) | `RubricOracle`, rubric resolution, the calibration test type |
@@ -196,7 +196,8 @@ const result = await engine.EvaluateRecord({
     subjectRecordId: proposalId,
     contextEntityName: 'Procurement Rounds',  // optional: what the subject was scored for
     contextRecordId: roundId,
-    evaluator: 'LLM',                          // 'LLM' (default) | 'AI' (agent) | 'Deterministic'
+    evaluator: 'LLM',                          // any registered evaluator; LLM when omitted (section 8)
+    settings: { ModelID: modelId },            // optional: prompt, model, mode, samples (section 8)
 });
 
 result.score;        // 0..1, or null when nothing could be scored
@@ -209,7 +210,8 @@ result.evaluationId; // the stored MJ: Rubric Evaluations row
 `EvaluateRecord` throws when the rubric has no published version, when the subject is missing or not readable
 by `contextUser`, or when the evaluator fails. A failed run is still stored as a `Failed` evaluation with its
 `ErrorMessage`. Pass `versionId` to score against one specific version, and `content` when the subject is
-already in memory (self-check does this, because the run's payload is not saved yet).
+already in memory (self-check does this, because the run's payload is not saved yet). Pass `evaluatorConfig`
+instead of `evaluator` and `settings` to use a stored evaluator selection as is, the way sampling and self-check do.
 
 From an agent, a workflow, or a low-code builder, use the **Evaluate Record Against Rubric** action. It takes
 the same inputs and returns `EvaluationID`, `Score`, `Outcome`, and `Criteria`.
@@ -288,6 +290,8 @@ graph TD
   used as given.
 - When a rubric resolves and the test has no `rubric` oracle, the driver adds one. It always gates the test's
   status, and it contributes to the score when `scoringWeights` is absent or already names `rubric`.
+- When the rubric comes from the agent's default link, the link's `EvaluatorConfig` (its judge, mode and model)
+  is used. An explicit `rubric` oracle's own `evaluator` wins over the link's settings.
 - A test that already has an `llm-judge` oracle keeps it, and the agent's default rubric is not added beside
   it. Rubrics named on the run, the test, or the suite are still added.
 
@@ -309,9 +313,14 @@ set with the AI evaluator and compares it with the submitted human scores on the
 {
   "rubricId": "<rubric id>",
   "goldSet": { "subjectEntity": "MJ: Test Runs", "filter": "TestID='...'" },
-  "evaluator": { "type": "LLM" }
+  "evaluator": { "EvaluatorName": "Decision", "ModelID": "<model id>" }
 }
 ```
+
+`evaluator` is an evaluator selection, the same shape as a link's `EvaluatorConfig`
+([Choosing the evaluator for a link](#choosing-the-evaluator-for-a-link)). The older `{ "type": "LLM" }` still
+works, with `type` read as the evaluator name. Calibrate each judge you intend to run: an LLM prompt, a
+Decision model, and an agent disagree with people in different ways.
 
 The test score is the overall quadratic-weighted kappa, clamped to 0..1. Agreement needs at least 20 subjects
 that both a person and the judge scored; with fewer, the statistic is withheld and the sample size is still
@@ -380,15 +389,20 @@ pay for.
 
 ### Choosing the evaluator for a link
 
-`EvaluatorConfig` on the link (type `IRubricEvaluatorSelection`) picks how it is scored:
+`EvaluatorConfig` on the link (type `IRubricEvaluatorSelection`) picks the evaluator and its settings:
 
 ```json
-{ "EvaluatorType": "AIPrompt", "Mode": "PerCriterion" }
+{ "EvaluatorType": "AIPrompt", "PromptName": "Rubric Judge - Research Agent" }
+{ "EvaluatorType": "AIPrompt", "EvaluatorName": "Decision", "ModelID": "<Jev's AI Model ID>" }
 ```
 
-`EvaluatorType` is `AIPrompt` (the default, one LLM prompt), `Agent` (the Rubric Evaluation Agent), or
-`Deterministic`. `Mode` is `SinglePass` (one call for the whole rubric, the default) or `PerCriterion` (one
-decision per leaf). The sampling job honors both. Self-check always uses the LLM evaluator in SinglePass.
+`EvaluatorName` names any registered evaluator ([section 8](#8-evaluators)), including one your application
+registered. Without it, `EvaluatorType` picks a built-in: `AIPrompt` is LLM, `Agent` is Agent, `Deterministic`
+is Deterministic. An empty config is LLM SinglePass with the default judge. `PromptID` / `PromptName` (the LLM
+judge, or the Decision prompt), `SystemPromptID` / `SystemPromptName`, `CriterionPromptID` /
+`CriterionPromptName`, `ModelID`, `ModelSelection`, `AgentID`, `Mode`, `Samples`, and `Extensions` are passed
+to the evaluator as its settings. Every core agent's link names a judge written for it; see
+[The shipped judges](#the-shipped-judges). Agent eval tests, self-check and the sampling job all honor the whole selection.
 `PassThreshold` on the link overrides the version's threshold for that purpose.
 
 ---
@@ -528,20 +542,48 @@ comparable:
 
 ## 8. Evaluators
 
-Every evaluation records who scored it in `EvaluatorType`:
+An evaluator turns a subject into one answer per criterion. It never computes the score: it hands its answers
+to `RubricScoring`, so every evaluator scores the same way. Evaluators are plugins. Each one registers under
+`BaseRubricEvaluator` by name, and the engine creates the one a call names through the class factory.
 
-| Type | Who | How it is created |
-|---|---|---|
-| Human | A person. `EvaluatorUserID` is required | Scoring form, or the Submit Human Rubric action |
-| AIPrompt | The Rubric Evaluator prompt | `evaluator: 'LLM'`. `SinglePass`: one call for the whole rubric. `PerCriterion`: one decision per leaf |
-| Agent | The Rubric Evaluation Agent, a Loop agent that can read the rubric and the subject | `evaluator: 'AI'` |
-| Deterministic | A rule on the criterion's `EvaluatorConfig.Deterministic` | `evaluator: 'Deterministic'`. No LLM call |
-| Self | The subject's own assertion, for example a vendor's self-assessment | Stored and shown; **never part of consensus** |
-| External | Another system's score, imported | Stored and shown |
+```mermaid
+graph LR
+    CALLER["A call, a link's EvaluatorConfig,<br/>a test, the action, or the CLI"] --> RES["ResolveRubricEvaluatorSelection<br/><i>name + settings</i>"]
+    RES --> CF["ClassFactory<br/><i>BaseRubricEvaluator, name</i>"]
+    CF --> EV["Evaluator.EvaluateRubric<br/><i>version · content · settings · services</i>"]
+    EV --> SC["RubricScoring<br/><i>the only scorer</i>"]
+    SC --> ROW["RubricEvaluation<br/><i>EvaluatorType · EvaluatorName · run IDs · Metadata</i>"]
+```
 
-The LLM evaluator receives the rubric as the system message and the subject as a separate, delimited user
-message, so subject text cannot rewrite the instructions. A quote cited as evidence that does not appear in
-the subject text is dropped, so stored quotes are always real.
+### The built-in evaluators
+
+| Name | Stored as | What runs | Settings it reads |
+|---|---|---|---|
+| `LLM` (default) | AIPrompt | The **Rubric Evaluator** prompt with a **judge** prompt composed into it ([below](#how-the-llm-evaluator-builds-its-prompt)). `SinglePass` asks once for the whole rubric; `PerCriterion` asks once per leaf | `PromptID` or `PromptName` (the judge), `SystemPromptID`/`Name`, `CriterionPromptID`/`Name`, `ModelID`, `ModelSelection`, `Mode`, `Samples` (at most 9) |
+| `Decision` | AIPrompt | Typed Score questions on a Decision-type model, all leaves in one call. **Default Decision** binds Jev and LLM Decision. Each question is the criterion as **Rubric Criterion** renders it | `PromptID` or `PromptName` (the decision prompt), `CriterionPromptID`/`Name`, `ModelID` |
+| `Agent` | Agent | The **Rubric Evaluation Agent**, a Loop agent that can read the rubric and the subject | `AgentID` |
+| `Deterministic` | Deterministic | Each criterion's `EvaluatorConfig.Deterministic` rule. No model call | none |
+| `Human` | Human | A person, through the scoring form or the Submit Human Rubric action. The engine never runs it | — |
+
+`AI` is accepted as the old name for `Agent`, and `AIPrompt` as a name for `LLM`. Names are case-insensitive.
+
+Every LLM and Decision call goes through MJ's prompt system, so the prompt's model bindings, failover,
+credentials, and cost tracking all apply, and the prompt run is linked from the evaluation's `AIPromptRunID`.
+An Agent evaluation links its agent run from `AIAgentRunID`. Both columns point at the run that **produced** the
+evaluation, never at the subject.
+
+**LLM or Decision?** A Decision model answers with a calibrated probability for each level, which is cheaper
+and steadier than asking a chat model to emit JSON, and the chosen level's probability becomes the answer's
+`Confidence`. It returns no rationale and no quotes, so it suits rubrics whose levels are well anchored and whose
+criteria do not require evidence. The Decision evaluator refuses a rubric with an evidence-required criterion
+before calling anything, writes each rationale as the chosen level and its probability, and leaves a criterion
+on a numeric scale unanswered (it is listed in the run metadata as `UnaskedCriteria`). Use LLM when you need
+written rationale, quotes, or numeric scales.
+
+The LLM evaluator sends the rubric as the system message and the subject as a separate, delimited user
+message, so subject text cannot rewrite the instructions. Its prompts are metadata you can swap, see
+[How the LLM evaluator builds its prompt](#how-the-llm-evaluator-builds-its-prompt). A quote cited as evidence
+that does not appear in the subject text is dropped, so stored quotes are always real.
 
 A deterministic rule reads a dotted path in the subject content's `data` and maps the comparison to a level:
 
@@ -560,7 +602,245 @@ A deterministic rule reads a dotted path in the subject content's `data` and map
 
 Operators: `equals`, `notEquals`, `in`, `notIn`, `contains`, `exists`, `between`, `gte`, `lte`, `matches`.
 
----
+### How the LLM evaluator builds its prompt
+
+The LLM evaluator writes no prompt text. The prompts are ordinary rows in `MJ: AI Prompts`, shipped from
+`/metadata/prompts` with their templates in `/metadata/prompts/templates/rubrics`. The engine builds **template
+data** from the rubric, and the prompts render it. Change a template, push the metadata, and the next
+evaluation uses it. No code change, no rebuild.
+
+Three prompts take part, and each has one job:
+
+| Prompt | Role | Shipped as | Swap it with |
+|---|---|---|---|
+| **Evaluator** (the parent) | The frame: the untrusted-subject rule, the criteria, the scoring rules, and the **JSON reply contract** the engine parses. Has a `{{ judgePrompt }}` slot | `Rubric Evaluator` | `SystemPromptID` / `SystemPromptName` |
+| **Judge** (the child) | *How to judge* this kind of subject: what good looks like, what to be strict about, what counts as a serious miss | `Rubric Evaluator - Default Judge`, plus one `Rubric Judge - <Agent>` per core agent | `PromptID` / `PromptName` |
+| **Criterion** | Renders one criterion as text: name, key, gate, description, guidance, hints, quote rule, N/A policy, and its levels with their anchors | `Rubric Criterion` | `CriterionPromptID` / `CriterionPromptName` |
+
+This is the same **child-prompt composition** a loop agent uses for its system prompt and agent prompt: the
+runner renders the judge, places it in the evaluator's `judgePrompt` slot, and sends **one** system message in
+**one** model call, which writes **one** `MJ: AI Prompt Runs` row. The subject never passes through a template.
+It travels as its own user message, inside a `<rubric-subject NONCE>` block whose random nonce the subject does
+not contain, so subject text cannot close the block or rewrite the instructions.
+
+```mermaid
+flowchart LR
+    subgraph DATA["Template data the engine builds"]
+        RV["Rubric<br/><i>Instructions · N/A policy · PassThreshold</i>"]
+        CR["Criteria[]<br/><i>Key · Name · Levels · Anchors · Hints …</i>"]
+        MO["Mode<br/><i>SinglePass · PerCriterion</i>"]
+    end
+    CP["Rubric Criterion<br/><i>rendered once per criterion</i>"]
+    JP["Judge prompt<br/><i>Rubric Judge - Sage, or your own</i>"]
+    EP["Rubric Evaluator<br/><i>parent · owns the reply JSON</i>"]
+    SYS["System message"]
+    SUB["User message<br/><i>&lt;rubric-subject NONCE&gt; … &lt;/rubric-subject NONCE&gt;</i>"]
+    LLM(("Model<br/><i>one call</i>"))
+    PARSE["Engine parses the JSON<br/><i>levels by label · quotes checked</i>"]
+    SC["RubricScoring"]
+
+    CR --> CP -->|"Criterion.Text"| EP
+    RV --> EP
+    MO --> EP
+    DATA --> JP -->|"{{ judgePrompt }}"| EP
+    EP --> SYS --> LLM
+    SUB --> LLM
+    LLM --> PARSE --> SC
+```
+
+Here is one SinglePass evaluation, call by call. The criterion texts are rendered first, with no model call,
+so the Decision evaluator asks exactly the same criterion text an LLM evaluation does.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Eng as LLM evaluator
+    participant PS as ProviderPromptService
+    participant Run as AIPromptRunner
+    participant M as Model
+    Eng->>PS: RenderCriteria(Rubric Criterion, one item per leaf)
+    PS->>Run: RenderChildPromptTemplates(criterion0 … criterionN)
+    Run-->>PS: rendered text per criterion
+    PS-->>Eng: Criteria[i].Text
+    Eng->>PS: Run(Prompt = Rubric Evaluator, Judge = Rubric Judge - Sage, Data, Subject)
+    PS->>Run: ExecutePrompt(parent, childPrompts = [judge → judgePrompt], conversationMessages = [subject])
+    Run->>Run: render judge, merge into the parent, pick the model
+    Run->>M: system = evaluator + judge + criteria · user = subject
+    M-->>Run: {"decisions": [...]}
+    Run-->>PS: reply · prompt run ID · cost
+    PS-->>Eng: Text, PromptRunID
+    Eng->>Eng: parse, drop unknown keys and invented quotes, RubricScoring
+```
+
+`PerCriterion` repeats step 5 once per leaf with `Criteria` holding only that leaf, and the evaluator template
+asks for `{"chosen", "probabilities", …}` instead of `{"decisions": [...]}`. `Samples` repeats the whole call and
+keeps each criterion's median level.
+
+#### Which prompt to change
+
+```mermaid
+flowchart TD
+    Q{"What do you want<br/>to change?"}
+    Q -->|"What good looks like<br/>for this agent or record type"| J["Write a judge prompt<br/>and name it in PromptName"]
+    Q -->|"How each criterion<br/>is described to the model"| C["Swap the criterion prompt:<br/>CriterionPromptName"]
+    Q -->|"The frame, the rules,<br/>or the reply shape"| S["Swap the evaluator prompt:<br/>SystemPromptName<br/><b>must return the same JSON</b>"]
+    Q -->|"Which model runs it"| MD["ModelID pins one.<br/>ModelSelection = Judge lets the<br/>judge's bindings choose"]
+    Q -->|"The criteria themselves"| R["Edit the rubric:<br/>a new version, not a prompt"]
+```
+
+Almost every customization is a **judge**. The evaluator prompt is a contract with the engine's parser, so
+replace it only with a prompt that returns the same JSON. The criterion prompt is shared with the Decision
+evaluator; change it when you want every rubric's criteria worded differently.
+
+#### Writing a judge
+
+A judge is a plain prompt with a template and nothing else: no reply format (the evaluator owns that), no
+criteria list (the evaluator renders them), no subject (it arrives separately). It describes the subject and
+says how to weigh it. The shipped Sage judge is a good model:
+
+```markdown
+# Judge: Sage
+
+You are reviewing a turn by **Sage**, the ambient assistant present in every MemberJunction conversation.
+The subject is that turn: the person's message, Sage's reply, and any agents or actions it invoked.
+
+- **Right route.** A simple question about MJ should be answered directly. Work that needs a specialist
+  should go to that agent, not be improvised.
+- **Accurate about MJ.** Names of apps, screens, and features must be real. Inventing one is a serious miss.
+- **Says what happened.** When Sage delegated or ran something, the reply says what came back, failures included.
+```
+
+Ship it as metadata beside the others:
+
+```json
+{
+  "fields": {
+    "Name": "Rubric Judge - Acme Intake Agent",
+    "Description": "How to judge an Acme intake summary.",
+    "TemplateText": "@file:templates/rubrics/judges/acme-intake.template.md",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "Status": "Active",
+    "ResponseFormat": "Any"
+  },
+  "primaryKey": { "ID": "<uuidgen, uppercase>" }
+}
+```
+
+and name it on the agent's rubric link:
+
+```json
+{ "EvaluatorType": "AIPrompt", "PromptName": "Rubric Judge - Acme Intake Agent" }
+```
+
+A judge can read the same template data as the evaluator, so it can branch on the rubric
+(`{% if Mode == 'PerCriterion' %}`) or mention the subject's entity (`{{ Subject.EntityName }}`). Most don't
+need to. Two rules for any rubric template:
+
+- **Use `| safe` on authored text.** MJ renders templates with Nunjucks autoescape on. Without `| safe`, a
+  criterion named *Reader's clarity* reaches the model as `Reader&#39;s clarity`.
+- **Wrap literal JSON in `{% raw %}…{% endraw %}`.** Otherwise `{{` inside an example is read as a variable.
+
+#### The template data
+
+Every rubric template renders from the same data, built in
+[`promptData.ts`](../packages/Rubrics/Engine/src/promptData.ts). Field names are the template variable names.
+
+| Variable | Evaluator & judge | Criterion | What it holds |
+|---|---|---|---|
+| `Rubric.Instructions` | ✓ | ✓ | The version's instructions, or null |
+| `Rubric.NotApplicablePolicy` | ✓ | ✓ | The version's default N/A policy |
+| `Rubric.PassThreshold` | ✓ | ✓ | The version's pass threshold, or null |
+| `Mode` | ✓ | | `SinglePass` or `PerCriterion` |
+| `Criteria[]` | ✓ | | The leaves being asked, in tree order. One leaf in PerCriterion |
+| `Criterion` | | ✓ | The one leaf being rendered |
+| `Subject.EntityName`, `Subject.RecordID` | ✓ | | Which record is scored. Its **content** is never in the data |
+| `judgePrompt` | evaluator only | | The rendered judge |
+
+Each criterion (an item of `Criteria`, or `Criterion`) carries:
+
+| Field | Meaning |
+|---|---|
+| `Key`, `Name` | The permanent key the reply must use, and the display name |
+| `Description`, `Guidance` | The author's description and guidance, or null |
+| `Hints` | `EvaluatorConfig.AI.Hints` on the criterion, or null |
+| `RequireQuote` | `EvaluatorConfig.AI.RequireQuote`, or the criterion requires evidence |
+| `EvidenceRequired`, `RationaleRequired`, `IsGate` | The criterion's flags |
+| `NotApplicablePolicy` | The effective policy: the criterion's own, else the version's |
+| `Scale` | `{ Type, Min, Max, Step, HigherIsBetter }`, or null |
+| `Levels[]` | `{ Label, NormalizedValue, Anchor }`, lowest first. Empty for a numeric scale |
+| `Text` | The criterion as the criterion prompt rendered it. Set before the evaluator renders |
+
+#### Previewing the composed prompt
+
+`ProviderPromptService(provider, user).Preview({ Prompt, Judge, Data })` renders the evaluator with its judge
+exactly as `Run` would and returns the system message, with no model call. Use it to check a new judge before
+you name it on a link, or in a test:
+
+```typescript
+import { BuildCriteriaPromptData, PromptData, ProviderPromptService, RenderCriteriaText, RUBRIC_CRITERION_PROMPT, RUBRIC_EVALUATOR_PROMPT } from '@memberjunction/rubrics';
+
+const prompts = ProviderPromptService(provider, contextUser);
+const version = await engine.GetRubric({ rubricName: 'Research answer' });
+const criteria = await RenderCriteriaText(version, prompts, { Name: RUBRIC_CRITERION_PROMPT });
+const system = await prompts.Preview({
+    Prompt: { Name: RUBRIC_EVALUATOR_PROMPT },
+    Judge: { Name: 'Rubric Judge - Database Research Agent' },
+    Data: PromptData(version, 'SinglePass', criteria, { entityName: 'MJ: AI Agent Runs', recordId: runId }),
+});
+```
+
+#### Choosing the model
+
+By default the **evaluator** prompt's model bindings choose the model, so every LLM evaluation runs on the
+models bound to *Rubric Evaluator*. Two settings change that:
+
+- `ModelID` pins one model for the link, whatever the bindings say.
+- `ModelSelection: "Judge"` lets the **judge's** bindings choose instead (the runner's `modelSelectionPrompt`).
+  Bind a stronger model to one agent's judge and only that agent's evaluations use it.
+
+The prompt run is linked from the evaluation's `AIPromptRunID`, and its row records the composed prompt, the
+model, tokens, and cost, like any other prompt run.
+
+#### The shipped judges
+
+Every core agent's Evaluation rubric link names a judge written for that agent, so the shared rubrics
+(*Research answer* is shared by eight agents) are judged with each agent's own idea of a good result.
+
+| Judge | Agents | Rubric |
+|---|---|---|
+| `Rubric Evaluator - Default Judge` | Any link that names none | — |
+| `Rubric Judge - Research Agent` | Research Agent | Research answer |
+| `Rubric Judge - Database Research Agent` | Database Research Agent | Research answer |
+| `Rubric Judge - Web Research Agent` | Web Research Agent | Research answer |
+| `Rubric Judge - File Research Agent` | File Research Agent | Research answer |
+| `Rubric Judge - Knowledge Base Research Agent` | Knowledge Base Research Agent | Research answer |
+| `Rubric Judge - Research Report Writer` | Research Report Writer | Research answer |
+| `Rubric Judge - Sage` | Sage | Assistant reply |
+| `Rubric Judge - Query Builder` | Query Builder | Query answer |
+| `Rubric Judge - Query Strategist` | Query Strategist | Query answer |
+| `Rubric Judge - ActionSmith` | ActionSmith | Catalog contract |
+| `Rubric Judge - SkillSmith` | SkillSmith | Catalog contract |
+| `Rubric Judge - Codesmith Agent` | Codesmith Agent | Generated code |
+| `Rubric Judge - Database Designer` | Database Designer | Schema proposal |
+| `Rubric Judge - Duplicate Resolution Agent` | Duplicate Resolution Agent | Duplicate decision |
+| `Rubric Judge - Infographic Agent` | Infographic Agent | Picture from the data |
+
+The testing framework's `llm-judge` oracle runs through the same prompts: its inline criteria render through
+*Rubric Criterion*, and its `judgePrompt` config names the judge (the default judge when omitted).
+
+### What an evaluation records
+
+| Column | Value |
+|---|---|
+| `EvaluatorType` | The evaluator's type: Human, AIPrompt, Agent, Deterministic, Self, or External |
+| `EvaluatorName` | The registered name, for example `Decision` or your own |
+| `AIPromptRunID` / `AIAgentRunID` | The run that produced it, when there was exactly one |
+| `Metadata.Evaluator` | `Name`, the `Settings` it ran with, and what the evaluator reported: for LLM the `SystemPrompt`, `JudgePrompt` and `CriterionPrompt` it used, every prompt run when there were several, the samples, dropped keys and quotes; for Decision the `Prompt`, `CriterionPrompt`, and `UnaskedCriteria` |
+
+`Self` and `External` are not run by the engine: they are another party's or another system's scores, stored
+and shown. **Self is never part of consensus.** A custom evaluator that is neither an AI prompt nor an agent
+should report `External`.
 
 ## 9. Consensus and agreement
 
@@ -629,10 +909,49 @@ version snapshot.
 
 ### Custom evaluators
 
-Evaluator classes register under `BaseRubricEvaluator` (`Deterministic`, `LLM`, `Agent`, `Human`), but
-`RubricEngine` currently chooses among its built-in evaluators by the `evaluator` argument, not through the
-class factory. To score with your own logic today, compute the answers yourself and submit them through the
-Submit Human Rubric action or an `External` evaluation; `RubricScoring` still produces the score.
+Subclass `BaseRubricEvaluator`, register it by name, and every caller can run it: `EvaluateRecord`, a link's
+`EvaluatorConfig`, a test's evaluator, the Evaluate Record Against Rubric action, and `mj rubric evaluate`.
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { BaseRubricEvaluator, type RubricEvaluatorContext, type RubricEvaluatorRun, type RubricEvaluatorType } from '@memberjunction/rubrics';
+
+@RegisterClass(BaseRubricEvaluator, 'Acme Readability')
+export class ReadabilityEvaluator extends BaseRubricEvaluator {
+    public get EvaluatorName(): string { return 'Acme Readability'; }
+    public get EvaluatorType(): RubricEvaluatorType { return 'External'; }
+
+    public async EvaluateRubric(context: RubricEvaluatorContext): Promise<RubricEvaluatorRun> {
+        const target = Number(context.Settings.Extensions?.['Acme Readability'] ?? 60);
+        const grade = ReadingEase(context.Content.text ?? '');          // your own logic
+        const answers = context.Version.nodes
+            .filter(node => node.nodeType === 'Criterion')
+            .map(node => ({
+                criterionId: node.id,
+                scaleLevelId: LevelFor(context.Version, node, grade >= target),
+                rationale: `Reading ease ${grade}, target ${target}.`,
+                evidence: [],
+            }));
+        return { ...this.Evaluate(context.Version, answers), metadata: { ReadingEase: grade } };
+    }
+}
+```
+
+- **Score with `this.Evaluate`.** It calls `RubricScoring`, which is what makes your evaluator's scores
+  comparable with every other evaluator's.
+- **Read settings from `context.Settings`.** Your own go under `Extensions['<your evaluator name>']`, so a link
+  can carry them: `{ "EvaluatorName": "Acme Readability", "Extensions": { "Acme Readability": 70 } }`.
+- **Use `context.Services` for models.** `Prompts.Run` runs an evaluator prompt with a judge composed into it,
+  `Prompts.RenderCriteria` renders criteria through a criterion prompt, `Prompts.Preview` renders without a
+  model call, `Decisions` asks Score questions, and `Agent` runs an agent, all through the caller's provider and
+  user. Build template data with `BuildCriteriaPromptData` and `PromptData` rather than writing prompt text, so
+  your evaluator's prompts stay swappable metadata too. Return the run's ID as `aiPromptRunId` or
+  `aiAgentRunId` so the evaluation links to it.
+- **Throw to fail.** The engine stores a `Failed` evaluation with your message.
+- **The class factory constructs it with no arguments.** Everything a run needs arrives in the context.
+- **Replace a built-in** by registering your class under the same name. The highest-priority registration wins.
+
+`ListRubricEvaluators()` reports every registered evaluator with its type and whether the engine can run it.
 
 ---
 
@@ -645,7 +964,7 @@ mj rubric list
 mj rubric show <rubric>[@version]
 mj rubric diff <rubric> <version> <version>
 mj rubric validate <file>
-mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator LLM|Deterministic]
+mj rubric evaluate --rubric <rubric> --entity <name> --record <id> [--evaluator <name>] [--prompt <name>] [--model <id>] [--mode SinglePass|PerCriterion]
 
 mj test run   --rubric <name-or-id>[@version]     # pin a rubric for this run
 mj test suite --rubric <name-or-id>[@version]
@@ -684,6 +1003,10 @@ and the Testing dashboards show the rubric result for each run.
 | A user sees only their own evaluations | The UI row filter | Grant the Administer Rubric Evaluations authorization to their role |
 | Two evaluations don't show up in one cohort | Different major, context, or one is Self, Draft, Withdrawn, or Superseded | Compare on the same major and context |
 | Calibration returns no kappa | Fewer than 20 subjects scored by both a person and the judge | Grow the gold set |
+| `The <name> prompt was not found.` from an LLM or Decision evaluation | The link names a judge, evaluator, or criterion prompt this database does not have | Push the prompt metadata (`mj sync push --dir=metadata --include="prompts"`), or fix the name on the link |
+| `The criterion prompt rendered N texts for M criteria.` | A swapped criterion prompt failed to render | Preview it; check its template for a Nunjucks error |
+| Every answer is dropped as an unknown key | A swapped evaluator prompt changed the reply shape or the key wording | Keep the evaluator's JSON contract, or go back to *Rubric Evaluator* and change the judge instead |
+| `&#39;` or `&lt;` in a stored prompt run | A template prints authored text without `\| safe` | Add `\| safe` to that variable |
 
 ---
 
@@ -798,8 +1121,13 @@ anchors are what the interviewer reads while choosing a level, and what the AI j
 
 ### Shipped agent rubrics
 
-Seven rubrics ship as Published 1.0.0 on Meets / Partial / Miss, with pass threshold 0.7 and a gate minimum of
+Eight rubrics ship as Published 1.0.0 on Meets / Partial / Miss, with pass threshold 0.7 and a gate minimum of
 0.6, so Partial fails the gate: **Research answer, Query answer, Generated code, Schema proposal, Catalog
-contract, Picture from the data, and Duplicate decision.** They are the Evaluation rubrics for the core agents
-([Rubrics on agents](#4-rubrics-on-agents)), and the **Core agent rubrics** test suite runs one test per
-orchestrator against them.
+contract, Picture from the data, Duplicate decision, and Assistant reply.** They are the Evaluation rubrics for
+the core agents ([Rubrics on agents](#4-rubrics-on-agents)); *Assistant reply* is Sage's. The **Core agent
+rubrics** test suite runs one test per orchestrator against them, Sage included.
+
+Each agent's link names its own judge prompt, so the eight agents that share *Research answer* are still judged
+by what a good result means for each of them: the Database Research Agent's judge checks that figures came from
+queries it ran, the Web Research Agent's that claims trace to pages it cited. The full list is in
+[The shipped judges](#the-shipped-judges).

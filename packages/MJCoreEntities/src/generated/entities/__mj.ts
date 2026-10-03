@@ -42524,15 +42524,38 @@ export interface MJAIAgentRubricEntity_IRubricVersionChangeDetails {
     Changes: MJAIAgentRubricEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJAIAgentRubricEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJAIAgentRubricEntity_JsonValue>;
 }
 
 /**
@@ -116704,15 +116727,38 @@ export interface MJRubricCriterionEntity_IRubricVersionChangeDetails {
     Changes: MJRubricCriterionEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJRubricCriterionEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJRubricCriterionEntity_JsonValue>;
 }
 
 /**
@@ -117367,15 +117413,38 @@ export interface MJRubricEvaluationScoreEntity_IRubricVersionChangeDetails {
     Changes: MJRubricEvaluationScoreEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJRubricEvaluationScoreEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJRubricEvaluationScoreEntity_JsonValue>;
 }
 
 /**
@@ -117949,15 +118018,38 @@ export interface MJRubricEvaluationEntity_IRubricVersionChangeDetails {
     Changes: MJRubricEvaluationEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJRubricEvaluationEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJRubricEvaluationEntity_JsonValue>;
 }
 
 /**
@@ -119136,15 +119228,38 @@ export interface MJRubricVersionEntity_IRubricVersionChangeDetails {
     Changes: MJRubricVersionEntity_IRubricVersionChange[];
 }
 
-/** AIAgentRubric.EvaluatorConfig */
+/**
+ * AIAgentRubric.EvaluatorConfig — which evaluator scores the link, and with which prompts.
+ *
+ * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
+ * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
+ * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
+ * they name the decision prompt instead.
+ */
 export interface MJRubricVersionEntity_IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
+    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
+    /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
+    /** The same prompt by name, when no PromptID is set. For example `Rubric Judge - Sage`. */
+    PromptName?: string;
+    /** LLM: the parent evaluator prompt. Default `Rubric Evaluator`. Must return the same JSON. */
+    SystemPromptID?: string;
+    SystemPromptName?: string;
+    /** LLM and Decision: the prompt that renders one criterion. Default `Rubric Criterion`. */
+    CriterionPromptID?: string;
+    CriterionPromptName?: string;
+    /** LLM: which prompt's model bindings choose the model. System (default) or Judge. */
+    ModelSelection?: 'System' | 'Judge';
     AgentID?: string;
+    /** Pins the model. */
     ModelID?: string;
+    /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** Settings for a custom evaluator, keyed by its evaluator name. */
+    Extensions?: Record<string, MJRubricVersionEntity_JsonValue>;
 }
 
 /**

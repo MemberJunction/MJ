@@ -19,14 +19,19 @@ async function ReadRows(
 interface CalibrationInput {
     rubricId: string;
     goldSet: { subjectEntity: string; filter?: string } | { subjects: { entity: string; recordID: string }[] };
-    evaluator?: { type?: string };
+    /**
+     * The evaluator to calibrate: an evaluator selection (IRubricEvaluatorSelection), or the older
+     * `{ type }` shape, where type is an evaluator name or alias. LLM SinglePass when absent.
+     */
+    evaluator?: { type?: string } & Record<string, unknown>;
 }
 
-/** The link's evaluator. A missing name stays LLM. Agent runs through the engine's AI evaluator. */
-function CalibrationEvaluator(type: string | undefined): 'AI' | 'Deterministic' | 'LLM' {
-    if (type === 'Deterministic') return 'Deterministic';
-    if (type === 'Agent' || type === 'AI') return 'AI';
-    return 'LLM';
+/** The engine's evaluator selection for this test. `type` is the older spelling of EvaluatorName. */
+export function CalibrationEvaluatorConfig(evaluator: CalibrationInput['evaluator']): Record<string, unknown> | undefined {
+    if (!evaluator) return undefined;
+    const { type, ...selection } = evaluator;
+    if (type && selection.EvaluatorName === undefined && selection.EvaluatorType === undefined) return { ...selection, EvaluatorName: type };
+    return selection;
 }
 
 /**
@@ -140,7 +145,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
             subjectRecordId: subjectId,
             contextEntityName: 'MJ: Tests',
             contextRecordId: context.test.ID,
-            evaluator: CalibrationEvaluator(input.evaluator?.type),
+            evaluatorConfig: CalibrationEvaluatorConfig(input.evaluator),
         });
         return result.evaluationId;
     }

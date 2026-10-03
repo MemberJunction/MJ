@@ -6401,12 +6401,13 @@ export class BaseAgent {
             }
         }
         if (!row?.RubricID) return null;
-        const link: SelfCheckLink & { rubricId: string; passThreshold?: number | null } = {
+        const link: SelfCheckLink & { rubricId: string; passThreshold?: number | null; evaluatorConfig?: string | null } = {
             Purpose: String(row.Purpose ?? ''),
             Status: String(row.Status ?? ''),
             MaxAttempts: row.MaxSelfCheckAttempts ?? null,
             rubricId: String(row.RubricID),
             passThreshold: row.PassThreshold ?? null,
+            evaluatorConfig: row.EvaluatorConfig ?? null,
         };
         const attempt = (this._selfCheckAttemptsByRun.get(agentRun.ID) ?? 0) + 1;
         this._selfCheckAttemptsByRun.set(agentRun.ID, attempt);
