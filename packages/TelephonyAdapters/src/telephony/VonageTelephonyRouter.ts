@@ -33,6 +33,7 @@ import type { VonageTelephonyConfig } from '../types.js';
 import { VonageCallMediaRegistry } from './vonageMediaRegistry.js';
 import { VonageTelephonyService } from './VonageTelephonyService.js';
 import { ResolveInboundContext } from './runAsIdentity.js';
+import { CoerceWebhookParams } from './webhookParams.js';
 
 /** The mount path for the Vonage telephony public router. */
 export const VONAGE_TELEPHONY_MOUNT_PATH = '/telephony/vonage';
@@ -100,7 +101,7 @@ export async function HandleVonageInboundAnswer(
     req: Request,
     res: Response,
 ): Promise<void> {
-    const params = coerceParams(req.body);
+    const params = CoerceWebhookParams(req.body);
     if (!verifyVonageRequest(config, req, params)) {
         res.status(403).type('application/json').json({ error: 'Invalid Vonage signature.' });
         return;
@@ -142,7 +143,7 @@ export async function HandleVonageCallEvent(
     req: Request,
     res: Response,
 ): Promise<void> {
-    const params = coerceParams(req.body);
+    const params = CoerceWebhookParams(req.body);
     if (!verifyVonageRequest(config, req, params)) {
         res.status(403).type('application/json').json({ error: 'Invalid Vonage signature.' });
         return;
@@ -249,19 +250,4 @@ function readSocketClaim(request: IncomingMessage): SocketClaim {
 /** Maps a missing or empty query value to `undefined`. */
 function nonEmpty(value: string | null): string | undefined {
     return value && value.length > 0 ? value : undefined;
-}
-
-/** Coerces an Express body (JSON object or urlencoded) to the `Record<string,string>` the verifiers expect. */
-function coerceParams(body: unknown): Record<string, string> {
-    const out: Record<string, string> = {};
-    if (body && typeof body === 'object') {
-        for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
-            if (typeof value === 'string') {
-                out[key] = value;
-            } else if (typeof value === 'number' || typeof value === 'boolean') {
-                out[key] = String(value);
-            }
-        }
-    }
-    return out;
 }

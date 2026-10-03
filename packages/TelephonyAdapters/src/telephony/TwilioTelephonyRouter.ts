@@ -32,6 +32,7 @@ import { TwilioCallMediaRegistry } from './twilioMediaRegistry.js';
 import { TwilioTelephonyService } from './TwilioTelephonyService.js';
 import { ResolveInboundContext } from './runAsIdentity.js';
 import { TrimTrailingSlashes } from './telephonySettings.js';
+import { CoerceWebhookParams } from './webhookParams.js';
 
 /** The mount path for the Twilio telephony public router. */
 export const TWILIO_TELEPHONY_MOUNT_PATH = '/telephony/twilio';
@@ -107,7 +108,7 @@ export function createTwilioTelephonyHandler(
  * returns the coerced form params. Shared by every Twilio webhook route.
  */
 function verifyTwilioRequest(config: TwilioTelephonyConfig, publicUrl: string, req: Request, res: Response): Record<string, string> | null {
-    const params = coerceParams(req.body);
+    const params = CoerceWebhookParams(req.body);
     const fullUrl = `${TrimTrailingSlashes(publicUrl)}${req.originalUrl}`;
     if (!config.authToken || !verifyTwilioSignature(config.authToken, req.get('X-Twilio-Signature'), fullUrl, params)) {
         res.status(403).type('text/plain').send('Invalid Twilio signature.');
@@ -314,17 +315,4 @@ function parseWsMessage(raw: unknown): TwilioWsMessage | null {
     } catch {
         return null;
     }
-}
-
-/** Coerces an Express urlencoded body to the `Record<string,string>` the signature verifier expects. */
-function coerceParams(body: unknown): Record<string, string> {
-    const out: Record<string, string> = {};
-    if (body && typeof body === 'object') {
-        for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
-            if (typeof value === 'string') {
-                out[key] = value;
-            }
-        }
-    }
-    return out;
 }
