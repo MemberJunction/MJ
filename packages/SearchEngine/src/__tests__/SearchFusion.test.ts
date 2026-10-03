@@ -235,7 +235,10 @@ describe('SearchFusion', () => {
             expect(deduped[0].ScoreBreakdown.Entity).toBe(0.6);
         });
 
-        it('should override overall Score when ScoreBreakdown value is higher', () => {
+        it('keeps Score when a ScoreBreakdown value is higher: Score is the ranking score', () => {
+            // Score is what results are ordered by (the fused or reranked score). The breakdown
+            // keeps each provider's raw evidence. Raising Score to the breakdown max re-sorted
+            // results by raw, cross-provider scores and threw the RRF / rerank order away.
             const results: SearchResultItem[] = [
                 makeResult({
                     EntityName: 'People',
@@ -247,8 +250,8 @@ describe('SearchFusion', () => {
             ];
 
             const deduped = fusion.Deduplicate(results);
-            // ScoreBreakdown.Entity (0.7) > Score (0.3), so Score should be updated
-            expect(deduped[0].Score).toBe(0.7);
+            expect(deduped[0].Score).toBe(0.3);
+            expect(deduped[0].ScoreBreakdown.Entity).toBe(0.7);
         });
 
         it('should not increase Score when ScoreBreakdown values are lower', () => {
@@ -298,6 +301,106 @@ describe('SearchFusion', () => {
     // ────────────────────────────────────────────────────────────────
     // Scope-aware fusion (Phase 1B.13 / 1B.19)
     // ────────────────────────────────────────────────────────────────
+
+    // ────────────────────────────────────────────────────────────────
+    // The fused (RRF) order is the final order
+    // ────────────────────────────────────────────────────────────────
+    describe('Fused order survives Deduplicate', () => {
+        /** Semantic lane: near-misses with high cosine scores. */
+        function vectorLane(): SearchResultItem[] {
+            return [0.81, 0.80, 0.79, 0.78].map((score, i) => makeResult({
+                EntityName: 'People', RecordID: `v${i + 1}`, Score: score, SourceType: 'vector',
+                ScoreBreakdown: { Vector: score },
+            }));
+        }
+        /** Keyword lane: the exact name match, on the keyword scorer's lower scale. */
+        function keywordLane(): SearchResultItem[] {
+            return [makeResult({
+                EntityName: 'People', RecordID: 'exact', Score: 0.59, SourceType: 'entity',
+                ScoreBreakdown: { Entity: 0.59 },
+            })];
+        }
+        function fuseAndDedup(): SearchResultItem[] {
+            const fused = fusion.Fuse([
+                { Source: 'vector', Results: vectorLane() },
+                { Source: 'entity', Results: keywordLane() },
+            ], 10);
+            return fusion.Deduplicate(fused);
+        }
+
+        it('ranks a keyword lane #1 alongside the semantic #1, not below every vector hit', () => {
+            const ids = fuseAndDedup().map(r => r.RecordID);
+            // RRF: both lane leaders score 1/61. The vector list is fused first, so it wins the tie.
+            expect(ids).toEqual(['v1', 'exact', 'v2', 'v3', 'v4']);
+        });
+
+        it('keeps exactly the order Fuse produced', () => {
+            const fused = fusion.Fuse([
+                { Source: 'vector', Results: vectorLane() },
+                { Source: 'entity', Results: keywordLane() },
+            ], 10);
+            expect(fusion.Deduplicate(fused).map(r => r.RecordID)).toEqual(fused.map(r => r.RecordID));
+        });
+
+        it('shows a readable score: the best raw score at the top, never increasing down the list', () => {
+            const scores = fuseAndDedup().map(r => r.Score);
+            expect(scores[0]).toBeCloseTo(0.81, 10);
+            for (let i = 1; i < scores.length; i++) {
+                expect(scores[i]).toBeLessThanOrEqual(scores[i - 1]);
+            }
+            // Tied RRF positions show the same score.
+            expect(scores[1]).toBeCloseTo(scores[0], 10);
+        });
+
+        it('scales each score by its fused score relative to the top one', () => {
+            const results = fuseAndDedup();
+            // v2 is rank 2 in its lane: 1/62 vs the top's 1/61.
+            expect(results[2].Score).toBeCloseTo(0.81 * (61 / 62), 10);
+        });
+
+        it('leaves each provider\'s raw evidence in ScoreBreakdown', () => {
+            const results = fuseAndDedup();
+            expect(results.find(r => r.RecordID === 'exact')?.ScoreBreakdown.Entity).toBe(0.59);
+            expect(results.find(r => r.RecordID === 'v2')?.ScoreBreakdown.Vector).toBe(0.80);
+        });
+
+        it('is idempotent: a second Deduplicate pass changes nothing', () => {
+            const once = fuseAndDedup();
+            const twice = fusion.Deduplicate(once);
+            expect(twice.map(r => r.RecordID)).toEqual(once.map(r => r.RecordID));
+            expect(twice.map(r => r.Score)).toEqual(once.map(r => r.Score));
+        });
+
+        it('leaves a single-source result set exactly as the provider scored it', () => {
+            const fused = fusion.Fuse([{ Source: 'vector', Results: vectorLane() }], 10);
+            const results = fusion.Deduplicate(fused);
+            expect(results.map(r => r.RecordID)).toEqual(['v1', 'v2', 'v3', 'v4']);
+            expect(results.map(r => r.Score)).toEqual([0.81, 0.80, 0.79, 0.78]);
+        });
+
+        it('keeps a reranker\'s order even when the raw vector scores disagree', () => {
+            // Shape BaseReRanker produces: Score = relevance, breakdown keeps the raw evidence.
+            const reranked: SearchResultItem[] = [
+                makeResult({ EntityName: 'People', RecordID: 'r1', Score: 0.9, SourceType: 'vector', ScoreBreakdown: { Vector: 0.30, ReRank: 0.9 } }),
+                makeResult({ EntityName: 'People', RecordID: 'r2', Score: 0.5, SourceType: 'vector', ScoreBreakdown: { Vector: 0.85, ReRank: 0.5 } }),
+                makeResult({ EntityName: 'People', RecordID: 'r3', Score: 0.2, SourceType: 'vector', ScoreBreakdown: { Vector: 0.60, ReRank: 0.2 } }),
+            ];
+            const results = fusion.Deduplicate(reranked);
+            expect(results.map(r => r.RecordID)).toEqual(['r1', 'r2', 'r3']);
+            expect(results.map(r => r.Score)).toEqual([0.9, 0.5, 0.2]);
+        });
+
+        it('CrossScopeFusion also returns readable, non-increasing scores', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', vectorLane());
+            map.set('scope-b', keywordLane());
+            const scores = fusion.CrossScopeFusion(map, 10).map(r => r.Score);
+            expect(scores[0]).toBeCloseTo(0.81, 10);
+            for (let i = 1; i < scores.length; i++) {
+                expect(scores[i]).toBeLessThanOrEqual(scores[i - 1]);
+            }
+        });
+    });
 
     describe('Fuse (weighted, non-uniform)', () => {
         it('honors heavy-vector weight when records differ across sources', () => {
