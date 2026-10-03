@@ -10,6 +10,35 @@ import { NormalizeSmartFieldResultShape } from "../Database/search-guardrails";
 
 export type EntityNameResult = { entityName: string, tableName: string }  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+/**
+ * Result from LLM-assisted entity DISPLAY NAME generation.
+ *
+ * Distinct from {@link EntityNameResult}: `Entity.Name` is an identifier that
+ * code and metadata reference, so changing it is a breaking rename and only ever
+ * happens at entity creation. `Entity.DisplayName` is presentation-only, so it
+ * can be improved on any run without breaking a reference.
+ */
+export type EntityDisplayNameResult = {
+    /** The proposed human-readable display name. */
+    DisplayName: string;
+    /** The entity name this was generated for, echoed back for correlation. */
+    EntityName: string;
+    /**
+     * Which abbreviations the model expanded, and to what. Recorded so a
+     * reviewer can audit a questionable expansion rather than only seeing the
+     * result — `STAT` to `Status` and `STAT` to `Statistic` are both plausible,
+     * and only the schema's context distinguishes them.
+     */
+    Expansions?: Array<{ From: string; To: string }>;
+    /**
+     * The model's own confidence. `low` results are discarded by CodeGen rather
+     * than written, since a bad display name is worse than an ugly one.
+     */
+    Confidence: 'high' | 'medium' | 'low';
+    /** Why the model chose this rendering. */
+    Reasoning?: string;
+}
 export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
 
 /** Width of `Entity.Name`; a candidate longer than this cannot be inserted. */
@@ -250,6 +279,31 @@ export class AdvancedGeneration {
     /** @deprecated Use {@link GetFeature}. */
     public getFeature(featureName: string): AdvancedGenerationFeature | undefined {
         return this.GetFeature(featureName);
+    }
+
+    /**
+     * Reads a boolean option off a feature, falling back to `defaultValue` when
+     * the feature or option is absent.
+     *
+     * Options are typed `unknown` in the config schema, so this normalizes the
+     * shapes a hand-edited `mj.config.cjs` realistically produces — a real
+     * boolean, or the strings "true"/"false" — rather than truthy-testing, under
+     * which the string "false" would enable the option.
+     */
+    public FeatureOptionBool(featureName: string, optionName: string, defaultValue: boolean): boolean {
+        const raw = this.GetFeature(featureName)?.options?.find(o => o.name === optionName)?.value;
+        if (raw === undefined || raw === null) {
+            return defaultValue;
+        }
+        if (typeof raw === 'boolean') {
+            return raw;
+        }
+        if (typeof raw === 'string') {
+            const normalized = raw.trim().toLowerCase();
+            if (normalized === 'true') return true;
+            if (normalized === 'false') return false;
+        }
+        return defaultValue;
     }
 
     public featureEnabled(featureName: string): boolean {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
@@ -721,6 +775,63 @@ export class AdvancedGeneration {
         contextUser: UserInfo
     ): Promise<EntityNameResult | null> {
         return this.GenerateEntityName(tableName, contextUser);
+    }
+
+    /**
+     * Generate an improved human-readable DISPLAY NAME for an entity.
+     *
+     * Only meaningful for entities whose names remain opaque after the
+     * deterministic `createDisplayName()` conversion — see
+     * `AssessDisplayNameOpacity()`. The caller is expected to have applied that
+     * filter; this method does not re-derive it, so an explicit request for a
+     * clean name is honoured rather than silently skipped.
+     *
+     * @param entity - The entity's name, table name, description and field names.
+     *                 Field names matter: they are usually the strongest evidence
+     *                 for what an abbreviated table name means.
+     * @param contextUser - User context for the prompt run.
+     */
+    public async GenerateEntityDisplayName(
+        entity: {
+            Name: string;
+            SchemaName?: string;
+            BaseTable?: string;
+            Description?: string | null;
+            Fields?: Array<{ Name: string; Type?: string }>;
+        },
+        contextUser: UserInfo
+    ): Promise<EntityDisplayNameResult | null> {
+        if (!this.featureEnabled('EntityDisplayNames')) {
+            return null;
+        }
+
+        try {
+            const prompt = await this.getPromptEntity('CodeGen: Entity Display Name Generation', contextUser);
+
+            const params = new AIPromptParams();
+            params.prompt = prompt;
+            params.data = {
+                entityName: entity.Name,
+                schemaName: entity.SchemaName ?? '',
+                tableName: entity.BaseTable ?? '',
+                description: entity.Description ?? '',
+                fields: (entity.Fields ?? []).map(f => ({ name: f.Name, type: f.Type ?? '' }))
+            };
+            params.contextUser = contextUser;
+
+            const result = await this.executePrompt<EntityDisplayNameResult>(params);
+
+            if (result.success && result.result?.DisplayName) {
+                LogStatus(`Entity display name generated for ${entity.Name}: ${result.result.DisplayName}`);
+                return result.result;
+            } else {
+                LogError(`AdvancedGeneration:Entity display name generation failed: ${result.errorMessage}`);
+                return null;
+            }
+        } catch (error) {
+            LogError(`AdvancedGeneration:Error in GenerateEntityDisplayName: ${error}`);
+            return null;
+        }
     }
 
     /**
