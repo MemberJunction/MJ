@@ -30,7 +30,13 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         return QueryEngine.Instance.GetQueryFields(this.ID);
     }
 
-    /** All parameter definitions for this query */
+    /**
+     * All parameter definitions for this query, read from QueryEngine's cache.
+     *
+     * @deprecated Use the `Parameters` related-record collection. It loads through this
+     * record's own provider and saves with the query; this getter reads a process-wide cache
+     * that can be stale or bound to a different connection.
+     */
     public get QueryParameters(): MJQueryParameterEntity[] {
         return QueryEngine.Instance.GetQueryParameters(this.ID);
     }

@@ -245,5 +245,53 @@
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: API Keys"
     }
+  },
+  {
+    "_comments": [
+      "MJ: Queries -> MJ: Query Parameters. QueryID is NOT NULL, Hard delete.",
+      "",
+      "This one is writable and database-sourced, like AI Agent Prompts, and for a specific",
+      "reason: it is what lets a repo DECLARE a query's parameters in metadata/ at all.",
+      "",
+      "MJQueryEntityServer.Save() derives a query's parameters from its SQL after super.Save().",
+      "Authored as a nested relatedEntities record, a declared parameter is ordered AFTER its",
+      "parent (it carries the parent's foreign key), so extraction created its own row first and",
+      "the declared INSERT then violated UQ_QueryParameter_QueryID_Name — the query's parameters",
+      "could not be expressed declaratively, only inferred. As a collection the rows are staged on",
+      "the entity and written INSIDE super.Save(), so extraction runs afterwards, matches them by",
+      "name and reconciles instead of duplicating. See issue #4545.",
+      "",
+      "Sync it in the default 'upsert' mode and never 'authoritative': extraction owns the rows it",
+      "infers (DetectionMethod 'AI'), and authoritative mode deletes every loaded child the JSON",
+      "does not name, which would wipe them on every push.",
+      "",
+      "No Sequence policy — QueryParameter has no positional column; Name is the natural key",
+      "(UQ_QueryParameter_QueryID_Name) and the read ordering."
+    ],
+    "fields": {
+      "Name": "MJ: Queries"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Parameters",
+              "Source": "database",
+              "ReadOnly": false,
+              "Load": "explicit",
+              "OnRemove": "delete",
+              "OrderBy": "Name ASC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Queries&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Query Parameters&RelatedEntityJoinField=QueryID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Queries"
+    }
   }
 ]

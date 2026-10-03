@@ -181,9 +181,25 @@ describe('Pipeline sync stage — stale record cleanup', () => {
         });
     });
 
+    // The no-parameter case goes through SyncParameters with an empty list, not
+    // RemoveAllRecords. Both remove the same rows; only SyncParameters knows a row may have
+    // been declared rather than inferred, so the shortcut used to wipe declared parameters
+    // silently whenever the pipeline did not recognise their token form.
     describe('when extraction produces no parameters', () => {
-        it('should call RemoveAllRecords for Query Parameters (existing behavior)', async () => {
+        it('should call SyncParameters with an empty list rather than RemoveAllRecords', async () => {
             // Plain SQL with no template parameters
+            mockRunLLMEnrichment.mockResolvedValue(null);
+
+            const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
+            await RunExtractionPipeline(ctx);
+
+            expect(mockSyncParameters).toHaveBeenCalled();
+            const [queryID, params] = mockSyncParameters.mock.calls[0] as [string, unknown[]];
+            expect(queryID).toBe(QUERY_ID);
+            expect(params).toEqual([]);
+        });
+
+        it('should NOT route parameter cleanup through RemoveAllRecords', async () => {
             mockRunLLMEnrichment.mockResolvedValue(null);
 
             const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
@@ -192,17 +208,7 @@ describe('Pipeline sync stage — stale record cleanup', () => {
             const paramCleanupCall = mockRemoveAllRecords.mock.calls.find(
                 (call: unknown[]) => call[1] === 'MJ: Query Parameters'
             );
-            expect(paramCleanupCall).toBeDefined();
-            expect(paramCleanupCall![0]).toBe(QUERY_ID);
-        });
-
-        it('should NOT call SyncParameters when there are no parameters', async () => {
-            mockRunLLMEnrichment.mockResolvedValue(null);
-
-            const ctx = buildCtx('SELECT col1 FROM SomeTable WHERE x = 1');
-            await RunExtractionPipeline(ctx);
-
-            expect(mockSyncParameters).not.toHaveBeenCalled();
+            expect(paramCleanupCall).toBeUndefined();
         });
     });
 

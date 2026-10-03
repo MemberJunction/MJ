@@ -340,10 +340,16 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     ): Promise<void> {
         const md = this.ProviderToUse as unknown as IMetadataProvider;
 
-        // Look up existing record from QueryEngine cache instead of a RunView call
-        const existing = QueryEngine.Instance.QuerySQLs.find(
-            qs => UUIDsEqual(qs.QueryID, this.ID) && UUIDsEqual(qs.SQLDialectID, targetDialect.ID)
-        );
+        // Read through this entity's own provider rather than QueryEngine's cache. A cached
+        // record is bound to whichever provider loaded the engine, so saving it here would
+        // write over a different connection than the one saving this query — outside the
+        // caller's transaction, and blind to what that transaction has written.
+        const existingResult = await this.RunViewProviderToUse.RunView<MJQuerySQLEntity>({
+            EntityName: 'MJ: Query SQLs',
+            ExtraFilter: `QueryID='${this.ID}' AND SQLDialectID='${targetDialect.ID}'`,
+            ResultType: 'entity_object'
+        }, this.ContextCurrentUser);
+        const existing = existingResult.Success ? existingResult.Results?.[0] : undefined;
 
         let record: MJQuerySQLEntity;
         if (existing) {
@@ -369,10 +375,16 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         try {
             if (!this.IsSaved) return;
 
-            const records = QueryEngine.Instance.QuerySQLs.filter(
-                qs => UUIDsEqual(qs.QueryID, this.ID)
-            );
+            // Same reasoning as upsertQuerySQLRecord: delete what this provider can see,
+            // through this provider, not entities the engine cached on another one.
+            const result = await this.RunViewProviderToUse.RunView<MJQuerySQLEntity>({
+                EntityName: 'MJ: Query SQLs',
+                ExtraFilter: `QueryID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+            if (!result.Success) return;
 
+            const records = result.Results ?? [];
             const deletePromises = records.map(r => r.Delete());
             if (deletePromises.length > 0) {
                 await Promise.all(deletePromises);
