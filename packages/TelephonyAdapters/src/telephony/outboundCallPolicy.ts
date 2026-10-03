@@ -29,11 +29,49 @@ import { UUIDsEqual } from '@memberjunction/global';
 /** Default destination allow-list: NANP only. */
 export const DEFAULT_ALLOWED_PREFIXES: readonly string[] = ['+1'];
 
-/** Default destination block-list: NANP premium-rate (900) and pay-per-call (976) exchanges. */
-export const DEFAULT_BLOCKED_PREFIXES: readonly string[] = ['+1900', '+1976'];
+/**
+ * Default destination block-list. The `+1` allow-list covers the whole North American Numbering Plan, which
+ * includes premium-rate exchanges (900, 976) and a set of Caribbean countries that share country code 1 but
+ * are international calls with international rates — the classic toll-fraud / "one-ring" destinations. They are
+ * blocked by default. Territories of the United States (+1340 USVI, +1670 Northern Marianas, +1671 Guam,
+ * +1684 American Samoa, +1787/+1939 Puerto Rico) bill as domestic calls and are deliberately NOT blocked.
+ *
+ * Operators can replace the whole list via `telephony.outbound.blockedPrefixes`, and should additionally enable
+ * the carrier's own geographic permissions (see DEPLOYMENT.md) — this list is a backstop, not the only control.
+ */
+export const DEFAULT_BLOCKED_PREFIXES: readonly string[] = [
+    // Premium-rate / pay-per-call
+    '+1900',
+    '+1976',
+    // Caribbean NANP countries (international rates, common fraud destinations)
+    '+1242', // Bahamas
+    '+1246', // Barbados
+    '+1264', // Anguilla
+    '+1268', // Antigua and Barbuda
+    '+1284', // British Virgin Islands
+    '+1345', // Cayman Islands
+    '+1441', // Bermuda
+    '+1473', // Grenada
+    '+1649', // Turks and Caicos
+    '+1658', // Jamaica
+    '+1664', // Montserrat
+    '+1721', // Sint Maarten
+    '+1758', // Saint Lucia
+    '+1767', // Dominica
+    '+1784', // Saint Vincent and the Grenadines
+    '+1809', // Dominican Republic
+    '+1829', // Dominican Republic
+    '+1849', // Dominican Republic
+    '+1868', // Trinidad and Tobago
+    '+1869', // Saint Kitts and Nevis
+    '+1876', // Jamaica
+];
 
 /** Default per-user hourly outbound call budget. */
 export const DEFAULT_MAX_CALLS_PER_USER_PER_HOUR = 20;
+
+/** How often the rate limiter sweeps users whose window has emptied (at most). */
+const SWEEP_INTERVAL_MS = 60 * 1000;
 
 /** The sliding-window length of the rate limiter. */
 const RATE_WINDOW_MS = 60 * 60 * 1000;
@@ -162,12 +200,18 @@ function normalizeLimit(value: number | undefined): number {
  */
 export class OutboundRateLimiter {
     private readonly calls = new Map<string, number[]>();
+    private lastSweepMs = 0;
 
     constructor(
         private readonly maxCalls: number,
         private readonly windowMs: number = RATE_WINDOW_MS,
         private readonly now: () => number = Date.now,
     ) {}
+
+    /** Number of users currently tracked (observability / tests). */
+    public get TrackedUserCount(): number {
+        return this.calls.size;
+    }
 
     /**
      * Counts a call against the user's budget if one remains.
@@ -178,6 +222,7 @@ export class OutboundRateLimiter {
     public TryConsume(userId: string): boolean {
         const key = userId.toLowerCase();
         const cutoff = this.now() - this.windowMs;
+        this.sweepIfDue(cutoff);
         const recent = (this.calls.get(key) ?? []).filter((t) => t > cutoff);
         if (recent.length >= this.maxCalls) {
             this.calls.set(key, recent);
@@ -186,6 +231,24 @@ export class OutboundRateLimiter {
         recent.push(this.now());
         this.calls.set(key, recent);
         return true;
+    }
+
+    /**
+     * Drops every user whose window has emptied. Pruning only the user being served would not help — a user who
+     * never calls again is never served — so each call opportunistically sweeps the whole map, at most once per
+     * {@link SWEEP_INTERVAL_MS}. Behaviour for live users is unchanged.
+     */
+    private sweepIfDue(cutoff: number): void {
+        const now = this.now();
+        if (now - this.lastSweepMs < Math.min(this.windowMs, SWEEP_INTERVAL_MS)) {
+            return;
+        }
+        this.lastSweepMs = now;
+        for (const [key, times] of this.calls) {
+            if (!times.some((t) => t > cutoff)) {
+                this.calls.delete(key);
+            }
+        }
     }
 }
 

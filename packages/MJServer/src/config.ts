@@ -575,8 +575,13 @@ const teamsMeetingsSchema = z.object({
 const outboundTelephonySchema = z.object({
   /** Destination prefixes a call may go to (E.164, e.g. `+1`). An empty list refuses every destination. Defaults to `['+1']`. */
   allowedPrefixes: z.array(z.string()).optional().default(['+1']),
-  /** Destination prefixes that are always refused, even when an allowed prefix matches. Defaults to NANP premium-rate (`+1900`, `+1976`). */
-  blockedPrefixes: z.array(z.string()).optional().default(['+1900', '+1976']),
+  /**
+   * Destination prefixes that are always refused, even when an allowed prefix matches. Deliberately has NO default
+   * here: when omitted, `@memberjunction/telephony-adapters` applies its own `DEFAULT_BLOCKED_PREFIXES` (NANP
+   * premium-rate plus the Caribbean +1 countries abused for toll fraud), so the list lives in exactly one place.
+   * Setting this REPLACES that list.
+   */
+  blockedPrefixes: z.array(z.string()).optional(),
   /** Max outbound calls one user may place per rolling hour (per process). Defaults to 20. */
   maxCallsPerUserPerHour: z.coerce.number().int().positive().optional().default(20),
 }).passthrough();

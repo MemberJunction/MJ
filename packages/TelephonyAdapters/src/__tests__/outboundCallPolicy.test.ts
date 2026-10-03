@@ -66,8 +66,19 @@ describe('MaskNumber', () => {
 describe('ResolveOutboundPolicy', () => {
     beforeEach(() => vi.mocked(LogError).mockClear());
 
-    it('defaults to NANP-only, premium ranges blocked, 20 calls/hour', () => {
-        expect(ResolveOutboundPolicy()).toEqual({ AllowedPrefixes: ['+1'], BlockedPrefixes: ['+1900', '+1976'], MaxCallsPerUserPerHour: 20 });
+    it('defaults to NANP-only with premium and Caribbean toll-fraud ranges blocked, 20 calls/hour', () => {
+        const policy = ResolveOutboundPolicy();
+        expect(policy.AllowedPrefixes).toEqual(['+1']);
+        expect(policy.MaxCallsPerUserPerHour).toBe(20);
+        expect(policy.BlockedPrefixes).toEqual(expect.arrayContaining(['+1900', '+1976', '+1876', '+1658', '+1809', '+1829', '+1849', '+1242', '+1869']));
+        expect(policy.BlockedPrefixes).toHaveLength(23);
+    });
+
+    it('does NOT block US territories, which bill as domestic', () => {
+        const { BlockedPrefixes } = ResolveOutboundPolicy();
+        for (const territory of ['+1340', '+1670', '+1671', '+1684', '+1787', '+1939']) {
+            expect(BlockedPrefixes).not.toContain(territory);
+        }
     });
 
     it('applies configured values', () => {
@@ -111,6 +122,30 @@ describe('OutboundRateLimiter', () => {
         expect(limiter.TryConsume('u1')).toBe(false);
     });
 
+    it('forgets users whose window emptied, even if they never call again (no unbounded growth)', () => {
+        let now = 0;
+        const limiter = new OutboundRateLimiter(2, 1000, () => now);
+        for (const id of ['a', 'b', 'c']) {
+            limiter.TryConsume(id);
+        }
+        expect(limiter.TrackedUserCount).toBe(3);
+
+        now = 5000; // everyone's window has emptied; only a NEW user calls
+        limiter.TryConsume('d');
+
+        expect(limiter.TrackedUserCount).toBe(1);
+    });
+
+    it('keeps users who are still inside their window when sweeping, with unchanged budgets', () => {
+        let now = 0;
+        const limiter = new OutboundRateLimiter(1, 100_000, () => now);
+        limiter.TryConsume('a');
+        now = 70_000; // past a sweep interval but inside a's window
+        limiter.TryConsume('b');
+        expect(limiter.TrackedUserCount).toBe(2);
+        expect(limiter.TryConsume('a')).toBe(false);
+    });
+
     it('budgets are per user and case-insensitive on the id', () => {
         const limiter = new OutboundRateLimiter(1, 1000, () => 0);
         expect(limiter.TryConsume('USER-A')).toBe(true);
@@ -139,9 +174,23 @@ describe('AuthorizeOutboundCall', () => {
         ['outside the allow-list', '+442071838750', 'prefix-not-allowed'],
         ['premium 900 range', '+19005551234', 'prefix-blocked'],
         ['pay-per-call 976 range', '+19765551234', 'prefix-blocked'],
+        ['Jamaica (+1876)', '+18765551234', 'prefix-blocked'],
+        ['Jamaica (+1658)', '+16585551234', 'prefix-blocked'],
+        ['Dominican Republic (+1809)', '+18095551234', 'prefix-blocked'],
+        ['Bahamas (+1242)', '+12425551234', 'prefix-blocked'],
     ])('refuses a destination that is %s', async (_label, to, code) => {
         const verdict = await AuthorizeOutboundCall(request({ ToNumber: to }), deps());
         expect(verdict).toMatchObject({ Allowed: false, Code: code });
+    });
+
+    it.each([
+        ['Puerto Rico +1787', '+17875551234'],
+        ['Puerto Rico +1939', '+19395551234'],
+        ['US Virgin Islands +1340', '+13405551234'],
+        ['Guam +1671', '+16715551234'],
+        ['Canada/US mainland +1416', '+14165551234'],
+    ])('allows %s (US territories and mainland are not blocked)', async (_label, to) => {
+        expect((await AuthorizeOutboundCall(request({ ToNumber: to }), deps())).Allowed).toBe(true);
     });
 
     it('a blocked prefix wins over a matching allowed prefix', async () => {
