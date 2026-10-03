@@ -23,10 +23,45 @@ export class CallEndObserverSdk implements ITelephonyCallSdk {
     /** The call id once known (set by `dial` / `answer`); `hangup` also receives it explicitly. */
     private callId: string | null = null;
 
+    /**
+     * Stops driving the call without hanging it up (after a transfer the carrier owns it). Present only when the
+     * wrapped SDK has one, because the bridge picks "detach" versus a plain hang-up by feature-detecting it.
+     */
+    public detach?: (callId: string) => Promise<void>; // case-violation-ok-legacy-back-compat: optional member of the ITelephonyCallSdk contract
+
+    /**
+     * Speaks a goodbye at the carrier and ends the call. Present only when the wrapped SDK can — the bridge
+     * falls back to a plain hang-up when it is absent.
+     */
+    public playMessageAndHangup?: (callId: string, message: string) => Promise<void>; // case-violation-ok-legacy-back-compat: optional member of the ITelephonyCallSdk contract
+
     constructor(
         private readonly inner: ITelephonyCallSdk,
         private readonly onEnded: (callId: string) => void,
-    ) {}
+    ) {
+        // The call is no longer MJ's once it has been handed to the carrier or said goodbye to, so these report
+        // the end just as a hang-up does (releasing the per-call timer).
+        const innerDetach = inner.detach?.bind(inner);
+        if (innerDetach) {
+            this.detach = async (callId) => {
+                try {
+                    await innerDetach(callId);
+                } finally {
+                    this.onEnded(callId);
+                }
+            };
+        }
+        const innerGoodbye = inner.playMessageAndHangup?.bind(inner);
+        if (innerGoodbye) {
+            this.playMessageAndHangup = async (callId, message) => {
+                try {
+                    await innerGoodbye(callId, message);
+                } finally {
+                    this.onEnded(callId);
+                }
+            };
+        }
+    }
 
     public async dial(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string> {
         const callId = await this.inner.dial(toNumber, fromNumber, args);

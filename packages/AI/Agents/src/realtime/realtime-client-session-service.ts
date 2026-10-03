@@ -53,6 +53,8 @@ import { AIEngine } from '@memberjunction/aiengine';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 import { AgentRunner } from '../AgentRunner';
+import { DelegationNarrator } from './realtime-delegation-narrator';
+import { FilterAllowedAgentsByCanRun } from './realtime-coagent-resolution';
 import {
     RealtimeToolBroker,
     RealtimeToolBrokerDeps,
@@ -135,6 +137,18 @@ export interface PrepareClientSessionInput {
     AppContext?: AppContextSnapshot;
     /** Prior conversation history to seed the model's context. Optional. */
     ConversationMessages?: ChatMessage[];
+    /**
+     * Tools the HOST (not the co-agent runtime) declares AND executes — e.g. a phone call's `transfer_call`,
+     * `send_dtmf` and `end_call`. They are added to the session's tool set but, unlike {@link ExtraTools}, are
+     * NOT described as interactive-surface tools in the prompt. The host executes them through the runtime's
+     * local tool handler ({@link BridgeRealtimeRuntime.SetLocalToolHandler}).
+     */
+    HostTools?: RealtimeToolDefinition[];
+    /**
+     * Host-authored instructions appended to the system prompt (e.g. "this is an audio-only phone call …",
+     * the caller's number and verification status). Empty/absent adds nothing.
+     */
+    HostFraming?: string;
     /**
      * Pre-formatted, role-tagged transcript lines (`User: …` / `Assistant: …`, newline-separated)
      * from the caller's PRIOR session leg(s) when this session RESUMES one (`lastSessionId`).
@@ -410,6 +424,49 @@ export interface BridgeRealtimeRuntime {
     PromptRunID?: string;
     /** Finalizes the co-agent + prompt run. Idempotent; safe to call from multiple teardown paths. */
     Finalize: (success: boolean) => Promise<void>;
+    /**
+     * Aborts every delegated run currently in flight for this session (and drops pending narration). This is the
+     * EXPLICIT cancel — on a phone it backs the `cancel_pending_work` tool — and is deliberately NOT what a
+     * barge-in does (see {@link CancelPendingNarration}). Returns how many were aborted (0 when nothing was
+     * running; never throws).
+     */
+    CancelInFlightDelegations: () => number;
+    /**
+     * Drops any queued spoken progress update without touching the delegated work — what a barge-in does. The
+     * caller took the floor, so a pending "still working on it" is stale, but the jobs they asked for keep
+     * running. Never throws.
+     */
+    CancelPendingNarration: () => void;
+    /**
+     * Installs (or clears, with `undefined`) the host's local tool handler. A tool call whose name the handler
+     * {@link BridgeLocalToolHandler.Handles} is executed by the host instead of the shared delegation path.
+     */
+    SetLocalToolHandler: (handler: BridgeLocalToolHandler | undefined) => void;
+}
+
+/**
+ * Executes tools the host declared through {@link PrepareClientSessionInput.HostTools}. Bound after the session
+ * is wired because the object that can act on them (a phone call's bridge) does not exist until the bridge
+ * engine has started.
+ */
+export interface BridgeLocalToolHandler {
+    /** Whether this handler owns `toolName`. */
+    Handles(toolName: string): boolean;
+    /** Runs one call; the returned string is the JSON handed back to the model. Never needs to catch — errors are reported to the model. */
+    Execute(call: RealtimeToolCall): Promise<string>;
+}
+
+/** Runtime handles by their realtime session, so the layer that only holds the session can reach its runtime. */
+const bridgeRuntimes = new WeakMap<IRealtimeSession, BridgeRealtimeRuntime>();
+
+/**
+ * Returns the runtime wired onto a bridged realtime session by
+ * {@link RealtimeClientSessionService.WireBridgeRealtimeSession}, or `undefined` for a session that was never
+ * wired. Lets a host that only holds the {@link IRealtimeSession} (the telephony services) cancel delegations on
+ * barge-in and install its local tool handler.
+ */
+export function GetBridgeRealtimeRuntime(session: IRealtimeSession): BridgeRealtimeRuntime | undefined {
+    return bridgeRuntimes.get(session);
 }
 
 /**
@@ -734,6 +791,17 @@ export class RealtimeClientSessionService {
             return this.wireBridgeFallbackRuntime(session);
         }
 
+        // The delegation set the model may reach, narrowed to what THIS run-as user may run (the browser path
+        // applies the same filter; without it a bridged call would reach colleagues the caller cannot).
+        const allowedAgents = await FilterAllowedAgentsByCanRun(prep.EffectiveConfig?.realtime?.allowedAgents, contextUser);
+        // Spoken progress while delegated work runs — the same pacing/wording the generic session runner uses.
+        const narrator = new DelegationNarrator({
+            GetSession: () => session,
+            NarrationInstructionsTemplate: this.resolveNarrationInstructionsTemplate(),
+            NarrationPaceMs: GetNarrationPaceMs(prep.EffectiveConfig) ?? undefined,
+        });
+        let localToolHandler: BridgeLocalToolHandler | undefined;
+
         const promptID = this.resolveCoAgentSystemPrompt(coAgent).PromptID;
         const obs = await this.createCoAgentObservabilityRun(
             coAgent, promptID, resolution.ModelID, resolution.VendorID,
@@ -756,18 +824,21 @@ export class RealtimeClientSessionService {
         // Tool calls → the shared delegation entry point, then hand the serialized result back to the model.
         session.OnToolCall(async (call) => {
             try {
-                const result = await this.ExecuteRelayedTool(
-                    {
-                        AgentSessionID: input.AgentSessionID,
-                        ParentRunID: obs?.CoAgentRunID,
-                        TargetAgentID: input.TargetAgentID,
-                        AllowedAgents: prep.EffectiveConfig?.realtime?.allowedAgents,
-                        DirectActions: prep.EffectiveConfig?.realtime?.directActions,
-                        Call: call,
-                    },
-                    contextUser, provider,
-                );
-                await session.SendToolResult(call.CallID, result.ResultJson);
+                const resultJson = localToolHandler?.Handles(call.ToolName)
+                    ? await localToolHandler.Execute(call)
+                    : (await narrator.Track(() => this.ExecuteRelayedTool(
+                        {
+                            AgentSessionID: input.AgentSessionID,
+                            ParentRunID: obs?.CoAgentRunID,
+                            TargetAgentID: input.TargetAgentID,
+                            AllowedAgents: allowedAgents,
+                            DirectActions: prep.EffectiveConfig?.realtime?.directActions,
+                            OnProgress: (progress) => narrator.HandleProgress(progress),
+                            Call: call,
+                        },
+                        contextUser, provider,
+                    ))).ResultJson;
+                await session.SendToolResult(call.CallID, resultJson);
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 LogError(`WireBridgeRealtimeSession: tool '${call.ToolName}' failed: ${message}`);
@@ -779,12 +850,25 @@ export class RealtimeClientSessionService {
         // through the idempotent finalizer, so double-fire is harmless.
         const originalClose = session.Close.bind(session);
         session.Close = async (): Promise<void> => {
+            narrator.Cancel();
             await finalize(true);
             await originalClose();
         };
         session.OnClose?.(() => { void finalize(true); });
 
-        return { CoAgentRunID: obs?.CoAgentRunID, PromptRunID: obs?.PromptRunID, Finalize: finalize };
+        const runtime: BridgeRealtimeRuntime = {
+            CoAgentRunID: obs?.CoAgentRunID,
+            PromptRunID: obs?.PromptRunID,
+            Finalize: finalize,
+            CancelInFlightDelegations: () => {
+                narrator.Cancel(); // a stale "still working on it" line must not be spoken over the caller
+                return this.CancelInFlightDelegations(input.AgentSessionID);
+            },
+            CancelPendingNarration: () => narrator.Cancel(),
+            SetLocalToolHandler: (handler) => { localToolHandler = handler; },
+        };
+        bridgeRuntimes.set(session, runtime);
+        return runtime;
     }
 
     /**
@@ -799,7 +883,14 @@ export class RealtimeClientSessionService {
                 JSON.stringify({ success: false, error: 'Tool execution is unavailable — the co-agent did not resolve. Let the user know.' }),
             );
         });
-        return { Finalize: async () => { /* nothing to finalize */ } };
+        const runtime: BridgeRealtimeRuntime = {
+            Finalize: async () => { /* nothing to finalize */ },
+            CancelInFlightDelegations: () => 0,
+            CancelPendingNarration: () => { /* nothing is narrated */ },
+            SetLocalToolHandler: () => { /* no tool path to extend */ },
+        };
+        bridgeRuntimes.set(session, runtime);
+        return runtime;
     }
 
     /**
@@ -1916,7 +2007,7 @@ export class RealtimeClientSessionService {
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
             : input.ExtraTools;
-        const tools = this.buildStableToolSet(combinedExtra);
+        const tools = this.appendHostTools(this.buildStableToolSet(combinedExtra), input.HostTools);
         // Hoisted (rather than built inline at the return) so the mint log below can report the voice
         // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once.
         const configBag = this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID);
@@ -2032,6 +2123,7 @@ export class RealtimeClientSessionService {
         const framing = BuildRealtimeAgentFraming(targetName, this.buildInteractiveSurfaceFraming(input.ExtraTools), colleagues, hasDirectTools);
 
         const meetingFraming = this.buildMeetingFraming(input);
+        const hostFraming = input.HostFraming?.trim() ?? '';
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);
         const voiceManner = BuildVoiceMannerSection(effectiveConfig);
         const targetIdentity = this.formatTargetIdentity(target);
@@ -2040,7 +2132,7 @@ export class RealtimeClientSessionService {
         const history = this.formatConversationHistory(input.ConversationMessages);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
-        return [framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
+        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }
@@ -2416,6 +2508,22 @@ export class RealtimeClientSessionService {
         }
 
         return result;
+    }
+
+    /** Appends the host-declared tools to a stable tool set, dropping any whose name is already taken. */
+    protected appendHostTools(tools: RealtimeToolDefinition[], hostTools?: RealtimeToolDefinition[]): RealtimeToolDefinition[] {
+        if (!hostTools || hostTools.length === 0) {
+            return tools;
+        }
+        const taken = new Set(tools.map((t) => t.Name.toLowerCase()));
+        const merged = [...tools];
+        for (const tool of hostTools) {
+            if (!taken.has(tool.Name.toLowerCase())) {
+                taken.add(tool.Name.toLowerCase());
+                merged.push(tool);
+            }
+        }
+        return merged;
     }
 
     /**
