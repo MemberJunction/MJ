@@ -34,7 +34,7 @@
 
 import type { JSONObject } from '@memberjunction/ai';
 import { IsPlainObject } from '@memberjunction/global';
-import type { RealtimeChannelExposure } from './realtime-channel-descriptor';
+import type { RealtimeChannelExposure, RealtimeChannelVerb } from './realtime-channel-descriptor';
 import type { RealtimeZeroDataRetentionLevel } from './realtime-channel-scope';
 
 /** Exposure levels from least to most revealing. The order is the whole definition of "lower". */
@@ -240,4 +240,36 @@ export function DescribeExposureLimit(
             ? 'you will not be told what the channel contains and will not see it'
             : `you receive ${effective} only; '${withheld.join("' and '")}' is withheld`;
     return reasons.length > 0 ? `${what} (${reasons.join('; ')})` : what;
+}
+
+/**
+ * Whether a verb's RESULT is withheld at the given exposure: the verb says its result carries channel data
+ * (`ReturnsChannelData`) and the channel's effective exposure is below that level.
+ *
+ * @param verb The verb.
+ * @param effective The channel's effective exposure.
+ */
+export function IsVerbWithheld(verb: Pick<RealtimeChannelVerb, 'ReturnsChannelData'>, effective: RealtimeChannelExposure): boolean {
+    return verb.ReturnsChannelData !== undefined && CompareExposure(effective, verb.ReturnsChannelData) < 0;
+}
+
+/** The verbs of a channel that are withheld at the given exposure (see {@link IsVerbWithheld}). */
+export function WithheldVerbs<T extends Pick<RealtimeChannelVerb, 'ReturnsChannelData'>>(verbs: readonly T[], effective: RealtimeChannelExposure): T[] {
+    return verbs.filter((verb) => IsVerbWithheld(verb, effective));
+}
+
+/**
+ * The sentence an agent is given when it calls a verb that is withheld: what is withheld, why, and what to do instead.
+ *
+ * @param verbName The verb.
+ * @param channelName The channel's display name.
+ * @param effective The channel's effective exposure.
+ * @param reasons Why exposure is below what the channel could expose (the limits that bind).
+ */
+export function DescribeWithheldVerb(verbName: string, channelName: string, effective: RealtimeChannelExposure, reasons: ReadonlyArray<string>): string {
+    const why = reasons.length > 0 ? ` (${reasons.join('; ')})` : '';
+    return (
+        `"${verbName}" is unavailable right now: its result would show you what the ${channelName} channel holds, ` +
+        `and you may perceive only '${effective}' of it${why}. Tell the user you cannot do that, or ask them to share it.`
+    );
 }

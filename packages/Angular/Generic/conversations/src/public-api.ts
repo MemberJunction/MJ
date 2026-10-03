@@ -191,7 +191,6 @@ export * from './lib/components/realtime/interactive-component/component-contrac
 export * from './lib/components/realtime/interactive-component/component-data-state';
 export * from './lib/components/realtime/interactive-component/component-instance-engine';
 export * from './lib/components/realtime/interactive-component/component-spec-content';
-export * from './lib/components/realtime/interactive-component/interactive-component-frame-capture';
 export * from './lib/components/realtime/interactive-component/run-view-component-artifact-source';
 export * from './lib/components/realtime/interactive-component/interactive-component-channel';
 export * from './lib/components/realtime/interactive-component/realtime-interactive-component-surface.component';

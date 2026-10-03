@@ -422,7 +422,14 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
           Schema: { type: 'object' }
         }
       ],
-      Verbs: BuildToolBackedVerbs(this.GetToolDefinitions(), this.ToolNamePrefix),
+      // Reading the page is what exposure limits: its text is the page's state, and what the vision model makes of the
+      // screenshot (or where it finds an element) is derived from its pixels. A goal's result reports what the browser found.
+      Verbs: BuildToolBackedVerbs(this.GetToolDefinitions(), this.ToolNamePrefix, 'agent', {
+        [REMOTE_BROWSER_TOOL_NAMES.GetPageText]: 'state',
+        [REMOTE_BROWSER_TOOL_NAMES.DescribePage]: 'pixels',
+        [REMOTE_BROWSER_TOOL_NAMES.LocateElement]: 'pixels',
+        [REMOTE_BROWSER_TOOL_NAMES.AchieveGoal]: 'state',
+      }),
       DisplayPolicy: 'open-on-start',
       DefaultAvailability: 'all-sessions',
       MaxExposure: 'pixels'

@@ -13,6 +13,10 @@
  * | `events[]` | channel events, payload schema from the event parameters |
  * | `properties[]` | the schema of the `inputs` accepted when opening it |
  *
+ * A verb whose result carries what the component holds (`get_data_state`, `validate`, `is_dirty`, and any custom method that
+ * returns something) is marked `ReturnsChannelData: 'state'`, so the agent is refused it when it may not perceive the
+ * component's state (see `RealtimeChannelVerb.ReturnsChannelData`).
+ *
  * Pure functions over plain data: no component is rendered and nothing is invoked here.
  *
  * @module @memberjunction/ng-conversations
@@ -168,11 +172,21 @@ function deriveCustomVerbs(spec: ComponentSpec, taken: Set<string>, skipped: Ski
                 Description: `${method.description || `Calls the component's ${method.name} method.`}${returns}`,
                 ParametersSchema: built.Schema,
                 InvokableBy: 'both',
+                // Unsure what a method hands back, so a method that returns anything is treated as returning the component's data.
+                ...(returnsData(method) ? { ReturnsChannelData: 'state' as const } : {}),
             },
             Binding: { Kind: 'custom', Method: method.name, ParameterNames: built.Names },
         });
     }
     return verbs;
+}
+
+/** Return types that carry nothing back. Anything else is treated as a result that carries the component's data. */
+const VOID_RETURN_TYPES: ReadonlySet<string> = new Set(['', 'void', 'undefined', 'null', 'never', 'promise<void>', 'promise<undefined>']);
+
+/** Whether a custom method returns something (and so needs `state` exposure to be given to the agent). */
+function returnsData(method: CustomComponentMethod): boolean {
+    return !VOID_RETURN_TYPES.has((method.returnType ?? '').trim().toLowerCase());
 }
 
 /** A verb with no parameters. */
@@ -183,8 +197,13 @@ function noParameters(): RealtimeChannelSchema {
 /** The standard verbs, in the order they are described. Each is present only when the spec says the component supports it. */
 function deriveStandardVerbs(spec: ComponentSpec): DerivedVerb[] {
     const supported = spec.methods?.standardMethodsSupported ?? {};
-    const standard = (key: keyof typeof STANDARD_VERBS, description: string, schema: RealtimeChannelSchema = noParameters()): DerivedVerb => ({
-        Verb: { Name: STANDARD_VERBS[key], Description: description, ParametersSchema: schema, InvokableBy: 'both' },
+    const standard = (
+        key: keyof typeof STANDARD_VERBS,
+        description: string,
+        schema: RealtimeChannelSchema = noParameters(),
+        returnsChannelData?: 'state'
+    ): DerivedVerb => ({
+        Verb: { Name: STANDARD_VERBS[key], Description: description, ParametersSchema: schema, InvokableBy: 'both', ...(returnsChannelData ? { ReturnsChannelData: returnsChannelData } : {}) },
         Binding: { Kind: 'standard', Standard: key },
     });
     const verbs: DerivedVerb[] = [];
@@ -192,13 +211,13 @@ function deriveStandardVerbs(spec: ComponentSpec): DerivedVerb[] {
         verbs.push(standard('Refresh', 'Reloads the component\'s data.'));
     }
     if (supported.getCurrentDataState) {
-        verbs.push(standard('GetDataState', 'Reads what the component is showing right now (its data state: tables, rows, filters). Use it when you need detail the state notes do not carry.'));
+        verbs.push(standard('GetDataState', 'Reads what the component is showing right now (its data state: tables, rows, filters). Use it when you need detail the state notes do not carry.', noParameters(), 'state'));
     }
     if (supported.validate) {
-        verbs.push(standard('Validate', 'Checks whether what the user entered is valid; reports the problems.'));
+        verbs.push(standard('Validate', 'Checks whether what the user entered is valid; reports the problems.', noParameters(), 'state'));
     }
     if (supported.isDirty) {
-        verbs.push(standard('IsDirty', 'Reports whether the user has unsaved changes in the component.'));
+        verbs.push(standard('IsDirty', 'Reports whether the user has unsaved changes in the component.', noParameters(), 'state'));
     }
     if (supported.reset) {
         verbs.push(standard('Reset', 'Discards the user\'s changes and returns the component to its initial state.'));
@@ -323,11 +342,16 @@ export function MergeVerbOffers(offers: ReadonlyArray<{ Component: string; Verb:
             }
         }
     }
+    // The dispatcher checks the merged verb, so it may refuse only what EVERY component would refuse; the exact check against
+    // the addressed component happens when the verb runs.
+    const levels = offers.map((offer) => offer.Verb.ReturnsChannelData);
+    const returnsChannelData = levels.every((level) => level !== undefined) ? (levels.includes('state') ? 'state' : 'pixels') : undefined;
     const signatures = offers.map((offer) => `${offer.Component}: ${Object.keys(schemaProperties(offer.Verb)).join(', ') || '(no parameters)'}`);
     return {
         Name: offers[0].Verb.Name,
         Description: `${offers[0].Verb.Description} Several open components have this action; pass the instance you mean. Parameters per component — ${signatures.join('; ')}.`,
         ParametersSchema: { type: 'object', properties, additionalProperties: false },
         InvokableBy: 'both',
+        ...(returnsChannelData ? { ReturnsChannelData: returnsChannelData } : {}),
     };
 }

@@ -22,7 +22,7 @@ import { DeriveComponentContract, MergeVerbOffers, type DerivedVerb } from './co
 import { SummarizeDataState, ToBoundedJson } from './component-data-state';
 import { ComponentInstanceEngine, InstanceLimitError, type ComponentInstanceRecord } from './component-instance-engine';
 import { ParseInteractiveComponentConfig } from './interactive-component-config';
-import { InteractiveComponentFrameCapture } from './interactive-component-frame-capture';
+import { ChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
 import { RealtimeInteractiveComponentSurfaceComponent } from './realtime-interactive-component-surface.component';
 import { RunViewComponentArtifactSource } from './run-view-component-artifact-source';
 import {
@@ -95,7 +95,7 @@ function readString(bag: JSONObject, key: string): string | undefined {
  * ### What the model perceives
  * Per instance: which artifact version is open, what the user last did in it (its events), and its data state,
  * bounded to a handful of rows. All of it is gated by exposure policy (`min(channel, agent config, zero-data-retention,
- * user)`). Pixels flow only if the host registered a frame capturer ({@link InteractiveComponentFrameCapture}).
+ * user)`). Pixels flow only if the host registered a frame capturer ({@link ChannelFrameCapture}).
  * Agent-INVOKED verbs return what the component returns; exposure gates what is volunteered to the model, not what it
  * asked for.
  *
@@ -282,24 +282,35 @@ export class InteractiveComponentChannel extends BaseRealtimeChannelClient<Realt
 
     /** Opts into pixels only when the host registered something that can rasterize a component. */
     private enableVisualPerceptionIfAvailable(): void {
-        const capturer = InteractiveComponentFrameCapture.Instance.Capturer;
-        if (!capturer) {
+        if (!ChannelFrameCapture.Instance.Capturer) {
             return;
         }
-        this.EnableVisualPerception({
-            GetLatestFrame: async () => {
-                const element = this.surface?.GetActiveElement() ?? null;
-                if (!element) {
-                    return null;
-                }
-                try {
-                    return await capturer(element);
-                } catch (error) {
-                    LogError(`[RealtimeChannel:${INTERACTIVE_COMPONENT_CHANNEL_KEY}] Capturing a component frame failed: ${error instanceof Error ? error.message : String(error)}`);
-                    return null;
-                }
-            },
-        });
+        this.EnableVisualPerception({ GetLatestFrame: () => this.CaptureActiveFrame() });
+    }
+
+    /**
+     * A picture of the component the user is looking at, as base64 JPEG, or `null` when there is none to send: exposure is
+     * below `pixels`, the session has no inbound video track, nothing is on screen, or the host's rasterizer produced nothing
+     * (it reports why, once, itself). Never throws.
+     *
+     * The base channel's visual pump has already checked exposure and the track before it asks; they are checked again so a
+     * frame is never rasterized (the costly part) for a model that may not see it, whoever asks.
+     */
+    protected async CaptureActiveFrame(): Promise<string | null> {
+        const capturer = ChannelFrameCapture.Instance.Capturer;
+        if (!capturer || this.Exposure !== 'pixels' || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+            return null;
+        }
+        const element = this.surface?.GetActiveElement() ?? null;
+        if (!element) {
+            return null;
+        }
+        try {
+            return await capturer(element);
+        } catch (error) {
+            LogError(`[RealtimeChannel:${INTERACTIVE_COMPONENT_CHANNEL_KEY}] Capturing a component frame failed: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
     }
 
     public override GetSurfaceComponent(): Type<RealtimeInteractiveComponentSurfaceComponent> {
@@ -330,6 +341,20 @@ export class InteractiveComponentChannel extends BaseRealtimeChannelClient<Realt
     }
 
     // ── Contract: state ────────────────────────────────────────────────────────
+
+    /**
+     * Open components are LIVE-ONLY: there is no state of record to persist, so nothing is saved with the session
+     * (`null`, which the host never writes) and {@link RestoreState} refuses what it is offered. A resumed session starts
+     * with no component open; the agent opens them again. What the model perceives right now is {@link GetState}.
+     */
+    public override SerializeState(): string | null {
+        return null;
+    }
+
+    /** Live-only: a resumed session never restores open components (see {@link SerializeState}). Always `false`. */
+    public override RestoreState(_stateJson: string): boolean {
+        return false;
+    }
 
     /** The open components, keyed by instance id (see the `components` noun). A pure read. */
     public override GetState(): JSONObject {
@@ -559,6 +584,10 @@ export class InteractiveComponentChannel extends BaseRealtimeChannelClient<Realt
         if ('Success' in target) {
             return target;
         }
+        const refusal = actor === 'agent' ? this.refuseForExposure(target, name) : null;
+        if (refusal) {
+            return refusal;
+        }
         if (name === BUILTIN_VERBS.ShowVersion) {
             return this.showVersion(target, args);
         }
@@ -566,6 +595,17 @@ export class InteractiveComponentChannel extends BaseRealtimeChannelClient<Realt
             return this.closeInstance(target);
         }
         return this.invokeDerived(target, name, args, actor);
+    }
+
+    /**
+     * Refuses a verb whose result carries the component's data while exposure keeps that from the agent. The dispatcher
+     * checks the same thing against the (merged) descriptor; this is the exact per-instance check, and it keeps the
+     * channel safe when it is driven by something other than the dispatcher.
+     */
+    private refuseForExposure(record: ComponentInstanceRecord, verbName: string): RealtimeChannelVerbResult | null {
+        const derived = record.Contract.Verbs.find((v) => v.Verb.Name.toLowerCase() === verbName);
+        const message = derived ? this.RefuseVerbForExposure(derived.Verb) : null;
+        return message ? failure('exposure_restricted', message, [...this.ExposureReasons]) : null;
     }
 
     /**

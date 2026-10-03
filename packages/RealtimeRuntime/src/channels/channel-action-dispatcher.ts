@@ -16,7 +16,9 @@
  *    mounts it and seeds it (`open_failed` / `invalid_params`);
  * 4. the verb exists (`unknown_verb`, listing the ones that do);
  * 5. the verb may be invoked by the agent (`not_invokable_by_agent` — a form's `confirm` is the
- *    user's alone);
+ *    user's alone), and its result is not one the channel's exposure policy withholds from the agent
+ *    (`exposure_restricted`: a verb that returns what the channel holds is refused when the user, the agent's
+ *    configuration or a zero-data-retention requirement limits what the model may perceive of it);
  * 6. the parameters satisfy the verb's declared schema (`invalid_params`, listing each violation) —
  *    a malformed call becomes a correctable message instead of a half-applied mutation.
  *
@@ -164,6 +166,10 @@ export class ChannelActionDispatcher {
         }
         if (verb.InvokableBy === 'user') {
             return failure('not_invokable_by_agent', `"${verb.Name}" can only be done by the user, not by you. Ask them to do it.`);
+        }
+        const withheld = plugin.RefuseVerbForExposure(verb);
+        if (withheld) {
+            return failure('exposure_restricted', withheld, { Details: [...plugin.ExposureReasons] });
         }
         const issues = ValidateJsonAgainstSchemaSubset(request.Params, verb.ParametersSchema);
         if (issues.length > 0) {

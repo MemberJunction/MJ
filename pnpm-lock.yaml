@@ -5040,6 +5040,9 @@ importers:
       '@memberjunction/ng-notifications':
         specifier: 6.2.0-edge.1
         version: link:../../Generic/notifications
+      '@memberjunction/ng-realtime-channels':
+        specifier: 6.2.0-edge.1
+        version: link:../../Generic/realtime-channels
       '@memberjunction/ng-shared':
         specifier: 6.2.0-edge.1
         version: link:../shared
@@ -6722,6 +6725,9 @@ importers:
       '@memberjunction/ng-react':
         specifier: 6.2.0-edge.1
         version: link:../react
+      '@memberjunction/ng-realtime-channels':
+        specifier: 6.2.0-edge.1
+        version: link:../realtime-channels
       '@memberjunction/ng-resource-permissions':
         specifier: 6.2.0-edge.1
         version: link:../resource-permissions
@@ -8366,6 +8372,95 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/realtime-channel-examples:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.1
+        version: link:../../../AI/Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.1
+        version: link:../../../AI/CorePlus
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-realtime-channels':
+        specifier: 6.2.0-edge.1
+        version: link:../realtime-channels
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0-edge.1
+        version: link:../../../RealtimeRuntime
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0-edge.1
+        version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/realtime-channels:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.1
+        version: link:../../../AI/Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.1
+        version: link:../../../AI/CorePlus
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJGlobal
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0-edge.1
+        version: link:../../../RealtimeRuntime
+      html-to-image:
+        specifier: ^1.11.11
+        version: 1.11.13
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0-edge.1
+        version: link:../test-utils
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)

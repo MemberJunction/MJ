@@ -8,12 +8,16 @@ import { ChannelInboundVideoBridge, type BaseRealtimeClient, type IChannelFrameP
 import {
   CompareExposure,
   DescribeExposureLimit,
+  DescribeWithheldVerb,
+  IsVerbWithheld,
   MinExposure,
+  WithheldVerbs,
   ValidateJsonAgainstSchemaSubset,
   type AppContextSnapshot,
   type RealtimeChannelActor,
   type RealtimeChannelDescriptor,
   type RealtimeChannelExposure,
+  type RealtimeChannelVerb,
 } from '@memberjunction/ai-core-plus';
 import type {
   RealtimeChannelEvent,
@@ -714,6 +718,32 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
     return prefix.length > 0 && !verb.startsWith(prefix) ? `${prefix}${verb}` : verb;
   }
 
+  /**
+   * The descriptor verb a native tool call runs, or `undefined` when the tool is not one of the channel's verbs
+   * (the runtime uses it to apply {@link RefuseVerbForExposure} on the native-tool route as well as the `ContextTool` one).
+   *
+   * @param toolName The native tool name the model called.
+   */
+  public FindVerbForNativeTool(toolName: string): RealtimeChannelVerb | undefined {
+    const wanted = this.ResolveVerbForTool(toolName).toLowerCase();
+    return this.GetDescriptor().Verbs.find((v) => v.Name.toLowerCase() === wanted);
+  }
+
+  /**
+   * Whether the agent may be given this verb's result at the channel's current exposure. A verb that declares
+   * `ReturnsChannelData` is refused whole when exposure is below that level, because its result would hand the agent
+   * what the user or a zero-data-retention policy held back from it. Policy, not redaction: the result is never filtered.
+   *
+   * Applies to the AGENT (the dispatcher and the native-tool route call it); a user acting through the surface is not restricted.
+   *
+   * @param verb The verb the agent is calling.
+   * @returns The sentence to give the agent, or `null` when the call may proceed.
+   */
+  public RefuseVerbForExposure(verb: Pick<RealtimeChannelVerb, 'Name' | 'ReturnsChannelData'>): string | null {
+    const effective = this.Exposure;
+    return IsVerbWithheld(verb, effective) ? DescribeWithheldVerb(verb.Name, this.GetDescriptor().DisplayName, effective, this.exposureReasons) : null;
+  }
+
   /** Why a channel that overrides neither entry point cannot run anything. */
   private implementsNeitherMessage(): string {
     return `Channel '${this.ChannelName}' implements neither ApplyVerb nor ApplyAgentTool.`;
@@ -976,9 +1006,12 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * - `'pixels'`: state notes and frames.
    *
    * It governs what flows to the model UNPROMPTED (perception notes, the contents of `opened` / `completed`
-   * notes, frames). It does not rewrite what a verb the agent itself invokes returns: that is the
-   * channel's declared contract, so a channel whose verbs would return sensitive data should say so in
-   * its own `MaxExposure` and not return it.
+   * notes, frames). It does not REDACT what a verb's result contains: a verb is all-or-nothing. A verb whose
+   * result would show the model something above this level declares `ReturnsChannelData` on the verb, and
+   * when this level is below it the verb is refused whole (`exposure_restricted`) and listed to the model as
+   * unavailable; see {@link RefuseVerbForExposure}. A verb that does not declare it returns what the channel
+   * says it returns, so a channel whose verbs reveal sensitive data must either declare it or lower its own
+   * `MaxExposure`.
    */
   public get Exposure(): RealtimeChannelExposure {
     return MinExposure(this.GetDescriptor().MaxExposure, this.policyExposure, this.userExposure);
@@ -1054,6 +1087,10 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
     const payload: JSONObject = { exposure: next, was: previous };
     if (limit) {
       payload['limit'] = limit;
+    }
+    const unavailable = WithheldVerbs(this.GetDescriptor().Verbs, next).map((v) => v.Name);
+    if (unavailable.length > 0) {
+      payload['unavailableActions'] = unavailable;
     }
     this.EmitChannelEvent('exposure_changed', payload);
     if (this.Context?.Client) {

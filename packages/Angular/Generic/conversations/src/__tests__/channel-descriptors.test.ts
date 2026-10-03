@@ -55,6 +55,26 @@ describe('shipped channel descriptors', () => {
     expect(d.Events?.map((e) => e.Name)).toEqual(['state_changed', 'frame_pushed']);
   });
 
+  it('the Remote Browser marks the verbs whose result shows what the page holds, so exposure policy can withhold them; the others only act', () => {
+    const flags = Object.fromEntries(
+      new RemoteBrowserChannel().GetDescriptor().Verbs.map((v) => [v.NativeToolName, v.ReturnsChannelData ?? null])
+    );
+    const returning = Object.entries(flags).filter(([, level]) => level !== null);
+    expect(Object.fromEntries(returning)).toEqual({
+      browser_GetPageText: 'state',
+      browser_DescribePage: 'pixels',
+      browser_LocateElement: 'pixels',
+      browser_AchieveGoal: 'state',
+    });
+    expect(Object.entries(flags).filter(([, level]) => level === null).length).toBeGreaterThan(5);
+  });
+
+  it('no other shipped channel has a verb that returns channel data (the whiteboard and media verbs only act and report an id)', () => {
+    for (const channel of [new RealtimeWhiteboardChannel(), new RealtimeMediaChannel()]) {
+      expect(channel.GetDescriptor().Verbs.filter((v) => v.ReturnsChannelData)).toEqual([]);
+    }
+  });
+
   it('a subclass that adds a tool gets a verb for it automatically (the descriptor cannot lie)', () => {
     class ExtendedBoard extends RealtimeWhiteboardChannel {
       public override GetToolDefinitions() {
