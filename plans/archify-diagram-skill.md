@@ -107,17 +107,24 @@ tag), `treeSha`, `artifact.sha256` and `severity`.
 Upstream moves fast: 629 commits in September 2026, roughly weekly tags, and v3.0 landed
 2026-09-28 with schema migrations. So we **pin to tags, never `main`**.
 
-**Weekly sync job** (GitHub workflow):
+**Monthly sync job** (scheduled GitHub workflow, also runnable by hand via `workflow_dispatch`).
+Monthly is enough: we pin to releases and review every bump, so a faster cadence would only queue
+up more PRs to review. A `severity: critical` release can still be pulled in by hand-dispatching
+the job.
 
-1. Read `stable.json`. Stop if `source.ref` matches `UPSTREAM.json`.
+1. Read `stable.json` and compare its `source.ref` with the tag recorded in `UPSTREAM.json`.
+   **If they match, exit quietly: no PR, no issue, no comment.** A month without an upstream
+   release produces nothing to review.
 2. Download the release zip, verify `artifact.sha256`, and replace the vendored files.
 3. Re-render every upstream example through our action as regression tests.
 4. Diff upstream `SKILL.md` and `references/` since our pinned tag.
-5. **Open a PR**, never auto-merge. The upstream instruction diff goes in the PR body for a human
-   (or SkillSmith / a Claude routine) to fold into MJ's rewritten `Instructions`.
+5. **Open a PR**, never auto-merge. The PR body carries the upstream release notes and
+   instruction diff, for a human (or SkillSmith / a Claude routine) to fold into MJ's rewritten
+   `Instructions`.
    - Upstream instruction text becomes prompt content in every customer's agents, so it is a
      supply-chain and prompt-injection surface and needs review.
    - Vendored code is ordinary third-party code under review.
+   - If a sync PR from an earlier month is still open, update that PR rather than opening a second.
 
 **Shipping.** Code ships in the package version. The skill row ships in the release's consolidated
 metadata-sync migration (`metadata/CLAUDE.md` §1b), like any other metadata.
