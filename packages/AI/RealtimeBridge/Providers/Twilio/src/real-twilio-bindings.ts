@@ -26,8 +26,24 @@
  * @see `/plans/realtime/bridges-and-widget/telephony-vendor-bindings.md` §2, §3 (T1).
  */
 
+import { randomBytes } from 'node:crypto';
 import { muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridge-base';
 import { ITwilioClientBindings } from './twilio-call-sdk';
+
+/**
+ * The custom-parameter name MJ stamps on every `<Stream>` it emits (`<Parameter name="mjToken" .../>`).
+ * Twilio echoes it back on the Media-Streams `start` frame as `start.customParameters.mjToken`, which is
+ * how the media websocket proves it belongs to a call MJ itself accepted or placed.
+ */
+export const TWILIO_MEDIA_TOKEN_PARAMETER = 'mjToken';
+
+/** Byte length of the per-call media token (rendered as hex, so the token is twice this many characters). */
+const MEDIA_TOKEN_BYTES = 32;
+
+/** Generates a fresh, unguessable per-call media-socket token (256 bits, hex). */
+export function GenerateTwilioMediaToken(): string {
+    return randomBytes(MEDIA_TOKEN_BYTES).toString('hex');
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Pure helpers — TwiML + Media-Streams frame transcode. No network, no SDK.
@@ -42,18 +58,17 @@ import { ITwilioClientBindings } from './twilio-call-sdk';
  * Pure + exported so it unit-tests with no network and the MJAPI router can reuse it verbatim.
  *
  * @param streamUrl The `wss://…` Media-Streams endpoint Twilio connects the call's audio to.
+ * @param parameters Optional custom `<Parameter>` name/value pairs Twilio echoes back on the `start` frame
+ *   (`start.customParameters`). MJ passes the per-call media token here so the websocket can be authenticated.
  * @returns The TwiML document string to return to Twilio (REST `twiml` param or webhook response body).
  */
-export function BuildConnectStreamTwiML(streamUrl: string): string {
+export function BuildConnectStreamTwiML(streamUrl: string, parameters?: Record<string, string>): string {
     const escaped = escapeXmlAttribute(streamUrl);
-    return (
-        '<?xml version="1.0" encoding="UTF-8"?>' +
-        '<Response>' +
-        '<Connect>' +
-        `<Stream url="${escaped}" />` +
-        '</Connect>' +
-        '</Response>'
-    );
+    const params = Object.entries(parameters ?? {})
+        .map(([name, value]) => `<Parameter name="${escapeXmlAttribute(name)}" value="${escapeXmlAttribute(value)}"/>`)
+        .join('');
+    const stream = params ? `<Stream url="${escaped}">${params}</Stream>` : `<Stream url="${escaped}" />`;
+    return '<?xml version="1.0" encoding="UTF-8"?><Response><Connect>' + stream + '</Connect></Response>';
 }
 
 /** @deprecated Use {@link BuildConnectStreamTwiML}. */
@@ -185,6 +200,16 @@ export interface TwilioCreateCallParams {
     Twiml: string;
     /** Optional status-callback URL for lifecycle events. Maps to Twilio's `statusCallback`. */
     StatusCallback?: string;
+    /** Lifecycle events to post to {@link StatusCallback} (`initiated`/`ringing`/`answered`/`completed`). Maps to `statusCallbackEvent`. */
+    StatusCallbackEvents?: string[];
+    /**
+     * Enables **asynchronous** answering-machine detection: Twilio keeps the call flowing (so the agent can
+     * start speaking) and later POSTs the verdict (`AnsweredBy`) to {@link AsyncAmdStatusCallback}. Maps to
+     * `machineDetection: 'Enable'` + `asyncAmd: 'true'`.
+     */
+    AsyncAmd?: boolean;
+    /** URL Twilio POSTs the async-AMD verdict to. Maps to `asyncAmdStatusCallback`. Required when {@link AsyncAmd} is set. */
+    AsyncAmdStatusCallback?: string;
 }
 
 /** The REST update payload {@link ITwilioRestLike} `calls(sid).update` accepts (the subset we use). */
@@ -219,6 +244,12 @@ export interface ITwilioMediaPump {
     OnFrame(callSid: string, handler: (frame: TwilioMediaFrame) => void): void;
     /** Registers the call's stream-SID resolver, so outbound frames address the right stream. */
     GetStreamSid(callSid: string): string;
+    /**
+     * **Optional.** Registers the per-call media-socket token for a call MJ has just placed (the REST
+     * `calls.create` response is the first moment the Call SID is known). The pump uses it to authenticate
+     * the Media-Streams `start` frame; a pump that does not authenticate sockets may omit it.
+     */
+    ExpectCall?(callSid: string, token: string): void;
 }
 
 /** Options {@link RealTwilioBindings} needs at construction — the injected client surfaces + the stream URL. */
@@ -231,7 +262,15 @@ export interface RealTwilioBindingsOptions {
     StreamUrl: string;
     /** Optional status-callback URL passed on outbound `createCall`. */
     StatusCallbackUrl?: string;
+    /**
+     * When set, outbound calls enable asynchronous answering-machine detection and Twilio POSTs the verdict
+     * to this URL (`asyncAmdStatusCallback`). Omit to place calls without AMD.
+     */
+    AsyncAmdStatusCallbackUrl?: string;
 }
+
+/** The lifecycle events requested on {@link TwilioCreateCallParams.StatusCallbackEvents} for every outbound call. */
+export const TWILIO_STATUS_CALLBACK_EVENTS: readonly string[] = ['initiated', 'ringing', 'answered', 'completed'];
 
 /**
  * Production {@link ITwilioClientBindings} over the real Twilio REST API + Media Streams, expressed against
@@ -249,23 +288,35 @@ export class RealTwilioBindings implements ITwilioClientBindings {
     private readonly mediaPump: ITwilioMediaPump;
     private readonly streamUrl: string;
     private readonly statusCallbackUrl?: string;
+    private readonly asyncAmdStatusCallbackUrl?: string;
 
     constructor(options: RealTwilioBindingsOptions) {
         this.rest = options.Rest;
         this.mediaPump = options.MediaPump;
         this.streamUrl = options.StreamUrl;
         this.statusCallbackUrl = options.StatusCallbackUrl;
+        this.asyncAmdStatusCallbackUrl = options.AsyncAmdStatusCallbackUrl;
     }
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     *
+     * Generates the per-call media token BEFORE the REST call (it rides in the TwiML the call executes), then
+     * registers it with the media pump under the returned Call SID so the Media-Streams socket can be
+     * authenticated when Twilio connects it.
+     */
     public async createCall(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string> {
         const statusCallback = readStatusCallback(args) ?? this.statusCallbackUrl;
-        return this.rest.CreateCall({
+        const token = GenerateTwilioMediaToken();
+        const callSid = await this.rest.CreateCall({
             To: toNumber,
             From: fromNumber,
-            Twiml: BuildConnectStreamTwiML(this.streamUrl),
-            ...(statusCallback ? { StatusCallback: statusCallback } : {}),
+            Twiml: BuildConnectStreamTwiML(this.streamUrl, { [TWILIO_MEDIA_TOKEN_PARAMETER]: token }),
+            ...(statusCallback ? { StatusCallback: statusCallback, StatusCallbackEvents: [...TWILIO_STATUS_CALLBACK_EVENTS] } : {}),
+            ...(this.asyncAmdStatusCallbackUrl ? { AsyncAmd: true, AsyncAmdStatusCallback: this.asyncAmdStatusCallbackUrl } : {}),
         });
+        this.mediaPump.ExpectCall?.(callSid, token);
+        return callSid;
     }
 
     /** @inheritdoc */
