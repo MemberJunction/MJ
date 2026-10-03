@@ -2,17 +2,19 @@ import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import {
   AppContextSnapshot,
   DeclaresNativeTools,
+  IsIdentityVerifiedEventPayload,
   NormalizeChannelKey,
   ParseRealtimeSessionClientPolicy,
   ResolveClientTools,
   SelectNativeChannelTools,
   type ClientToolMetadata,
+  type IdentityVerifiedEventPayload,
   type RealtimeChannelScopeResult,
   type RealtimeSessionClientTools,
   type ResolvedRealtimeChannel
@@ -32,6 +34,9 @@ import {
   RealtimeClientTranscript,
   RealtimeClientUsage
 } from '@memberjunction/ai-realtime-client';
+import { DefaultRealtimeSessionLauncher, type IRealtimeSessionLauncher } from './session-launcher';
+import { ClientSessionDeadline } from './client-session-deadline';
+import { RealtimeSessionEventHub, type IRealtimeSessionEventSource, type RealtimeSessionStreamEvent } from './session-event-hub';
 import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../channels/base-realtime-channel-client';
@@ -212,17 +217,6 @@ function trackDescriptorToJSON(track: RealtimeTrackDescriptor): JSONObject {
     json['RequiresConsent'] = track.RequiresConsent;
   }
   return json;
-}
-
-/**
- * Whether a mint failure is a GraphQL validation rejection of the channel-scoping extension — the
- * signature of a server that predates it ("Unknown argument "channelCandidatesJson"…", "Cannot query
- * field "ClientPolicyJson"…"). Only that exact case is recoverable; any other failure is a real mint
- * failure and must surface.
- */
-function isUnsupportedChannelScopingError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('channelCandidatesJson') || message.includes('ClientPolicyJson');
 }
 
 /**
@@ -833,6 +827,145 @@ export class RealtimeSessionRuntime {
     this._provider = value;
   }
 
+  private _launcher: IRealtimeSessionLauncher = new DefaultRealtimeSessionLauncher();
+
+  /**
+   * How this runtime mints a session — the stock `StartRealtimeClientSession` mutation unless a host
+   * installs its own {@link IRealtimeSessionLauncher} (a guest-session exchange, a deployment-specific
+   * mutation). Everything after the mint — channel scoping, the driver, transcripts, teardown — is
+   * unchanged. Assign `null` to restore the default.
+   */
+  public get Launcher(): IRealtimeSessionLauncher {
+    return this._launcher;
+  }
+  public set Launcher(value: IRealtimeSessionLauncher | null) {
+    this._launcher = value ?? new DefaultRealtimeSessionLauncher();
+  }
+
+  // ── Session events (server → this session's client) ────────────────────────
+
+  private readonly _sessionEvents$ = new Subject<RealtimeSessionStreamEvent>();
+
+  /**
+   * Every event the server publishes to THIS session, for the session's life (identity verification
+   * today; apps add their own types). Hot, with no replay — subscribe before the session starts, once,
+   * and it keeps working across sessions. The runtime has already acted on the events it understands
+   * (see {@link handleIdentityVerified}) by the time one reaches here; this stream is for the host UI.
+   *
+   * Silent when the session's provider has no subscription transport (see {@link createSessionEventSource}).
+   */
+  public readonly SessionEvents$: Observable<RealtimeSessionStreamEvent> = this._sessionEvents$.asObservable();
+
+  /** Keeps the live session's event stream open; null between sessions. */
+  private sessionEventHub: RealtimeSessionEventHub | null = null;
+
+  /** Per-type handlers the runtime runs (before publishing on {@link SessionEvents$}) for events it understands. */
+  private readonly sessionEventHandlers = new Map<string, (event: RealtimeSessionStreamEvent) => void>([
+    ['identity.verified', (event) => this.handleIdentityVerified(event)]
+  ]);
+
+  /**
+   * What the agent should SAY the moment the user's identity is verified, or `null` (the default) to
+   * say nothing — the agent is still told, silently, through a context note. A string is used as the
+   * instruction verbatim; a function receives the verified payload (e.g. to greet by name) and returns
+   * the instruction, or `null` to stay silent for this verification.
+   */
+  public IdentityVerifiedSpokenResponse: string | ((payload: IdentityVerifiedEventPayload) => string | null) | null = null;
+
+  private readonly clientDeadline = new ClientSessionDeadline();
+
+  /**
+   * The client's copy of the session's absolute deadline (`null` when none is known). A host that
+   * knows the session's cap at start sets it with {@link SetSessionDeadline}; verification extends it
+   * from the server's `identity.verified` payload. The SERVER enforces the real deadline — this exists
+   * so the host can end the call gracefully first and show a countdown. It only ever moves later by
+   * the server's word, so nothing a client does can extend the real one.
+   */
+  public get SessionDeadline$(): Observable<Date | null> {
+    return this.clientDeadline.Deadline$;
+  }
+
+  /** Synchronous access to {@link SessionDeadline$}. */
+  public get SessionDeadline(): Date | null {
+    return this.clientDeadline.Value;
+  }
+
+  /** Sets the baseline deadline a host knows at session start (`null` clears). See {@link SessionDeadline$}. */
+  public SetSessionDeadline(deadline: Date | null): void {
+    this.clientDeadline.Set(deadline);
+  }
+
+  /**
+   * Builds the transport that reads the session's events. The default rides the session's GraphQL
+   * provider; it returns `null` — "no session events here" — for a provider with no subscription
+   * support (a test double, a host on another transport), which the runtime tolerates. Override to
+   * supply another transport.
+   */
+  protected createSessionEventSource(): IRealtimeSessionEventSource | null {
+    const provider = this.Provider as GraphQLDataProvider | null;
+    if (!provider || typeof provider.Subscribe !== 'function') {
+      return null;
+    }
+    return new GraphQLRealtimeSessionClient(provider);
+  }
+
+  /** Opens the live session's event stream. Best-effort: never disturbs the call. */
+  private startSessionEvents(agentSessionId: string): void {
+    this.stopSessionEvents();
+    try {
+      const source = this.createSessionEventSource();
+      if (!source) {
+        return;
+      }
+      this.sessionEventHub = new RealtimeSessionEventHub(source, (event) => this.routeSessionEvent(agentSessionId, event));
+      this.sessionEventHub.Start(agentSessionId);
+    } catch (error) {
+      console.error('[RealtimeSession] Could not start the session event stream:', error);
+    }
+  }
+
+  private stopSessionEvents(): void {
+    this.sessionEventHub?.Stop();
+    this.sessionEventHub = null;
+  }
+
+  /** Routes one event to its per-type handler, then publishes it. An event for another session is dropped. */
+  private routeSessionEvent(expectedSessionId: string, event: RealtimeSessionStreamEvent): void {
+    if (event.AgentSessionID !== expectedSessionId || this.agentSessionId !== expectedSessionId) {
+      console.warn(`[RealtimeSession] Dropped a '${event.Type}' event addressed to another session.`);
+      return;
+    }
+    try {
+      this.sessionEventHandlers.get(event.Type)?.(event);
+    } catch (error) {
+      console.error(`[RealtimeSession] Handling the '${event.Type}' session event failed:`, error);
+    }
+    this._sessionEvents$.next(event);
+  }
+
+  /**
+   * `identity.verified`: keep the client's deadline in step with the server's, tell the model — as a
+   * silent, structured note — who it is now talking to, and, when the host configured it, have it say
+   * something about that. The payload is validated again here (it crossed a wire); the name rides as
+   * JSON so user-entered text can never break out of the note's frame.
+   */
+  private handleIdentityVerified(event: RealtimeSessionStreamEvent): void {
+    if (event.Type !== 'identity.verified' || !IsIdentityVerifiedEventPayload(event.Payload)) {
+      console.warn('[RealtimeSession] Ignored a malformed identity.verified event.');
+      return;
+    }
+    const payload = event.Payload;
+    this.clientDeadline.Extend(payload.MaxSessionDeadlineIso);
+    this.SendContextNote(
+      `[identity] verified ${JSON.stringify({ email: payload.VerifiedEmail, name: payload.VerifiedName, method: payload.Method })} ` +
+        '(background context — the user has proven they control this email address; treat them as verified. Do not read this note aloud.)'
+    );
+    const spoken = typeof this.IdentityVerifiedSpokenResponse === 'function' ? this.IdentityVerifiedSpokenResponse(payload) : this.IdentityVerifiedSpokenResponse;
+    if (spoken && spoken.trim().length > 0 && this.client && this.isSessionLive()) {
+      this.requestChannelSpokenResponse(spoken.trim());
+    }
+  }
+
   /** True when a session is currently open. */
   public get IsActive(): boolean {
     return this._active$.value;
@@ -1128,6 +1261,8 @@ export class RealtimeSessionRuntime {
       // SessionsObserver bridge. Emitting AFTER Connect() guarantees both that
       // agentSessionId is set (line ~468) AND the realtime client is connected,
       // so consumers can act on it without re-checking either condition.
+      // The session's own event stream (identity verification, app events) stays open for its life.
+      this.startSessionEvents(this.agentSessionId);
       this._sessionStarted$.next({
         sessionId: this.agentSessionId,
         channelNames: this._activeChannels$.value.map(c => c.ChannelName),
@@ -1924,6 +2059,18 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * Opens (and seeds) a channel from the HOST — the same path the agent's `open` action takes: the channel
+   * is mounted if it was only advertised, its `Inputs` schema validates `inputs`, and it announces itself to
+   * the model. A channel that is already open is re-seeded. Never throws; a refusal is a structured result.
+   *
+   * @param channelKey The channel to open (case-insensitive).
+   * @param inputs Seed inputs, validated against the channel's descriptor.
+   */
+  public OpenChannel(channelKey: string, inputs: JSONObject = {}): Promise<RealtimeContextActionResult> {
+    return this.dispatchContextAction({ Target: { Channel: channelKey }, Action: 'open', Params: inputs });
+  }
+
+  /**
    * Tells the model which channels exist and how to use them — rendered from the channels' own
    * descriptors, so a new channel needs no prompt change. Sent ONCE, the first moment the control
    * channel is usable — a context note sent before then is dropped, and `Connect` can resolve before the
@@ -1985,6 +2132,8 @@ export class RealtimeSessionRuntime {
       AppContext$: this.AppContext$,
       ExecuteClientTool: (name: string, params: Record<string, unknown>) =>
         this.executeAppClientTool(name, params),
+      // The session's server events (identity verification, app events), for a channel that reacts to them.
+      SessionEvents$: this.SessionEvents$,
       // Channel-addressed ContextTool calls: validated against the verb's schema, open `on-demand` channels.
       DispatchContextAction: (request: RealtimeContextActionRequest) => this.dispatchContextAction(request),
       // This channel's resolved configuration (host defaults beneath agent/app config).
@@ -2800,7 +2949,10 @@ export class RealtimeSessionRuntime {
 
   // ── Session minting (GraphQL) ──────────────────────────────────────────────
 
-  /** Calls the `StartRealtimeClientSession` mutation to obtain an ephemeral token + config. */
+  /**
+   * Mints a session through the installed {@link Launcher} — by default the stock
+   * `StartRealtimeClientSession` mutation (see {@link DefaultRealtimeSessionLauncher}).
+   */
   private async mintSession(
     targetAgentId: string,
     conversationId?: string | null,
@@ -2816,79 +2968,28 @@ export class RealtimeSessionRuntime {
     appContext?: AppContextSnapshot | null,
     channelCandidatesJson?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
-    const variables = {
-      targetAgentId,
-      conversationId: conversationId ?? null,
-      lastSessionId: lastSessionId ?? null,
-      preferredModelId: preferredModelId ?? null,
-      clientToolsJson: clientTools && clientTools.length > 0 ? JSON.stringify(clientTools) : null,
-      coAgentId: coAgentId ?? null,
-      configOverridesJson: configOverridesJson ?? null,
-      recordingConsent: recordingConsent ?? false,
-      recordingStartedAt: recordingStartedAt ?? null,
-      mediaCollectionId: mediaCollectionId ?? null,
-      applicationId: applicationId ?? null,
-      appContextJson: appContext ? JSON.stringify(appContext) : null
-    };
-    const result = await this.executeMintMutation(variables, channelCandidatesJson ?? null);
-    const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
-    if (!payload?.EphemeralToken) {
-      throw new Error('StartRealtimeClientSession returned no ephemeral token');
+    const result = await this._launcher.Launch(
+      {
+        TargetAgentId: targetAgentId,
+        ConversationId: conversationId ?? null,
+        LastSessionId: lastSessionId ?? null,
+        PreferredModelId: preferredModelId ?? null,
+        ClientTools: clientTools ?? [],
+        CoAgentId: coAgentId ?? null,
+        ConfigOverridesJson: configOverridesJson ?? null,
+        RecordingConsent: recordingConsent ?? false,
+        RecordingStartedAt: recordingStartedAt ?? null,
+        MediaCollectionId: mediaCollectionId ?? null,
+        ApplicationId: applicationId ?? null,
+        AppContext: appContext ?? null,
+        ChannelCandidatesJson: channelCandidatesJson ?? null
+      },
+      { Provider: this.Provider }
+    );
+    if (!result?.EphemeralToken) {
+      throw new Error('The session launcher returned no ephemeral token');
     }
-    return payload;
-  }
-
-  /**
-   * Runs the mint mutation. When the session has channel candidates it asks the server to scope them
-   * (`channelCandidatesJson`) and to return the resolved policy (`ClientPolicyJson`); a server that
-   * predates channel scoping rejects that argument/field at validation, in which case the runtime
-   * mints with the original mutation instead and resolves the scope locally — a new client must keep
-   * working against an older server, and a failed mint over an optional extension would be the worst
-   * way to find out they differ. The fallback is remembered so a long-lived runtime asks once.
-   */
-  private async executeMintMutation(
-    variables: Record<string, JSONValue>,
-    channelCandidatesJson: string | null
-  ): Promise<Record<string, JSONValue> | undefined> {
-    if (channelCandidatesJson === null || this.serverLacksChannelScoping) {
-      return this.gql().ExecuteGQL(this.buildMintMutation(false), variables);
-    }
-    try {
-      return await this.gql().ExecuteGQL(this.buildMintMutation(true), { ...variables, channelCandidatesJson });
-    } catch (error) {
-      if (!isUnsupportedChannelScopingError(error)) {
-        throw error;
-      }
-      console.warn('[RealtimeSession] The server does not support channel scoping — minting without it and resolving channels locally.');
-      this.serverLacksChannelScoping = true;
-      return this.gql().ExecuteGQL(this.buildMintMutation(false), variables);
-    }
-  }
-
-  /** Whether the server rejected the channel-scoping extension of the mint; set once and kept. */
-  private serverLacksChannelScoping = false;
-
-  /** The `StartRealtimeClientSession` document, with or without the channel-scoping extension. */
-  private buildMintMutation(withChannelScoping: boolean): string {
-    const extraVariable = withChannelScoping ? ', $channelCandidatesJson: String' : '';
-    const extraArgument = withChannelScoping ? ', channelCandidatesJson: $channelCandidatesJson' : '';
-    const extraField = withChannelScoping ? '\n          ClientPolicyJson' : '';
-    return `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String, $applicationId: String, $appContextJson: String${extraVariable}) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId, applicationId: $applicationId, appContextJson: $appContextJson${extraArgument}) {
-          AgentSessionId
-          ConversationId
-          Provider
-          Model
-          EphemeralToken
-          ExpiresAt
-          SessionConfigJson
-          ModelName
-          NarrationInstructionsTemplate
-          PriorChannelStatesJson${extraField}
-        }
-      }
-    `;
+    return result;
   }
 
   /** Calls the `ExecuteRealtimeSessionTool` mutation; returns the ResultJson string. */
@@ -3410,6 +3511,8 @@ export class RealtimeSessionRuntime {
     // session we are deliberately ending, leaving an Idle row the janitor then has to age out.
     this.stopLivenessPulse();
     this.teardownDelegationProgress();
+    this.stopSessionEvents();
+    this.clientDeadline.Clear();
 
     // Channels first: flush any unsaved channel state WHILE the live session id is still
     // set (the captured per-save id covers the race anyway), then dispose the plugins.

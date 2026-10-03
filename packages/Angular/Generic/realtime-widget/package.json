@@ -1,0 +1,77 @@
+{
+  "name": "@memberjunction/ng-realtime-widget",
+  "version": "6.2.0-edge.1",
+  "description": "MemberJunction: <mj-realtime-widget> \u2014 embed a realtime voice agent (with interactive channels and in-call identity verification) in any page, as an Angular component or a one-script custom element.",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist",
+    "/sample"
+  ],
+  "scripts": {
+    "prebuild": "node scripts/build-global-styles.mjs",
+    "build": "ngc && node scripts/build-element.mjs",
+    "pretest": "node scripts/build-global-styles.mjs",
+    "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "MemberJunction",
+    "Angular",
+    "realtime",
+    "voice",
+    "widget",
+    "custom-element"
+  ],
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "@angular/animations": "21.2.22",
+    "@angular/cdk": "21.2.14",
+    "@angular/common": "21.2.22",
+    "@angular/compiler": "21.2.22",
+    "@angular/compiler-cli": "21.2.22",
+    "@angular/core": "21.2.22",
+    "@angular/elements": "21.2.22",
+    "@angular/forms": "21.2.22",
+    "@angular/platform-browser": "21.2.22",
+    "@babel/core": "^7.29.0",
+    "@fortawesome/fontawesome-free": "6.7.2",
+    "@memberjunction/ai-realtime-client": "6.2.0-edge.1",
+    "@memberjunction/ng-test-utils": "6.2.0-edge.1",
+    "esbuild": "0.28.1",
+    "jsdom": "^26.1.0",
+    "sass": "^1.97.3",
+    "vitest": "^4.0.18",
+    "zone.js": "^0.16.0"
+  },
+  "peerDependencies": {
+    "@angular/animations": "^21.2.22",
+    "@angular/cdk": "^21.2.14",
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/elements": "^21.2.22",
+    "@angular/forms": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22"
+  },
+  "dependencies": {
+    "@memberjunction/ai": "6.2.0-edge.1",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.1",
+    "@memberjunction/core": "6.2.0-edge.1",
+    "@memberjunction/global": "6.2.0-edge.1",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.1",
+    "@memberjunction/ng-conversations": "6.2.0-edge.1",
+    "@memberjunction/ng-shared-generic": "6.2.0-edge.1",
+    "@memberjunction/ng-ui-components": "6.2.0-edge.1",
+    "@memberjunction/realtime-runtime": "6.2.0-edge.1",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1"
+  },
+  "sideEffects": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "mjUILayer": "widgets"
+}

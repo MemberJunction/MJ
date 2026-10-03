@@ -46,6 +46,24 @@ export {
     type RealtimeSessionRunOptions,
 } from './session/RealtimeSessionRuntime';
 
+// How a session is minted — the seam an app implements to replace the stock mint.
+export {
+    DefaultRealtimeSessionLauncher,
+    type IRealtimeSessionLauncher,
+    type RealtimeSessionLaunchRequest,
+    type RealtimeSessionLaunchContext,
+} from './session/session-launcher';
+
+// Session events — the server's typed channel back to the session's client, and the client's deadline copy.
+export {
+    RealtimeSessionEventHub,
+    type IRealtimeSessionEventSource,
+    type RealtimeSessionEventHubOptions,
+    type RealtimeSessionStreamEvent,
+    type RealtimeSessionVerificationSnapshot,
+} from './session/session-event-hub';
+export { ClientSessionDeadline } from './session/client-session-deadline';
+
 // Channel scoping inputs a host supplies at session start.
 export {
     type RealtimeHostChannelDeclaration,

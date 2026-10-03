@@ -459,6 +459,23 @@ describe('RealtimeSessionRuntime — on-demand channels and the ContextTool prox
         await runtime.EndRealtimeSession();
     });
 
+    it('lets the HOST open an on-demand channel with seed inputs, the way the agent would', async () => {
+        const { runtime } = await startWithOnDemandForm();
+        const result = await runtime.OpenChannel('form', { title: 'From the page' }); // case-insensitive
+        expect(result.Success).toBe(true);
+        const form = runtime.ActiveChannels.find((c) => c.ChannelName === 'Form') as RegisteredForm;
+        expect(form.Opened).toEqual({ title: 'From the page' });
+        expect(runtime.AdvertisedChannels).toEqual([]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('reports a structured failure when the host opens a channel with invalid inputs or one that is not in the session', async () => {
+        const { runtime } = await startWithOnDemandForm();
+        expect(await runtime.OpenChannel('Form', {})).toMatchObject({ Success: false, ErrorCode: 'invalid_params' }); // title is required
+        expect(await runtime.OpenChannel('Nope')).toMatchObject({ Success: false, ErrorCode: 'unknown_channel' });
+        await runtime.EndRealtimeSession();
+    });
+
     it('refuses a verb on a channel that is still only advertised', async () => {
         const { runtime, echo } = await startWithOnDemandForm();
         const result = await echo.ContextForTest!.DispatchContextAction!({ Target: { Channel: 'Form' }, Action: 'SetField', Params: { name: 'a', value: 'b' } });

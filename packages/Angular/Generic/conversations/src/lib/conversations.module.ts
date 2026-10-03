@@ -87,6 +87,7 @@ import { LoadRealtimeRemoteBrowserChannel } from './components/realtime/remote-b
 import { RemoteBrowserSurfaceComponent } from './components/realtime/remote-browser/remote-browser-surface.component';
 import { LoadRealtimeMediaChannel } from './components/realtime/media/media-channel';
 import { LoadClientContextChannel } from './components/realtime/channels/client-context-channel';
+import { LoadIdentityVerificationChannel } from './components/realtime/identity-verification/identity-verification-channel';
 import { RealtimeMediaSurfaceComponent } from './components/realtime/media/realtime-media-surface.component';
 import { RealtimeEvidencePlaybackComponent } from './components/realtime/evidence-playback/realtime-evidence-playback.component';
 
@@ -115,6 +116,7 @@ LoadRealtimeRemoteBrowserChannel();
 // 'RealtimeMediaChannel'); the static call defeats tree-shaking of its @RegisterClass.
 LoadRealtimeMediaChannel();
 LoadClientContextChannel();
+LoadIdentityVerificationChannel();
 // Whiteboard ARTIFACT VIEWER plugin — resolved by the artifact plugin host via the
 // ClassFactory (keyed by the artifact type's DriverClass), same tree-shaking concern.
 LoadWhiteboardArtifactViewer();

@@ -56,6 +56,11 @@ describe('IsIdentityVerifiedEventPayload', () => {
         expect(IsIdentityVerifiedEventPayload({ ...VERIFIED_PAYLOAD, Method: 'sms' })).toBe(false);
         expect(IsIdentityVerifiedEventPayload({ ...VERIFIED_PAYLOAD, MaxSessionDeadlineIso: 5 })).toBe(false);
     });
+
+    it('accepts the client-set Recovered marker as a boolean only', () => {
+        expect(IsIdentityVerifiedEventPayload({ ...VERIFIED_PAYLOAD, Recovered: true })).toBe(true);
+        expect(IsIdentityVerifiedEventPayload({ ...VERIFIED_PAYLOAD, Recovered: 'yes' })).toBe(false);
+    });
 });
 
 describe('SerializeRealtimeSessionEvent / ParseRealtimeSessionEvent', () => {

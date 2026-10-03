@@ -177,6 +177,10 @@ export * from './lib/components/realtime/media/media-channel';
 export * from './lib/components/realtime/media/media-channel-state';
 export * from './lib/components/realtime/media/media-channel-tools';
 export * from './lib/components/realtime/media/realtime-media-surface.component';
+// Identity Verification channel (generic, opt-in): prove an email address mid-call. State machine + surface.
+export * from './lib/components/realtime/identity-verification/identity-verification-channel';
+export * from './lib/components/realtime/identity-verification/identity-verification-model';
+export * from './lib/components/realtime/identity-verification/identity-verification-surface.component';
 // Time-aligned Evidence Playback component (recorded session audio synced to the transcript).
 export * from './lib/components/realtime/evidence-playback/realtime-evidence-playback.component';
 export * from './lib/services/composer-draft-store';
