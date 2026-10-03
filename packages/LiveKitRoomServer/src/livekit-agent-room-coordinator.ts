@@ -15,9 +15,16 @@
 
 import { BaseSingleton } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession } from '@memberjunction/ai';
-import { AlwaysAddressedMatcher, RegexAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode } from '@memberjunction/ai-bridge-base';
-import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
+import type { IRealtimeSession, RealtimeToolDefinition } from '@memberjunction/ai';
+import {
+  AlwaysAddressedMatcher,
+  RegexAddressedMatcher,
+  TURN_TAKING_TOOL_DEFINITIONS,
+  type BridgeDisconnectReason,
+  type BridgeTurnMode,
+  type TurnAddressingMode,
+} from '@memberjunction/ai-bridge-base';
+import { AIBridgeEngine, type BridgeTurnTakingToolHandler, type RoomTurnSnapshot } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
 
 /** The subset of {@link AIBridgeEngine} the coordinator drives — an injectable seam for unit testing. */
@@ -53,7 +60,21 @@ export interface RealtimeSessionStartContext {
   MeetingMode?: boolean;
   /** The names the agent answers to (display name + aliases) — phrasing for the meeting prompt. */
   SelfNames?: string[];
+  /**
+   * Tools the host declares for the session. Here: the turn-taking tools (`i_am_addressed`, `yield_turn`) a
+   * full-duplex model uses to claim and hand over the floor in a shared room. Registered at connect (a model's
+   * tool set cannot be extended later); executed by the handler the engine exposes, bound through
+   * {@link LiveKitAgentRoomCoordinator.SetTurnToolBinder}.
+   */
+  HostTools?: RealtimeToolDefinition[];
 }
+
+/**
+ * Installs the engine's turn-taking tool handler on a model session — the seam that lets this package stay free
+ * of the agent runtime. Production binds it to `GetBridgeRealtimeRuntime(session)?.SetLocalToolHandler(handler)`
+ * (`@memberjunction/ai-agents`); a test binds a spy.
+ */
+export type TurnToolBinder = (session: IRealtimeSession, handler: BridgeTurnTakingToolHandler) => void;
 
 /**
  * Opens a realtime model session for the agent. Production binds this to the real model-resolution path;
@@ -84,6 +105,12 @@ export interface StartAgentRoomSessionParams {
   AgentAliases?: string[];
   /** Turn-taking mode. Default: `'Passive'` (speak only when addressed). */
   TurnMode?: BridgeTurnMode;
+  /**
+   * How the agent decides it was addressed. `'Auto'` (the default) uses the MODEL's own judgement when its model is
+   * full-duplex and falls back to name matching otherwise; `'ModelSide'` / `'Regex'` force one. A room in moderator
+   * mode (gated meeting) always uses `'Regex'`.
+   */
+  TurnAddressing?: TurnAddressingMode;
   /** The user the session runs as. */
   ContextUser?: UserInfo;
   /** The metadata provider for the session. */
@@ -128,6 +155,8 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    */
   private roomRosters = new Map<string, RoomAgentEntry[]>();
   private bridgeOps: BridgeOps = AIBridgeEngine.Instance;
+  private turnToolBinder?: TurnToolBinder;
+  private turnStateSource: (roomKey: string) => RoomTurnSnapshot | null = (roomKey) => AIBridgeEngine.Instance.GetRoomTurnSnapshot(roomKey);
   private sessionFactory: RealtimeSessionFactory = () => {
     throw new Error(
       'LiveKitAgentRoomCoordinator has no realtime-session factory bound. Call SetSessionFactory(...) ' +
@@ -153,6 +182,38 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
    */
   public SetSessionFactory(factory: RealtimeSessionFactory): void {
     this.sessionFactory = factory;
+  }
+
+  /**
+   * Binds the seam that installs the engine's turn-taking tool handler on a model session. Without it a
+   * full-duplex model's `i_am_addressed` / `yield_turn` calls cannot be executed (the room's floor gate still
+   * protects against overlap; the model just cannot reserve the floor or hand it to a named agent).
+   *
+   * @param binder The binder, or `undefined` to clear it.
+   */
+  public SetTurnToolBinder(binder: TurnToolBinder | undefined): void {
+    this.turnToolBinder = binder;
+  }
+
+  /**
+   * Overrides where a room's turn-taking snapshot comes from (an injectable seam for unit testing; production
+   * reads the process-wide {@link AIBridgeEngine}).
+   *
+   * @param source Returns the snapshot for a room key, or `null` when the room holds no agents.
+   */
+  public SetTurnStateSource(source: (roomKey: string) => RoomTurnSnapshot | null): void {
+    this.turnStateSource = source;
+  }
+
+  /**
+   * A room's live turn-taking state — floor holder, whether a person is speaking, any pending hand-off, the
+   * agent-to-agent loop-cap progress, the most recent floor events, and who is seated. Read-only.
+   *
+   * @param roomName The LiveKit room name (the bridge's room key).
+   * @returns The snapshot, or `null` when the room holds no agents.
+   */
+  public GetRoomTurnState(roomName: string): RoomTurnSnapshot | null {
+    return this.turnStateSource(roomName.trim());
   }
 
   /**
@@ -210,6 +271,9 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     // (gated meeting mode + LLM router) for controlled scenarios (webinars, large rooms, weaker models).
     const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
     const isMeeting = moderatorMode && existingAgents.length > 0;
+    // A full-duplex model judges for itself whether it was addressed and uses the turn-taking tools; a gated
+    // meeting (moderator mode) decides addressing by name in the engine, so the tools would only confuse it.
+    const addressing: TurnAddressingMode = isMeeting ? 'Regex' : params.TurnAddressing ?? 'Auto';
 
     const session = await this.sessionFactory({
       AgentID: params.AgentID,
@@ -224,6 +288,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       AgentSessionID: params.AgentSessionID,
       MeetingMode: isMeeting || undefined,
       SelfNames: isMeeting ? selfNames : undefined,
+      HostTools: addressing === 'Regex' ? undefined : [...TURN_TAKING_TOOL_DEFINITIONS],
     });
 
     const active = await this.bridgeOps.StartBridgeSession({
@@ -234,6 +299,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       Address: botToken.ServerUrl,
       JoinMethod: 'OnDemand',
       TurnMode: params.TurnMode ?? 'Passive',
+      TurnAddressing: addressing,
       // Meeting: gate speech to ADDRESSED turns (RegexAddressedMatcher on the agent's names) AND tell the
       // engine the model's auto-response is off so the bridge becomes the sole trigger. Solo 1:1: respond to
       // ALL the user's speech (AlwaysAddressedMatcher) with the model's own auto-response — Passive's
@@ -262,6 +328,7 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     });
 
     this.addToRoster(roomKey, { AgentSessionID: params.AgentSessionID, SessionBridgeID: active.SessionBridgeID, Names: selfNames });
+    this.bindTurnTools(session, active.TurnTakingToolHandler, botName);
 
     // The room just became (or stayed) multi-agent → retroactively re-gate the agents already in it into
     // meeting mode so the whole room takes turns, not just the newcomers. Capability-gated in the engine:
@@ -278,6 +345,21 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
         `(bridge ${active.SessionBridgeID}, ${isMeeting ? 'MEETING — addressed-only' : 'solo 1:1'})`,
     );
     return { SessionBridgeID: active.SessionBridgeID, RoomName: params.RoomName, ServerUrl: botToken.ServerUrl };
+  }
+
+  /** Installs the engine's turn-taking tool handler on the model session, when the session has one (a full-duplex model in a room). */
+  private bindTurnTools(session: IRealtimeSession, handler: BridgeTurnTakingToolHandler | undefined, botName: string): void {
+    if (!handler) {
+      return;
+    }
+    if (!this.turnToolBinder) {
+      LogError(
+        `[LiveKitAgentRoomCoordinator] ${botName} is full-duplex but no turn-tool binder is set (SetTurnToolBinder); ` +
+          'its i_am_addressed / yield_turn calls will not execute. The room floor gate still prevents overlap.',
+      );
+      return;
+    }
+    this.turnToolBinder(session, handler);
   }
 
   /** Appends an agent to a room's roster (creating the room's list on first join). */

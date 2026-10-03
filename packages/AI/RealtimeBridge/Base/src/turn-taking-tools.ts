@@ -17,7 +17,22 @@
  * calls — agree on one contract. Neither tool needs a round trip to anything outside the process.
  */
 
-import type { BridgeChannelToolDefinition } from './channel-plane';
+/** A JSON value (structurally the same as `@memberjunction/ai`'s `JSONValue`, declared here so this package needs no AI dependency). */
+export type TurnToolJsonValue = string | number | boolean | null | TurnToolJsonValue[] | { [key: string]: TurnToolJsonValue };
+
+/**
+ * A turn-taking tool definition. Structurally identical to `@memberjunction/ai`'s `RealtimeToolDefinition`
+ * (and to the bridge `BridgeChannelToolDefinition`), so a host can hand these straight to a realtime session's
+ * tool set without conversion.
+ */
+export interface TurnTakingToolDefinition {
+    /** The model-visible tool name. */
+    Name: string;
+    /** What the tool does and when to call it. */
+    Description: string;
+    /** The JSON-schema object describing the parameters. */
+    ParametersSchema: { [key: string]: TurnToolJsonValue };
+}
 
 /** Tool name: the model judges the last turn was directed at it. */
 export const TURN_TOOL_I_AM_ADDRESSED = 'i_am_addressed';
@@ -26,7 +41,7 @@ export const TURN_TOOL_I_AM_ADDRESSED = 'i_am_addressed';
 export const TURN_TOOL_YIELD_TURN = 'yield_turn';
 
 /** The model-visible definitions of the turn-taking host tools. */
-export const TURN_TAKING_TOOL_DEFINITIONS: readonly BridgeChannelToolDefinition[] = [
+export const TURN_TAKING_TOOL_DEFINITIONS: readonly TurnTakingToolDefinition[] = [
     {
         Name: TURN_TOOL_I_AM_ADDRESSED,
         Description:

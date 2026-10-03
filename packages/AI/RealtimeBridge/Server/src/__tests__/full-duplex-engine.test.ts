@@ -390,7 +390,7 @@ describe('AIBridgeEngine — the turn-taking host tools', () => {
         const b = await seat('yn-b', 'Demo', sb);
         sa.Say(500);
         await a.TurnTakingToolHandler!.Execute({ ToolName: 'yield_turn', Arguments: '{"to":"Demo"}' });
-        expect(sb.ContextNotes).toHaveLength(1);
+        expect(sb.ContextNotes.filter(n => n.includes('handed the floor'))).toHaveLength(1);
         expect(sb.SpokenUpdates).toHaveLength(0);
         await stopAll(a, b);
     });
@@ -402,6 +402,35 @@ describe('AIBridgeEngine — the turn-taking host tools', () => {
         const unknown = JSON.parse(await a.TurnTakingToolHandler!.Execute({ ToolName: 'nope', Arguments: '{}' }));
         expect(unknown.ok).toBe(false);
         await stopAll(a);
+    });
+});
+
+describe('AIBridgeEngine — telling a model how to take turns', () => {
+    it('keeps a solo agent in a one-on-one answering everything: no framing until the room has a second agent', async () => {
+        const sa = new FakeSession(true);
+        const a = await seat('ann-a', 'Sage', sa);
+        expect(sa.ContextNotes).toHaveLength(0);
+
+        const sb = new FakeSession(true);
+        const b = await seat('ann-b', 'Demo', sb);
+        expect(sa.ContextNotes).toHaveLength(1); // the first agent is told now that it has company
+        expect(sb.ContextNotes).toHaveLength(1);
+        expect(sa.ContextNotes[0]).toContain('i_am_addressed');
+
+        const sc = new FakeSession(true);
+        const c = await seat('ann-c', 'Scout', sc);
+        expect(sa.ContextNotes).toHaveLength(1); // never repeated
+        expect(sb.ContextNotes).toHaveLength(1);
+        expect(sc.ContextNotes).toHaveLength(1);
+        await stopAll(a, b, c);
+    });
+
+    it('never tells a turn-based model (it has no tools to use and the engine triggers its speech)', async () => {
+        const sa = new FakeSession(false);
+        const a = await seat('ann-t1', 'Sage', sa);
+        const b = await seat('ann-t2', 'Demo', new FakeSession(false));
+        expect(sa.ContextNotes).toHaveLength(0);
+        await stopAll(a, b);
     });
 });
 

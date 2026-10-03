@@ -46,6 +46,7 @@ import {
     ParseTurnTakingToolCall,
     IsTurnTakingTool,
     TURN_TAKING_TOOL_DEFINITIONS,
+    MODEL_SIDE_TURN_TAKING_FRAMING,
     ResolvedTurnAddressingMode,
     TurnAddressingMode,
 } from '@memberjunction/ai-bridge-base';
@@ -547,6 +548,9 @@ export interface ActiveBridgeSession {
      * local tool handler (the tool DEFINITIONS are {@link TURN_TAKING_TOOL_DEFINITIONS}).
      */
     TurnTakingToolHandler?: BridgeTurnTakingToolHandler;
+
+    /** Whether this session has been told how to take turns in a shared room (the framing note is sent once, when the room becomes multi-agent). */
+    TurnTakingAnnounced?: boolean;
 
     /**
      * Whether the model's blind auto-response is OFF for this session (multi-agent meeting). When `true`
@@ -1104,6 +1108,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             this.wireTurnTakingTools(active);
 
             this.activeSessions.set(bridgeRow.ID.toLowerCase(), active);
+            this.announceTurnTaking(active.RoomKey); // after registration, so the newcomer is counted among the room's agents
             LogStatus(`[AIBridgeEngine] Bridge session ${bridgeRow.ID} connected via ${params.Provider.Name}`);
             return active;
         } catch (err) {
@@ -2144,6 +2149,26 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             Handles: (toolName: string) => IsTurnTakingTool(toolName),
             Execute: async (call) => this.executeTurnTakingTool(active, call.ToolName, call.Arguments),
         };
+    }
+
+    /**
+     * Once a room holds 2+ agents, tells each tool-equipped (full-duplex / model-side) agent in it — once — how to
+     * take turns: speak when addressed, stop for a person, only acknowledge briefly over someone, hand over by name.
+     * It is a context note rather than part of the system prompt on purpose: the FIRST agent joins before anyone
+     * else, and a solo agent in a one-on-one call must keep answering everything it hears.
+     *
+     * @param roomKey The room to announce in (no-op when `undefined`, or while the room has a single agent).
+     */
+    private announceTurnTaking(roomKey: string | undefined): void {
+        if (!roomKey || !this.roomCoordinator.IsMultiAgentRoom(roomKey)) {
+            return;
+        }
+        for (const agent of this.roomAgents(roomKey)) {
+            if (agent.TurnTakingToolHandler && !agent.TurnTakingAnnounced) {
+                agent.RealtimeSession.SendContextNote?.(MODEL_SIDE_TURN_TAKING_FRAMING);
+                agent.TurnTakingAnnounced = true;
+            }
+        }
     }
 
     /** Runs one turn-taking tool call and returns the JSON the model is handed back. Never throws. */
