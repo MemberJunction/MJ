@@ -55,6 +55,34 @@ Record, for every row: the **Call SID**, **date/time**, **pass/fail**, and anyth
 | 20 | **Barge-in keeps work running** | Ask the agent something that makes it delegate (a slow lookup), then talk over it (or say "mm-hm") mid-lookup. | The delegated work is **not** cancelled and its answer is still delivered; only a queued "still working on it" progress line is dropped. While delegated work runs the agent narrates progress aloud. | | | | |
 | 21 | **cancel_pending_work** | Start a slow lookup, then say "never mind, stop that". | The agent calls `cancel_pending_work`; log: `agent cancelled N pending run(s) at the caller's request`; the delegated run is aborted and no answer arrives. | | | | |
 
+## Multi-agent rooms (agent test bed)
+
+These rows cover turn-taking between two or more agents in one LiveKit room, run from the Meet app's **Live Room**
+(start a call, then add agents in the room's **Agents** panel and open the **Turns** panel). Nothing here needs a phone
+number. None of it has been run against a live model: the host tools (`i_am_addressed`, `yield_turn`), the
+full-duplex capability flag and the floor gate are tested against fakes only, and the first thing to learn is how
+often each vendor's model actually calls `i_am_addressed` before it speaks (rows M2, M3). Record the **room name**,
+the two models used, the date and pass/fail for every row; a row with no room name has not been run.
+
+Setup: two agents on **different** realtime models if you can (one GPT-Live, one Gemini 3.8 Live), and a second person
+or a second browser tab for the human who talks over them. Leave **Turns** open for the whole run; each expected
+outcome below is something the panel should show.
+
+| # | Scenario | Steps | Expected | Room | Date | Result | Notes |
+|---|---|---|---|---|---|---|---|
+| M1 | **Seat two agents** | Start a call with agent A (Turn-taking: Passive, Addressing: Auto). In the Agents panel add agent B with the same settings. | Both appear in the roster with a `Passive · Model-side` (full-duplex model) or `Passive · Name match` badge; the Turns panel lists both seats and shows "The floor is free". The pill reads "Turns" until someone speaks. | | | | |
+| M2 | **Model-side addressing** | Say, without either name, "what does the room think about this?" then "A, what do you think?". | The first is judged by the models themselves: at most one agent answers, never both. The panel shows one "took the floor" and, for a non-addressed agent, a "held back" row at most. Note which agent answered and whether it called `i_am_addressed` first (MJAPI log). | | | | |
+| M3 | **Name match fallback** | Re-add an agent with Addressing: **Name match**. Say "B, are you there?" then something addressed to nobody. | Only B answers the first; nobody answers the second. The badge reads `Name match`. | | | | |
+| M4 | **No overlap** | Address both agents in one sentence ("A and B, introduce yourselves"). | They speak one after the other, never over each other; the panel shows one `Floor held` at a time and the second agent is held back until the first releases. | | | | |
+| M5 | **Backchannels** | While agent A is explaining something, say "mm-hm", "right", "go on". | A keeps talking uninterrupted; the panel's backchannel counter rises and no floor change appears. Then ask a real short question ("what time is it?"): that **is** a turn. | | | | |
+| M6 | **Human preempts** | While an agent is speaking, talk over it. | The agent stops within about a second ("A person cut in on ..." in the feed), the floor is free, and any delegated lookup it started still delivers its answer. | | | | |
+| M7 | **Explicit hand-off** | Ask A to "pass this to B". | A says a short handover, the panel shows "A handed the floor to B" and "Floor reserved for B", B then speaks. A third agent (add one) does not jump in. If B does not speak within about 5 s the reservation lapses on its own. | | | | |
+| M8 | **Hand-off to nobody** | Ask A to "hand over to Zed" (no such agent). | A is told there is no such agent and the floor returns to the room; nothing is reserved. | | | | |
+| M9 | **Loop cap** | Set both agents to **Active** and let them talk to each other without speaking yourself. | After 8 consecutive agent turns the meter reaches its end, the panel reads "Agents paused until a person speaks" and neither agent speaks again until you do; then the counter resets. | | | | |
+| M10 | **Human joins and speaks** | In a second browser tab, join the same room by name (Join existing) and speak. | The joined tab can open the **Turns** panel; the person is heard and preempts exactly as in M6. | | | | |
+| M11 | **Late second agent** | Start with agent A alone and hold a one-to-one conversation, then add B mid-call. | Before B joins, A answers everything with no turn-taking behaviour. After B joins A is told once how to take turns (log: a single framing note) and the panel starts showing both seats. | | | | |
+| M12 | **Turn-based model in the mix** | Add an agent whose model is not full-duplex. | It shows `... · Name match`, is triggered by the engine rather than speaking on its own, and still never overlaps the full-duplex agent. | | | | |
+
 ## After the run
 
 - [ ] Restore any settings you changed for the test (`maxConcurrentCalls`, `maxCallSeconds`, `onMachine`, `maxCallsPerUserPerHour`, `inboundRunAsUserEmail`).
