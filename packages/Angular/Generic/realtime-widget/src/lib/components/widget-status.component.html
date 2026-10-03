@@ -1,0 +1,37 @@
+@switch (Phase) {
+  @case ('ended') {
+    <div class="mjw-center">
+      <section class="mjw-card mjw-ended" aria-labelledby="mjw-ended-title">
+        @if (LogoUrl) {
+          <img class="mjw-logo" [src]="LogoUrl" alt="" />
+        }
+        <span class="mjw-icon" aria-hidden="true"><i class="fa-solid fa-circle-check"></i></span>
+        <h2 id="mjw-ended-title" class="mjw-title">{{ Strings.endedTitle }}</h2>
+        <p class="mjw-message">{{ EndedMessage }}</p>
+        <div class="mjw-actions">
+          <button #primaryAction mjButton variant="primary" type="button" (click)="Restart.emit()">
+            <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+            <span>{{ Strings.startOver }}</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  }
+  @case ('error') {
+    <div class="mjw-center">
+      <mj-alert Variant="error" [Title]="Strings.errorTitle" [Message]="ErrorMessage" Role="alert">
+        <div actions>
+          <button #primaryAction mjButton variant="primary" type="button" (click)="Retry.emit()">
+            <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+            <span>{{ Strings.tryAgain }}</span>
+          </button>
+        </div>
+      </mj-alert>
+    </div>
+  }
+  @default {
+    <div class="mjw-center" role="status" aria-live="polite">
+      <mj-loading size="large" [showText]="true" [text]="LoadingLabel"></mj-loading>
+    </div>
+  }
+}

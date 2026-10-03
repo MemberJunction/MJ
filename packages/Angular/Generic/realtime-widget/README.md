@@ -1,0 +1,432 @@
+# @memberjunction/ng-realtime-widget
+
+`<mj-realtime-widget>`: a realtime voice agent you can drop into any web page.
+
+It ships two ways from one codebase:
+
+- **A one-script custom element.** `dist/element/mj-realtime-widget.js` is a single self-contained file. Load it, write the tag, done. No framework, no host application, no `unsafe-eval`.
+- **An Angular component.** `RealtimeWidgetComponent` (selector `mj-realtime-widget`) for an Angular application that wants the same widget in a template.
+
+The call itself is MemberJunction's own realtime overlay (voice orb, live thread, channel surfaces, mute, end). The widget adds what a public page needs around it: authentication, a consent gate, resuming, tab-close cleanup, theming, and a small DOM contract of attributes, properties, methods and events.
+
+> Not to be confused with `@memberjunction/realtime-widget` (`packages/Web/RealtimeWidget`), the shadow-DOM customer-support chat widget. This package is the realtime **voice** widget built on MemberJunction's Angular realtime overlay and channels; it has a different element (`<mj-realtime-widget>`), a different bundle and a different API.
+
+- [Quick start](#quick-start)
+- [Authentication modes](#authentication-modes)
+- [Reference](#reference): attributes, properties, methods, events
+- [Channels](#channels) and the [anonymous to verified flow](#anonymous-to-verified-flow-end-to-end)
+- [Theming](#theming) and [Content-Security-Policy](#content-security-policy)
+- [Examples](#examples): plain HTML, vanilla JS, Angular, React, CMS snippet
+- [Try it](#try-it) and [Building](#building)
+- [Things worth knowing](#things-worth-knowing)
+
+## Quick start
+
+```html
+<script src="https://your-cdn.example.com/mj-realtime-widget.js"></script>
+
+<mj-realtime-widget
+  api-url="https://api.example.com"
+  widget-key="pk_live_xxxxxxxx"
+  agent-name="Sage"></mj-realtime-widget>
+```
+
+That is the whole integration for an anonymous visitor. The widget shows a "Talk to Sage" button; pressing it shows a consent notice; accepting it mints a guest session from your widget key and starts the call.
+
+Host the script yourself (the file is built by `pnpm run build` in this package) or copy it into your site's assets. Its URL is yours to choose; nothing in it is tied to a MemberJunction domain.
+
+## Authentication modes
+
+The widget decides how to authenticate from the attributes you give it. Exactly one applies, in this order of precedence: `launcher`, `widget-key`, `invite-token`, `token`, and finally none (see `host`).
+
+| Mode | You provide | What happens | Use it when |
+| --- | --- | --- | --- |
+| **widget-key** | `api-url`, `widget-key` | The widget calls `POST {api-url}/widget/session` with your public key and receives a short-lived anonymous guest JWT. It renews the JWT through `/widget/session/refresh`. The **server** pins the agent and application; `agent-id` is ignored. | A public page, anonymous visitors. This is the common case. |
+| **invite-token** | `api-url`, `invite-token` (`mj_ml_…`), `agent-id` | The invite is redeemed once (`POST /magic-link/redeem?format=json`) for a session JWT. The redeemed session is remembered for the tab, so a reload does not try to spend the single-use invite again. | You emailed someone a link that opens a conversation with an agent. |
+| **token** | `token`, `agent-id`, `api-url` | The widget holds a session JWT your page already has, as is. It cannot renew it. | Your backend minted a session for a signed-in person. |
+| **launcher** | the `launcher` property | You mint the session yourself (any transport, any server) and return the result. The widget runs the call on it. No `agent-id` needed. | You have your own minting endpoint or a proxy in front of MemberJunction. |
+| **host** | nothing | The page is itself a MemberJunction application whose GraphQL provider is already authenticated. | The Angular component inside an MJ application. |
+
+### widget-key
+
+```html
+<mj-realtime-widget api-url="https://api.example.com" widget-key="pk_live_xxxxxxxx"></mj-realtime-widget>
+```
+
+The key identifies a `ConversationWidgetInstance` on your server. The instance decides the agent, the application, whether voice is enabled, the longest call, and which channels the visitor's session may use. If voice is not enabled for the instance the widget says so instead of failing silently. A rejected key gets the same answer whether it never existed or was revoked, so keys cannot be probed.
+
+### invite-token
+
+```html
+<mj-realtime-widget
+  api-url="https://api.example.com"
+  invite-token="mj_ml_xxxxxxxx"
+  agent-id="8F0B1C2E-0000-0000-0000-000000000000"></mj-realtime-widget>
+```
+
+A spent or expired invite is reported in words ("this link has already been used", "this link has expired") with a way forward, never as a bare error.
+
+### token
+
+```html
+<mj-realtime-widget
+  api-url="https://api.example.com"
+  token="eyJhbGciOi…"
+  agent-id="8F0B1C2E-0000-0000-0000-000000000000"></mj-realtime-widget>
+```
+
+Set `token` as a property rather than an attribute if you would rather not put a credential in the markup (`el.token = jwt`). Because the widget cannot renew a token it was handed, a call that outlives it ends with a clear message. Mint tokens that live at least as long as a call.
+
+### launcher
+
+A launcher is any object with one method, `Launch(request, context)`, that returns the same record MemberJunction's `StartRealtimeClientSession` mutation returns. `request` carries the agent, application, conversation, the channel candidates and the client policy, so a launcher that forwards them to a server matches the default behaviour exactly.
+
+```js
+const widget = document.querySelector('mj-realtime-widget');
+widget.launcher = {
+  async Launch(request, context) {
+    const response = await fetch('/api/realtime/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(request)
+    });
+    if (!response.ok) throw new Error('Could not start the call');
+    return response.json(); // the StartRealtimeClientSession result
+  }
+};
+```
+
+If the launcher throws, the widget reports `mj-error` with the code `launcher-failed` and the error's message.
+
+## Reference
+
+HTML attributes are kebab-case; the matching element properties are camelCase. Set either: they stay in sync. Attribute values are strings and are coerced; properties accept real types. Attributes and properties may be set before or after the element is attached.
+
+### Attributes and properties
+
+| Attribute | Property | Type | Default | Meaning |
+| --- | --- | --- | --- | --- |
+| `api-url` | `apiUrl` | string | none | Root URL of your MemberJunction API. Required for every mode except `launcher` and `host`. |
+| `widget-key` | `widgetKey` | string | none | Public widget key. Selects widget-key mode. |
+| `invite-token` | `inviteToken` | string | none | Magic-link invite (`mj_ml_…`). Selects invite-token mode. |
+| `token` | `token` | string | none | A session JWT you already hold. Selects token mode. |
+| `agent-id` | `agentId` | string (UUID) | none | The agent to talk to. Required for invite-token and token. Ignored with a widget key (the server pins the agent). |
+| `application-id` | `applicationId` | string (UUID) | none | The application the session runs in. With a widget key the server supplies it. |
+| `conversation-id` | `conversationId` | string (UUID) | none | Continue an existing conversation. |
+| `channels` | `channels` | comma list or JSON array; as a property an array | none | Channels your page brings to the session, by name. See [Channels](#channels). |
+| `channel-inputs` | `channelInputs` | JSON object; as a property an object | `{}` | Seed inputs per channel name. Each named channel is opened with them as soon as the call is live. |
+| `chrome` | `chrome` | `orb` \| `console` \| `auto` | `auto` | `orb` is the ambient voice orb. `console` is the structured layout with channel surfaces beside the thread. `auto` starts as the orb and switches to the console while a channel that has a surface (such as identity verification) is open. |
+| `auto-start` | `autoStart` | boolean | `false` | Begin by itself once configured instead of waiting for `start()` or the start button. The consent gate still shows first when required. |
+| `require-consent` | `requireConsent` | boolean | `true` | Show the consent notice before the microphone is touched. Declining starts nothing. |
+| `theme` | `theme` | `light` \| `dark` \| `auto` | `auto` | The colour scheme. `auto` follows the page (an ancestor's `data-theme`), then the visitor's OS setting. As an attribute it may instead hold a JSON object of token overrides. |
+| `theme-tokens` | `themeTokens` | JSON object; as a property an object | `{}` | `--mj-*` token overrides. See [Theming](#theming). |
+| `locale` | `locale` | BCP-47 tag | none | The language of the widget's own copy, and the `lang` of the element. The built-in table is English; add another with `RegisterWidgetLocale` when using the component. |
+| `agent-name` | `agentName` | string | `Assistant` | The name shown on the button and in the consent notice. Cosmetic. |
+| `csp-nonce` | `cspNonce` | string | none | Your page's CSP nonce, used for the styles the widget injects. See [Content-Security-Policy](#content-security-policy). |
+| none | `launcher` | `IRealtimeSessionLauncher` | `null` | A JS-only way to mint the session yourself. Selects launcher mode. |
+
+Boolean attributes accept `true`, `1`, `yes`, `on` and the empty attribute (`<mj-realtime-widget auto-start>`) as true; `false`, `0`, `no` and `off` as false.
+
+The current phase is always on the element as `data-phase` (`idle`, `consent`, `booting`, `connecting`, `live`, `ended`, `error`), so CSS and scripts can react to it without listening.
+
+### Methods
+
+All are on the element. Methods that return a promise never reject for an operational failure; they resolve to a structured result, and failures are also reported as `mj-error`.
+
+| Method | Returns | Does |
+| --- | --- | --- |
+| `start()` | `Promise<void>` | Starts the call. With `require-consent` the consent notice shows first and the microphone stays off until the visitor chooses Begin. Ignored while a call is starting or live. Rejects only when the element has never been attached to a document. |
+| `end()` | `Promise<void>` | Ends the call. Safe when none is live, and it never hangs up a call that another widget or your page started. |
+| `openChannel(key, inputs?)` | `Promise<{ success, result?, error?, errorCode? }>` | Opens (and seeds) a channel in the live call, exactly as the agent's own `open` action would. Fails with `errorCode: 'no_session'` when no call is live, and with a structured error for a channel that is not in the session or inputs the channel rejects. |
+| `sendContextNote(text)` | `void` | Tells the agent something in the background: it learns it but does not speak. No-op when no call is live. |
+| `requestSpokenResponse(text)` | `boolean` | Asks the agent to speak, now, about `text`. Returns whether the request was delivered. `false` when no call is live. |
+| `registerChannel(classRef)` | `void` | Registers a channel class your page brings (a subclass of `BaseRealtimeChannelClient`). It is declared to every session the widget starts. May be called before the element is attached. |
+
+### Events
+
+Every event is a `CustomEvent` that **bubbles and is composed**, so you can listen on the element, on a wrapper, or on `document`. The payload is in `event.detail`.
+
+| Event | `detail` | Fires |
+| --- | --- | --- |
+| `mj-ready` | `{ mode, autoStart }` | Once, after the first render. `mode` is the resolved auth mode. |
+| `mj-phase-changed` | `{ phase, previous }` | On every phase change. |
+| `mj-session-started` | `{ sessionId, agentId, conversationId, channels }` | When the call is accepted. `channels` lists those mounted with it. |
+| `mj-session-ended` | `{ sessionId, reason }` | When the call ends. `reason` is `user`, `error`, `deadline`, `page-close` or `remote`. |
+| `mj-verified` | `{ sessionId, email, name, verifiedAt, method, maxSessionDeadline?, recovered }` | When the **server** confirms the person controls an email address. `method` is `code` or `link`. `recovered` is true when the widget learned of it by reading the status after a dropped connection. |
+| `mj-session-event` | `{ type, sessionId, occurredAt, payload }` | For every server-published session event, including `identity.verified`. Unknown types pass through unchanged. |
+| `mj-channel-opened` | `{ channel, instance, inputs }` | A channel opened. |
+| `mj-channel-event` | `{ channel, instance, name, payload, changeId?, occurredAt }` | A channel emitted a typed event (a value filled, a code sent, …). |
+| `mj-channel-output` | `{ channel, instance, output, occurredAt }` | A channel completed with a result. |
+| `mj-error` | `{ code, message, phase }` | Something failed. `message` is written for a visitor and always includes a way forward. Never a dead end: the widget offers "Try again". |
+
+`mj-error` codes: `no-credential`, `no-agent`, `auth-failed`, `session-expired`, `voice-not-enabled`, `launcher-failed`, `start-failed`, `start-dropped`, `connection-lost`, `channel-failed`.
+
+**Attach your listeners early.** Listeners attach to the element itself, so they work before the element is upgraded, and `mj-ready` fires only once. Put your script above the widget bundle (as the sample page does), or read `data-phase` instead of waiting for `mj-ready`.
+
+## Channels
+
+Channels are small interactive surfaces that live beside the conversation: a form, a whiteboard, a media player. The agent can open and drive them; some can be driven by the visitor too. A page brings channels with the `channels` attribute and seeds them with `channel-inputs`:
+
+```html
+<mj-realtime-widget
+  api-url="https://api.example.com"
+  widget-key="pk_live_xxxxxxxx"
+  channels="IdentityVerification"
+  channel-inputs='{"IdentityVerification":{"name":"Ada"}}'></mj-realtime-widget>
+```
+
+Only **`IdentityVerification`** is built into the script bundle. With a widget key, the instance's own channel list is added to yours. Other channel keys (`Whiteboard`, `Media`, `RemoteBrowser`, `ClientContext`) are resolved through the MemberJunction class factory, so they work in the Angular component inside an application that already loads them, and in the bundle only when your page registers a class under that key with `registerChannel`.
+
+A channel with a surface shows it beside the thread when the widget is wide enough (about 560px) or when `chrome="console"`. With `chrome="auto"` the widget promotes itself to the console while such a channel is open, so a narrow embed never hides a form the agent just opened.
+
+### The IdentityVerification channel
+
+A person proves they control an email address without leaving the conversation.
+
+- **Nouns** (what the agent can see): `name`, `email`, `status`, `confirmed`, `problem`.
+- **Verbs**: `fill` (the agent or the user), `confirm` (**the user only**), `submit`, `resend`, `enter_code`.
+- A value the agent fills is shown as "Suggested by Sage" until the visitor confirms it. The agent cannot confirm on the visitor's behalf; that is enforced in the channel, not just the surface. Typing a value yourself counts as confirming it.
+- The six-digit code is typed by the visitor into the surface. It is never stored by the channel and is never shown to the agent.
+- The server sends the email, enforces its policy (business-domain rules, rate limits, attempts, expiry) and is the only thing that decides the person is verified.
+
+## Anonymous to verified flow, end to end
+
+1. The page loads with a widget key. The visitor is **anonymous**: a guest session with a short ceiling on call length.
+2. The visitor presses the button, accepts the consent notice, and the call starts. `mj-session-started` fires.
+3. During the conversation the agent decides it needs a verified identity (to book something, send an order summary, continue later) and opens the **IdentityVerification** channel. The widget switches to the console layout and shows the small form. `mj-channel-opened` fires.
+4. The agent fills the name and email it heard. The form shows them marked as the agent's suggestions. The visitor corrects them if needed and confirms. `mj-channel-event` fires for each step (`field_filled`, `confirmed`).
+5. The visitor presses **Send code**. The server emails a six-digit code (and a link). `mj-channel-event` reports `code_sent`.
+6. The visitor types the code (or opens the link). The server checks it. On success it marks the session verified, **extends the call's deadline**, and publishes `identity.verified`.
+7. The widget receives that event: it tells the agent, quietly, that the person is now verified (a background context note, so the agent does not repeat itself), moves its own deadline to the server's new one, and dispatches `mj-verified` and `mj-session-event`. The channel's output fires `mj-channel-output` with `{ verified, email, name }`.
+8. Your page hears `mj-verified` and can respond: show the visitor's name, unlock a section, post to your backend, or ask the agent to say something.
+
+```js
+widget.addEventListener('mj-verified', (event) => {
+  const { email, name, sessionId, recovered } = event.detail;
+  document.querySelector('#greeting').textContent = `Thanks, ${name || email}.`;
+  // Optional: have the agent say something now. Skip when `recovered` is true
+  // (the widget learned of the verification after a reconnect; the agent was told already).
+  if (!recovered) widget.requestSpokenResponse('Thank the person briefly and ask how you can help next.');
+});
+```
+
+What the server guarantees, and the widget never overrides: the verification is single-use, expires, and compares codes in constant time; a verified identity is never forged by the visitor's own session; and verification never creates an MJ user or changes who the session belongs to. If the connection drops mid-flow the widget re-subscribes and reads the verification status once, so a verification that completed while it was offline is still announced (with `recovered: true`).
+
+## Theming
+
+The widget carries no colours of its own. Every surface, including the hosted overlay, reads only `var(--mj-*)` design tokens, so a page repaints everything by overriding tokens on the element.
+
+```html
+<mj-realtime-widget
+  theme="dark"
+  theme-tokens='{"brand-primary":"#0a7a55","brand-primary-hover":"#08603f","radius-md":"12px"}'></mj-realtime-widget>
+```
+
+```js
+widget.themeTokens = { 'brand-primary': '#0a7a55', '--mj-text-primary': '#10201a' };
+```
+
+Keys may be written with or without the `--mj-` prefix. Anything that is not an MJ token (any other `--custom-property`) is ignored, and values are passed through verbatim, so light/dark parity is yours to keep. Overrides land inline on the element and outrank everything.
+
+The common tokens: `brand-primary`, `brand-primary-hover`, `text-primary`, `text-secondary`, `text-muted`, `bg-surface`, `bg-surface-card`, `bg-page`, `border-default`, `status-success`, `status-error`.
+
+**How the defaults arrive.** A one-script embed lands on a page that never loaded MJ's stylesheets, so the widget brings the token set, the button styles and the Font Awesome icon font itself, in a CSS cascade layer named `mj-realtime-widget-defaults`. Layered styles lose to any unlayered ones, so if the page is itself a MemberJunction application (or defines the same tokens), the page's values win and the widget only fills gaps.
+
+**Light and dark.** `theme="light"` and `theme="dark"` are explicit. `theme="auto"` defers to the page (an ancestor with `data-theme`), then to the visitor's operating-system setting. The dark token set is keyed on `[data-theme="dark"]`.
+
+**Shadow DOM.** The widget uses the light DOM on purpose. A web font's `@font-face` does not register from inside a shadow root, so a shadow boundary would unstyle the very icons and buttons the widget is made of. Isolation is by a `mjw-` class prefix and the cascade layer.
+
+## Content-Security-Policy
+
+The bundle is compiled ahead of time with the Angular linker, so it needs no JIT compiler and runs under a policy **without** `unsafe-eval`:
+
+```
+script-src 'self' https://your-cdn.example.com;
+style-src  'self' 'nonce-RANDOM';
+font-src   'self' data:;
+img-src    'self' data:;
+connect-src https://api.example.com;
+media-src  blob:;
+```
+
+- **`connect-src`** must allow your MemberJunction API origin (HTTPS and the WebSocket origin used for live events).
+- **Styles.** Angular writes component styles as `<style>` elements. Give the widget your page's nonce and it applies it to them: `csp-nonce="RANDOM"` on the element, or any `<script nonce>` / `<style nonce>` already on the page (the bundle reads the first it finds). Without a nonce, the policy needs `style-src 'unsafe-inline'`.
+- **Fonts and icons** are inlined (`data:` URIs), so no extra font host is needed.
+- **Microphone.** Browsers require HTTPS (or `localhost`) for microphone access, and any `Permissions-Policy` on your page must allow `microphone` for the embedding frame.
+
+## Examples
+
+### Plain HTML
+
+```html
+<!doctype html>
+<html lang="en">
+  <body>
+    <h1>Talk to us</h1>
+
+    <mj-realtime-widget
+      api-url="https://api.example.com"
+      widget-key="pk_live_xxxxxxxx"
+      agent-name="Sage"
+      theme="auto"></mj-realtime-widget>
+
+    <script src="/assets/mj-realtime-widget.js"></script>
+  </body>
+</html>
+```
+
+### Vanilla JS
+
+```html
+<mj-realtime-widget id="widget" api-url="https://api.example.com" widget-key="pk_live_xxxxxxxx"
+                    channels="IdentityVerification"></mj-realtime-widget>
+
+<script src="app.js"></script>              <!-- listeners first -->
+<script src="/assets/mj-realtime-widget.js"></script>
+```
+
+```js
+// app.js
+const widget = document.getElementById('widget');
+
+widget.addEventListener('mj-session-started', (e) => console.log('call started', e.detail.sessionId));
+widget.addEventListener('mj-session-ended', (e) => console.log('call ended', e.detail.reason));
+widget.addEventListener('mj-error', (e) => console.warn(e.detail.code, e.detail.message));
+widget.addEventListener('mj-verified', (e) => saveVerifiedLead(e.detail));
+
+document.getElementById('talk').addEventListener('click', () => widget.start());
+document.getElementById('verify').addEventListener('click', async () => {
+  const result = await widget.openChannel('IdentityVerification', { name: 'Ada' });
+  if (!result.success) console.warn(result.error);
+});
+
+// Tell the agent what the visitor is looking at, without making it speak.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) widget.sendContextNote(`The visitor is on ${location.pathname}.`);
+});
+```
+
+### Angular
+
+As a component (inside an application that already provides MemberJunction's services):
+
+```ts
+import { Component } from '@angular/core';
+import { RealtimeWidgetComponent } from '@memberjunction/ng-realtime-widget';
+
+@Component({
+  selector: 'app-help',
+  standalone: true,
+  imports: [RealtimeWidgetComponent],
+  template: `
+    <mj-realtime-widget
+      apiUrl="https://api.example.com"
+      widgetKey="pk_live_xxxxxxxx"
+      agentName="Sage"
+      [channels]="['IdentityVerification']"
+      (mj-verified)="onVerified($any($event).detail)"></mj-realtime-widget>
+  `
+})
+export class HelpComponent {
+  onVerified(detail: { email: string; name: string }): void {
+    console.log('verified', detail.email);
+  }
+}
+```
+
+Inputs are the camelCase property names from the reference table. Events are DOM `CustomEvent`s on the host element, so `(mj-verified)="…"` works.
+
+Or use the custom element in any Angular application by registering it once and adding `CUSTOM_ELEMENTS_SCHEMA`:
+
+```ts
+import { RegisterRealtimeWidgetElement } from '@memberjunction/ng-realtime-widget';
+RegisterRealtimeWidgetElement(inject(Injector));
+```
+
+### React
+
+React passes attributes to custom elements and supports refs; use a ref for properties, methods and events (React 19 also forwards `on…` props and properties, but a ref works in every version).
+
+```tsx
+import { useEffect, useRef } from 'react';
+import type { RealtimeWidgetElement } from '@memberjunction/ng-realtime-widget';
+
+export function VoiceHelp({ apiUrl, widgetKey }: { apiUrl: string; widgetKey: string }) {
+  const ref = useRef<RealtimeWidgetElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onVerified = (e: Event) => console.log('verified', (e as CustomEvent).detail);
+    const onError = (e: Event) => console.warn((e as CustomEvent).detail);
+    el.addEventListener('mj-verified', onVerified);
+    el.addEventListener('mj-error', onError);
+    el.channels = ['IdentityVerification'];
+    el.themeTokens = { 'brand-primary': '#0a7a55' };
+    return () => {
+      el.removeEventListener('mj-verified', onVerified);
+      el.removeEventListener('mj-error', onError);
+    };
+  }, []);
+
+  return (
+    // @ts-expect-error: the tag is declared by the package's HTMLElementTagNameMap augmentation for refs only
+    <mj-realtime-widget ref={ref} api-url={apiUrl} widget-key={widgetKey} agent-name="Sage" />
+  );
+}
+```
+
+Load the bundle once at the app's root (`<script src="/mj-realtime-widget.js">` in `index.html`). Calling `ref.current?.end()` from an effect cleanup is a good way to hang up when the component unmounts; removing the element also ends a call it started.
+
+### CMS snippet
+
+Most CMSs let an editor paste an HTML block. Paste this, replace the two values, and add your site's origin to the widget key's allowed origins on the server:
+
+```html
+<mj-realtime-widget
+  api-url="https://api.example.com"
+  widget-key="pk_live_xxxxxxxx"
+  agent-name="Ask us"
+  chrome="orb"></mj-realtime-widget>
+<script async src="https://your-cdn.example.com/mj-realtime-widget.js"></script>
+```
+
+`async` is safe: the element upgrades when the script arrives, and the page works without it. A visitor whose browser blocks the script simply sees nothing, never a broken layout.
+
+## Try it
+
+`sample/index.html` is a static page that loads the built bundle under a strict Content-Security-Policy, lets you type an API URL and widget key, exposes the methods as buttons, and logs every event.
+
+```bash
+pnpm run build
+npx http-server . -p 8080     # any static server, from this package's directory
+# open http://localhost:8080/sample/
+```
+
+It is also what the package's bundle test loads: the test boots the built bundle from the sample page in a window whose `eval` and `Function` constructor throw, so a build that quietly needed `unsafe-eval` fails the test run.
+
+## Building
+
+```bash
+pnpm run build   # ngc (the Angular library) then the element bundle
+pnpm test        # node + DOM suites, including the bundle test (build first)
+```
+
+The build has three outputs:
+
+- `dist/` is the compiled Angular library (`RealtimeWidgetComponent` and friends).
+- `dist/element/mj-realtime-widget.js` is the one-script bundle (an IIFE, with a source map and a `meta.json` build report).
+- `src/lib/theme/widget-global-styles.generated.css` is generated at `prebuild` and `pretest` from MemberJunction's own token and button sources plus Font Awesome, and is gitignored.
+
+The element bundle is produced by esbuild after the Angular linker has converted the partially compiled Angular libraries to full ahead-of-time code (the content of each file decides, not its package name: `angular-split` and others ship partial code too). `keepNames` is on because MemberJunction resolves classes by string at runtime (`@RegisterClass`); minifying those names away breaks screens with no error.
+
+## Things worth knowing
+
+- **Size.** The bundle is large (about 15 MB raw, about 4 MB gzipped). Most of it is the hosted overlay's transitive imports, the same weight any MemberJunction realtime surface carries. Serve it with gzip or brotli and a long cache lifetime; the file name changes with the package version.
+- **`new Function` in the bundle.** A handful of bundled third-party libraries contain `new Function(...)` call sites. They are not on the widget's call path, and the boot test runs the bundle with the constructor blocked to prove it. If your policy scanner flags the file for them, that is why.
+- **One call per page.** The widget drives a single shared realtime runtime. Two widgets on one page can both be idle, but only one can be in a call at a time, and a widget will never hang up a call it did not start.
+- **Recording.** The widget does not offer recording consent and always starts sessions with recording off.
+- **Resuming.** The widget remembers, per tab (`sessionStorage`), the last session and its conversation so a reload can continue it. It stores identifiers and the redeemed session token only, never names, emails or codes. It sends a best-effort close for a live call when the tab closes (`pagehide`, using a keep-alive request), and does nothing on a back/forward-cache hide.
+- **Deadlines.** The server's call ceiling is enforced on the server. The widget also ends the call a little early with reason `deadline`, so the visitor sees why instead of a dead line. Verification extends that deadline.
+- **Agent pinning.** With a widget key the server decides the agent and application. Setting `agent-id` has no effect and the widget says so in the console.
+- **Generated registration manifests.** The channel classes the bundle needs are referenced directly (the package declares `sideEffects: false`, and a bare `Load…()` call would be removed by the bundler), so you do not need to regenerate MemberJunction's class-registration manifests to use the element.

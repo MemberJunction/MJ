@@ -69,6 +69,13 @@ export interface IdentityVerifiedEventPayload {
      * with it. A client uses it only to keep its own abuse guard in step.
      */
     MaxSessionDeadlineIso?: string;
+    /**
+     * Set to `true` ONLY by a client that learned of the verification by reading the session's status
+     * after a reconnect (the live event was missed — delivery has no replay), never by the server.
+     * What a status read cannot carry is then best-effort: `VerifiedName` is empty and `Method` is
+     * `'link'` (the usual way a verification completes while the client is away).
+     */
+    Recovered?: boolean;
 }
 
 /**
@@ -160,7 +167,8 @@ export function IsIdentityVerifiedEventPayload(value: unknown): value is Identit
         typeof value['VerifiedName'] === 'string' &&
         isNonEmptyString(value['VerifiedAt']) &&
         (value['Method'] === 'link' || value['Method'] === 'code') &&
-        (value['MaxSessionDeadlineIso'] === undefined || typeof value['MaxSessionDeadlineIso'] === 'string')
+        (value['MaxSessionDeadlineIso'] === undefined || typeof value['MaxSessionDeadlineIso'] === 'string') &&
+        (value['Recovered'] === undefined || typeof value['Recovered'] === 'boolean')
     );
 }
 

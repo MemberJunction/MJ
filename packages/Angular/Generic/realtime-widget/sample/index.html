@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      A strict policy on purpose: scripts only from this origin, no inline script, no eval. The widget bundle
+      is linked ahead of time (no JIT compiler) so it runs under exactly this. Styles allow 'unsafe-inline'
+      only because Angular writes component styles as <style> elements; in production pass your nonce on the
+      element instead (csp-nonce="…") and drop 'unsafe-inline' — see the README, "Content-Security-Policy".
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src *; media-src 'self' blob:" />
+    <title>mj-realtime-widget sample</title>
+    <link rel="stylesheet" href="sample.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <h1>mj-realtime-widget</h1>
+        <p>
+          One script tag and one element. Fill in your MemberJunction API and widget key, then press the button
+          inside the widget. The log shows every event the element dispatches.
+        </p>
+      </header>
+
+      <section class="config" aria-label="Widget settings">
+        <label>
+          API URL
+          <input id="api-url" type="url" value="https://api.example.com" autocomplete="off" />
+        </label>
+        <label>
+          Widget key
+          <input id="widget-key" type="text" value="pk_live_replace_me" autocomplete="off" />
+        </label>
+        <button id="apply" type="button">Apply</button>
+      </section>
+
+      <section class="stage">
+        <mj-realtime-widget
+          id="widget"
+          api-url="https://api.example.com"
+          widget-key="pk_live_replace_me"
+          agent-name="Sage"
+          channels="IdentityVerification"
+          chrome="auto"></mj-realtime-widget>
+      </section>
+
+      <section class="actions" aria-label="Page controls">
+        <button id="start" type="button">start()</button>
+        <button id="end" type="button">end()</button>
+        <button id="verify" type="button">openChannel('IdentityVerification')</button>
+        <button id="note" type="button">sendContextNote()</button>
+      </section>
+
+      <section aria-label="Event log">
+        <h2>Events</h2>
+        <ol id="log" class="log" aria-live="polite"></ol>
+      </section>
+    </main>
+
+    <!--
+      sample.js is listed FIRST on purpose. Listeners attach to the element itself, so they work before the
+      element is upgraded, and mj-ready fires only once (right after the first render) — a script that
+      attaches its listeners after the bundle may run after it. See the README, "Events".
+    -->
+    <script src="sample.js"></script>
+    <script src="../dist/element/mj-realtime-widget.js"></script>
+  </body>
+</html>

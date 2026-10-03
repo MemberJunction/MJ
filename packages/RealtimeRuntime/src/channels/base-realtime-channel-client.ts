@@ -26,6 +26,7 @@ import type {
   RealtimeContextActionRequest,
   RealtimeContextActionResult,
 } from './channel-contract-types';
+import type { RealtimeSessionStreamEvent } from '../session/session-event-hub';
 import { SynthesizeChannelDescriptor } from './channel-descriptor-synthesis';
 import { ChannelPerceptionCoalescer, DEFAULT_CHANNEL_PERCEPTION_OPTIONS, type ChannelPerceptionOptions } from './channel-perception';
 import { FormatChannelNote } from './channel-state-delta';
@@ -203,6 +204,14 @@ export interface RealtimeChannelContext {
    * Treat it as untrusted, validated input: it is JSON authored by an operator, not typed code.
    */
   ChannelConfig?: Readonly<JSONObject>;
+
+  /**
+   * OPTIONAL — the events the SERVER publishes to this session (identity verification today; app-defined
+   * types too), hot with no replay. A channel that reacts to them (an identity channel learning that the
+   * user verified) subscribes in {@link BaseRealtimeChannelClient.OnInitialize} and unsubscribes at
+   * {@link BaseRealtimeChannelClient.Dispose}. Absent on hosts whose session has no event transport.
+   */
+  SessionEvents$?: Observable<RealtimeSessionStreamEvent>;
 
   /**
    * OPTIONAL — sends a visual frame into the live session's inbound video track

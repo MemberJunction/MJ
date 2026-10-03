@@ -92,5 +92,24 @@
     "primaryKey": {
       "ID": "2CA05669-8E08-40D9-8E3D-1E691D57A829"
     }
+  },
+  {
+    "fields": {
+      "Name": "IdentityVerification",
+      "Description": "Generic, opt-in channel for proving an email address during a realtime call. The agent fills a visitor's name and email (marked as suggested until the USER confirms; only the user can), then submits to email a one-time code and link; the user types the code (or the agent enters it) or opens the link. Status follows the server's identity.verified session event, never the client. CLIENT-DIRECT: the verbs run in the browser against the session's verification operations. The server channel plugin validates nothing beyond scope, contributes no server tools and persists no state.",
+      "ServerPluginClass": "IdentityVerificationChannelServer",
+      "ClientPluginClass": "IdentityVerificationChannel",
+      "TransportType": "PubSub",
+      "IsActive": true,
+      "UIConfig": {
+        "DisplayName": "Identity Verification",
+        "GroupName": "Identity",
+        "Icon": "fa-solid fa-user-shield",
+        "Color": "--mj-brand-primary"
+      }
+    },
+    "primaryKey": {
+      "ID": "0341502E-4C87-48D6-AE20-A4B20D8A11DA"
+    }
   }
 ]
