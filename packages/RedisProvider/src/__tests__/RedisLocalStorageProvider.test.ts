@@ -104,6 +104,13 @@ function createMockRedisInstance() {
             };
             return pipe;
         }),
+        // A real counter, not a stub: the provider INCRs the shared epoch before publishing, and
+        // tests assert on the value the event carries.
+        incr: vi.fn((key: string) => {
+            const next = ((store.get(key) as unknown as number) ?? 0) + 1;
+            store.set(key, String(next) as unknown as string);
+            return Promise.resolve(next);
+        }),
         publish: vi.fn().mockResolvedValue(1),
         subscribe: vi.fn().mockResolvedValue('OK'),
         unsubscribe: vi.fn().mockResolvedValue('OK'),
@@ -151,6 +158,16 @@ vi.mock('ioredis', () => {
 
 import { RedisLocalStorageProvider } from '../RedisLocalStorageProvider.js';
 import { LogError } from '@memberjunction/core';
+
+/**
+ * Lets the provider's fire-and-forget publish chain settle. `publishChange` INCRs before it
+ * publishes, so the publish lands a tick after the mutation's own promise resolves.
+ */
+async function flushPublishChain(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+}
 
 describe('RedisLocalStorageProvider', () => {
     let provider: RedisLocalStorageProvider;
@@ -452,6 +469,7 @@ describe('RedisLocalStorageProvider', () => {
 
         it('should publish a "set" event when SetItem is called', async () => {
             await pubsubProvider.SetItem('myKey', 'myValue', 'testCat');
+            await flushPublishChain();
 
             const client = pubsubProvider.Client;
             expect(client.publish).toHaveBeenCalled();
@@ -474,6 +492,7 @@ describe('RedisLocalStorageProvider', () => {
             (pubsubProvider.Client.publish as ReturnType<typeof vi.fn>).mockClear();
 
             await pubsubProvider.Remove('myKey', 'testCat');
+            await flushPublishChain();
 
             const client = pubsubProvider.Client;
             expect(client.publish).toHaveBeenCalled();
