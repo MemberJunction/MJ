@@ -1,9 +1,31 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../../../metadata');
+
+interface PromptRecord {
+    fields: { Name: string; TemplateText: string };
+    primaryKey: { ID: string };
+    sync?: object;
+}
+
+interface AgentRecord {
+    fields?: { Name?: string; EvaluatorConfig?: { PromptName?: string } };
+    relatedEntities?: Record<string, AgentRecord[]>;
+}
+
+/** Every EvaluatorConfig.PromptName on an agent's rubric links, its sub-agents included. */
+function CollectJudges(agent: AgentRecord, into: string[]): void {
+    for (const [entity, rows] of Object.entries(agent.relatedEntities ?? {})) {
+        for (const row of rows) {
+            const judge = row.fields?.EvaluatorConfig?.PromptName;
+            if (entity === 'MJ: AI Agent Rubrics' && judge) into.push(judge);
+            CollectJudges(row, into);
+        }
+    }
+}
 const shipped = [
     '.research-answer.json',
     '.query-answer.json',
@@ -12,6 +34,7 @@ const shipped = [
     '.catalog-contract.json',
     '.picture-from-the-data.json',
     '.duplicate-decision.json',
+    '.assistant-reply.json',
 ];
 
 describe('shipped rubric metadata', () => {
@@ -24,9 +47,9 @@ describe('shipped rubric metadata', () => {
         const rule = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../Rubrics/Engine/src/DeterministicRubricEvaluator.ts'), 'utf8');
         expect(rule).toContain('Values?: JsonValue[]');
         expect(rule).not.toContain('Values?: unknown[]');
-        const sampling = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../Rubrics/Engine/src/sampling.ts'), 'utf8');
-        expect(sampling).toContain("EvaluatorType?: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self'");
-        expect(sampling).not.toContain('EvaluatorType?: string');
+        const services = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../Rubrics/Engine/src/evaluatorServices.ts'), 'utf8');
+        expect(services).toContain("export type RubricEvaluatorType = MJRubricEvaluationEntity['EvaluatorType'];");
+        expect(services).not.toMatch(/EvaluatorType\??:\s*string/);
     });
 
     it('pushes scales, draft rubrics, and publications before the agents that look them up', () => {
@@ -38,7 +61,7 @@ describe('shipped rubric metadata', () => {
         expect(at('rubric-publications')).toBeLessThan(at('agents'));
     });
 
-    it('leaves the seven versions as drafts and publishes them in a later folder without hand-written hashes', () => {
+    it('leaves the shipped versions as drafts and publishes them in a later folder without hand-written hashes', () => {
         const versionIds: string[] = [];
         for (const file of shipped) {
             const rubric = JSON.parse(readFileSync(join(root, 'rubrics', file), 'utf8'));
@@ -110,9 +133,42 @@ describe('shipped rubric metadata', () => {
             ['.rubric-architect-prompt.json', 'A04F025E-E797-4CA2-8EB3-8C0D4983C274'],
         ] as const;
         for (const [file, id] of prompts) {
-            const prompt = JSON.parse(readFileSync(join(root, 'prompts', file), 'utf8'));
-            expect(prompt.primaryKey).toEqual({ ID: id });
-            expect(prompt.primaryKey.Name).toBeUndefined();
+            const parsed = JSON.parse(readFileSync(join(root, 'prompts', file), 'utf8')) as PromptRecord | PromptRecord[];
+            const records = Array.isArray(parsed) ? parsed : [parsed];
+            const prompt = records.find(record => record.primaryKey.ID === id);
+            expect(prompt?.primaryKey).toEqual({ ID: id });
         }
+    });
+
+    it('ships the rubric evaluator, criterion, and judge prompts from templates that exist', () => {
+        const records = [
+            ...JSON.parse(readFileSync(join(root, 'prompts/.rubric-evaluator-prompt.json'), 'utf8')) as PromptRecord[],
+            ...JSON.parse(readFileSync(join(root, 'prompts/.rubric-judge-prompts.json'), 'utf8')) as PromptRecord[],
+        ];
+        const names = records.map(record => record.fields.Name);
+        expect(names).toEqual(expect.arrayContaining(['Rubric Evaluator', 'Rubric Criterion', 'Rubric Evaluator - Default Judge']));
+        expect(new Set(names).size).toBe(names.length);
+        for (const record of records) {
+            expect(record.primaryKey.ID).toMatch(/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/);
+            expect(record.sync).toBeUndefined();
+            const template = record.fields.TemplateText.replace('@file:', '');
+            expect(readFileSync(join(root, 'prompts', template), 'utf8').length).toBeGreaterThan(0);
+        }
+        const evaluator = readFileSync(join(root, 'prompts/templates/rubrics/rubric-evaluator.template.md'), 'utf8');
+        expect(evaluator).toContain('{{ judgePrompt | safe }}');
+        expect(evaluator).not.toContain('{{content}}');
+    });
+
+    it('points every shipped agent-rubric judge at a shipped judge prompt', () => {
+        const judges = new Set((JSON.parse(readFileSync(join(root, 'prompts/.rubric-judge-prompts.json'), 'utf8')) as PromptRecord[]).map(record => record.fields.Name));
+        const named: string[] = [];
+        for (const file of readdirSync(join(root, 'agents')).filter(name => name.startsWith('.') && name.endsWith('.json') && name !== '.mj-sync.json')) {
+            const parsed = JSON.parse(readFileSync(join(root, 'agents', file), 'utf8')) as AgentRecord | AgentRecord[];
+            for (const agent of Array.isArray(parsed) ? parsed : [parsed]) CollectJudges(agent, named);
+        }
+        expect(named.length).toBeGreaterThanOrEqual(16);
+        for (const name of named) expect(judges.has(name)).toBe(true);
+        expect(named).toContain('Rubric Judge - Sage');
+        expect(named).toContain('Rubric Judge - Database Research Agent');
     });
 });

@@ -128,6 +128,17 @@
           "lastModified": "2026-10-02T21:42:41.978Z",
           "checksum": "e02fc657ddee3ba76ceead13d57723638ddb3ada6ad80fae2f8cbc7fcbdf9ea1"
         }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Core agent rubrics - Sage",
+          "Sequence": 9,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6F2B01E9-3D6F-4D54-A1E7-A478E7C5A10E"
+        }
       }
     ]
   },

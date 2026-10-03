@@ -211,7 +211,11 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Research answer",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Database Research Agent"
+            }
           },
           "primaryKey": {
             "ID": "0C5BCB7E-E1F7-4727-85D0-8C2C9925DE4E"
@@ -409,7 +413,11 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Research answer",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - File Research Agent"
+            }
           },
           "primaryKey": {
             "ID": "1D4287BB-6128-4A8B-8123-18AF4AB3E108"
@@ -546,7 +554,11 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Research answer",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Web Research Agent"
+            }
           },
           "primaryKey": {
             "ID": "2D8801DE-5F4A-4226-94C5-6E9E4537124F"
@@ -832,7 +844,11 @@
                   "RubricID": "@lookup:MJ: Rubrics.Name=Research answer",
                   "Purpose": "Evaluation",
                   "IsDefault": true,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "EvaluatorConfig": {
+                    "EvaluatorType": "AIPrompt",
+                    "PromptName": "Rubric Judge - Research Report Writer"
+                  }
                 },
                 "primaryKey": {
                   "ID": "23E2A4EF-6D82-4FEC-8185-3373E6CE993F"
@@ -1001,7 +1017,11 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Research answer",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Research Agent"
+            }
           },
           "primaryKey": {
             "ID": "08505F76-6A35-43DB-8D24-BC200142A495"
@@ -1018,7 +1038,11 @@
             "Purpose": "SelfCheck",
             "IsDefault": true,
             "Status": "Disabled",
-            "MaxSelfCheckAttempts": 1
+            "MaxSelfCheckAttempts": 1,
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Research Agent"
+            }
           },
           "primaryKey": {
             "ID": "83F32E0F-AC5B-45CC-BAA7-BE1F759C818F"
@@ -1035,7 +1059,11 @@
             "Purpose": "ProductionSampling",
             "IsDefault": true,
             "Status": "Active",
-            "SampleRate": 0.05
+            "SampleRate": 0.05,
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Research Agent"
+            }
           },
           "primaryKey": {
             "ID": "02743135-E7E3-445F-A7CA-0F7A1663AB6E"

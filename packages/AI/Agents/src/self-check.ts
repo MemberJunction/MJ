@@ -13,6 +13,8 @@ export interface SelfCheckLinkRow {
     RubricID?: string;
     MaxSelfCheckAttempts?: number | null;
     PassThreshold?: number | null;
+    /** IRubricEvaluatorSelection JSON naming the evaluator and its settings. LLM SinglePass when empty. */
+    EvaluatorConfig?: string | null;
 }
 
 /**
@@ -78,7 +80,7 @@ export interface SelfCheckEngine {
         rubricId: string;
         subjectEntityName: string;
         subjectRecordId: string;
-        evaluator: 'LLM';
+        evaluatorConfig?: unknown;
         passThreshold?: number | null;
         content?: { text?: string; data?: Record<string, unknown> };
     }): Promise<{
@@ -99,12 +101,12 @@ export interface SelfCheckValidation {
  * Runs one self-check evaluation and records a Validation step linked to it.
  * The subject pointer is the current agent run. The text the judge scores is the
  * in-memory message and payload, because the stored run does not have FinalPayload yet.
- * The evaluator is the LLM rubric evaluator. The threshold is the link override
- * when set, otherwise the version's threshold.
+ * The evaluator is the one the link's EvaluatorConfig names, LLM SinglePass when it names none.
+ * The threshold is the link override when set, otherwise the version's threshold.
  */
 export async function ExecuteSelfCheck(input: {
     engine: SelfCheckEngine;
-    link: SelfCheckLink & { rubricId: string; passThreshold?: number | null };
+    link: SelfCheckLink & { rubricId: string; passThreshold?: number | null; evaluatorConfig?: string | null };
     runId: string;
     agentKind: 'loop' | 'flow';
     attempt: number;
@@ -115,7 +117,7 @@ export async function ExecuteSelfCheck(input: {
         rubricId: input.link.rubricId,
         subjectEntityName: 'MJ: AI Agent Runs',
         subjectRecordId: input.runId,
-        evaluator: 'LLM',
+        evaluatorConfig: input.link.evaluatorConfig ?? undefined,
         passThreshold: input.link.passThreshold ?? null,
         ...(input.candidate ? {
             content: {

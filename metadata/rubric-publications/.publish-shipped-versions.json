@@ -82,5 +82,13 @@
       "lastModified": "2026-10-02T21:42:24.859Z",
       "checksum": "036054c77fd716d567c3532f631636339ed905225cf550198e5fb54b7517eaa9"
     }
+  },
+  {
+    "fields": {
+      "Status": "Published"
+    },
+    "primaryKey": {
+      "ID": "0EDF8C3F-5FAC-4E6D-968D-48047D7FD295"
+    }
   }
 ]

@@ -58,7 +58,11 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Generated code",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Codesmith Agent"
+            }
           },
           "primaryKey": {
             "ID": "14F1D3E2-D06B-4726-86E2-3B732B50D623"

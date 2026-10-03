@@ -74,7 +74,11 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Research answer",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Knowledge Base Research Agent"
+            }
           },
           "primaryKey": {
             "ID": "C38D96BE-D1BD-4EAA-90D2-739B599EE711"

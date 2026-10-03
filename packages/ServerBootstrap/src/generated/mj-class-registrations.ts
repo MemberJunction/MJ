@@ -1134,10 +1134,11 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/rubrics (10 classes)
+// @memberjunction/rubrics (11 classes)
 import {
     AgentRubricEvaluator,
     CreateRubricDraftAction,
+    DecisionRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -2358,6 +2359,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AutotagWebsite,
     AgentRubricEvaluator,
     CreateRubricDraftAction,
+    DecisionRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -2408,11 +2410,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CodexAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
-    HarnessAgentType,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    HarnessAgentType,
     OpenCodeAdapter,
     PiAdapter,
     StdioJsonAdapter,
@@ -2612,11 +2614,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ExecuteAgentAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
-    ExploreDatabaseSchemaAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ExploreDatabaseSchemaAction,
     ExternalChangeDetectionAction,
     FileCompressAction,
     FinalizeDocumentAction,
@@ -2738,7 +2740,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1105;
+export const CLASS_REGISTRATIONS_COUNT = 1106;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
