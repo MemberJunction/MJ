@@ -960,8 +960,14 @@ export class ResolverBase {
   /**
    * SECURITY — screen for a FULL client-supplied SQL statement (ad-hoc query path). In addition
    * to the SELECT-only validation the caller performs, every table reference must resolve to an
-   * entity BaseView the acting user holds CanRead on. CTE names defined by the statement itself
+   * entity BaseView the acting user can read UNSCOPED. CTE names defined by the statement itself
    * are excluded from the check. Fails closed: no user, or an unresolvable reference, refuses.
+   *
+   * Entity CanRead is not unscoped base-view read authority: RunView narrows a granted read with
+   * row-level security and denied-field projection, and raw SQL applies neither. Rather than try
+   * to rewrite arbitrary SQL (joins, CTEs) to compose that policy, this refuses any entity that
+   * carries a row filter or a denied field for the caller — those reads belong on RunView. For
+   * the remaining entities CanRead genuinely means "every row and field of the view".
    */
   protected assertFullQueryUsesReadableEntityViews(
     sqlText: string,
@@ -987,8 +993,23 @@ export class ResolverBase {
     for (const t of tables) {
       const table = this.stripSqlIdent(t.TableName);
       const schema = this.stripSqlIdent(t.SchemaName);
-      if (!schema && cteNames.has(table.toLowerCase())) continue;
-      this.assertTableRefReadable(allowed, schema, table, label, user);
+      if (this.isUnqualifiedSchema(schema) && cteNames.has(table.toLowerCase())) continue;
+      const entity = this.assertTableRefReadable(allowed, schema, table, label, user);
+      this.assertUnscopedRead(entity, user, label);
+    }
+  }
+
+  /** Refuses an entity whose read is narrowed for this user by row-level security or field-level denials. */
+  private assertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
+    if (entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '').length > 0) {
+      throw new Error(
+        `Invalid ${label}: entity '${entity.Name}' is row-level-security filtered for you — ad-hoc SQL cannot apply that filter; use RunView`,
+      );
+    }
+    if (entity.GetDeniedReadFields(user).size > 0) {
+      throw new Error(
+        `Invalid ${label}: entity '${entity.Name}' has fields you are not permitted to read — ad-hoc SQL cannot project them away; use RunView`,
+      );
     }
   }
 
@@ -1073,23 +1094,33 @@ export class ResolverBase {
     return new SQLServerDialect();
   }
 
+  /** True for a reference with no schema — which `SQLParser.ExtractTableRefs` reports as `dbo`. */
+  private isUnqualifiedSchema(schema: string): boolean {
+    return !schema || schema.toLowerCase() === 'dbo';
+  }
+
   private stripSqlIdent(name: string | null | undefined): string {
     if (!name) return '';
     return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
   }
 
+  /**
+   * `bare` maps an unqualified view name to its entity, or to `null` when the name exists in
+   * more than one schema — the database, not this screen, would decide which one runs.
+   */
   private entityBaseViewAllowList(provider?: IMetadataProvider): {
     qualified: Map<string, EntityInfo>;
-    bare: Map<string, EntityInfo>;
+    bare: Map<string, EntityInfo | null>;
   } {
     const qualified = new Map<string, EntityInfo>();
-    const bare = new Map<string, EntityInfo>();
+    const bare = new Map<string, EntityInfo | null>();
     const entities = provider?.Entities ?? [];
     for (const e of entities) {
       const view = this.stripSqlIdent(e.BaseView);
       if (!view) continue;
       const schema = this.stripSqlIdent(e.SchemaName);
-      bare.set(view.toLowerCase(), e);
+      const bareKey = view.toLowerCase();
+      bare.set(bareKey, bare.has(bareKey) ? null : e);
       if (schema) qualified.set(`${schema}.${view}`.toLowerCase(), e);
     }
     return { qualified, bare };
@@ -1101,20 +1132,33 @@ export class ResolverBase {
    * entity. Base views do not embed RLS and entity permissions are otherwise checked only on
    * the TOP entity of a request, so without this check a subquery (or ad-hoc query) could read
    * entities the caller has no read grant on.
+   *
+   * A schema-qualified reference must match that exact schema — `secret.vwFoo` never resolves
+   * through another schema's `vwFoo`. An unqualified reference resolves only when the view name
+   * is unique across schemas; an ambiguous one must be qualified, because the database's
+   * default-schema resolution, not this screen, would pick which view actually runs.
+   *
+   * `SQLParser.ExtractTableRefs` reports an unqualified reference as schema `dbo`, so `dbo` is
+   * indistinguishable from "no schema" here and both take the unqualified path (an exact
+   * `dbo.<view>` entity wins first).
    */
   private assertTableRefReadable(
-    allowed: { qualified: Map<string, EntityInfo>; bare: Map<string, EntityInfo> },
+    allowed: { qualified: Map<string, EntityInfo>; bare: Map<string, EntityInfo | null> },
     schema: string,
     table: string,
     label: string,
     user?: UserInfo,
-  ): void {
-    const qualifiedKey = `${schema}.${table}`.toLowerCase();
-    const bareKey = table.toLowerCase();
-    const entity = allowed.qualified.get(qualifiedKey) ?? (schema ? undefined : allowed.bare.get(bareKey)) ?? allowed.bare.get(bareKey);
+  ): EntityInfo {
+    const qualified = allowed.qualified.get(`${schema}.${table}`.toLowerCase());
+    const entity = this.isUnqualifiedSchema(schema) ? qualified ?? allowed.bare.get(table.toLowerCase()) : qualified;
+    if (entity === null) {
+      throw new Error(
+        `Invalid ${label}: '${table}' is a base view in more than one schema — qualify it with its schema`,
+      );
+    }
     if (!entity) {
       throw new Error(
-        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
+        `Invalid ${label}: subquery must use an entity base view, not '${schema ? schema + '.' : ''}${table}'`,
       );
     }
     if (user) {
@@ -1125,6 +1169,7 @@ export class ResolverBase {
         );
       }
     }
+    return entity;
   }
 
   /**
