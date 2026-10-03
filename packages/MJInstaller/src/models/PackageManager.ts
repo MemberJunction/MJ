@@ -47,8 +47,13 @@ const LOCKFILE_NAMES: Record<PackageManagerType, string> = {
  * Resolve the effective package manager from a config value.
  * The default is pnpm — the era-6 platform manifest declares pnpm 10.x.
  */
-export function resolvePackageManager(configured: PackageManagerType | undefined): PackageManagerType {
+export function ResolvePackageManager(configured: PackageManagerType | undefined): PackageManagerType {
   return configured ?? 'pnpm';
+}
+
+/** @deprecated Use {@link ResolvePackageManager}. */
+export function resolvePackageManager(configured: PackageManagerType | undefined): PackageManagerType {
+  return ResolvePackageManager(configured);
 }
 
 /**
@@ -66,7 +71,7 @@ export class PackageManagerCommands {
 
   /** Build from a config value, applying the pnpm default. */
   static For(configured: PackageManagerType | undefined): PackageManagerCommands {
-    return new PackageManagerCommands(resolvePackageManager(configured));
+    return new PackageManagerCommands(ResolvePackageManager(configured));
   }
 
   /** `npm install [...extra]` / `pnpm install [...extra]`. */

@@ -7,12 +7,12 @@
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import {
-  convertIdentifiers, convertDateFunctions, convertCharIndex,
-  convertStringConcat, convertTopToLimit, convertCastTypes,
-  convertIIF, convertConvertFunction, removeNPrefix, removeCollate,
-  convertCommonFunctions, convertStuff, emitDropOverloadsBlock,
+  ConvertIdentifiers, ConvertDateFunctions, ConvertCharIndex,
+  ConvertStringConcat, ConvertTopToLimit, ConvertCastTypes,
+  ConvertIIF, ConvertConvertFunction, RemoveNPrefix, RemoveCollate,
+  ConvertCommonFunctions, ConvertStuff, EmitDropOverloadsBlock,
 } from './ExpressionHelpers.js';
-import { resolveType } from './TypeResolver.js';
+import { ResolveType } from './TypeResolver.js';
 
 /**
  * Views referenced via `RETURNS SETOF` by CRUD sprocs for deprecated entities
@@ -109,7 +109,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
     // "function ... is not unique" errors at call time. Shared helper
     // emits the canonical pg_proc-iteration DROP block; FunctionRule uses
     // the same helper so reviewers see one pattern across the converter.
-    let result = emitDropOverloadsBlock(procName);
+    let result = EmitDropOverloadsBlock(procName);
     result += `CREATE OR REPLACE FUNCTION __mj."${procName}"(${pgParams})\n`;
     result += `${returnsClause}\n$$\n`;
     result += pgBody;
@@ -156,13 +156,13 @@ export class ProcedureToFunctionRule implements IConversionRule {
       if (!pm) continue;
       const name = pm[1];
       if (/_Clear$/i.test(name)) continue;
-      const pgType = resolveType(pm[2]).toUpperCase();
+      const pgType = ResolveType(pm[2]).toUpperCase();
       if (/^ID$/i.test(name) && pgType === 'UUID') { pkName = name; continue; }
       writable.push({ name, pgType });
     }
     if (!pkName || writable.length === 0) return null;
 
-    const drop = emitDropOverloadsBlock(procName);
+    const drop = EmitDropOverloadsBlock(procName);
 
     if (verb === 'create') {
       const fieldArray = writable.map((f) => `'${f.name}'`).join(', ');
@@ -338,7 +338,7 @@ $$ LANGUAGE plpgsql;
   private mapType(typeStr: string): string {
     // Strip COLLATE clause before resolving
     const cleaned = typeStr.trim().replace(/\s+COLLATE\s+\S+/gi, '');
-    return resolveType(cleaned);
+    return ResolveType(cleaned);
   }
 
   // ---------------------------------------------------------------------------
@@ -389,7 +389,7 @@ $$ LANGUAGE plpgsql;
     }
 
     // Convert identifiers
-    sql = convertIdentifiers(sql);
+    sql = ConvertIdentifiers(sql);
 
     // NEWID()/NEWSEQUENTIALID() → gen_random_uuid()
     sql = sql.replace(/\bNEWID\s*\(\s*\)/gi, 'gen_random_uuid()');
@@ -464,7 +464,7 @@ $$ LANGUAGE plpgsql;
     );
 
     // Convert identifiers again (for vars that slipped through)
-    sql = convertIdentifiers(sql);
+    sql = ConvertIdentifiers(sql);
 
     // ISNULL → COALESCE
     sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
@@ -511,13 +511,13 @@ $$ LANGUAGE plpgsql;
     sql = sql.replace(/N'/g, "'");
 
     // String concat + → ||
-    sql = convertStringConcat(sql, context?.TableColumns);
+    sql = ConvertStringConcat(sql, context?.TableColumns);
 
     // Common function replacements
-    sql = convertCommonFunctions(sql);
+    sql = ConvertCommonFunctions(sql);
 
     // DATEADD/DATEDIFF/DATEPART
-    sql = convertDateFunctions(sql);
+    sql = ConvertDateFunctions(sql);
 
     // LEN → LENGTH
     sql = sql.replace(/\bLEN\s*\(/gi, 'LENGTH(');
@@ -526,13 +526,13 @@ $$ LANGUAGE plpgsql;
     sql = sql.replace(/\bSCOPE_IDENTITY\s*\(\s*\)/gi, 'lastval()');
 
     // CHARINDEX
-    sql = convertCharIndex(sql);
+    sql = ConvertCharIndex(sql);
 
     // Type conversions in CAST
-    sql = convertCastTypes(sql);
+    sql = ConvertCastTypes(sql);
 
     // Remove COLLATE
-    sql = removeCollate(sql);
+    sql = RemoveCollate(sql);
 
     // PRINT → RAISE NOTICE
     sql = sql.replace(/\bPRINT\s+'([^']*)'/gi, "RAISE NOTICE '$1'");
@@ -593,7 +593,7 @@ $$ LANGUAGE plpgsql;
     );
 
     // TOP N → LIMIT N
-    sql = convertTopToLimit(sql);
+    sql = ConvertTopToLimit(sql);
 
     // Convert T-SQL cursor loops → PG FOR...LOOP
     sql = convertCursorLoops(sql);
@@ -605,7 +605,7 @@ $$ LANGUAGE plpgsql;
     sql = convertBeginTryCatch(sql);
 
     // IIF → CASE WHEN
-    sql = convertIIF(sql);
+    sql = ConvertIIF(sql);
 
     // suser_name() / user_name() → current_user
     sql = sql.replace(/\bsuser_s?name\s*\(\s*\)/gi, 'current_user');
@@ -782,7 +782,7 @@ $$ LANGUAGE plpgsql;
     const declMatch = body.match(
       new RegExp(`DECLARE\\s+@${varName}\\s+([A-Za-z0-9_]+(?:\\s*\\(\\s*\\d+\\s*(?:,\\s*\\d+\\s*)?\\))?)`, 'i'),
     );
-    return declMatch ? resolveType(declMatch[1].trim()) : 'INTEGER';
+    return declMatch ? ResolveType(declMatch[1].trim()) : 'INTEGER';
   }
 }
 

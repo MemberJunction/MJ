@@ -1,0 +1,871 @@
+[
+  {
+    "fields": {
+      "Name": "Evaluate Record Against Rubric",
+      "Description": "Resolves the rubric to its latest Published version and evaluates the subject record. Returns the evaluation id, score, outcome, and per-criterion summary.",
+      "Type": "Custom",
+      "DriverClass": "Evaluate Record Against Rubric",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "DBD8CCBA-3BCD-48D7-81CE-6EA771A91392"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Rubric id. Provide this or RubricName.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "30E67728-8999-4EED-A6A6-B211ACDBC63C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Rubric name. Provide this or RubricID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FF12785A-63B7-40DB-A5AE-7D3D902CB11D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity name of the record being evaluated.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "BFFD17E6-131C-4AB0-BBCB-4DC53C4DB0FB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Primary key of the record being evaluated.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "069C79EE-880C-41A0-B073-7196E8323821"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContextEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional context entity. Set together with ContextRecordID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1E8B2AF3-D00F-4BFB-85D9-97CCB9A7B547"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContextRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional context record. Set together with ContextEntityName.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6197D614-63BE-4FC5-BF15-30ACD4AA284A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Evaluator",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "A registered rubric evaluator: LLM (a chat prompt, Rubric Evaluator by default), Decision (typed Score questions on a Decision model, Default Decision by default), Agent (the Rubric Evaluation Agent), Deterministic (the criteria's rules), or a custom evaluator a host registered. AI is accepted as Agent. Human is not accepted, because a person completes it. LLM when omitted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BFF0056D-119E-4F11-8E8B-B97CFC8DDF9F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PassThreshold",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional 0..1 threshold stored on the evaluation. Null uses the version threshold.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8ECF0D94-3866-4AEE-B59C-177540A88884"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EvaluationID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Id of the evaluation the engine saved.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0606F00C-3895-4926-AE4A-8133D473192E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Score",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Normalized score from 0 to 1, or null.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "225FF2BB-E556-401E-B0D4-15A06D693270"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Outcome",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Passed, BelowThreshold, GateFailed, NotApplicableFailure, Incomplete, or Scored.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7366F783-147A-4184-A059-91EB46F231E4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Criteria",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Per-criterion key and normalized score.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "23422761-8B17-4446-A908-2606C3560669"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The engine evaluated the record."
+          },
+          "primaryKey": {
+            "ID": "8D2DA54B-BE83-4119-8D07-AA41A4A42E9F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "The rubric was missing, unpublished, or the evaluation failed."
+          },
+          "primaryKey": {
+            "ID": "A01D62D0-4448-4983-B8A4-AC66EB9251DC"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Rubric Consensus",
+      "Description": "Loads the subject's Submitted scores for the rubric and returns the consensus. The caller does not pass the scores.",
+      "Type": "Custom",
+      "DriverClass": "Get Rubric Consensus",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "6B5AB38D-2DA2-48C5-BF05-A4FC35B808F9"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Rubric id. Provide this or RubricName.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9ECDB547-3A85-425C-B0CF-983DF7C40A5A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Rubric name. Provide this or RubricID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C8B8F9B8-7EDB-4D44-A1BC-3D1A2D12BC5B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity of the subject. Consensus is limited to this entity.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A4E0C1B2-7F55-4C0A-9D11-2B6E8A91C4D0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Primary key of the subject record.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "E9239FFD-B837-4878-AFB6-6F325B862D3A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContextEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity of the context. Set together with ContextRecordID. When both are omitted, only evaluations with no context are included.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7D21E44-6A18-4F90-8C33-91E0A5D27B61"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContextRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When set with ContextEntityName, only scores for that context are included.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C33CD64D-41D4-4CAC-BAE8-BE0B007E1B5A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Major",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional major version. When omitted, only the latest Published major is included.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A1C4E8B2-7D61-4F0A-9C33-6E5B0A19D274"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Method",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Mean, Median, or TrimmedMean. Mean when omitted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F29909DC-6E41-4862-A9C8-CF25D17FA07C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConsensusMethod",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The consensus method that was applied.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7BA9CD5D-5CA7-490D-AFC8-021AD1B5048A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Overall",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Consensus of the normalized scores.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C3554857-AE46-4CC6-A72E-C623C9F80EDA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StdDev",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Population standard deviation.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "20AABF66-F422-4F39-80F9-B384E704ED9D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Range",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Highest score minus the lowest.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "373EBE18-0974-4F50-9133-DAB2F45762CC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SampleSize",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of submitted scores included.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C57F66FA-96FE-47AA-ACE9-D86BBACA0E07"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The engine returned the consensus."
+          },
+          "primaryKey": {
+            "ID": "AC151FAA-DBB6-46A2-9DA6-82DADEC88B9E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "The rubric was not found."
+          },
+          "primaryKey": {
+            "ID": "378CB4B3-B263-486C-9DB7-5DD14B060377"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Rubric",
+      "Description": "Returns the rubric tree for a name or id, or for a specific version. Does not score.",
+      "Type": "Custom",
+      "DriverClass": "Get Rubric",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "40C680B2-E3CB-4385-B09B-7AB0C3133077"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Rubric id. Provide this or RubricName when VersionID is omitted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FE3DAEDA-BACF-40C4-B7A3-0C2A29BD4EE4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Rubric name. Provide this or RubricID when VersionID is omitted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CF2D6768-2C4C-441B-BBA9-A8ADB637110F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "A specific version. Otherwise the latest Published version is returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BDC2F37A-42FB-4214-9F15-092417B104FA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tree",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "The version, its criteria, scales, and bands.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2848E44A-D184-4178-AE3C-C5F7C6D658E1"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The tree was returned."
+          },
+          "primaryKey": {
+            "ID": "642AF8E6-0CFB-4E68-856B-544D1F1ACC12"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "That version was not found."
+          },
+          "primaryKey": {
+            "ID": "5A5335E2-1396-4951-BF40-2A228F5FD35D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "The rubric was not found."
+          },
+          "primaryKey": {
+            "ID": "DDC0E736-3B6B-48C7-939E-FF6C5890A916"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Rubric Draft",
+      "Description": "Stores a rubric tree as a Draft version. When RubricID is omitted and RubricName or Description is set, creates a new rubric first. Never publishes. Publishing stays a human action.",
+      "Type": "Custom",
+      "DriverClass": "Create Rubric Draft",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "2FEAB835-A452-4455-9141-3EB3A59C3425"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The rubric that owns the new draft. Omit this and pass RubricName or Description to create a new rubric.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DB2B6E47-D053-414C-8204-19934C18ADBF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of a rubric to create when RubricID is omitted. The new rubric is Active and its version is a Draft. This does not publish.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "47FE5B79-75C6-4812-AF50-96670E7725DA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Nodes",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "The criteria tree to store on the draft. Omit this when Matrix or Description is set.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "81300405-2891-4713-9B36-88B2E74874D8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Matrix",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Numbered CSV: path, name, weight, knockout. Saved as Draft criterion rows. A path such as 3.2 is a child of 3.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F81E08D2-132A-4696-A749-715A5BD8A325"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "A description to store as one Draft criterion. Used when Matrix and Nodes are omitted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "645A7803-002E-4625-93A7-1EF409FD1A37"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Id of the Draft version.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D52E47EF-D7C1-47AA-B004-4148EDEE79F9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Always Draft.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FFBEB15A-D523-47B3-B439-F72849C4FF75"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "A Draft version was stored."
+          },
+          "primaryKey": {
+            "ID": "991DB929-C187-4567-B030-0493D2E7530D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "The draft was not stored, or the stored status was not Draft."
+          },
+          "primaryKey": {
+            "ID": "F8263AEB-E787-4500-A828-E077BB8209C0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Rubric Subject",
+      "Description": "Loads the subject record for a rubric evaluation and returns the content the evaluator may read. Read-only. It does not score and it does not publish.",
+      "Type": "Custom",
+      "DriverClass": "Get Rubric Subject",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "5D8830C5-AD31-48FD-B5EF-AA5E16CE7F21"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity name of the subject, such as MJ: AI Agent Runs.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D8EA4D73-F2AE-40C5-B748-B4C20FD0714F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Primary key of the subject record.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "109512E9-2E4C-4C73-94B3-8CD6F3EE5926"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Content",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Text and data the evaluator may read.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E483AB81-6BEE-4678-9D65-A24212D59657"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The subject content was loaded."
+          },
+          "primaryKey": {
+            "ID": "8B815B28-6A01-456F-AB66-8830B0A3E097"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "The subject could not be read."
+          },
+          "primaryKey": {
+            "ID": "1010E1F8-E0E8-42ED-B407-DF46E693E6A1"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Submit Human Rubric",
+      "Description": "Stores a human evaluation and its scores, then marks it Submitted, in one transaction. Evidence is an evidence list. A percentage answer is a numeric value.",
+      "Type": "Custom",
+      "DriverClass": "Submit Human Rubric",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "260B8927-0B3D-4879-BC29-6480DE46F2C9"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricVersionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The pinned rubric version being scored.",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "84C9D81A-F001-4900-8C91-271FF7529F95" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectEntityID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity of the record being scored.",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "0A127B85-9C11-4085-926B-3E1DA4008E50" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Primary key of the record being scored.",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "A3701FC8-A6D5-4256-8ABC-4AE4B9D539ED" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContextEntityID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional context entity. Set together with ContextRecordID.",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "03F8ECAC-2ACF-4C03-AD45-62B44C6FE028" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContextRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional context record.",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "C6CD617B-3394-4E28-A33B-2248F8C7E4D2" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SupersedesEvaluationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Earlier human evaluation this score replaces.",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "9C13A1C6-F835-4EA0-812C-99DB832D9F41" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Answers",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON array of answers. A percentage answer sets RawValue. Evidence is quote text or an evidence list.",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "82B310A4-E52A-411A-9366-38E0889A2783" }
+        }
+      ]
+    }
+  }
+]

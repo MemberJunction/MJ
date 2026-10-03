@@ -17,10 +17,28 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class SchedulingOverviewComponent implements OnInit, OnDestroy {
-  @Input() initialState: Record<string, unknown> = {};
+  @Input() InitialState: Record<string, unknown> = {};
+
+  /** @deprecated Use {@link InitialState}. */
+  @Input() set initialState(value: Record<string, unknown>) {
+    this.InitialState = value;
+  }
+  /** @deprecated Use {@link InitialState}. */
+  get initialState(): Record<string, unknown> {
+    return this.InitialState;
+  }
   /** When true, the inner toolbar is hidden — the parent shell is rendering it in `<mj-page-header>` instead. */
   @Input() HideToolbar = false;
-  @Output() stateChange = new EventEmitter<Record<string, unknown>>();
+  @Output() StateChange = new EventEmitter<Record<string, unknown>>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
 
   public Kpis: SchedulingKPIs | null = null;
   public LiveExecutions: JobExecution[] = [];
@@ -39,9 +57,9 @@ export class SchedulingOverviewComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    if (this.initialState) {
-      if (this.initialState['autoRefreshEnabled'] != null) {
-        this.AutoRefreshEnabled = this.initialState['autoRefreshEnabled'] as boolean;
+    if (this.InitialState) {
+      if (this.InitialState['autoRefreshEnabled'] != null) {
+        this.AutoRefreshEnabled = this.InitialState['autoRefreshEnabled'] as boolean;
       }
     }
 
@@ -220,7 +238,7 @@ export class SchedulingOverviewComponent implements OnInit, OnDestroy {
   }
 
   private emitState(): void {
-    this.stateChange.emit({
+    this.StateChange.emit({
       autoRefreshEnabled: this.AutoRefreshEnabled
     });
   }

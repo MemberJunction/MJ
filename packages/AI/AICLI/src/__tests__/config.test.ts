@@ -58,7 +58,7 @@ describe('AICliConfig', () => {
 
 describe('loadAIConfig', () => {
     it('should throw when no config found', async () => {
-        const { loadAIConfig } = await import('../config');
-        await expect(loadAIConfig()).rejects.toThrow('No mj.config.cjs configuration found');
+        const { LoadAIConfig } = await import('../config');
+        await expect(LoadAIConfig()).rejects.toThrow('No mj.config.cjs configuration found');
     });
 });

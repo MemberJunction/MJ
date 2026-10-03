@@ -111,12 +111,17 @@ export class MCPLogDetailPanelComponent implements OnInit, OnDestroy {
     // Panel Resize Handlers
     // ========================================
 
-    onResizeStart(event: MouseEvent): void {
+    OnResizeStart(event: MouseEvent): void {
         if (this.IsMobileMode) return;
         event.preventDefault();
         this.IsResizing = true;
         document.body.style.cursor = 'ew-resize';
         document.body.style.userSelect = 'none';
+    }
+
+    /** @deprecated Use {@link OnResizeStart}. */
+    onResizeStart(event: MouseEvent): void {
+      return this.OnResizeStart(event);
     }
 
     @HostListener('document:mousemove', ['$event'])
@@ -180,17 +185,27 @@ export class MCPLogDetailPanelComponent implements OnInit, OnDestroy {
     // Actions
     // ========================================
 
-    closePanel(): void {
+    ClosePanel(): void {
         this.Close.emit();
     }
 
-    onRunAgain(): void {
+    /** @deprecated Use {@link ClosePanel}. */
+    closePanel(): void {
+      return this.ClosePanel();
+    }
+
+    OnRunAgain(): void {
         if (this.Log?.ToolID && this.Log?.ConnectionID) {
             this.RunAgain.emit({
                 toolId: this.Log.ToolID,
                 connectionId: this.Log.ConnectionID
             });
         }
+    }
+
+    /** @deprecated Use {@link OnRunAgain}. */
+    onRunAgain(): void {
+      return this.OnRunAgain();
     }
 
     // ========================================
@@ -202,16 +217,31 @@ export class MCPLogDetailPanelComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
     }
 
-    async copyInputArgs(): Promise<void> {
+    async CopyInputArgs(): Promise<void> {
         await this.copyToClipboard(this.FormattedInputArgs, 'Input arguments copied to clipboard');
     }
 
-    async copyResult(): Promise<void> {
+    /** @deprecated Use {@link CopyInputArgs}. */
+    async copyInputArgs(): Promise<void> {
+      return this.CopyInputArgs();
+    }
+
+    async CopyResult(): Promise<void> {
         await this.copyToClipboard(this.FormattedResult, 'Result copied to clipboard');
     }
 
-    async copyError(): Promise<void> {
+    /** @deprecated Use {@link CopyResult}. */
+    async copyResult(): Promise<void> {
+      return this.CopyResult();
+    }
+
+    async CopyError(): Promise<void> {
         await this.copyToClipboard(this.Log?.ErrorMessage || '', 'Error message copied to clipboard');
+    }
+
+    /** @deprecated Use {@link CopyError}. */
+    async copyError(): Promise<void> {
+      return this.CopyError();
     }
 
     private async copyToClipboard(text: string, successMessage: string): Promise<void> {
@@ -241,7 +271,7 @@ export class MCPLogDetailPanelComponent implements OnInit, OnDestroy {
         return `${(ms / 1000).toFixed(2)}s`;
     }
 
-    formatJson(jsonString: string | null | undefined): string {
+    FormatJson(jsonString: string | null | undefined): string {
         if (!jsonString) return '';
         try {
             const parsed = JSON.parse(jsonString);
@@ -251,15 +281,20 @@ export class MCPLogDetailPanelComponent implements OnInit, OnDestroy {
         }
     }
 
+    /** @deprecated Use {@link FormatJson}. */
+    formatJson(jsonString: string | null | undefined): string {
+      return this.FormatJson(jsonString);
+    }
+
     get FormattedInputArgs(): string {
-        return this.formatJson(this.Log?.InputArgs);
+        return this.FormatJson(this.Log?.InputArgs);
     }
 
     get FormattedResult(): string {
-        return this.formatJson(this.Log?.Result);
+        return this.FormatJson(this.Log?.Result);
     }
 
-    getStatusIcon(status: string): string {
+    GetStatusIcon(status: string): string {
         switch (status) {
             case 'Success': return 'fa-solid fa-check-circle';
             case 'Error': return 'fa-solid fa-times-circle';
@@ -268,11 +303,21 @@ export class MCPLogDetailPanelComponent implements OnInit, OnDestroy {
         }
     }
 
-    getStatusVariant(status: string): 'info' | 'success' | 'warning' | 'error' {
+    /** @deprecated Use {@link GetStatusIcon}. */
+    getStatusIcon(status: string): string {
+      return this.GetStatusIcon(status);
+    }
+
+    GetStatusVariant(status: string): 'info' | 'success' | 'warning' | 'error' {
         switch (status) {
             case 'Success': return 'success';
             case 'Error': return 'error';
             default: return 'info';
         }
+    }
+
+    /** @deprecated Use {@link GetStatusVariant}. */
+    getStatusVariant(status: string): 'info' | 'success' | 'warning' | 'error' {
+      return this.GetStatusVariant(status);
     }
 }

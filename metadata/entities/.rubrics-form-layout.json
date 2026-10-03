@@ -1,0 +1,15 @@
+{
+  "fields": {
+    "Name": "MJ: Rubrics",
+    "Configuration": {
+      "UI": {
+        "Form": {
+          "Layout": "left-nav"
+        }
+      }
+    }
+  },
+  "primaryKey": {
+    "ID": "@lookup:MJ: Entities.Name=MJ: Rubrics"
+  }
+}

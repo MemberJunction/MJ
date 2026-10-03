@@ -42,13 +42,13 @@ export class WebsiteCrawlerSettingsPanel extends BaseFormPanel<MJContentSourceEn
         return typeName != null && typeName.trim().toLowerCase() === 'website';
     }
 
-    private get Config(): MJContentSourceEntity_IContentSourceConfiguration {
+    private get config(): MJContentSourceEntity_IContentSourceConfiguration {
         return this.Record?.ConfigurationObject ?? {};
     }
 
     /** Return the typed Website sub-object, defaulted to {} so getters can read freely. */
     public get WebsiteConfig(): MJContentSourceEntity_IContentSourceWebsiteConfiguration {
-        return this.Config.Website ?? {};
+        return this.config.Website ?? {};
     }
 
     private setConfig(patch: Partial<MJContentSourceEntity_IContentSourceConfiguration>): void {

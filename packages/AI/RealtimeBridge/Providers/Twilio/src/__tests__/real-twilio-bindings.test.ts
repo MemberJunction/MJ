@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridge-base';
 import {
     RealTwilioBindings,
-    buildConnectStreamTwiML,
-    buildDialTwiML,
-    buildPlayDigitsTwiML,
-    parseTwilioMediaFrame,
-    encodeTwilioMediaFrame,
-    encodeTwilioClearFrame,
+    BuildConnectStreamTwiML,
+    BuildDialTwiML,
+    BuildPlayDigitsTwiML,
+    ParseTwilioMediaFrame,
+    EncodeTwilioMediaFrame,
+    EncodeTwilioClearFrame,
     ITwilioRestLike,
     ITwilioMediaPump,
     TwilioCreateCallParams,
@@ -77,18 +77,18 @@ function muLawBase64(bytes: number[]): string {
 
 describe('TwiML pure helpers', () => {
     it('buildConnectStreamTwiML emits a bidirectional <Connect><Stream> with the escaped url', () => {
-        const twiml = buildConnectStreamTwiML('wss://h/media?x=1&y=2');
+        const twiml = BuildConnectStreamTwiML('wss://h/media?x=1&y=2');
         expect(twiml).toContain('<Connect>');
         expect(twiml).toContain('<Stream url="wss://h/media?x=1&amp;y=2" />');
         expect(twiml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
     });
 
     it('buildPlayDigitsTwiML emits <Play digits>', () => {
-        expect(buildPlayDigitsTwiML('12#')).toContain('<Play digits="12#" />');
+        expect(BuildPlayDigitsTwiML('12#')).toContain('<Play digits="12#" />');
     });
 
     it('buildDialTwiML emits <Dial>destination</Dial>', () => {
-        expect(buildDialTwiML('+15551112222')).toContain('<Dial>+15551112222</Dial>');
+        expect(BuildDialTwiML('+15551112222')).toContain('<Dial>+15551112222</Dial>');
     });
 });
 
@@ -100,21 +100,21 @@ describe('media-frame transcode (T0 codec)', () => {
     it('parseTwilioMediaFrame decodes base64 μ-law to PCM16 matching the codec', () => {
         const mulawBytes = [0xff, 0x80, 0x00, 0x7f, 0x40];
         const frame: TwilioMediaFrame = { event: 'media', streamSid: 'MZ1', media: { payload: muLawBase64(mulawBytes) } };
-        const pcm = parseTwilioMediaFrame(frame);
+        const pcm = ParseTwilioMediaFrame(frame);
         expect(pcm).not.toBeNull();
         const expected = muLawToPcm16Buffer(Uint8Array.from(mulawBytes).buffer);
         expect(new Uint8Array(pcm!)).toEqual(new Uint8Array(expected));
     });
 
     it('parseTwilioMediaFrame returns null for non-media events', () => {
-        expect(parseTwilioMediaFrame({ event: 'start', streamSid: 'MZ1' })).toBeNull();
-        expect(parseTwilioMediaFrame({ event: 'stop' })).toBeNull();
-        expect(parseTwilioMediaFrame({ event: 'media' })).toBeNull();
+        expect(ParseTwilioMediaFrame({ event: 'start', streamSid: 'MZ1' })).toBeNull();
+        expect(ParseTwilioMediaFrame({ event: 'stop' })).toBeNull();
+        expect(ParseTwilioMediaFrame({ event: 'media' })).toBeNull();
     });
 
     it('encodeTwilioMediaFrame encodes PCM16 to base64 μ-law matching the codec', () => {
         const pcm = new Int16Array([0, 1000, -1000, 32767, -32768]).buffer;
-        const frame = encodeTwilioMediaFrame(pcm, 'MZ1');
+        const frame = EncodeTwilioMediaFrame(pcm, 'MZ1');
         expect(frame.event).toBe('media');
         expect(frame.streamSid).toBe('MZ1');
         const expectedMulaw = pcm16ToMuLawBuffer(pcm);
@@ -125,9 +125,9 @@ describe('media-frame transcode (T0 codec)', () => {
         const mulawBytes = [0x10, 0x20, 0x30, 0x40, 0x50, 0xaa, 0x55];
         // base64 μ-law IN → PCM16
         const inFrame: TwilioMediaFrame = { event: 'media', media: { payload: muLawBase64(mulawBytes) } };
-        const pcm = parseTwilioMediaFrame(inFrame)!;
+        const pcm = ParseTwilioMediaFrame(inFrame)!;
         // PCM16 → base64 μ-law OUT
-        const outFrame = encodeTwilioMediaFrame(pcm, 'MZ1');
+        const outFrame = EncodeTwilioMediaFrame(pcm, 'MZ1');
         // μ-law is companded; decode→encode is idempotent on μ-law codes → identical bytes back.
         expect(Buffer.from(outFrame.media!.payload, 'base64')).toEqual(Buffer.from(Uint8Array.from(mulawBytes)));
     });
@@ -246,7 +246,7 @@ describe('RealTwilioBindings — Media Streams mapping', () => {
     });
 
     it('encodeTwilioClearFrame creates an event=clear frame with streamSid', () => {
-        const frame = encodeTwilioClearFrame('MZ-xyz');
+        const frame = EncodeTwilioClearFrame('MZ-xyz');
         expect(frame).toEqual({
             event: 'clear',
             streamSid: 'MZ-xyz',

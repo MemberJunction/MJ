@@ -4,10 +4,76 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Hoisted Mocks
 // ─────────────────────────────────────────────
 
-const { mockRunViewFn, mockRunViewsFn } = vi.hoisted(() => {
+const { mockRunViewFn, mockRunViewsFn, mockRunEmbeddingFn, testState, MockCompositeKey } = vi.hoisted(() => {
+    class MockCompositeKey {
+        static DefaultValueDelimiter = '||';
+        static FromURLSegment = vi.fn().mockImplementation(() => new MockCompositeKey());
+        static FromEntityRecord = vi.fn().mockImplementation(() => new MockCompositeKey());
+        KeyValuePairs: { FieldName: string; Value: string }[] = [{ FieldName: 'ID', Value: 'rec-1' }];
+        ToString = vi.fn().mockReturnValue('ID|rec-1');
+        Values = vi.fn().mockReturnValue('rec-1');
+        ToURLSegment = vi.fn().mockReturnValue('ID|rec-1');
+        ToCompactURLSegment = vi.fn().mockReturnValue('rec-1');
+        LoadFromConcatenatedString = vi.fn();
+        Equals(other: { KeyValuePairs: { FieldName: string; Value: string }[] }): boolean {
+            const a = this.KeyValuePairs, b = other?.KeyValuePairs ?? [];
+            return a.length === b.length && a.every((kv, i) =>
+                kv.FieldName.toLowerCase() === b[i].FieldName.toLowerCase() &&
+                String(kv.Value).toLowerCase() === String(b[i].Value).toLowerCase());
+        }
+    }
+
+    interface EntityDocumentStub {
+        ID: string;
+        Name: string;
+        EntityID: string;
+        AIModelID: string;
+        VectorDatabaseID: string;
+        VectorIndexID: string;
+        Type: string;
+        TemplateID: string;
+    }
+
+    interface TestState {
+        entityDocument: EntityDocumentStub | undefined;
+    }
+
+    const mockRecord = {
+        ID: 'rec-1',
+        Name: 'Alice',
+        PrimaryKey: new MockCompositeKey(),
+        GetAll: () => ({ ID: 'rec-1', Name: 'Alice' }),
+        Get: (_fieldName: string) => null,
+    };
+
+    const state: TestState = {
+        entityDocument: undefined,
+    };
+
     return {
-        mockRunViewFn: vi.fn().mockResolvedValue({ Success: true, Results: [], RowCount: 0 }),
+        MockCompositeKey,
+        mockRunViewFn: vi.fn().mockImplementation(async (params: { EntityName?: string; ResultType?: string }) => {
+            if (state.entityDocument) {
+                if (params.EntityName === 'MJ: List Details') {
+                    return { Success: true, Results: [{ RecordID: 'rec-1' }], RowCount: 1 };
+                }
+                if (params.ResultType === 'entity_object') {
+                    return { Success: true, Results: [mockRecord], RowCount: 1 };
+                }
+            }
+            return { Success: true, Results: [], RowCount: 0 };
+        }),
         mockRunViewsFn: vi.fn().mockResolvedValue([{ Success: true, Results: [], RowCount: 0 }]),
+        mockRunEmbeddingFn: vi.fn().mockImplementation(async (params: { Texts?: string[] }) => ({
+            Success: true,
+            Vectors: (params.Texts || []).map(() => [0.1, 0.2]),
+            PromptRunID: 'pr-mock',
+            TokensUsed: 10,
+            Cost: 0,
+            ErrorMessage: null,
+            ExecutionTimeMs: 1,
+        })),
+        testState: state,
     };
 });
 
@@ -21,11 +87,29 @@ vi.mock('@memberjunction/core', () => {
         RunViews = mockRunViewsFn;
     }
     class MockMetadata {
-        Entities = [{ ID: 'entity-1', Name: 'Contacts', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } }];
+        Entities = [{
+            ID: 'entity-1',
+            Name: 'Contacts',
+            FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+            Fields: [],
+        }];
         CurrentUser = { ID: 'user-1' };
         EntityByID = vi.fn().mockReturnValue({
-            ID: 'entity-1', Name: 'Contacts',
+            ID: 'entity-1',
+            Name: 'Contacts',
             FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+            Fields: [],
+            AllowRecordMerge: false,
+        });
+        EntityByName = vi.fn().mockReturnValue({
+            ID: 'entity-1',
+            Name: 'Contacts',
+            FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+            PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+            Fields: [],
+            AllowRecordMerge: false,
         });
         GetEntityObject = vi.fn().mockResolvedValue({
             Load: vi.fn().mockResolvedValue(true),
@@ -48,20 +132,8 @@ vi.mock('@memberjunction/core', () => {
         // KeyValuePair is referenced by the operation's key-mapping helper.
         BaseRemotableOperation: class {},
         KeyValuePair: class { FieldName = ''; Value = ''; },
-        CompositeKey: class {
-            KeyValuePairs: { FieldName: string; Value: string }[] = [];
-            ToString = vi.fn().mockReturnValue('key-1');
-            Values = vi.fn().mockReturnValue('key-1');
-            LoadFromConcatenatedString = vi.fn();
-            // mirror the real CompositeKey.Equals semantics (case-insensitive UUID-safe compare)
-            Equals(other: { KeyValuePairs: { FieldName: string; Value: string }[] }): boolean {
-                const a = this.KeyValuePairs, b = other?.KeyValuePairs ?? [];
-                return a.length === b.length && a.every((kv, i) =>
-                    kv.FieldName.toLowerCase() === b[i].FieldName.toLowerCase() &&
-                    String(kv.Value).toLowerCase() === String(b[i].Value).toLowerCase());
-            }
-        },
-        UserInfo: vi.fn(),
+        CompositeKey: MockCompositeKey,
+        UserInfo: class { ID = 'user-1'; },
         EntityInfo: vi.fn(),
         PotentialDuplicateRequest: class {
             EntityID = '';
@@ -91,12 +163,15 @@ vi.mock('@memberjunction/core', () => {
             ProbabilityScore = 0;
             LoadFromConcatenatedString = vi.fn();
             ToString = vi.fn().mockReturnValue('match-key');
+            ToCompactURLSegment = vi.fn().mockReturnValue('match-1');
+            ToURLSegment = vi.fn().mockReturnValue('ID|match-1');
             KeyValuePairs: { FieldName: string; Value: string }[] = [];
             // Mirror the real CompositeKey.Values() — concatenated key values — so the
             // parse-time self-match filter (isSameRecord) can be exercised faithfully.
             Values(): string {
                 return this.KeyValuePairs.map(kv => String(kv.Value)).join('||');
             }
+            Equals = vi.fn().mockReturnValue(false);
         },
         RecordMergeRequest: class {
             EntityName = '';
@@ -113,6 +188,12 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIEmbeddingRunner: class {
+        RunEmbedding = mockRunEmbeddingFn;
+    },
+}));
+
 vi.mock('@memberjunction/ai', () => ({
     BaseEmbeddings: vi.fn(),
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
@@ -123,24 +204,29 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
     BaseResponse: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    MJGlobal: {
-        Instance: {
-            ClassFactory: {
-                CreateInstance: vi.fn().mockReturnValue({
-                    EmbedTexts: vi.fn().mockResolvedValue({ vectors: [[0.1, 0.2], [0.3, 0.4]] }),
-                    queryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
-                    HybridQuery: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
-                    SupportsHybridSearch: false,
-                }),
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        MJGlobal: {
+            Instance: {
+                ClassFactory: {
+                    CreateInstance: vi.fn().mockReturnValue({
+                        EmbedTexts: vi.fn().mockResolvedValue({ vectors: [[0.1, 0.2], [0.3, 0.4]] }),
+                        queryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
+                        QueryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
+                        HybridQuery: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
+                        SupportsHybridSearch: false,
+                    }),
+                },
             },
         },
-    },
-    UUIDsEqual: vi.fn((a: string, b: string) => a === b),
-    // No-op decorator stub — the Compare Remote Operation (transitively loaded via
-    // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
-    RegisterClass: () => () => { /* no-op */ },
-}));
+        UUIDsEqual: vi.fn((a: string, b: string) => a === b),
+        // No-op decorator stub — the Compare Remote Operation (transitively loaded via
+        // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
+        RegisterClass: () => () => { /* no-op */ },
+    };
+});
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJDuplicateRunDetailEntity: vi.fn(),
@@ -157,13 +243,7 @@ vi.mock('@memberjunction/core-entities', () => ({
             Config: vi.fn().mockResolvedValue(undefined),
             EntityDocuments: [],
             VectorIndexes: [],
-            GetEntityDocumentByID: vi.fn().mockReturnValue(undefined),
-            GetVectorIndexByID: vi.fn().mockReturnValue({
-                ID: 'vi-1',
-                Name: 'mj-knowledge-index',
-                VectorDatabaseID: 'vdb-1',
-                EmbeddingModelID: 'model-1',
-            }),
+            GetEntityDocumentByID: vi.fn().mockImplementation(() => testState.entityDocument),
         },
     },
 }));
@@ -173,11 +253,29 @@ vi.mock('@memberjunction/ai-vectors', () => {
         VectorBase: class VectorBase {
             _runView = { RunView: mockRunViewFn, RunViews: mockRunViewsFn };
             _metadata = {
-                Entities: [{ ID: 'entity-1', Name: 'Contacts', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } }],
+                Entities: [{
+                    ID: 'entity-1',
+                    Name: 'Contacts',
+                    FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                    PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+                    Fields: [],
+                }],
                 CurrentUser: { ID: 'user-1' },
                 EntityByID: vi.fn().mockReturnValue({
-                    ID: 'entity-1', Name: 'Contacts',
+                    ID: 'entity-1',
+                    Name: 'Contacts',
                     FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                    PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+                    Fields: [],
+                    AllowRecordMerge: false,
+                }),
+                EntityByName: vi.fn().mockReturnValue({
+                    ID: 'entity-1',
+                    Name: 'Contacts',
+                    FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+                    PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+                    Fields: [],
+                    AllowRecordMerge: false,
                 }),
                 GetEntityObject: vi.fn().mockResolvedValue({
                     Load: vi.fn().mockResolvedValue(true),
@@ -225,6 +323,14 @@ vi.mock('@memberjunction/aiengine', () => ({
         Instance: {
             Models: [{ ID: 'model-1', AIModelType: 'Embeddings', DriverClass: 'TestDriver' }],
             VectorDatabases: [{ ID: 'vdb-1', ClassKey: 'TestVDB' }],
+            GetVectorIndexByID: vi.fn().mockReturnValue({
+                ID: 'vi-1',
+                Name: 'mj-knowledge-index',
+                VectorDatabaseID: 'vdb-1',
+                EmbeddingModelID: 'model-1',
+            }),
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: vi.fn((v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name),
         },
     },
 }));
@@ -253,12 +359,14 @@ vi.mock('@memberjunction/templates', () => ({
 // ─────────────────────────────────────────────
 
 import { DuplicateRecordDetector } from '../duplicateRecordDetector';
+import { CompositeKey, PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
 
 describe('DuplicateRecordDetector', () => {
     let detector: DuplicateRecordDetector;
 
     beforeEach(() => {
         vi.clearAllMocks();
+        testState.entityDocument = undefined;
         detector = new DuplicateRecordDetector();
     });
 
@@ -384,6 +492,33 @@ describe('DuplicateRecordDetector', () => {
             expect(result.Status).toBe('Error');
             expect(result.ErrorMessage).toContain('No active Entity Document');
         });
+
+        it('passes entity document AIModelID as ModelID to AIEmbeddingRunner for batch detection', async () => {
+            testState.entityDocument = {
+                ID: 'doc-1',
+                Name: 'Contacts Doc',
+                EntityID: 'entity-1',
+                AIModelID: 'model-1',
+                VectorDatabaseID: 'vdb-1',
+                VectorIndexID: 'vi-1',
+                Type: 'Template',
+                TemplateID: 'tmpl-1',
+            };
+            const user = new UserInfo();
+            const req = new PotentialDuplicateRequest();
+            req.EntityID = 'entity-1';
+            req.EntityDocumentID = 'doc-1';
+            req.ListID = 'list-1';
+
+            const response = await detector.GetDuplicateRecords(req, user);
+            expect(response.Status).toBe('Success');
+            expect(mockRunEmbeddingFn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ModelID: 'model-1',
+                    Description: expect.stringContaining('Duplicate detection batch'),
+                })
+            );
+        });
     });
 
     describe('CheckSingleRecord', () => {
@@ -391,6 +526,55 @@ describe('DuplicateRecordDetector', () => {
             await expect(
                 detector.CheckSingleRecord('doc-1', { ToString: () => 'key-1', KeyValuePairs: [] } as never, {}, { ID: 'user-1' } as never)
             ).rejects.toThrow('No active Entity Document');
+        });
+
+        it('passes entity document AIModelID as ModelID to AIEmbeddingRunner', async () => {
+            testState.entityDocument = {
+                ID: 'doc-1',
+                Name: 'Contacts Doc',
+                EntityID: 'entity-1',
+                AIModelID: 'model-1',
+                VectorDatabaseID: 'vdb-1',
+                VectorIndexID: 'vi-1',
+                Type: 'Template',
+                TemplateID: 'tmpl-1',
+            };
+            const user = new UserInfo();
+            const key = new CompositeKey();
+            await detector.CheckSingleRecord('doc-1', key, {}, user);
+
+            expect(mockRunEmbeddingFn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    ModelID: 'model-1',
+                    Description: expect.stringContaining('Duplicate detection single record'),
+                })
+            );
+        });
+
+        it('queries the vector index by the engine-resolved provider name, not its MJ display Name', async () => {
+            const { AIEngine } = await import('@memberjunction/aiengine');
+            const vectorIndex = {
+                ID: 'vi-1',
+                Name: 'Contacts Index (Pinecone)',
+                ExternalID: 'contacts-index',
+                VectorDatabaseID: 'vdb-1',
+                EmbeddingModelID: 'model-1',
+            };
+            vi.mocked(AIEngine.Instance.GetVectorIndexByID).mockReturnValueOnce(vectorIndex as never);
+            testState.entityDocument = {
+                ID: 'doc-1',
+                Name: 'Contacts Doc',
+                EntityID: 'entity-1',
+                AIModelID: 'model-1',
+                VectorDatabaseID: 'vdb-1',
+                VectorIndexID: 'vi-1',
+                Type: 'Template',
+                TemplateID: 'tmpl-1',
+            };
+            await detector.CheckSingleRecord('doc-1', new CompositeKey(), {}, new UserInfo());
+
+            expect(AIEngine.Instance.GetProviderIndexName).toHaveBeenCalledWith(vectorIndex);
+            expect((detector as unknown as { indexName: string }).indexName).toBe('contacts-index');
         });
     });
 

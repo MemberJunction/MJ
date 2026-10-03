@@ -1,8 +1,17 @@
+import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
 import { BehaviorSubject } from 'rxjs';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSProductionComponent } from './ps-production.component';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for <ps-production> — the model-centric production control tower. It extends

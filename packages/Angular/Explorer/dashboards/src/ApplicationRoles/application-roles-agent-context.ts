@@ -74,7 +74,7 @@ export interface ApplicationRolesAgentContextInput {
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildApplicationRolesAgentContext(input: ApplicationRolesAgentContextInput): Record<string, unknown> {
+export function BuildApplicationRolesAgentContext(input: ApplicationRolesAgentContextInput): Record<string, unknown> {
     const expanded = input.ExpandedApplicationIds.slice(0, AGENT_CONTEXT_ID_LIST_CAP);
     const context: Record<string, unknown> = {
         ApplicationGroupCount: input.ApplicationGroupCount,
@@ -115,6 +115,11 @@ export function buildApplicationRolesAgentContext(input: ApplicationRolesAgentCo
     return context;
 }
 
+/** @deprecated Use {@link BuildApplicationRolesAgentContext}. */
+export function buildApplicationRolesAgentContext(input: ApplicationRolesAgentContextInput): Record<string, unknown> {
+    return BuildApplicationRolesAgentContext(input);
+}
+
 /**
  * A minimal id+name candidate matched by {@link resolveApplicationByIdOrName}.
  */
@@ -131,7 +136,7 @@ export interface ApplicationNamedCandidate {
  *
  * Pure + deterministic. Returns the matched candidate, or null on a miss. Never throws.
  */
-export function resolveApplicationByIdOrName<T extends ApplicationNamedCandidate>(
+export function ResolveApplicationByIdOrName<T extends ApplicationNamedCandidate>(
     input: string,
     candidates: readonly T[]
 ): T | null {
@@ -150,14 +155,27 @@ export function resolveApplicationByIdOrName<T extends ApplicationNamedCandidate
     return candidates.find((c) => c.ApplicationName.toLowerCase().includes(needle)) ?? null;
 }
 
+/** @deprecated Use {@link ResolveApplicationByIdOrName}. */
+export function resolveApplicationByIdOrName<T extends ApplicationNamedCandidate>(
+    input: string,
+    candidates: readonly T[]
+): T | null {
+    return ResolveApplicationByIdOrName(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error listing a bounded sample of the available application names so
  * the agent can correct itself. Pure + deterministic.
  */
-export function buildApplicationNotFoundError(input: string, candidates: readonly ApplicationNamedCandidate[]): string {
+export function BuildApplicationNotFoundError(input: string, candidates: readonly ApplicationNamedCandidate[]): string {
     const names = candidates.slice(0, 10).map((c) => c.ApplicationName);
     const sample = names.length > 0 ? ` Applications shown in this matrix include: ${names.join(', ')}.` : '';
     return `No application matches "${input}" in this matrix.${sample}`;
+}
+
+/** @deprecated Use {@link BuildApplicationNotFoundError}. */
+export function buildApplicationNotFoundError(input: string, candidates: readonly ApplicationNamedCandidate[]): string {
+    return BuildApplicationNotFoundError(input, candidates);
 }
 
 /**
@@ -179,11 +197,16 @@ export interface ApplicationRoleExportRow {
  * 🔒 This only SERIALIZES already-visible matrix data — it performs no mutation and exposes no
  * credential. Apps with no role rows still appear as a single "(open access)" row.
  */
-export function buildApplicationRolesCsv(rows: readonly ApplicationRoleExportRow[]): string {
+export function BuildApplicationRolesCsv(rows: readonly ApplicationRoleExportRow[]): string {
     const esc = (v: string): string => `"${v.replace(/"/g, '""')}"`;
     const header = ['Application', 'Role', 'CanAccess', 'CanAdmin'].map(esc).join(',');
     const body = rows.map((r) =>
         [esc(r.ApplicationName), esc(r.RoleName), esc(r.CanAccess ? 'Yes' : 'No'), esc(r.CanAdmin ? 'Yes' : 'No')].join(',')
     );
     return [header, ...body].join('\n');
+}
+
+/** @deprecated Use {@link BuildApplicationRolesCsv}. */
+export function buildApplicationRolesCsv(rows: readonly ApplicationRoleExportRow[]): string {
+    return BuildApplicationRolesCsv(rows);
 }

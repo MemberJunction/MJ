@@ -7,7 +7,7 @@ import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-dat
 import sql from 'mssql';
 import dotenv from 'dotenv';
 import path from 'path';
-import { loadMJConfig, type MJConfig } from '../utils/config-loader';
+import { LoadMJConfig, type MJConfig } from '../utils/config-loader';
 import { DiscoverMJConfig, EffectiveProcessId, LoadDynamicPackages, StderrDynamicPackagesLogger } from '@memberjunction/dynamic-packages';
 
 // Load environment variables from .env file.
@@ -24,10 +24,11 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
 
 let isInitialized = false;
 let connectionPool: sql.ConnectionPool | null = null;
+let activeProvider: IMetadataProvider | null = null;
 /** Set only on the PostgreSQL path; there is no mssql pool to close in that case. */
 let pgProvider: { Close?: () => Promise<void> } | null = null;
 
-export async function initializeMJProvider(): Promise<void> {
+export async function InitializeMJProvider(): Promise<void> {
   if (isInitialized) {
     return;
   }
@@ -35,12 +36,13 @@ export async function initializeMJProvider(): Promise<void> {
   // Check if MJ provider is already initialized
   if (Metadata.Provider) { // global-provider-ok: CLI tool, single-provider context
     console.log('MJ Provider already initialized');
+    activeProvider = Metadata.Provider; // global-provider-ok: CLI tool, single-provider context
     isInitialized = true;
     return;
   }
 
   try {
-    const config = await loadMJConfig();
+    const config = await LoadMJConfig();
 
     // Installed Open App server packages register their entity/action subclasses here, before the
     // provider exists. When this CLI runs inside `mj`, the prerun hook has already loaded them and
@@ -148,6 +150,7 @@ For security, use environment variables:
       );
 
       await setupSQLServerClient(providerConfig);
+      activeProvider = Metadata.Provider; // global-provider-ok: CLI just installed this single provider
     }
 
     // Debug: Log entity counts
@@ -203,6 +206,11 @@ For debugging, run with --verbose flag for detailed error information.`);
   }
 }
 
+/** @deprecated Use {@link InitializeMJProvider}. */
+export async function initializeMJProvider(): Promise<void> {
+  return InitializeMJProvider();
+}
+
 /** Connection details shared by both platform initializers. */
 type ResolvedDbConfig = {
   dbName: string;
@@ -240,7 +248,8 @@ async function initializePostgresProvider(cfg: ResolvedDbConfig): Promise<void> 
     coreSchema,
     1, // must be > 0 or PostgreSQLDataProvider skips the initial metadata load
   ));
-  SetProvider(provider as unknown as IMetadataProvider);
+  activeProvider = provider as unknown as IMetadataProvider;
+  SetProvider(activeProvider);
   pgProvider = provider as unknown as { Close?: () => Promise<void> };
 
   await refreshUserCacheFromPG(provider, coreSchema);
@@ -271,7 +280,13 @@ async function refreshUserCacheFromPG(provider: { ExecuteSQL: <T>(sql: string) =
   UserCache.Instance.SetUsers(userInfos);
 }
 
-export function getConnectionPool(): sql.ConnectionPool {
+/** The provider InitializeMJProvider just installed. CLI commands use this instead of the global. */
+export function GetMJProvider(): IMetadataProvider {
+  if (!activeProvider) throw new Error('MJ Provider not initialized. Call InitializeMJProvider() first.');
+  return activeProvider;
+}
+
+export function GetConnectionPool(): sql.ConnectionPool {
   if (!connectionPool) {
     throw new Error(`❌ MJ Provider not initialized
 
@@ -284,7 +299,12 @@ This is an internal error. Please report this issue.`);
   return connectionPool;
 }
 
-export async function closeMJProvider(): Promise<void> {
+/** @deprecated Use {@link GetConnectionPool}. */
+export function getConnectionPool(): sql.ConnectionPool {
+  return GetConnectionPool();
+}
+
+export async function CloseMJProvider(): Promise<void> {
   if (connectionPool) {
     await connectionPool.close();
     connectionPool = null;
@@ -297,11 +317,16 @@ export async function closeMJProvider(): Promise<void> {
   }
 }
 
+/** @deprecated Use {@link CloseMJProvider}. */
+export async function closeMJProvider(): Promise<void> {
+  return CloseMJProvider();
+}
+
 /**
  * Get a context user for CLI operations
  * Tries to get the "System" user first, falls back to first available user
  */
-export async function getContextUser(): Promise<import('@memberjunction/core').UserInfo> {
+export async function GetContextUser(): Promise<import('@memberjunction/core').UserInfo> {
   // Try to get the System user like other CLIs do
   let user = UserCache.Instance.UserByName("System", false);
 
@@ -340,4 +365,9 @@ This is typically a configuration or database setup issue.`);
   }
 
   return user;
+}
+
+/** @deprecated Use {@link GetContextUser}. */
+export async function getContextUser(): Promise<import('@memberjunction/core').UserInfo> {
+  return GetContextUser();
 }

@@ -13,15 +13,15 @@ import {
   EntityMapRow,
 } from '../../services/integration-data.service';
 import {
-  buildActivityAgentContext,
-  resolveIntegrationSurface,
-  navLabelForSurface,
-  resolveIntegrationRecord,
-  buildIntegrationNotFoundError,
+  BuildActivityAgentContext,
+  ResolveIntegrationSurface,
+  NavLabelForSurface,
+  ResolveIntegrationRecord,
+  BuildIntegrationNotFoundError,
   ActivityRunSummary,
   NamedIntegrationRecord,
 } from '../../integration-agent-context';
-import { AgentToolResult, validateEnumParam, validateStringParam } from '../../../shared/agent-tool-validation';
+import { AgentToolResult, ValidateEnumParam, ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /**
  * The activity filter's choices: 'All' plus every real run status, derived from the entity so the
@@ -227,7 +227,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
   private emitAgentContext(): void {
     const kpis = this.dataService.ComputeKPIs(this.Summaries);
     const selectedRun = this.GetSelectedRun();
-    const context = buildActivityAgentContext({
+    const context = BuildActivityAgentContext({
       KPIs: {
         TotalIntegrations: kpis.TotalIntegrations,
         ActiveSyncs: kpis.ActiveSyncs,
@@ -321,11 +321,11 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
   }
 
   private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
-    const surface = resolveIntegrationSurface(params['surface']);
+    const surface = ResolveIntegrationSurface(params['surface']);
     if (!surface) {
       return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
     }
-    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    const tabId = await this.navigationService.OpenNavItemByName(NavLabelForSurface(surface));
     if (!tabId) {
       return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
     }
@@ -333,7 +333,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
   }
 
   private toolFilterByStatus(params: Record<string, unknown>): AgentToolResult {
-    const check = validateEnumParam<StatusFilterType>(params['status'], this.StatusOptions, 'status');
+    const check = ValidateEnumParam<StatusFilterType>(params['status'], this.StatusOptions, 'status');
     if (!check.ok) {
       return check.result;
     }
@@ -343,7 +343,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
 
   private toolFilterByTimeRange(params: Record<string, unknown>): AgentToolResult {
     const allowed = this.DateOptions.map(d => d.Value);
-    const check = validateEnumParam<DateFilterType>(params['range'], allowed, 'range');
+    const check = ValidateEnumParam<DateFilterType>(params['range'], allowed, 'range');
     if (!check.ok) {
       return check.result;
     }
@@ -352,7 +352,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
   }
 
   private toolFilterByIntegration(params: Record<string, unknown>): AgentToolResult {
-    const check = validateStringParam(params['integration'], 'integration');
+    const check = ValidateStringParam(params['integration'], 'integration');
     if (!check.ok) {
       return check.result;
     }
@@ -361,16 +361,16 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
       return { Success: true };
     }
     const candidates: NamedIntegrationRecord[] = this.Integrations.map(i => ({ ID: i.ID, Name: i.Name }));
-    const match = resolveIntegrationRecord(check.value, candidates);
+    const match = ResolveIntegrationRecord(check.value, candidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'integration') };
+      return { Success: false, ErrorMessage: BuildIntegrationNotFoundError(check.value, candidates, 'integration') };
     }
     this.SetIntegrationFilter(match.ID);
     return { Success: true };
   }
 
   private toolSearch(params: Record<string, unknown>): AgentToolResult {
-    const check = validateStringParam(params['query'], 'query');
+    const check = ValidateStringParam(params['query'], 'query');
     if (!check.ok) {
       return check.result;
     }
@@ -404,18 +404,18 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
   private resolveRunFromParam(
     raw: unknown,
   ): { ok: true; value: IntegrationRunRow } | { ok: false; result: AgentToolResult } {
-    const check = validateStringParam(raw, 'run');
+    const check = ValidateStringParam(raw, 'run');
     if (!check.ok) {
       return { ok: false, result: check.result };
     }
     const candidates: NamedIntegrationRecord[] = this.AllRuns.map(r => ({ ID: r.ID, Name: this.runLabel(r) }));
-    const match = resolveIntegrationRecord(check.value, candidates);
+    const match = ResolveIntegrationRecord(check.value, candidates);
     if (!match) {
-      return { ok: false, result: { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'run') } };
+      return { ok: false, result: { Success: false, ErrorMessage: BuildIntegrationNotFoundError(check.value, candidates, 'run') } };
     }
     const run = this.AllRuns.find(r => UUIDsEqual(r.ID, match.ID));
     if (!run) {
-      return { ok: false, result: { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'run') } };
+      return { ok: false, result: { Success: false, ErrorMessage: BuildIntegrationNotFoundError(check.value, candidates, 'run') } };
     }
     return { ok: true, value: run };
   }

@@ -66,6 +66,24 @@
             "checksum": "7a24335c70b69b4d6a23b08097fc0c497fa9f09fefafdb6b1af9f1e4ef0a56d9"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Research answer",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Knowledge Base Research Agent"
+            }
+          },
+          "primaryKey": {
+            "ID": "C38D96BE-D1BD-4EAA-90D2-739B599EE711"
+          }
+        }
       ]
     },
     "primaryKey": {

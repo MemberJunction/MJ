@@ -199,21 +199,36 @@ export class MJConfirmDialogComponent {
     return DEFAULT_ICONS[this.Type] ?? DEFAULT_ICONS.default;
   }
 
-  onConfirm(): void {
+  OnConfirm(): void {
     this.Confirmed.emit();
   }
 
-  onCancel(): void {
+  /** @deprecated Use {@link OnConfirm}. */
+  onConfirm(): void {
+    return this.OnConfirm();
+  }
+
+  OnCancel(): void {
     this.close();
     this.Cancelled.emit();
   }
 
+  /** @deprecated Use {@link OnCancel}. */
+  onCancel(): void {
+    return this.OnCancel();
+  }
+
   /** Backdrop / Esc / ✕ from the underlying dialog — ignored while Processing. */
-  onDismiss(): void {
+  OnDismiss(): void {
     if (this.Processing) {
       return;
     }
-    this.onCancel();
+    this.OnCancel();
+  }
+
+  /** @deprecated Use {@link OnDismiss}. */
+  onDismiss(): void {
+    return this.OnDismiss();
   }
 
   private close(): void {

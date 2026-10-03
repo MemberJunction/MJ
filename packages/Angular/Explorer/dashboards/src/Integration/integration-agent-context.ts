@@ -70,7 +70,7 @@ const SURFACE_TO_NAV_LABEL: Readonly<Record<IntegrationSurface, string>> = {
  * @param surface - candidate surface string (may be anything the agent passes)
  * @returns the canonical {@link IntegrationSurface} when recognized, else null
  */
-export function resolveIntegrationSurface(surface: unknown): IntegrationSurface | null {
+export function ResolveIntegrationSurface(surface: unknown): IntegrationSurface | null {
     if (typeof surface !== 'string') {
         return null;
     }
@@ -87,12 +87,22 @@ export function resolveIntegrationSurface(surface: unknown): IntegrationSurface 
     return null;
 }
 
+/** @deprecated Use {@link ResolveIntegrationSurface}. */
+export function resolveIntegrationSurface(surface: unknown): IntegrationSurface | null {
+    return ResolveIntegrationSurface(surface);
+}
+
 /**
  * The real nav-item label to pass to `NavigationService.OpenNavItemByName` for a
  * given canonical surface.
  */
-export function navLabelForSurface(surface: IntegrationSurface): string {
+export function NavLabelForSurface(surface: IntegrationSurface): string {
     return SURFACE_TO_NAV_LABEL[surface];
+}
+
+/** @deprecated Use {@link NavLabelForSurface}. */
+export function navLabelForSurface(surface: IntegrationSurface): string {
+    return NavLabelForSurface(surface);
 }
 
 // ============================================================================
@@ -115,8 +125,13 @@ export const INTEGRATION_AGENT_CONTEXT_NAME_LIST_CAP = 25;
  * @param names - the full list of names (caller owns de-duplication / ordering)
  * @returns the first N names, where N is the cap
  */
-export function capIntegrationNames(names: readonly string[]): string[] {
+export function CapIntegrationNames(names: readonly string[]): string[] {
     return names.slice(0, INTEGRATION_AGENT_CONTEXT_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapIntegrationNames}. */
+export function capIntegrationNames(names: readonly string[]): string[] {
+    return CapIntegrationNames(names);
 }
 
 /**
@@ -143,7 +158,7 @@ export interface NamedIntegrationRecord {
  * @param input - whatever the agent passed (an ID or an integration/run name)
  * @param candidates - the records available on this surface
  */
-export function resolveIntegrationRecord<T extends NamedIntegrationRecord>(
+export function ResolveIntegrationRecord<T extends NamedIntegrationRecord>(
     input: string,
     candidates: readonly T[],
 ): T | null {
@@ -166,6 +181,14 @@ export function resolveIntegrationRecord<T extends NamedIntegrationRecord>(
     return byContains ?? null;
 }
 
+/** @deprecated Use {@link ResolveIntegrationRecord}. */
+export function resolveIntegrationRecord<T extends NamedIntegrationRecord>(
+    input: string,
+    candidates: readonly T[],
+): T | null {
+    return ResolveIntegrationRecord(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error message that lists a few of the available
  * names, so the agent can correct itself. Pure + deterministic.
@@ -174,13 +197,22 @@ export function resolveIntegrationRecord<T extends NamedIntegrationRecord>(
  * @param candidates - the available records (their names are sampled)
  * @param noun - the kind of thing (e.g. "integration", "run") for the message
  */
-export function buildIntegrationNotFoundError(
+export function BuildIntegrationNotFoundError(
     input: string,
     candidates: readonly NamedIntegrationRecord[],
     noun: string,
 ): string {
     const sample = candidates.slice(0, 6).map(c => c.Name).join(', ');
     return `No ${noun} matching "${input}" is available. Available ${noun}s include: ${sample || '(none)'}.`;
+}
+
+/** @deprecated Use {@link BuildIntegrationNotFoundError}. */
+export function buildIntegrationNotFoundError(
+    input: string,
+    candidates: readonly NamedIntegrationRecord[],
+    noun: string,
+): string {
+    return BuildIntegrationNotFoundError(input, candidates, noun);
 }
 
 // ============================================================================
@@ -250,7 +282,7 @@ export interface OverviewAgentContextInput {
  * health-status breakdown, success rate, avg duration, the visible pipeline-card
  * names (bounded), and a bounded recent-activity sample.
  */
-export function buildOverviewAgentContext(input: OverviewAgentContextInput): Record<string, unknown> {
+export function BuildOverviewAgentContext(input: OverviewAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = { Surface: 'Overview', IsLoading: input.IsLoading };
     appendKPIs(context, input.KPIs);
     context['SuccessRate'] = input.SuccessRate;
@@ -261,7 +293,7 @@ export function buildOverviewAgentContext(input: OverviewAgentContextInput): Rec
     context['AverageSyncDurationMs'] = input.AverageSyncDurationMs;
     context['ActivityFeedCount'] = input.ActivityFeedCount;
     if (input.VisibleIntegrationNames.length > 0) {
-        context['VisibleIntegrationNames'] = capIntegrationNames(input.VisibleIntegrationNames);
+        context['VisibleIntegrationNames'] = CapIntegrationNames(input.VisibleIntegrationNames);
         if (input.VisibleIntegrationNames.length > INTEGRATION_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['VisibleIntegrationNameCount'] = input.VisibleIntegrationNames.length;
         }
@@ -270,6 +302,11 @@ export function buildOverviewAgentContext(input: OverviewAgentContextInput): Rec
         context['RecentActivity'] = input.RecentActivity.slice(0, INTEGRATION_AGENT_CONTEXT_NAME_LIST_CAP);
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildOverviewAgentContext}. */
+export function buildOverviewAgentContext(input: OverviewAgentContextInput): Record<string, unknown> {
+    return BuildOverviewAgentContext(input);
 }
 
 // ============================================================================
@@ -303,7 +340,7 @@ export interface ConnectionsAgentContextInput {
  * connection counts, the visible card names (bounded), and — when a connection's
  * detail view is open — the selected id+name and its entity-map detail state.
  */
-export function buildConnectionsAgentContext(input: ConnectionsAgentContextInput): Record<string, unknown> {
+export function BuildConnectionsAgentContext(input: ConnectionsAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = { Surface: 'Connections', IsLoading: input.IsLoading };
     appendKPIs(context, input.KPIs);
     context['ConnectionCount'] = input.ConnectionCount;
@@ -311,7 +348,7 @@ export function buildConnectionsAgentContext(input: ConnectionsAgentContextInput
     context['SelectedConnectionId'] = input.SelectedConnectionId;
     context['SelectedConnectionName'] = input.SelectedConnectionName;
     if (input.VisibleConnectionNames.length > 0) {
-        context['VisibleConnectionNames'] = capIntegrationNames(input.VisibleConnectionNames);
+        context['VisibleConnectionNames'] = CapIntegrationNames(input.VisibleConnectionNames);
         if (input.VisibleConnectionNames.length > INTEGRATION_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['VisibleConnectionNameCount'] = input.VisibleConnectionNames.length;
         }
@@ -325,6 +362,11 @@ export function buildConnectionsAgentContext(input: ConnectionsAgentContextInput
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildConnectionsAgentContext}. */
+export function buildConnectionsAgentContext(input: ConnectionsAgentContextInput): Record<string, unknown> {
+    return BuildConnectionsAgentContext(input);
 }
 
 // ============================================================================
@@ -380,7 +422,7 @@ export interface ActivityAgentContextInput {
  * status breakdown + records processed, the visible run rows (bounded), the
  * selected run id+name, and the bounded list of integrations available to filter.
  */
-export function buildActivityAgentContext(input: ActivityAgentContextInput): Record<string, unknown> {
+export function BuildActivityAgentContext(input: ActivityAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = { Surface: 'Activity', IsLoading: input.IsLoading };
     appendKPIs(context, input.KPIs);
     context['ActivityStatusFilter'] = input.StatusFilter;
@@ -401,12 +443,17 @@ export function buildActivityAgentContext(input: ActivityAgentContextInput): Rec
         }
     }
     if (input.AvailableIntegrationNames.length > 0) {
-        context['AvailableIntegrationNames'] = capIntegrationNames(input.AvailableIntegrationNames);
+        context['AvailableIntegrationNames'] = CapIntegrationNames(input.AvailableIntegrationNames);
         if (input.AvailableIntegrationNames.length > INTEGRATION_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['AvailableIntegrationNameCount'] = input.AvailableIntegrationNames.length;
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildActivityAgentContext}. */
+export function buildActivityAgentContext(input: ActivityAgentContextInput): Record<string, unknown> {
+    return BuildActivityAgentContext(input);
 }
 
 // ============================================================================
@@ -449,7 +496,7 @@ export interface SchedulesAgentContextInput {
  * schedule counts (total / enabled / locked) and the cadence-type breakdown, and
  * the visible schedule rows (bounded).
  */
-export function buildSchedulesAgentContext(input: SchedulesAgentContextInput): Record<string, unknown> {
+export function BuildSchedulesAgentContext(input: SchedulesAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = { Surface: 'Schedules', IsLoading: input.IsLoading };
     appendKPIs(context, input.KPIs);
     context['ScheduleCount'] = input.ScheduleCount;
@@ -465,4 +512,9 @@ export function buildSchedulesAgentContext(input: SchedulesAgentContextInput): R
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildSchedulesAgentContext}. */
+export function buildSchedulesAgentContext(input: SchedulesAgentContextInput): Record<string, unknown> {
+    return BuildSchedulesAgentContext(input);
 }
