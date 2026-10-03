@@ -857,6 +857,14 @@ export class RealtimeSessionRuntime {
     this._launcher = value ?? new DefaultRealtimeSessionLauncher();
   }
 
+  /**
+   * Loads channel code on demand. Called, with the `ClientPluginClass` keys of every channel about to be
+   * resolved (the registry's rows plus the host's declarations), after the registry is read and before any
+   * plugin is built — so a host can register a heavy channel's class only when the session could use it.
+   * It must resolve once the classes it knows are registered; a rejection is logged, never fatal.
+   */
+  public ChannelClassLoader: ((clientPluginClasses: readonly string[]) => Promise<void>) | null = null;
+
   // ── Session events (server → this session's client) ────────────────────────
 
   private readonly _sessionEvents$ = new Subject<RealtimeSessionStreamEvent>();
@@ -1768,6 +1776,11 @@ export class RealtimeSessionRuntime {
     this.exposurePreferences = preferences;
   }
 
+  /** The store the user's per-channel exposure choices are currently kept in (so a host can wrap it). */
+  public get ExposurePreferences(): IChannelExposurePreferences {
+    return this.exposurePreferences;
+  }
+
   /** Whether user settings can be written: a signed-in user on a provider that has entity metadata. */
   private canPersistUserSettings(): boolean {
     const provider = this.Provider;
@@ -1938,6 +1951,7 @@ export class RealtimeSessionRuntime {
    */
   private async prepareChannels(hostChannels?: RealtimeHostChannelDeclaration[]): Promise<PreparedChannel[]> {
     const rows = await this.fetchChannelDefinitions();
+    await this.loadChannelClasses([...rows.map((r) => r.ClientPluginClass), ...(hostChannels ?? []).map((d) => d.ClientPluginClass)]);
     const prepared: PreparedChannel[] = [];
     for (const row of rows) {
       const plugin = this.resolveChannelPlugin(row);
@@ -1961,6 +1975,29 @@ export class RealtimeSessionRuntime {
       }
     }
     return prepared.filter((p) => this.canDescribe(p));
+  }
+
+  /**
+   * Gives a host that loads channel code on demand (a widget that keeps a heavy channel in its own download)
+   * the chance to load it before the plugins are built. Never fatal: a loader that throws is logged and the
+   * channel simply is not available, exactly as if its class had never been registered.
+   *
+   * @param keys The `ClientPluginClass` keys of every channel about to be resolved (blank/absent ones included).
+   */
+  private async loadChannelClasses(keys: ReadonlyArray<string | null | undefined>): Promise<void> {
+    const loader = this.ChannelClassLoader;
+    if (!loader) {
+      return;
+    }
+    const wanted = [...new Set(keys.map((k) => k?.trim() ?? '').filter((k) => k.length > 0))];
+    if (wanted.length === 0) {
+      return;
+    }
+    try {
+      await loader(wanted);
+    } catch (error) {
+      console.error('[RealtimeSession] The channel class loader failed — channels that needed it are left out:', error);
+    }
   }
 
   /** Whether a prepared plugin's descriptor can be read; logs and rejects one that throws. */

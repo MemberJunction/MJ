@@ -588,3 +588,54 @@ describe('RealtimeSessionRuntime — owner-keyed app client tools', () => {
         await runtime.EndRealtimeSession();
     });
 });
+
+describe('RealtimeSessionRuntime — ChannelClassLoader (on-demand channel code)', () => {
+  beforeEach(() => {
+    ScopedFakeClient.Notes = [];
+    ScopedFakeClient.ListenOnConnect = true;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('is asked, before any plugin is built, for the keys of the registry rows and the host declarations (deduplicated, blanks dropped)', async () => {
+    stubRegistry([ECHO_ROW]);
+    const { runtime } = build();
+    const loader = vi.fn(async () => undefined);
+    runtime.ChannelClassLoader = loader;
+    await start(runtime, { HostChannels: [{ ClientPluginClass: 'ScopedEchoChannel' }, { ClientPluginClass: ' LazyChannel ' }, { ClientPluginClass: '' }] });
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(loader).toHaveBeenCalledWith(['ScopedEchoChannel', 'LazyChannel']);
+    await runtime.EndRealtimeSession();
+  });
+
+  it('lets the loader register a class just in time, so a channel the host declared is built from it', async () => {
+    const { runtime } = build(new MintProvider([]));
+    runtime.ChannelClassLoader = async (keys) => {
+      if (keys.includes('ScopedEchoChannel')) {
+        // The class is already registered by this file; the point is the ORDER: the loader ran before resolution.
+        ScopedFakeClient.Notes.push('loader-ran');
+      }
+    };
+    await start(runtime, { HostChannels: [{ ClientPluginClass: 'ScopedEchoChannel' }] });
+    expect(ScopedFakeClient.Notes).toContain('loader-ran');
+    expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual(['Echo']);
+    await runtime.EndRealtimeSession();
+  });
+
+  it('is not called at all when there are no channel keys, and a loader that throws is logged without stopping the session', async () => {
+    const { runtime } = build(new MintProvider([]));
+    const loader = vi.fn(async () => {
+      throw new Error('chunk 404');
+    });
+    runtime.ChannelClassLoader = loader;
+    await start(runtime);
+    expect(loader).not.toHaveBeenCalled();
+    await runtime.EndRealtimeSession();
+
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await start(runtime, { HostChannels: [{ ClientPluginClass: 'ScopedEchoChannel' }] });
+    expect(err).toHaveBeenCalledWith(expect.stringContaining('channel class loader failed'), expect.any(Error));
+    expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual(['Echo']); // the class was registered anyway
+    await runtime.EndRealtimeSession();
+  });
+});

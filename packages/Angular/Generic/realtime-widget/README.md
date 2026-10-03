@@ -4,7 +4,7 @@
 
 It ships two ways from one codebase:
 
-- **A one-script custom element.** `dist/element/mj-realtime-widget.js` is a single self-contained file. Load it, write the tag, done. No framework, no host application, no `unsafe-eval`.
+- **A one-script custom element.** `dist/element/mj-realtime-widget.js` is a small (about 8 KB gzipped) script. Load it, write the tag, done. It draws the start button and the consent notice by itself, and downloads the call code only when a visitor starts a call (or when you ask it to prefetch). No framework on your page, no host application, no `unsafe-eval`.
 - **An Angular component.** `RealtimeWidgetComponent` (selector `mj-realtime-widget`) for an Angular application that wants the same widget in a template.
 
 The call itself is MemberJunction's own realtime overlay (voice orb, live thread, channel surfaces, mute, end). The widget adds what a public page needs around it: authentication, a consent gate, resuming, tab-close cleanup, theming, and a small DOM contract of attributes, properties, methods and events.
@@ -15,7 +15,7 @@ The call itself is MemberJunction's own realtime overlay (voice orb, live thread
 - [Authentication modes](#authentication-modes)
 - [Reference](#reference): attributes, properties, methods, events
 - [Channels](#channels) and the [anonymous to verified flow](#anonymous-to-verified-flow-end-to-end)
-- [Theming](#theming) and [Content-Security-Policy](#content-security-policy)
+- [Theming](#theming), [Install and loading](#install-and-loading) and [Content-Security-Policy](#content-security-policy)
 - [Examples](#examples): plain HTML, vanilla JS, Angular, React, CMS snippet
 - [Try it](#try-it) and [Building](#building)
 - [Things worth knowing](#things-worth-knowing)
@@ -33,7 +33,7 @@ The call itself is MemberJunction's own realtime overlay (voice orb, live thread
 
 That is the whole integration for an anonymous visitor. The widget shows a "Talk to Sage" button; pressing it shows a consent notice; accepting it mints a guest session from your widget key and starts the call.
 
-Host the script yourself (the file is built by `pnpm run build` in this package) or copy it into your site's assets. Its URL is yours to choose; nothing in it is tied to a MemberJunction domain.
+Host the **whole `dist/element/` folder** yourself (it is built by `pnpm run build` in this package) or copy it into your site's assets, and point the `<script>` at `mj-realtime-widget.js`. The call code (`mj-realtime-widget-session.js` and `chunks/`) must sit beside it: the widget finds it by its own URL, so a CDN path needs no configuration. Nothing in it is tied to a MemberJunction domain. See [Install and loading](#install-and-loading) for what loads when.
 
 ## Authentication modes
 
@@ -123,6 +123,10 @@ HTML attributes are kebab-case; the matching element properties are camelCase. S
 | `locale` | `locale` | BCP-47 tag | none | The language of the widget's own copy, and the `lang` of the element. The built-in table is English; add another with `RegisterWidgetLocale` when using the component. |
 | `agent-name` | `agentName` | string | `Assistant` | The name shown on the button and in the consent notice. Cosmetic. |
 | `csp-nonce` | `cspNonce` | string | none | Your page's CSP nonce, used for the styles the widget injects. See [Content-Security-Policy](#content-security-policy). |
+| `perception` | `perception` | `on` \| `off` \| `ask` | `ask` | Whether the agent may *see* what the person shares (a whiteboard, a shared screen, a rendered component). `ask` pre-fills nothing: the server's policy decides what is possible and the "agent can see" control lets the person choose. `on` pre-sets the person's choice to "may see". `off` pre-sets it to "may not see pixels" (the agent still learns what is on screen as text). The person's own choice in the control always wins over the pre-set, and `on` can never exceed what the server's policy allows. Changing it mid-call re-applies it. Every change to what the agent can see is reported as `mj-perception-changed`. |
+| `frame-capture` | `frameCapture` | boolean | `false` | The page's statement that a rendered component may be captured as an image for the agent. **The rasterizer that honours it ships with Channels v2 Phase 2; until then this records your intent**, and the widget logs one notice if it is on and no rasterizer is registered. |
+| `preload` | `preload` | `none` \| `hover` \| `idle` \| `eager` | `hover` | When to start downloading the call code (see [Install and loading](#install-and-loading)). The code is only *downloaded*, never run, until a call starts. |
+| `session-url` | `sessionUrl` | URL | beside the script | Where the call code is, when it is not next to `mj-realtime-widget.js`. Absolute, or relative to the script. |
 | none | `launcher` | `IRealtimeSessionLauncher` | `null` | A JS-only way to mint the session yourself. Selects launcher mode. |
 
 Boolean attributes accept `true`, `1`, `yes`, `on` and the empty attribute (`<mj-realtime-widget auto-start>`) as true; `false`, `0`, `no` and `off` as false.
@@ -135,12 +139,12 @@ All are on the element. Methods that return a promise never reject for an operat
 
 | Method | Returns | Does |
 | --- | --- | --- |
-| `start()` | `Promise<void>` | Starts the call. With `require-consent` the consent notice shows first and the microphone stays off until the visitor chooses Begin. Ignored while a call is starting or live. Rejects only when the element has never been attached to a document. |
-| `end()` | `Promise<void>` | Ends the call. Safe when none is live, and it never hangs up a call that another widget or your page started. |
-| `openChannel(key, inputs?)` | `Promise<{ success, result?, error?, errorCode? }>` | Opens (and seeds) a channel in the live call, exactly as the agent's own `open` action would. Fails with `errorCode: 'no_session'` when no call is live, and with a structured error for a channel that is not in the session or inputs the channel rejects. |
-| `sendContextNote(text)` | `void` | Tells the agent something in the background: it learns it but does not speak. No-op when no call is live. |
-| `requestSpokenResponse(text)` | `boolean` | Asks the agent to speak, now, about `text`. Returns whether the request was delivered. `false` when no call is live. |
-| `registerChannel(classRef)` | `void` | Registers a channel class your page brings (a subclass of `BaseRealtimeChannelClient`). It is declared to every session the widget starts. May be called before the element is attached. |
+| `start()` | `Promise<void>` | Starts the call. With `require-consent` the consent notice shows first (the promise resolves once it is showing) and neither the microphone nor the call code is touched until the visitor chooses Begin. Otherwise it downloads the call code, connects, and resolves when the call is live or has failed. Ignored while a call is starting or live. Rejects only when the element has never been attached to a document. |
+| `end()` | `Promise<void>` | Ends the call. Safe when none is live. Called while a start is still in progress (the code is downloading, or the consent notice is showing), it **abandons that start**: nothing loads further, nothing connects, and the widget returns to `idle`. It never hangs up a call that another widget or your page started. |
+| `openChannel(key, inputs?)` | `Promise<{ success, result?, error?, errorCode? }>` | Opens (and seeds) a channel in the call, exactly as the agent's own `open` action would. **Before the call is live** it is queued if a start is pending (the consent notice is showing, the code is loading, or `auto-start` has not fired yet) and runs, in order, the moment the call goes live; it resolves to a failure (`errorCode: 'no_session'`) if the call never gets there (declined, failed to load, ended). With no start pending it resolves to `no_session` at once; it never starts a call by itself. Once live it resolves with the channel's answer, or a structured error for a channel that is not in the session or inputs the channel rejects. |
+| `sendContextNote(text)` | `void` | Tells the agent something in the background: it learns it but does not speak. **Before the call is live** (even before `start()`) the note is queued, up to 20 (the oldest are dropped), and delivered in order when the next call goes live. Notes still queued when a call ends are dropped, so one call's context is never replayed into the next. |
+| `requestSpokenResponse(text)` | `boolean` | Asks the agent to speak, now, about `text`. Returns whether the request was delivered. It is about *now*, so it is **never queued**: `false` unless the call is live. |
+| `registerChannel(classRef)` | `void` | Registers a channel class your page brings (a subclass of `BaseRealtimeChannelClient`). Allowed at any time, including before the element is attached or before the call code has loaded; it is declared to every call the widget starts. |
 
 ### Events
 
@@ -157,9 +161,10 @@ Every event is a `CustomEvent` that **bubbles and is composed**, so you can list
 | `mj-channel-opened` | `{ channel, instance, inputs }` | A channel opened. |
 | `mj-channel-event` | `{ channel, instance, name, payload, changeId?, occurredAt }` | A channel emitted a typed event (a value filled, a code sent, …). |
 | `mj-channel-output` | `{ channel, instance, output, occurredAt }` | A channel completed with a result. |
+| `mj-perception-changed` | `{ sourceId, label, channel, enabled, active, sources[] }` | The agent's view of a video source (a whiteboard, a shared screen, a rendered component) was switched on or off, by the person in the "agent can see" control, by your `perception` setting, or by the server's policy. `channel` is the channel the source belongs to, or `null`. `sources` lists every source with its state after the change. Appearing or disappearing sources are not toggles and are not reported. |
 | `mj-error` | `{ code, message, phase }` | Something failed. `message` is written for a visitor and always includes a way forward. Never a dead end: the widget offers "Try again". |
 
-`mj-error` codes: `no-credential`, `no-agent`, `auth-failed`, `session-expired`, `voice-not-enabled`, `launcher-failed`, `start-failed`, `start-dropped`, `connection-lost`, `channel-failed`.
+`mj-error` codes: `load-failed` (the call code could not be downloaded; the widget offers Try again), `no-credential`, `no-agent`, `auth-failed`, `session-expired`, `voice-not-enabled`, `launcher-failed`, `start-failed`, `start-dropped`, `connection-lost`, `channel-failed`.
 
 **Attach your listeners early.** Listeners attach to the element itself, so they work before the element is upgraded, and `mj-ready` fires only once. Put your script above the widget bundle (as the sample page does), or read `data-phase` instead of waiting for `mj-ready`.
 
@@ -175,7 +180,16 @@ Channels are small interactive surfaces that live beside the conversation: a for
   channel-inputs='{"IdentityVerification":{"name":"Ada"}}'></mj-realtime-widget>
 ```
 
-Only **`IdentityVerification`** is built into the script bundle. With a widget key, the instance's own channel list is added to yours. Other channel keys (`Whiteboard`, `Media`, `RemoteBrowser`, `ClientContext`) are resolved through the MemberJunction class factory, so they work in the Angular component inside an application that already loads them, and in the bundle only when your page registers a class under that key with `registerChannel`.
+**Built in** (nothing to register; name them in `channels`):
+
+| Channel | Where it lives | Notes |
+| --- | --- | --- |
+| `IdentityVerification` | the call code | Name, email and a one-time code, verified by the server. See below. |
+| `Whiteboard` | the call code | A shared board the agent can read and draw on. |
+| `Media` | the call code | Plays audio, video and images for the visitor. |
+| `InteractiveComponent` | **its own lazily loaded file** | Shows an interactive component (a chart, a report, a form) the agent can operate. It downloads only when a call could use it: it is named in `channels` (or by the widget instance), or a registry lists it. A call that never names it never downloads it. It loads the visitor's artifacts through the visitor's own signed-in access, so it is for authenticated sessions. |
+
+With a widget key, the instance's own channel list is added to yours. Any other key (`RemoteBrowser`, `ClientContext`, your own) is resolved through the MemberJunction class factory, so it works in the Angular component inside an application that already loads it, and in the bundle when your page registers a class under that key with `registerChannel`.
 
 A channel with a surface shows it beside the thread when the widget is wide enough (about 560px) or when `chrome="console"`. With `chrome="auto"` the widget promotes itself to the console while such a channel is open, so a narrow embed never hides a form the agent just opened.
 
@@ -236,9 +250,33 @@ The common tokens: `brand-primary`, `brand-primary-hover`, `text-primary`, `text
 
 **Shadow DOM.** The widget uses the light DOM on purpose. A web font's `@font-face` does not register from inside a shadow root, so a shadow boundary would unstyle the very icons and buttons the widget is made of. Isolation is by a `mjw-` class prefix and the cascade layer.
 
+## Install and loading
+
+The embed is several files, loaded in stages, so a page that never starts a call pays almost nothing:
+
+| File | What it is | When it loads | Size (raw / gzip) |
+| --- | --- | --- | --- |
+| `mj-realtime-widget.js` | The **shell**: a classic `<script>` that defines `<mj-realtime-widget>`, parses attributes, exposes the whole property/method/event contract, and draws the start button, the consent notice and the status screens | With your page | 25.7 KB / **8.3 KB** |
+| `mj-realtime-widget-session.js` and the 13 chunks it imports | The **call**: Angular, MemberJunction's realtime overlay, runtime, drivers, the GraphQL client, and the built-in channels (identity, whiteboard, media) | On `start()` (after consent), on `auto-start`, or prefetched by `preload` | 10.1 MB / 2.5 MB together |
+| `chunks/interactive-chunk-entry-*.js` | The Interactive Component channel | Only when that channel is in the call's scope | 51 KB / 15 KB |
+| `chunks/*.js` (the rest) | Libraries the call loads only if a feature needs them (spreadsheet export, maths rendering, diagram types) | On demand | 4.9 MB / 1.5 MB in total |
+
+These are measured from the build (`dist/element/sizes.json`); the build fails if the shell ever exceeds 40 KB gzipped or a heavy dependency leaks into it.
+
+- **Where the files go.** Keep `dist/element/` together. The shell finds the call code **relative to its own URL**, so a CDN path works with no configuration. If you must put them apart, set `session-url`.
+- **Cache.** The shell's name never changes, so give it a short cache lifetime and version the folder (`/widget/6.2.0/`); the chunks have content-hashed names and can be cached for a year.
+- **`preload`** decides when the call code starts *downloading* (it is never run until a call starts, because running it patches the page's timers and promises):
+  - `hover` (default): when the pointer or keyboard focus reaches the start button, or on touch. Because the notice takes the visitor a few seconds to read, the download is usually finished by the time they accept.
+  - `idle`: once the browser is idle after the page settles.
+  - `eager`: as soon as the element is attached. Use it when most visitors will talk.
+  - `none`: only when the call starts.
+  The prefetch is a `<link rel="modulepreload">`, so it also warms the call code's imports.
+- **Declining consent costs nothing.** With `require-consent` (the default) the consent notice is drawn by the shell; the call code is not fetched and the microphone is not touched until the visitor accepts.
+- **CORS.** The shell is a classic script and needs no CORS headers. The call code is loaded as ES modules, which browsers fetch in CORS mode, so when the files are on a different origin than your page the host must send `Access-Control-Allow-Origin`.
+
 ## Content-Security-Policy
 
-The bundle is compiled ahead of time with the Angular linker, so it needs no JIT compiler and runs under a policy **without** `unsafe-eval`:
+The call code is compiled ahead of time with the Angular linker, so it needs no JIT compiler and runs under a policy **without** `unsafe-eval`:
 
 ```
 script-src 'self' https://your-cdn.example.com;
@@ -249,8 +287,9 @@ connect-src https://api.example.com;
 media-src  blob:;
 ```
 
+- **`script-src`** must allow the origin the widget files are served from. That one entry covers the shell **and** the call code and its chunks, because they are loaded from the same folder (the chunks are ES modules fetched with `import()`, which `script-src` governs by URL). With a nonce-based policy and `'strict-dynamic'`, the nonced shell is trusted to load them; with a nonce but without `strict-dynamic`, allow the CDN origin by host as well. The `preload` link carries your nonce too.
 - **`connect-src`** must allow your MemberJunction API origin (HTTPS and the WebSocket origin used for live events).
-- **Styles.** Angular writes component styles as `<style>` elements. Give the widget your page's nonce and it applies it to them: `csp-nonce="RANDOM"` on the element, or any `<script nonce>` / `<style nonce>` already on the page (the bundle reads the first it finds). Without a nonce, the policy needs `style-src 'unsafe-inline'`.
+- **Styles.** The shell's own styles use a constructed stylesheet where the browser has one, which needs no CSP allowance. The call code's Angular components write `<style>` elements: give the widget your page's nonce and it applies it to them, with `csp-nonce="RANDOM"` on the element or any `<script nonce>` / `<style nonce>` already on the page (the first one found is used). Without a nonce, the policy needs `style-src 'unsafe-inline'`.
 - **Fonts and icons** are inlined (`data:` URIs), so no extra font host is needed.
 - **Microphone.** Browsers require HTTPS (or `localhost`) for microphone access, and any `Permissions-Policy` on your page must allow `microphone` for the embedding frame.
 
@@ -395,7 +434,7 @@ Most CMSs let an editor paste an HTML block. Paste this, replace the two values,
 
 ## Try it
 
-`sample/index.html` is a static page that loads the built bundle under a strict Content-Security-Policy, lets you type an API URL and widget key, exposes the methods as buttons, and logs every event.
+`sample/index.html` is a static page that loads the built shell under a strict Content-Security-Policy (the call code loads from the same folder when you press the button), lets you type an API URL and widget key, exposes the methods as buttons, and logs every event.
 
 ```bash
 pnpm run build
@@ -403,7 +442,7 @@ npx http-server . -p 8080     # any static server, from this package's directory
 # open http://localhost:8080/sample/
 ```
 
-It is also what the package's bundle test loads: the test boots the built bundle from the sample page in a window whose `eval` and `Function` constructor throw, so a build that quietly needed `unsafe-eval` fails the test run.
+It is also what the package's bundle test loads. `scripts/boot-bundle.mjs` boots the built shell and call code from the sample page in a window whose `eval` and `Function` constructor throw, calls `start()`, and proves that nothing but the shell is fetched until then, that the call code loads and the element upgrades into a running call, and that the Interactive Component chunk loads only when that channel is in scope. (jsdom cannot run a real module `import()`, so the call code runs in Node with jsdom's globals: it exercises the real built files but not a browser's network or CSP enforcement.) You can run it by hand: `node scripts/boot-bundle.mjs`.
 
 ## Building
 
@@ -415,18 +454,19 @@ pnpm test        # node + DOM suites, including the bundle test (build first)
 The build has three outputs:
 
 - `dist/` is the compiled Angular library (`RealtimeWidgetComponent` and friends).
-- `dist/element/mj-realtime-widget.js` is the one-script bundle (an IIFE, with a source map and a `meta.json` build report).
+- `dist/element/` is the embed: `mj-realtime-widget.js` (the shell, a classic script), `mj-realtime-widget-session.js` and `chunks/` (the call, as split ES modules), source maps, `sizes.json` (every file's raw and gzip size) and `meta.json` (the build report).
 - `src/lib/theme/widget-global-styles.generated.css` is generated at `prebuild` and `pretest` from MemberJunction's own token and button sources plus Font Awesome, and is gitignored.
 
-The element bundle is produced by esbuild after the Angular linker has converted the partially compiled Angular libraries to full ahead-of-time code (the content of each file decides, not its package name: `angular-split` and others ship partial code too). `keepNames` is on because MemberJunction resolves classes by string at runtime (`@RegisterClass`); minifying those names away breaks screens with no error.
+The embed is two esbuild builds: the shell as a classic IIFE (so it works in a CMS snippet and needs no CORS), and the call as an ES-module graph with code splitting (which needs ES-module output). The call build runs after the Angular linker has converted the partially compiled Angular libraries to full ahead-of-time code (the content of each file decides, not its package name: `angular-split` and others ship partial code too). `keepNames` is on because MemberJunction resolves classes by string at runtime (`@RegisterClass`); minifying those names away breaks screens with no error.
 
 ## Things worth knowing
 
-- **Size.** The bundle is large (about 15 MB raw, about 4 MB gzipped). Most of it is the hosted overlay's transitive imports, the same weight any MemberJunction realtime surface carries. Serve it with gzip or brotli and a long cache lifetime; the file name changes with the package version.
+- **Size.** Before this split the embed was one 15.0 MB (4.0 MB gzipped) script every page paid for up front. Now the page pays 8.3 KB gzipped; a call downloads 2.5 MB gzipped (the 1.5 MB of libraries that only some features need now load on demand, and the Interactive Component channel only when used). That call weight is still large, and most of it is not the widget's own: the overlay's imports bring in MemberJunction's generated entity classes (about 2.5 MB raw), the data grid (1.1 MB), spreadsheet export (0.9 MB), forms, and the artifact viewers. Trimming those means making the overlay lazier, which is work in `ng-conversations` and `ng-artifacts`, not here. In particular the React runtime is in the call chunk, not the Interactive Component chunk, because the overlay's activity rail imports the artifact viewers (which include React) statically; the Interactive Component chunk therefore holds only the channel, its component host and its surface. Serve everything with gzip or brotli.
 - **`new Function` in the bundle.** A handful of bundled third-party libraries contain `new Function(...)` call sites. They are not on the widget's call path, and the boot test runs the bundle with the constructor blocked to prove it. If your policy scanner flags the file for them, that is why.
 - **One call per page.** The widget drives a single shared realtime runtime. Two widgets on one page can both be idle, but only one can be in a call at a time, and a widget will never hang up a call it did not start.
 - **Recording.** The widget does not offer recording consent and always starts sessions with recording off.
 - **Resuming.** The widget remembers, per tab (`sessionStorage`), the last session and its conversation so a reload can continue it. It stores identifiers and the redeemed session token only, never names, emails or codes. It sends a best-effort close for a live call when the tab closes (`pagehide`, using a keep-alive request), and does nothing on a back/forward-cache hide.
 - **Deadlines.** The server's call ceiling is enforced on the server. The widget also ends the call a little early with reason `deadline`, so the visitor sees why instead of a dead line. Verification extends that deadline.
 - **Agent pinning.** With a widget key the server decides the agent and application. Setting `agent-id` has no effect and the widget says so in the console.
+- **zone.js is loaded with the call code**, not with the shell, because it patches the page's timers and promises. A page that never starts a call never sees it.
 - **Generated registration manifests.** The channel classes the bundle needs are referenced directly (the package declares `sideEffects: false`, and a bare `Load…()` call would be removed by the bundler), so you do not need to regenerate MemberJunction's class-registration manifests to use the element.

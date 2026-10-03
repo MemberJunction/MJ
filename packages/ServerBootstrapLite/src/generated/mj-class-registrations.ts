@@ -978,7 +978,7 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (22 classes)
+// @memberjunction/ai-agents (24 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -990,6 +990,8 @@ import {
     ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
+    IdentityVerificationChannelServer,
+    InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
@@ -2072,6 +2074,8 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
+    IdentityVerificationChannelServer,
+    InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
@@ -2149,12 +2153,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
-    MJAIAgentEntityServer,
-    MJAIAgentExampleEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJAIAgentEntityServer,
+    MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -2353,12 +2357,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     UpdateListItemStatusAction,
     UpdateRecordAction,
     ValidateAddressAction,
-    ValidateEmailUniqueAction,
-    VectorizeEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ValidateEmailUniqueAction,
+    VectorizeEntityAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -2390,7 +2394,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1015;
+export const CLASS_REGISTRATIONS_COUNT = 1017;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

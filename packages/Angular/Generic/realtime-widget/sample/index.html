@@ -4,8 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!--
-      A strict policy on purpose: scripts only from this origin, no inline script, no eval. The widget bundle
-      is linked ahead of time (no JIT compiler) so it runs under exactly this. Styles allow 'unsafe-inline'
+      A strict policy on purpose: scripts only from this origin, no inline script, no eval. The widget is linked
+      ahead of time (no JIT compiler) so it runs under exactly this. It is several files: the small script below
+      defines the element, and the call code (mj-realtime-widget-session.js and chunks/) is fetched only when a
+      call starts, from the same folder, so 'self' covers all of it. On a CDN, allow the CDN origin in script-src. Styles allow 'unsafe-inline'
       only because Angular writes component styles as <style> elements; in production pass your nonce on the
       element instead (csp-nonce="…") and drop 'unsafe-inline' — see the README, "Content-Security-Policy".
     -->
@@ -44,6 +46,7 @@
           widget-key="pk_live_replace_me"
           agent-name="Sage"
           channels="IdentityVerification"
+          preload="hover"
           chrome="auto"></mj-realtime-widget>
       </section>
 

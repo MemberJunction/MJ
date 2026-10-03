@@ -1,14 +1,21 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+  ApplyWidgetInput,
+  AttributeNameFor,
   DefaultWidgetConfig,
+  PropertyForAttribute,
   ReadBoolean,
   ReadChannelInputs,
   ReadChannelList,
   ReadChrome,
+  ReadPerception,
+  ReadPreload,
   ReadString,
   ReadThemeMode,
   ReadThemeTokens,
-  ResolveAuthMode
+  ResolveAuthMode,
+  WIDGET_INPUT_PROPERTIES,
+  WIDGET_OBSERVED_ATTRIBUTES
 } from '../lib/config';
 
 describe('attribute and property coercion', () => {
@@ -128,5 +135,53 @@ describe('DefaultWidgetConfig', () => {
     const a = DefaultWidgetConfig();
     a.channelInputs['x'] = {};
     expect(DefaultWidgetConfig().channelInputs).toEqual({});
+  });
+});
+
+describe('the element input table', () => {
+  it('names every input once, in attribute form dash-cased from the property', () => {
+    expect(new Set(WIDGET_INPUT_PROPERTIES).size).toBe(WIDGET_INPUT_PROPERTIES.length);
+    expect(AttributeNameFor('apiUrl')).toBe('api-url');
+    expect(AttributeNameFor('frameCapture')).toBe('frame-capture');
+    expect(AttributeNameFor('sessionUrl')).toBe('session-url');
+    expect(AttributeNameFor('token')).toBe('token');
+    expect(PropertyForAttribute('csp-nonce')).toBe('cspNonce');
+    expect(PropertyForAttribute('nope')).toBeNull();
+    // `launcher` is code, so it has no attribute.
+    expect(WIDGET_OBSERVED_ATTRIBUTES).not.toContain('launcher');
+    expect(WIDGET_OBSERVED_ATTRIBUTES).toContain('perception');
+    expect(WIDGET_OBSERVED_ATTRIBUTES).toContain('preload');
+  });
+
+  it('reads the new inputs with safe defaults: perception ask, preload hover, frame-capture off', () => {
+    expect(DefaultWidgetConfig()).toMatchObject({ perception: 'ask', preload: 'hover', frameCapture: false, sessionUrl: null });
+    expect([ReadPerception('on'), ReadPerception(' OFF '), ReadPerception('ask'), ReadPerception('maybe'), ReadPerception(null)]).toEqual(['on', 'off', 'ask', 'ask', 'ask']);
+    expect([ReadPreload('none'), ReadPreload('IDLE'), ReadPreload('eager'), ReadPreload('hover'), ReadPreload('soon'), ReadPreload(undefined)]).toEqual(['none', 'idle', 'eager', 'hover', 'hover', 'hover']);
+  });
+
+  it('applies a value to a config the way an attribute or a property would', () => {
+    let c = DefaultWidgetConfig();
+    c = ApplyWidgetInput(c, 'frameCapture', '');
+    expect(c.frameCapture).toBe(true);
+    c = ApplyWidgetInput(c, 'perception', 'off');
+    c = ApplyWidgetInput(c, 'preload', 'idle');
+    c = ApplyWidgetInput(c, 'sessionUrl', ' https://cdn.example.com/s.js ');
+    expect(c).toMatchObject({ perception: 'off', preload: 'idle', sessionUrl: 'https://cdn.example.com/s.js' });
+    c = ApplyWidgetInput(c, 'agentName', '   ');
+    expect(c.agentName).toBe('Assistant');
+    c = ApplyWidgetInput(c, 'theme', '{"brand-primary":"#0a7a55"}');
+    expect(c.themeTokens).toEqual({ 'brand-primary': '#0a7a55' });
+    expect(c.theme).toBe('auto');
+    c = ApplyWidgetInput(c, 'theme', 'dark');
+    expect(c.theme).toBe('dark');
+    c = ApplyWidgetInput(c, 'requireConsent', 'false');
+    expect(c.requireConsent).toBe(false);
+  });
+
+  it('accepts a launcher only if it can launch', () => {
+    const good = { Launch: async () => { throw new Error('x'); } };
+    expect(ApplyWidgetInput(DefaultWidgetConfig(), 'launcher', good).launcher).toBe(good);
+    expect(ApplyWidgetInput(DefaultWidgetConfig(), 'launcher', {}).launcher).toBeNull();
+    expect(ApplyWidgetInput(DefaultWidgetConfig(), 'launcher', 'nope').launcher).toBeNull();
   });
 });

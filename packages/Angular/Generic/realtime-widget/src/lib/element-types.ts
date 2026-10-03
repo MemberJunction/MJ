@@ -1,7 +1,7 @@
 import type { JSONObject } from '@memberjunction/ai';
 import type { IRealtimeSessionLauncher } from '@memberjunction/realtime-runtime';
 import type { WidgetChannelClass, WidgetChannelResult } from './session/widget-controller';
-import type { WidgetChrome, WidgetEventDetailMap, WidgetThemeMode } from './types';
+import type { WidgetChrome, WidgetEventDetailMap, WidgetPerception, WidgetPreload, WidgetThemeMode } from './types';
 
 /** The tag the custom element is registered under. */
 export const REALTIME_WIDGET_TAG = 'mj-realtime-widget';
@@ -50,6 +50,14 @@ export interface RealtimeWidgetElement extends HTMLElement {
   cspNonce: string | null;
   /** A JS-only way to mint the session yourself. */
   launcher: IRealtimeSessionLauncher | null;
+  /** `perception` — `on`, `off` or `ask` (default): whether the agent may see what the person shares. */
+  perception: WidgetPerception | string | null;
+  /** `frame-capture` — whether a rendered component may be captured as an image for the agent. */
+  frameCapture: boolean | string | null;
+  /** `preload` — `none`, `hover` (default), `idle` or `eager`: when to fetch the call code. */
+  preload: WidgetPreload | string | null;
+  /** `session-url` — where the call code is, when it is not beside this script. */
+  sessionUrl: string | null;
 
   /** Starts the call (the consent gate first, when required). */
   start(): Promise<void>;

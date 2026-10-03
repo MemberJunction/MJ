@@ -35,6 +35,8 @@ import { SESSION_EXPIRED_MESSAGE, type WidgetAuthAdapter } from '../auth/widget-
 import { WidgetKeyError, type WidgetGuestSession } from '../auth/widget-key-client';
 import type { WidgetPageClose } from '../lifecycle/widget-page-close';
 import type { WidgetResumeStore } from '../resume/widget-resume-store';
+import { PerceptionBridge } from './perception-bridge';
+import { ApplyFrameCapturePreference } from './frame-capture-hook';
 
 /** A channel class the page registers (`registerChannel`): constructible with no arguments. */
 export type WidgetChannelClass = new () => BaseRealtimeChannelClient;
@@ -53,6 +55,12 @@ export interface WidgetControllerDeps {
   createResumeStore: (scope: string) => WidgetResumeStore;
   pageClose: WidgetPageClose;
   now?: () => number;
+  /**
+   * Loads channel code on demand, given the `ClientPluginClass` keys of the channels a session could use. The
+   * one-script element supplies it so a heavy channel (the Interactive Component channel's React runtime)
+   * downloads only when it is in scope. Absent, every channel the page can name is already in the bundle.
+   */
+  loadChannelClasses?: (clientPluginClasses: readonly string[]) => Promise<void>;
 }
 
 /** The outcome of a host-initiated channel call. */
@@ -70,6 +78,7 @@ export const BUILT_IN_CHANNEL_KEYS: Readonly<Record<string, string>> = {
   IdentityVerification: 'IdentityVerificationChannel',
   Whiteboard: 'RealtimeWhiteboardChannel',
   Media: 'RealtimeMediaChannel',
+  InteractiveComponent: 'RealtimeInteractiveComponentChannel',
   RemoteBrowser: 'RealtimeRemoteBrowserChannel',
   ClientContext: 'ClientContextChannel'
 };
@@ -168,10 +177,13 @@ export class WidgetController {
   /** True once a connection state has arrived that belongs to THIS launch (the only sign a start was accepted). */
   private sawOwnState = false;
   private connectionSub: Subscription | null = null;
+  private readonly perception: PerceptionBridge;
 
   constructor(private readonly deps: WidgetControllerDeps, initialConfig: WidgetConfig) {
     this.config = initialConfig;
     this.now = deps.now ?? (() => Date.now());
+    this.perception = new PerceptionBridge(deps.runtime, (event) => this.emit(event));
+    this.applyPageSettings();
     this.wireRuntimeStreams();
   }
 
@@ -217,6 +229,13 @@ export class WidgetController {
   /** Replaces the configuration (the component calls this as attributes and properties change). */
   public Configure(config: WidgetConfig): void {
     this.config = config;
+    this.applyPageSettings();
+  }
+
+  /** Pushes the page's `perception` and `frame-capture` into the runtime. Cheap and idempotent. */
+  private applyPageSettings(): void {
+    this.perception.Apply(this.config.perception);
+    ApplyFrameCapturePreference(this.config.frameCapture);
   }
 
   /**
@@ -314,6 +333,7 @@ export class WidgetController {
     }
     this.connectionSub?.unsubscribe();
     this.subs.unsubscribe();
+    this.perception.Dispose();
     for (const sub of this.channelSubs.values()) {
       sub.unsubscribe();
     }
@@ -509,6 +529,10 @@ export class WidgetController {
     if (prepared.deadline) {
       runtime.SetSessionDeadline(prepared.deadline);
     }
+    if (this.deps.loadChannelClasses) {
+      runtime.ChannelClassLoader = this.deps.loadChannelClasses;
+    }
+    this.perception.Start();
     this.wireConnectionState();
     const lastSessionId = this.store?.Read()?.lastSessionId ?? null;
     // Set BEFORE the call, not after: the runtime pushes 'connecting' from inside StartRealtimeSession, and
@@ -763,6 +787,7 @@ export class WidgetController {
     }
     if (next === 'ended' || next === 'error') {
       this.ownsRuntimeCall = false; // the runtime has already torn the call down
+      this.perception.Stop();
     }
     const previous = this.phase;
     this.phase = next;

@@ -1,11 +1,21 @@
 /**
- * Bundles `<mj-realtime-widget>` into one self-contained, browser-loadable IIFE:
- * `dist/element/mj-realtime-widget.js` (plus a sourcemap and the esbuild metafile).
+ * Builds `<mj-realtime-widget>` as a SMALL SHELL plus a lazily loaded CALL CHUNK, into `dist/element/`:
  *
- * Why this is a script and not an `esbuild` flag list: the Angular Linker runs as an esbuild `onLoad` step,
- * which the CLI cannot express. The pattern is the one the Orders checkout element and the Caliber widget
- * already ship (`createApplication` + `createCustomElement`, linker bundle, no `unsafe-eval`), with the same
- * reasons — repeated here because each is load-bearing and each fails quietly:
+ *   mj-realtime-widget.js            the shell: a classic <script> (IIFE) that defines the element, renders the
+ *                                    start button / consent / status, and loads the call on demand.
+ *   mj-realtime-widget-session.js    the call: an ES module (Angular, the realtime overlay, runtime, drivers, the
+ *                                    GraphQL client, and the built-in channels) fetched by `import()` on start.
+ *   chunks/*.js                      code the call shares with the lazy Interactive Component channel, and that
+ *                                    channel itself (React runtime + component host), fetched only when a session
+ *                                    could use it.
+ *
+ * Why two builds and not one with splitting: the shell must stay a classic script (it works in a CMS snippet and
+ * needs no CORS headers on its own file), and ES-module code splitting needs ES-module output. So the shell is its
+ * own IIFE and the call is its own split ES-module build. The shell finds the call by its own URL, so a CDN path
+ * needs no configuration. A guard FAILS this build if anything heavy leaks into the shell.
+ *
+ * Why this is a script and not an `esbuild` flag list: the Angular Linker runs as an esbuild `onLoad` step, which
+ * the CLI cannot express. The reasons below are load-bearing and each fails quietly:
  *
  * ── WHY THE LINKER ────────────────────────────────────────────────────────────────────────────
  * Published `@angular/*` packages ship PARTIALLY compiled (`ɵɵngDeclare*`). esbuild does not run the Angular
@@ -31,21 +41,30 @@ import { build } from 'esbuild';
 import { transformAsync } from '@babel/core';
 import linkerPlugin from '@angular/compiler-cli/linker/babel';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, relative, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, '..');
-const entryPoint = resolve(packageRoot, 'dist/element-entry.js');
-const outFile = resolve(packageRoot, 'dist/element/mj-realtime-widget.js');
+const outDir = resolve(packageRoot, 'dist/element');
+const shellEntry = resolve(packageRoot, 'dist/shell-entry.js');
+const sessionEntry = resolve(packageRoot, 'dist/session-entry.js');
 
-if (!existsSync(entryPoint)) {
-    console.error(
-        `[build:element] Compiled entry not found at ${entryPoint}.\n` +
-            `  This script bundles ngc OUTPUT and does not compile TypeScript. Run \`pnpm run build\`\n` +
-            `  (which is \`ngc && node scripts/build-element.mjs\`) rather than this script alone.`,
-    );
-    process.exit(1);
+/** The shell's gzip budget (bytes). It is a ceiling, not a target: the build fails if the shell grows past it. */
+const SHELL_GZIP_BUDGET = 40 * 1024;
+/** Anything matching these in the shell's inputs means a heavy dependency leaked into the part every page pays for. */
+const FORBIDDEN_IN_SHELL = [/node_modules[\\/]@angular[\\/]/, /node_modules[\\/]rxjs[\\/]/, /node_modules[\\/]zone\.js[\\/]/, /node_modules[\\/]@memberjunction[\\/]/, /[\\/]MJ[A-Za-z]+[\\/]dist[\\/]/, /conversations[\\/]dist[\\/]/];
+
+for (const entry of [shellEntry, sessionEntry]) {
+    if (!existsSync(entry)) {
+        console.error(
+            `[build:element] Compiled entry not found at ${entry}.\n` +
+                `  This script bundles ngc OUTPUT and does not compile TypeScript. Run \`pnpm run build\`\n` +
+                `  (which is \`ngc && node scripts/build-element.mjs\`) rather than this script alone.`,
+        );
+        process.exit(1);
+    }
 }
 
 /**
@@ -77,26 +96,61 @@ const angularLinker = {
     },
 };
 
-mkdirSync(dirname(outFile), { recursive: true });
-const result = await build({
-    entryPoints: [entryPoint],
-    outfile: outFile,
-    bundle: true,
+rmSync(outDir, { recursive: true, force: true });
+mkdirSync(outDir, { recursive: true });
+
+const common = { bundle: true, platform: 'browser', target: 'es2022', minify: true, keepNames: true, sourcemap: true, legalComments: 'none', metafile: true, logLevel: 'warning' };
+
+// ── The shell: a classic script, nothing heavy ───────────────────────────────────────────────────
+const shell = await build({
+    ...common,
+    entryPoints: { 'mj-realtime-widget': shellEntry },
+    outdir: outDir,
     format: 'iife',
-    platform: 'browser',
-    target: 'es2022',
-    minify: true,
-    // See the header: string-based @RegisterClass lookups break silently without this.
-    keepNames: true,
-    sourcemap: true,
-    legalComments: 'none',
-    define: { ngDevMode: 'false', ngJitMode: 'false' },
-    plugins: [angularLinker],
-    metafile: true,
-    logLevel: 'info',
+    // The one dynamic import() in the shell takes a run-time URL; esbuild leaves it as a native import().
 });
 
-writeFileSync(resolve(packageRoot, 'dist/element/meta.json'), JSON.stringify(result.metafile), 'utf8');
-const out = Object.entries(result.metafile.outputs).find(([name]) => name.endsWith('mj-realtime-widget.js'));
-const bytes = out ? out[1].bytes : 0;
-console.log(`[build:element] Bundled <mj-realtime-widget> → ${outFile} (${(bytes / 1048576).toFixed(2)} MB)`);
+// ── The call: an ES module graph, split so the Interactive Component channel is its own file ─────
+const session = await build({
+    ...common,
+    entryPoints: { 'mj-realtime-widget-session': sessionEntry },
+    outdir: outDir,
+    format: 'esm',
+    splitting: true,
+    chunkNames: 'chunks/[name]-[hash]',
+    define: { ngDevMode: 'false', ngJitMode: 'false' },
+    plugins: [angularLinker],
+});
+
+// ── Guard and report ─────────────────────────────────────────────────────────────────────────────
+const leaked = Object.keys(shell.metafile.inputs).filter((input) => FORBIDDEN_IN_SHELL.some((pattern) => pattern.test(input)));
+if (leaked.length > 0) {
+    console.error(`[build:element] A heavy dependency leaked into the shell:\n  ${leaked.slice(0, 10).join('\n  ')}`);
+    process.exit(1);
+}
+
+const sizes = [];
+for (const [metafile, role] of [[shell.metafile, 'shell'], [session.metafile, 'call']]) {
+    for (const [path, info] of Object.entries(metafile.outputs)) {
+        if (path.endsWith('.map')) {
+            continue;
+        }
+        const file = relative(outDir, resolve(packageRoot, path));
+        const bytes = readFileSync(resolve(packageRoot, path));
+        const kind = role === 'shell' ? 'shell' : /^mj-realtime-widget-session/.test(file) ? 'session' : /interactive-chunk-entry/.test(file) ? 'interactive-component' : 'shared';
+        sizes.push({ file, kind, raw: bytes.length, gzip: gzipSync(bytes, { level: 9 }).length, entry: Boolean(info.entryPoint) });
+    }
+}
+writeFileSync(resolve(outDir, 'sizes.json'), JSON.stringify(sizes, null, 2), 'utf8');
+writeFileSync(resolve(outDir, 'meta.json'), JSON.stringify({ shell: shell.metafile, session: session.metafile }), 'utf8');
+
+const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
+console.log('[build:element] Bundled <mj-realtime-widget>:');
+for (const row of sizes) {
+    console.log(`  ${row.file.padEnd(58)} ${row.kind.padEnd(22)} ${kb(row.raw).padStart(10)} raw  ${kb(row.gzip).padStart(10)} gzip`);
+}
+const shellRow = sizes.find((row) => row.kind === 'shell');
+if (!shellRow || shellRow.gzip > SHELL_GZIP_BUDGET) {
+    console.error(`[build:element] The shell is ${kb(shellRow?.gzip ?? 0)} gzip; its budget is ${kb(SHELL_GZIP_BUDGET)}. Something heavy got in.`);
+    process.exit(1);
+}

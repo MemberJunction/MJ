@@ -45,6 +45,8 @@ import {
   ReadChannelInputs,
   ReadChannelList,
   ReadChrome,
+  ReadPerception,
+  ReadPreload,
   ReadString,
   ReadThemeMode,
   ReadThemeTokens
@@ -53,11 +55,8 @@ import { FormatWidgetString, ResolveWidgetStrings, type WidgetStrings } from '..
 import { BuildThemeTokenMap, ResolveDataTheme } from '../theme/widget-theme';
 import { WidgetController, type WidgetChannelClass, type WidgetChannelResult, type WidgetControllerDeps } from '../session/widget-controller';
 import { EnsureBuiltInChannelsRegistered } from '../channels/built-in-channels';
-import { CreateBrowserWidgetAuth } from '../auth/widget-auth.browser';
-import { WidgetKeyClient } from '../auth/widget-key-client';
-import { CreateBrowserPageClose } from '../lifecycle/widget-page-close.browser';
-import { WidgetResumeStore } from '../resume/widget-resume-store';
-import { type WidgetChrome, type WidgetConfig, type WidgetOutboundEvent, type WidgetPhase, type WidgetThemeMode } from '../types';
+import { DefaultRealtimeWidgetPorts, type RealtimeWidgetPorts } from '../session/widget-ports';
+import { type WidgetChrome, type WidgetConfig, type WidgetOutboundEvent, type WidgetPerception, type WidgetPhase, type WidgetPreload, type WidgetThemeMode } from '../types';
 import { WidgetConsentGateComponent } from './widget-consent-gate.component';
 import { WidgetGlobalStylesComponent } from './widget-global-styles.component';
 import { WidgetStatusComponent } from './widget-status.component';
@@ -84,19 +83,6 @@ export function QueueRealtimeWidgetChannel(element: HTMLElement, channelClass: W
 /** The component driving `element`, or `null` when it is not (or no longer) attached. */
 export function GetRealtimeWidgetComponent(element: HTMLElement): RealtimeWidgetComponent | null {
   return COMPONENTS_BY_ELEMENT.get(element) ?? null;
-}
-
-/** The collaborators the widget builds its controller from. A host (or a test) replaces any of them. */
-export type RealtimeWidgetPorts = Omit<WidgetControllerDeps, 'runtime'>;
-
-/** Production wiring: the browser `fetch`, the real GraphQL provider, `sessionStorage`. */
-export function DefaultRealtimeWidgetPorts(): RealtimeWidgetPorts {
-  return {
-    createAuth: (apiUrl, refresh) => CreateBrowserWidgetAuth(apiUrl, refresh),
-    createGuestSessions: (apiUrl, widgetKey) => new WidgetKeyClient(apiUrl, widgetKey),
-    createResumeStore: (scope) => new WidgetResumeStore(scope),
-    pageClose: CreateBrowserPageClose()
-  };
 }
 
 /** The ports the widget uses. Provide it to substitute any of them. */
@@ -259,6 +245,22 @@ export class RealtimeWidgetComponent implements AfterViewInit, OnDestroy {
   /** A host-supplied way to mint the session (a JS property; there is no attribute form). */
   @Input() set launcher(value: IRealtimeSessionLauncher | null | undefined) { this.patch({ launcher: value ?? null }); } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
   get launcher(): IRealtimeSessionLauncher | null { return this.config.launcher; } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
+
+  /** `on`, `off` or `ask` (default) — `perception`. Pre-sets whether the agent may see what the person shares. */
+  @Input() set perception(value: unknown) { this.patch({ perception: ReadPerception(value) }); } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
+  get perception(): WidgetPerception { return this.config.perception; } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
+
+  /** Whether a rendered component may be captured as an image for the agent — `frame-capture`. */
+  @Input() set frameCapture(value: unknown) { this.patch({ frameCapture: ReadBoolean(value, false) }); } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
+  get frameCapture(): boolean { return this.config.frameCapture; } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
+
+  /** When the one-script element fetches the call code — `preload`. Accepted here for parity; a component has no separate download. */
+  @Input() set preload(value: unknown) { this.patch({ preload: ReadPreload(value) }); } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
+  get preload(): WidgetPreload { return this.config.preload; } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
+
+  /** Where the one-script element finds its call chunk — `session-url`. Accepted here for parity; unused by the component. */
+  @Input() set sessionUrl(value: unknown) { this.patch({ sessionUrl: ReadString(value) }); } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
+  get sessionUrl(): string | null { return this.config.sessionUrl; } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
 
   // ── Methods ────────────────────────────────────────────────────────────────
 

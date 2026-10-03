@@ -7,7 +7,7 @@
  * per-test state lives in `fx` and is reset in `beforeEach`; every test ends its call and detaches its element.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { provideZonelessChangeDetection, type ApplicationRef } from '@angular/core';
+import { provideZonelessChangeDetection, reflectComponentType, type ApplicationRef } from '@angular/core';
 import { createApplication } from '@angular/platform-browser';
 import { RealtimeSessionRuntime } from '@memberjunction/realtime-runtime';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -29,8 +29,11 @@ import { StubRealtimeSessionOverlayComponent } from '../__tests__/stub-overlay.c
 import { WidgetAuthAdapter, type HttpPostPort } from './auth/widget-auth.adapter';
 import { WidgetPageClose } from './lifecycle/widget-page-close';
 import { WidgetResumeStore } from './resume/widget-resume-store';
-import { REALTIME_WIDGET_PORTS, REALTIME_WIDGET_RUNTIME, type RealtimeWidgetPorts } from './components/realtime-widget.component';
-import { RegisterRealtimeWidgetElement, ReadCspNonce } from './realtime-widget.element';
+import { REALTIME_WIDGET_PORTS, REALTIME_WIDGET_RUNTIME, RealtimeWidgetComponent } from './components/realtime-widget.component';
+import { WIDGET_INPUT_PROPERTIES } from './config';
+import type { RealtimeWidgetPorts } from './session/widget-ports';
+import { RegisterRealtimeWidgetElement } from './realtime-widget.element';
+import { ReadCspNonce } from './csp-nonce';
 import { REALTIME_WIDGET_TAG, type RealtimeWidgetElement } from './element-types';
 import type { WidgetEventName } from './types';
 
@@ -151,6 +154,13 @@ describe('<mj-realtime-widget> element', () => {
       expect(el.querySelector('.mjw-start')?.textContent).toContain('Talk to Sage');
       expect(el.getAttribute('data-phase')).toBe('idle');
       expect(el.classList.contains('mjw-host')).toBe(true);
+    });
+  });
+
+  describe('the contract is one list', () => {
+    it('the Angular component takes exactly the inputs the one-script element does (they cannot drift)', () => {
+      const inputs = (reflectComponentType(RealtimeWidgetComponent)?.inputs ?? []).map((i) => i.propName).sort();
+      expect(inputs).toEqual([...WIDGET_INPUT_PROPERTIES].sort());
     });
   });
 

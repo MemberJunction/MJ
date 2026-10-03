@@ -29,6 +29,24 @@ export type WidgetThemeMode = 'light' | 'dark' | 'auto';
  */
 export type WidgetPhase = 'idle' | 'consent' | 'booting' | 'connecting' | 'live' | 'ended' | 'error';
 
+/**
+ * Whether the agent may SEE what the person is looking at (a whiteboard, a shared screen, a rendered component).
+ *  - `ask` (default) — no answer is pre-filled: the server's policy decides what is possible, and the "agent can
+ *    see" control lets the person choose.
+ *  - `on` — the person's choice is pre-set to "may see" (up to what the server's policy allows).
+ *  - `off` — pre-set to "may not see pixels": the agent still learns what is on screen as text, never as an image.
+ */
+export type WidgetPerception = 'on' | 'off' | 'ask';
+
+/**
+ * When the element fetches the heavy call code (the realtime overlay, drivers, channels).
+ *  - `none` — only when the call starts.
+ *  - `hover` (default) — when the visitor's pointer or keyboard focus reaches the start button (or on touch).
+ *  - `idle` — once the browser is idle after the page has settled.
+ *  - `eager` — immediately, as soon as the element is attached.
+ */
+export type WidgetPreload = 'none' | 'hover' | 'idle' | 'eager';
+
 /** Why a session ended, as reported on `mj-session-ended`. */
 export type WidgetEndReason = 'user' | 'error' | 'deadline' | 'page-close' | 'remote';
 
@@ -42,6 +60,7 @@ export type WidgetErrorCode =
   | 'launcher-failed'
   | 'start-failed'
   | 'start-dropped'
+  | 'load-failed'
   | 'connection-lost'
   | 'channel-failed';
 
@@ -87,6 +106,17 @@ export interface WidgetConfig {
   cspNonce: string | null;
   /** A host-supplied way to mint the session (see {@link IRealtimeSessionLauncher}). */
   launcher: IRealtimeSessionLauncher | null;
+  /** Whether the agent may see what the person shares; see {@link WidgetPerception}. */
+  perception: WidgetPerception;
+  /**
+   * Whether a rendered component may be captured as an image for the agent. Read by the session chunk; the
+   * default rasterizer that honours it is Phase 2's, so today this only records the page's intent.
+   */
+  frameCapture: boolean;
+  /** When to fetch the heavy call code; see {@link WidgetPreload}. */
+  preload: WidgetPreload;
+  /** Where the call chunk lives, when it is not next to this script (the element derives it from its own URL). */
+  sessionUrl: string | null;
 }
 
 /** The names of the DOM events the element dispatches (bubbling and composed). */
@@ -100,6 +130,7 @@ export const WIDGET_EVENTS = {
   ChannelOpened: 'mj-channel-opened',
   ChannelEvent: 'mj-channel-event',
   ChannelOutput: 'mj-channel-output',
+  PerceptionChanged: 'mj-perception-changed',
   Error: 'mj-error'
 } as const;
 
@@ -174,6 +205,24 @@ export interface WidgetChannelOutputDetail {
   occurredAt: number;
 }
 
+/** One video source the agent can or could see (a whiteboard, a shared screen, a rendered component). */
+export interface WidgetPerceptionSource {
+  sourceId: string;
+  label: string;
+  /** The channel the source belongs to, or `null` for one that is not a channel (a camera, a screen share). */
+  channel: string | null;
+  /** Whether the agent may see it. */
+  enabled: boolean;
+  /** Whether the agent is looking at it right now. */
+  active: boolean;
+}
+
+/** Raised when the agent's view of a source is switched on or off, whoever did it (the person, the page, the server's policy). */
+export interface WidgetPerceptionChangedDetail extends WidgetPerceptionSource {
+  /** Every source, with its state after the change. */
+  sources: WidgetPerceptionSource[];
+}
+
 export interface WidgetErrorDetail {
   code: WidgetErrorCode;
   message: string;
@@ -191,6 +240,7 @@ export interface WidgetEventDetailMap {
   'mj-channel-opened': WidgetChannelOpenedDetail;
   'mj-channel-event': WidgetChannelEventDetail;
   'mj-channel-output': WidgetChannelOutputDetail;
+  'mj-perception-changed': WidgetPerceptionChangedDetail;
   'mj-error': WidgetErrorDetail;
 }
 

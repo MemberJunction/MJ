@@ -1,9 +1,11 @@
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { IdentityVerificationChannel } from '@memberjunction/ng-conversations/dist/lib/components/realtime/identity-verification/identity-verification-channel';
+import { RealtimeWhiteboardChannel } from '@memberjunction/ng-conversations/dist/lib/components/realtime/whiteboard/whiteboard-channel';
+import { RealtimeMediaChannel } from '@memberjunction/ng-conversations/dist/lib/components/realtime/media/media-channel';
 
 /**
- * The channel classes this widget ships, by the ClassFactory key a host declaration resolves them through.
+ * The channel classes this widget ships IN ITS CALL CHUNK (identity verification, whiteboard, media), by the ClassFactory key a host declaration resolves them through.
  *
  * Why this is a VALUE reference and not just a `Load…()` call: `@memberjunction/ng-conversations` declares
  * `"sideEffects": false`, and esbuild inlines an empty `Load…()` call away, finds the channel class
@@ -12,7 +14,9 @@ import { IdentityVerificationChannel } from '@memberjunction/ng-conversations/di
  * whiteboard). Naming the class here is what pins it.
  */
 export const BUILT_IN_CHANNEL_CLASSES: ReadonlyArray<{ key: string; channelClass: new () => BaseRealtimeChannelClient }> = [
-  { key: 'IdentityVerificationChannel', channelClass: IdentityVerificationChannel }
+  { key: 'IdentityVerificationChannel', channelClass: IdentityVerificationChannel },
+  { key: 'RealtimeWhiteboardChannel', channelClass: RealtimeWhiteboardChannel },
+  { key: 'RealtimeMediaChannel', channelClass: RealtimeMediaChannel }
 ];
 
 /**

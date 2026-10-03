@@ -18,6 +18,7 @@ import { REALTIME_WIDGET_TAG, type RealtimeWidgetElement } from './element-types
 import type { WidgetChannelClass, WidgetChannelResult } from './session/widget-controller';
 
 export { REALTIME_WIDGET_TAG } from './element-types';
+import { ReadCspNonce } from './csp-nonce';
 
 /** The element's methods need an attached component; this is the failure when there is none. */
 function notAttached(method: string): Error {
@@ -78,21 +79,6 @@ export function RegisterRealtimeWidgetElement(injector: Injector): void {
     return;
   }
   customElements.define(REALTIME_WIDGET_TAG, CreateRealtimeWidgetElementClass(injector));
-}
-
-/**
- * The CSP nonce for the styles the widget injects. Angular needs it at application creation, so it is read
- * from the first `<mj-realtime-widget>` already on the page (`csp-nonce`, or Angular's own `ngcspnonce`), else
- * from any `<script nonce>` / `<style nonce>` — the same nonce a page that sets a strict CSP already has.
- */
-export function ReadCspNonce(doc: Document = document): string {
-  const host = doc.querySelector(REALTIME_WIDGET_TAG);
-  const fromHost = host?.getAttribute('csp-nonce') || host?.getAttribute('ngcspnonce');
-  if (fromHost) {
-    return fromHost;
-  }
-  const tagged = doc.querySelector<HTMLElement>('script[nonce], style[nonce]');
-  return tagged?.nonce || tagged?.getAttribute('nonce') || '';
 }
 
 /**
