@@ -119,7 +119,13 @@ telephony: {
   // Outbound (`Place*Call`) policy — defaults shown. Applies on top of the caller's right to run the agent.
   outbound: {
     allowedPrefixes: ['+1'],               // E.164 prefixes a call may go to; [] refuses everything
-    blockedPrefixes: ['+1900', '+1976'],   // always refused, even if an allowed prefix matches
+    // Always refused, even if an allowed prefix matches. OMIT this to get the built-in list (shown): NANP
+    // premium-rate +1900/+1976 plus the Caribbean +1 countries abused for toll fraud. Setting it REPLACES the list.
+    blockedPrefixes: [
+      '+1900', '+1976',
+      '+1242', '+1246', '+1264', '+1268', '+1284', '+1345', '+1441', '+1473', '+1649', '+1658',
+      '+1664', '+1721', '+1758', '+1767', '+1784', '+1809', '+1829', '+1849', '+1868', '+1869', '+1876',
+    ],
     maxCallsPerUserPerHour: 20,            // in-memory sliding window — PER PROCESS (N instances ⇒ N× the limit)
   },
 
@@ -167,6 +173,16 @@ telephony: {
 },
 ```
 
+### Outbound toll fraud: block Caribbean +1 and enable carrier geographic permissions
+
+`+1` is not just the US and Canada: the North American Numbering Plan also covers Jamaica, the Dominican Republic,
+the Bahamas and other Caribbean countries whose numbers are billed at international rates and are the classic
+destinations of toll-fraud (IRSF) schemes. The built-in `blockedPrefixes` therefore refuse those area codes while
+leaving US territories (Puerto Rico, USVI, Guam, ...) allowed. Operators can override the list with
+`telephony.outbound.blockedPrefixes` (the override replaces the built-in list entirely). This is a second line of
+defence: also **enable geographic permissions in the carrier console** (Twilio Voice Geographic Permissions /
+Vonage geo-permissions) and allow only the countries you actually call.
+
 ### Inbound run-as user (required) and what protects the telephony endpoints
 
 A phone caller is anonymous — there is no MJ session to inherit a user from — yet the call still needs a
@@ -179,6 +195,8 @@ first Owner), so every stranger who dialed a number ran an agent with the platfo
 - If it is unset, matches no user, names an inactive user, or names the system user, the call is **rejected**
   (Twilio: a short spoken apology + hang-up; Vonage: a `talk` NCCO; RingCentral: the SIP INVITE is declined) and
   an error naming the dialed number is logged. After upgrading, inbound calls stop working until this is set.
+- An **Owner** is allowed but logs a startup-time warning (once per process): every anonymous caller would run agents
+  with Owner privileges. Use a dedicated least-privilege user instead.
 
 The carrier media websockets are authenticated per call. MJ mints a random token when it accepts or places a call
 and embeds it in the TwiML `<Parameter name="mjToken">` (Twilio) or the websocket URI `mj_token` (Vonage); a socket
