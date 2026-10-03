@@ -13,7 +13,7 @@
  * @module @memberjunction/telephony-adapters
  */
 
-import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
@@ -37,11 +37,32 @@ export const UserCacheDirectory: RunAsUserDirectory = {
     GetSystemUser: () => UserCache.Instance.GetSystemUser(),
 };
 
+/** Run-as users already warned about, so the Owner warning is logged once per process per user. */
+const ownerWarnedUserIds = new Set<string>();
+
+/** Whether the user is an Owner-type user (the highest-privilege MJ user type). */
+function isOwner(user: UserInfo): boolean {
+    return user.Type?.trim().toLowerCase() === 'owner';
+}
+
+/** Logs (once per process per user) that inbound callers will run with Owner privileges. */
+function warnOnceIfOwner(user: UserInfo): void {
+    const key = user.ID.toLowerCase();
+    if (!isOwner(user) || ownerWarnedUserIds.has(key)) {
+        return;
+    }
+    ownerWarnedUserIds.add(key);
+    LogStatus(
+        `[Telephony] WARNING: telephony.inboundRunAsUserEmail '${user.Email}' is an Owner. Every anonymous inbound caller will run ` +
+            'agents with Owner privileges. Use a dedicated least-privilege user instead.',
+    );
+}
+
 /**
  * Resolves `telephony.inboundRunAsUserEmail` to the user an inbound call runs as.
  *
  * Rejects (never falls back) when the setting is blank, names no known user, names an inactive user, or
- * names the system user.
+ * names the system user. An Owner is still allowed, but logs a one-time warning that callers get Owner privileges.
  *
  * @param configuredEmail The configured email (may be undefined/blank).
  * @param directory User lookups (defaults to the {@link UserCache}).
@@ -66,6 +87,7 @@ export function ResolveInboundRunAsUser(
     if (systemUser && UUIDsEqual(systemUser.ID, user.ID)) {
         return { Ok: false, Reason: `telephony.inboundRunAsUserEmail '${email}' is the system user; configure a dedicated least-privilege user instead.` };
     }
+    warnOnceIfOwner(user);
     return { Ok: true, User: user };
 }
 
