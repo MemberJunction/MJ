@@ -1,5 +1,180 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+### Patch Changes
+
+- f555162: Add a `compose:email` actionable command so an agent can hand the user a pre-filled email draft.
+
+  The agent drafts; the user sends. Nothing in this path transmits mail — the host opens the user's
+  own compose window via a `mailto:` URL and the user decides whether to send.
+  - **ai-core-plus** — `ComposeEmailCommand` joins the `ActionableCommand` union, with `BuildMailtoURL`,
+    `MAILTO_MAX_URL_LENGTH` and `IsMailtoURLWithinLimit`. The command carries no target field: which
+    compose surface opens is the host's decision, so retargeting later is a one-handler change rather
+    than a migration across every agent that emits one.
+  - **ng-conversations** — the handler opens the mail client via a synthesized anchor click (not
+    `window.open`, which strands an `about:blank` tab on a non-http scheme). Past the length limit it
+    refuses to open, copies the body best-effort, and emits for the host to open the draft artifact
+    instead: a mail client handed an over-long URL does not error, it opens a draft with the body
+    **silently truncated**. The emitted request carries `DraftCopiedToClipboard`, so the host can say
+    the clipboard changed without ever claiming a copy that failed. compose:email is logged by type
+    only, never with its body or recipients.
+  - **ng-explorer-core** — handles the over-length fallback by opening the draft artifact (by
+    `artifactId`, else the conversation's most recent) and showing one notification that says why
+    the mail client did not open, names the artifact that opened, and says whether the text is on the
+    clipboard. A stated `artifactId` that is not loaded opens nothing rather than a different
+    artifact, and "nothing to open" is a notification rather than a console warning.
+  - **messaging-adapters** — Slack and Teams degrade to a note naming the draft, because a `mailto:`
+    URL fails both platforms' button-URL checks and the command would otherwise render as nothing.
+    The note carries the label and the route back to Explorer only — never the recipient or subject:
+    a channel is a shared, retained surface, and what is safe beside the composing user's own button
+    is not safe for every participant.
+
+  The button shows the draft's recipients next to it: it otherwise renders only the agent-authored
+  label, so an agent influenced by injected content could pair a benign label with an unexpected
+  address and the user would not see it until their own mail client was already populated. The line
+  wraps rather than truncating, so a Bcc (listed last) is never cut off.
+
+- 5114c10: ArtifactsModule no longer preloads React, ReactDOM and Babel from unpkg when it is constructed, so apps that only import a realtime overlay (e.g. a public voice widget) make no third-party CDN requests at bootstrap. MJ Explorer keeps the warm cache by calling AngularAdapterService.Preload() after login. Other hosts that render interactive component artifacts and want a warm cache can call `inject(AngularAdapterService).Preload()` (from `@memberjunction/ng-react`) after authentication; otherwise the runtime loads on first use.
+- a3d6182: fix: a date-only (SQL `date`) column reads as its stored day in the query viewer, the record change history and restore preview, and the timeline, and exports as `YYYY-MM-DD`
+
+  These paths still formatted a calendar day, which arrives as UTC midnight, in the reader's local zone, so a stored 2026-10-01 read as Sep 30 west of Greenwich: as "Sep 30, 2026" in a query viewer cell and row detail, as "Sep 30, 2026, 7:00 PM" in the change history, and in a "September 30" timeline segment. The query viewer now branches on `IsDateOnlySQLType` and formats with `FormatDateOnly`, and the row detail no longer adds an "hours ago" suffix to a day. The change history and the restore preview share one formatter, so a date-only field shows its day with no time, and the restore preview's live value for a date field is no longer blank. The timeline carries a date-only event as local midnight of its stored day, so its segments and labels land on that day. The export engine gains a `dateonly` column type: CSV and JSON write ISO 8601 `YYYY-MM-DD`, and Excel writes a date cell on the stored day. The entity grid and the query viewer mark SQL `date` columns with it, and the query viewer's export columns now set `dataType` (they set an ignored `type` key before).
+
+  The entity viewer's Timeline view now reads its date field the same way: its rows are plain objects with no entity metadata, so the renderer hands the timeline group the entity (`TimelineGroup.EntityInfo`, used when a record carries none) and drops the time from the card date for a date-only field. The restore preview decides whether a field changed by value, not by its display string, so a timestamp that moved by under a minute is no longer reported unchanged and a snapshot day matches the same live day. The fallback export for Cards, Map and Timeline (the view workspace and Explorer's view resource) types its columns as the grid does, through a shared `ExportColumnTypeForSQLType`, so a date-only field exports as its day there too. The export engine writes a `dateonly` value whose leading `YYYY-MM-DD` is not a real day (`2026-13-45`, `2026-02-30`) as its original text instead of "Invalid Date" or a rolled-over day. The mobile app's entity explorer shows a date-only field in card subtitles and the record detail as its stored day. Closes MJ#4966.
+
+- ea4080e: fix: an agent completion reaches the conversation even when the WebSocket dies without closing (MJ#4222)
+
+  On an unstable connection, sending a message to an agent left the message spinning forever: status updates stopped, the elapsed timer counted up with no ceiling, and no error appeared. The agent ran fine and its answer persisted; only a refresh revealed it.
+
+  The cause was not a missing timeout but a single point of failure. Five recovery mechanisms — graphql-ws `retryAttempts`, `GraphQLDataProvider._socketStateSubject`, Explorer's `ServerConnectivityService`, `ConversationStreaming.scheduleReconnection()` and `FireAndForgetHelper.onStreamEnd` — were all triggered by the socket `closed` event, and the failure mode is precisely "the socket never closes". They failed together. graphql-ws re-arms its keepalive only on pong receipt, so a half-open socket gets one ping and then permanent silence; its own JSDoc says nothing happens automatically if the server never responds.
+
+  **Transport.** `getOrCreateWSClient()` now arms a pong watchdog on each ping it sends and calls `client.terminate()` if no pong returns, producing a real `4499` close that the existing retry apparatus can act on. Each client owns its own pong timer, and a close from a client that has already been replaced is ignored, so one socket can never terminate or disarm its replacement. `connectionAckWaitTimeout` is set, and `keepAlive` drops to 10s, making detection ~14s in practice instead of never. MJServer passes its `useServer` keepAlive explicitly rather than relying on an invisible library default.
+
+  **Recovery triggers.** New `ConversationLiveness` (L0, no Angular) aggregates socket reconnect, stream re-subscribe, tab-visible and browser-online into one coalesced reconciliation request, throttled leading-edge at 500ms. `ng-conversations` adds a root-provided DOM bridge and `ReconcileNow()`, which refreshes agent runs **before** comparing status — without that the comparison reads the stale in-memory map the outage froze and silently no-ops. The reconciliation path runs over HTTP, so it repairs a message while the socket is still dead.
+
+  **Durable read model.** New `TailConversationEvents` query over existing `AIAgentRunStep` rows — no table, no migration. The cursor never rewinds, events are capped at 200, authorization is delegated to `RunView` as the calling user through the request's read-only provider, and not-found and not-authorized are indistinguishable. Only the columns an event carries are read, never the step's input, output or payload columns. A run `Paused` on a still-running workflow reports `IsInFlight: true`, and a failed call does too, because it knows nothing about the run. `FinalPayload` falls back to the conversation detail's message because `AIAgentRun.Result` is agent-dependent and null on many successful runs; callers must decide terminality from `IsInFlight`/`DetailStatus`, never from its presence. `GraphQLConversationClient` and `ConversationTail` hold a per-message cursor that advances only on a successful read. When the tail call fails, for example a new client against an older server, the client completes a message from its run list as it did before.
+
+  **Cross-instance delivery.** Push-status updates now carry `SourceServerId` and fan out over Redis through a generic `PublishMessage`/`SubscribeToChannel` pair on `RedisLocalStorageProvider`, closing the case where the mutation lands on one replica and the browser's socket on another. Inbound messages are type-checked, then republish onto the local topic and still pass the identity filter, so a replica never decides who sees what. Streaming deltas are deliberately not replicated. Measured: 5 push frames delivered cross-replica with Redis, 0 without — and the message still completed without it, so fan-out is a latency optimization rather than a requirement.
+
+  **Deployment order.** A client deployed before the server gets a failed tail call on every reconcile and falls back to the run list, which cannot see the conversation detail's own status. The liveness pulse (`DEFAULT_PULSE_INTERVAL_MS`, 5 min → 60 s in MJServer) and the client's idle window (`DEFAULT_IDLE_TIMEOUT_MS`, 12 min → 3 min in GraphQLDataProvider) are a matched pair in separate packages. Ship the server first or with the client: a client on the 3-minute window against a server still pulsing every 5 minutes times out on every pulse gap. `DEFAULT_MAX_STALL_RECONCILES` stays at 6, so the give-up horizon moves from roughly 72 minutes to roughly 18.
+
+  **Honest UI.** The message time pill degrades `live → checking → stalled`, with thresholds anchored to the agent watchdog's own 30s heartbeat and 5-minute stale threshold rather than invented values. Silence is measured from the last push frame the browser received for the run or the message, including the server's 60s liveness pulse, and from the run's database timestamps when the run was re-read. Progress frames carry the server's in-memory run, whose timestamps do not move until the run ends, so they cannot be the only signal. A row with no MJ agent run, such as one written by a host's own turn handler, stays live while frames that name it arrive. The database timestamp is bounded by how long the component has been watching, so browser-versus-database clock skew cannot invent a stall. While HTTP works, a dead socket alone does not degrade the pill: each reconcile re-reads the run and its fresh heartbeat. The connectivity banner reports the socket. The pill's one-second timer stops whenever nothing is in flight.
+
+  A quiet pill's request for a re-check goes through the same 500ms coalescing trigger as the transport signals, and only one reconcile pass runs at a time. A request that arrives during a pass shares it and schedules one follow-up, so no request is lost and no message is completed twice.
+
+  Also fixes three defects found by manual testing that unit tests missed, each an instance of the same pattern as the original bug — a mechanism wired to a signal the failure mode suppresses: liveness was computed only in `ngDoCheck`, which `detectChanges()` does not re-invoke; `agentRunMap` was absent from `message-list`'s `ngOnChanges`, so a refreshed heartbeat never reached the rendered bubble; and the reconnection backoff reset on every re-subscribe, which succeeds against a dead socket, pinning the delay at its base value and leaving the escalation inert. The backoff escalates to a 60s ceiling and retries for the life of the page; it has no attempt cap, because no host calls `initialize()` outside `ngOnInit`, so a stream that stopped retrying would stay stopped until a reload. Up to 20% is taken off each delay at random so tabs do not retry in lockstep, and the backoff clears when the socket reports `connected`, which follows the server's acknowledgement, so a quiet healthy stream does not start its next outage at the ceiling.
+
+  Two further defects this surfaced, both fixed here. Explorer's connectivity warning cleared on an HTTP 200 from `/healthcheck`, before the socket was back — reachable over HTTP and able to carry frames are different properties, and a half-open socket satisfies the first while dropping every push. The warning now clears when the socket itself reports `connected`, and a `degraded` flag makes that sticky so the transient `unknown` emitted by the service's own `ForceSocketReconnect()` cannot read as recovery. The one exception is a screen with no active subscription: no socket exists there, so no `connected` can arrive, and an HTTP 200 clears the warning. A subscription opened later against a socket that is still down raises it again.
+
+  And a new `OrphanedConversationDetailReconciler` closes conversation details left `In-Progress` by a run that is already over. `AgentRunner` closes the detail as a run's final step, so a process that dies mid-run never reaches it; the agent-run watchdog repairs the run but nothing repaired the detail, which is the row the chat renders from. It runs at boot and every five minutes, asks only for details that have a finished run so stuck rows cannot fill its 200-row window, waits a grace period so it cannot race a normal completion, skips a detail that something else closed after it was listed, and writes as the conversation's OWNER — `MJConversationDetailEntityExtended.Save()` refuses a non-owner without a resource grant, so a maintenance pass running as the system user is silently rejected, returning false with no `LatestResult` to read. Verified against five real orphaned details aged 42 to 246 minutes: all five closed, none left.
+
+- 8766e99: A view resource now reloads when rows of its entity change: a local save or delete, or a server-side write announced as `remote-invalidate` (for example a record clone). Bursts of changes are debounced into a single reload, which keeps the user's page, sort and filters (new `EntityViewerComponent.RefreshInPlace()`; `Refresh()` still starts at page 1).
+
+  Cost: any local save or delete of a record, and any `remote-invalidate`, reloads every open view tab of that entity, background tabs included, so a user with several tabs on a busy entity sends one reload per tab per burst of changes. A refresh that arrives while a view is loading waits for that load, then reloads the same page.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [5114c10]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [75d4e8c]
+- Updated dependencies [a3d6182]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [a785e48]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [93f1254]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+- Updated dependencies [8766e99]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/ng-conversations@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ng-artifacts@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/export-engine@6.2.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.2
+  - @memberjunction/ng-query-viewer@6.2.0-edge.2
+  - @memberjunction/ng-record-changes@6.2.0-edge.2
+  - @memberjunction/ng-base-forms@6.2.0-edge.2
+  - @memberjunction/ng-dashboards@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/ng-composer@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-shared@6.2.0-edge.2
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.2
+  - @memberjunction/ng-auth-services@6.2.0-edge.2
+  - @memberjunction/ng-base-application@6.2.0-edge.2
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.2
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.2
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.2
+  - @memberjunction/ng-list-detail-grid@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-container-directives@6.2.0-edge.2
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.2
+  - @memberjunction/ng-feedback@6.2.0-edge.2
+  - @memberjunction/ng-file-storage@6.2.0-edge.2
+  - @memberjunction/ng-list-management@6.2.0-edge.2
+  - @memberjunction/ng-mj-livekit-room@6.2.0-edge.2
+  - @memberjunction/ng-notifications@6.2.0-edge.2
+  - @memberjunction/ng-react@6.2.0-edge.2
+  - @memberjunction/ng-record-selector@6.2.0-edge.2
+  - @memberjunction/ng-record-tags@6.2.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.2
+  - @memberjunction/ng-search@6.2.0-edge.2
+  - @memberjunction/ng-shared-generic@6.2.0-edge.2
+  - @memberjunction/ng-user-avatar@6.2.0-edge.2
+  - @memberjunction/communication-types@6.2.0-edge.2
+  - @memberjunction/entity-communications-client@6.2.0-edge.2
+  - @memberjunction/interactive-component-types@6.2.0-edge.2
+  - @memberjunction/templates-base-types@6.2.0-edge.2
+  - @memberjunction/ng-export-service@6.2.0-edge.2
+  - @memberjunction/ng-generic-dialog@6.2.0-edge.2
+  - @memberjunction/ng-markdown@6.2.0-edge.2
+  - @memberjunction/ng-word-cloud@6.2.0-edge.2
+  - @memberjunction/ng-pagination@6.2.0-edge.2
+  - @memberjunction/lists-base@6.2.0-edge.2
+  - @memberjunction/theme-engine@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

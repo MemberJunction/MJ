@@ -1,28 +1,34 @@
 {
   "name": "@memberjunction/rubrics",
   "type": "module",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.2",
   "description": "Server rubric evaluators. AI and human evaluators produce answers; RubricScoring is the only math.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["/dist", "/templates"],
+  "files": [
+    "/dist",
+    "/templates"
+  ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "test": "vitest run"
   },
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
-  "repository": { "type": "git", "url": "https://github.com/MemberJunction/MJ" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
   "dependencies": {
-    "@memberjunction/actions": "6.2.0-edge.1",
-    "@memberjunction/ai": "6.2.0-edge.1",
-    "@memberjunction/ai-core-plus": "6.2.0-edge.1",
-    "@memberjunction/ai-prompts": "6.2.0-edge.1",
-    "@memberjunction/actions-base": "6.2.0-edge.1",
-    "@memberjunction/core": "6.2.0-edge.1",
-    "@memberjunction/core-entities": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1",
-    "@memberjunction/rubrics-base": "6.2.0-edge.1"
+    "@memberjunction/actions": "6.2.0-edge.2",
+    "@memberjunction/ai": "6.2.0-edge.2",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.2",
+    "@memberjunction/ai-prompts": "6.2.0-edge.2",
+    "@memberjunction/actions-base": "6.2.0-edge.2",
+    "@memberjunction/core": "6.2.0-edge.2",
+    "@memberjunction/core-entities": "6.2.0-edge.2",
+    "@memberjunction/global": "6.2.0-edge.2",
+    "@memberjunction/rubrics-base": "6.2.0-edge.2"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
