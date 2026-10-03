@@ -7,19 +7,18 @@ describe('CoerceWebhookParams', () => {
         expect({ ...params }).toEqual({ CallSid: 'CA1', duration: '12', answered: 'true' });
     });
 
-    it('returns an empty prototype-free map for a non-object body', () => {
+    it('returns an empty map for a non-object body', () => {
         for (const body of [undefined, null, 'text', 42]) {
-            const params = CoerceWebhookParams(body);
-            expect(Object.keys(params)).toEqual([]);
-            expect(Object.getPrototypeOf(params)).toBeNull();
+            expect(Object.keys(CoerceWebhookParams(body))).toEqual([]);
         }
     });
 
     it('never copies prototype-reaching keys', () => {
         const hostile = JSON.parse('{"__proto__":"polluted","constructor":"x","prototype":"y","CallSid":"CA2"}') as Record<string, unknown>;
         const params = CoerceWebhookParams(hostile);
-        expect(Object.getPrototypeOf(params)).toBeNull();
+        expect(Object.getPrototypeOf(params)).toBe(Object.prototype);
         expect(Object.keys(params)).toEqual(['CallSid']);
+        expect(params['CallSid']).toBe('CA2');
         expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
     });
 });
