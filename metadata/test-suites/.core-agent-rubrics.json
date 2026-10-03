@@ -96,6 +96,17 @@
         "primaryKey": {
           "ID": "D9F7CC84-9751-4A0A-9682-1D186123CF26"
         }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=Core agent rubrics - Sage",
+          "Sequence": 9,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6F2B01E9-3D6F-4D54-A1E7-A478E7C5A10E"
+        }
       }
     ]
   }

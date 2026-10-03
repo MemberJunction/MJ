@@ -1,0 +1,226 @@
+[
+  {
+    "fields": {
+      "Name": "Rubric Evaluator - Default Judge",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/default-judge.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "The judge the LLM rubric evaluator uses when the link names none: an impartial reviewer who scores only against the criteria and anchors, takes the lower of two levels, and does not reward length or tone."
+    },
+    "primaryKey": {
+      "ID": "6BAD808D-598A-4C4A-8C94-01237E8FAFAE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Research Agent",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/research-agent.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Research Agent runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "86555E27-F857-4721-9748-2D14D4B0CAD5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Database Research Agent",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/database-research-agent.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Database Research Agent runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "7347559B-A657-4B40-B42E-4777684F844D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Web Research Agent",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/web-research-agent.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Web Research Agent runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "40F1CD2C-96E9-4F26-A684-9705344FA5CF"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - File Research Agent",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/file-research-agent.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for File Research Agent runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "3583C285-DE70-4EDF-817A-BB1DEDF9EC58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Research Report Writer",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/research-report-writer.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Research Report Writer runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "DE0BF28B-B55F-4CDB-89E5-90C8FE2DA67D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Knowledge Base Research Agent",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/knowledge-base-research-agent.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Knowledge Base Research Agent runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "D85D535B-540A-4CA4-8FF5-84D6A3A66FDD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Sage",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/sage.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Sage runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "E3D7347A-FC77-4833-B628-061BE12A7B19"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Query Builder",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/query-builder.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Query Builder runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "874391ED-FDC3-445D-A85A-41DDA75E9C2B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Query Strategist",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/query-strategist.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Query Strategist runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "25CE2B83-02A4-4FEC-94C0-B449F774BD48"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - ActionSmith",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/actionsmith.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for ActionSmith runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "65966816-7584-4F5B-B959-F38FD87AF248"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - SkillSmith",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/skillsmith.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for SkillSmith runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "FBFB8462-3022-4EBE-84D9-5C9339B83BDD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Codesmith Agent",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/codesmith-agent.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Codesmith Agent runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "2BD5E0FD-20CD-4E94-9B32-36341250A1CB"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Database Designer",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/database-designer.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Database Designer runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "555A599B-89F4-41F3-A487-F0B382ACB044"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Duplicate Resolution Agent",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/duplicate-resolution-agent.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Duplicate Resolution Agent runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "753CBD7A-7F61-4836-B9F2-908F6983C9F3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubric Judge - Infographic Agent",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/rubrics/judges/infographic-agent.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "A rubric judge written for Infographic Agent runs: what a good run of that agent looks like and the mistakes to score down. Rendered into the Rubric Evaluator prompt's judgePrompt slot when an agent-rubric link names it in EvaluatorConfig.PromptName."
+    },
+    "primaryKey": {
+      "ID": "44AC795A-D0E2-4222-9A05-2C9DB2287F38"
+    }
+  }
+]

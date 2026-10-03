@@ -7,13 +7,12 @@ import { IOracle } from './IOracle';
 import { BuildJudgeTrace, ReadJudgeCriteria, ReadJudgeTimeoutMS } from './judge-trace';
 import { InlineOracleResult, InlineVersion, ScoreInline } from './inline-rubric';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { Metadata } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { RenderRubricEvaluatorPrompt } from '@memberjunction/rubrics';
-
-/** The prompt whose model selection this judge uses. The rendered rubric text is the user message. */
-const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
+import {
+    BuildSubjectMessage, DEFAULT_RUBRIC_JUDGE_PROMPT, PromptData, ProviderPromptService, RenderCriteriaText,
+    RUBRIC_CRITERION_PROMPT, RUBRIC_EVALUATOR_PROMPT,
+} from '@memberjunction/rubrics';
 
 /**
  * LLM Judge Oracle.
@@ -29,6 +28,12 @@ const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
  * Configuration:
  * - criteria: Array of validation criteria (required)
  * - model: Model name or API name. When set, that model is required. Otherwise the Rubric Evaluator prompt selects one.
+ * - judgePrompt: The judge prompt composed into the Rubric Evaluator's `judgePrompt` slot
+ *   (default: "Rubric Evaluator - Default Judge"). Any active prompt can be named here.
+ *
+ * The prompts come from `/metadata/prompts`, exactly as for a stored LLM rubric evaluation: the
+ * criteria render through "Rubric Criterion", the judge fills the evaluator's slot, and the
+ * input/expected/actual trace travels as its own delimited user message.
  * - temperature: Temperature for LLM (default: 0.1 for consistency)
  * - promptTemplate: Custom prompt template (optional, uses default if not provided)
  * - strictMode: Require all criteria to pass (default: false, uses weighted scoring)
@@ -103,45 +108,40 @@ export class LLMJudgeOracle implements IOracle {
             const strict = config.strictMode === true;
             const passThreshold = typeof config.passThreshold === 'number' ? config.passThreshold : 0.7;
             const version = InlineVersion(leaves, strict, passThreshold);
-            const rendered = RenderRubricEvaluatorPrompt(version, { text: judgeSubject(trace) }, 'SinglePass');
 
-            await AIEngine.Instance.Config(false, input.contextUser);
-            const prompt = AIEngine.Instance.Prompts.find(item => item.Name === RUBRIC_EVALUATOR_PROMPT);
-            if (!prompt) {
-                return this.failed('The Rubric Evaluator prompt is not configured.');
-            }
-
-            const promptParams = new AIPromptParams();
-            promptParams.prompt = prompt;
-            promptParams.systemPromptOverride = rendered;
-            // The Rubric Evaluator record stores TemplateText and may have no TemplateID. A user
-            // message still reaches the model in that case; an override alone would not.
-            promptParams.templateMessageRole = 'none';
-            promptParams.conversationMessages = [{ role: 'user', content: rendered }];
-            promptParams.data = { criteria: texts, input: trace.Input, expected: trace.Expected, actual: trace.Actual, model: config.model };
-            promptParams.contextUser = input.contextUser;
-            promptParams.timeoutMS = timeout.Value;
             const requestedModel = typeof config.model === 'string' ? config.model.trim() : '';
+            let modelId: string | undefined;
             if (requestedModel) {
+                await AIEngine.Instance.Config(false, input.contextUser, input.provider);
                 const model = AIEngine.Instance.Models.find(item => item.Name === requestedModel || item.APIName === requestedModel);
                 if (!model) {
                     return this.failed(`Judge model "${requestedModel}" was not found.`);
                 }
-                promptParams.override = { modelId: model.ID };
+                modelId = model.ID;
             }
 
-            const runner = new AIPromptRunner();
-            const result = await runner.ExecutePrompt(promptParams);
-            if (!result.success) {
-                return this.failed(`LLM judgment failed: ${result.errorMessage}`);
+            const provider = input.provider ?? Metadata.Provider;
+            if (!provider) {
+                return this.failed('No metadata provider is available to run the judge prompt.');
             }
+            const prompts = ProviderPromptService(provider, input.contextUser);
+            const criteriaData = await RenderCriteriaText(version, prompts, { Name: RUBRIC_CRITERION_PROMPT });
+            const judgeName = typeof config.judgePrompt === 'string' && config.judgePrompt.trim() ? config.judgePrompt.trim() : DEFAULT_RUBRIC_JUDGE_PROMPT;
+            const result = await prompts.Run({
+                Prompt: { Name: RUBRIC_EVALUATOR_PROMPT },
+                Judge: { Name: judgeName },
+                Data: PromptData(version, 'SinglePass', criteriaData, { entityName: 'MJ: Test Runs', recordId: input.testRunId ?? '' }),
+                Subject: BuildSubjectMessage({ text: judgeSubject(trace) }),
+                ModelID: modelId,
+                TimeoutMS: timeout.Value,
+            });
 
-            const answers = answersFromModel(result.result, texts);
+            const answers = answersFromModel(result.Text, texts);
             const scored = ScoreInline(leaves, answers, { strict, passThreshold });
             const evidence: (string | undefined)[] = [];
             for (const answer of answers) evidence[answer.index] = answer.rationale;
             const report = InlineOracleResult(texts, scored, evidence);
-            report.details = { ...(report.details as object), llmModel: config.model || 'default', llmCost: result.cost };
+            report.details = { ...(report.details as object), llmModel: config.model || 'default', llmCost: result.Cost ?? undefined, llmPromptRunId: result.PromptRunID ?? undefined, judgePrompt: judgeName };
             return report;
 
         } catch (error) {

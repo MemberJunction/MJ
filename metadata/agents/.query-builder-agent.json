@@ -406,7 +406,11 @@
                   "RubricID": "@lookup:MJ: Rubrics.Name=Query answer",
                   "Purpose": "Evaluation",
                   "IsDefault": true,
-                  "Status": "Active"
+                  "Status": "Active",
+                  "EvaluatorConfig": {
+                    "EvaluatorType": "AIPrompt",
+                    "PromptName": "Rubric Judge - Query Strategist"
+                  }
                 },
                 "primaryKey": {
                   "ID": "CC9C12E6-0381-4F87-B2EE-B7CA43C42C34"
@@ -430,7 +434,11 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Query answer",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Query Builder"
+            }
           },
           "primaryKey": {
             "ID": "0072D249-FDA6-4705-AD31-B0577552DDB1"
@@ -443,7 +451,11 @@
             "Purpose": "ProductionSampling",
             "IsDefault": true,
             "Status": "Active",
-            "SampleRate": 0.02
+            "SampleRate": 0.02,
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Query Builder"
+            }
           },
           "primaryKey": {
             "ID": "51D9C17C-C780-483E-87FB-7061BA88C210"
