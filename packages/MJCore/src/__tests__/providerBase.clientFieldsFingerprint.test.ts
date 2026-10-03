@@ -20,7 +20,7 @@ import { ProviderBase } from '../generic/providerBase';
 import { LocalCacheManager, CacheCategory } from '../generic/localCacheManager';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 import { ClientSmartCacheTestProvider, ResetLocalCacheManager, Settle } from './mocks/ClientSmartCacheTestProvider';
-import { RunViewResult } from '../generic/interfaces';
+import { RunViewResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse } from '../generic/interfaces';
 import { EntityInfo } from '../generic/entityInfo';
 import { RunViewParams } from '../views/runView';
 
@@ -129,5 +129,112 @@ describe('Client-side Fields-aware cache fingerprint (smart-cache flow)', () => 
         const keys = await mockStorage.GetCategoryKeys(CacheCategory.RunViewCache);
         const suffixes = keys.map(k => k.substring(k.lastIndexOf('|f:'))).sort();
         expect(suffixes).toEqual(['|f:*', '|f:id,name', '|f:id,status']);
+    });
+});
+
+/**
+ * A browser provider whose signed-in user can change without the cache being cleared, as when a
+ * session ends without logout() and another account signs in. The row-filter clause and the
+ * field-security key are set per user; the stand-in server returns that user's rows and, like the
+ * one above, trusts any cached copy the browser reports.
+ */
+class UserSwitchingClientProvider extends ClientSmartCacheTestProvider {
+    public RowFilter = '';
+    public AllowedFields = '';
+    public ServerRows: Record<string, unknown>[] = [];
+
+    constructor() {
+        super({ Entity: CACHEABLE, ServerRows: () => [] });
+    }
+
+    protected override ComputeRunViewRLSWhereClause(): string {
+        return this.RowFilter;
+    }
+
+    protected override ComputeClientFLSAllowedKey(): string {
+        return this.AllowedFields;
+    }
+
+    public override async RunViewsWithCacheCheck<T>(checkParams: RunViewWithCacheCheckParams[]): Promise<RunViewsWithCacheCheckResponse<T>> {
+        this.receivedChecks.push(checkParams);
+        return {
+            success: true,
+            results: checkParams.map((cp, i) => cp.cacheStatus
+                ? { viewIndex: i, status: 'current' as const }
+                : { viewIndex: i, status: 'stale' as const, results: this.ServerRows as T[], maxUpdatedAt: '2026-06-01T00:00:00.000Z', rowCount: this.ServerRows.length }),
+        };
+    }
+}
+
+describe("Client cache key carries the signed-in user's row-filter and field-security segments", () => {
+    let provider: UserSwitchingClientProvider;
+    let mockStorage: MockCacheStorageProvider;
+    const originalCoalesce = ProviderBase.CoalesceWindowMs;
+    const originalDedupLinger = ProviderBase.DedupLingerMs;
+    const params = (): RunViewParams => ({ EntityName: 'Cacheable', CacheLocal: true, ResultType: 'simple' });
+
+    beforeEach(async () => {
+        ResetLocalCacheManager();
+        mockStorage = new MockCacheStorageProvider();
+        await LocalCacheManager.Instance.Initialize(mockStorage);
+        provider = new UserSwitchingClientProvider();
+        ProviderBase.CoalesceWindowMs = 0;
+        ProviderBase.DedupLingerMs = 0;
+    });
+
+    afterEach(() => {
+        ProviderBase.CoalesceWindowMs = originalCoalesce;
+        ProviderBase.DedupLingerMs = originalDedupLinger;
+        ResetLocalCacheManager();
+    });
+
+    async function storedKey(): Promise<string> {
+        await provider.RunViews([params()]);
+        await Settle();
+        const keys = await mockStorage.GetCategoryKeys(CacheCategory.RunViewCache);
+        expect(keys).toHaveLength(1);
+        return keys[0];
+    }
+
+    it('puts the field-security key in a hashed fls: segment, not the dataset segment', async () => {
+        provider.AllowedFields = 'id,name';
+        provider.ServerRows = [{ ID: 'row-1', Name: 'Test Record' }];
+
+        const key = await storedKey();
+
+        expect(key).toContain('|fls:');
+        expect(key).not.toContain('|ds:');
+        expect(key).not.toContain('id,name|');
+    });
+
+    it("adds an rls: segment for a user with a row filter", async () => {
+        provider.RowFilter = "UserID = 'user-a'";
+        provider.ServerRows = [{ ID: 'row-a', Name: 'Row A' }];
+
+        expect(await storedKey()).toContain('|rls:');
+    });
+
+    it('leaves the key unchanged for a user with no row filter or field restriction', async () => {
+        provider.ServerRows = [{ ID: 'row-1', Name: 'Test Record' }];
+
+        const key = await storedKey();
+
+        expect(key).not.toContain('|rls:');
+        expect(key).not.toContain('|fls:');
+        expect(key.endsWith('|f:*')).toBe(true);
+    });
+
+    it("never serves the previous user's cached rows after the signed-in user changes", async () => {
+        provider.RowFilter = "UserID = 'user-a'";
+        provider.ServerRows = [{ ID: 'row-a', Name: 'Row A' }];
+        await provider.RunViews([params()]);
+        await Settle();
+
+        // A different user signs in on the same browser; the cache was not cleared.
+        provider.RowFilter = "UserID = 'user-b'";
+        provider.ServerRows = [{ ID: 'row-b', Name: 'Row B' }];
+        const [result] = await provider.RunViews([params()]);
+
+        expect((result.Results as Array<{ ID: string }>).map(r => r.ID)).toEqual(['row-b']);
     });
 });

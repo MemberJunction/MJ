@@ -2000,14 +2000,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (memoized) {
             return memoized;
         }
-        // The fls: segment participates in CLIENT slot identity too, keyed on the ALLOWED list
-        // (see ComputeClientFLSAllowedKey). Without it, a user whose field access is TIGHTENED
-        // keeps being served their persisted IndexedDB slot: the currency check compares only
-        // maxUpdatedAt and rowCount, neither of which notices a column, so the server answers
-        // "current" and the browser shows a column that was just taken away — until the rows
-        // change. Empty for unrestricted users, whose fingerprints are unchanged.
+        // The signed-in user's row filter (rls:) and allowed field list (fls:, see
+        // ComputeClientFLSAllowedKey) are part of client slot identity, as they are on the server.
+        // The browser cache outlives a session — one IndexedDB store per server URL — and the
+        // currency check compares only maxUpdatedAt and rowCount, which cannot tell one user's
+        // rows from another's, nor notice a column. Without these segments, a different user on
+        // the same browser could be served the previous user's rows, and a user whose field
+        // access is tightened would keep seeing a column just taken away. Both are empty for an
+        // unrestricted user, whose fingerprints are unchanged.
         const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-            param, this.InstanceConnectionString, undefined, this.ComputeClientFLSAllowedKey(param)
+            param, this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(param), undefined, this.ComputeClientFLSAllowedKey(param)
         );
         // Normalize a FULL-COVERAGE field list to '*' — in the FINGERPRINT only (B44).
         //
