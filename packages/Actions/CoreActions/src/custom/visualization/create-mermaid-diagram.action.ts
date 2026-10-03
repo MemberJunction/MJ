@@ -1,9 +1,9 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import mermaid from 'mermaid';
 import { SVGUtils } from './shared/svg-utils';
 import { MermaidTheme, MermaidConfig } from './shared/mermaid-types';
+import { MermaidRenderer } from './shared/mermaid-renderer';
 
 /**
  * Action that generates SVG diagrams from Mermaid text syntax.
@@ -11,9 +11,15 @@ import { MermaidTheme, MermaidConfig } from './shared/mermaid-types';
  * Gantt charts, and more.
  *
  * Mermaid is a text-based diagram generation tool that converts markdown-like
- * syntax into rich visual diagrams. This action uses the Mermaid library to
- * render diagrams server-side as SVG, suitable for embedding in reports,
- * artifacts, and AI-generated content.
+ * syntax into rich visual diagrams. This action renders diagrams server-side as
+ * static SVG (no script), suitable for embedding in reports, artifacts, and
+ * AI-generated content.
+ *
+ * Rendering runs in headless Chromium via {@link MermaidRenderer}, because Mermaid
+ * measures rendered text to lay diagrams out and cannot run in plain Node. Hosts
+ * that use this action need the optional `playwright` peer dependency and a
+ * Chromium build; without one the action fails with `BROWSER_UNAVAILABLE` rather
+ * than producing a broken diagram.
  *
  * @example
  * ```typescript
@@ -73,8 +79,9 @@ export class CreateMermaidDiagramAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            // Extract required Code parameter
-            const code = this.getStringParam(params, 'Code');
+            // Extract required Code parameter. Default to '' so a missing Code reaches the
+            // MISSING_PARAMETERS check below instead of throwing into DIAGRAM_GENERATION_FAILED.
+            const code = this.getStringParam(params, 'Code', '');
             if (!code) {
                 return {
                     Success: false,
@@ -128,27 +135,20 @@ export class CreateMermaidDiagramAction extends BaseAction {
                 }
             }
 
-            // Initialize Mermaid with configuration
-            mermaid.initialize({
-                theme,
-                startOnLoad: false,  // Headless mode for server-side rendering
-                securityLevel: 'strict',  // Enforce strict security
-                ...config
-            });
+            const rendered = await MermaidRenderer.Instance.Render(code, theme, config);
+            if (rendered.Success === false) {
+                return {
+                    Success: false,
+                    ResultCode: rendered.ErrorCode === 'RENDER_FAILED' ? 'DIAGRAM_GENERATION_FAILED' : rendered.ErrorCode,
+                    Message: `Failed to generate Mermaid diagram: ${rendered.Message}`
+                };
+            }
 
-            // Generate unique ID for this render
-            const renderId = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-            // Render diagram to SVG
-            const { svg } = await mermaid.render(renderId, code);
-
-            // Sanitize SVG (XSS prevention)
-            const sanitizedSvg = SVGUtils.sanitizeSVG(svg);
-
+            // Sanitize SVG (XSS prevention) — the source is model output, so never trust the markup.
             return {
                 Success: true,
                 ResultCode: "SUCCESS",
-                Message: sanitizedSvg
+                Message: SVGUtils.sanitizeSVG(rendered.Svg)
             };
 
         } catch (error) {
