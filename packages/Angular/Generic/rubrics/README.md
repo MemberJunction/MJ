@@ -101,10 +101,10 @@ Inputs `Base` and `Draft`. One row per criterion key, with each change and its b
 | Input | `Provider`, `RubricId`, `Major`, `SubjectEntityId` | | Lets the matrix load the cohort itself |
 | Input | `ViewerStatus`, `ViewerEvaluationId` | `string` | The viewer's own evaluation |
 
-Evaluators across, criteria down. Cells that disagree are marked, and the grid shows the human, AI,
-and self mean. Withdrawn columns stay visible and stay out of the means. **While the viewer's own evaluation is a
-Draft, cohort figures and other people's rationales are hidden**, so a reviewer scores before seeing anyone
-else.
+Evaluators across, criteria down. Cells that disagree are marked, and the grid shows the human mean, the AI
+mean, the self mean and the cohort mean. Withdrawn columns stay visible and stay out of the means. **While the
+viewer's own evaluation is a Draft, cohort figures and other people's rationales are hidden**, so a reviewer
+scores before seeing anyone else.
 
 ### `mj-rubric-version-board`
 
