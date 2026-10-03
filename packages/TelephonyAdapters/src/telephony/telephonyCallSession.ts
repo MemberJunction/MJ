@@ -13,7 +13,7 @@
  * - the call-capacity lease and the agent-session row are released/closed on EVERY path — a failed start, a
  *   normal hang-up, a model loss — never leaked;
  * - the transcript lands in the call's OWN conversation, with the dialled agent attributed;
- * - a talk-over cancels delegated work that is now stale;
+ * - a talk-over drops queued spoken progress but leaves delegated work running (the caller cancels it explicitly);
  * - a model session lost mid-call is re-opened once with the conversation so far (the engine owns the retry cap).
  *
  * @module @memberjunction/telephony-adapters
@@ -41,6 +41,7 @@ import {
     type OutboundCallPolicy,
     type OutboundCallRequest,
     type OutboundGuardDeps,
+    type TransferTarget,
 } from './outboundCallPolicy.js';
 import { BuildPhoneFraming, BuildTelephonyTools, TelephonyCallToolExecutor, type TelephonyToolFeatures } from './telephonyCallTools.js';
 
@@ -60,6 +61,8 @@ export interface TelephonyCallStarterDeps {
     CallerResolver: ICallerIdentityResolver;
     /** The outbound policy a transfer destination is checked against. */
     OutboundPolicy: OutboundCallPolicy;
+    /** The validated transfer directory (`telephony.transferTargets`); empty means the agent cannot transfer. */
+    TransferTargets?: readonly TransferTarget[];
 }
 
 /** One call to start. */
@@ -187,7 +190,7 @@ export class TelephonyCallSessionStarter {
         const features = readToolFeatures(carrier);
         const executor = this.buildExecutor(args, features, ref);
         const framing = await this.buildFraming(args, features);
-        const tools = BuildTelephonyTools(features);
+        const tools = BuildTelephonyTools(features, this.deps.TransferTargets ?? []);
 
         const openModelSession = async (priorTranscript?: string): Promise<IRealtimeSession> => {
             const session = await this.deps.SessionFactory({
@@ -226,7 +229,12 @@ export class TelephonyCallSessionStarter {
             TranscriptSink: agentSession.ConversationID
                 ? CreateBridgeSessionTranscriptSink({ ConversationID: agentSession.ConversationID, AgentSessionID: agentSession.ID, AgentID: args.Identity.AgentID })
                 : undefined,
-            OnBargeIn: () => this.cancelStaleWork(ref),
+            // HOST POLICY (deliberate, same as the browser): barge-in drops queued progress narration but does NOT
+            // abort delegated runs — the caller keeps talking while work runs, and full-duplex models make
+            // backchannels ("mm-hm") common, so cancel-on-speech would kill exactly the jobs they asked for. See
+            // packages/RealtimeRuntime/src/session/RealtimeSessionRuntime.ts ~L1956-1963. The phone has no per-job
+            // cancel button, so explicit cancellation is the `cancel_pending_work` tool.
+            OnBargeIn: () => this.cancelPendingNarration(ref),
             RecoverRealtimeSession: (request: BridgeRealtimeSessionRecoveryRequest) => openModelSession(request.PriorTranscript),
             OnSessionEnded: (reason) => this.onSessionEnded(args, agentSession.ID, reason),
         });
@@ -241,7 +249,13 @@ export class TelephonyCallSessionStarter {
             args.Direction === 'Inbound'
                 ? await ResolveCallerSafely(this.deps.CallerResolver, args.RemoteNumber, args.Identity.IdentityValue, args.ContextUser)
                 : undefined;
-        return BuildPhoneFraming({ Direction: args.Direction, RemoteNumber: args.RemoteNumber, Caller: caller, Features: features });
+        return BuildPhoneFraming({
+            Direction: args.Direction,
+            RemoteNumber: args.RemoteNumber,
+            Caller: caller,
+            Features: features,
+            TransferTargets: this.deps.TransferTargets ?? [],
+        });
     }
 
     /** The call-control tool executor; it reaches the call's bridge lazily because that exists only after start. */
@@ -250,6 +264,8 @@ export class TelephonyCallSessionStarter {
             Controls: () => ref.Active?.Bridge,
             Policy: this.deps.OutboundPolicy,
             Features: features,
+            TransferTargets: this.deps.TransferTargets ?? [],
+            CancelPendingWork: () => this.cancelInFlightDelegations(ref),
             EndCall: async (reason) => {
                 if (ref.Active) {
                     LogStatus(`[Telephony] agent ended call ${ref.Active.SessionBridgeID}: ${reason}`);
@@ -270,13 +286,18 @@ export class TelephonyCallSessionStarter {
         runtime.SetLocalToolHandler(executor);
     }
 
-    /** The caller talked over the agent: delegated work started for the interrupted turn is now stale. */
-    private cancelStaleWork(ref: CallRuntimeRef): void {
+    /** The caller talked over the agent: queued progress narration is stale. Delegated work is left running. */
+    private cancelPendingNarration(ref: CallRuntimeRef): void {
         const session = ref.Active?.RealtimeSession ?? ref.Initial;
-        const cancelled = session ? GetBridgeRealtimeRuntime(session)?.CancelInFlightDelegations() ?? 0 : 0;
-        if (cancelled > 0) {
-            LogStatus(`[Telephony] caller barged in; cancelled ${cancelled} in-flight delegation(s).`);
+        if (session) {
+            GetBridgeRealtimeRuntime(session)?.CancelPendingNarration();
         }
+    }
+
+    /** The caller explicitly asked to cancel (`cancel_pending_work`): abort the delegated runs in flight. */
+    private cancelInFlightDelegations(ref: CallRuntimeRef): number {
+        const session = ref.Active?.RealtimeSession ?? ref.Initial;
+        return session ? GetBridgeRealtimeRuntime(session)?.CancelInFlightDelegations() ?? 0 : 0;
     }
 
     /** End-of-call bookkeeping: free the capacity slot and close the agent-session row. Never throws. */

@@ -56,6 +56,12 @@ describe('PublicOrigin', () => {
 });
 
 describe('ReadSharedTelephonySettings', () => {
+    it('passes the transfer directory through', () => {
+        const targets = [{ name: 'Front desk', number: '+14155550100' }];
+        expect(ReadSharedTelephonySettings({ transferTargets: targets }).transferTargets).toEqual(targets);
+        expect(ReadSharedTelephonySettings(undefined).transferTargets).toBeUndefined();
+    });
+
     it('passes the concurrency cap through', () => {
         expect(ReadSharedTelephonySettings({ maxConcurrentCalls: 10 }).maxConcurrentCalls).toBe(10);
         expect(ReadSharedTelephonySettings(undefined).maxConcurrentCalls).toBeUndefined();

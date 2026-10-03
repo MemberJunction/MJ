@@ -7,11 +7,12 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
 }));
 
 import { MAX_DTMF_DIGITS } from '@memberjunction/ai-bridge-base';
-import { ResolveOutboundPolicy } from '../telephony/outboundCallPolicy.js';
+import { ResolveOutboundPolicy, type TransferTarget } from '../telephony/outboundCallPolicy.js';
 import {
     BuildPhoneFraming,
     BuildTelephonyTools,
     CALL_CONTROL_SETTLE_MS,
+    CANCEL_PENDING_WORK_TOOL,
     END_CALL_TOOL,
     SEND_DTMF_TOOL,
     TRANSFER_CALL_TOOL,
@@ -21,22 +22,45 @@ import {
 } from '../telephony/telephonyCallTools.js';
 
 const ALL = { CallTransfer: true, DTMF: true };
+const TARGETS: TransferTarget[] = [
+    { Name: 'Front desk', Number: '+14155550100', Description: 'general enquiries' },
+    { Name: 'Billing', Number: '+14155550101' },
+];
 
 describe('BuildTelephonyTools', () => {
-    it('offers every tool when the carrier supports transfer and DTMF', () => {
-        expect(BuildTelephonyTools(ALL).map((t) => t.Name)).toEqual([TRANSFER_CALL_TOOL, SEND_DTMF_TOOL, END_CALL_TOOL]);
+    it('offers every tool when the carrier supports transfer and DTMF and a transfer directory exists', () => {
+        expect(BuildTelephonyTools(ALL, TARGETS).map((t) => t.Name)).toEqual([TRANSFER_CALL_TOOL, SEND_DTMF_TOOL, CANCEL_PENDING_WORK_TOOL, END_CALL_TOOL]);
     });
 
-    it('offers only what the carrier supports; end_call is always there', () => {
-        expect(BuildTelephonyTools({ CallTransfer: false, DTMF: true }).map((t) => t.Name)).toEqual([SEND_DTMF_TOOL, END_CALL_TOOL]);
-        expect(BuildTelephonyTools({ CallTransfer: true, DTMF: false }).map((t) => t.Name)).toEqual([TRANSFER_CALL_TOOL, END_CALL_TOOL]);
-        expect(BuildTelephonyTools({ CallTransfer: false, DTMF: false }).map((t) => t.Name)).toEqual([END_CALL_TOOL]);
+    it('offers only what the carrier supports; end_call and cancel_pending_work are always there', () => {
+        expect(BuildTelephonyTools({ CallTransfer: false, DTMF: true }, TARGETS).map((t) => t.Name)).toEqual([SEND_DTMF_TOOL, CANCEL_PENDING_WORK_TOOL, END_CALL_TOOL]);
+        expect(BuildTelephonyTools({ CallTransfer: true, DTMF: false }, TARGETS).map((t) => t.Name)).toEqual([TRANSFER_CALL_TOOL, CANCEL_PENDING_WORK_TOOL, END_CALL_TOOL]);
+        expect(BuildTelephonyTools({ CallTransfer: false, DTMF: false }, TARGETS).map((t) => t.Name)).toEqual([CANCEL_PENDING_WORK_TOOL, END_CALL_TOOL]);
     });
 
-    it('requires the destination and digits arguments', () => {
-        const tools = BuildTelephonyTools(ALL);
-        expect(tools.find((t) => t.Name === TRANSFER_CALL_TOOL)?.ParametersSchema).toMatchObject({ required: ['destination'] });
+    it('does not offer transfer_call at all when the transfer directory is empty, even on a carrier that can transfer', () => {
+        expect(BuildTelephonyTools(ALL, []).map((t) => t.Name)).not.toContain(TRANSFER_CALL_TOOL);
+        expect(BuildTelephonyTools(ALL).map((t) => t.Name)).not.toContain(TRANSFER_CALL_TOOL);
+    });
+
+    it('limits transfer_call to the configured names with an enum, and takes no free-form number', () => {
+        const tool = BuildTelephonyTools(ALL, TARGETS).find((t) => t.Name === TRANSFER_CALL_TOOL);
+        expect(tool?.ParametersSchema).toMatchObject({ required: ['target'], properties: { target: { enum: ['Front desk', 'Billing'] } } });
+        expect(JSON.stringify(tool?.ParametersSchema)).not.toContain('destination');
+        expect(tool?.Description).toContain('Front desk (general enquiries)');
+        expect(tool?.Description).toContain('Billing');
+    });
+
+    it('requires the digits argument', () => {
+        const tools = BuildTelephonyTools(ALL, TARGETS);
         expect(tools.find((t) => t.Name === SEND_DTMF_TOOL)?.ParametersSchema).toMatchObject({ required: ['digits'] });
+    });
+
+    it('describes cancel_pending_work as for never mind / stop that / cancel only', () => {
+        const description = BuildTelephonyTools(ALL, TARGETS).find((t) => t.Name === CANCEL_PENDING_WORK_TOOL)?.Description ?? '';
+        expect(description).toMatch(/never mind/i);
+        expect(description).toMatch(/stop that/i);
+        expect(description).toMatch(/mm-hm/);
     });
 });
 
@@ -84,11 +108,26 @@ describe('BuildPhoneFraming', () => {
         expect(text).not.toMatch(/UNVERIFIED/);
     });
 
+    it('lists the transfer destinations by name and description, never their numbers', () => {
+        const text = BuildPhoneFraming({ Direction: 'Inbound', RemoteNumber: '+1', Features: ALL, TransferTargets: TARGETS });
+        expect(text).toContain(TRANSFER_CALL_TOOL);
+        expect(text).toContain('Front desk (general enquiries)');
+        expect(text).toContain('Billing');
+        expect(text).not.toContain('+14155550100');
+    });
+
+    it('does not mention transfer when the directory is empty, even if the carrier supports it', () => {
+        const text = BuildPhoneFraming({ Direction: 'Inbound', RemoteNumber: '+1', Features: ALL, TransferTargets: [] });
+        expect(text).not.toContain(TRANSFER_CALL_TOOL);
+        expect(text).toContain(SEND_DTMF_TOOL);
+    });
+
     it('only mentions the tools the carrier supports', () => {
-        const noTransfer = BuildPhoneFraming({ Direction: 'Inbound', RemoteNumber: '+1', Features: { CallTransfer: false, DTMF: false } });
-        expect(noTransfer).not.toContain(TRANSFER_CALL_TOOL);
-        expect(noTransfer).not.toContain(SEND_DTMF_TOOL);
-        expect(noTransfer).toContain(END_CALL_TOOL);
+        const none = BuildPhoneFraming({ Direction: 'Inbound', RemoteNumber: '+1', Features: { CallTransfer: false, DTMF: false }, TransferTargets: TARGETS });
+        expect(none).not.toContain(TRANSFER_CALL_TOOL);
+        expect(none).not.toContain(SEND_DTMF_TOOL);
+        expect(none).toContain(END_CALL_TOOL);
+        expect(none).toContain(CANCEL_PENDING_WORK_TOOL);
     });
 });
 
@@ -98,7 +137,9 @@ function makeExecutor(overrides: Partial<TelephonyToolExecutorDeps> = {}) {
         Controls: () => controls,
         Policy: ResolveOutboundPolicy(),
         Features: ALL,
+        TransferTargets: TARGETS,
         EndCall: vi.fn(async () => undefined),
+        CancelPendingWork: vi.fn(() => 2),
         NotifyModel: vi.fn(),
         ...overrides,
     };
@@ -106,40 +147,77 @@ function makeExecutor(overrides: Partial<TelephonyToolExecutorDeps> = {}) {
 }
 
 const call = (ToolName: string, args: unknown) => ({ CallID: 'c1', ToolName, Arguments: typeof args === 'string' ? args : JSON.stringify(args) });
-const parse = (json: string) => JSON.parse(json) as { ok: boolean; status?: string; error?: string };
+const parse = (json: string) => JSON.parse(json) as { ok: boolean; status?: string; error?: string; cancelled?: number };
 
 describe('TelephonyCallToolExecutor', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
 
-    it('owns exactly the three call-control tools', () => {
+    it('owns exactly the four call-control tools', () => {
         const { executor } = makeExecutor();
-        expect([TRANSFER_CALL_TOOL, SEND_DTMF_TOOL, END_CALL_TOOL].every((n) => executor.Handles(n))).toBe(true);
+        expect([TRANSFER_CALL_TOOL, SEND_DTMF_TOOL, END_CALL_TOOL, CANCEL_PENDING_WORK_TOOL].every((n) => executor.Handles(n))).toBe(true);
         expect(executor.Handles('invoke-target-agent')).toBe(false);
     });
 
     describe('transfer_call', () => {
-        it('transfers to a valid destination after the goodbye has had time to play', async () => {
+        it('transfers to the number configured for the named target after the goodbye has had time to play', async () => {
             const { executor, controls } = makeExecutor();
-            const result = parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { destination: ' +14155550123 ' })));
+            const result = parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Front desk' })));
             expect(result).toMatchObject({ ok: true, status: 'transferring' });
             expect(controls.TransferCall).not.toHaveBeenCalled();
 
             await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
-            expect(controls.TransferCall).toHaveBeenCalledWith('+14155550123');
+            expect(controls.TransferCall).toHaveBeenCalledWith('+14155550100');
         });
 
-        it.each(['+19005551234', '+442071838750', '4155550123', '', 'call me'])('refuses %j through the outbound allow/block policy and never touches the carrier', async (destination) => {
+        it('matches the target name case-insensitively and ignoring surrounding whitespace', async () => {
             const { executor, controls } = makeExecutor();
-            const result = parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { destination })));
+            await executor.Execute(call(TRANSFER_CALL_TOOL, { target: '  BILLING ' }));
+            await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
+            expect(controls.TransferCall).toHaveBeenCalledWith('+14155550101');
+        });
+
+        it('refuses a target that is not in the directory, naming the ones that are, and never touches the carrier', async () => {
+            const { executor, controls } = makeExecutor();
+            const result = parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'The CEO' })));
             expect(result.ok).toBe(false);
+            expect(result.error).toContain('Front desk');
+            await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
+            expect(controls.TransferCall).not.toHaveBeenCalled();
+        });
+
+        it.each(['+14155550123', '+19005551234', '+442071838750', '4155550123', ''])('refuses an arbitrary number %j given as the target (toll-fraud: no free-form forwarding)', async (target) => {
+            const { executor, controls } = makeExecutor();
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target }))).ok).toBe(false);
+            await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
+            expect(controls.TransferCall).not.toHaveBeenCalled();
+        });
+
+        it('ignores a legacy "destination" argument: only a directory name is accepted', async () => {
+            const { executor, controls } = makeExecutor();
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { destination: '+14155550123' }))).ok).toBe(false);
+            await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
+            expect(controls.TransferCall).not.toHaveBeenCalled();
+        });
+
+        it('still checks the resolved number against the outbound policy (defence in depth)', async () => {
+            const bad: TransferTarget[] = [{ Name: 'Premium', Number: '+19005551234' }];
+            const { executor, controls } = makeExecutor({ TransferTargets: bad });
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Premium' }))).ok).toBe(false);
+            await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
+            expect(controls.TransferCall).not.toHaveBeenCalled();
+        });
+
+        it('refuses when the directory is empty, even if the model invents the call', async () => {
+            const { executor, controls } = makeExecutor({ TransferTargets: [] });
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Front desk' }))).ok).toBe(false);
             await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
             expect(controls.TransferCall).not.toHaveBeenCalled();
         });
 
         it('refuses when the carrier cannot transfer', async () => {
             const { executor, controls } = makeExecutor({ Features: { CallTransfer: false, DTMF: true } });
-            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { destination: '+14155550123' }))).ok).toBe(false);
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Front desk' }))).ok).toBe(false);
             await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
             expect(controls.TransferCall).not.toHaveBeenCalled();
         });
@@ -147,22 +225,43 @@ describe('TelephonyCallToolExecutor', () => {
         it('tells the model when the transfer fails, and lets it try again', async () => {
             const { executor, controls, deps } = makeExecutor();
             vi.mocked(controls.TransferCall).mockRejectedValueOnce(new Error('carrier said no'));
-            await executor.Execute(call(TRANSFER_CALL_TOOL, { destination: '+14155550123' }));
+            await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Front desk' }));
             await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
 
             expect(deps.NotifyModel).toHaveBeenCalledWith(expect.stringContaining('transfer failed'));
-            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { destination: '+14155550123' }))).ok).toBe(true);
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Front desk' }))).ok).toBe(true);
         });
 
         it('will not start a second transfer while one is pending', async () => {
             const { executor } = makeExecutor();
-            await executor.Execute(call(TRANSFER_CALL_TOOL, { destination: '+14155550123' }));
-            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { destination: '+14155550124' }))).ok).toBe(false);
+            await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Front desk' }));
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Billing' }))).ok).toBe(false);
         });
 
         it('reads a malformed argument payload as a refusal, not a crash', async () => {
             const { executor } = makeExecutor();
             expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, '{not json'))).ok).toBe(false);
+        });
+    });
+
+    describe('cancel_pending_work', () => {
+        it('aborts the delegated work in flight and reports how many runs it cancelled', async () => {
+            const { executor, deps } = makeExecutor();
+            expect(parse(await executor.Execute(call(CANCEL_PENDING_WORK_TOOL, {})))).toMatchObject({ ok: true, cancelled: 2 });
+            expect(deps.CancelPendingWork).toHaveBeenCalledTimes(1);
+        });
+
+        it('does nothing to the call itself', async () => {
+            const { executor, deps, controls } = makeExecutor();
+            await executor.Execute(call(CANCEL_PENDING_WORK_TOOL, {}));
+            await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
+            expect(deps.EndCall).not.toHaveBeenCalled();
+            expect(controls.TransferCall).not.toHaveBeenCalled();
+        });
+
+        it('reports zero when nothing was running', async () => {
+            const { executor } = makeExecutor({ CancelPendingWork: vi.fn(() => 0) });
+            expect(parse(await executor.Execute(call(CANCEL_PENDING_WORK_TOOL, {})))).toMatchObject({ ok: true, cancelled: 0 });
         });
     });
 
@@ -220,7 +319,7 @@ describe('TelephonyCallToolExecutor', () => {
         it('refuses a transfer once the call is ending', async () => {
             const { executor } = makeExecutor();
             await executor.Execute(call(END_CALL_TOOL, {}));
-            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { destination: '+14155550123' }))).ok).toBe(false);
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Front desk' }))).ok).toBe(false);
         });
 
         it('does not let a failure to end the call escape the timer', async () => {

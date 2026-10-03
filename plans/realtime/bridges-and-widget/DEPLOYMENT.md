@@ -119,6 +119,11 @@ telephony: {
   // Most calls (all carriers, both directions) carried at once (default 25). Set it at or BELOW the realtime
   // model plan's concurrent-session limit — see "Concurrency cap, caller identity and call recovery" below.
   maxConcurrentCalls: 25,
+  // Where the agent may transfer a live call, BY NAME — see "Transfer directory" below. Empty/absent ⇒ the agent
+  // cannot transfer at all, even on a carrier that supports it.
+  transferTargets: [
+    // { name: 'Front desk', number: '+14155550100', description: 'general enquiries and anything the agent cannot answer' },
+  ],
   // Outbound (`Place*Call`) policy — defaults shown. Applies on top of the caller's right to run the agent.
   outbound: {
     allowedPrefixes: ['+1'],               // E.164 prefixes a call may go to; [] refuses everything
@@ -216,6 +221,18 @@ logged. `webhookSigningSecret` is **reserved and currently unused** — the voic
   and `Place*Call` is refused with a clear error (`at-capacity`) without spending the caller's hourly outbound
   budget. There is no queue yet — a refusal is the whole answer. The slot frees when the call's session ends or
   fails to start. The cap is per process (N instances ⇒ N× the cap).
+- **Transfer directory (`telephony.transferTargets`).** The `transfer_call` tool takes the NAME of an entry here,
+  never a number. A free-form destination — even one inside `telephony.outbound.allowedPrefixes` — would let any
+  unverified caller say "transfer me to +1…" and get free call forwarding to any US/Canada number at your expense.
+  Each entry is `{ name, number, description? }`; the model sees the names and descriptions (not the numbers) and
+  the tool's schema enumerates the names. At startup every number is checked with the same E.164 and allow/block
+  rules as an outbound dial, and an invalid, duplicate or nameless entry is **dropped and logged**. The number is
+  checked again when a transfer runs. **With no entries the tool is not offered and the agent is not told it can
+  transfer.** Later routing work (queues, human-agent targets) extends this directory.
+- **Barge-in and cancelling work.** When the caller talks over the agent, queued spoken progress is dropped but
+  delegated work **keeps running** — the same policy as the browser (the user keeps talking while work runs, and
+  backchannels like "mm-hm" are common). A phone has no per-job cancel button, so the agent has a
+  `cancel_pending_work` tool, used only when the caller says never mind / stop that / cancel.
 - **Caller identity.** The agent is told the caller's number and that it is an **unverified** caller ID. To say
   more (a name, membership status), register a subclass of `BaseCallerIdentityResolver`
   (`@memberjunction/telephony-adapters`) with `@RegisterClass(BaseCallerIdentityResolver, 'TelephonyCallerIdentity')`

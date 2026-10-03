@@ -86,6 +86,16 @@ export interface OutboundPolicySettings {
     maxCallsPerUserPerHour?: number;
 }
 
+/** One raw `telephony.transferTargets` entry: a named place the agent may transfer a live call to. */
+export interface TransferTargetSettings {
+    /** What the agent calls it (e.g. `Front desk`); the agent names a target, never a number. */
+    name: string;
+    /** Where it goes, in E.164. Checked against the outbound allow/block lists at startup. */
+    number: string;
+    /** What it is for; shown to the agent so it knows when to use it. */
+    description?: string;
+}
+
 /** The effective, validated policy. */
 export interface OutboundCallPolicy {
     AllowedPrefixes: string[];
@@ -288,6 +298,71 @@ export function CheckTransferDestination(
         return { Allowed: false, ...refusal };
     }
     return { Allowed: true, Number: to };
+}
+
+/** A validated entry of the transfer directory. */
+export interface TransferTarget {
+    Name: string;
+    /** E.164, already checked against the outbound policy. */
+    Number: string;
+    Description?: string;
+}
+
+const MAX_TRANSFER_TARGETS = 20;
+const MAX_TRANSFER_NAME_CHARS = 60;
+const MAX_TRANSFER_DESCRIPTION_CHARS = 200;
+
+/**
+ * Builds the transfer directory from `telephony.transferTargets`: each entry needs a name, a unique name (case
+ * insensitive) and a number that passes the same E.164 + allow/block checks as an outbound dial. An entry that
+ * fails any of them is DROPPED and logged, never half-kept — a typo must not turn into a forwarding destination.
+ *
+ * The directory is the only thing `transfer_call` can reach. Letting the model (and so an unverified caller)
+ * name an arbitrary number would be free call forwarding at the operator's expense.
+ *
+ * Later routing work (queues, human-agent targets) extends this directory rather than relaxing it.
+ */
+export function ResolveTransferDirectory(raw: TransferTargetSettings[] | undefined, policy: OutboundCallPolicy): TransferTarget[] {
+    const targets: TransferTarget[] = [];
+    const seen = new Set<string>();
+    for (const entry of raw ?? []) {
+        if (targets.length >= MAX_TRANSFER_TARGETS) {
+            LogError(`[Telephony] telephony.transferTargets is capped at ${MAX_TRANSFER_TARGETS} entries; ignoring the rest.`);
+            break;
+        }
+        const target = validateTransferEntry(entry, policy, seen);
+        if (target) {
+            seen.add(target.Name.toLowerCase());
+            targets.push(target);
+        }
+    }
+    return targets;
+}
+
+/** Validates one directory entry, logging why it was dropped. */
+function validateTransferEntry(entry: TransferTargetSettings, policy: OutboundCallPolicy, seen: Set<string>): TransferTarget | undefined {
+    const name = typeof entry?.name === 'string' ? entry.name.trim() : '';
+    if (!name || name.length > MAX_TRANSFER_NAME_CHARS) {
+        LogError(`[Telephony] ignoring a telephony.transferTargets entry: its name must be 1-${MAX_TRANSFER_NAME_CHARS} characters.`);
+        return undefined;
+    }
+    if (seen.has(name.toLowerCase())) {
+        LogError(`[Telephony] ignoring duplicate telephony.transferTargets name '${name}'.`);
+        return undefined;
+    }
+    const verdict = CheckTransferDestination(policy, typeof entry.number === 'string' ? entry.number : '');
+    if (!verdict.Allowed) {
+        LogError(`[Telephony] ignoring telephony.transferTargets entry '${name}': ${verdict.Reason}`);
+        return undefined;
+    }
+    const description = typeof entry.description === 'string' ? entry.description.trim().slice(0, MAX_TRANSFER_DESCRIPTION_CHARS) : '';
+    return { Name: name, Number: verdict.Number, ...(description ? { Description: description } : {}) };
+}
+
+/** Finds a directory entry by the name the agent gave (case and surrounding whitespace insensitive). */
+export function FindTransferTarget(targets: readonly TransferTarget[], name: string): TransferTarget | undefined {
+    const wanted = (name ?? '').trim().toLowerCase();
+    return wanted ? targets.find((t) => t.Name.toLowerCase() === wanted) : undefined;
 }
 
 /** Why the identity cannot be used for this carrier, or `undefined` when it can. */

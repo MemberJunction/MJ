@@ -21,6 +21,7 @@ export function ReadSharedTelephonySettings(raw: Partial<TelephonySharedSettings
         maxCallSeconds: raw?.maxCallSeconds,
         maxConcurrentCalls: raw?.maxConcurrentCalls,
         outbound: raw?.outbound,
+        transferTargets: raw?.transferTargets,
     };
 }
 

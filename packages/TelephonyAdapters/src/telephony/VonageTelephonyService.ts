@@ -30,6 +30,7 @@ import {
     OutboundCallRefusedError,
     OutboundRateLimiter,
     ResolveOutboundPolicy,
+    ResolveTransferDirectory,
     type OutboundGuardDeps,
 } from './outboundCallPolicy.js';
 
@@ -132,6 +133,7 @@ export class VonageTelephonyService {
             CoAgentResolver: deps.coAgentResolver ?? ResolveRealtimeCoAgentID,
             CallerResolver: deps.callerResolver ?? CreateCallerIdentityResolver(),
             OutboundPolicy: policy,
+            TransferTargets: ResolveTransferDirectory(config.transferTargets, policy),
         });
         this.wireRegistryHooks();
     }

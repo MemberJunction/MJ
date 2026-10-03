@@ -2,14 +2,21 @@
  * @fileoverview What a phone-voiced agent is told about the call, and the call-control tools it can use.
  *
  * A model that does not know it is on a phone talks like a chat window: markdown, lists, long paragraphs. This
- * module supplies the framing that fixes that (plus who is calling), and three tools the model can call on the
- * live call — `transfer_call`, `send_dtmf` and `end_call` — each offered only when the carrier supports it.
+ * module supplies the framing that fixes that (plus who is calling), and four tools the model can call on the
+ * live call — `transfer_call`, `send_dtmf`, `end_call` and `cancel_pending_work`.
  *
  * The tools are executed here, by the host, not by the delegation path: they act on the call itself (the
- * telephony bridge), which only the host holds. Every argument comes from the model, so each is validated before
- * it touches the carrier: a transfer destination goes through the same E.164 and allow/block-list policy as an
- * outbound dial (a transfer is as much a toll-fraud primitive), and DTMF is limited to the keypad alphabet and a
- * length cap.
+ * telephony bridge), which only the host holds. Every argument comes from the model — and so, indirectly, from an
+ * unverified caller — so each is validated before it touches the carrier:
+ * - `transfer_call` takes the NAME of an entry in the operator's transfer directory (`telephony.transferTargets`),
+ *   never a number. A free-form destination, even one that passes the outbound allow/block lists, would let any
+ *   caller get free call forwarding to any allowed number at the operator's expense. The tool is not offered at
+ *   all when the directory is empty or the carrier cannot transfer. The resolved number is still checked against
+ *   the outbound policy (defence in depth). Later routing work (queues, human-agent targets) adds kinds of target
+ *   to this directory; it does not reintroduce free-form numbers.
+ * - DTMF is limited to the keypad alphabet and a length cap.
+ * - `cancel_pending_work` is the phone's explicit cancel: barge-in does not abort delegated work (the user keeps
+ *   talking while it runs), and a phone has no per-job cancel button, so the agent cancels on the caller's word.
  *
  * @module @memberjunction/telephony-adapters
  */
@@ -19,12 +26,13 @@ import type { JSONObject, RealtimeToolCall, RealtimeToolDefinition } from '@memb
 import { IsValidDtmfDigits, MAX_DTMF_DIGITS } from '@memberjunction/ai-bridge-base';
 import type { BridgeLocalToolHandler } from '@memberjunction/ai-agents';
 import type { CallerIdentity } from './callerIdentity.js';
-import { CheckTransferDestination, MaskNumber, type OutboundCallPolicy } from './outboundCallPolicy.js';
+import { CheckTransferDestination, FindTransferTarget, MaskNumber, type OutboundCallPolicy, type TransferTarget } from './outboundCallPolicy.js';
 
 /** The tool names the host executes itself. */
 export const TRANSFER_CALL_TOOL = 'transfer_call';
 export const SEND_DTMF_TOOL = 'send_dtmf';
 export const END_CALL_TOOL = 'end_call';
+export const CANCEL_PENDING_WORK_TOOL = 'cancel_pending_work';
 
 /**
  * How long to let the agent's goodbye finish before a transfer or hang-up takes effect. The model usually speaks
@@ -46,16 +54,27 @@ export interface TelephonyToolFeatures {
     DTMF: boolean;
 }
 
-/** The tools to offer for a carrier: `end_call` always, the others only when the carrier supports them. */
-export function BuildTelephonyTools(features: TelephonyToolFeatures): RealtimeToolDefinition[] {
+/** Whether the agent may transfer: the carrier supports it AND the operator configured somewhere to send calls. */
+function canTransfer(features: TelephonyToolFeatures, targets: readonly TransferTarget[]): boolean {
+    return features.CallTransfer && targets.length > 0;
+}
+
+/**
+ * The tools to offer for a carrier. `end_call` and `cancel_pending_work` always; `send_dtmf` when the carrier does
+ * DTMF; `transfer_call` only when the carrier can transfer AND the transfer directory is non-empty.
+ */
+export function BuildTelephonyTools(features: TelephonyToolFeatures, transferTargets: readonly TransferTarget[] = []): RealtimeToolDefinition[] {
     const tools: RealtimeToolDefinition[] = [];
-    if (features.CallTransfer) {
+    if (canTransfer(features, transferTargets)) {
         tools.push({
             Name: TRANSFER_CALL_TOOL,
             Description:
-                'Transfer this call to another phone number (for example a human colleague). Say a short goodbye first; ' +
-                'the call leaves you when the transfer completes. Only call it when the caller asks for it or you cannot help.',
-            ParametersSchema: objectSchema({ destination: stringProperty('The number to transfer to, in E.164 form such as +14155550123.') }, ['destination']),
+                'Transfer this call to one of the configured destinations. Say a short goodbye first; the call leaves you when the ' +
+                `transfer completes. Only call it when the caller asks for it or you cannot help. Destinations: ${describeTransferTargets(transferTargets)}`,
+            ParametersSchema: objectSchema(
+                { target: { type: 'string', enum: transferTargets.map((t) => t.Name), description: 'The name of the place to transfer to, exactly as listed.' } },
+                ['target'],
+            ),
         });
     }
     if (features.DTMF) {
@@ -67,6 +86,13 @@ export function BuildTelephonyTools(features: TelephonyToolFeatures): RealtimeTo
             ParametersSchema: objectSchema({ digits: stringProperty('The digits to press, such as "1" or "4021#".') }, ['digits']),
         });
     }
+    tools.push({
+        Name: CANCEL_PENDING_WORK_TOOL,
+        Description:
+            'Cancel the lookups or tasks you started on the caller\'s behalf. Use ONLY when the caller says never mind, stop that or cancel. ' +
+            'The caller talking, or saying "mm-hm", while you work does not mean cancel.',
+        ParametersSchema: objectSchema({}, []),
+    });
     tools.push({
         Name: END_CALL_TOOL,
         Description:
@@ -86,6 +112,8 @@ export interface PhoneFramingInput {
     Caller?: CallerIdentity;
     /** The call-control features offered. */
     Features: TelephonyToolFeatures;
+    /** The transfer directory; transfer is not mentioned when it is empty. */
+    TransferTargets?: readonly TransferTarget[];
 }
 
 /**
@@ -100,7 +128,7 @@ export function BuildPhoneFraming(input: PhoneFramingInput): string {
         '- If you did not hear something clearly, ask the caller to repeat it.',
     ];
     lines.push(...describeRemoteParty(input));
-    lines.push(...describeTools(input.Features));
+    lines.push(...describeTools(input.Features, input.TransferTargets ?? []));
     return lines.join('\n');
 }
 
@@ -120,8 +148,12 @@ export interface TelephonyToolExecutorDeps {
     Policy: OutboundCallPolicy;
     /** The features the carrier supports (a tool for an unsupported one is refused even if the model invents the call). */
     Features: TelephonyToolFeatures;
+    /** The transfer directory — the only destinations `transfer_call` can reach. */
+    TransferTargets: readonly TransferTarget[];
     /** Ends the call (stops the bridge session). */
     EndCall: (reason: string) => Promise<void>;
+    /** Aborts the delegated work in flight; returns how many runs were aborted. */
+    CancelPendingWork: () => number;
     /** Tells the model something happened out-of-band (a failed transfer) so it can tell the caller. */
     NotifyModel: (note: string) => void;
     /** Override for the goodbye settle delay (tests). */
@@ -137,7 +169,7 @@ export class TelephonyCallToolExecutor implements BridgeLocalToolHandler {
 
     /** Whether `toolName` is one of the call-control tools. */
     public Handles(toolName: string): boolean {
-        return toolName === TRANSFER_CALL_TOOL || toolName === SEND_DTMF_TOOL || toolName === END_CALL_TOOL;
+        return toolName === TRANSFER_CALL_TOOL || toolName === SEND_DTMF_TOOL || toolName === END_CALL_TOOL || toolName === CANCEL_PENDING_WORK_TOOL;
     }
 
     /** Runs one tool call and returns the JSON the model is handed back. Never throws. */
@@ -150,6 +182,8 @@ export class TelephonyCallToolExecutor implements BridgeLocalToolHandler {
                     return await this.sendDtmf(call);
                 case END_CALL_TOOL:
                     return this.endCall(call);
+                case CANCEL_PENDING_WORK_TOOL:
+                    return this.cancelPendingWork();
                 default:
                     return fail(`Unknown call-control tool '${call.ToolName}'.`);
             }
@@ -160,13 +194,18 @@ export class TelephonyCallToolExecutor implements BridgeLocalToolHandler {
     }
 
     private transfer(call: RealtimeToolCall): string {
-        if (!this.deps.Features.CallTransfer) {
+        if (!canTransfer(this.deps.Features, this.deps.TransferTargets)) {
             return fail('Transferring is not available on this line.');
         }
         if (this.ending || this.transferring) {
             return fail('The call is already ending or being transferred.');
         }
-        const verdict = CheckTransferDestination(this.deps.Policy, readString(call.Arguments, 'destination'));
+        const entry = FindTransferTarget(this.deps.TransferTargets, readString(call.Arguments, 'target'));
+        if (!entry) {
+            return fail(`Unknown transfer destination. Choose one of: ${this.deps.TransferTargets.map((t) => t.Name).join(', ')}.`);
+        }
+        // Defence in depth: the directory was validated at startup, but the policy is checked again on the resolved number.
+        const verdict = CheckTransferDestination(this.deps.Policy, entry.Number);
         if (!verdict.Allowed) {
             return fail(verdict.Reason);
         }
@@ -204,6 +243,12 @@ export class TelephonyCallToolExecutor implements BridgeLocalToolHandler {
         }
         await controls.SendDTMF(digits);
         return JSON.stringify({ ok: true, status: 'sent' });
+    }
+
+    private cancelPendingWork(): string {
+        const cancelled = this.deps.CancelPendingWork();
+        LogStatus(`[Telephony] agent cancelled ${cancelled} pending run(s) at the caller's request.`);
+        return JSON.stringify({ ok: true, cancelled });
     }
 
     private endCall(call: RealtimeToolCall): string {
@@ -251,14 +296,20 @@ function describeRemoteParty(input: PhoneFramingInput): string[] {
     return lines;
 }
 
-function describeTools(features: TelephonyToolFeatures): string[] {
+/** `Name (description); Name2` — what the agent is told each transfer destination is for. */
+function describeTransferTargets(targets: readonly TransferTarget[]): string {
+    return targets.map((t) => (t.Description ? `${t.Name} (${t.Description})` : t.Name)).join('; ');
+}
+
+function describeTools(features: TelephonyToolFeatures, targets: readonly TransferTarget[]): string[] {
     const lines: string[] = [];
-    if (features.CallTransfer) {
-        lines.push(`- Use ${TRANSFER_CALL_TOOL} to hand the call to a human or another number when the caller asks or you cannot help.`);
+    if (canTransfer(features, targets)) {
+        lines.push(`- Use ${TRANSFER_CALL_TOOL} to hand the call over when the caller asks or you cannot help. You can only transfer to: ${describeTransferTargets(targets)}.`);
     }
     if (features.DTMF) {
         lines.push(`- Use ${SEND_DTMF_TOOL} to press keys, for example in an automated menu. When the caller presses keys you will be told what they pressed.`);
     }
+    lines.push(`- Use ${CANCEL_PENDING_WORK_TOOL} only when the caller says never mind, stop that or cancel. Talking while you work is normal and does not cancel anything.`);
     lines.push(`- When the conversation is complete, say goodbye and then use ${END_CALL_TOOL}.`);
     return lines;
 }
@@ -269,9 +320,9 @@ function sanitizeNumberForPrompt(value: string): string {
 }
 
 /** Reads one string argument from the model's JSON arguments; anything else yields `''`. */
-function readString(argumentsJson: string, name: 'destination' | 'digits' | 'reason'): string {
+function readString(argumentsJson: string, name: 'target' | 'digits' | 'reason'): string {
     try {
-        const parsed = JSON.parse(argumentsJson || '{}') as Partial<Record<'destination' | 'digits' | 'reason', string | number>>;
+        const parsed = JSON.parse(argumentsJson || '{}') as Partial<Record<'target' | 'digits' | 'reason', string | number>>;
         const value = parsed?.[name];
         return typeof value === 'string' ? value : '';
     } catch {

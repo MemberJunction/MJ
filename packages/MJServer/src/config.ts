@@ -606,6 +606,21 @@ const telephonySchema = z.object({
   maxConcurrentCalls: z.coerce.number().int().positive().optional().default(25),
   /** Outbound destination policy + per-user rate limit (see {@link outboundTelephonySchema}). */
   outbound: outboundTelephonySchema.optional().default({}),
+  /**
+   * The places the agent may transfer a live call to, by name (the agent names a target, never a number). Each
+   * number is validated at startup against the outbound allow/block lists; an invalid entry is dropped and logged.
+   * Empty (the default) means the agent cannot transfer calls at all.
+   */
+  transferTargets: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        number: z.string().min(1),
+        description: z.string().optional(),
+      }),
+    )
+    .optional()
+    .default([]),
   /** Twilio Programmable Voice + Media Streams binding. */
   twilio: twilioTelephonySchema.optional(),
   /** Vonage Voice + WebSocket-media binding. */

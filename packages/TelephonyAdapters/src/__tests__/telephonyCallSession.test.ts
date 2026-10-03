@@ -31,13 +31,14 @@ const IDENTITY = { AgentID: 'target-agent', IdentityValue: '+18005550100' };
 
 interface FakeRuntime {
     CancelInFlightDelegations: ReturnType<typeof vi.fn>;
+    CancelPendingNarration: ReturnType<typeof vi.fn>;
     SetLocalToolHandler: ReturnType<typeof vi.fn>;
 }
 
 function fakeSession(cancelled = 0): { session: IRealtimeSession; runtime: FakeRuntime; close: ReturnType<typeof vi.fn> } {
     const close = vi.fn(async () => undefined);
     const session = { Close: close, SendContextNote: vi.fn() } as unknown as IRealtimeSession;
-    const runtime: FakeRuntime = { CancelInFlightDelegations: vi.fn(() => cancelled), SetLocalToolHandler: vi.fn() };
+    const runtime: FakeRuntime = { CancelInFlightDelegations: vi.fn(() => cancelled), CancelPendingNarration: vi.fn(), SetLocalToolHandler: vi.fn() };
     runtimes.set(session, runtime as unknown as BridgeRealtimeRuntime);
     return { session, runtime, close };
 }
@@ -73,7 +74,9 @@ interface Setup {
     active: { SessionBridgeID: string; RoomKey: string; Bridge: { TransferCall: ReturnType<typeof vi.fn>; SendDTMF: ReturnType<typeof vi.fn> }; RealtimeSession?: IRealtimeSession };
 }
 
-function setup(features: Record<string, boolean> = { CallTransfer: true, DTMF: true }): Setup {
+const DIRECTORY = [{ Name: 'Front desk', Number: '+14155550199', Description: 'general enquiries' }];
+
+function setup(features: Record<string, boolean> = { CallTransfer: true, DTMF: true }, transferTargets = DIRECTORY): Setup {
     const sessions: ReturnType<typeof fakeSession>[] = [];
     const sessionFactory = vi.fn(async () => {
         const made = fakeSession(2);
@@ -99,6 +102,7 @@ function setup(features: Record<string, boolean> = { CallTransfer: true, DTMF: t
         CoAgentResolver: coAgentResolver as never,
         CallerResolver: { ResolveCaller: vi.fn(async () => ({ Verified: false })) },
         OutboundPolicy: ResolveOutboundPolicy(),
+        TransferTargets: transferTargets,
     });
     const args = (overrides: Partial<TelephonyCallStartArgs> = {}): TelephonyCallStartArgs => ({
         ResolveProvider: () => ({ ID: 'PROV', SupportedFeaturesObject: features }) as never,
@@ -162,7 +166,25 @@ describe('TelephonyCallSessionStarter.Start — agents', () => {
         const s = setup({ CallTransfer: false, DTMF: true });
         await s.starter.Start(s.args());
         const tools = (s.sessionFactory.mock.calls[0][0] as { HostTools: Array<{ Name: string }> }).HostTools.map((t) => t.Name);
-        expect(tools).toEqual(['send_dtmf', 'end_call']);
+        expect(tools).toEqual(['send_dtmf', 'cancel_pending_work', 'end_call']);
+    });
+
+    it('offers no transfer tool and says nothing about transfer when no transfer directory is configured', async () => {
+        const s = setup({ CallTransfer: true, DTMF: true }, []);
+        await s.starter.Start(s.args());
+        const factoryArgs = s.sessionFactory.mock.calls[0][0] as { HostTools: Array<{ Name: string }>; HostFraming: string };
+        expect(factoryArgs.HostTools.map((t) => t.Name)).not.toContain('transfer_call');
+        expect(factoryArgs.HostFraming).not.toContain('transfer_call');
+    });
+
+    it('lists the configured transfer destinations (names only) to the model', async () => {
+        const s = setup();
+        await s.starter.Start(s.args());
+        const factoryArgs = s.sessionFactory.mock.calls[0][0] as { HostTools: Array<{ Name: string; ParametersSchema: unknown }>; HostFraming: string };
+        const transfer = factoryArgs.HostTools.find((t) => t.Name === 'transfer_call');
+        expect(transfer?.ParametersSchema).toMatchObject({ properties: { target: { enum: ['Front desk'] } } });
+        expect(factoryArgs.HostFraming).toContain('Front desk');
+        expect(factoryArgs.HostFraming).not.toContain('+14155550199');
     });
 });
 
@@ -208,15 +230,41 @@ describe('TelephonyCallSessionStarter.Start — in-call behaviour', () => {
         expect(handler.Handles('transfer_call')).toBe(true);
     });
 
-    it('cancels in-flight delegations when the caller talks over the agent', async () => {
+    it('on barge-in cancels pending narration but leaves delegated work running (the browser policy)', async () => {
         const s = setup();
         await s.starter.Start(s.args());
         const onBargeIn = (s.engine.StartBridgeSession.mock.calls[0][0] as { OnBargeIn: () => void }).OnBargeIn;
         onBargeIn();
-        expect(s.sessions[0].runtime.CancelInFlightDelegations).toHaveBeenCalledTimes(1);
+        expect(s.sessions[0].runtime.CancelPendingNarration).toHaveBeenCalledTimes(1);
+        expect(s.sessions[0].runtime.CancelInFlightDelegations).not.toHaveBeenCalled();
     });
 
-    it('barge-in with no delegation running is harmless', async () => {
+    it('cancel_pending_work is the explicit cancel: it aborts the in-flight delegations', async () => {
+        const s = setup();
+        await s.starter.Start(s.args());
+        const handler = s.sessions[0].runtime.SetLocalToolHandler.mock.calls[0][0] as BridgeLocalToolHandler;
+
+        const result = JSON.parse(await handler.Execute({ CallID: 'c', ToolName: 'cancel_pending_work', Arguments: '{}' })) as { ok: boolean; cancelled: number };
+
+        expect(s.sessions[0].runtime.CancelInFlightDelegations).toHaveBeenCalledTimes(1);
+        expect(result).toEqual({ ok: true, cancelled: 2 });
+    });
+
+    it('cancel_pending_work targets the live (recovered) model session after a recovery', async () => {
+        const s = setup();
+        await s.starter.Start(s.args());
+        const recover = (s.engine.StartBridgeSession.mock.calls[0][0] as { RecoverRealtimeSession: (r: { PriorTranscript: string; Attempt: number; Reason: string }) => Promise<IRealtimeSession> }).RecoverRealtimeSession;
+        const reopened = await recover({ PriorTranscript: 'x', Attempt: 1, Reason: 'closed' });
+        s.active.RealtimeSession = reopened; // the engine swaps the active session on recovery
+        const handler = s.sessions[0].runtime.SetLocalToolHandler.mock.calls[0][0] as BridgeLocalToolHandler;
+
+        await handler.Execute({ CallID: 'c', ToolName: 'cancel_pending_work', Arguments: '{}' });
+
+        expect(s.sessions[1].runtime.CancelInFlightDelegations).toHaveBeenCalledTimes(1);
+        expect(s.sessions[0].runtime.CancelInFlightDelegations).not.toHaveBeenCalled();
+    });
+
+    it('barge-in with no runtime to talk to is harmless', async () => {
         const s = setup();
         await s.starter.Start(s.args());
         runtimes.clear();
@@ -259,7 +307,7 @@ describe('TelephonyCallSessionStarter.Start — in-call behaviour', () => {
         await handler.Execute({ CallID: 'c', ToolName: 'send_dtmf', Arguments: '{"digits":"12#"}' });
         expect(s.active.Bridge.SendDTMF).toHaveBeenCalledWith('12#');
 
-        await handler.Execute({ CallID: 'c', ToolName: 'transfer_call', Arguments: '{"destination":"+14155550199"}' });
+        await handler.Execute({ CallID: 'c', ToolName: 'transfer_call', Arguments: '{"target":"Front desk"}' });
         await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
         expect(s.active.Bridge.TransferCall).toHaveBeenCalledWith('+14155550199');
     });

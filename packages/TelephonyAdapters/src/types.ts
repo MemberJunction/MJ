@@ -1,6 +1,6 @@
 import { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import type { OutboundPolicySettings } from './telephony/outboundCallPolicy.js';
+import type { OutboundPolicySettings, TransferTargetSettings } from './telephony/outboundCallPolicy.js';
 
 /**
  * Settings that apply to every carrier. They are configured once under `telephony` and merged into each
@@ -23,6 +23,11 @@ export interface TelephonySharedSettings {
     maxConcurrentCalls?: number;
     /** Outbound destination policy and per-user rate limit applied to every `Place*Call` mutation. */
     outbound?: OutboundPolicySettings;
+    /**
+     * The places the agent may transfer a live call to, by name. Empty or absent means the agent cannot transfer at
+     * all, even on a carrier that supports it: the agent never names a free-form number.
+     */
+    transferTargets?: TransferTargetSettings[];
 }
 
 /** What to do when answering-machine detection says a machine (or fax) answered an outbound call. */

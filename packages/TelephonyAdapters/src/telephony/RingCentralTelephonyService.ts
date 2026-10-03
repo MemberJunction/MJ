@@ -30,6 +30,7 @@ import {
     OutboundCallRefusedError,
     OutboundRateLimiter,
     ResolveOutboundPolicy,
+    ResolveTransferDirectory,
     type OutboundGuardDeps,
 } from './outboundCallPolicy.js';
 
@@ -157,6 +158,7 @@ export class RingCentralTelephonyService {
             CoAgentResolver: deps.coAgentResolver ?? ResolveRealtimeCoAgentID,
             CallerResolver: deps.callerResolver ?? CreateCallerIdentityResolver(),
             OutboundPolicy: policy,
+            TransferTargets: ResolveTransferDirectory(config.transferTargets, policy),
         });
     }
 

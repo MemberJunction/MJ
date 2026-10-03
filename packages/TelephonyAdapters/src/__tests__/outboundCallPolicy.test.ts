@@ -10,11 +10,13 @@ import { LogError } from '@memberjunction/core';
 import {
     AuthorizeOutboundCall,
     CheckTransferDestination,
+    FindTransferTarget,
     IsValidE164,
     MaskNumber,
     OutboundCallRefusedError,
     OutboundRateLimiter,
     ResolveOutboundPolicy,
+    ResolveTransferDirectory,
     type OutboundCallRequest,
     type OutboundGuardDeps,
 } from '../telephony/outboundCallPolicy.js';
@@ -301,5 +303,90 @@ describe('CheckTransferDestination', () => {
 
     it('treats a missing destination as invalid rather than throwing', () => {
         expect(CheckTransferDestination(policy, undefined as unknown as string).Allowed).toBe(false);
+    });
+});
+
+describe('ResolveTransferDirectory', () => {
+    const policy = ResolveOutboundPolicy();
+
+    it('keeps valid entries, trimming names and numbers', () => {
+        const directory = ResolveTransferDirectory(
+            [
+                { name: ' Front desk ', number: ' +14155550100 ', description: ' general enquiries ' },
+                { name: 'Billing', number: '+14155550101' },
+            ],
+            policy,
+        );
+        expect(directory).toEqual([
+            { Name: 'Front desk', Number: '+14155550100', Description: 'general enquiries' },
+            { Name: 'Billing', Number: '+14155550101' },
+        ]);
+    });
+
+    it('is empty when nothing is configured', () => {
+        expect(ResolveTransferDirectory(undefined, policy)).toEqual([]);
+        expect(ResolveTransferDirectory([], policy)).toEqual([]);
+    });
+
+    it('drops, and logs, an entry whose number is not E.164, is in a blocked range, or is outside the allowed ranges', () => {
+        vi.mocked(LogError).mockClear();
+        const directory = ResolveTransferDirectory(
+            [
+                { name: 'Typo', number: '4155550100' },
+                { name: 'Premium', number: '+19005551234' },
+                { name: 'Abroad', number: '+442071838750' },
+                { name: 'Good', number: '+14155550100' },
+            ],
+            policy,
+        );
+        expect(directory.map((t) => t.Name)).toEqual(['Good']);
+        const logged = vi.mocked(LogError).mock.calls.map((c) => String(c[0])).join('\n');
+        expect(logged).toContain("'Typo'");
+        expect(logged).toContain("'Premium'");
+        expect(logged).toContain("'Abroad'");
+    });
+
+    it('drops an entry with no usable name, and a duplicate name (case-insensitively)', () => {
+        const directory = ResolveTransferDirectory(
+            [
+                { name: '   ', number: '+14155550100' },
+                { name: 'Sales', number: '+14155550101' },
+                { name: 'sales', number: '+14155550102' },
+                { name: 'x'.repeat(500), number: '+14155550103' },
+            ],
+            policy,
+        );
+        expect(directory).toEqual([{ Name: 'Sales', Number: '+14155550101' }]);
+    });
+
+    it('survives a malformed entry (wrong types) without throwing', () => {
+        const bad = [{ name: 5, number: null }, null, { name: 'Ok', number: '+14155550100' }] as unknown as Parameters<typeof ResolveTransferDirectory>[0];
+        expect(ResolveTransferDirectory(bad, policy).map((t) => t.Name)).toEqual(['Ok']);
+    });
+
+    it('caps the directory size', () => {
+        const many = Array.from({ length: 30 }, (_, i) => ({ name: `Target ${i}`, number: `+1415555${String(1000 + i)}` }));
+        expect(ResolveTransferDirectory(many, policy)).toHaveLength(20);
+    });
+
+    it('honours an operator-configured policy', () => {
+        const custom = ResolveOutboundPolicy({ allowedPrefixes: ['+44'], blockedPrefixes: [] });
+        expect(ResolveTransferDirectory([{ name: 'London', number: '+442071838750' }], custom)).toHaveLength(1);
+        expect(ResolveTransferDirectory([{ name: 'SF', number: '+14155550100' }], custom)).toHaveLength(0);
+    });
+});
+
+describe('FindTransferTarget', () => {
+    const targets = [{ Name: 'Front desk', Number: '+14155550100' }];
+
+    it('finds by name regardless of case and surrounding whitespace', () => {
+        expect(FindTransferTarget(targets, ' FRONT DESK ')?.Number).toBe('+14155550100');
+    });
+
+    it('never resolves a number, a blank, or an unknown name', () => {
+        expect(FindTransferTarget(targets, '+14155550100')).toBeUndefined();
+        expect(FindTransferTarget(targets, '')).toBeUndefined();
+        expect(FindTransferTarget(targets, 'Back office')).toBeUndefined();
+        expect(FindTransferTarget(targets, undefined as unknown as string)).toBeUndefined();
     });
 });
