@@ -598,6 +598,12 @@ const telephonySchema = z.object({
   inboundRunAsUserEmail: z.string().optional(),
   /** Maximum length of one phone call, in seconds. The bridge session is stopped (and the call hung up) at the cap. Defaults to 1800. */
   maxCallSeconds: z.coerce.number().int().positive().optional().default(1800),
+  /**
+   * Most phone calls (every carrier together, both directions) the server carries at once. Past it an inbound
+   * caller hears "all agents are busy" and an outbound request is refused. Keep it at or below the realtime
+   * model plan's concurrent-session limit. Defaults to 25.
+   */
+  maxConcurrentCalls: z.coerce.number().int().positive().optional().default(25),
   /** Outbound destination policy + per-user rate limit (see {@link outboundTelephonySchema}). */
   outbound: outboundTelephonySchema.optional().default({}),
   /** Twilio Programmable Voice + Media Streams binding. */

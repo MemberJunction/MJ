@@ -116,6 +116,9 @@ telephony: {
   inboundRunAsUserEmail: process.env.TELEPHONY_INBOUND_RUN_AS_USER_EMAIL || undefined,
   // Hard cap on one call's length, in seconds (default 1800 = 30 min). The session is stopped at the cap.
   maxCallSeconds: 1800,
+  // Most calls (all carriers, both directions) carried at once (default 25). Set it at or BELOW the realtime
+  // model plan's concurrent-session limit — see "Concurrency cap, caller identity and call recovery" below.
+  maxConcurrentCalls: 25,
   // Outbound (`Place*Call`) policy — defaults shown. Applies on top of the caller's right to run the agent.
   outbound: {
     allowedPrefixes: ['+1'],               // E.164 prefixes a call may go to; [] refuses everything
@@ -204,6 +207,31 @@ that names an unknown call, presents the wrong/no token, or targets a call that 
 logged. `webhookSigningSecret` is **reserved and currently unused** — the voice/status webhooks are authenticated by
 `X-Twilio-Signature` / the Vonage signed-webhook JWT, and the media sockets by the per-call token.
 
+### Concurrency cap, caller identity and call recovery
+
+- **`telephony.maxConcurrentCalls` (default 25)** caps simultaneous calls across every carrier and both directions.
+  Every call holds a live realtime-model session and the model plan has its own concurrent-session limit; past it
+  calls fail or degrade for everyone, not just the newest. **Set the cap at or below that limit.** Over the cap an
+  inbound caller hears "all of our agents are busy right now" (Twilio/Vonage answer, RingCentral declines the INVITE)
+  and `Place*Call` is refused with a clear error (`at-capacity`) without spending the caller's hourly outbound
+  budget. There is no queue yet — a refusal is the whole answer. The slot frees when the call's session ends or
+  fails to start. The cap is per process (N instances ⇒ N× the cap).
+- **Caller identity.** The agent is told the caller's number and that it is an **unverified** caller ID. To say
+  more (a name, membership status), register a subclass of `BaseCallerIdentityResolver`
+  (`@memberjunction/telephony-adapters`) with `@RegisterClass(BaseCallerIdentityResolver, 'TelephonyCallerIdentity')`
+  in your own package; it replaces the default for the process. MJ core knows nothing about contacts or CRMs, so
+  this is the only seam. Return `Verified: true` only when the caller was verified some other way — a caller-ID
+  match alone is not verification. A resolver that throws is logged and the caller is treated as anonymous.
+- **Model-connection drops.** If the realtime model's connection drops mid-call the engine reopens it **once**,
+  carrying the conversation so far. If that also fails the caller hears a short apology at the carrier (Twilio
+  `<Say>`+`<Hangup>`, Vonage `talk`; RingCentral has no server-side speech and just hangs up) and the call ends.
+- **Orphans.** At startup, and every 10 minutes after, bridge rows left `Connected` by a previous boot of the same
+  host are closed as `Janitor`. Live calls heartbeat their agent session every 5 minutes so the host session
+  janitor (15 minute idle cutoff) does not close a long call mid-conversation.
+- **RingCentral health.** `HealthCheck` reports unhealthy when SIP registration failed or has been pending for over
+  a minute, with the reason in `Details` (`registration`, `reason`). Previously it reported healthy whenever the
+  service object existed, even if registration had failed.
+
 The widget **reuses the magic-link RS256 key + auth provider**, initialized idempotently inside
 `createWidgetHandler` even when `magicLink.enabled` is `false`. So the widget stands on its own — you
 do NOT need to enable magic-link unless you want the guest→verified **upgrade** path (then set
@@ -222,7 +250,7 @@ signing secret or public URL (it needs no ngrok). See §6b for where the five SI
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Twilio | live = billable; test creds only work with magic numbers |
 | `TWILIO_STREAM_PUBLIC_URL` | Twilio media | `wss://<ngrok-host>/telephony/twilio/media` |
 | `TELEPHONY_INBOUND_RUN_AS_USER_EMAIL` | **all carriers (inbound)** | **REQUIRED** — email of the dedicated least-privilege user inbound calls run as. Unset ⇒ inbound calls are rejected (no System/Owner fallback). Feeds `telephony.inboundRunAsUserEmail`. |
-| `MJAPI_PUBLIC_URL` | Twilio/Vonage | MUST match the ngrok host — webhook signatures are verified against the full public URL, **and** the outbound status / AMD / event callback URLs are derived from it |
+| `MJAPI_PUBLIC_URL` | Twilio/Vonage | MUST match the ngrok host — Twilio webhook signatures are verified against this URL's **origin** (scheme + host + port) plus the request path; any path on it (e.g. `/graphql`) is ignored, since extension routes mount at the app root — **and** the outbound status / AMD / event callback URLs are derived from it |
 | `TWILIO_TEST_ACCOUNT_SID` / `_AUTH_TOKEN` / `_FROM` / `_TO` | the credential-gated integration test | absent → test self-skips |
 | `VONAGE_APPLICATION_ID` | Vonage | the Voice app UUID — also the `enabled` gate for the Vonage block |
 | `VONAGE_PRIVATE_KEY_PATH` | Vonage | absolute path to the app's `private.key` (PEM). Read into config at boot — keeps the multi-line key out of `.env`. (`VONAGE_PRIVATE_KEY` with the inline PEM is the fallback.) |
@@ -391,6 +419,8 @@ The things that cost real time during bring-up — each is now either fixed in c
 | Audio **deep / slowed down** | model PCM is 24 kHz, Twilio Media Streams are 8 kHz μ-law — played at the wrong rate | fixed in code — `BaseTelephonyBridge` resamples both legs |
 | **Inbound call: "unable to take your call right now"**, log says `inboundRunAsUserEmail … not configured / does not match any user / inactive / is the system user` | `telephony.inboundRunAsUserEmail` is unset or unusable — inbound calls are deliberately refused rather than run as a privileged user | create a dedicated least-privilege user and set `TELEPHONY_INBOUND_RUN_AS_USER_EMAIL` (§4) |
 | Media socket closed immediately; log says `refusing media socket … unknown-call / bad-token / already-attached` | the socket named a call MJ never registered, presented the wrong/no per-call token, or the call already has a socket | expected for scanners/replays. For a real call it means the carrier is not echoing the token: check the TwiML `<Parameter name="mjToken">` (Twilio) / the websocket URI query (Vonage) reaches the carrier unmodified |
+| Inbound caller hears "all of our agents are busy" / `Place*Call` says "All agent lines are busy" (`at-capacity`) | `telephony.maxConcurrentCalls` reached | expected under load; raise the cap only if the realtime model plan's concurrent-session limit allows it (§4) |
+| RingCentral extension reports **unhealthy**, `Details.registration` is `failed` / `pending` | SIP registration failed (bad credentials/proxy) or is stuck; `Start()` only logs the failure | read `Details.reason` and the `[Telephony][RingCentral] softphone start failed` log line; fix the SIP values (§6b) and restart |
 | `PlaceTwilioCall` etc. returns "outside the allowed calling ranges" / "blocked range" / "limit reached" / "permission to run this agent" | the outbound gate refused the call | adjust `telephony.outbound` (§4) or the caller's agent run permission; every refusal is logged with the masked destination |
 | Outbound rejected, Twilio **21210** | caller-ID (the agent identity's number) isn't provisioned on the Twilio account | use a number you own on the account as the agent identity's `IdentityValue` |
 | entity-permissions push fails on `@lookup …RLS Filters` | pushed before the RLS-filter migration ran | migrate first, then push metadata (§2 ordering) |

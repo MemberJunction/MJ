@@ -1,5 +1,10 @@
 # Live Call Checklist — Twilio
 
+> **Agent parity / reliability pass (PR 2):** rows 13–20 below cover what that pass added — transfer, DTMF in and out,
+> `end_call`, model-drop recovery, the concurrency cap, barge-in cancellation and the phone framing. None of it has
+> been exercised on a real carrier. Twilio DTMF is sent **in-band** (generated tones on the media stream); whether a
+> given IVR accepts those tones is the first thing to confirm in row 15.
+
 **Why this exists:** the last recorded live Twilio call (June 2026) ran against the old MJServer-hosted ingress.
 The ingress now lives in `@memberjunction/telephony-adapters` (moved 2026-09-12) and has since gained a configured
 inbound run-as user, per-call media-socket tokens, an outbound gate, status callbacks + answering-machine
@@ -15,6 +20,7 @@ snippet for outbound are in [`TESTING.md`](./TESTING.md) (Tier 1).
 
 - [ ] `telephony.inboundRunAsUserEmail` names a **dedicated least-privilege** user (not the system user, not an Owner).
 - [ ] `MJAPI_PUBLIC_URL`, `TWILIO_STREAM_PUBLIC_URL` and the number's Voice webhook all point at the **current** public host.
+- [ ] For the cap test (row 18), set `telephony.maxConcurrentCalls` to `1` **temporarily**.
 - [ ] For a short max-duration test, set `telephony.maxCallSeconds` to something small (e.g. `60`) **temporarily**.
 - [ ] You have a second phone to call from / receive on, and (for the voicemail test) a number that goes to voicemail.
 - [ ] MJAPI log is visible (`[Telephony][Twilio]` lines are the evidence for most items below).
@@ -37,10 +43,18 @@ Record, for every row: the **Call SID**, **date/time**, **pass/fail**, and anyth
 | 10 | **Media-socket rejection** | From a machine that can reach MJAPI, open `wss://<public-host>/telephony/twilio/media` and send a `start` frame naming a real Call SID **without** the token, then with a wrong token. | Socket is closed both times; MJAPI log: `refusing media socket for call … bad-token`. The live call (if any) is **unaffected**. Repeat with a Call SID MJ never saw: `unknown-call`. | n/a | | | |
 | 11 | **Duplicate socket** | While call 1 is connected, open a second socket with the correct Call SID and token (you will need the token from the TwiML — easiest to just replay a captured `start` frame). | Second socket is refused (`already-attached`); the original call keeps its audio. | n/a | | | |
 | 12 | **Rate limit** | Set `telephony.outbound.maxCallsPerUserPerHour: 2`; place 3 outbound calls in an hour as one user. | Third attempt is refused with a "limit reached" message. Restore the setting. (The limiter is per process.) | | | | |
+| 13 | **Transfer** | On a live call ask the agent to transfer you to a second phone you hold (allowed prefix). Repeat asking for a blocked destination (`+1900…`) and a malformed one. | The agent says a short goodbye, then the call is handed to the second phone within ~3 s; the call is **not** hung up by MJ when the media stream stops (log: no `hangup` after the transfer; bridge row `Disconnected`). The blocked and malformed destinations are refused by the agent with no carrier call made; the log line masks the number. | | | | |
+| 14 | **Transfer failure** | Ask for a transfer to an allowed but unreachable/invalid number. | The caller is still on the line and the agent apologises and offers another way to help (it is told `[call control] The transfer failed…`). | | | | |
+| 15 | **DTMF out** | Call an IVR (or a second phone running a DTMF decoder app) as an outbound call and ask the agent to press `1` then `4021#`. | The far end receives the digits (each tone ~100 ms, 100 ms gap) and the **call stays up** and keeps its audio. This is the in-band-tone check: if the IVR ignores the tones, record it — do not edit the row. | | | | |
+| 16 | **DTMF in** | During an inbound call press `1234` on the keypad, pause. | After ~1.5 s the agent acts as though told you pressed `1234` (one note per burst, not one per key). | | | | |
+| 17 | **end_call** | Say goodbye and tell the agent to end the call (or let it conclude). | The agent says goodbye, then the call is hung up ~3 s later; session ends; **agent session row is `Closed`** (not left `Active`). | | | | |
+| 18 | **Concurrency cap** | With `maxConcurrentCalls: 1`, keep call 1 up and dial the number from a second phone; also try `PlaceTwilioCall`. | The second caller hears "all of our agents are busy" and the call ends; `PlaceTwilioCall` returns `Success:false` with a "busy" message and no Twilio call is created. When call 1 ends, a new call is accepted again (the slot was released). | | | | |
+| 19 | **Model drop** | While a call is up, break the realtime model connection (e.g. block outbound to the model vendor for a few seconds, or kill the model socket). | Within a few seconds the model session is reopened **once** and the agent continues knowing what was said earlier. If it cannot be reopened the caller hears the apology (`<Say>`) and the call ends — it is never silent dead air. Log shows the single recovery attempt, no loop. | | | | |
+| 20 | **Barge-in cancels work** | Ask the agent something that makes it delegate (a slow lookup), then talk over it mid-lookup. | Log: `caller barged in; cancelled N in-flight delegation(s)`; the stale answer is not spoken after you interrupt. While delegated work runs the agent also narrates progress aloud. | | | | |
 
 ## After the run
 
-- [ ] Restore any settings you changed for the test (`maxCallSeconds`, `onMachine`, `maxCallsPerUserPerHour`, `inboundRunAsUserEmail`).
+- [ ] Restore any settings you changed for the test (`maxConcurrentCalls`, `maxCallSeconds`, `onMachine`, `maxCallsPerUserPerHour`, `inboundRunAsUserEmail`).
 - [ ] Update the **Status** banners in `TESTING.md` and `telephony-vendor-bindings.md` with the date and the Call SIDs above.
 - [ ] File anything surprising as an issue; do not edit the rows to hide a failure.
 
@@ -54,7 +68,16 @@ first real calls:
       to `/telephony/twilio/amd`.
 - [ ] Twilio echoes the TwiML `<Parameter name="mjToken">` back as `start.customParameters.mjToken` on the
       Media-Streams `start` frame.
-- [ ] The URL Twilio signs for `/status` and `/amd` equals `<MJAPI_PUBLIC_URL>` + the request path (the same assumption the
-      voice webhook already makes).
+- [ ] The URL Twilio signs for `/voice`, `/status` and `/amd` equals the **origin** of `MJAPI_PUBLIC_URL` plus the
+      request path. (Earlier builds appended the request path to the whole public URL, which double-counted a path such
+      as `/graphql` and failed every signature check; if your public URL has a path **and** your reverse proxy adds a
+      matching prefix, confirm the signature still verifies.)
+- [ ] Twilio plays the `<Say>` + `<Hangup/>` TwiML the engine posts through `UpdateCall` for the model-loss goodbye,
+      and a REST `UpdateCall` for a transfer (`<Dial>`) does end the Media-Streams leg cleanly without MJ then
+      hanging the transferred call up.
+- [ ] Vonage: the NCCO `talk` goodbye through the transfer endpoint, and the DTMF REST call, behave as written
+      (carried over from documentation only).
+- [ ] RingCentral: SIP REFER transfer completes and the softphone detaches without sending a BYE to the transferred
+      call.
 - [ ] Hanging up an already-ended call (the session stop after a terminal status) logs a harmless Twilio error rather than
       anything that stalls teardown.
