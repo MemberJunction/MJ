@@ -1,5 +1,31 @@
 # @memberjunction/open-app-engine
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- 125f40a: Open App schemas on SQL Server are now created owned by the MJ core schema's owner (usually `dbo`), so ownership chaining lets app views read core tables without per-table grants (MJ#4756). When the installer is not permitted to assign that owner, install still succeeds with a plain `CREATE SCHEMA` and a `Schema` warning names the consequence and the remedy. Upgrades, and installs that reuse an existing schema, now check before changing anything that the login has `CONTROL` on the app schema, which its migrations need to record their history and grant on their objects. If it doesn't, they stop with an error naming the owner, the login and the remedy. PostgreSQL is unchanged. The Open App README documents the retrofit for existing installs, including that `ALTER AUTHORIZATION` drops the schema's grants (objects, columns, types and XML schema collections included).
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes
