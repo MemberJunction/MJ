@@ -1,0 +1,187 @@
+{
+  "fields": {
+    "Name": "Catalog contract",
+    "Status": "Active",
+    "Description": "Judges a catalog contract: it names the capability, the inputs, the outputs, and whether the catalog already has that capability."
+  },
+  "primaryKey": {
+    "ID": "6B769CDD-EB96-45DE-8280-0336C8C73EA8"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Score each criterion Meets, Partial, or Miss. Partial is below the gate, so a gate scored Partial fails the contract. Not applicable is not allowed: every criterion applies to the contract, including the check for an existing catalog item. Use the guidance and the anchors."
+        },
+        "primaryKey": {
+          "ID": "8CFBCCE3-7C26-4B17-8A14-9D03FE184E4F"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "names-the-capability-the-inputs-and-the-outputs",
+                "Name": "Names the capability, the inputs, and the outputs",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The contract names what it does, what it takes, and what it returns. One of the three is not enough."
+              },
+              "primaryKey": {
+                "ID": "8653901B-6693-46ED-A3C2-74728D86FB7A"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The contract names the capability, the inputs, and the outputs."
+                    },
+                    "primaryKey": {
+                      "ID": "BFDCCD0E-DD5F-488D-AA3C-82B8C0BEB5B1"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The contract names some of the capability, the inputs, and the outputs, and omits one."
+                    },
+                    "primaryKey": {
+                      "ID": "33913C2A-21B9-4544-8DA7-0648237FC44E"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The contract does not name the capability, the inputs, and the outputs."
+                    },
+                    "primaryKey": {
+                      "ID": "2CE83D6A-A433-4DF1-AF56-E05FC33D5611"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "says-what-it-will-not-do",
+                "Name": "Says what it will not do",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "A boundary is a thing the contract will not do. A list of features is not a boundary."
+              },
+              "primaryKey": {
+                "ID": "4E28D162-52EB-4104-8B92-8070E516D9F7"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The contract says what it will not do."
+                    },
+                    "primaryKey": {
+                      "ID": "D3486FB5-E6D7-4A05-80A2-F504FC81EA44"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The contract hints at a boundary and does not state it."
+                    },
+                    "primaryKey": {
+                      "ID": "ED676D77-37B6-456A-BBF0-30BDE112CF45"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The contract does not say what it will not do."
+                    },
+                    "primaryKey": {
+                      "ID": "E4F2632A-BEE5-46B5-B4C7-794697C5A342"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "names-an-existing-catalog-overlap",
+                "Name": "States whether the catalog already has this capability",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Look for an existing catalog item that already does this. Name it when one exists. When none exists, say that none exists. Silence is not an answer."
+              },
+              "primaryKey": {
+                "ID": "3E919617-2796-45BC-84DF-5B44BDBB5BDC"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The contract names the existing overlap, or says the catalog has none."
+                    },
+                    "primaryKey": {
+                      "ID": "D2E47C67-474A-4B49-8808-5809FB9426FA"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The contract mentions a possible overlap and does not name the item or say there is none."
+                    },
+                    "primaryKey": {
+                      "ID": "0F0126E8-7119-4618-92B3-52F393BE50D5"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The contract is silent about whether the catalog already has this capability."
+                    },
+                    "primaryKey": {
+                      "ID": "26C2ADD9-574B-45BA-85C6-C1EAA0562588"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -122,9 +122,14 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJRemoteOperations', sectionName: 'Remote Operations', isExpanded: false },
             { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false },
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
+            { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
+            { sectionKey: 'mJProjects', sectionName: 'Projects', isExpanded: false },
+            { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
             { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
+            { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
+            { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false },
             { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false }
         ]);
     }

@@ -4,10 +4,13 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ResolveChatSearchRoute } from './chat-search-routing.js';
+import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './compose-email-fallback.js';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
-import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil } from 'rxjs';
@@ -53,7 +56,8 @@ import { Subject, takeUntil } from 'rxjs';
                 (newConversationRequested)="onNewConversationRequested()"
                 (pinSidebarRequested)="pinSidebar()"
                 (unpinSidebarRequested)="unpinSidebar()"
-                (refreshRequested)="onRefreshRequested()">
+                (refreshRequested)="onRefreshRequested()"
+                (SearchEscalated)="OpenSearch($event)">
               </mj-conversation-list>
               <!-- Routines — pinned at the very bottom of the sidebar. Gated inside the
                    section component by Read permission on 'MJ: User Routines'. -->
@@ -109,6 +113,18 @@ import { Subject, takeUntil } from 'rxjs';
       </div>
     }
     
+    <!-- Cross-entity search panel (conversations / messages / artifacts / collections / tasks) -->
+    @if (CurrentUser) {
+      <mj-search-panel
+        [InitialQuery]="SearchSeedQuery"
+        [IsOpen]="IsSearchPanelOpen"
+        [EnvironmentId]="EnvironmentId"
+        [CurrentUser]="CurrentUser"
+        (close)="CloseSearch()"
+        (ResultSelected)="OnSearchResultSelected($event)">
+      </mj-search-panel>
+    }
+
     <!-- Toast notifications container -->
     <mj-toast></mj-toast>
     `,
@@ -551,9 +567,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Subscribe to actionable commands (open:resource) from the UI command handler service.
     // open:url commands are handled directly by the service; open:resource needs NavigationService.
-    this.uiCommandHandler.actionableCommandRequested
+    this.uiCommandHandler.ActionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(request => this.handleActionableCommand(request.command));
+      .subscribe(request => this.handleActionableCommand(request));
 
     // Subscribe to bridge switch events so the overlay can hand off a conversation to this workspace
     this.bridge.SwitchEvent$
@@ -1412,6 +1428,54 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
   }
 
+  // ========================================
+  // CROSS-ENTITY SEARCH PANEL
+  // ========================================
+
+  /** Whether the cross-entity search panel is open. */
+  public IsSearchPanelOpen = false;
+
+  /** Term the panel opens with, handed over from the conversation list's own filter. */
+  public SearchSeedQuery = '';
+
+  /**
+   * Open the cross-entity search panel, carrying over the term the user had already typed
+   * into the conversation list's filter so they do not retype it.
+   */
+  OpenSearch(query: string = ''): void {
+    this.SearchSeedQuery = query;
+    this.IsSearchPanelOpen = true;
+  }
+
+  /** Close the cross-entity search panel. */
+  CloseSearch(): void {
+    this.IsSearchPanelOpen = false;
+  }
+
+  /**
+   * Route a search result to the right Explorer surface.
+   *
+   * Explorer renders each chat surface as a separate resource, so results for another
+   * surface go through NavigationService. Conversations and messages resolve to a
+   * conversation, which this component owns, so they are selected in place.
+   */
+  OnSearchResultSelected(result: SearchResult): void {
+    this.CloseSearch();
+
+    const route = ResolveChatSearchRoute(result);
+    switch (route?.Kind) {
+      case 'conversation':
+        void this.OnConversationSelected(route.ConversationId);
+        break;
+      case 'artifact':
+        this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
+        break;
+      case 'nav-item':
+        void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        break;
+    }
+  }
+
   /** @deprecated Use {@link OnOpenEntityRecord}. */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     return this.OnOpenEntityRecord(event);
@@ -1444,10 +1508,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Handle actionable commands that require app-specific navigation (open:resource).
-   * open:url commands are already handled directly by UICommandHandlerService.
+   * Handle actionable commands that require app-specific navigation (open:resource, and the
+   * compose:email over-length fallback). open:url commands are already handled directly by
+   * UICommandHandlerService.
    */
-  private handleActionableCommand(command: ActionableCommand): void {
+  private handleActionableCommand(request: ActionableCommandRequest): void {
+    const command = request.command;
     if (command.type === 'open:resource') {
       const resourceCommand = command as OpenResourceCommand;
       if (resourceCommand.resourceType === 'Record') {
@@ -1459,7 +1525,32 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         // Find the most recent artifact in the active conversation and open it.
         this.openMostRecentArtifact();
       }
+    } else if (command.type === 'compose:email') {
+      // The service handles compose:email directly whenever the draft fits in a mailto: URL, so
+      // reaching here means it did NOT fit. Opening the mail client would hand the user a draft
+      // with the body silently truncated, so the service declined and handed it to us instead —
+      // our job is to show the full draft, which lives in the artifact.
+      this.openComposeEmailDraft(command, request.DraftCopiedToClipboard === true);
     }
+  }
+
+  /**
+   * The compose:email over-length fallback: open the draft artifact and tell the user why their
+   * mail client did not open.
+   *
+   * With no artifactId (it is optional) the conversation's latest artifact opens, since for a
+   * single-artifact turn that IS the draft. A stated artifactId that is not loaded opens nothing:
+   * a different artifact would be passed off as the draft. Every outcome, including "nothing to
+   * open", ends in one notification, so the button never does nothing visible.
+   */
+  private openComposeEmailDraft(command: ComposeEmailCommand, copiedToClipboard: boolean): void {
+    const target = ResolveComposeEmailDraft(this.ChatArea?.ArtifactsByDetailId.values() ?? [], command.artifactId);
+    if (this.ChatArea && (target.Kind === 'stated' || target.Kind === 'most-recent')) {
+      void this.ChatArea.OnArtifactClicked({ artifactId: target.Artifact.ArtifactId, versionId: target.Artifact.ArtifactVersionId });
+    }
+    const notice = BuildComposeEmailFallbackNotice(target, copiedToClipboard);
+    // Longer than the default: the notice is two sentences and explains a changed clipboard.
+    MJNotificationService.Instance?.CreateSimpleNotification(notice.Message, notice.Style, 7000);
   }
 
   /**

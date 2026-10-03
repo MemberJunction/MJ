@@ -55,6 +55,7 @@ export class WriteBackProcessor implements IRecordProcessor {
             const runProvenance: RunProvenance = {
                 ...this.run,
                 ProcessRunID: context.processRunID ?? this.run?.ProcessRunID,
+                PromptID: result.PromptID ?? this.run?.PromptID,
                 AIPromptRunID: result.AIPromptRunID ?? this.run?.AIPromptRunID,
                 PromptVersionHash: result.PromptVersionHash ?? this.run?.PromptVersionHash,
                 FeatureValueCacheID: result.FeatureValueCacheID ?? this.run?.FeatureValueCacheID,
@@ -116,6 +117,7 @@ export class WriteBackProcessor implements IRecordProcessor {
                     const runProvenance: RunProvenance = {
                         ...this.run,
                         ProcessRunID: context.processRunID ?? this.run?.ProcessRunID,
+                        PromptID: res.PromptID ?? this.run?.PromptID,
                         AIPromptRunID: res.AIPromptRunID ?? this.run?.AIPromptRunID,
                         PromptVersionHash: res.PromptVersionHash ?? this.run?.PromptVersionHash,
                         FeatureValueCacheID: res.FeatureValueCacheID ?? this.run?.FeatureValueCacheID,

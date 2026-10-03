@@ -481,7 +481,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /** No-results message for the entity list (echoes the filter text). */
   get NoEntityResultsMessage(): string {
-    return `No entities match "${this.EntityFilterText}".`;
+    return `Nothing matches "${this.EntityFilterText}".`;
   }
 
   /**
@@ -1751,8 +1751,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       return;
     }
 
-    // "/" to focus filter
-    if (event.key === '/') {
+    // "/" to focus filter (Ctrl/Cmd+/ belongs to the shell's command palette)
+    if (event.key === '/' && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
       this.focusFilterInput();
       return;

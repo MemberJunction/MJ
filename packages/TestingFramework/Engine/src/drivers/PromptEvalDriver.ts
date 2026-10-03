@@ -19,6 +19,7 @@ import { BaseTestDriver } from './BaseTestDriver';
 import { DriverExecutionContext, DriverExecutionResult, OracleInput, ValidationResult } from '../types';
 import type { OracleResult } from '@memberjunction/testing-engine-base';
 import type { PromptEvalActualOutput } from '../oracles/AgentDecisionOracle';
+import { OraclesWithNamedRubric } from '../oracles/rubric-resolution.js';
 
 /** One oracle to run, as it appears in the test's `Configuration`. */
 export interface PromptEvalOracleConfig {
@@ -439,7 +440,12 @@ export class PromptEvalDriver extends BaseTestDriver {
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
         const results: OracleResult[] = [];
-        for (const oracleConfig of config.oracles ?? []) {
+        const oracles = OraclesWithNamedRubric(config.oracles, {
+            runRubricId: context.options.rubricId,
+            runVersionId: context.options.rubricVersionId,
+            testRubricId: context.test.RubricID,
+        });
+        for (const oracleConfig of oracles) {
             const oracle = context.oracleRegistry.get(oracleConfig.type);
             if (!oracle) {
                 results.push({
@@ -452,6 +458,7 @@ export class PromptEvalDriver extends BaseTestDriver {
             }
             const oracleInput: OracleInput = {
                 test: context.test,
+                testRunId: context.testRun.ID,
                 expectedOutput: expected,
                 actualOutput,
                 targetEntity: result.promptRun,

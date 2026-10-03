@@ -34,6 +34,17 @@ import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError
 export type RefreshTokenFunction = () => Promise<string>;
 
 /**
+ * The URL and credentials each GraphQL client was built with (recorded by CreateNewGraphQLClient).
+ * A client's headers are fixed at construction, so a connect bringing different credentials must
+ * build a new client rather than reuse one that would keep sending the old identity (#4887).
+ */
+const clientCredentials = new WeakMap<GraphQLClient, string>();
+
+function credentialsKey(url: string, token: string, mjAPIKey: string, userAPIKey?: string): string {
+    return JSON.stringify([url, token ?? null, mjAPIKey ?? null, userAPIKey ?? null]);
+}
+
+/**
  * State of the provider's graphql-ws WebSocket connection.
  * - 'connected': socket is open and ready
  * - 'disconnected': socket failed after graphql-ws exhausted its retries
@@ -222,6 +233,37 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 
 
+/**
+ * How often the client sends a keepalive ping, in ms.
+ *
+ * Matched to MJAPI's own cadence: graphql-ws's `useServer(options, ws, keepAlive)` defaults its
+ * third positional argument to 12s, so the server already pings and terminates on an unanswered
+ * pong. Pinging at a comparable rate makes the two ends detect a dead link at roughly the same
+ * time instead of leaving the client blind for half a minute after the server has given up.
+ */
+export const WS_KEEPALIVE_MS = 10_000;
+
+/**
+ * How long to wait for a pong before declaring the socket dead, in ms.
+ *
+ * REQUIRED, not optional. graphql-ws re-arms its keepalive ping ONLY on pong receipt, so a
+ * half-open socket receives exactly one ping and then goes silent forever — its own JSDoc says
+ * "NOTHING will happen automatically with the client if the server never responds to a
+ * PingMessage with a PongMessage." Without this watchdog the socket never closes, `retryAttempts`
+ * never engages (it fires only on abnormal CLOSURE), and every recovery path that keys off
+ * `on('closed')` stays asleep indefinitely. See MJ #4222.
+ */
+export const WS_PONG_TIMEOUT_MS = 10_000;
+
+/**
+ * How long to wait for `ConnectionAck` after opening the socket, in ms.
+ *
+ * graphql-ws defaults this to 0, i.e. disabled — a reconnect that completes the TCP handshake but
+ * never acks would hang forever, which is the same blindness as an unanswered pong, just on the
+ * reconnect path. On expiry graphql-ws closes with `4418`, which is retriable.
+ */
+export const WS_CONNECTION_ACK_TIMEOUT_MS = 10_000;
+
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
 /**
  * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunQueryProvider interfaces and connects to the
@@ -396,53 +438,92 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
-            // Enhanced logging to diagnose token issues
-            // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
-            // console.log('[GraphQL] Config called with token:', {
-            //     tokenPreview,
-            //     tokenLength: configData.Token?.length,
-            //     separateConnection,
-            //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
-            // });
-
-            // CRITICAL: Always set this instance's _configData first
-            // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
-            this._configData = configData;
-
-            if (separateConnection) {
-                // Get UUID after setting the configData, so that it can be used to get any stored session ID
-                this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-
-                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-                // Store the session ID for this connection
-                await this.saveStoredSessionID(this._sessionId);
-            }
-            else {
-                // Update the singleton instance
-                GraphQLDataProvider.Instance._configData = configData;
-
-                if (GraphQLDataProvider.Instance._sessionId === undefined) {
-                    GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-                }
-
-                // now create the new client, if it isn't already created
-                if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-
-                // Store the session ID for the global instance
-                await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
-
-                // CRITICAL: Sync this instance with the singleton
-                // This ensures ExecuteGQL() can use this._client.request()
-                this._sessionId = GraphQLDataProvider.Instance._sessionId;
-                this._client = GraphQLDataProvider.Instance._client;
-            }
+            await this.connectClient(configData, separateConnection, forceRefreshSessionId);
             return super.Config(configData); // now parent class can do it's config
         }
         catch (e) {
             LogError(e);
             throw (e)
         }
+    }
+
+    /**
+     * The authenticate-only half of {@link Config}, for embedded/anonymous surfaces that only make
+     * their own GraphQL calls. After it resolves, {@link ExecuteGQL} works. No metadata is fetched,
+     * so entity metadata (`Entities`, `EntityByName`, `RunView`, `GetEntityObject`) is NOT available
+     * until the full boot runs (`SetupGraphQLClient`, or {@link Config}) on this same instance.
+     * Uses the shared singleton connection (a secondary instance keeps its own). A later Connect/Config with a different URL,
+     * token or API key rebuilds that connection's client (keeping the session id).
+     */
+    public async Connect(configData: GraphQLProviderConfigData): Promise<void> {
+        await this.connectClient(configData, false, false);
+    }
+
+    /**
+     * The connection half of {@link Config}: stores the config, resolves the session id and creates the
+     * GraphQL client (this instance's own client when separateConnection is true or this is not the
+     * global singleton, otherwise the shared singleton client, which is reused unless the credentials
+     * changed). Loads no metadata.
+     */
+    private async connectClient(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<void> {
+        // Enhanced logging to diagnose token issues
+        // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
+        // console.log('[GraphQL] Config called with token:', {
+        //     tokenPreview,
+        //     tokenLength: configData.Token?.length,
+        //     separateConnection,
+        //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
+        // });
+
+        // CRITICAL: Always set this instance's _configData first
+        // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
+        this._configData = configData;
+
+        // An instance that is not the global singleton (built while the global-store slot was
+        // parked) owns its own connection, even when a re-entry path omits the flag:
+        // ProviderBase.Refresh() re-runs Config(this._ConfigData) without separateConnection.
+        // Taking the shared branch from such an instance would hand the global provider this
+        // instance's credentials, and every global call would then run as its user (#4887).
+        if (separateConnection || GraphQLDataProvider.Instance !== this) {
+            // Get UUID after setting the configData, so that it can be used to get any stored session ID
+            this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+
+            this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+            // Store the session ID for this connection
+            await this.saveStoredSessionID(this._sessionId);
+        }
+        else {
+            // Update the singleton instance
+            GraphQLDataProvider.Instance._configData = configData;
+
+            if (GraphQLDataProvider.Instance._sessionId === undefined) {
+                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+            }
+
+            // Create the client if there is none, or rebuild it (same session id) when this config
+            // brings different credentials — e.g. an anonymous connect upgraded to a login.
+            const existing = GraphQLDataProvider.Instance._client;
+            if (!existing || this.isBuiltWithOtherCredentials(existing, configData))
+                GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+
+            // Store the session ID for the global instance
+            await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+
+            // CRITICAL: Sync this instance with the singleton
+            // This ensures ExecuteGQL() can use this._client.request()
+            this._sessionId = GraphQLDataProvider.Instance._sessionId;
+            this._client = GraphQLDataProvider.Instance._client;
+        }
+    }
+
+    /**
+     * True when `client` was built with a URL or credentials other than `configData`'s. A client this
+     * class did not record (a subclass's own CreateNewGraphQLClient, a test harness) is kept as-is.
+     */
+    private isBuiltWithOtherCredentials(client: GraphQLClient, configData: GraphQLProviderConfigData): boolean {
+        const builtWith = clientCredentials.get(client);
+        return builtWith !== undefined &&
+            builtWith !== credentialsKey(configData.URL, configData.Token, configData.MJAPIKey, configData.UserAPIKey);
     }
 
     public get sessionId(): string {
@@ -1511,12 +1592,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityName
                     RelatedEntityName
                     FieldName
-                    CompositeKey {
+                    PrimaryKey {
                         KeyValuePairs {
                             FieldName
                             Value
                         }
                     }
+                    IsSoftLink
+                    EntityIDFieldName
                 }
             }`
 
@@ -1527,7 +1610,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
             const data = await this.ExecuteGQL(query, vars);
 
-            return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
+            if (data?.GetRecordDependencies && Array.isArray(data.GetRecordDependencies)) {
+                return data.GetRecordDependencies.map((raw: {
+                    EntityName: string;
+                    RelatedEntityName: string;
+                    FieldName: string;
+                    PrimaryKey?: { KeyValuePairs?: KeyValuePair[] };
+                    IsSoftLink?: boolean | null;
+                    EntityIDFieldName?: string | null;
+                }): RecordDependency => {
+                    const dep = new RecordDependency();
+                    dep.EntityName = raw.EntityName;
+                    dep.RelatedEntityName = raw.RelatedEntityName;
+                    dep.FieldName = raw.FieldName;
+                    const kvps = (raw.PrimaryKey?.KeyValuePairs ?? []).map(kv => new KeyValuePair(kv.FieldName, kv.Value));
+                    const pk = new CompositeKey(kvps);
+                    if (pk.KeyValuePairs.length === 0 && kvps.length > 0) {
+                        pk.KeyValuePairs = kvps;
+                    }
+                    dep.PrimaryKey = pk;
+                    dep.IsSoftLink = raw.IsSoftLink ?? undefined;
+                    dep.EntityIDFieldName = raw.EntityIDFieldName ?? undefined;
+                    return dep;
+                });
+            }
+            return [];
         }
         catch (e) {
             LogError(e);
@@ -2265,6 +2372,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
+        // IS-A parent delete: the leaf's delete mutation already deleted the whole chain on the
+        // server, so the parent has nothing left to send. Record the success and return, as
+        // Save() does for IsParentEntitySave (MJ#4864).
+        if (options?.IsParentEntityDelete) {
+            const parentResult = new BaseEntityResult();
+            parentResult.StartedAt = new Date();
+            parentResult.EndedAt = new Date();
+            parentResult.Type = 'delete';
+            parentResult.Success = true;
+            entity.RegisterResultHistoryEntry(parentResult);
+            return true;
+        }
+
         const result = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing();
@@ -3107,6 +3227,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             client.setHeader(key, value);
         }
 
+        clientCredentials.set(client, credentialsKey(url, token, mjAPIKey, userAPIKey));
         return client;
     }
 
@@ -3173,7 +3294,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _wsClient: Client = null;
     private _wsClientCreatedAt: number = null;
     private _socketStateSubject = new BehaviorSubject<SocketConnectionState>('unknown');
+    private _socketReconnectedSubject = new Subject<void>();
     private _isDisposingSocketIntentionally = false;
+    /** Disarms the current client's pong watchdog. Each client owns its own timer. */
+    private _disarmPongWatchdog: (() => void) | null = null;
+
+    /**
+     * Fires each time the socket comes back up after having dropped — never on the first
+     * connect. Subscribers should treat it as "you may have missed events while you were
+     * away; re-read authoritative state", because the push topic has no replay buffer.
+     */
+    public get SocketReconnected$(): Observable<void> {
+        return this._socketReconnectedSubject.asObservable();
+    }
 
     /**
      * Observable of the WebSocket (graphql-ws) connection state. Used by
@@ -3189,6 +3322,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public get SocketConnectionState(): SocketConnectionState {
         return this._socketStateSubject.value;
+    }
+
+    /**
+     * How many WebSocket subscriptions are currently open. Zero means nothing is waiting on
+     * push frames, so a socket that is down is delivering nothing and costing nothing.
+     */
+    public get ActiveSubscriptionCount(): number {
+        return this._activeSubscriptionCount;
     }
 
     /**
@@ -3235,7 +3376,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // Create new client if needed
         if (!this._wsClient) {
             this._isDisposingSocketIntentionally = false;
-            this._wsClient = createClient({
+            // Bind handlers to this LOCAL client, not to `this._wsClient`. A pong watchdog armed
+            // on one socket must never be able to terminate a *replacement* socket created while
+            // that timer was still pending.
+            const client = createClient({
                 url: this.ConfigData.WSURL,
                 // Function form: re-evaluated on every connection attempt (including
                 // retries after 4403 "Token expired"). This lets the client pick up a
@@ -3247,17 +3391,79 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ...(this.ConfigData.MJAPIKey ? { 'x-mj-api-key': this.ConfigData.MJAPIKey } : {}),
                     ...(this.ConfigData.UserAPIKey ? { 'x-mj-user-api-key': this.ConfigData.UserAPIKey } : {}),
                 }),
-                keepAlive: 30000, // Send keepalive ping every 30 seconds
+                keepAlive: WS_KEEPALIVE_MS,
+                connectionAckWaitTimeout: WS_CONNECTION_ACK_TIMEOUT_MS,
                 retryAttempts: 3,
                 shouldRetry: () => true,
             });
+            this._wsClient = client;
             this._wsClientCreatedAt = now;
 
-            // Emit connectivity events — consumed by ServerConnectivityService
-            this._wsClient.on('connected', () => {
-                this._socketStateSubject.next('connected');
+            // The pong timer belongs to this client alone, so a late event from a replaced client
+            // can never disarm the watchdog of the client that took its place.
+            let pongTimeout: ReturnType<typeof setTimeout> | null = null;
+            const disarmPongWatchdog = (): void => {
+                if (pongTimeout !== null) {
+                    clearTimeout(pongTimeout);
+                    pongTimeout = null;
+                }
+            };
+            this._disarmPongWatchdog = disarmPongWatchdog;
+
+            // ── Pong watchdog (MJ #4222) ──
+            // graphql-ws sends the keepalive ping but deliberately does nothing when no pong
+            // comes back, and re-arms the ping ONLY on pong receipt. So on a half-open socket
+            // the library emits exactly one 'ping' and then falls permanently silent: no close,
+            // no error, no retry. This watchdog is what converts that silence into a real close
+            // event, which is the single signal the retry logic, `_socketStateSubject`,
+            // ServerConnectivityService, ConversationStreaming and FireAndForgetHelper all wait on.
+            client.on('ping', (received: boolean) => {
+                // `received === true` is a server-initiated ping, which graphql-ws answers on our
+                // behalf — it tells us nothing about whether OUR traffic is getting through. Only
+                // a ping we sent starts the countdown.
+                if (received) {
+                    return;
+                }
+                disarmPongWatchdog();
+                pongTimeout = setTimeout(() => {
+                    pongTimeout = null;
+                    try {
+                        // Issues a synthetic `4499 Terminated` close. graphql-ws treats terminate
+                        // as non-fatal, so `retryAttempts`/`shouldRetry` reconnect as normal.
+                        client.terminate();
+                    } catch {
+                        // Socket already gone — the close we wanted has effectively happened.
+                    }
+                }, WS_PONG_TIMEOUT_MS);
             });
-            this._wsClient.on('closed', (event: unknown) => {
+            client.on('pong', (received: boolean) => {
+                // The link is proven alive in both directions; stand the watchdog down.
+                if (received) {
+                    disarmPongWatchdog();
+                }
+            });
+
+            // Emit connectivity events — consumed by ServerConnectivityService
+            client.on('connected', (_socket: unknown, _payload: unknown, wasRetry: boolean) => {
+                this._socketStateSubject.next('connected');
+                if (wasRetry) {
+                    // A RECONNECT, not a first connect. This is the only trustworthy reconnect
+                    // signal available: graphql-ws re-establishes subscriptions transparently, so
+                    // the RxJS stream may never error or complete, and `_socketStateSubject` can
+                    // re-emit 'connected' without an intervening 'disconnected' when the close was
+                    // suppressed. Anything published while the socket was down was dropped with no
+                    // replay, so a listener must reconcile against durable state (MJ #4222).
+                    this._socketReconnectedSubject.next();
+                }
+            });
+            client.on('closed', (event: unknown) => {
+                // Whatever closed the socket, no pong can arrive on it now. Disarm first so a
+                // pending watchdog cannot fire against an already-dead client.
+                disarmPongWatchdog();
+                // A replaced client's late close says nothing about the socket in use now.
+                if (this._wsClient !== client) {
+                    return;
+                }
                 // Ignore closes we initiated via disposeWSClient() — those already
                 // emit 'unknown' themselves. Only treat unexpected closes (retries
                 // exhausted) as 'disconnected'.
@@ -3295,6 +3501,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private disposeWSClient(): void {
         if (this._wsClient) {
             this._isDisposingSocketIntentionally = true;
+            // Disarm before disposing: a deliberate teardown must not leave a watchdog running
+            // against a client that is going away.
+            this._disarmPongWatchdog?.();
+            this._disarmPongWatchdog = null;
             try {
                 this._wsClient.dispose();
             } catch (e) {

@@ -2,6 +2,7 @@ import {
     AudioModel,
     AudioSplitter,
     BaseAudioGenerator,
+    BaseSpeechToText,
     ErrorAnalyzer,
     ModelUsage,
     PronounciationDictionary,
@@ -68,8 +69,13 @@ function supportsVerboseJson(model: string): boolean {
  * Audio above Groq's 25MB upload ceiling requires an {@link AudioSplitter}, assigned to
  * {@link Splitter}. Without one, oversized audio fails with a message naming the option
  * rather than silently transcribing a truncated prefix.
+ *
+ * Registered against {@link BaseSpeechToText} under the key model metadata names. It still
+ * extends, and is registered against, `BaseAudioGenerator`, so callers that resolve it through
+ * the old base keep working.
  */
 @RegisterClass(BaseAudioGenerator, 'GroqAudioGenerator')
+@RegisterClass(BaseSpeechToText, 'GroqAudioGenerator')
 export class GroqAudioGenerator extends BaseAudioGenerator {
     private _client: Groq;
 
@@ -132,6 +138,9 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'Groq Whisper');
             result.success = false;
             result.errorMessage = error?.message || 'Unknown error occurred';
+            // Kept so a caller can tell a rejected upload (a 400) from an outage: the message alone
+            // loses the SDK error's HTTP status.
+            result.errorInfo = errorInfo;
             console.error('Groq Whisper error:', error, errorInfo);
         }
         return result;

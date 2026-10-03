@@ -7,6 +7,7 @@ import { EntityCardsComponent } from '../lib/entity-cards/entity-cards.component
 import { EntityRecordDetailPanelComponent } from '../lib/entity-record-detail-panel/entity-record-detail-panel.component';
 import { EntityDataGridComponent } from '../lib/entity-data-grid/entity-data-grid.component';
 import { ViewConfigPanelComponent } from '../lib/view-config-panel/view-config-panel.component';
+import { ExportColumnTypeForSQLType } from '../lib/utils/export-column.util';
 
 /**
  * A DATE-ONLY COLUMN IS A CALENDAR DAY, NOT AN INSTANT (MJ#4210).
@@ -237,5 +238,29 @@ describe('ViewConfigPanelComponent.FormatPreviewValue', () => {
             const entity = makeEntity();
             expect(make().FormatPreviewValue(INSTANT, { type: 'datetime', dateFormat: 'medium' }, fieldNamed(entity, 'LaunchAt'))).toContain('19');
         });
+    });
+});
+
+describe('ExportColumnTypeForSQLType (the grid and the fallback exports)', () => {
+    // A `date` column exports as a calendar day (YYYY-MM-DD in CSV/JSON, a date cell in Excel); a
+    // timestamp keeps exporting as an instant.
+    it('types a date column as dateonly', () => {
+        expect(ExportColumnTypeForSQLType('date')).toBe('dateonly');
+        expect(ExportColumnTypeForSQLType('DATE')).toBe('dateonly');
+    });
+
+    it('keeps timestamp columns as date', () => {
+        expect(ExportColumnTypeForSQLType('datetimeoffset')).toBe('date');
+        expect(ExportColumnTypeForSQLType('datetime2')).toBe('date');
+        expect(ExportColumnTypeForSQLType('time')).toBe('date');
+    });
+
+    it('types numbers, booleans, currency and text as the grid always has', () => {
+        expect(ExportColumnTypeForSQLType('int')).toBe('number');
+        expect(ExportColumnTypeForSQLType('decimal')).toBe('number');
+        expect(ExportColumnTypeForSQLType('bit')).toBe('boolean');
+        expect(ExportColumnTypeForSQLType('money')).toBe('currency');
+        expect(ExportColumnTypeForSQLType('nvarchar')).toBe('string');
+        expect(ExportColumnTypeForSQLType(undefined)).toBe('string');
     });
 });

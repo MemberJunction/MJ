@@ -1,0 +1,65 @@
+{
+  "_comments": [
+    "JSONType bridge records for the rubric structured columns. See plans/rubrics/RUBRICS_PLAN.md §4.1."
+  ],
+  "fields": {
+    "Name": "MJ: Entity Fields"
+  },
+  "relatedEntities": {
+    "MJ: Entity Fields": [
+      {
+        "fields": {
+          "JSONType": "IRubricCriterionEvaluatorConfig",
+          "JSONTypeIsArray": false,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Criteria&Name=EvaluatorConfig"
+        }
+      },
+      {
+        "fields": {
+          "JSONType": "IRubricEvidence",
+          "JSONTypeIsArray": true,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores&Name=Evidence"
+        }
+      },
+      {
+        "fields": {
+          "JSONType": "IRubricEvaluationMetadata",
+          "JSONTypeIsArray": false,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluations&Name=Metadata"
+        }
+      },
+      {
+        "fields": {
+          "JSONType": "IRubricVersionChangeDetails",
+          "JSONTypeIsArray": false,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Versions&Name=ChangeDetails"
+        }
+      },
+      {
+        "fields": {
+          "JSONType": "IRubricEvaluatorSelection",
+          "JSONTypeIsArray": false,
+          "JSONTypeDefinition": "@file:JSONType-interfaces/IRubricJsonTypes.ts"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Rubrics&Name=EvaluatorConfig"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "@lookup:MJ: Entities.Name=MJ: Entity Fields"
+  }
+}
