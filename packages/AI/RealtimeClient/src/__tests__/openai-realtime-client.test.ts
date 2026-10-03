@@ -327,12 +327,66 @@ describe('OpenAIRealtimeClient', () => {
             channel.Sent = [];
         });
 
-        it('should send response.create with the given instructions and mark the client busy', () => {
+        it('should send response.create carrying the session identity AND the direction, and mark the client busy', () => {
+            // `InitChannel`'s default config is `{ instructions: 'test agent' }` — the co-agent
+            // identity the session was minted with.
             client.RequestSpokenUpdate('Say one short first-person sentence.');
             expect(channel.SentEvents()).toEqual([
-                { type: 'response.create', response: { instructions: 'Say one short first-person sentence.' } },
+                {
+                    type: 'response.create',
+                    response: { instructions: 'test agent\n\nSay one short first-person sentence.' },
+                },
             ]);
             expect(client.IsBusy).toBe(true);
+        });
+
+        /**
+         * MJ/#4591 · bizapps-caliber#397 — the interviewer introduced herself as "ChatGPT".
+         *
+         * `response.create`'s `response.instructions` is a FULL OVERRIDE of the session system
+         * prompt for that response — not an addition to it. The server-side twin of this driver
+         * (`openAIRealtime.ts`) already says so in a comment, and guards the BLANK case for exactly
+         * that reason: forwarding `''` "would wipe the co-agent identity framing". The non-blank
+         * case was never guarded, so every caller that supplied a real direction wiped it too.
+         *
+         * Live consequence, on the one turn that rides this method: the model has no persona for
+         * that response, falls back to its vendor default, and opens a hiring interview with
+         * "I'm ChatGPT, your friendly voice companion" while every other turn in the same session
+         * correctly says "I'm Sam Rivera, Support Team Lead".
+         *
+         * The direction stays LAST so it is the most recent thing the model reads, and the identity
+         * is not restated by the caller — a stage direction is not the place to carry a persona.
+         */
+        it('should never send a direction that would wipe the session identity (#397)', () => {
+            client.RequestSpokenUpdate('Open the conversation now: greet them and introduce yourself.');
+            const sent = channel.SentEvents();
+            expect(sent).toHaveLength(1);
+            const response = (sent[0] as { response?: { instructions?: string } }).response;
+            expect(response?.instructions).toContain('test agent');
+            expect(response?.instructions).toMatch(/test agent[\s\S]*Open the conversation now/);
+        });
+
+        it('should send a BARE response.create when the direction is blank — the session prompt governs', () => {
+            // The meeting-mode bridge trigger passes `''` to mean "respond now, under the session
+            // prompt". An `instructions: ''` override would wipe the identity outright; the server
+            // twin already special-cases this and the client must agree.
+            client.RequestSpokenUpdate('   ');
+            expect(channel.SentEvents()).toEqual([{ type: 'response.create' }]);
+        });
+
+        it('should send the direction alone when the session carried no instructions', () => {
+            // A session minted with no instructions has no identity to lose, so there is nothing to
+            // prepend — and prepending "undefined" or an empty line would be worse than nothing.
+            const bare = new ChannelTestClient();
+            const bareChannel = new FakeDataChannel();
+            bare.InitChannel(bareChannel, { tools: [] });
+            bareChannel.Open();
+            bareChannel.Sent = [];
+
+            bare.RequestSpokenUpdate('progress update');
+            expect(bareChannel.SentEvents()).toEqual([
+                { type: 'response.create', response: { instructions: 'progress update' } },
+            ]);
         });
 
         it('should SKIP the update while a response is in flight (queue-or-skip rule; narration is disposable)', () => {
