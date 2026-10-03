@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT98 - JSONType Live Sync (client transport)",
+    "Description": "Live-database proof that a JSONType field's typed object accessor (GetJSONFieldObject/SetJSONFieldObject over JSONFieldBinding) is a LIVE view of the raw field. The pre-fix accessor parsed on every read, so an in-place edit mutated a throwaway copy and Save() wrote nothing. A test-only subclass of MJ: Tests adds a LiveConfig accessor over the nullable Configuration JSON column. JL1: a 12-level-deep in-place edit dirties the raw field, saves, and a FRESH load returns it. JL2: push, splice and delete persist. JL3: a reference held across Save stays live. JL4: an edit through the caller's own reference after assignment is captured by the pre-save flush. JL5: reads and no-op writes never dirty the record. JL6: after a change made elsewhere the accessor re-parses and stale references throw rather than silently dropping writes. JL7: ToPlainJSON output survives structuredClone and is independent of the entity. JL8: null to object, replacement and object to null persist. JL9: 200 nested mutations collapse into one consistent save. All checks mutate and are gated behind RUN_MUTATION_TESTS; the bundle creates, prefixes, tags and sweeps its own MJ: Tests rows. Client transport: the same nine checks over the GraphQL wire, the branch a browser uses.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A JSONType field's typed object accessor is a live view: in-place edits at any depth persist and a fresh database load returns them."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "jsontype-live-sync-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "EFA04FDF-8627-4428-A61D-764B0F7823D5"
+  }
+}

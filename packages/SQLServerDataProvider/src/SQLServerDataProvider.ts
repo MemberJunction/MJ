@@ -355,7 +355,12 @@ export class SQLServerDataProvider
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _fileSystemProvider: IFileSystemProvider;
-  private _bAllowRefresh: boolean = true;
+  /** Saves currently running SQL. Refresh is suspended while any is in flight (a count, since saves overlap). */
+  private _refreshSuspendCount: number = 0;
+  /** Refresh() calls waiting for `_refreshSuspendCount` to reach zero. */
+  private _refreshResumeWaiters: Array<() => void> = [];
+  /** Longest an explicit Refresh() waits for in-flight saves before giving up (returning false). */
+  private static readonly REFRESH_WAIT_TIMEOUT_MS = 30_000;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
@@ -618,10 +623,34 @@ export class SQLServerDataProvider
    * picked up by the subsequent rescan instead of serving a stale column order until restart.
    */
   public override async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
-    if (this.AllowRefresh && this._pool) {
+    // An explicit Refresh must really reload: base Refresh() is a silent no-op while a save is in
+    // flight, which left callers (CodeGen after a fire-and-forget prompt-run save) on stale metadata.
+    if (!(await this.waitForSavesToFinish())) {
+      LogError(`SQLServerDataProvider.Refresh: ${this._refreshSuspendCount} save(s) still in flight after ${SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS}ms; metadata was NOT refreshed`);
+      return false;
+    }
+    if (this._pool) {
       SQLServerDataProvider.InvalidateViewColumnOrderCache(this._pool);
     }
     return super.Refresh(providerToUse);
+  }
+
+  /** Resolves true once no save is in flight, or false after REFRESH_WAIT_TIMEOUT_MS. */
+  private waitForSavesToFinish(): Promise<boolean> {
+    if (this._refreshSuspendCount === 0) {
+      return Promise.resolve(true);
+    }
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => {
+        this._refreshResumeWaiters = this._refreshResumeWaiters.filter((w) => w !== onResume);
+        resolve(false);
+      }, SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS);
+      const onResume = (): void => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      this._refreshResumeWaiters.push(onResume);
+    });
   }
 
   /**
@@ -700,7 +729,7 @@ export class SQLServerDataProvider
    * @internal
    */
   protected get AllowRefresh(): boolean {
-    return this._bAllowRefresh;
+    return this._refreshSuspendCount === 0;
   }
 
   /**
@@ -1761,11 +1790,20 @@ export class SQLServerDataProvider
   }
 
   protected override OnSuspendRefresh(): void {
-    this._bAllowRefresh = false;
+    this._refreshSuspendCount++;
   }
 
   protected override OnResumeRefresh(): void {
-    this._bAllowRefresh = true;
+    if (this._refreshSuspendCount === 0) {
+      LogError('SQLServerDataProvider.OnResumeRefresh called with no matching OnSuspendRefresh; ignored');
+      return;
+    }
+    this._refreshSuspendCount--;
+    if (this._refreshSuspendCount === 0) {
+      const waiters = this._refreshResumeWaiters;
+      this._refreshResumeWaiters = [];
+      waiters.forEach((resume) => resume());
+    }
   }
 
   protected override GetTransactionExtraData(_entity: BaseEntity): Record<string, unknown> {
