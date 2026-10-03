@@ -19,6 +19,7 @@ export function ReadSharedTelephonySettings(raw: Partial<TelephonySharedSettings
     return {
         inboundRunAsUserEmail: raw?.inboundRunAsUserEmail,
         maxCallSeconds: raw?.maxCallSeconds,
+        maxConcurrentCalls: raw?.maxConcurrentCalls,
         outbound: raw?.outbound,
     };
 }
@@ -33,9 +34,27 @@ export function ResolveOnMachine(raw: string | undefined): OnMachineAction {
  * call back (e.g. `https://api.example.com` + `/telephony/twilio` + `/status`).
  */
 export function BuildCallbackUrl(publicUrl: string, rootPath: string, route: string): string {
-    const base = TrimTrailingSlashes(publicUrl);
+    const base = PublicOrigin(publicUrl);
     const mount = rootPath.startsWith('/') ? rootPath : `/${rootPath}`;
     return `${base}${TrimTrailingSlashes(mount)}${route}`;
+}
+
+/**
+ * The scheme + host (+ port) of the host's public URL, with any path dropped.
+ *
+ * The host's public URL is typically the GraphQL endpoint (`https://api.example.com/graphql`), but extension
+ * routes are mounted at the application root, so the URL a carrier calls — and signs — is the ORIGIN plus the
+ * route's own path. Appending the route to the full public URL double-counts the GraphQL path
+ * (`/graphql/telephony/twilio/voice`), which breaks both the callback URLs we hand the carrier and the
+ * signature check. An unparseable value falls back to a trailing-slash trim so a misconfiguration surfaces as
+ * a plainly wrong URL rather than an exception on the request path.
+ */
+export function PublicOrigin(publicUrl: string): string {
+    try {
+        return new URL(publicUrl).origin;
+    } catch {
+        return TrimTrailingSlashes(publicUrl);
+    }
 }
 
 /**

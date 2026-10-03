@@ -19,15 +19,8 @@ import { RunView, UserInfo, IMetadataProvider, LogError, LogStatus } from '@memb
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
-import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
-import {
-    BaseTelephonyBridge,
-    GenerateMediaToken,
-    type BridgeNativeSdkBinding,
-    DIRECTION_CONFIG_KEY,
-    FROM_NUMBER_CONFIG_KEY,
-    INBOUND_CALL_ID_CONFIG_KEY,
-} from '@memberjunction/ai-bridge-base';
+import { CreateBridgeRealtimeSession, ResolveRealtimeCoAgentID } from '@memberjunction/ai-agents';
+import { BaseTelephonyBridge, GenerateMediaToken, type BridgeNativeSdkBinding } from '@memberjunction/ai-bridge-base';
 import {
     TwilioCallSdk,
     RealTwilioBindings,
@@ -41,8 +34,10 @@ import { IAgentSessionManager, DefaultAgentSessionManager } from '../sessionMana
 import { TwilioCallMediaRegistry } from './twilioMediaRegistry.js';
 import { CallLifecycleTracker } from './callLifecycleTracker.js';
 import { CallEndObserverSdk } from './callEndObserver.js';
+import { CreateCallerIdentityResolver, type ICallerIdentityResolver } from './callerIdentity.js';
+import { TelephonyCapacity, type CallCapacityLease, type ICallCapacity } from './telephonyCapacity.js';
+import { AuthorizeOutboundCallOrRelease, BuildTelephonyCallConfiguration, TelephonyCallSessionStarter } from './telephonyCallSession.js';
 import {
-    AuthorizeOutboundCall,
     OutboundCallRefusedError,
     OutboundRateLimiter,
     ResolveOutboundPolicy,
@@ -72,6 +67,8 @@ export interface InboundCallResult {
     accepted: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Why it was rejected (no agent identity for the DID, provider missing, etc.). */
     reason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    /** Set when the call was refused only because the server is at its concurrent-call cap (the webhook says "all agents are busy"). */
+    Busy?: boolean;
     /** The per-call media token to embed in the answer TwiML (`<Parameter name="mjToken">`); present when accepted. */
     MediaToken?: string;
     /**
@@ -91,6 +88,12 @@ export interface TwilioTelephonyServiceDeps {
     rest?: ITwilioRestLike;
     /** Overrides the agent-permission check of the outbound gate (defaults to `AIAgentPermissionHelper`). */
     canRunAgent?: OutboundGuardDeps['CanRunAgent'];
+    /** Overrides how the co-agent that voices an agent is resolved (defaults to the shared chain the browser path uses). */
+    coAgentResolver?: typeof ResolveRealtimeCoAgentID;
+    /** Overrides the caller-identity resolver (defaults to the host's registration, else anonymous). */
+    callerResolver?: ICallerIdentityResolver;
+    /** Overrides the concurrent-call gate (defaults to the process-wide {@link TelephonyCapacity}). */
+    capacity?: ICallCapacity;
 }
 
 /**
@@ -104,6 +107,8 @@ export class TwilioTelephonyService {
     private readonly sessionManager: IAgentSessionManager;
     private readonly tracker: CallLifecycleTracker;
     private readonly outboundGuard: OutboundGuardDeps;
+    private readonly starter: TelephonyCallSessionStarter;
+    private readonly capacity: ICallCapacity;
 
     constructor(
         private readonly config: TwilioTelephonyConfig,
@@ -127,6 +132,18 @@ export class TwilioTelephonyService {
         );
         const policy = ResolveOutboundPolicy(config.outbound);
         this.outboundGuard = { Policy: policy, Limiter: new OutboundRateLimiter(policy.MaxCallsPerUserPerHour), CanRunAgent: deps.canRunAgent };
+        if (!deps.capacity) {
+            TelephonyCapacity.Instance.Configure(config.maxConcurrentCalls);
+        }
+        this.capacity = deps.capacity ?? TelephonyCapacity.Instance;
+        this.starter = new TelephonyCallSessionStarter({
+            Engine: this.engine,
+            SessionFactory: this.sessionFactory,
+            SessionManager: this.sessionManager,
+            CoAgentResolver: deps.coAgentResolver ?? ResolveRealtimeCoAgentID,
+            CallerResolver: deps.callerResolver ?? CreateCallerIdentityResolver(),
+            OutboundPolicy: policy,
+        });
         this.wireRegistryHooks();
     }
 
@@ -145,9 +162,14 @@ export class TwilioTelephonyService {
             if (!identity) {
                 return { accepted: false, reason: `No active agent identity for dialed number '${input.to}'.` };
             }
+            const lease = this.capacity.TryAcquire();
+            if (!lease) {
+                LogError(`[Telephony][Twilio] inbound call ${input.callSid} refused: at the concurrent-call cap.`);
+                return { accepted: false, Busy: true, reason: 'All agent lines are busy.' };
+            }
             const token = GenerateMediaToken();
             this.registry.ExpectCall(input.callSid, token); // also marks the call as starting in the tracker
-            const Started = this.startInboundInBackground(input, identity.AgentID, contextUser, provider);
+            const Started = this.startInboundInBackground(input, identity, lease, contextUser, provider);
             return { accepted: true, MediaToken: token, Started };
         } catch (e) {
             LogError(`[Telephony][Twilio] inbound call ${input.callSid} failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -171,14 +193,30 @@ export class TwilioTelephonyService {
         }
         await this.engine.Config(false, contextUser, provider);
         const to = (toNumber ?? '').trim();
-        const verdict = await AuthorizeOutboundCall(
+        const lease = this.capacity.TryAcquire();
+        if (!lease) {
+            LogError(`[Telephony][Twilio] outbound call refused: at the concurrent-call cap.`);
+            throw new OutboundCallRefusedError('All agent lines are busy right now; try again shortly.', 'at-capacity');
+        }
+        const verdict = await AuthorizeOutboundCallOrRelease(
             { User: contextUser, AgentIdentity: identity, CarrierProviderID: this.resolveProvider().ID, ToNumber: to },
             this.outboundGuard,
+            lease,
         );
         if (!verdict.Allowed) {
             throw new OutboundCallRefusedError(verdict.Reason, verdict.Code);
         }
-        const session = await this.startBridge({ agentID: identity.AgentID, direction: 'Outbound', address: to, fromNumber: identity.IdentityValue, contextUser, provider });
+        const session = await this.starter.Start({
+            ResolveProvider: () => this.resolveProvider(),
+            Identity: identity,
+            Direction: 'Outbound',
+            RemoteNumber: to,
+            Configuration: BuildTelephonyCallConfiguration({ Direction: 'Outbound', AgentNumber: identity.IdentityValue }),
+            BindSdk: this.BuildBindSdk(),
+            ContextUser: contextUser,
+            MetadataProvider: provider,
+            Lease: lease,
+        });
         const callSid = session.RoomKey ?? '';
         await this.tracker.Attach(callSid, { SessionBridgeID: session.SessionBridgeID, ContextUser: contextUser, Provider: provider });
         return callSid;
@@ -231,9 +269,25 @@ export class TwilioTelephonyService {
     }
 
     /** Starts the inbound bridge session; on failure logs, hangs the call up and frees its state. Never rejects. */
-    private async startInboundInBackground(input: InboundCallInput, agentID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+    private async startInboundInBackground(
+        input: InboundCallInput,
+        identity: MJAIBridgeAgentIdentityEntity,
+        lease: CallCapacityLease,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
         try {
-            const session = await this.startBridge({ agentID, direction: 'Inbound', address: input.from, inboundCallId: input.callSid, contextUser, provider });
+            const session = await this.starter.Start({
+                ResolveProvider: () => this.resolveProvider(),
+                Identity: identity,
+                Direction: 'Inbound',
+                RemoteNumber: input.from,
+                Configuration: BuildTelephonyCallConfiguration({ Direction: 'Inbound', CallerNumber: input.from, InboundCallId: input.callSid }),
+                BindSdk: this.BuildBindSdk(),
+                ContextUser: contextUser,
+                MetadataProvider: provider,
+                Lease: lease,
+            });
             await this.tracker.Attach(input.callSid, { SessionBridgeID: session.SessionBridgeID, ContextUser: contextUser, Provider: provider });
         } catch (e) {
             LogError(`[Telephony][Twilio] inbound call ${input.callSid} could not start its agent session: ${e instanceof Error ? e.message : String(e)}`);
@@ -250,45 +304,6 @@ export class TwilioTelephonyService {
         } catch (e) {
             LogError(`[Telephony][Twilio] could not hang up call ${callSid} after a failed start: ${e instanceof Error ? e.message : String(e)}`);
         }
-    }
-
-    /** Shared inbound/outbound bridge-start: resolve provider, open the realtime session, bind the SDK, start. */
-    private async startBridge(args: {
-        agentID: string;
-        direction: 'Inbound' | 'Outbound';
-        address: string;
-        inboundCallId?: string;
-        fromNumber?: string;
-        contextUser: UserInfo;
-        provider: IMetadataProvider;
-    }): Promise<{ RoomKey?: string; SessionBridgeID: string }> {
-        await this.engine.Config(false, args.contextUser, args.provider);
-        const twilioProvider = this.resolveProvider();
-
-        const agentSession = await this.sessionManager.CreateSession({ agentID: args.agentID, userID: args.contextUser.ID }, args.contextUser, args.provider);
-        const realtimeSession = await this.sessionFactory({
-            AgentID: args.agentID,
-            TargetAgentID: args.agentID,
-            ContextUser: args.contextUser,
-            MetadataProvider: args.provider,
-            AgentSessionID: agentSession.ID,
-            RoomName: args.address,
-        });
-
-        const active = await this.engine.StartBridgeSession({
-            AgentSessionID: agentSession.ID,
-            AgentID: args.agentID,
-            TargetAgentID: args.agentID,
-            Provider: twilioProvider,
-            RealtimeSession: realtimeSession,
-            Address: args.address,
-            Direction: args.direction,
-            Configuration: this.buildSessionConfiguration(args.direction, args.fromNumber, args.inboundCallId),
-            BindSdk: this.BuildBindSdk(),
-            ContextUser: args.contextUser,
-            MetadataProvider: args.provider,
-        });
-        return { RoomKey: active.RoomKey, SessionBridgeID: active.SessionBridgeID };
     }
 
     /** Resolves the seeded Twilio provider row (by driver class, falling back to display name). */
@@ -329,20 +344,6 @@ export class TwilioTelephonyService {
     /** @deprecated Use {@link BuildBindSdk}. */
     public buildBindSdk(): BridgeNativeSdkBinding {
         return this.BuildBindSdk();
-    }
-
-    /**
-     * Assembles the per-session bridge Configuration the telephony driver reads.
-     */
-    private buildSessionConfiguration(direction: 'Inbound' | 'Outbound', fromNumber?: string, inboundCallId?: string): Record<string, unknown> {
-        const config: Record<string, unknown> = { [DIRECTION_CONFIG_KEY]: direction };
-        if (fromNumber) {
-            config[FROM_NUMBER_CONFIG_KEY] = fromNumber;
-        }
-        if (inboundCallId) {
-            config[INBOUND_CALL_ID_CONFIG_KEY] = inboundCallId;
-        }
-        return config;
     }
 
     /** Finds the active agent identity whose phone number matches the dialed DID and Twilio provider. */

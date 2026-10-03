@@ -101,7 +101,8 @@ export type OutboundRefusalCode =
     | 'prefix-not-allowed'
     | 'prefix-blocked'
     | 'agent-not-permitted'
-    | 'rate-limited';
+    | 'rate-limited'
+    | 'at-capacity';
 
 /** The verdict of {@link AuthorizeOutboundCall}. */
 export type OutboundAuthorization = { Allowed: true } | { Allowed: false; Code: OutboundRefusalCode; Reason: string };
@@ -261,6 +262,32 @@ function checkDestinationPrefixes(policy: OutboundCallPolicy, toNumber: string):
         return { Code: 'prefix-not-allowed', Reason: 'The destination number is outside the allowed calling ranges.' };
     }
     return undefined;
+}
+
+/**
+ * Checks a destination the AGENT asked to transfer a live call to against the same E.164 rule and
+ * allow/block prefix lists as outbound calls. A transfer sends a caller to a number the model chose, so it is
+ * as much a toll-fraud primitive as an outbound dial and must not be a way around the gate. The rate budget is
+ * not spent (a transfer places no new call from the account).
+ *
+ * @param policy The effective outbound policy.
+ * @param toNumber The requested destination.
+ * @returns `{Allowed:true, Number}` with the trimmed number, or the refusal with a caller-safe reason.
+ */
+export function CheckTransferDestination(
+    policy: OutboundCallPolicy,
+    toNumber: string,
+): { Allowed: true; Number: string } | { Allowed: false; Code: OutboundRefusalCode; Reason: string } {
+    const to = (toNumber ?? '').trim();
+    if (!IsValidE164(to)) {
+        return { Allowed: false, Code: 'invalid-number', Reason: 'The destination must be an E.164 number such as +14155550123.' };
+    }
+    const refusal = checkDestinationPrefixes(policy, to);
+    if (refusal) {
+        LogError(`[Telephony] call transfer refused (${refusal.Code}) for destination ${MaskNumber(to)}: ${refusal.Reason}`);
+        return { Allowed: false, ...refusal };
+    }
+    return { Allowed: true, Number: to };
 }
 
 /** Why the identity cannot be used for this carrier, or `undefined` when it can. */

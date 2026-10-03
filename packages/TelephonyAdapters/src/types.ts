@@ -15,6 +15,12 @@ export interface TelephonySharedSettings {
     inboundRunAsUserEmail?: string;
     /** Maximum length of one phone call in seconds (default 1800). The session is stopped at the cap. */
     maxCallSeconds?: number;
+    /**
+     * Most phone calls (every carrier together, both directions) the server will carry at once (default 25).
+     * Keep this at or below the realtime model plan's concurrent-session limit: past the cap an inbound caller
+     * hears a polite "all agents are busy" and an outbound call is refused, instead of every call degrading.
+     */
+    maxConcurrentCalls?: number;
     /** Outbound destination policy and per-user rate limit applied to every `Place*Call` mutation. */
     outbound?: OutboundPolicySettings;
 }

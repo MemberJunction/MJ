@@ -16,6 +16,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
 import { VonageTelephonyService, type VonageTelephonyServiceDeps } from '../telephony/VonageTelephonyService.js';
 import { VonageCallMediaRegistry } from '../telephony/vonageMediaRegistry.js';
 import { CallEndObserverSdk } from '../telephony/callEndObserver.js';
+import { CallCapacityGate } from '../telephony/telephonyCapacity.js';
 import { OutboundCallRefusedError } from '../telephony/outboundCallPolicy.js';
 import type { VonageTelephonyConfig } from '../types.js';
 
@@ -49,6 +50,7 @@ interface Harness {
     registry: VonageCallMediaRegistry;
     engine: ReturnType<typeof fakeEngine>;
     voice: { CreateCall: ReturnType<typeof vi.fn>; HangupCall: ReturnType<typeof vi.fn>; TransferCall: ReturnType<typeof vi.fn>; SendDtmf: ReturnType<typeof vi.fn> };
+    sessionFactory: ReturnType<typeof vi.fn>;
 }
 
 function harness(config: VonageTelephonyConfig = CONFIG, overrides: Partial<VonageTelephonyServiceDeps> = {}, registryOptions = {}): Harness {
@@ -60,15 +62,18 @@ function harness(config: VonageTelephonyConfig = CONFIG, overrides: Partial<Vona
         TransferCall: vi.fn(async () => undefined),
         SendDtmf: vi.fn(async () => undefined),
     };
+    const sessionFactory = vi.fn(async () => ({}));
     const service = new VonageTelephonyService(config, registry, {
         engine: engine as never,
-        sessionFactory: vi.fn(async () => ({})) as never,
+        sessionFactory: sessionFactory as never,
         sessionManager: { CreateSession: vi.fn(async () => ({ ID: 'AS1' })) } as never,
         voice: voice as IVonageVoiceLike,
         canRunAgent: async () => true,
+        coAgentResolver: vi.fn(async () => 'co-agent-1'),
+        capacity: new CallCapacityGate(100),
         ...overrides,
     });
-    return { service, registry, engine, voice };
+    return { service, registry, engine, voice, sessionFactory };
 }
 
 const INBOUND = { callId: 'CALL-1', from: '14155550123', to: '18005550100' };
@@ -316,5 +321,47 @@ describe('outbound audio (the correlation fix): the bridge reaches the media soc
         await placing;
 
         expect(h.engine.StopBridgeSession).toHaveBeenCalledWith('SB1', 'HostEnded', USER, expect.anything());
+    });
+});
+
+describe('call parity and the concurrent-call cap', () => {
+    it('keeps the co-agent and the dialled agent apart, and the agent DID apart from the caller number', async () => {
+        const h = harness();
+        const result = await h.service.HandleInboundCall(INBOUND, USER, dbProvider());
+        await result.Started;
+
+        expect(h.sessionFactory.mock.calls[0][0]).toMatchObject({ AgentID: 'co-agent-1', TargetAgentID: 'agent-1' });
+        const start = h.engine.StartBridgeSession.mock.calls[0][0] as { Address: string; JoinMethod: string; TurnMode: string; Configuration: Record<string, unknown> };
+        expect(start.Address).toBe('+18005550100');
+        expect(start.Configuration['CallerNumber']).toBe('14155550123');
+        expect(start.JoinMethod).toBe('InboundRoute');
+        expect(start.TurnMode).toBe('Active');
+    });
+
+    it('answers an inbound call over the cap as Busy and registers nothing', async () => {
+        const full = new CallCapacityGate(1);
+        full.TryAcquire();
+        const h = harness(CONFIG, { capacity: full });
+        const result = await h.service.HandleInboundCall(INBOUND, USER, dbProvider());
+        expect(result).toMatchObject({ accepted: false, Busy: true });
+        expect(h.registry.IsExpected('CALL-1')).toBe(false);
+    });
+
+    it('refuses an outbound call over the cap with a clear, coded error', async () => {
+        const full = new CallCapacityGate(1);
+        full.TryAcquire();
+        const h = harness(CONFIG, { capacity: full });
+        const error = await h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider()).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(OutboundCallRefusedError);
+        expect((error as OutboundCallRefusedError).Code).toBe('at-capacity');
+    });
+
+    it('frees the slot when the background start fails', async () => {
+        const gate = new CallCapacityGate(1);
+        const h = harness(CONFIG, { capacity: gate });
+        h.engine.StartBridgeSession.mockRejectedValue(new Error('model unavailable'));
+        const result = await h.service.HandleInboundCall(INBOUND, USER, dbProvider());
+        await result.Started;
+        expect(gate.Active).toBe(0);
     });
 });

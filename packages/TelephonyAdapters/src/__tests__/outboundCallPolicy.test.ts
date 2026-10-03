@@ -9,6 +9,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
 import { LogError } from '@memberjunction/core';
 import {
     AuthorizeOutboundCall,
+    CheckTransferDestination,
     IsValidE164,
     MaskNumber,
     OutboundCallRefusedError,
@@ -267,5 +268,38 @@ describe('OutboundCallRefusedError', () => {
         expect(err).toBeInstanceOf(Error);
         expect(err.message).toBe('nope');
         expect(err.Code).toBe('rate-limited');
+    });
+});
+
+describe('CheckTransferDestination', () => {
+    const policy = ResolveOutboundPolicy();
+
+    it('allows a well-formed number inside the allowed ranges and returns it trimmed', () => {
+        expect(CheckTransferDestination(policy, ' +14155550123 ')).toEqual({ Allowed: true, Number: '+14155550123' });
+    });
+
+    it.each([
+        ['+19005551234', 'prefix-blocked'],
+        ['+18765550123', 'prefix-blocked'],
+        ['+442071838750', 'prefix-not-allowed'],
+        ['4155550123', 'invalid-number'],
+        ['', 'invalid-number'],
+        ['+1415 555 0123', 'invalid-number'],
+    ])('refuses %j (%s) exactly as an outbound dial would', (to, code) => {
+        const verdict = CheckTransferDestination(policy, to);
+        expect(verdict.Allowed).toBe(false);
+        if (!verdict.Allowed) {
+            expect(verdict.Code).toBe(code);
+        }
+    });
+
+    it('honours an operator-configured allow-list', () => {
+        const custom = ResolveOutboundPolicy({ allowedPrefixes: ['+44'], blockedPrefixes: [] });
+        expect(CheckTransferDestination(custom, '+442071838750').Allowed).toBe(true);
+        expect(CheckTransferDestination(custom, '+14155550123').Allowed).toBe(false);
+    });
+
+    it('treats a missing destination as invalid rather than throwing', () => {
+        expect(CheckTransferDestination(policy, undefined as unknown as string).Allowed).toBe(false);
     });
 });

@@ -95,3 +95,29 @@ describe('CallEndObserverSdk', () => {
         expect(() => new CallEndObserverSdk(inner, vi.fn()).flushOutbound()).not.toThrow();
     });
 });
+
+describe('CallEndObserverSdk — carrier hand-off', () => {
+    it('has no detach or goodbye when the wrapped SDK has none (so the bridge falls back to a plain hang-up)', () => {
+        const sdk = new CallEndObserverSdk(fakeSdk(), vi.fn());
+        expect(sdk.detach).toBeUndefined();
+        expect(sdk.playMessageAndHangup).toBeUndefined();
+    });
+
+    it('forwards detach to the wrapped SDK and reports the end (MJ is done with a call it handed to the carrier)', async () => {
+        const detach = vi.fn(async () => undefined);
+        const onEnded = vi.fn();
+        const sdk = new CallEndObserverSdk(fakeSdk({ detach }), onEnded);
+        await sdk.detach?.('CA1');
+        expect(detach).toHaveBeenCalledWith('CA1');
+        expect(onEnded).toHaveBeenCalledWith('CA1');
+    });
+
+    it('forwards the carrier-side goodbye and reports the end, even when the carrier call throws', async () => {
+        const playMessageAndHangup = vi.fn(async () => { throw new Error('twilio 500'); });
+        const onEnded = vi.fn();
+        const sdk = new CallEndObserverSdk(fakeSdk({ playMessageAndHangup }), onEnded);
+        await expect(sdk.playMessageAndHangup?.('CA1', 'Goodbye')).rejects.toThrow('twilio 500');
+        expect(playMessageAndHangup).toHaveBeenCalledWith('CA1', 'Goodbye');
+        expect(onEnded).toHaveBeenCalledWith('CA1');
+    });
+});
