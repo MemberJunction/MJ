@@ -30,6 +30,7 @@
     "@memberjunction/core-entities": "6.2.0-edge.1",
     "@memberjunction/generic-database-provider": "6.2.0-edge.1",
     "@memberjunction/global": "6.2.0-edge.1",
+    "@memberjunction/livekit-room-server": "6.2.0-edge.1",
     "@memberjunction/server-extensions-core": "6.2.0-edge.1",
     "cors": "^2.8.5",
     "express": "^5.2.1",

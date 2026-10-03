@@ -23,8 +23,8 @@ import {
 
 const ALL = { CallTransfer: true, DTMF: true };
 const TARGETS: TransferTarget[] = [
-    { Name: 'Front desk', Number: '+14155550100', Description: 'general enquiries' },
-    { Name: 'Billing', Number: '+14155550101' },
+    { Kind: 'number', Name: 'Front desk', Number: '+14155550100', Description: 'general enquiries' },
+    { Kind: 'number', Name: 'Billing', Number: '+14155550101' },
 ];
 
 describe('BuildTelephonyTools', () => {
@@ -201,7 +201,7 @@ describe('TelephonyCallToolExecutor', () => {
         });
 
         it('still checks the resolved number against the outbound policy (defence in depth)', async () => {
-            const bad: TransferTarget[] = [{ Name: 'Premium', Number: '+19005551234' }];
+            const bad: TransferTarget[] = [{ Kind: 'number', Name: 'Premium', Number: '+19005551234' }];
             const { executor, controls } = makeExecutor({ TransferTargets: bad });
             expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Premium' }))).ok).toBe(false);
             await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
@@ -333,5 +333,38 @@ describe('TelephonyCallToolExecutor', () => {
     it('answers an unknown tool with an error rather than throwing', async () => {
         const { executor } = makeExecutor();
         expect(parse(await executor.Execute(call('nope', {}))).ok).toBe(false);
+    });
+});
+
+describe('carrier calls ignore the room-only target kinds', () => {
+    const MIXED: TransferTarget[] = [
+        { Kind: 'user', Name: 'Dana', UserEmail: 'dana@example.com' },
+        { Kind: 'agent', Name: 'Legal', AgentName: 'Rex' },
+        ...TARGETS,
+    ];
+
+    it('offers transfer_call only the phone-number names', () => {
+        const transfer = BuildTelephonyTools(ALL, MIXED).find((t) => t.Name === TRANSFER_CALL_TOOL)!;
+        const schema = transfer.ParametersSchema as { properties: { target: { enum: string[] } } };
+        expect(schema.properties.target.enum).toEqual(['Front desk', 'Billing']);
+    });
+
+    it('offers no transfer tool when the directory holds only people and agents', () => {
+        const onlyRoomKinds = MIXED.slice(0, 2);
+        expect(BuildTelephonyTools(ALL, onlyRoomKinds).map((t) => t.Name)).not.toContain(TRANSFER_CALL_TOOL);
+        expect(BuildPhoneFraming({ Direction: 'Inbound', RemoteNumber: '+1', Features: ALL, TransferTargets: onlyRoomKinds })).not.toContain(TRANSFER_CALL_TOOL);
+    });
+
+    it('refuses to transfer a carrier call to a person or an agent, even when the model names one', async () => {
+        vi.useFakeTimers();
+        try {
+            const { executor, controls } = makeExecutor({ TransferTargets: MIXED });
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Dana' }))).ok).toBe(false);
+            expect(parse(await executor.Execute(call(TRANSFER_CALL_TOOL, { target: 'Legal' }))).ok).toBe(false);
+            await vi.advanceTimersByTimeAsync(CALL_CONTROL_SETTLE_MS + 1);
+            expect(controls.TransferCall).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

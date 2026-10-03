@@ -15161,6 +15161,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../MJGlobal
+      '@memberjunction/livekit-room-server':
+        specifier: 6.2.0-edge.1
+        version: link:../LiveKitRoomServer
       '@memberjunction/server-extensions-core':
         specifier: 6.2.0-edge.1
         version: link:../ServerExtensionsCore

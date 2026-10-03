@@ -308,20 +308,7 @@ export class TelephonyCallSessionStarter {
 
     /** Moves the agent-session row to `Closed`. A row that is already closed (or missing) is left alone. */
     private async closeAgentSession(agentSessionID: string, reason: BridgeDisconnectReason, user: UserInfo, provider: IMetadataProvider): Promise<void> {
-        try {
-            const row = await provider.GetEntityObject<MJAIAgentSessionEntity>(AGENT_SESSION_ENTITY, user);
-            if (!(await row.Load(agentSessionID)) || row.Status === 'Closed') {
-                return;
-            }
-            row.Status = 'Closed';
-            row.ClosedAt = new Date();
-            row.CloseReason = mapCloseReason(reason);
-            if (!(await row.Save())) {
-                LogError(`[Telephony] could not close agent session ${agentSessionID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            }
-        } catch (e) {
-            LogError(`[Telephony] closing agent session ${agentSessionID} failed: ${e instanceof Error ? e.message : String(e)}`);
-        }
+        await CloseAgentSessionRow(agentSessionID, reason, user, provider);
     }
 
     private async closeQuietly(session: IRealtimeSession | undefined): Promise<void> {
@@ -330,6 +317,27 @@ export class TelephonyCallSessionStarter {
         } catch (e) {
             LogError(`[Telephony] closing the model session after a failed start failed: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+}
+
+/**
+ * Moves an agent-session row to `Closed`, recording why. A row that is already closed (or missing) is left alone. Never
+ * throws: closing is bookkeeping at the end of a call and must not turn a clean hang-up into an error.
+ */
+export async function CloseAgentSessionRow(agentSessionID: string, reason: BridgeDisconnectReason, user: UserInfo, provider: IMetadataProvider): Promise<void> {
+    try {
+        const row = await provider.GetEntityObject<MJAIAgentSessionEntity>(AGENT_SESSION_ENTITY, user);
+        if (!(await row.Load(agentSessionID)) || row.Status === 'Closed') {
+            return;
+        }
+        row.Status = 'Closed';
+        row.ClosedAt = new Date();
+        row.CloseReason = mapCloseReason(reason);
+        if (!(await row.Save())) {
+            LogError(`[Telephony] could not close agent session ${agentSessionID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    } catch (e) {
+        LogError(`[Telephony] closing agent session ${agentSessionID} failed: ${e instanceof Error ? e.message : String(e)}`);
     }
 }
 

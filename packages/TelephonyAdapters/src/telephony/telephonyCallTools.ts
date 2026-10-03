@@ -26,7 +26,7 @@ import type { JSONObject, RealtimeToolCall, RealtimeToolDefinition } from '@memb
 import { IsValidDtmfDigits, MAX_DTMF_DIGITS } from '@memberjunction/ai-bridge-base';
 import type { BridgeLocalToolHandler } from '@memberjunction/ai-agents';
 import type { CallerIdentity } from './callerIdentity.js';
-import { CheckTransferDestination, FindTransferTarget, MaskNumber, type OutboundCallPolicy, type TransferTarget } from './outboundCallPolicy.js';
+import { CheckTransferDestination, FindTransferTarget, MaskNumber, NumberTransferTargets, type OutboundCallPolicy, type TransferTarget } from './outboundCallPolicy.js';
 
 /** The tool names the host executes itself. */
 export const TRANSFER_CALL_TOOL = 'transfer_call';
@@ -54,9 +54,13 @@ export interface TelephonyToolFeatures {
     DTMF: boolean;
 }
 
-/** Whether the agent may transfer: the carrier supports it AND the operator configured somewhere to send calls. */
+/**
+ * Whether the agent may transfer: the carrier supports it AND the operator configured a phone number to send calls to.
+ * A carrier call has no room to bring a person or another agent into, so only `number` entries of the directory count
+ * here; the `user` and `agent` kinds belong to room calls (see `roomCallTools.ts`).
+ */
 function canTransfer(features: TelephonyToolFeatures, targets: readonly TransferTarget[]): boolean {
-    return features.CallTransfer && targets.length > 0;
+    return features.CallTransfer && NumberTransferTargets(targets).length > 0;
 }
 
 /**
@@ -65,14 +69,15 @@ function canTransfer(features: TelephonyToolFeatures, targets: readonly Transfer
  */
 export function BuildTelephonyTools(features: TelephonyToolFeatures, transferTargets: readonly TransferTarget[] = []): RealtimeToolDefinition[] {
     const tools: RealtimeToolDefinition[] = [];
+    const numberTargets = NumberTransferTargets(transferTargets);
     if (canTransfer(features, transferTargets)) {
         tools.push({
             Name: TRANSFER_CALL_TOOL,
             Description:
                 'Transfer this call to one of the configured destinations. Say a short goodbye first; the call leaves you when the ' +
-                `transfer completes. Only call it when the caller asks for it or you cannot help. Destinations: ${describeTransferTargets(transferTargets)}`,
+                `transfer completes. Only call it when the caller asks for it or you cannot help. Destinations: ${describeTransferTargets(numberTargets)}`,
             ParametersSchema: objectSchema(
-                { target: { type: 'string', enum: transferTargets.map((t) => t.Name), description: 'The name of the place to transfer to, exactly as listed.' } },
+                { target: { type: 'string', enum: numberTargets.map((t) => t.Name), description: 'The name of the place to transfer to, exactly as listed.' } },
                 ['target'],
             ),
         });
@@ -200,9 +205,10 @@ export class TelephonyCallToolExecutor implements BridgeLocalToolHandler {
         if (this.ending || this.transferring) {
             return fail('The call is already ending or being transferred.');
         }
-        const entry = FindTransferTarget(this.deps.TransferTargets, readString(call.Arguments, 'target'));
-        if (!entry) {
-            return fail(`Unknown transfer destination. Choose one of: ${this.deps.TransferTargets.map((t) => t.Name).join(', ')}.`);
+        const numberTargets = NumberTransferTargets(this.deps.TransferTargets);
+        const entry = FindTransferTarget(numberTargets, readString(call.Arguments, 'target'));
+        if (!entry || entry.Kind !== 'number') {
+            return fail(`Unknown transfer destination. Choose one of: ${numberTargets.map((t) => t.Name).join(', ')}.`);
         }
         // Defence in depth: the directory was validated at startup, but the policy is checked again on the resolved number.
         const verdict = CheckTransferDestination(this.deps.Policy, entry.Number);
@@ -304,7 +310,7 @@ function describeTransferTargets(targets: readonly TransferTarget[]): string {
 function describeTools(features: TelephonyToolFeatures, targets: readonly TransferTarget[]): string[] {
     const lines: string[] = [];
     if (canTransfer(features, targets)) {
-        lines.push(`- Use ${TRANSFER_CALL_TOOL} to hand the call over when the caller asks or you cannot help. You can only transfer to: ${describeTransferTargets(targets)}.`);
+        lines.push(`- Use ${TRANSFER_CALL_TOOL} to hand the call over when the caller asks or you cannot help. You can only transfer to: ${describeTransferTargets(NumberTransferTargets(targets))}.`);
     }
     if (features.DTMF) {
         lines.push(`- Use ${SEND_DTMF_TOOL} to press keys, for example in an automated menu. When the caller presses keys you will be told what they pressed.`);
