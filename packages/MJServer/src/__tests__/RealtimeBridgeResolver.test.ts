@@ -81,6 +81,11 @@ class TestableResolver extends RealtimeBridgeResolver {
 
 const ctx = {} as AppContext;
 
+// The resolver module installs the binder once, as it loads. `restoreMocks` clears call history before each test,
+// so take it now rather than reading `mock.calls` inside a test.
+type TurnToolBinderFn = (session: object, handler: object) => void;
+const installedTurnToolBinder = h.setTurnToolBinder.mock.calls[0]?.[0] as TurnToolBinderFn | undefined;
+
 describe('RealtimeBridgeResolver', () => {
   let resolver: TestableResolver;
 
@@ -139,7 +144,7 @@ describe('RealtimeBridgeResolver', () => {
 
   describe('turn-taking tool binding', () => {
     it('installs the engine\'s tool handler as the model session runtime\'s local tool handler', () => {
-      const binder = h.setTurnToolBinder.mock.calls[0][0] as (s: object, handler: object) => void;
+      const binder = installedTurnToolBinder!;
       const setLocalToolHandler = vi.fn();
       h.getBridgeRuntime.mockReturnValueOnce({ SetLocalToolHandler: setLocalToolHandler });
       const session = {};
@@ -150,7 +155,7 @@ describe('RealtimeBridgeResolver', () => {
     });
 
     it('does not throw when the session has no bridge runtime', () => {
-      const binder = h.setTurnToolBinder.mock.calls[0][0] as (s: object, handler: object) => void;
+      const binder = installedTurnToolBinder!;
       h.getBridgeRuntime.mockReturnValueOnce(undefined);
       expect(() => binder({}, {})).not.toThrow();
     });
