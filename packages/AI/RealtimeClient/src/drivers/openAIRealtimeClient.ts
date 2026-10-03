@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, ToProviderSessionConfig } from '../generic/baseRealtimeClient';
 import {
     OpenAIProtocolRealtimeClient,
     OpenAIProtocolClientEvent,
@@ -338,6 +338,12 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
     }
 
+    /** @inheritdoc — the instructions in the session config applied via `session.update`. */
+    protected override currentSessionInstructions(): string | null {
+        const instructions = this.sessionConfig?.['instructions'];
+        return typeof instructions === 'string' ? instructions : null;
+    }
+
     /**
      * Sends the server-controlled session config (instructions + tools) as a
      * `session.update` so the co-agent's identity and tool set apply. Skipped when the
@@ -349,7 +355,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             return;
         }
         if (channel.readyState === 'open') {
-            channel.send(JSON.stringify({ type: 'session.update', session: this.sessionConfig }));
+            channel.send(JSON.stringify({ type: 'session.update', session: ToProviderSessionConfig(this.sessionConfig) }));
         }
     }
 }

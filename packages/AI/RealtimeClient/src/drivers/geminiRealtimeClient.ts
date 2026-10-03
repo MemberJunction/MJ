@@ -21,7 +21,7 @@ import {
     type LiveServerMessage,
     type Transcription,
 } from '@google/genai';
-import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, RealtimeClientState, REQUESTED_TRACKS_SESSION_KEY } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -656,7 +656,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         const rawMaxVideoRate = sessionConfig['maxInboundVideoRate'];
         const maxInboundVideoRate =
             typeof rawMaxVideoRate === 'number' && rawMaxVideoRate > 0 ? rawMaxVideoRate : undefined;
-        const rawRequestedTracks = sessionConfig['requestedTracks'];
+        const rawRequestedTracks = sessionConfig[REQUESTED_TRACKS_SESSION_KEY];
         let requestedTracks: readonly RealtimeTrackDescriptor[] | undefined = undefined;
         if (Array.isArray(rawRequestedTracks)) {
             const list: RealtimeTrackDescriptor[] = [];

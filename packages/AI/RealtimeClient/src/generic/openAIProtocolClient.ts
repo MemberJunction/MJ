@@ -1,5 +1,5 @@
 import { ClientRealtimeSessionConfig, JSONObject, ResolveResponseDoneUsage } from '@memberjunction/ai';
-import { BaseRealtimeClient, RealtimeClientState } from './baseRealtimeClient';
+import { BaseRealtimeClient, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -419,6 +419,25 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
+     * The instructions the session was configured with, or null. Each transport holds its session
+     * config in its own field, so each answers for itself.
+     */
+    protected currentSessionInstructions(): string | null {
+        return null;
+    }
+
+    /**
+     * A spoken update's per-response instructions, made safe for this protocol: `response.instructions`
+     * REPLACES the session's instructions for that response, so a directive sent alone ("greet them,
+     * introduce yourself") is spoken with no persona at all — seen live as "Hi, I'm ChatGPT". The
+     * session's instructions are restated first and the directive follows.
+     */
+    protected withSessionInstructions(directive: string): string {
+        const session = this.currentSessionInstructions()?.trim();
+        return session ? `${session}\n\n${directive}` : directive;
+    }
+
+    /**
      * Triggers ONE short spoken update with the given instructions. Marks the upcoming
      * response as `'narration'` (flag consumed by the next `response.created`) so its
      * transcripts are emitted with `Kind: 'narration'` — ephemeral by contract. Sets
@@ -442,7 +461,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         this.responseActive = true;
         this.pendingNarrationKind = true;
         this.pendingLocalResponseCreates++;
-        this.sendEvent({ type: 'response.create', response: { instructions } });
+        this.sendEvent({ type: 'response.create', response: { instructions: this.withSessionInstructions(instructions) } });
     }
 
     /**
@@ -849,9 +868,17 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     /** Opens the provider socket for this connection (drivers own URL/auth specifics). */
     protected abstract openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket;
-    /** Extracts the wire-shaped `session` object from the server pact. Default: the pact itself. */
+    /** @inheritdoc — the instructions in the wire-shaped session object applied at connect. */
+    protected override currentSessionInstructions(): string | null {
+        const instructions = this.sessionObject['instructions'];
+        return typeof instructions === 'string' ? instructions : null;
+    }
+    /**
+     * Extracts the wire-shaped `session` object from the server pact. Default: the pact minus the
+     * client-only hints ({@link ToProviderSessionConfig}).
+     */
     protected resolveSessionObject(config: ClientRealtimeSessionConfig): JSONObject {
-        return config.SessionConfig ?? {};
+        return ToProviderSessionConfig(config.SessionConfig ?? {});
     }
     /** Resolves the PCM sample rate for the audio plane (both directions). */
     protected abstract resolveSampleRate(config: ClientRealtimeSessionConfig): number;
