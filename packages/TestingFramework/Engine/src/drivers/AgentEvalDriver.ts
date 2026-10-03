@@ -779,11 +779,12 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /**
-     * Extract output payload from agent run.
-     * Parses the FinalPayload string property to get the agent's output for chaining to next turn.
-     * @private
+     * The agent run's output, used both as the payload chained into the next
+     * turn and as `outputPayload`, the actualOutput every oracle judges.
+     * Delegates to {@link ExtractOutputPayload}: the parsed FinalPayload, else
+     * `{ message }` for conversational agents whose output is in Message, else `{}`.
      */
-    protected extractOutputPayload(agentRun: MJAIAgentRunEntity): Record<string, unknown> {
+    private extractOutputPayload(agentRun: MJAIAgentRunEntity): Record<string, unknown> {
         return ExtractOutputPayload(agentRun);
     }
 
