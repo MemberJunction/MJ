@@ -62,7 +62,7 @@ describe('RoomHandoffEngine', () => {
   let engine: RoomHandoffEngine;
   let presence: FakePresence;
   let events: HandoffOfferEvent[];
-  let notified: Array<{ offerId: string; userId: string }>;
+  let notified: Array<{ offerId: string; userId: string; provider: IMetadataProvider }>;
   let dialed: DialIntoRoomRequest[];
 
   beforeEach(() => {
@@ -78,7 +78,7 @@ describe('RoomHandoffEngine', () => {
     engine.Configure({
       Presence: presence,
       Publisher: { Publish: (e) => events.push(e) },
-      Notifier: { NotifyOffer: async (offer, userId) => void notified.push({ offerId: offer.OfferID, userId }) },
+      Notifier: { NotifyOffer: async (offer, userId, _user, provider) => void notified.push({ offerId: offer.OfferID, userId, provider }) },
       Dialer: {
         DialIntoRoom: async (req) => {
           dialed.push(req);
@@ -127,7 +127,7 @@ describe('RoomHandoffEngine', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({ UserID: PERSON, Kind: 'offered', Offer: { Status: 'Pending', AgentName: 'Sage', RoomName: 'call-1' } });
-      expect(notified).toEqual([{ offerId: events[0].Offer.OfferID, userId: PERSON }]);
+      expect(notified).toEqual([{ offerId: events[0].Offer.OfferID, userId: PERSON, provider: PROVIDER }]);
     });
 
     it('lists the offer for its target and for nobody else', () => {

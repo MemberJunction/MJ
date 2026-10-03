@@ -75,6 +75,8 @@ export interface RoomCallStartArgs {
     Lease?: CallCapacityLease | null;
     ContextUser: UserInfo;
     MetadataProvider: IMetadataProvider;
+    /** Who is on the other end, in words a person can use. Defaults to a masked number (phone) or `Web visitor`. */
+    CallerLabel?: string;
     /** Set when this agent takes a conversation over from another. */
     Takeover?: { PreviousAgentName: string; Brief: string };
     /** Reuse an existing conversation (a taking-over agent continues the call's record). */
@@ -168,6 +170,7 @@ export class RoomCallSessionStarter {
             Lease: lease,
             ContextUser: request.ContextUser,
             MetadataProvider: request.Provider,
+            CallerLabel: request.CallerLabel,
             Takeover: request.Brief ? { PreviousAgentName: request.PreviousAgentName ?? 'the previous agent', Brief: request.Brief } : undefined,
             ConversationID: context?.ConversationID,
             RealtimeModelID: request.RealtimeModelID,
@@ -343,6 +346,9 @@ export class RoomCallSessionStarter {
         const existing = this.rooms.get(roomKey(args.RoomName));
         if (existing) {
             return existing.CallerLabel;
+        }
+        if (args.CallerLabel) {
+            return args.CallerLabel;
         }
         return args.Channel === 'phone' && args.RemoteNumber ? `Phone caller ${MaskNumber(args.RemoteNumber)}` : 'Web visitor';
     }

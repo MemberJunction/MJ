@@ -448,7 +448,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
 
     private async notify(offer: HandoffOfferRecord, flow: HandoffFlow): Promise<void> {
         try {
-            await this.deps.Notifier?.NotifyOffer(ToOfferView(offer), offer.TargetUserID, flow.Agent.ContextUser);
+            await this.deps.Notifier?.NotifyOffer(ToOfferView(offer), offer.TargetUserID, flow.Agent.ContextUser, flow.Agent.Provider);
         } catch (e) {
             LogError(`[RoomHandoff] notifying about offer ${offer.OfferID} failed (the live console still receives it): ${e instanceof Error ? e.message : String(e)}`);
         }

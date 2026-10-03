@@ -108,7 +108,7 @@ export type HandoffStartResult = { Ok: true; Status: 'offered' | 'dialing' | 'ag
 
 /** Delivers a new offer to the person it was made to, outside the live subscription (in-app notification, email). */
 export interface IHandoffNotifier {
-    NotifyOffer(offer: HandoffOfferView, targetUserID: string, contextUser: UserInfo): Promise<void>;
+    NotifyOffer(offer: HandoffOfferView, targetUserID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void>;
 }
 
 /** Pushes offer changes to the person's open console. */
