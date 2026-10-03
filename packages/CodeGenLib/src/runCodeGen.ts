@@ -302,7 +302,7 @@ export class RunCodeGenBase {
         // rows for newly-discovered entities. Skipping Refresh here causes the SQL-gen entity
         // loop to use stale snapshots and silently drop CRUD for those entities — Bug 1 in the
         // 3-bug chain, observed first-run on PG for entities like SystemEvent.
-        await provider.Refresh();
+        await this.refreshMetadataAfterManageMetadata(provider);
         if (!metadataSuccess) {
           FailSpinner('ERROR managing metadata (refresh applied; downstream will use latest available state)');
           pipelineSuccess = false;
@@ -606,6 +606,27 @@ export class RunCodeGenBase {
        const { filePath } = await reporter.endRun(pipelineSuccess);
        if (filePath) logStatus('CodeGen report written: ' + filePath);
      }
+  }
+
+  /**
+   * Refreshes every metadata provider the rest of the pipeline reads, once `manageMetadata` has written to
+   * the database.
+   *
+   * There can be two. `provider` is the one this pipeline was handed, but SQL generation reads entities
+   * through `new MJ.Metadata()` — the process's GLOBAL provider. The CLI creates one provider and makes it the
+   * global one, so they are the same object and one refresh covers both. In-process (`RunInProcess`, the
+   * runtime schema-update path) the host hands the pipeline a SEPARATE CodeGen-credential provider, and
+   * refreshing only that one left SQL generation on whatever snapshot the host's timed refresh last took. The
+   * entities `manageMetadata` had just given their soft primary keys still had none there, so every one of them
+   * was skipped as "no primary key field in metadata" — tables and entity rows, but no base view and no CRUD
+   * routines. Observed on a SQL Server tenant for 348 of 884 entities, on two consecutive runs.
+   */
+  private async refreshMetadataAfterManageMetadata(provider: MJ.IMetadataProvider): Promise<void> {
+    await provider.Refresh();
+    const hostProvider = MJ.Metadata.Provider; // global-provider-ok: SQL generation reads `new MJ.Metadata()`, which is this provider; in-process it is the host's, not `provider`
+    if (hostProvider && hostProvider !== provider) {
+      await hostProvider.Refresh();
+    }
   }
 
   /**

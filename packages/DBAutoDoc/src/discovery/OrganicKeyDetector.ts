@@ -67,8 +67,16 @@ export class OrganicKeyDetector {
         const startedAt = new Date().toISOString();
 
         const a = await RunSemanticPhase(state, this.config, this.aiConfig, progress);
-        const b = RunStructuralPhase(state, a.clusters, this.databaseProvider);
-        progress(`structural: ${b.Summary.transitiveBridgesFound} bridges`);
+        const b = RunStructuralPhase(state, a.clusters, { Provider: this.databaseProvider });
+        // Say WHY when the phase produced nothing: "0 bridges" from a completed walk and
+        // "0 bridges" from a walk that never ran are different facts, and a truncated walk
+        // is a third. Reporting them separately is the difference between a schema with no
+        // transitive bridges and a schema whose walk we bounded.
+        progress(
+            b.Summary.walked
+                ? `structural: ${b.Summary.transitiveBridgesFound} bridges${b.Summary.truncationReasons ? ` (walk truncated: ${b.Summary.truncationReasons.join(', ')})` : ''}`
+                : `structural: skipped (${b.Summary.skipReason})`
+        );
         const c = Compose(a.clusters, b.Bridges);
         progress(`compose: emitted ${c.Emitted}/${a.clusters.length} clusters (${c.Summary.outputKeys} keys, ${c.Summary.outputSpokes} spokes)`);
 

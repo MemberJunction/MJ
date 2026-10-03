@@ -21,10 +21,18 @@
  *     are skipped (composite-PK bridge join is future work).
  */
 
-import { FindBridgePaths, FKEdge } from './FKGraphWalker.js';
+import { WalkBridgePaths, FKEdge, FKGraphWalkerOptions } from './FKGraphWalker.js';
 import { GenerateBridgeView, GeneratedBridgeView, BridgeViewProvider } from './BridgeViewSQLGenerator.js';
 import { OrganicKeyCluster, MemberColumns } from '../types/organic-keys.js';
 import { DatabaseDocumentation, ForeignKeyReference } from '../types/state.js';
+
+/** A hub table plus the full organic-key tuple and concept it came from. */
+interface HubEntry {
+    schema: string;
+    table: string;
+    keyFields: string[];          // Full MatchFieldNames tuple
+    concept: string;
+}
 
 /** One transitive bridge finding ready for spoke emission. */
 export interface TransitiveBridgeFinding {
@@ -50,9 +58,13 @@ export interface TransitiveBridgeDetectorOptions {
     KeepShortestOnly?: boolean;
     /** Platform the generated bridge-view SQL is written for. Default `'sqlserver'`. */
     provider?: BridgeViewProvider;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    /** Walk bounds. See {@link FKGraphWalkerOptions}; omitted entries take the walker's ceilings. */
+    WalkBounds?: Pick<FKGraphWalkerOptions, 'MaxFrontier' | 'MaxPathsPerPair' | 'MaxTotalPaths'>;
+    /** Called once when a walk bound truncated the search, so the caller can report it. */
+    OnTruncated?: (reasons: string[]) => void;
 }
 
-const DEFAULTS: Required<TransitiveBridgeDetectorOptions> = {
+const DEFAULTS: Required<Omit<TransitiveBridgeDetectorOptions, 'WalkBounds' | 'OnTruncated'>> = {
     MaxHops: 3,
     MinSoftFKConfidence: 0.6,
     MinPathConfidence: 0.7,
@@ -85,12 +97,6 @@ export function DetectTransitiveBridges(
     // PR #2193's MatchFieldNames is a tuple; we use the FIRST field of the
     // tuple as the projected bridge column (the rest are positional siblings
     // emitted via TransitiveMatchFieldNames).
-    interface HubEntry {
-        schema: string;
-        table: string;
-        keyFields: string[];          // Full MatchFieldNames tuple
-        concept: string;
-    }
     const hubsByKey = new Map<string, HubEntry>();
     for (const cluster of organicKeyClusters) {
         for (const member of cluster.members) {
@@ -122,11 +128,28 @@ export function DetectTransitiveBridges(
     for (const h of hubsByKey.values()) {
         hubsForWalker.push({ schema: h.schema, table: h.table, keyField: h.keyFields[0] });
     }
-    const allPaths = FindBridgePaths(edges, hubsForWalker, allTables, {
+    const walk = WalkBridgePaths(edges, hubsForWalker, allTables, {
         MaxHops: o.MaxHops,
         MinSoftFKConfidence: o.MinSoftFKConfidence,
         PruneCycles: true,
+        ...(opts.WalkBounds ?? {}),
     });
+    if (walk.Truncated) {
+        opts.OnTruncated?.(walk.TruncationReasons);
+    }
+    const allPaths = walk.Paths;
+
+    // Hub lookup by (schema, table, primary match field). Built ONCE: the loop below used to
+    // call `Array.from(hubsByKey.values()).find(...)` per path, which allocates a fresh array
+    // of every hub for every path found — the second-largest allocation in this phase after
+    // the BFS frontier itself.
+    const hubsByLookupKey = new Map<string, HubEntry>();
+    for (const h of hubsByKey.values()) {
+        const lookupKey = `${h.schema}.${h.table}.${h.keyFields[0]}`;
+        if (!hubsByLookupKey.has(lookupKey)) {
+            hubsByLookupKey.set(lookupKey, h);
+        }
+    }
 
     // ─── 4. For each path, materialize the bridge view ─────────────────────
     const findings: TransitiveBridgeFinding[] = [];
@@ -137,9 +160,7 @@ export function DetectTransitiveBridges(
         if (!spokePK) continue; // skip composite-PK spokes for now
 
         // Resolve the originating hub entry to recover the full keyFields tuple + concept.
-        const hubMatch = Array.from(hubsByKey.values()).find(
-            (h) => h.schema === path.HubSchema && h.table === path.HubTable && h.keyFields[0] === path.HubKeyField,
-        );
+        const hubMatch = hubsByLookupKey.get(`${path.HubSchema}.${path.HubTable}.${path.HubKeyField}`);
         if (!hubMatch) continue;
 
         const view = GenerateBridgeView(path, spokePK, { provider: o.provider });
