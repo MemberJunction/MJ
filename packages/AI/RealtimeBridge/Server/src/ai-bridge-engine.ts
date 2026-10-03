@@ -41,8 +41,16 @@ import {
     BridgeChannelToolResult,
     BridgeNativeSdkRegistry,
     BridgeNativeSdkBinding,
+    BuildAddressedMatcher,
+    ModelSideAddressedMatcher,
+    ParseTurnTakingToolCall,
+    IsTurnTakingTool,
+    TURN_TAKING_TOOL_DEFINITIONS,
+    ResolvedTurnAddressingMode,
+    TurnAddressingMode,
 } from '@memberjunction/ai-bridge-base';
-import { MultiAgentRoomCoordinator } from './multi-agent-room-coordinator';
+import { MultiAgentRoomCoordinator, RoomCoordinatorLimits, RoomFloorState } from './multi-agent-room-coordinator';
+import { FullDuplexTurnGate, HumanSpeechDetector, OutputVerdict } from './full-duplex-turn-gate';
 import { DtmfCoalescer } from './dtmf-coalescer';
 import { AppendTranscriptTurn, BridgeTranscriptTurn, BuildPriorTranscript } from './bridge-prior-transcript';
 
@@ -331,6 +339,22 @@ export interface StartBridgeSessionParams {
     TurnTuning?: Partial<Omit<TurnTakingPolicyConfig, 'Mode' | 'Matcher' | 'Scorer'>>;
 
     /**
+     * How this session decides it was addressed. `'Auto'` (the default when set) uses the MODEL's own
+     * judgement when its session reports full-duplex capability and falls back to name matching otherwise;
+     * `'ModelSide'` / `'Regex'` force one. When omitted the engine keeps the legacy behaviour and uses
+     * {@link StartBridgeSessionParams.TurnMatcher} as given. An explicit `TurnMatcher` is still honoured as
+     * the `Regex`-side matcher (e.g. a 1:1 call's always-addressed matcher).
+     */
+    TurnAddressing?: TurnAddressingMode;
+
+    /**
+     * Whether a full-duplex model's outbound audio runs through the room floor gate in a MULTI-agent room
+     * (the safety net behind the model's own turn-taking). Defaults to `true`; sessions whose model is not
+     * full-duplex are never gated. Set `false` to let a full-duplex agent speak freely (debugging).
+     */
+    FullDuplexTurnGate?: boolean;
+
+    /**
      * **Multi-agent meeting mode.** When `true`, the realtime model's blind auto-response was disabled at
      * session start (the agent layer set `disableAutoResponse` on the model session), so the BRIDGE is the
      * sole speech trigger: on a `Speak` turn decision the engine issues exactly one `RequestSpokenUpdate`.
@@ -441,6 +465,47 @@ export interface BridgeRealtimeSessionRecoveryRequest {
 export type BridgeRealtimeSessionRecovery = (request: BridgeRealtimeSessionRecoveryRequest) => Promise<IRealtimeSession>;
 
 /**
+ * Executes the turn-taking host tools for one session. Structurally the agents layer's
+ * `BridgeLocalToolHandler` (declared here so the engine takes no dependency on `@memberjunction/ai-agents`):
+ * the layer that owns the model session passes it to its runtime's `SetLocalToolHandler`.
+ */
+export interface BridgeTurnTakingToolHandler {
+    /** Whether this handler owns `toolName` (`i_am_addressed`, `yield_turn`). */
+    Handles(toolName: string): boolean;
+    /** Runs one call; the returned JSON string is handed back to the model. Never throws. */
+    Execute(call: { ToolName: string; Arguments: string }): Promise<string>;
+}
+
+/** One agent seated in a room, as the turn-taking observability surface describes it. */
+export interface RoomTurnAgentInfo {
+    /** The agent's `MJ: AI Agent Sessions` id (matches the coordinator's ids in {@link RoomFloorState}). */
+    AgentSessionID: string;
+    /** The bridge row id (what stops/removes the agent). */
+    SessionBridgeID: string;
+    /** The names the agent answers to; the first is its display name. */
+    Names: string[];
+    /** The configured turn-taking mode. */
+    TurnMode: BridgeTurnMode;
+    /** How it decides it was addressed (after capability resolution). */
+    Addressing: ResolvedTurnAddressingMode;
+    /** Whether its model is full-duplex (its outbound audio runs through the floor gate). */
+    FullDuplex: boolean;
+}
+
+/** What {@link AIBridgeEngine} builds for a session's turn-taking at connect. */
+interface BuiltTurnPolicy {
+    Policy: TurnTakingPolicy;
+    Mode: ResolvedTurnAddressingMode;
+    ModelSide?: ModelSideAddressedMatcher;
+}
+
+/** A room's live turn-taking state: the coordinator's floor state plus who is seated. See {@link AIBridgeEngine.GetRoomTurnSnapshot}. */
+export interface RoomTurnSnapshot extends RoomFloorState {
+    /** The agents seated in the room. */
+    Agents: RoomTurnAgentInfo[];
+}
+
+/**
  * The live, in-memory handle for one running bridged session held by the engine. Carries the driver,
  * the wired realtime session, the per-session turn-taking policy, and the persisted bridge row id so
  * teardown can reach all of them.
@@ -463,6 +528,25 @@ export interface ActiveBridgeSession {
 
     /** The per-session turn-taking policy gating generation. */
     TurnPolicy: TurnTakingPolicy;
+
+    /** How this session decides it was addressed (the mode actually in effect after capability resolution). */
+    AddressingMode?: ResolvedTurnAddressingMode;
+
+    /** The model-side addressing latch the model's `i_am_addressed` signal feeds — present only in `ModelSide` mode. */
+    ModelSideMatcher?: ModelSideAddressedMatcher;
+
+    /** The floor gate over this full-duplex model's outbound audio (see {@link FullDuplexTurnGate}); absent for turn-based models. */
+    TurnGate?: FullDuplexTurnGate;
+
+    /** Detects human speech in inbound room audio so the room's agents yield to it; present with {@link ActiveBridgeSession.TurnGate}. */
+    HumanSpeech?: HumanSpeechDetector;
+
+    /**
+     * Executes the turn-taking host tools (`i_am_addressed`, `yield_turn`) for this session. Present for
+     * full-duplex / model-side sessions in a room; the layer that owns the model session binds it as its
+     * local tool handler (the tool DEFINITIONS are {@link TURN_TAKING_TOOL_DEFINITIONS}).
+     */
+    TurnTakingToolHandler?: BridgeTurnTakingToolHandler;
 
     /**
      * Whether the model's blind auto-response is OFF for this session (multi-agent meeting). When `true`
@@ -964,14 +1048,17 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             bridgeRow.ConnectedAt = new Date();
             await this.transitionStatus(bridgeRow, 'Connected', params);
 
-            const turnPolicy = this.buildTurnPolicy(params);
+            const fullDuplex = params.RealtimeSession.Capabilities?.FullDuplex === true;
+            const turn = this.buildTurnPolicy(params, fullDuplex);
             const active: ActiveBridgeSession = {
                 SessionBridgeID: bridgeRow.ID,
                 AgentSessionID: params.AgentSessionID,
                 AgentID: params.AgentID,
                 Bridge: driver,
                 RealtimeSession: params.RealtimeSession,
-                TurnPolicy: turnPolicy,
+                TurnPolicy: turn.Policy,
+                AddressingMode: turn.Mode,
+                ModelSideMatcher: turn.ModelSide,
                 DisableAutoResponse: params.DisableAutoResponse === true,
                 HasSeenHuman: false,
                 RoomKey: result.ExternalConnectionId,
@@ -1012,7 +1099,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             this.wireParticipantTracking(active);
             this.wireTelephonyLifecycle(active);
             this.wireTurnTaking(active);
+            this.wireFullDuplexTurnGate(active, params);
             await this.wireChannelPlane(active);
+            this.wireTurnTakingTools(active);
 
             this.activeSessions.set(bridgeRow.ID.toLowerCase(), active);
             LogStatus(`[AIBridgeEngine] Bridge session ${bridgeRow.ID} connected via ${params.Provider.Name}`);
@@ -1115,6 +1204,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 active.LastInboundSpeaker = frame.SpeakerLabel;
             }
             const chunk = this.frameToArrayBuffer(frame);
+            this.observeInboundHumanSpeech(active, frame, chunk);
             if (chunk && !active.ModelRecovering) {
                 if (!this.diagInbound.has(active.SessionBridgeID)) {
                     this.diagInbound.add(active.SessionBridgeID);
@@ -1156,6 +1246,13 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 this.diagOutbound.add(active.SessionBridgeID);
                 LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`, verboseOnly: true });
             }
+            const verdict = this.gateOutput(active, chunk.byteLength);
+            if (verdict !== 'Forward') {
+                if (verdict === 'Cut') {
+                    Bridge.FlushOutboundMedia(); // the burst was just refused — drop audio already queued for it too
+                }
+                return;
+            }
             const track: BridgeMediaTrackKind = 'audio-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
@@ -1182,6 +1279,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // A human cut in → any moderator decision staged for the prior turn is now stale. Drop the queued
         // speakers (the human's new turn will drive a fresh decision); also free the floor this agent held.
         if (active.RoomKey) {
+            if (this.isHumanSpeaker(active.LastInboundSpeaker)) {
+                this.preemptForHuman(active.RoomKey); // a person cut in — every agent yields, not just this one
+            }
             this.clearRoomModeratorState(active.RoomKey, false);
             if (active.HoldsFloor) {
                 this.releaseRoomFloor(active);
@@ -1564,6 +1664,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             this.recordRoomTurn(active, t);
 
             if (t.Role === 'assistant') {
+                // Full-duplex gate: settle the turn first so a short acknowledgement is reclassified as a backchannel.
+                active.TurnGate?.EndTurn({ Text: t.Text });
                 // The agent finished its own turn → release the room floor so the next can speak. Then advance:
                 // run the moderator for "who responds to this agent?" (the agent↔agent + pre-stage path) — this
                 // executes while the agent's audio is still playing out, hiding the moderator latency.
@@ -1607,6 +1709,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             // empty-room auto-leave + reset the consecutive-agent-only counter.
             for (const peer of peers) {
                 this.noteHumanPresence(peer);
+            }
+            if (source.RoomKey) {
+                this.roomCoordinator.NoteHumanTurn(source.RoomKey); // a human spoke: agents may take turns again
             }
         }
         if (source.RoomKey) {
@@ -1929,20 +2034,252 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
     }
 
+    // ──────────────────────────────────────────────────────────────────────────────
+    // Full-duplex turn-taking — the room floor as a safety net behind the model's own judgement.
+    // ──────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Gives a FULL-DUPLEX model the floor gate + human-speech detector (see {@link FullDuplexTurnGate}).
+     * Turn-based models are never gated: the engine triggers their speech, so it already decides when.
+     *
+     * @param active The freshly connected session.
+     * @param params The start parameters (`FullDuplexTurnGate: false` opts out).
+     */
+    private wireFullDuplexTurnGate(active: ActiveBridgeSession, params: StartBridgeSessionParams): void {
+        if (!active.RoomKey || params.FullDuplexTurnGate === false) {
+            return;
+        }
+        if (active.RealtimeSession.Capabilities?.FullDuplex !== true) {
+            return;
+        }
+        active.TurnGate = new FullDuplexTurnGate({
+            Coordinator: this.roomCoordinator,
+            RoomId: active.RoomKey,
+            AgentSessionId: active.AgentSessionID,
+            SampleRateHz: active.RealtimeSession.OutputSampleRate,
+        });
+        active.HumanSpeech = new HumanSpeechDetector();
+    }
+
+    /**
+     * Runs one chunk of a full-duplex model's outbound audio through its floor gate. Sessions without a gate,
+     * and rooms with a single agent, are never gated.
+     *
+     * @param active The speaking session.
+     * @param byteLength The chunk size (PCM16).
+     * @returns Whether to forward the chunk, drop it, or cut the burst (drop + flush queued audio).
+     */
+    private gateOutput(active: ActiveBridgeSession, byteLength: number): OutputVerdict {
+        const gate = active.TurnGate;
+        if (!gate || !active.RoomKey || !this.roomCoordinator.IsMultiAgentRoom(active.RoomKey)) {
+            return 'Forward';
+        }
+        const result = gate.OnOutputAudio(byteLength);
+        if (result.TookFloor) {
+            this.armFloorHold(active);
+        }
+        if (result.Verdict === 'Cut') {
+            LogStatusEx({ message: `[AIBridgeEngine][diag] full-duplex gate CUT bridge ${active.SessionBridgeID} — it spoke without the floor`, verboseOnly: true });
+        }
+        return result.Verdict;
+    }
+
+    /** Whether an inbound speaker label belongs to a human (diarized, and not a peer `agent-…` bot). */
+    private isHumanSpeaker(label: string | undefined): boolean {
+        return label !== undefined && label.length > 0 && !label.toLowerCase().startsWith('agent-');
+    }
+
+    /**
+     * Watches inbound room audio for a human speaking and, on the first activity, makes every agent yield.
+     * Only a DIARIZED human counts — without a speaker label the audio could be a peer agent, and a peer must
+     * never preempt another agent's turn.
+     */
+    private observeInboundHumanSpeech(active: ActiveBridgeSession, frame: BridgeMediaFrame, chunk: ArrayBuffer | undefined): void {
+        const detector = active.HumanSpeech;
+        if (!detector || !chunk || !active.RoomKey || frame.Track !== 'audio-in' || !this.isHumanSpeaker(frame.SpeakerLabel)) {
+            return;
+        }
+        if (this.roomCoordinator.IsMultiAgentRoom(active.RoomKey) && detector.ShouldReportSpeech(chunk)) {
+            this.preemptForHuman(active.RoomKey);
+        }
+    }
+
+    /**
+     * A human started talking: tell the coordinator (humans win), and for the agent that was holding the floor
+     * flush its queued audio, mute the rest of its burst, free its floor, and fire the barge-in hook so the host
+     * drops now-stale narration. Delegated work keeps running — the same policy as a direct barge-in.
+     *
+     * @param roomKey The room the human spoke in.
+     */
+    private preemptForHuman(roomKey: string): void {
+        const { PreemptedAgentSessionId } = this.roomCoordinator.NoteHumanSpeech(roomKey);
+        if (!PreemptedAgentSessionId) {
+            return;
+        }
+        const target = this.roomAgents(roomKey).find((a) => a.AgentSessionID.toLowerCase() === PreemptedAgentSessionId.toLowerCase());
+        if (!target) {
+            return;
+        }
+        LogStatusEx({ message: `[AIBridgeEngine][diag] human speech preempted bridge ${target.SessionBridgeID} — flushing its output`, verboseOnly: true });
+        target.TurnGate?.Cut();
+        target.Bridge.FlushOutboundMedia();
+        this.clearRoomModeratorState(roomKey, false);
+        this.releaseRoomFloor(target, /*skipDrain*/ true);
+        this.notifyBargeIn(target);
+    }
+
+    /**
+     * Binds the turn-taking host tools (`i_am_addressed`, `yield_turn`) to a session that needs them: a
+     * full-duplex model in a room, or any model using model-side addressing. The tool DEFINITIONS are
+     * {@link TURN_TAKING_TOOL_DEFINITIONS}; the layer that owns the model session registers them at connect and
+     * installs {@link ActiveBridgeSession.TurnTakingToolHandler} as its local tool handler.
+     *
+     * @param active The live bridged session.
+     */
+    private wireTurnTakingTools(active: ActiveBridgeSession): void {
+        if (!active.RoomKey || !(active.AddressingMode === 'ModelSide' || active.TurnGate)) {
+            return;
+        }
+        active.TurnTakingToolHandler = {
+            Handles: (toolName: string) => IsTurnTakingTool(toolName),
+            Execute: async (call) => this.executeTurnTakingTool(active, call.ToolName, call.Arguments),
+        };
+    }
+
+    /** Runs one turn-taking tool call and returns the JSON the model is handed back. Never throws. */
+    private executeTurnTakingTool(active: ActiveBridgeSession, toolName: string, argsJson: string): string {
+        try {
+            const parsed = ParseTurnTakingToolCall(toolName, argsJson);
+            if (!parsed) {
+                return JSON.stringify({ ok: false, error: `Unknown turn-taking tool '${toolName}'.` });
+            }
+            switch (parsed.Kind) {
+                case 'Addressed':
+                    return this.onModelAddressed(active);
+                case 'Yield':
+                    return this.onModelYield(active, parsed.To);
+                default:
+                    return JSON.stringify({ ok: false, error: parsed.Reason });
+            }
+        } catch (err) {
+            LogError(`[AIBridgeEngine] turn-taking tool ${toolName} failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+            return JSON.stringify({ ok: false, error: 'The turn-taking action failed.' });
+        }
+    }
+
+    /**
+     * The model said it is addressed: latch the model-side matcher and — in a multi-agent room — reserve the
+     * floor NOW, before any audio, so a peer cannot start in the gap. A denial tells the model to stay silent,
+     * which is how a cooperative model learns it lost the race.
+     */
+    private onModelAddressed(active: ActiveBridgeSession): string {
+        active.ModelSideMatcher?.NoteModelAddressed();
+        if (!active.RoomKey || !this.roomCoordinator.IsMultiAgentRoom(active.RoomKey)) {
+            return JSON.stringify({ ok: true, floor: 'granted' });
+        }
+        const floor = this.roomCoordinator.TakeFloor(active.RoomKey, active.AgentSessionID);
+        if (!floor.Granted) {
+            return JSON.stringify({ ok: false, floor: 'denied', reason: floor.Reason, instruction: 'Do not speak now; stay silent.' });
+        }
+        this.armFloorHold(active);
+        return JSON.stringify({ ok: true, floor: 'granted' });
+    }
+
+    /**
+     * The model hands the floor over, optionally to a named agent: release it, reserve it for the target, and
+     * nudge the target to speak. A name that matches nobody degrades to a plain release.
+     */
+    private onModelYield(active: ActiveBridgeSession, toName: string | undefined): string {
+        if (!active.RoomKey) {
+            return JSON.stringify({ ok: true, floor: 'released' });
+        }
+        const target = toName ? this.findRoomAgentByName(active.RoomKey, toName, active) : undefined;
+        const result = this.roomCoordinator.YieldFloor(active.RoomKey, active.AgentSessionID, target?.AgentSessionID);
+        active.TurnGate?.Reset();
+        this.releaseRoomFloor(active, /*skipDrain*/ true);
+        if (target && result.HandoffToAgentSessionId) {
+            this.handOffFloor(active, target);
+        }
+        const note = toName && !target ? `No agent named '${toName}' is in the room; the floor went back to the room.` : undefined;
+        const handedTo = result.HandoffToAgentSessionId ? target?.AgentNames[0] ?? null : null;
+        return JSON.stringify({ ok: true, floor: 'released', handedTo, reason: result.Reason, note });
+    }
+
+    /** Finds another agent in the room by any of its names (case-insensitive), excluding the asker. */
+    private findRoomAgentByName(roomKey: string, name: string, asker: ActiveBridgeSession): ActiveBridgeSession | undefined {
+        const wanted = name.trim().toLowerCase();
+        return this.roomAgents(roomKey).find((a) => a !== asker && a.AgentNames.some((n) => n.trim().toLowerCase() === wanted));
+    }
+
+    /** Tells a hand-off target it was given the floor and triggers it to speak (when its driver can be triggered). */
+    private handOffFloor(from: ActiveBridgeSession, target: ActiveBridgeSession): void {
+        const fromName = from.AgentNames[0] ?? 'Another agent';
+        target.RealtimeSession.SendContextNote?.(`[turn] ${fromName} handed the floor to you. Continue the conversation now.`);
+        if (typeof target.RealtimeSession.RequestSpokenUpdate === 'function') {
+            this.triggerMeetingSpeak(target);
+        }
+    }
+
+    /**
+     * Adjusts the turn-taking limits every room uses (the agent-to-agent loop cap, hand-off TTL, human-speech
+     * hold). Omitted values keep their current setting. Call once at startup to tune.
+     *
+     * @param limits The limits to change.
+     */
+    public ConfigureTurnLimits(limits: RoomCoordinatorLimits): void {
+        this.roomCoordinator.ConfigureLimits(limits);
+    }
+
+    /**
+     * A room's live turn-taking state: who holds the floor, whether a human is speaking, any pending hand-off,
+     * the loop-cap progress, recent floor/backchannel/yield events, and who is seated. Read-only; the test bed
+     * polls it. `null` when the room is unknown (no agent in it).
+     *
+     * @param roomKey The room (external connection id — a LiveKit room's name).
+     * @returns The snapshot, or `null`.
+     */
+    public GetRoomTurnSnapshot(roomKey: string): RoomTurnSnapshot | null {
+        const state = this.roomCoordinator.GetRoomState(roomKey);
+        if (!state) {
+            return null;
+        }
+        const agents: RoomTurnAgentInfo[] = this.roomAgents(roomKey).map((a) => ({
+            AgentSessionID: a.AgentSessionID,
+            SessionBridgeID: a.SessionBridgeID,
+            Names: a.AgentNames,
+            TurnMode: a.TurnPolicy.Mode,
+            Addressing: a.AddressingMode ?? 'Regex',
+            FullDuplex: a.RealtimeSession.Capabilities?.FullDuplex === true,
+        }));
+        return { ...state, Agents: agents };
+    }
+
     /**
      * Builds the per-session {@link TurnTakingPolicy} from the start params.
      *
      * @param params The session parameters.
-     * @returns The configured turn-taking policy.
+     * @param fullDuplex Whether the session's model reports full-duplex capability (enables model-side addressing).
+     * @returns The configured policy plus the addressing mode in effect and the model-side latch, when any.
      */
-    private buildTurnPolicy(params: StartBridgeSessionParams): TurnTakingPolicy {
+    private buildTurnPolicy(params: StartBridgeSessionParams, fullDuplex: boolean): BuiltTurnPolicy {
+        let matcher = params.TurnMatcher;
+        let mode: ResolvedTurnAddressingMode = 'Regex';
+        let modelSide: ModelSideAddressedMatcher | undefined;
+        if (params.TurnAddressing !== undefined) {
+            // The model's own judgement when it is full-duplex (and asked for); otherwise name matching, with
+            // a caller-supplied matcher (e.g. a 1:1 call's always-addressed one) taking precedence as the fallback.
+            const built = BuildAddressedMatcher(params.AgentNames ?? [], params.TurnAddressing, fullDuplex);
+            mode = built.Mode;
+            modelSide = built.ModelSide;
+            matcher = built.Mode === 'ModelSide' ? built.Matcher : (params.TurnMatcher ?? built.Matcher);
+        }
         const config: TurnTakingPolicyConfig = {
             Mode: params.TurnMode ?? 'Passive',
-            Matcher: params.TurnMatcher,
+            Matcher: matcher,
             Scorer: params.TurnScorer,
             ...(params.TurnTuning ?? {}),
         };
-        return new TurnTakingPolicy(config);
+        return { Policy: new TurnTakingPolicy(config), Mode: mode, ModelSide: modelSide };
     }
 
     /**
