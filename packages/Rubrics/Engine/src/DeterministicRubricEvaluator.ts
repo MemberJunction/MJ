@@ -2,6 +2,7 @@ import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRubricEvaluator, type RubricCandidate, type RubricEvaluatorOutput } from './RubricEvaluator.js';
 import type { RubricSubjectContent } from './content.js';
+import type { RubricEvaluatorContext, RubricEvaluatorRun, RubricEvaluatorType } from './evaluatorServices.js';
 
 /**
  * A leaf rule stored at EvaluatorConfig.Deterministic. It reads one path in
@@ -37,6 +38,15 @@ export interface DeterministicRule {
 export class DeterministicRubricEvaluator extends BaseRubricEvaluator {
     public get EvaluatorName(): string {
         return 'Deterministic';
+    }
+
+    public get EvaluatorType(): RubricEvaluatorType {
+        return 'Deterministic';
+    }
+
+    /** Applies the rules. Needs no service. */
+    public async EvaluateRubric(context: RubricEvaluatorContext): Promise<RubricEvaluatorRun> {
+        return this.EvaluateData(context.Version, context.Content);
     }
     /**
      * Scores the subject JSON. Does not call an agent or a model.
