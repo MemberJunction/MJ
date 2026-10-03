@@ -137,7 +137,7 @@ for (const [metafile, role] of [[shell.metafile, 'shell'], [session.metafile, 'c
         }
         const file = relative(outDir, resolve(packageRoot, path));
         const bytes = readFileSync(resolve(packageRoot, path));
-        const kind = role === 'shell' ? 'shell' : /^mj-realtime-widget-session/.test(file) ? 'session' : /interactive-chunk-entry/.test(file) ? 'interactive-component' : 'shared';
+        const kind = role === 'shell' ? 'shell' : /^mj-realtime-widget-session/.test(file) ? 'session' : /interactive-chunk-entry/.test(file) ? 'interactive-component' : /frame-capture-chunk-entry/.test(file) ? 'frame-capture' : 'shared';
         sizes.push({ file, kind, raw: bytes.length, gzip: gzipSync(bytes, { level: 9 }).length, entry: Boolean(info.entryPoint) });
     }
 }

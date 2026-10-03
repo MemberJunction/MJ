@@ -17,8 +17,9 @@
  * @module @memberjunction/ai-agents
  */
 
-import { BaseRealtimeChannelServer, RealtimeToolDefinition } from '@memberjunction/ai';
+import { BaseRealtimeChannelServer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
+import { ClientOnlyChannelServer, LoadClientOnlyChannelServer } from './client-only-channel-server';
 
 /** The stable channel name, matching the `MJ: AI Agent Channels` row. */
 export const INTERACTIVE_COMPONENT_CHANNEL_NAME = 'InteractiveComponent';
@@ -26,27 +27,16 @@ export const INTERACTIVE_COMPONENT_CHANNEL_NAME = 'InteractiveComponent';
 /**
  * Server half of the Interactive Component channel. One instance per realtime session (created by
  * `RealtimeChannelServerHost` from the channel registry; never construct directly).
+ *
+ * A {@link ClientOnlyChannelServer} that pins the channel's name under its own, already-seeded registry key
+ * (`InteractiveComponentChannelServer`), so the existing row keeps resolving. It contributes no server tools and does not
+ * rewrite saves; the client plugin is live-only (`SerializeState()` returns `null`), so nothing is ever persisted.
  */
 @RegisterClass(BaseRealtimeChannelServer, 'InteractiveComponentChannelServer')
-export class InteractiveComponentChannelServer extends BaseRealtimeChannelServer {
-    /** Matches the registry row's `Name`. */
-    public get ChannelName(): string {
+export class InteractiveComponentChannelServer extends ClientOnlyChannelServer {
+    /** Matches the `MJ: AI Agent Channels` row's `Name`. */
+    public override get ChannelName(): string {
         return INTERACTIVE_COMPONENT_CHANNEL_NAME;
-    }
-
-    /** No server-executed tools: every action is derived from the open component's spec and runs in the browser. */
-    public override GetServerToolDefinitions(): RealtimeToolDefinition[] {
-        return [];
-    }
-
-    /**
-     * Live-only channel: which components are open is not state of record, so a landed save is not persisted and a
-     * resumed session starts with nothing open.
-     *
-     * @returns `null`: never persist.
-     */
-    public override async OnChannelStateSave(): Promise<string | null> {
-        return null;
     }
 }
 
@@ -55,5 +45,5 @@ export class InteractiveComponentChannelServer extends BaseRealtimeChannelServer
  * static code path in the server host so the registration always executes.
  */
 export function LoadInteractiveComponentChannelServer(): void {
-    // no-op: the import + call create a static reference bundlers cannot eliminate
+    LoadClientOnlyChannelServer();
 }

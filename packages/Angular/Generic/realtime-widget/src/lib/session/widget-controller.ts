@@ -36,7 +36,7 @@ import { WidgetKeyError, type WidgetGuestSession } from '../auth/widget-key-clie
 import type { WidgetPageClose } from '../lifecycle/widget-page-close';
 import type { WidgetResumeStore } from '../resume/widget-resume-store';
 import { PerceptionBridge } from './perception-bridge';
-import { ApplyFrameCapturePreference } from './frame-capture-hook';
+import { FrameCaptureHook } from './frame-capture-hook';
 
 /** A channel class the page registers (`registerChannel`): constructible with no arguments. */
 export type WidgetChannelClass = new () => BaseRealtimeChannelClient;
@@ -178,6 +178,7 @@ export class WidgetController {
   private sawOwnState = false;
   private connectionSub: Subscription | null = null;
   private readonly perception: PerceptionBridge;
+  private readonly frameCapture = new FrameCaptureHook();
 
   constructor(private readonly deps: WidgetControllerDeps, initialConfig: WidgetConfig) {
     this.config = initialConfig;
@@ -235,7 +236,7 @@ export class WidgetController {
   /** Pushes the page's `perception` and `frame-capture` into the runtime. Cheap and idempotent. */
   private applyPageSettings(): void {
     this.perception.Apply(this.config.perception);
-    ApplyFrameCapturePreference(this.config.frameCapture);
+    this.frameCapture.Apply(this.config.frameCapture);
   }
 
   /**
@@ -334,6 +335,7 @@ export class WidgetController {
     this.connectionSub?.unsubscribe();
     this.subs.unsubscribe();
     this.perception.Dispose();
+    this.frameCapture.Dispose();
     for (const sub of this.channelSubs.values()) {
       sub.unsubscribe();
     }
@@ -532,6 +534,8 @@ export class WidgetController {
     if (this.deps.loadChannelClasses) {
       runtime.ChannelClassLoader = this.deps.loadChannelClasses;
     }
+    // The rasterizer must be registered before the mint: whether a channel can source video is decided there.
+    await this.frameCapture.Ready();
     this.perception.Start();
     this.wireConnectionState();
     const lastSessionId = this.store?.Read()?.lastSessionId ?? null;

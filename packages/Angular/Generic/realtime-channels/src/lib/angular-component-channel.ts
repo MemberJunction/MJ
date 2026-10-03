@@ -46,6 +46,21 @@
  * but success, so they are applied when the surface binds. (A channel with no surface at all, a pure wire, does not need this
  * class.)
  *
+ * ## A verb that never answers
+ *
+ * Verbs run one at a time, so one that never settles would stall every later call. Each verb therefore has a bounded execution
+ * time ({@link VerbTimeoutMs}, 15 s). On timeout the call fails with `'verb_timeout'` and a message the agent can act on ("try
+ * again or ask the user"), the queue is released, and the timeout is logged once with the channel and verb. The adapter cannot
+ * cancel the promise your {@link ApplySurfaceVerb} returned, so what happens next is deliberately defined:
+ *
+ * - A **late result is never delivered**: the agent was already told the verb failed, and it is not told otherwise.
+ * - A late **failure** is logged and dropped.
+ * - A late **success** means the component DID change after the agent was told it had not. Nothing is rolled back (the
+ *   component's own rules decide whether a retry is accepted, which is why they must live in the component), but the change is
+ *   recorded like any other so the next perception note shows the model the real state.
+ * - The next queued verb may run while the late one is still pending, so a verb should not assume exclusive access to the
+ *   component for longer than it takes to settle.
+ *
  * @module @memberjunction/ng-realtime-channels
  */
 
@@ -78,6 +93,12 @@ export interface ChannelSurfaceEvent {
 
 /** How long a verb waits for the surface to bind before failing, in ms. */
 const SURFACE_BIND_TIMEOUT_MS = 5000;
+
+/** How long a verb may run before the call fails and the queue is released, in ms. */
+const VERB_TIMEOUT_MS = 15000;
+
+/** What a verb run produced: its result, or that it did not answer in time. */
+type VerbOutcome = { TimedOut: false; Result: RealtimeChannelVerbResult } | { TimedOut: true };
 
 /** A failure result the dispatcher turns into a message the model can act on. */
 function failure(code: string, error: string, details?: string[]): RealtimeChannelVerbResult {
@@ -173,6 +194,14 @@ export abstract class AngularComponentChannel<TComponent extends object> extends
 
     /** How long a verb waits for the surface to bind before failing with `'surface_unavailable'`, in ms. Override to change it. */
     protected SurfaceBindTimeoutMs: number = SURFACE_BIND_TIMEOUT_MS;
+
+    /**
+     * How long {@link ApplySurfaceVerb} may run before the call fails with `'verb_timeout'` and the queue is released, in ms
+     * (15 s by default; the surface bind wait is separate, see {@link SurfaceBindTimeoutMs}). Override it for a component whose
+     * verbs are legitimately slow; a value that is not a positive number turns the limit off, which is only safe for a verb that
+     * is guaranteed to settle. See the file comment for what happens to a verb that settles after the timeout.
+     */
+    protected VerbTimeoutMs: number = VERB_TIMEOUT_MS;
 
     // ── Identity, derived from the descriptor ──────────────────────────────────
 
@@ -408,7 +437,14 @@ export abstract class AngularComponentChannel<TComponent extends object> extends
     private async applyOnSurface(component: TComponent, verb: string, args: JSONObject, actor: RealtimeChannelActor): Promise<RealtimeChannelVerbResult> {
         this.applyingActor = actor;
         try {
-            const result = await this.ApplySurfaceVerb(component, verb, args, actor);
+            const outcome = await this.runWithTimeout(component, verb, args, actor);
+            if (outcome.TimedOut) {
+                return failure(
+                    'verb_timeout',
+                    `The ${this.Descriptor.DisplayName} didn't respond to "${verb}" within ${Math.max(1, Math.round(this.VerbTimeoutMs / 1000))}s; try again or ask the user.`
+                );
+            }
+            const result = outcome.Result;
             if (result.Success) {
                 this.RecordChange({ Author: actor });
                 if (actor === 'agent') {
@@ -421,6 +457,62 @@ export abstract class AngularComponentChannel<TComponent extends object> extends
             return failure('verb_failed', `${verb} failed: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             this.applyingActor = null;
+        }
+    }
+
+    /**
+     * Runs {@link ApplySurfaceVerb} with a bounded execution time. Settles with the verb's result, with `TimedOut` when it did
+     * not answer in time, or rejects with what it threw. Once it has timed out, whatever it later does is handled by
+     * {@link onLateVerbSettle} and never reaches the caller: the promise is already settled, so there is no second result.
+     */
+    private runWithTimeout(component: TComponent, verb: string, args: JSONObject, actor: RealtimeChannelActor): Promise<VerbOutcome> {
+        const call = Promise.resolve().then(() => this.ApplySurfaceVerb(component, verb, args, actor));
+        return new Promise<VerbOutcome>((resolve, reject) => {
+            let timedOut = false;
+            const limited = Number.isFinite(this.VerbTimeoutMs) && this.VerbTimeoutMs > 0;
+            const timer = limited
+                ? setTimeout(() => {
+                      timedOut = true;
+                      LogError(
+                          `[RealtimeChannel:${this.ChannelName}] "${verb}" did not respond within ${this.VerbTimeoutMs} ms. The agent was told it failed and the queue was released; ` +
+                              `if it completes later its effects are not rolled back.`
+                      );
+                      resolve({ TimedOut: true });
+                  }, this.VerbTimeoutMs)
+                : null;
+            call.then(
+                (result) => {
+                    clearTimeout(timer ?? undefined);
+                    if (timedOut) {
+                        this.onLateVerbSettle(component, verb, actor, result, null);
+                    } else {
+                        resolve({ TimedOut: false, Result: result });
+                    }
+                },
+                (error: unknown) => {
+                    clearTimeout(timer ?? undefined);
+                    if (timedOut) {
+                        this.onLateVerbSettle(component, verb, actor, null, error);
+                    } else {
+                        reject(error);
+                    }
+                }
+            );
+        });
+    }
+
+    /**
+     * A verb settled AFTER it timed out. The agent already has its answer (failure), so the late result is never delivered. A
+     * late failure is logged. A late success means the component changed after the agent was told it had not: it is recorded as
+     * a change (when the same component is still on screen) so the next perception note shows the model the real state.
+     */
+    private onLateVerbSettle(component: TComponent, verb: string, actor: RealtimeChannelActor, result: RealtimeChannelVerbResult | null, error: unknown): void {
+        if (error !== null && error !== undefined) {
+            LogError(`[RealtimeChannel:${this.ChannelName}] "${verb}" failed after it had timed out: ${error instanceof Error ? error.message : String(error)}`);
+            return;
+        }
+        if (result?.Success && this.surface === component) {
+            this.RecordChange({ Author: actor });
         }
     }
 

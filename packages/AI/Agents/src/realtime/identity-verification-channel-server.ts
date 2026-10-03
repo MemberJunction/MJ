@@ -26,37 +26,28 @@
  * @author MemberJunction.com
  */
 
-import { BaseRealtimeChannelServer, RealtimeToolDefinition } from '@memberjunction/ai';
+import { BaseRealtimeChannelServer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
+import { ClientOnlyChannelServer, LoadClientOnlyChannelServer } from './client-only-channel-server';
 
 /** The stable channel name, matching the seeded `MJ: AI Agent Channels` row. */
 export const IDENTITY_VERIFICATION_CHANNEL_NAME = 'IdentityVerification';
 
 /**
  * Server half of the Identity Verification channel. One instance per realtime session (created by
- * `RealtimeChannelServerHost` from the channel registry — never construct directly).
+ * `RealtimeChannelServerHost` from the channel registry; never construct directly).
+ *
+ * A {@link ClientOnlyChannelServer} that pins the channel's name under its own, already-seeded registry key
+ * (`IdentityVerificationChannelServer`), so the existing row keeps resolving. It contributes no server tools and does not
+ * rewrite saves. The channel's state is a name and an email in a form: the client plugin has no state of record (it never
+ * requests a save), so no email address reaches the channel row. A server plugin cannot refuse a save, so that guarantee
+ * rests on the client plugin continuing not to request one.
  */
 @RegisterClass(BaseRealtimeChannelServer, 'IdentityVerificationChannelServer')
-export class IdentityVerificationChannelServer extends BaseRealtimeChannelServer {
+export class IdentityVerificationChannelServer extends ClientOnlyChannelServer {
     /** Matches the seeded `MJ: AI Agent Channels` row's `Name`. */
-    public get ChannelName(): string {
+    public override get ChannelName(): string {
         return IDENTITY_VERIFICATION_CHANNEL_NAME;
-    }
-
-    /** No server-executed tools: every verb runs in the browser, and the verification operations are the boundary. */
-    public override GetServerToolDefinitions(): RealtimeToolDefinition[] {
-        return [];
-    }
-
-    /**
-     * Persists nothing. The channel's state is a name and an email in a form; the session's verification
-     * state of record is stored server-side by the verification service. Returning `null` also means a
-     * session resume never rehydrates a half-filled form onto a new session.
-     *
-     * @returns `null` — never persist.
-     */
-    public override async OnChannelStateSave(): Promise<string | null> {
-        return null;
     }
 }
 
@@ -65,5 +56,5 @@ export class IdentityVerificationChannelServer extends BaseRealtimeChannelServer
  * Called from a static code path in the server host so the registration always executes.
  */
 export function LoadIdentityVerificationChannelServer(): void {
-    // no-op — the import + call create a static reference bundlers cannot eliminate
+    LoadClientOnlyChannelServer();
 }

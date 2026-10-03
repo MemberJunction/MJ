@@ -152,5 +152,16 @@ report.steps.interactive = {
 };
 report.steps.interactive.interactiveChunkLoaded = report.steps.interactive.filesLoaded.some((f) => f.includes('interactive-chunk-entry'));
 
+// ── Step 4: a call whose page set frame-capture: the rasterizer chunk loads, before the mint ───────
+const mark4 = loadedCount();
+widget.removeAttribute('channels');
+widget.setAttribute('frame-capture', '');
+await widget.end();
+await widget.start();
+await wait(500);
+report.steps.frameCapture = { phase: widget.getAttribute('data-phase'), filesLoaded: loadedSince(mark4) };
+report.steps.frameCapture.rasterizerChunkLoaded = report.steps.frameCapture.filesLoaded.some((f) => f.includes('frame-capture-chunk-entry'));
+report.steps.start.rasterizerChunkLoaded = report.steps.start.filesLoaded.some((f) => f.includes('frame-capture-chunk-entry'));
+
 console.log(JSON.stringify(report));
 process.exit(0);

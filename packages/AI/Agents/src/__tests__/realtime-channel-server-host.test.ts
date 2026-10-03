@@ -36,6 +36,7 @@ import { BaseRealtimeChannelServer, RealtimeChannelServerContext, RealtimeChanne
 import { RegisterClass } from '@memberjunction/global';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { RealtimeChannelServerHost } from '../realtime/realtime-channel-server-host';
+import { ClientOnlyChannelServer, CLIENT_ONLY_CHANNEL_SERVER_KEY } from '../realtime/client-only-channel-server';
 
 // ---------------------------------------------------------------------------------------------
 // Test plugins (module-scope registration — the ClassFactory registry is append-only/global)
@@ -305,6 +306,34 @@ describe('RealtimeChannelServerHost — resolution from the channel registry', (
 // ---------------------------------------------------------------------------------------------
 // Lifecycle hook order
 // ---------------------------------------------------------------------------------------------
+
+describe('RealtimeChannelServerHost — the generic client-only server plugin', () => {
+    it('serves any number of channels from one registered class, each bound to its own registry row name', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        setRegistryRows([
+            { ID: 'ch-f', Name: 'FormsChannel', ServerPluginClass: CLIENT_ONLY_CHANNEL_SERVER_KEY },
+            { ID: 'ch-g', Name: 'GameChannel', ServerPluginClass: CLIENT_ONLY_CHANNEL_SERVER_KEY },
+        ]);
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+
+        const forms = host.GetSessionPlugin('session-1', 'FormsChannel');
+        const game = host.GetSessionPlugin('session-1', 'GameChannel');
+        expect(forms).toBeInstanceOf(ClientOnlyChannelServer);
+        expect(game).toBeInstanceOf(ClientOnlyChannelServer);
+        expect(forms).not.toBe(game);
+        expect(forms?.ChannelName).toBe('FormsChannel');
+        expect(game?.ChannelName).toBe('GameChannel');
+        // Binding the row name means the host's plugin/registry name check has nothing to report.
+        expect(error.mock.calls.some((c) => String(c[0]).includes('reports ChannelName'))).toBe(false);
+        error.mockRestore();
+    });
+
+    it('keeps a state save exactly as the client sent it', async () => {
+        setRegistryRows([{ ID: 'ch-f', Name: 'FormsChannel', ServerPluginClass: CLIENT_ONLY_CHANNEL_SERVER_KEY }]);
+        await host.OnSessionStarted(ctx(), USER, PROVIDER);
+        expect(await host.OnChannelStateSave('session-1', 'FormsChannel', '{"a":1}')).toBe('{"a":1}');
+    });
+});
 
 describe('RealtimeChannelServerHost — lifecycle hook invocation order', () => {
     it('brackets session start as Initialize(ctx) → OnSessionStarted, with the session context bound', async () => {

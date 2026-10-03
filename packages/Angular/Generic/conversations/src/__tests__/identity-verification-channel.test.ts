@@ -168,7 +168,8 @@ describe('IdentityVerificationModel — fill and confirm', () => {
 
 describe('IdentityVerificationModel — submit and resend', () => {
   it('refuses to send until both details exist and the USER has confirmed them', async () => {
-    const { m, service } = model();
+    const service = new FakeService();
+    const { m } = model(service);
     expect(await m.Submit()).toMatchObject({ Success: false, ErrorCode: 'verb_failed' });
     m.Fill({ field: 'name', value: 'Ada' }, 'agent');
     m.Fill({ field: 'email', value: 'ada@example.com' }, 'agent');

@@ -37,6 +37,7 @@ import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { IsRealtimeChannelServerDataAware } from './realtime-channel-server-data-context';
+import { ClientOnlyChannelServer } from './client-only-channel-server';
 
 /** Entity name — kept in sync with the session machinery's `MJ:`-prefix convention. */
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
@@ -445,6 +446,10 @@ export class RealtimeChannelServerHost extends BaseSingleton<RealtimeChannelServ
         if (!plugin) {
             LogError(`[RealtimeChannelServerHost] Failed to instantiate server plugin for channel '${row.Name}' (key '${key}').`);
             return null;
+        }
+        if (plugin instanceof ClientOnlyChannelServer) {
+            // One registered class serves every client-only channel: it takes its name from the row it was resolved for.
+            plugin.BindChannelName(row.Name);
         }
         if (this.channelKey(plugin.ChannelName) !== this.channelKey(row.Name)) {
             LogError(

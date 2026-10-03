@@ -96,12 +96,20 @@ beforeEach(() => {
   spyConsole();
 });
 
+/**
+ * Angular Elements destroys a disconnected element's component on a 10 ms timer, not synchronously.
+ * Waiting past it keeps that destroy inside the test that removed the element; otherwise the last
+ * test's timer fires after jsdom is torn down and Angular's listener cleanup throws.
+ */
+const ELEMENT_DESTROY_SETTLE_MS = 25;
+
 afterEach(async () => {
   for (const el of attached.splice(0)) {
     await el.end();
     el.remove();
   }
   await flush();
+  await new Promise<void>((resolve) => setTimeout(resolve, ELEMENT_DESTROY_SETTLE_MS));
   vi.restoreAllMocks();
 });
 

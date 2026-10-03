@@ -13,7 +13,8 @@ Everything a channel needs to be usable by an agent that has never seen it is in
 | `@memberjunction/ai-core-plus` | The contract types (`RealtimeChannelDescriptor`, verbs, nouns, events), scoping (`ResolveRealtimeChannelScope`), exposure policy (`ResolveChannelExposure`, `IsVerbWithheld`), and the JSON-schema validator. Pure, shared by browser and server. |
 | `@memberjunction/realtime-runtime` | `BaseRealtimeChannelClient` (the class every channel extends), `ChannelActionDispatcher`, the catalog note, the perception coalescer, the visual-perception pump, `RealtimeSessionRuntime`. |
 | `@memberjunction/ng-realtime-channels` | `AngularComponentChannel` (wrap an existing component), and the opt-in DOM rasterizer (`EnableChannelFrameCapture`). Small on purpose: no overlay, no Explorer, no router. |
-| `@memberjunction/ng-conversations` | The call overlay, the built-in channels (Whiteboard, Remote Browser, Media, Interactive Component). |
+| `@memberjunction/ng-conversations` | The call overlay, the built-in channels (Whiteboard, Remote Browser, Media, Interactive Component, Identity Verification). |
+| `@memberjunction/ng-realtime-widget` | `<mj-realtime-widget>`: the call, packaged for any web page (a one-script custom element and an Angular component). See section 10. |
 | `@memberjunction/ng-realtime-channel-examples` | A complete worked channel (tic-tac-toe). Not loaded by default; not a dependency of anything. |
 | `@memberjunction/ai-agents` | The server half of each channel (`BaseRealtimeChannelServer` plugins) and the server's scoping and exposure decisions. |
 
@@ -287,6 +288,7 @@ Every event is recorded as a change: observers get a typed event, and the model 
 
 * **Binding.** The overlay creates the component and the adapter binds to it: subscribes to its events, applies anything that arrived early, and lets go on unbind. A panel that collapses and expands creates a **new** component instance, so durable state belongs to the channel, not the component. The adapter keeps the last state and hands it to `OnSurfaceBound`.
 * **Verbs are serialized.** A second call waits for the first. Order is preserved.
+* **A verb that never answers is bounded.** `VerbTimeoutMs` (15 s, overridable) limits how long `ApplySurfaceVerb` may run. On timeout the call fails with `verb_timeout` and a message the agent can act on ("try again or ask the user"), the queue is released and the timeout is logged once. The adapter cannot cancel your promise, so a late result is never delivered, a late failure is logged, and a late success is recorded as a change so the model's next note shows the real state. Nothing is rolled back: a retry the agent makes after a timeout must be rejected by the component's own rules (an occupied cell, a stale version), which is another reason to keep the rules in the component.
 * **Validation.** Parameters are validated before your code runs; an unknown verb lists the available ones.
 * **Persistence.** `SerializeState()` returns the last state as JSON; `RestoreState()` accepts it back (a non-object is refused).
 * **A failing state reader** is logged and the last state is used. A perception note never breaks a call.
@@ -415,7 +417,7 @@ MJ core ships no DOM rasterizer by default: it is a heavy dependency every embed
 
 ```ts
 import { EnableChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
-EnableChannelFrameCapture();   // Explorer does this in ExplorerAppComponent.ngOnInit
+EnableChannelFrameCapture();   // Explorer does this in ExplorerAppComponent.ngOnInit; <mj-realtime-widget frame-capture> does it for an embed
 ```
 
 This registers a capturer built on `html-to-image` (MIT, the same library Explorer's pin thumbnails use) with a bounded budget: at most 3000 nodes, a 4 second timeout, one capture at a time, and a longest edge of 1024 px; web fonts are skipped. It fails **softly**: a surface it cannot render (no size, too many nodes, tainted, timed out) costs the model one frame and never throws into a call. After three consecutive failures, or at once on a failure that cannot recover (such as a tainted canvas), it turns itself off for the session and logs the single reason, and the agent keeps receiving state. `CreateDomFrameCapturer(options)` builds a capturer with different limits or a different rasterizer; `ChannelFrameCapture.Instance.Register(fn | null)` registers any capturer, or removes it.
@@ -468,24 +470,16 @@ Configuration (`channels.config.InteractiveComponent`): `autoOpenDelegatedCompon
 
 ## 8. Publishing a channel from an Open App
 
-An Open App reaches a host through exactly two things: **migrations** and **npm packages**. A channel therefore ships as client and server plugin packages plus a registry row carried by a migration.
+An Open App reaches a host through exactly two things: **migrations** and **npm packages**. A channel therefore ships as a client plugin package (plus a server plugin only if it needs one) and a registry row carried by a migration.
 
 ### The pieces
 
 1. **The client plugin** (browser): your `BaseRealtimeChannelClient` or `AngularComponentChannel` subclass in the app's client package (`@your-scope/yourapp-ng`), registered with `@RegisterClass(BaseRealtimeChannelClient, 'YourChannel')`, with an exported no-op `LoadYourChannel()` that the package's module or `public-api` calls. The `@memberjunction/*` packages are **peer dependencies**, never regular dependencies (a second copy of the framework registers into a second ClassFactory and nothing resolves).
-2. **The server plugin**: the registry row's `ServerPluginClass` is required (`NOT NULL`), so every channel names one, even a client-only channel. The server half can be a few lines:
+2. **The server plugin.** The registry row's `ServerPluginClass` is required (`NOT NULL`), so every channel names one. A channel that runs entirely in the browser (the common case for an Open App) uses the generic, already-registered **`ClientOnlyChannelServer`** from `@memberjunction/ai-agents` and writes no server code: set `"ServerPluginClass": "ClientOnlyChannelServer"` on the row. It takes its channel name from the row it is resolved for, so one class serves any number of channels. It contributes no server tools and does not interpret or rewrite saves. It does **not** decide scope (that is resolved by the scoping cascade and the row's `IsActive` before any plugin exists) and it cannot stop a save (the host persists whatever the client submits when a plugin returns `null`), so whether state is stored is decided by the client: a channel whose `SerializeState()` returns `null` never saves, while an `AngularComponentChannel` that has state does, and that state lands on the session's channel row as submitted.
 
-   ```ts
-   @RegisterClass(BaseRealtimeChannelServer, 'YourChannelServer')
-   export class YourChannelServer extends BaseRealtimeChannelServer {
-       public get ChannelName(): string { return 'YourChannel'; }
-       public override GetServerToolDefinitions(): RealtimeToolDefinition[] { return []; }
-       public override async OnChannelStateSave(): Promise<string | null> { return null; } // live-only
-   }
-   export function LoadYourChannelServer(): void {}
-   ```
+   Write your own `BaseRealtimeChannelServer` (registered with `@RegisterClass(BaseRealtimeChannelServer, 'YourChannelServer')`, with its own `Load...()` called from the server package's entry point) only when the channel needs server tools, a server-side normalizer for saved state (return a replacement, for example to strip an email address), or session-lifecycle work. `InteractiveComponentChannelServer` and `IdentityVerificationChannelServer` in `@memberjunction/ai-agents` are `ClientOnlyChannelServer` subclasses that pin a name under an existing key, which is only worth doing to keep an already-seeded registry key resolving.
 
-   (`InteractiveComponentChannelServer` in `@memberjunction/ai-agents` is the reference.) It also gets lifecycle hooks and, if the channel has state of record, `OnChannelStateSave`.
+   The MJ server loads `ClientOnlyChannelServer` for you (`LoadClientOnlyChannelServer()` in `@memberjunction/server`); an Open App using it needs no server package for its channel at all.
 3. **The registry row**: an `MJ: AI Agent Channels` record. Author it as declarative JSON under the app's `metadata/ai-agent-channels/` (so `mj sync push` seeds your dev database), with a fixed primary key from `uuidgen`:
 
    ```json
@@ -493,7 +487,7 @@ An Open App reaches a host through exactly two things: **migrations** and **npm 
      "fields": {
        "Name": "YourChannel",
        "Description": "What it is, for an operator reading the registry.",
-       "ServerPluginClass": "YourChannelServer",
+       "ServerPluginClass": "ClientOnlyChannelServer",
        "ClientPluginClass": "YourChannel",
        "TransportType": "PubSub",
        "IsActive": true
@@ -502,19 +496,19 @@ An Open App reaches a host through exactly two things: **migrations** and **npm 
    }
    ```
 
-   `Name` is the channel key and must equal the plugin's `ChannelName` and the descriptor's `Key`. `IsActive: false` is the master kill switch.
+   `Name` is the channel key and must equal the descriptor's `Key` (and the server plugin's `ChannelName`, which `ClientOnlyChannelServer` takes from this very `Name`). `IsActive: false` is the master kill switch.
 
 ### How it reaches a host
 
 * **The row ships in a migration.** `metadata/` is a development-time pointer: `mj app install` applies migrations and installs packages and does **nothing else**, so a `mj sync push` whose result lives only in your database is an unshipped change. The row reaches hosts through the release's `*__Metadata_Sync.sql`, which the build engineer generates from the declarative JSON at release time against a fresh database. A feature PR carries only the JSON, never the seed. Follow your app's release runbook (and [Release Metadata Migrations Guide](RELEASE_METADATA_MIGRATIONS_GUIDE.md)). Do not author PostgreSQL migrations by hand.
-* **The packages are wired in by `mj app install`.** The client package is registered in the host's `dynamicPackages` and the server package in its server dependencies, and the host's class-registration manifest (`mj codegen manifest`) finds the `@RegisterClass` classes by walking the dependency tree. Declare the package in `mj-app.json`, and keep the `Load*()` call reachable from the package's entry point so the registration is not tree-shaken. In a dev workspace, linking makes the packages resolve but not load: registering them in `dynamicPackages` is a separate step (see the app's local-host doc).
+* **The packages are wired in by `mj app install`.** The client package is registered in the host's `dynamicPackages` (and a server package, if you wrote one, in its server dependencies), and the host's class-registration manifest (`mj codegen manifest`) finds the `@RegisterClass` classes by walking the dependency tree. Declare the package in `mj-app.json`, and keep the `Load*()` call reachable from the package's entry point so the registration is not tree-shaken. In a dev workspace, linking makes the packages resolve but not load: registering them in `dynamicPackages` is a separate step (see the app's local-host doc).
 * **Scoping after install.** A channel with `DefaultAvailability: 'opt-in'` is off until an agent or app includes it. Ship the `Include` as app metadata (`Application.AgentSettings.Realtime.Channels.Include`) or document it for the operator.
 
 ### Checklist
 
 - [ ] Descriptor `Key`, plugin `ChannelName` and registry `Name` are identical.
 - [ ] Client plugin registered, with an exported `Load*()` called from the package entry point.
-- [ ] Server plugin registered, with its `Load*()`.
+- [ ] `ServerPluginClass` set: `ClientOnlyChannelServer` for a client-only channel, or your own registered server plugin with its `Load*()`.
 - [ ] `MJ: AI Agent Channels` row authored as JSON with a fixed primary key; carried to hosts by the release seed migration.
 - [ ] `@memberjunction/*` are peer dependencies.
 - [ ] `MaxExposure` and every verb's `ReturnsChannelData` reviewed against what the channel reveals.
@@ -554,5 +548,5 @@ The adapter's own tests (`@memberjunction/ng-realtime-channels`, `src/__tests__/
 ## Reference
 
 * Plan and decisions: [`plans/realtime/channels-v2/README.md`](../plans/realtime/channels-v2/README.md).
-* Package READMEs: `packages/RealtimeRuntime/README.md` (dispatch, scoping, exposure), `packages/AI/CorePlus/README.md` (the contract types), `packages/Angular/Generic/realtime-channels/README.md` (the adapter and the rasterizer), `packages/Angular/Generic/realtime-channel-examples/README.md` (the sample), `packages/Angular/Generic/conversations/src/lib/components/realtime/README.md` (the overlay and the built-in channels).
+* Package READMEs: `packages/Angular/Generic/realtime-widget/README.md` (embedding the call in a page), `packages/RealtimeRuntime/README.md` (dispatch, scoping, exposure), `packages/AI/CorePlus/README.md` (the contract types), `packages/Angular/Generic/realtime-channels/README.md` (the adapter and the rasterizer), `packages/Angular/Generic/realtime-channel-examples/README.md` (the sample), `packages/Angular/Generic/conversations/src/lib/components/realtime/README.md` (the overlay and the built-in channels).
 * The stack the channels sit in: [Real-Time Co-Agents Guide](REALTIME_CO_AGENTS_GUIDE.md); remote browser specifics: [Remote Browser Guide](REMOTE_BROWSER_GUIDE.md).

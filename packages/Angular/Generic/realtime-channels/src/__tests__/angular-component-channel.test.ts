@@ -546,6 +546,140 @@ describe('AngularComponentChannel: showing the model a picture', () => {
     });
 });
 
+describe('AngularComponentChannel: a verb that never answers', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    /** A channel whose `add` verb hangs until the test settles it. */
+    class HangingChannel extends CounterChannel {
+        public Pending: Array<{ resolve: (r: RealtimeChannelVerbResult) => void; reject: (e: Error) => void }> = [];
+        public Hang = true;
+        protected override ApplySurfaceVerb(c: CounterComponent, verb: string, args: JSONObject, actor: RealtimeChannelActor): RealtimeChannelVerbResult | Promise<RealtimeChannelVerbResult> {
+            if (this.Hang && verb === 'add') {
+                return new Promise<RealtimeChannelVerbResult>((resolve, reject) => this.Pending.push({ resolve, reject }));
+            }
+            return super.ApplySurfaceVerb(c, verb, args, actor);
+        }
+        public set Timeout(ms: number) {
+            this.VerbTimeoutMs = ms;
+        }
+    }
+
+    function hangingRig() {
+        const channel = new HangingChannel();
+        const ctx = context(new FakeVideoClient());
+        channel.Initialize(ctx);
+        const component = new CounterComponent();
+        channel.BindSurface(component);
+        return { channel, ctx, component };
+    }
+
+    it('fails the call after the timeout with a message the agent can act on, and logs once with the channel and verb', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { channel } = hangingRig();
+        const pending = channel.ApplyVerb('add', { amount: 1 }, 'agent');
+        await vi.advanceTimersByTimeAsync(14999);
+        let settled = false;
+        void pending.then(() => (settled = true));
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        await vi.advanceTimersByTimeAsync(2);
+        const result = await pending;
+        expect(result).toMatchObject({ Success: false, ErrorCode: 'verb_timeout' });
+        expect(result.Error).toBe('The Counter didn\'t respond to "add" within 15s; try again or ask the user.');
+        const logs = error.mock.calls.filter((c) => String(c[0]).includes('"add" did not respond'));
+        expect(logs).toHaveLength(1);
+        expect(String(logs[0][0])).toContain('[RealtimeChannel:Counter]');
+    });
+
+    it('releases the queue: the next verb still runs after a hung one times out', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { channel, component } = hangingRig();
+        const hung = channel.ApplyVerb('add', { amount: 1 }, 'agent');
+        const next = channel.ApplyVerb('wipe', {}, 'user');
+        component.Value = 4;
+        await vi.advanceTimersByTimeAsync(15001);
+        expect(await hung).toMatchObject({ ErrorCode: 'verb_timeout' });
+        expect(await next).toMatchObject({ Success: true });
+        expect(component.Value).toBe(0);
+    });
+
+    it('ignores a late success: the caller already has its answer, and the channel records the real change for perception', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { channel, ctx, component } = hangingRig();
+        const hung = channel.ApplyVerb('add', { amount: 1 }, 'agent');
+        await vi.advanceTimersByTimeAsync(15001);
+        expect(await hung).toMatchObject({ ErrorCode: 'verb_timeout' });
+        const events: string[] = [];
+        channel.Events$.subscribe((e) => events.push(e.Name));
+
+        component.Value = 1; // what the late verb did to the component
+        channel.Pending[0].resolve({ Success: true, Result: { value: 1 } });
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(ctx.Notes.length).toBeGreaterThan(0); // the model's picture reconverges on the real state
+        expect(ctx.Notes.join('\n')).toContain('"value":1');
+        expect(events.filter((n) => n === 'completed')).toEqual([]); // no result was delivered a second time
+    });
+
+    it('a late success after the component is gone, or a late failure, records nothing and is logged', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { channel, ctx } = hangingRig();
+        const first = channel.ApplyVerb('add', { amount: 1 }, 'agent');
+        const second = channel.ApplyVerb('add', { amount: 2 }, 'agent');
+        await vi.advanceTimersByTimeAsync(15001);
+        await first;
+        await vi.advanceTimersByTimeAsync(15001);
+        await second;
+        const notesBefore = ctx.Notes.length;
+
+        channel.UnbindSurface();
+        channel.Pending[0].resolve({ Success: true });
+        channel.Pending[1].reject(new Error('late boom'));
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(ctx.Notes.length).toBe(notesBefore);
+        expect(error.mock.calls.some((c) => String(c[0]).includes('failed after it had timed out: late boom'))).toBe(true);
+    });
+
+    it('does not time out a verb that answers in time, and clears its timer', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { channel } = hangingRig();
+        const call = channel.ApplyVerb('add', { amount: 1 }, 'agent');
+        await vi.advanceTimersByTimeAsync(5000);
+        channel.Pending[0].resolve({ Success: true, Result: { value: 1 } });
+        expect(await call).toMatchObject({ Success: true });
+        await vi.advanceTimersByTimeAsync(60000);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(error.mock.calls.some((c) => String(c[0]).includes('did not respond'))).toBe(false);
+    });
+
+    it('the limit is overridable, and a non-positive value turns it off', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const short = hangingRig();
+        short.channel.Timeout = 100;
+        const p = short.channel.ApplyVerb('add', { amount: 1 }, 'agent');
+        await vi.advanceTimersByTimeAsync(101);
+        expect(await p).toMatchObject({ ErrorCode: 'verb_timeout', Error: expect.stringContaining('within 1s') });
+
+        const off = hangingRig();
+        off.channel.Timeout = 0;
+        let settled = false;
+        void off.channel.ApplyVerb('add', { amount: 1 }, 'agent').then(() => (settled = true));
+        await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+        expect(settled).toBe(false);
+    });
+
+    it('a verb that throws synchronously is still reported as verb_failed, not a timeout', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { channel } = hangingRig();
+        channel.Hang = false;
+        expect(await channel.ApplyVerb('explode', {}, 'agent')).toMatchObject({ ErrorCode: 'verb_failed' });
+        expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
 describe('AngularComponentChannel: teardown', () => {
     it('Dispose lets go of the component and completes the event stream', () => {
         const { channel, events } = rig();

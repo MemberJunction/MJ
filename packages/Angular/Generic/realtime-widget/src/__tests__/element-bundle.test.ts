@@ -32,8 +32,9 @@ interface BootReport {
   scripts: string[];
   steps: {
     shell: { defined: boolean; phase: string; startButton: string | null; zoneLoaded: boolean; callFilesLoaded: string[]; firstRenderMs: number | null; properties: Record<string, unknown>; methods: string[] };
-    start: { phase: string; zoneLoaded: boolean; filesLoaded: string[]; errorShown: string | null; events: Array<{ name: string; code?: string; phase?: string }>; interactiveChunkLoaded: boolean };
+    start: { phase: string; zoneLoaded: boolean; filesLoaded: string[]; errorShown: string | null; events: Array<{ name: string; code?: string; phase?: string }>; interactiveChunkLoaded: boolean; rasterizerChunkLoaded: boolean };
     interactive: { phase: string; filesLoaded: string[]; interactiveChunkLoaded: boolean };
+    frameCapture: { phase: string; filesLoaded: string[]; rasterizerChunkLoaded: boolean };
   };
 }
 
@@ -150,10 +151,25 @@ describe('mj-realtime-widget element bundle', () => {
       expect(start.errorShown).toBe('launcher exploded on purpose');
     });
 
+    it('downloads the rasterizer chunk only for a call whose page set frame-capture', () => {
+      expect(report.steps.start.rasterizerChunkLoaded).toBe(false);
+      expect(report.steps.interactive.filesLoaded.some((f) => f.includes('frame-capture-chunk-entry'))).toBe(false);
+      expect(report.steps.frameCapture.rasterizerChunkLoaded).toBe(true);
+    });
+
     it('does not download the Interactive Component channel unless it is in the session\'s scope, and does when it is', () => {
       expect(report.steps.start.interactiveChunkLoaded).toBe(false);
       expect(report.steps.interactive.interactiveChunkLoaded).toBe(true);
       expect(report.steps.interactive.filesLoaded).toHaveLength(1);
+    });
+  });
+
+  describe('the DOM rasterizer chunk', () => {
+    it('is its own file: html-to-image is in no other file, so neither the shell nor an ordinary call pays for it', () => {
+      const withRasterizer = allJsFiles().filter((f) => readFileSync(f, 'utf8').includes('data:image/svg+xml;charset=utf-8,') && readFileSync(f, 'utf8').includes('foreignObject'));
+      const names = withRasterizer.map((f) => f.replace(dist + '/', ''));
+      expect(names.some((n) => n.includes('frame-capture-chunk-entry'))).toBe(true);
+      expect(names.some((n) => n === 'mj-realtime-widget.js' || n === 'mj-realtime-widget-session.js' || n.includes('interactive-chunk-entry'))).toBe(false);
     });
   });
 

@@ -14,7 +14,7 @@ The call itself is MemberJunction's own realtime overlay (voice orb, live thread
 - [Quick start](#quick-start)
 - [Authentication modes](#authentication-modes)
 - [Reference](#reference): attributes, properties, methods, events
-- [Channels](#channels) and the [anonymous to verified flow](#anonymous-to-verified-flow-end-to-end)
+- [Channels](#channels) (and [your own](#your-own-channels), written with the [Realtime Channels Guide](../../../../guides/REALTIME_CHANNELS_GUIDE.md)) and the [anonymous to verified flow](#anonymous-to-verified-flow-end-to-end)
 - [Theming](#theming), [Install and loading](#install-and-loading) and [Content-Security-Policy](#content-security-policy)
 - [Examples](#examples): plain HTML, vanilla JS, Angular, React, CMS snippet
 - [Try it](#try-it) and [Building](#building)
@@ -123,8 +123,8 @@ HTML attributes are kebab-case; the matching element properties are camelCase. S
 | `locale` | `locale` | BCP-47 tag | none | The language of the widget's own copy, and the `lang` of the element. The built-in table is English; add another with `RegisterWidgetLocale` when using the component. |
 | `agent-name` | `agentName` | string | `Assistant` | The name shown on the button and in the consent notice. Cosmetic. |
 | `csp-nonce` | `cspNonce` | string | none | Your page's CSP nonce, used for the styles the widget injects. See [Content-Security-Policy](#content-security-policy). |
-| `perception` | `perception` | `on` \| `off` \| `ask` | `ask` | Whether the agent may *see* what the person shares (a whiteboard, a shared screen, a rendered component). `ask` pre-fills nothing: the server's policy decides what is possible and the "agent can see" control lets the person choose. `on` pre-sets the person's choice to "may see". `off` pre-sets it to "may not see pixels" (the agent still learns what is on screen as text). The person's own choice in the control always wins over the pre-set, and `on` can never exceed what the server's policy allows. Changing it mid-call re-applies it. Every change to what the agent can see is reported as `mj-perception-changed`. |
-| `frame-capture` | `frameCapture` | boolean | `false` | The page's statement that a rendered component may be captured as an image for the agent. **The rasterizer that honours it ships with Channels v2 Phase 2; until then this records your intent**, and the widget logs one notice if it is on and no rasterizer is registered. |
+| `perception` | `perception` | `on` \| `off` \| `ask` | `ask` | Whether the agent may *see* what the person shares (a whiteboard, a shared screen, a rendered component). `ask` pre-fills nothing: the server's policy decides what is possible and the "agent can see" control lets the person choose. `on` pre-sets the person's choice to "may see". `off` pre-sets it to "may not see pixels" (the agent still learns what is on screen as text). The person's own choice in the control always wins over the pre-set, and `on` can never exceed what the server's policy allows. Changing it mid-call re-applies it. Every change to what the agent can see is reported as `mj-perception-changed`. How exposure is decided (descriptor ceiling, server policy, then the person) is in the [Realtime Channels Guide](../../../../guides/REALTIME_CHANNELS_GUIDE.md#exposure-how-much-the-model-may-perceive). |
+| `frame-capture` | `frameCapture` | boolean | `false` | Lets the agent *see pictures* of rendered components (the Interactive Component channel, and channels built with `AngularComponentChannel`). Turning it on loads the opt-in DOM rasterizer (`EnableChannelFrameCapture()` from `@memberjunction/ng-realtime-channels`, built on `html-to-image`) as **its own lazily loaded file**, before the call is minted, so it costs nothing on a page or a call that does not set it. Pictures still flow only when the model takes video, the channel's effective exposure is `pixels` (see `perception` and the server's policy), and the channel can produce a frame. If the rasterizer cannot be loaded the widget says so once in the console and the agent keeps receiving state only. A capturer your page registered itself is respected and left alone. |
 | `preload` | `preload` | `none` \| `hover` \| `idle` \| `eager` | `hover` | When to start downloading the call code (see [Install and loading](#install-and-loading)). The code is only *downloaded*, never run, until a call starts. |
 | `session-url` | `sessionUrl` | URL | beside the script | Where the call code is, when it is not next to `mj-realtime-widget.js`. Absolute, or relative to the script. |
 | none | `launcher` | `IRealtimeSessionLauncher` | `null` | A JS-only way to mint the session yourself. Selects launcher mode. |
@@ -144,7 +144,7 @@ All are on the element. Methods that return a promise never reject for an operat
 | `openChannel(key, inputs?)` | `Promise<{ success, result?, error?, errorCode? }>` | Opens (and seeds) a channel in the call, exactly as the agent's own `open` action would. **Before the call is live** it is queued if a start is pending (the consent notice is showing, the code is loading, or `auto-start` has not fired yet) and runs, in order, the moment the call goes live; it resolves to a failure (`errorCode: 'no_session'`) if the call never gets there (declined, failed to load, ended). With no start pending it resolves to `no_session` at once; it never starts a call by itself. Once live it resolves with the channel's answer, or a structured error for a channel that is not in the session or inputs the channel rejects. |
 | `sendContextNote(text)` | `void` | Tells the agent something in the background: it learns it but does not speak. **Before the call is live** (even before `start()`) the note is queued, up to 20 (the oldest are dropped), and delivered in order when the next call goes live. Notes still queued when a call ends are dropped, so one call's context is never replayed into the next. |
 | `requestSpokenResponse(text)` | `boolean` | Asks the agent to speak, now, about `text`. Returns whether the request was delivered. It is about *now*, so it is **never queued**: `false` unless the call is live. |
-| `registerChannel(classRef)` | `void` | Registers a channel class your page brings (a subclass of `BaseRealtimeChannelClient`). Allowed at any time, including before the element is attached or before the call code has loaded; it is declared to every call the widget starts. |
+| `registerChannel(classRef)` | `void` | Registers a channel class your page brings (a subclass of `BaseRealtimeChannelClient`; see [Your own channels](#your-own-channels)). Allowed at any time, including before the element is attached or before the call code has loaded; it is declared to every call the widget starts. |
 
 ### Events
 
@@ -187,11 +187,29 @@ Channels are small interactive surfaces that live beside the conversation: a for
 | `IdentityVerification` | the call code | Name, email and a one-time code, verified by the server. See below. |
 | `Whiteboard` | the call code | A shared board the agent can read and draw on. |
 | `Media` | the call code | Plays audio, video and images for the visitor. |
-| `InteractiveComponent` | **its own lazily loaded file** | Shows an interactive component (a chart, a report, a form) the agent can operate. It downloads only when a call could use it: it is named in `channels` (or by the widget instance), or a registry lists it. A call that never names it never downloads it. It loads the visitor's artifacts through the visitor's own signed-in access, so it is for authenticated sessions. |
+| `InteractiveComponent` | **its own lazily loaded file** | Shows an interactive component (a chart, a report, a form) the agent can operate. It downloads only when a call could use it: it is named in `channels` (or by the widget instance), or a registry lists it. A call that never names it never downloads it. It loads the visitor's artifacts through the visitor's own signed-in access, so it is for authenticated sessions. Pictures of it need `frame-capture`. |
+
+Not built in: `RemoteBrowser`, `ClientContext` and your own. The full list of what MemberJunction ships, and how each is scoped to an agent or app, is in the [Realtime Channels Guide](../../../../guides/REALTIME_CHANNELS_GUIDE.md) (sections 3, 4 and 7). A channel's descriptor, not the widget, decides what it may do and how much of it the model may see.
 
 With a widget key, the instance's own channel list is added to yours. Any other key (`RemoteBrowser`, `ClientContext`, your own) is resolved through the MemberJunction class factory, so it works in the Angular component inside an application that already loads it, and in the bundle when your page registers a class under that key with `registerChannel`.
 
+
 A channel with a surface shows it beside the thread when the widget is wide enough (about 560px) or when `chrome="console"`. With `chrome="auto"` the widget promotes itself to the console while such a channel is open, so a narrow embed never hides a form the agent just opened.
+
+### Your own channels
+
+Write one with the [Realtime Channels Guide](../../../../guides/REALTIME_CHANNELS_GUIDE.md): a descriptor that lets an agent operate it cold, and either a `BaseRealtimeChannelClient` subclass (section 2) or `AngularComponentChannel` wrapping a component you already have (section 3). Then hand the class to the widget with `registerChannel(YourChannel)` (or `[channels]`/`channels` for a class already registered under a key). The widget declares it to every call it starts, as a *host* channel, which is exactly the "Host" layer of the guide's scoping cascade and the only way an anonymous embed gets channels.
+
+Which kind you can use depends on how you embed the widget, because a channel that has a **surface** is rendered by the widget's own Angular, and Angular components cannot be created across two copies of Angular:
+
+| How you embed | `BaseRealtimeChannelClient` channel with no surface (headless, DOM-only) | `AngularComponentChannel` / a channel with an Angular surface |
+| --- | --- | --- |
+| One-script element (`<script>` + tag) | Works: your class is bundled by your page and handed to `registerChannel`. It must be built against the same `@memberjunction/realtime-runtime` API the call code uses. | **Does not work from a page bundle**: your component was compiled by *your* Angular, the call code runs *its* Angular. Put the channel in a custom call build instead (a copy of `src/session-entry.ts` that also imports your channel), or embed with the Angular component below. |
+| `RealtimeWidgetComponent` inside your Angular app | Works. | Works: it is the same Angular. Call `ViewChild(RealtimeWidgetComponent).RegisterChannel(YourChannel)` or provide it before the first call, and keep a `LoadYourChannel()` reference so the bundler does not drop the class (guide, section 3, step 7). |
+
+I have tested `registerChannel` with a plain `BaseRealtimeChannelClient` channel (open, events, output, queueing before the call is live) in both the element and the component. I have **not** run an `AngularComponentChannel` end to end through the widget's overlay.
+
+Whether the model may *see* your channel is the channel's `MaxExposure`, the agent's policy and the person's choice (guide, section 6); on this page that is the `perception` and `frame-capture` attributes.
 
 ### The IdentityVerification channel
 
@@ -257,9 +275,10 @@ The embed is several files, loaded in stages, so a page that never starts a call
 | File | What it is | When it loads | Size (raw / gzip) |
 | --- | --- | --- | --- |
 | `mj-realtime-widget.js` | The **shell**: a classic `<script>` that defines `<mj-realtime-widget>`, parses attributes, exposes the whole property/method/event contract, and draws the start button, the consent notice and the status screens | With your page | 25.7 KB / **8.3 KB** |
-| `mj-realtime-widget-session.js` and the 13 chunks it imports | The **call**: Angular, MemberJunction's realtime overlay, runtime, drivers, the GraphQL client, and the built-in channels (identity, whiteboard, media) | On `start()` (after consent), on `auto-start`, or prefetched by `preload` | 10.1 MB / 2.5 MB together |
-| `chunks/interactive-chunk-entry-*.js` | The Interactive Component channel | Only when that channel is in the call's scope | 51 KB / 15 KB |
-| `chunks/*.js` (the rest) | Libraries the call loads only if a feature needs them (spreadsheet export, maths rendering, diagram types) | On demand | 4.9 MB / 1.5 MB in total |
+| `mj-realtime-widget-session.js` and the 15 chunks it imports | The **call**: Angular, MemberJunction's realtime overlay, runtime, drivers, the GraphQL client, and the built-in channels (identity, whiteboard, media) | On `start()` (after consent), on `auto-start`, or prefetched by `preload` | 10.1 MB / 2.5 MB together |
+| `chunks/interactive-chunk-entry-*.js` | The Interactive Component channel | Only when that channel is in the call's scope | 52 KB / 15 KB |
+| `chunks/frame-capture-chunk-entry-*.js` | The DOM rasterizer (`html-to-image`) | Only when the page sets `frame-capture` | 16 KB / 6.6 KB |
+| `chunks/*.js` (the rest) | Libraries the call loads only if a feature needs them (spreadsheet export, maths rendering, diagram types) | On demand | 5.0 MB / 1.6 MB in total |
 
 These are measured from the build (`dist/element/sizes.json`); the build fails if the shell ever exceeds 40 KB gzipped or a heavy dependency leaks into it.
 
@@ -461,7 +480,7 @@ The embed is two esbuild builds: the shell as a classic IIFE (so it works in a C
 
 ## Things worth knowing
 
-- **Size.** Before this split the embed was one 15.0 MB (4.0 MB gzipped) script every page paid for up front. Now the page pays 8.3 KB gzipped; a call downloads 2.5 MB gzipped (the 1.5 MB of libraries that only some features need now load on demand, and the Interactive Component channel only when used). That call weight is still large, and most of it is not the widget's own: the overlay's imports bring in MemberJunction's generated entity classes (about 2.5 MB raw), the data grid (1.1 MB), spreadsheet export (0.9 MB), forms, and the artifact viewers. Trimming those means making the overlay lazier, which is work in `ng-conversations` and `ng-artifacts`, not here. In particular the React runtime is in the call chunk, not the Interactive Component chunk, because the overlay's activity rail imports the artifact viewers (which include React) statically; the Interactive Component chunk therefore holds only the channel, its component host and its surface. Serve everything with gzip or brotli.
+- **Size.** Before this split the embed was one 15.0 MB (4.0 MB gzipped) script every page paid for up front. Now the page pays 8.3 KB gzipped; a call downloads 2.5 MB gzipped (the 1.6 MB of libraries that only some features need now load on demand, and the Interactive Component channel and the rasterizer only when used). That call weight is still large, and most of it is not the widget's own: the overlay's imports bring in MemberJunction's generated entity classes (about 2.5 MB raw), the data grid (1.1 MB), spreadsheet export (0.9 MB), forms, and the artifact viewers. Trimming those means making the overlay lazier, which is work in `ng-conversations` and `ng-artifacts`, not here. In particular the React runtime is in the call chunk, not the Interactive Component chunk, because the overlay's activity rail imports the artifact viewers (which include React) statically; the Interactive Component chunk therefore holds only the channel, its component host and its surface. Serve everything with gzip or brotli.
 - **`new Function` in the bundle.** A handful of bundled third-party libraries contain `new Function(...)` call sites. They are not on the widget's call path, and the boot test runs the bundle with the constructor blocked to prove it. If your policy scanner flags the file for them, that is why.
 - **One call per page.** The widget drives a single shared realtime runtime. Two widgets on one page can both be idle, but only one can be in a call at a time, and a widget will never hang up a call it did not start.
 - **Recording.** The widget does not offer recording consent and always starts sessions with recording off.
