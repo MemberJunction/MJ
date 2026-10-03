@@ -17,6 +17,14 @@ import { StartupValidationService } from '@memberjunction/ng-explorer-core';
 import { WorkspaceEnvironment, WorkspaceInitResult, WorkspaceInitError } from '../models/workspace-types';
 import { lastValueFrom } from 'rxjs';
 
+/**
+ * The server's permission error for a user who cannot read their own roles. The entity is named
+ * `MJ: User Roles` since v5 (older servers say `User Roles`). SetupGraphQLClient appends it to its
+ * own message when the boot's metadata download fails for that reason (#4887). Intentionally
+ * duplicated in ng-bootstrap's MJInitializationService, which classifies the same boot error.
+ */
+const NO_USER_ROLES_PERMISSION_TEXT = /does not have read permissions on (MJ: )?User Roles/;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -263,14 +271,13 @@ export class WorkspaceInitializerService {
       if (err.response && Array.isArray(err.response.errors)) {
         return err.response.errors.some((e: any) =>
           e && e.message && typeof e.message === 'string' &&
-          e.message.includes('does not have read permissions on User Roles')
+          NO_USER_ROLES_PERMISSION_TEXT.test(e.message)
         );
       }
 
       // Check for error message directly on the error object
       if (err.message && typeof err.message === 'string') {
-        const message = err.message;
-        return message.includes('does not have read permissions on User Roles');
+        return NO_USER_ROLES_PERMISSION_TEXT.test(err.message);
       }
 
       // Check for nested error object

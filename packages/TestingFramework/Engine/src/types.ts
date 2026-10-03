@@ -355,6 +355,11 @@ export interface OracleInput {
   contextUser: UserInfo;
 
   /**
+   * The test run being judged. The rubric oracle uses this as the subject record.
+   */
+  testRunId?: string;
+
+  /**
    * Optional metadata provider to use for entity/SQL operations during oracle evaluation.
    * If supplied, oracles should use this provider instead of the global Metadata.Provider
    * to participate in the same transaction/connection as the calling test run.

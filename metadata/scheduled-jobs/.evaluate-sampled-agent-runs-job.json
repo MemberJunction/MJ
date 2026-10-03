@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Evaluate Sampled Agent Runs",
+      "Description": "For each Active ProductionSampling link, selects completed runs of that agent that do not already have an evaluation for that rubric, keeps the deterministic sample, and evaluates each kept run as MJ: AI Agent Runs. Daily at 02:00 UTC.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=EvaluateSampledAgentRunsDriver",
+      "CronExpression": "0 0 2 * * *",
+      "Timezone": "UTC",
+      "Status": "Disabled",
+      "Configuration": {}
+    },
+    "primaryKey": {
+      "ID": "55DEAAF2-3800-4B5A-B8DD-9AD5D1E45088"
+    }
+  }
+]

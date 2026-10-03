@@ -31,7 +31,7 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
@@ -40,13 +40,15 @@ import {
     ChatMessage,
     ClientRealtimeSessionConfig,
     GetAIAPIKey,
+    AIAPIKey,
+    AIAPIKeyResolver,
     IRealtimeSession,
     JSONObject,
     RealtimeSessionParams,
     RealtimeToolCall,
     RealtimeToolDefinition
 } from '@memberjunction/ai';
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult, AppContextSnapshot, FormatAppContextNote } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, MJAIPromptRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult, AppContextSnapshot, FormatAppContextNote, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
@@ -96,6 +98,17 @@ import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtim
  * id — it is a runtime choice made when the voice session starts.
  */
 export interface PrepareClientSessionInput {
+    /**
+     * The run's runtime API keys, when the session is prepared from an agent run that carries them
+     * (`ExecuteAgentParams.apiKeys`, set by `BaseAgent.StartBridgeRealtimeSession`). Vendor selection
+     * and the minted session try these first, per driver class; for a class they do not key, this
+     * service's {@link RealtimeClientSessionService.getAPIKeyForDriver} seam answers (by default the
+     * `AI_VENDOR_API_KEY__<driver>` environment key). That is the same order as `GetAIAPIKey` — the
+     * legacy tier of prompt key resolution. MJ Credentials / `AICredentialBinding`s, which a prompt
+     * consults first, are not consulted by realtime. Absent ⇒ the seam alone, which is every
+     * client-initiated session today.
+     */
+    APIKeys?: AIAPIKey[];
     /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
     CoAgent?: MJAIAgentEntityExtended;
     /** The Realtime Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
@@ -492,14 +505,29 @@ export class ToolArgumentsError extends Error {
  * reaches for the global default provider, so it is safe in multi-provider/multi-tenant servers.
  */
 export class RealtimeClientSessionService {
-    /** Maps session id -> (wireName -> MJActionEntityExtended) built during tool projection. */
-    protected readonly sessionWireActionMaps = new Map<string, Map<string, MJActionEntityExtended>>();
+    /**
+     * Maps session id -> (wireName -> MJActionEntityExtended) built during tool projection.
+     * Bounded with `MJLruCache` (rather than a plain `Map`): the resolver holds ONE shared service
+     * instance for the process lifetime (see class doc above), and there is no "session ended" hook
+     * this service can key eviction off — every voice session ever prepared would otherwise leave an
+     * entry here forever. Same TTL/maxSize rationale as {@link promptRunWriteChains} below.
+     */
+    protected readonly sessionWireActionMaps = new MJLruCache<string, Map<string, MJActionEntityExtended>>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000, // 4h — generous vs. any realistic voice-session duration
+    });
 
-    /** Maps targetAgentID -> (wireName -> MJActionEntityExtended) fallback built during tool projection. */
-    protected readonly targetWireActionMaps = new Map<string, Map<string, MJActionEntityExtended>>();
+    /** Maps targetAgentID -> (wireName -> MJActionEntityExtended) fallback built during tool projection. Bounded for the same reason as {@link sessionWireActionMaps}. */
+    protected readonly targetWireActionMaps = new MJLruCache<string, Map<string, MJActionEntityExtended>>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000,
+    });
 
-    /** Maps session id -> direct actions config resolved during session prep. */
-    protected readonly sessionDirectConfigs = new Map<string, RealtimeDirectActionsConfig>();
+    /** Maps session id -> direct actions config resolved during session prep. Bounded for the same reason as {@link sessionWireActionMaps}. */
+    protected readonly sessionDirectConfigs = new MJLruCache<string, RealtimeDirectActionsConfig>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000,
+    });
 
     /**
      * Builds a wire-name to action map from candidate actions, sanitizing each
@@ -1025,7 +1053,7 @@ export class RealtimeClientSessionService {
         if (!promptID) {
             return null;
         }
-        const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+        const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
         promptRun.NewRecord();
         promptRun.PromptID = promptID;
         promptRun.ModelID = modelID;
@@ -1035,6 +1063,7 @@ export class RealtimeClientSessionService {
             promptRun.VendorID = vendorID;
         }
         promptRun.AgentID = coAgent.ID;
+        promptRun.UserID = ResolvePromptRunUserID({ ContextUser: contextUser });
         promptRun.RunAt = new Date();
         promptRun.RunType = 'Single';
         promptRun.Status = 'Running';
@@ -1277,7 +1306,7 @@ export class RealtimeClientSessionService {
         // Serialize the finalize against any in-flight message/usage writes so it can't race them — and so a
         // late usage flush queued behind it sees the run already Completed.
         await this.serializePromptRunWrite(promptRunID, async () => {
-            const run = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+            const run = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
             if (!(await run.Load(promptRunID)) || run.Status !== 'Running') {
                 return false;
             }
@@ -1323,7 +1352,7 @@ export class RealtimeClientSessionService {
         // the Messages we write here (and vice-versa). See promptRunWriteChains.
         return this.serializePromptRunWrite(promptRunID, async () => {
             try {
-                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
                 if (!(await promptRun.Load(promptRunID))) {
                     LogError(`AppendPromptRunMessage: co-agent prompt run ${promptRunID} not found — transcript turn dropped.`);
                     return false;
@@ -1368,7 +1397,7 @@ export class RealtimeClientSessionService {
     ): Promise<boolean> {
         return this.serializePromptRunWrite(promptRunID, async () => {
             try {
-                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
                 if (!(await promptRun.Load(promptRunID))) {
                     LogError(`AccumulatePromptRunUsage: co-agent prompt run ${promptRunID} not found — usage delta dropped.`);
                     return false;
@@ -1573,15 +1602,35 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         effectiveConfig?: RealtimeCoAgentConfig
     ): Promise<RealtimeModelResolutionOutcome> {
+        // One resolver for every branch below, built here rather than per branch so the requested-model,
+        // configured-preference and default paths cannot disagree about which credentials the session
+        // may use. It answers with the session's RUN keys only: resolveVendorAndInstantiate layers this
+        // service's getAPIKeyForDriver seam under it, giving run key → seam → (the seam's default) env.
+        // A resolver that fell back to the environment itself would answer before the seam, so a
+        // subclass that overrides the seam would lose to AI_VENDOR_API_KEY__<driver>.
+        const resolveRunKey = this.buildRunKeyResolver(input.APIKeys);
         if (input.PreferredModelID) {
-            return this.resolvePreferredRealtimeModel(input.PreferredModelID);
+            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey);
         }
-        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig);
+        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey);
         if (fromConfig) {
             return { Resolution: fromConfig };
         }
-        const resolution = await this.resolveRealtimeModel(coAgent);
+        const resolution = await this.resolveRealtimeModel(coAgent, resolveRunKey);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
+    }
+
+    /**
+     * The session's run-scoped keys as a resolver: the key for a driver class when the run carries
+     * one, else `undefined` — no platform fallback. The fallback belongs to
+     * {@link getAPIKeyForDriver}, which {@link resolveVendorAndInstantiate} consults for any class
+     * this does not key.
+     *
+     * @param apiKeys The session's run keys ({@link PrepareClientSessionInput.APIKeys}), if any.
+     * @returns A resolver over those keys only.
+     */
+    private buildRunKeyResolver(apiKeys: AIAPIKey[] | undefined): AIAPIKeyResolver {
+        return (driverClass) => apiKeys?.find(k => k.driverClass === driverClass)?.apiKey || undefined;
     }
 
     /**
@@ -1592,9 +1641,10 @@ export class RealtimeClientSessionService {
      * explicit runtime choice ({@link resolvePreferredRealtimeModel}), which fails loud.
      *
      * @param effectiveConfig The resolved effective configuration.
+     * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @returns The resolution, or `null` when no preference is configured or it can't be satisfied.
      */
-    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig): RealtimeModelResolution | null {
+    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
         const preference = effectiveConfig?.realtime?.modelPreference;
         if (!preference) {
             return null;
@@ -1614,7 +1664,7 @@ export class RealtimeClientSessionService {
             );
             return null;
         }
-        const resolution = this.resolveVendorAndInstantiate(model);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve);
         if (!resolution) {
             LogError(
                 `RealtimeClientSessionService: configured realtime model preference '${model.Name}' has no usable ` +
@@ -1651,9 +1701,10 @@ export class RealtimeClientSessionService {
      * the caller's user explicitly chose this one.
      *
      * @param preferredModelID The `MJ: AI Models.ID` the user chose.
+     * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @returns The resolution outcome (resolution or a specific failure reason).
      */
-    protected resolvePreferredRealtimeModel(preferredModelID: string): RealtimeModelResolutionOutcome {
+    protected resolvePreferredRealtimeModel(preferredModelID: string, resolve?: AIAPIKeyResolver): RealtimeModelResolutionOutcome {
         const model = this.findModelByID(preferredModelID);
         if (!model) {
             return { ErrorMessage: `The requested realtime model (id '${preferredModelID}') was not found in AI model metadata.` };
@@ -1664,7 +1715,7 @@ export class RealtimeClientSessionService {
         if (!this.isRealtimeModel(model)) {
             return { ErrorMessage: `The requested model '${model.Name}' is not a Realtime model (its type is '${model.AIModelType}').` };
         }
-        const resolution = this.resolveVendorAndInstantiate(model);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve);
         if (!resolution) {
             return {
                 ErrorMessage:
@@ -1700,9 +1751,10 @@ export class RealtimeClientSessionService {
      * step can't be satisfied.
      *
      * @param coAgent The co-agent being voiced (reserved for future per-agent model preference).
+     * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @returns The resolved model + identifiers, or `null`.
      */
-    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended): Promise<RealtimeModelResolution | null> {
+    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver): Promise<RealtimeModelResolution | null> {
         // Walk candidates in descending PowerRank, returning the FIRST that fully resolves to a usable
         // client-direct driver (active vendor + API key + ClassFactory driver + SupportsClientDirect).
         // Single-pick dead-ended whenever the highest-power model lacked a key or client-direct support
@@ -1710,7 +1762,7 @@ export class RealtimeClientSessionService {
         // surfaced "No usable Realtime model" instead of falling through to a model that works.
         const candidates = this.selectRealtimeModelCandidates(coAgent);
         for (const model of candidates) {
-            const resolution = this.resolveVendorAndInstantiate(model);
+            const resolution = this.resolveVendorAndInstantiate(model, resolve);
             if (resolution && resolution.Model.SupportsClientDirect) {
                 return resolution;
             }
@@ -1722,16 +1774,26 @@ export class RealtimeClientSessionService {
      * Shared tail of model resolution: picks the vendor (with a usable API key) for an
      * already-chosen model entity and instantiates its realtime driver.
      *
+     * Key precedence, per driver class: `resolve` (the session's run keys), then this service's
+     * {@link getAPIKeyForDriver} seam, whose default is the environment key. Vendor selection and the
+     * mint use that one chain, so a session is never routed to a vendor it cannot then be minted on.
+     *
      * @param model The chosen model entity.
+     * @param resolve The session's run-scoped key resolver. Expected to answer with run keys only:
+     *   one that falls back to the environment itself answers before {@link getAPIKeyForDriver} and
+     *   so bypasses an override of it.
      * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
      */
-    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended): RealtimeModelResolution | null {
-        const vendor = this.selectRealtimeVendor(model.ID);
+    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
+        // The run's keys first, then this service's own seam (which subclasses and tests override) —
+        // so a run-scoped credential wins without taking that seam away from anyone who replaced it.
+        const resolveKey: AIAPIKeyResolver = (driverClass) => resolve?.(driverClass) ?? this.getAPIKeyForDriver(driverClass);
+        const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
         if (!vendor) {
             return null;
         }
 
-        const apiKey = this.getAPIKeyForDriver(vendor.DriverClass);
+        const apiKey = resolveKey(vendor.DriverClass);
         if (!apiKey) {
             return null;
         }
@@ -1755,6 +1817,9 @@ export class RealtimeClientSessionService {
     /**
      * Resolves the API key for a vendor driver class. **Overridable seam** (wraps the module-level
      * {@link GetAIAPIKey}) so tests can simulate present/absent keys without environment setup.
+     * Consulted for every driver class the session's run keys do not cover, so an override (a vault,
+     * a different key, or `undefined` to disable a vendor) applies whether or not the environment
+     * also holds a key.
      *
      * @param driverClass The vendor's `DriverClass`.
      * @returns The API key, or a falsy value when none is configured.
@@ -1796,10 +1861,11 @@ export class RealtimeClientSessionService {
      * THIS service's {@link getAPIKeyForDriver} so subclasses and tests keep their key-resolution seam.
      *
      * @param modelID The chosen model's id.
+     * @param resolve The complete key chain to select against; defaults to {@link getAPIKeyForDriver}.
      * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
      */
-    protected selectRealtimeVendor(modelID: string): RealtimeVendorSelection | null {
-        return SelectRealtimeVendorForModel(modelID, (driverClass) => this.getAPIKeyForDriver(driverClass));
+    protected selectRealtimeVendor(modelID: string, resolve?: AIAPIKeyResolver): RealtimeVendorSelection | null {
+        return SelectRealtimeVendorForModel(modelID, resolve ?? ((driverClass) => this.getAPIKeyForDriver(driverClass)));
     }
 
     /**
@@ -2733,12 +2799,12 @@ export class RealtimeClientSessionService {
 
         const wireMap = this.BuildWireActionMap(allowedActions);
         if (agentSessionID) {
-            this.sessionWireActionMaps.set(agentSessionID, wireMap);
+            this.sessionWireActionMaps.Set(agentSessionID, wireMap);
             if (directConfig) {
-                this.sessionDirectConfigs.set(agentSessionID, directConfig);
+                this.sessionDirectConfigs.Set(agentSessionID, directConfig);
             }
         }
-        this.targetWireActionMaps.set(targetAgentID, wireMap);
+        this.targetWireActionMaps.Set(targetAgentID, wireMap);
 
         const tools: RealtimeToolDefinition[] = [];
         for (const [wireName, action] of wireMap.entries()) {
@@ -2842,7 +2908,7 @@ export class RealtimeClientSessionService {
 
         const candidateActions = this.getTargetAgentActions(target.ID);
         const candidateWireMap = this.BuildWireActionMap(candidateActions);
-        const action = (input?.AgentSessionID ? this.sessionWireActionMaps.get(input.AgentSessionID)?.get(call.ToolName) : undefined)
+        const action = (input?.AgentSessionID ? this.sessionWireActionMaps.Get(input.AgentSessionID)?.get(call.ToolName) : undefined)
             ?? candidateWireMap.get(call.ToolName)
             ?? Array.from(candidateWireMap.entries()).find(([w]) => w.toLowerCase() === call.ToolName.trim().toLowerCase())?.[1];
 
@@ -2855,7 +2921,7 @@ export class RealtimeClientSessionService {
         }
 
         const directConfig = input?.DirectActions
-            ?? (input?.AgentSessionID ? this.sessionDirectConfigs.get(input.AgentSessionID) : undefined)
+            ?? (input?.AgentSessionID ? this.sessionDirectConfigs.Get(input.AgentSessionID) : undefined)
             ?? GetDirectActionsConfig(this.resolveEffectiveConfig(target, undefined, target));
 
         if (!IsActionAllowedForDirectInvocation(action.Name, directConfig)) {

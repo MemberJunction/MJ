@@ -608,6 +608,10 @@ describe('OllamaEmbedding', () => {
     it('should expose client getter', () => {
       expect(embedder.client).toBeDefined();
     });
+
+    it('does not require an API key', () => {
+      expect(embedder.RequiresAPIKey).toBe(false);
+    });
   });
 
   /* ---- EmbedText ---- */

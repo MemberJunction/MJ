@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Core agent rubrics - SkillSmith",
+    "Description": "Answers from the run itself. Scored by the SkillSmith Evaluation rubric, not an inline judge.",
+    "InputDefinition": {
+      "userMessage": "Name a skill that lists a folder, and say what that skill will not do."
+    },
+    "ExpectedOutcomes": {},
+    "Configuration": {
+      "agentId": "@lookup:MJ: AI Agents.Name=SkillSmith",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "812F226F-C0C4-48DA-9E24-511D527CF5BB"
+  }
+}

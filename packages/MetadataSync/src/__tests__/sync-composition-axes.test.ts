@@ -880,7 +880,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
 
   describe('collection-resolver — Dynamic Synthesis Precedence (§8.1)', () => {
     it('resolves collection relationships with strict 4-tier rule strength', async () => {
-      const { ResolveCollectionRelationship } = await import('../lib/collection-resolver');
+      const { ResolveCollectionRelationship } = await import('@memberjunction/record-graph');
 
       const mockEntityInfo = {
         Name: 'Orders',
@@ -945,7 +945,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
     });
 
     it('throws explicit error on ambiguity within winning tier in collection-resolver', async () => {
-      const { ResolveCollectionRelationship } = await import('../lib/collection-resolver');
+      const { ResolveCollectionRelationship } = await import('@memberjunction/record-graph');
 
       const ambiguousEntityInfo = {
         Name: 'Orders',
@@ -971,7 +971,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
     });
 
     it('warns on malformed RelatedRecordCollection JSON and continues evaluation', async () => {
-      const { ResolveCollectionRelationship } = await import('../lib/collection-resolver');
+      const { ResolveCollectionRelationship } = await import('@memberjunction/record-graph');
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const malformedEntityInfo = {

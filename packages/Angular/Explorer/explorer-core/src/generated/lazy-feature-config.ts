@@ -101,6 +101,12 @@ const loadNgDashboardsRoutinesDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/routines-dashboards.module').then(() => {})
 };
 
+// --- @memberjunction/ng-dashboards → ./rubrics-dashboards.module (5 entries) ---
+const loadNgDashboardsRubricsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/rubrics-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/rubrics-dashboards.module').then(() => {})
+};
+
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
 const loadNgDashboardsSchedulingDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/scheduling-dashboards.module',
@@ -261,6 +267,13 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   // @memberjunction/ng-dashboards → ./routines-dashboards.module
   'BaseResourceComponent::UserRoutines': loadNgDashboardsRoutinesDashboardsModule,
 
+  // @memberjunction/ng-dashboards → ./rubrics-dashboards.module
+  'BaseDashboard::RubricScalesDashboard': loadNgDashboardsRubricsDashboardsModule,
+  'BaseDashboard::RubricsDashboard': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricDriftResource': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricScalesResource': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricsResource': loadNgDashboardsRubricsDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadNgDashboardsSchedulingDashboardsModule,
   'BaseResourceComponent::SchedulingActivityResource': loadNgDashboardsSchedulingDashboardsModule,
@@ -293,4 +306,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 117;
+export const LAZY_FEATURE_CONFIG_COUNT = 122;
