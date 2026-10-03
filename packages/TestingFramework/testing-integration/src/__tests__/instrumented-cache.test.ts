@@ -18,6 +18,17 @@ describe('InstrumentedLocalStorageProvider', () => {
         expect(provider.SetCount('Other')).toBe(0);
     });
 
+    it('counts SetItem per key, and ResetCounts clears it', async () => {
+        await provider.SetItem('a', 'v', 'RunViewCache');
+        await provider.SetItem('a', 'w', 'RunViewCache');
+        await provider.SetItem('b', 'v', 'RunViewCache');
+        expect(provider.SetCountForKey('a')).toBe(2);
+        expect(provider.SetCountForKey('b')).toBe(1);
+        expect(provider.SetCountForKey('c')).toBe(0);
+        provider.ResetCounts();
+        expect(provider.SetCountForKey('a')).toBe(0);
+    });
+
     it('counts GetItem and GetItems separately and per-category', async () => {
         await provider.GetItem('k', 'RunViewCache');
         await provider.GetItems(['a', 'b'], 'RunViewCache');

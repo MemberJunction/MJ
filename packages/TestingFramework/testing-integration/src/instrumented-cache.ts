@@ -36,6 +36,7 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
     public SetItemCount = 0;
     public RemoveCount = 0;
     private perCategory = new Map<string, { Gets: number; Sets: number }>();
+    private setsPerKey = new Map<string, number>();
 
     /**
      * Present only when the inner provider has it: `LocalCacheManager` chooses its lookup path by
@@ -77,6 +78,7 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
         this.SetItemCount = 0;
         this.RemoveCount = 0;
         this.perCategory.clear();
+        this.setsPerKey.clear();
     }
 
     /**
@@ -91,6 +93,14 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
 
     public SetCount(category: string): number {
         return this.perCategory.get(category)?.Sets ?? 0;
+    }
+
+    /**
+     * Writes to one key since the last {@link ResetCounts}. Use it to assert how often a single
+     * cache slot was rewritten when other slots in the same category may be written meanwhile.
+     */
+    public SetCountForKey(key: string): number {
+        return this.setsPerKey.get(key) ?? 0;
     }
 
     private bump(category: string | undefined, kind: 'Gets' | 'Sets'): void {
@@ -115,6 +125,7 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
     public async SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void> {
         this.SetItemCount++;
         this.bump(category, 'Sets');
+        this.setsPerKey.set(key, (this.setsPerKey.get(key) ?? 0) + 1);
         return this.inner.SetItem<T>(key, value, category, options);
     }
 
