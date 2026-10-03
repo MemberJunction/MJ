@@ -15143,6 +15143,9 @@ importers:
       '@memberjunction/ai-bridge-vonage':
         specifier: 6.2.0-edge.1
         version: link:../AI/RealtimeBridge/Providers/Vonage
+      '@memberjunction/ai-engine-base':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/BaseAIEngine
       '@memberjunction/core':
         specifier: 6.2.0-edge.1
         version: link:../MJCore

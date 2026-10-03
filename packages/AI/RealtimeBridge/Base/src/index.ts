@@ -8,3 +8,4 @@ export * from './turn-taking-policy';
 export * from './ai-bridge-engine-base';
 export * from './bridge-native-sdk-registry';
 export * from './audio';
+export * from './media-token';
