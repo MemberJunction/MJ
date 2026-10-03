@@ -21,7 +21,7 @@ export function BuildThemeTokenMap(tokens: Record<string, string> | null | undef
       continue;
     }
     const key = normaliseTokenKey(rawKey);
-    if (key !== null) {
+    if (key !== null && !(key === '__proto__' || key === 'constructor' || key === 'prototype')) {
       out[key] = value.trim();
     }
   }

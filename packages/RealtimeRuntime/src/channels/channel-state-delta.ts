@@ -67,6 +67,10 @@ function diffObjects(previous: JSONObject, next: JSONObject, prefix: string): St
     const changed: JSONObject = {};
     const removed: string[] = [];
     for (const key of Object.keys(next)) {
+        // Channel state is caller-supplied JSON; a key like `__proto__` must never be copied through.
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+            continue;
+        }
         const path = prefix ? `${prefix}.${key}` : key;
         const before = previous[key];
         const after = next[key];

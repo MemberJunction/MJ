@@ -67,3 +67,13 @@ describe('FormatParameterList', () => {
         expect(FormatParameterList(undefined)).toBe('');
     });
 });
+
+describe('ComputeStateDelta — prototype keys', () => {
+    it('never copies __proto__ / constructor / prototype from caller-supplied state', () => {
+        const next = JSON.parse('{"ok":1,"__proto__":{"polluted":true},"constructor":{"x":1},"prototype":2}');
+        const delta = ComputeStateDelta({}, next);
+        expect(delta).toEqual({ Changed: { ok: 1 }, Removed: [] });
+        expect(Object.getPrototypeOf(delta?.Changed)).toBe(Object.prototype);
+        expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+    });
+});

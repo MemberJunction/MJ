@@ -70,6 +70,9 @@ export function ParseExposurePreferences(json: string | null | undefined): Map<s
 export function SerializeExposurePreferences(preferences: ReadonlyMap<string, RealtimeChannelExposure>): string {
   const record: Record<string, RealtimeChannelExposure> = {};
   for (const [key, level] of preferences) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue;
+    }
     record[key] = level;
   }
   return JSON.stringify(record);

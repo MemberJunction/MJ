@@ -260,3 +260,12 @@ describe('framework-free files stay framework-free', () => {
         expect(forbidden).toEqual([]);
     });
 });
+
+describe('ToBoundedJson — prototype keys', () => {
+    it('drops __proto__ / constructor / prototype keys from untrusted component state', () => {
+        const state = JSON.parse('{"count":3,"__proto__":{"polluted":true},"constructor":1,"prototype":2}');
+        const out = ToBoundedJson(state);
+        expect(out).toEqual({ count: 3 });
+        expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    });
+});

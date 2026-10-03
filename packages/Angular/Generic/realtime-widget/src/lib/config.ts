@@ -157,6 +157,10 @@ export function ReadThemeTokens(value: unknown): Record<string, string> {
   }
   const out: Record<string, string> = {};
   for (const [key, entry] of Object.entries(raw as Record<string, unknown>)) {
+    // Host-page JSON: never let a key reach Object.prototype.
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      continue;
+    }
     if (typeof entry === 'string' && entry.trim().length > 0) {
       out[key] = entry.trim();
     }

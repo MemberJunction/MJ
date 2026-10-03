@@ -85,6 +85,10 @@ function objectToBoundedJson(value: object, depth: number, seen: WeakSet<object>
         }
         const out: JSONObject = {};
         for (const key of Object.keys(value).slice(0, MAX_BREADTH)) {
+            // Component state is untrusted; never copy a key that would reach Object.prototype.
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+                continue;
+            }
             out[key] = ToBoundedJson((value as Record<string, unknown>)[key], depth + 1, seen);
         }
         return out;
