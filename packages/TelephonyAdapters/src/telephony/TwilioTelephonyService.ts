@@ -15,7 +15,7 @@
  * @module @memberjunction/telephony-adapters
  */
 
-import { RunView, UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
+import { RunView, UserInfo, IMetadataProvider, LogError, LogStatus } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
@@ -27,10 +27,30 @@ import {
     FROM_NUMBER_CONFIG_KEY,
     INBOUND_CALL_ID_CONFIG_KEY,
 } from '@memberjunction/ai-bridge-base';
-import { TwilioCallSdk, RealTwilioBindings, RealTwilioRestClient } from '@memberjunction/ai-bridge-twilio';
+import {
+    TwilioCallSdk,
+    RealTwilioBindings,
+    RealTwilioRestClient,
+    IsMachineAnsweredBy,
+    IsTerminalTwilioCallStatus,
+    type ITwilioRestLike,
+} from '@memberjunction/ai-bridge-twilio';
 import type { TwilioTelephonyConfig } from '../types.js';
 import { IAgentSessionManager, DefaultAgentSessionManager } from '../sessionManager.js';
 import { TwilioCallMediaRegistry } from './twilioMediaRegistry.js';
+import { GenerateMediaToken } from './mediaSocketAuth.js';
+import { CallLifecycleTracker } from './callLifecycleTracker.js';
+import { CallEndObserverSdk } from './callEndObserver.js';
+import {
+    AuthorizeOutboundCall,
+    OutboundCallRefusedError,
+    OutboundRateLimiter,
+    ResolveOutboundPolicy,
+    type OutboundGuardDeps,
+} from './outboundCallPolicy.js';
+
+/** The engine surface this service drives (a `Pick` so tests inject a fake). */
+type TelephonyEngine = Pick<AIBridgeEngine, 'ProviderByName' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'StopBridgeSession' | 'Config'>;
 
 const TWILIO_PROVIDER_DRIVER = 'TwilioBridge';
 const AGENT_IDENTITY_ENTITY = 'MJ: AI Bridge Agent Identities';
@@ -52,13 +72,25 @@ export interface InboundCallResult {
     accepted: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Why it was rejected (no agent identity for the DID, provider missing, etc.). */
     reason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    /** The per-call media token to embed in the answer TwiML (`<Parameter name="mjToken">`); present when accepted. */
+    MediaToken?: string;
+    /**
+     * Resolves when the bridge session has finished starting (or failed and been cleaned up). The call is
+     * answered WITHOUT waiting on this — Twilio's webhook timeout is short — so callers ignore it; it exists
+     * for tests and diagnostics. Never rejects.
+     */
+    Started?: Promise<void>;
 }
 
 /** Injectable collaborators (production defaults wired in the constructor; fakes in tests). */
 export interface TwilioTelephonyServiceDeps {
-    engine?: Pick<AIBridgeEngine, 'ProviderByName' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'Config'>;
+    engine?: TelephonyEngine;
     sessionFactory?: typeof CreateBridgeRealtimeSession;
     sessionManager?: IAgentSessionManager;
+    /** The REST client used to hang up a call whose session failed to start (defaults to the real client). */
+    rest?: ITwilioRestLike;
+    /** Overrides the agent-permission check of the outbound gate (defaults to `AIAgentPermissionHelper`). */
+    canRunAgent?: OutboundGuardDeps['CanRunAgent'];
 }
 
 /**
@@ -66,32 +98,44 @@ export interface TwilioTelephonyServiceDeps {
  * sharing the {@link TwilioCallMediaRegistry} with the Media-Streams WSS server.
  */
 export class TwilioTelephonyService {
-    private readonly rest: RealTwilioRestClient;
-    private readonly engine: Pick<AIBridgeEngine, 'ProviderByName' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'Config'>;
+    private readonly rest: ITwilioRestLike;
+    private readonly engine: TelephonyEngine;
     private readonly sessionFactory: typeof CreateBridgeRealtimeSession;
     private readonly sessionManager: IAgentSessionManager;
+    private readonly tracker: CallLifecycleTracker;
+    private readonly outboundGuard: OutboundGuardDeps;
 
     constructor(
         private readonly config: TwilioTelephonyConfig,
         private readonly registry: TwilioCallMediaRegistry,
         deps: TwilioTelephonyServiceDeps = {},
     ) {
-        this.rest = new RealTwilioRestClient({
-            AccountSid: config.accountSid,
-            AuthToken: config.authToken,
-            ApiKeySid: config.apiKeySid,
-            ApiKeySecret: config.apiKeySecret,
-        });
+        this.rest =
+            deps.rest ??
+            new RealTwilioRestClient({
+                AccountSid: config.accountSid,
+                AuthToken: config.authToken,
+                ApiKeySid: config.apiKeySid,
+                ApiKeySecret: config.apiKeySecret,
+            });
         this.engine = deps.engine ?? AIBridgeEngine.Instance;
         this.sessionFactory = deps.sessionFactory ?? CreateBridgeRealtimeSession;
         this.sessionManager = deps.sessionManager ?? new DefaultAgentSessionManager();
+        this.tracker = new CallLifecycleTracker(
+            (session, reason) => this.engine.StopBridgeSession(session.SessionBridgeID, reason, session.ContextUser, session.Provider),
+            config.maxCallSeconds,
+        );
+        const policy = ResolveOutboundPolicy(config.outbound);
+        this.outboundGuard = { Policy: policy, Limiter: new OutboundRateLimiter(policy.MaxCallsPerUserPerHour), CanRunAgent: deps.canRunAgent };
+        this.wireRegistryHooks();
     }
 
     /**
-     * Resolves the dialed DID to a pinned agent and starts an INBOUND bridge session. The bound
-     * `RealTwilioBindings` will accept the Media-Streams socket (opened by the webhook's TwiML) for the
-     * Call SID. Returns `{ accepted:false }` (never throws) when no agent identity matches the DID, so
-     * the webhook can answer with a polite "no agent" message instead of a 500.
+     * Admits an INBOUND call: resolves the dialed DID to a pinned agent, registers the call + its media-socket
+     * token, and starts the bridge session **in the background**. Returns as soon as the call is admitted so
+     * the voice webhook can answer inside Twilio's short timeout; the Media-Streams socket (and any audio the
+     * caller speaks) is buffered until the session is ready. Returns `{ accepted:false }` (never throws) when
+     * no agent identity matches the DID, so the webhook can answer with a polite "no agent" message.
      */
     public async HandleInboundCall(input: InboundCallInput, contextUser: UserInfo, provider: IMetadataProvider): Promise<InboundCallResult> {
         try {
@@ -101,16 +145,10 @@ export class TwilioTelephonyService {
             if (!identity) {
                 return { accepted: false, reason: `No active agent identity for dialed number '${input.to}'.` };
             }
-            this.registry.RegisterCall(input.callSid);
-            await this.startBridge({
-                agentID: identity.AgentID,
-                direction: 'Inbound',
-                address: input.from,
-                inboundCallId: input.callSid,
-                contextUser,
-                provider,
-            });
-            return { accepted: true };
+            const token = GenerateMediaToken();
+            this.registry.ExpectCall(input.callSid, token); // also marks the call as starting in the tracker
+            const Started = this.startInboundInBackground(input, identity.AgentID, contextUser, provider);
+            return { accepted: true, MediaToken: token, Started };
         } catch (e) {
             LogError(`[Telephony][Twilio] inbound call ${input.callSid} failed: ${e instanceof Error ? e.message : String(e)}`);
             return { accepted: false, reason: 'Internal error starting the agent.' };
@@ -118,29 +156,101 @@ export class TwilioTelephonyService {
     }
 
     /**
-     * Places an OUTBOUND call from a given agent identity to a destination number. The bound
-     * `RealTwilioBindings.createCall` issues the Twilio REST `POST /Calls` with the `<Connect><Stream>`
-     * TwiML; the returned Call SID is the bridge's external connection id.
+     * Places an OUTBOUND call from a given agent identity to a destination number, after the shared outbound
+     * gate (agent permission, destination policy, rate limit) has authorized it. The bound
+     * `RealTwilioBindings.createCall` issues the Twilio REST `POST /Calls` with the `<Connect><Stream>` TwiML;
+     * the returned Call SID is the bridge's external connection id.
      *
      * @returns The placed Call SID.
+     * @throws {OutboundCallRefusedError} when the gate refuses the call (the message is caller-safe).
      */
     public async PlaceOutboundCall(agentIdentityId: string, toNumber: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string> {
         const identity = await this.loadAgentIdentity(agentIdentityId, contextUser, provider);
         if (!identity) {
             throw new Error(`Agent identity '${agentIdentityId}' not found or inactive.`);
         }
-        const session = await this.startBridge({
-            agentID: identity.AgentID,
-            direction: 'Outbound',
-            address: toNumber,
-            fromNumber: identity.IdentityValue,
-            contextUser,
-            provider,
-        });
-        return session.RoomKey ?? '';
+        await this.engine.Config(false, contextUser, provider);
+        const to = (toNumber ?? '').trim();
+        const verdict = await AuthorizeOutboundCall(
+            { User: contextUser, AgentIdentity: identity, CarrierProviderID: this.resolveProvider().ID, ToNumber: to },
+            this.outboundGuard,
+        );
+        if (!verdict.Allowed) {
+            throw new OutboundCallRefusedError(verdict.Reason, verdict.Code);
+        }
+        const session = await this.startBridge({ agentID: identity.AgentID, direction: 'Outbound', address: to, fromNumber: identity.IdentityValue, contextUser, provider });
+        const callSid = session.RoomKey ?? '';
+        await this.tracker.Attach(callSid, { SessionBridgeID: session.SessionBridgeID, ContextUser: contextUser, Provider: provider });
+        return callSid;
+    }
+
+    /**
+     * Handles a Twilio status-callback event. A terminal status (`busy`, `no-answer`, `failed`, `canceled`,
+     * `completed`) ends the call's bridge session — an unanswered outbound call never opens a media socket, so
+     * without this the session would linger. Non-terminal statuses are ignored.
+     */
+    public async HandleStatusCallback(callSid: string, callStatus: string | undefined): Promise<void> {
+        if (!IsTerminalTwilioCallStatus(callStatus)) {
+            return;
+        }
+        await this.tracker.RequestEnd(callSid, 'carrier-status');
+        this.registry.EndCall(callSid);
+    }
+
+    /**
+     * Handles Twilio's async answering-machine verdict. A machine or fax hangs the call up unless
+     * `onMachine` is `'continue'` (then the verdict is only logged). `human`/`unknown` verdicts are ignored.
+     */
+    public async HandleAnsweringMachine(callSid: string, answeredBy: string | undefined): Promise<void> {
+        if (!IsMachineAnsweredBy(answeredBy)) {
+            return;
+        }
+        if (this.config.onMachine === 'continue') {
+            LogStatus(`[Telephony][Twilio] call ${callSid} answered by '${answeredBy}'; onMachine=continue, leaving the call up.`);
+            return;
+        }
+        await this.tracker.RequestEnd(callSid, 'answering-machine', 'Explicit');
+    }
+
+    /** Cancels every timer and drops tracked state (server shutdown). */
+    public Dispose(): void {
+        this.tracker.Dispose();
+        this.registry.Dispose();
     }
 
     // ── internals ────────────────────────────────────────────────────────────────
+
+    /** Connects the registry's lifecycle events to the tracker: a known call begins; a never-connected one ends. */
+    private wireRegistryHooks(): void {
+        this.registry.OnCallRegistered((callSid) => this.tracker.Begin(callSid));
+        this.registry.OnConnectTimeout((callSid) => {
+            void this.tracker.RequestEnd(callSid, 'media-connect-timeout').catch((e) =>
+                LogError(`[Telephony][Twilio] connect-timeout stop failed for ${callSid}: ${e instanceof Error ? e.message : String(e)}`),
+            );
+        });
+    }
+
+    /** Starts the inbound bridge session; on failure logs, hangs the call up and frees its state. Never rejects. */
+    private async startInboundInBackground(input: InboundCallInput, agentID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+        try {
+            const session = await this.startBridge({ agentID, direction: 'Inbound', address: input.from, inboundCallId: input.callSid, contextUser, provider });
+            await this.tracker.Attach(input.callSid, { SessionBridgeID: session.SessionBridgeID, ContextUser: contextUser, Provider: provider });
+        } catch (e) {
+            LogError(`[Telephony][Twilio] inbound call ${input.callSid} could not start its agent session: ${e instanceof Error ? e.message : String(e)}`);
+            await this.abandonCall(input.callSid);
+        }
+    }
+
+    /** Frees a call's state and hangs it up at the carrier (best-effort) — used when its session cannot start. */
+    private async abandonCall(callSid: string): Promise<void> {
+        this.tracker.Fail(callSid);
+        this.registry.EndCall(callSid);
+        try {
+            await this.rest.UpdateCall(callSid, { Status: 'completed' });
+        } catch (e) {
+            LogError(`[Telephony][Twilio] could not hang up call ${callSid} after a failed start: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
 
     /** Shared inbound/outbound bridge-start: resolve provider, open the realtime session, bind the SDK, start. */
     private async startBridge(args: {
@@ -151,7 +261,7 @@ export class TwilioTelephonyService {
         fromNumber?: string;
         contextUser: UserInfo;
         provider: IMetadataProvider;
-    }): Promise<{ RoomKey?: string }> {
+    }): Promise<{ RoomKey?: string; SessionBridgeID: string }> {
         await this.engine.Config(false, args.contextUser, args.provider);
         const twilioProvider = this.resolveProvider();
 
@@ -178,7 +288,7 @@ export class TwilioTelephonyService {
             ContextUser: args.contextUser,
             MetadataProvider: args.provider,
         });
-        return { RoomKey: active.RoomKey };
+        return { RoomKey: active.RoomKey, SessionBridgeID: active.SessionBridgeID };
     }
 
     /** Resolves the seeded Twilio provider row (by driver class, falling back to display name). */
@@ -192,20 +302,26 @@ export class TwilioTelephonyService {
 
     /**
      * Builds the per-session SDK binding that wires the REAL Twilio bindings (REST client + the per-call
-     * media registry) onto the telephony driver — overriding the package's default unbound SDK.
+     * media registry) onto the telephony driver — overriding the package's default unbound SDK. The SDK is
+     * wrapped so the tracker learns of every call end (releasing the max-duration timer).
      */
     public BuildBindSdk(): BridgeNativeSdkBinding {
         return (driver) => {
             const telephony = driver as BaseTelephonyBridge;
-            telephony.SetSdkFactory(() =>
-                new TwilioCallSdk(
-                    new RealTwilioBindings({
-                        Rest: this.rest,
-                        MediaPump: this.registry,
-                        StreamUrl: this.config.streamPublicUrl,
-                        StatusCallbackUrl: this.config.statusCallbackUrl,
-                    }),
-                ),
+            telephony.SetSdkFactory(
+                () =>
+                    new CallEndObserverSdk(
+                        new TwilioCallSdk(
+                            new RealTwilioBindings({
+                                Rest: this.rest,
+                                MediaPump: this.registry,
+                                StreamUrl: this.config.streamPublicUrl,
+                                StatusCallbackUrl: this.config.statusCallbackUrl,
+                                AsyncAmdStatusCallbackUrl: this.config.amdStatusCallbackUrl,
+                            }),
+                        ),
+                        (callSid) => this.tracker.Release(callSid),
+                    ),
             );
         };
     }
