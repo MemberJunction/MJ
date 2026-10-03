@@ -8,7 +8,7 @@
  * **This registry is per process.** With more than one MJAPI instance an offer made on instance A is invisible to a
  * console connected to instance B, and an accept that lands on B cannot find it. A multi-instance deployment needs a
  * database-backed registry behind the same interface; that needs a table, which this build deliberately does not add
- * (see `plans/realtime/bridges-and-widget/LOCAL-HANDOFF.md`).
+ * (see `plans/realtime/bridges-and-widget/LOCAL-HANDOFF-PR3.md`).
  *
  * An accept or decline is authorised by comparing the offer's target user with the caller, and a mismatch answers
  * exactly as a missing offer does: someone who does not own an offer cannot learn that it exists.

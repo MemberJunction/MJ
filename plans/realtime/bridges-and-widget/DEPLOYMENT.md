@@ -473,7 +473,7 @@ transferTargets: [
   leaves. The target must name an active agent.
 - **What this is not.** There are no queues, routing strategies or business hours here; those come later as an Open App that
   extends the directory. Offers are **in memory, per process**: with more than one MJAPI instance an offer is visible only to the
-  instance that created it (see `LOCAL-HANDOFF.md`).
+  instance that created it (see `LOCAL-HANDOFF-PR3.md`).
 - **Who can see an offer.** Only its target user: listing, accepting, declining and the live subscription are all scoped to the
   signed-in user, and a stranger's attempt answers exactly like a missing offer.
 
@@ -560,7 +560,7 @@ The things that cost real time during bring-up — each is now either fixed in c
 | `PlaceTwilioCall` etc. returns "outside the allowed calling ranges" / "blocked range" / "limit reached" / "permission to run this agent" | the outbound gate refused the call | adjust `telephony.outbound` (§4) or the caller's agent run permission; every refusal is logged with the masked destination |
 | LiveKit SIP: the caller hears ringing, then the call drops with no agent | the answered number has no `MJ: AI Bridge Agent Identities` row on the `LiveKitBridge` provider, the capacity cap is reached, or no run-as user is set | the LiveKit SIP path can only hang up (no spoken apology); read the `[Telephony][LiveKitSip] inbound call in <room> ...` log line for the reason (§6c) |
 | LiveKit webhook returns **401** | the project webhook is signed with a different API key/secret than `telephony.livekitSip` uses | use the same key pair for the webhook and the config (§6c step 4) |
-| Handoff to a person: nothing appears in the console | the offer is held in the memory of the MJAPI instance that took the call, and the person's Explorer is connected to another instance | single instance only for now; see `LOCAL-HANDOFF.md` |
+| Handoff to a person: nothing appears in the console | the offer is held in the memory of the MJAPI instance that took the call, and the person's Explorer is connected to another instance | single instance only for now; see `LOCAL-HANDOFF-PR3.md` |
 | A fallback leg or a transfer to a number does nothing in a room | `telephony.livekitSip.outboundTrunkId` is not set, or the LiveKit outbound trunk's Twilio termination credentials are wrong | create the outbound trunk and set the id (§6c step 3) |
 | Outbound rejected, Twilio **21210** | caller-ID (the agent identity's number) isn't provisioned on the Twilio account | use a number you own on the account as the agent identity's `IdentityValue` |
 | entity-permissions push fails on `@lookup …RLS Filters` | pushed before the RLS-filter migration ran | migrate first, then push metadata (§2 ordering) |

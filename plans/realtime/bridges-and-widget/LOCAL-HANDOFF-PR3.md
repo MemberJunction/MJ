@@ -1,7 +1,6 @@
-# Local hand-off notes
+# Local hand-off notes: PR 3 (rooms + humans)
 
-Things a pull request deliberately did not do, kept here so the next person (or the person running the database work) finds them
-in one place. Each section names the PR that left it.
+PR 3's deferred items. The ordered, program-wide guide is `LOCAL-HANDOFF.md` (on the schema branch); this file holds the detail for the items it references.
 
 ## PR 3 deferred to DB work
 
