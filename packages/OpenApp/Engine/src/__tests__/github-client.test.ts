@@ -4,7 +4,10 @@
  * methods it calls (repos.getContent / git.getRef / repos.listTags / repos.listReleases)
  * and the auth token each constructed client receives.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // Hoisted shared mocks: every `new Octokit()` returns an object backed by the SAME
 // method mocks, so a test can stub the next response and assert on the call args.
@@ -54,6 +57,8 @@ import {
     FetchManifestFromGitHub,
     IsPrereleaseVersion,
     ClearGitHubTagCache,
+    FindVersionTagName,
+    DownloadMigrations,
 } from '../github/github-client.js';
 import type { GitHubClientOptions } from '../github/github-client.js';
 
@@ -675,5 +680,186 @@ describe('scoped (multi-app) version resolution', () => {
         mocks.getRef.mockResolvedValueOnce({ data: {} });
         await ValidateGitHubTag('https://github.com/Acme/App', '2.0.0', {});
         expect(mocks.getRef).toHaveBeenCalledWith({ owner: 'Acme', repo: 'App', ref: 'tags/v2.0.0' });
+    });
+});
+
+
+// ── The package-tagged monorepo ──────────────────────────────────────────────────────────────
+//
+// A connector lives at `Events/PheedLoop` but releases through changesets, so its tag is the
+// PACKAGE name: `@memberjunction/connector-pheedloop@1.4.6`. Deriving the tag from the folder
+// produced `Events-PheedLoop@…`, which matches nothing — so every such app resolved to no version
+// and `mj app upgrade` reported 'Could not determine target version'. Installs hid it, because a
+// version-less install resolves to HEAD and never reads a tag.
+const PHEEDLOOP_TAGS = {
+    data: [
+        { name: '@memberjunction/connector-pheedloop@1.4.6' },
+        { name: '@memberjunction/connector-pheedloop@1.4.5' },
+        { name: '@memberjunction/connector-nimble-ams@1.3.2' },
+        { name: 'not-semver' },
+    ],
+};
+
+describe('scoped tags named after the package, not the folder', () => {
+    it('finds the version when the app name is supplied', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const v = await GetLatestVersion(
+            'https://github.com/MemberJunction/Integrations', {}, 'Events/PheedLoop', 'connector-pheedloop'
+        );
+        expect(v).toBe('1.4.6');
+    });
+
+    it('is the regression: without the app name the folder form matches nothing', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const v = await GetLatestVersion(
+            'https://github.com/MemberJunction/Integrations', {}, 'Events/PheedLoop'
+        );
+        expect(v).toBeNull();
+    });
+
+    it('does not bleed across connectors sharing the repo', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const v = await GetLatestVersion(
+            'https://github.com/MemberJunction/Integrations', {}, 'AMS/NimbleAMS', 'connector-nimble-ams'
+        );
+        expect(v).toBe('1.3.2');
+    });
+
+    it('resolves the REAL tag name for a version, not one built from the folder', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const tag = await FindVersionTagName(
+            'https://github.com/MemberJunction/Integrations', {}, '1.4.6', 'Events/PheedLoop', 'connector-pheedloop'
+        );
+        expect(tag).toBe('@memberjunction/connector-pheedloop@1.4.6');
+    });
+
+    it('returns null for a version that is not tagged', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const tag = await FindVersionTagName(
+            'https://github.com/MemberJunction/Integrations', {}, '9.9.9', 'Events/PheedLoop', 'connector-pheedloop'
+        );
+        expect(tag).toBeNull();
+    });
+
+    it('still honours a repo that genuinely tags by folder', async () => {
+        mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'Events-PheedLoop@2.0.0' }] });
+        const v = await GetLatestVersion(
+            'https://github.com/MemberJunction/Integrations', {}, 'Events/PheedLoop', 'connector-pheedloop'
+        );
+        expect(v).toBe('2.0.0');
+    });
+});
+
+
+// ── DownloadMigrations: the THIRD ResolveRef consumer ─────────────────────────────────────────
+//
+// The manifest fetch and the tag validation both learned to resolve the tag that exists; the
+// migration download did not, and it is the one call that ALWAYS has a version — `manifest.version`
+// is required by the manifest schema, so it never falls back to HEAD. For a package-tagged monorepo
+// app WITH migrations that made every install and upgrade 404 in the Migration phase
+// ('Failed to download migrations: Not Found'), and made the PostgreSQL `-pg` probe — which reads a
+// 404 as "no PG variant here" — skip the PG set silently.
+const REAL_TAG = '@memberjunction/connector-pheedloop@1.4.6';
+
+/**
+ * Serves the migrations tree ONLY at `atRef`; every other ref 404s exactly as GitHub does for a tag
+ * that was never pushed. A test therefore cannot pass by COMPOSING a ref — the bug composed a ref
+ * that looked right and did not exist — it has to request the one the repo really has.
+ */
+function serveMigrationsOnlyAt(atRef: string, treePath: string): void {
+    mocks.getContent.mockImplementation(async ({ ref, path }: { ref: string; path: string }) => {
+        if (ref !== atRef) throw Object.assign(new Error('Not Found'), { status: 404 });
+        if (path === treePath) {
+            return { data: [{ type: 'file', name: 'V1__seed.sql', path: `${treePath}/V1__seed.sql`, sha: 'sha-1' }] };
+        }
+        return { data: { type: 'file', sha: 'sha-1', encoding: 'base64', content: Buffer.from('-- seed').toString('base64') } };
+    });
+}
+
+/** Every ref `getContent` was asked for, in order. */
+function requestedRefs(): string[] {
+    return mocks.getContent.mock.calls.map((c) => (c[0] as { ref: string }).ref);
+}
+
+describe('DownloadMigrations resolves the tag that exists', () => {
+    let dir: string;
+
+    beforeEach(() => {
+        dir = mkdtempSync(join(tmpdir(), 'mj-dlmig-'));
+    });
+
+    afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+    it('requests the package-scoped tag, not one composed from the folder', async () => {
+        stubTags(PHEEDLOOP_TAGS.data.map((t) => t.name));
+        serveMigrationsOnlyAt(REAL_TAG, 'Events/PheedLoop/migrations');
+
+        const result = await DownloadMigrations(
+            'https://github.com/MemberJunction/Integrations', '1.4.6', 'migrations', dir, {},
+            'Events/PheedLoop', 'connector-pheedloop'
+        );
+
+        expect(result.Success).toBe(true);
+        expect(result.Files).toEqual(['V1__seed.sql']);
+        // The EXACT ref, not merely "it succeeded": the original bug composed a ref that was
+        // well-formed and absent, so only the literal string distinguishes fixed from broken.
+        expect(requestedRefs()).toEqual([REAL_TAG, REAL_TAG]);
+        expect(requestedRefs().every((r) => r === REAL_TAG)).toBe(true);
+        // One tag listing, genuinely issued — a warm memo would make this 0 and the pin vacuous.
+        expect(mocks.listTags).toHaveBeenCalledTimes(1);
+    });
+
+    it('is the regression: the folder form ALONE resolves nothing', async () => {
+        stubTags(PHEEDLOOP_TAGS.data.map((t) => t.name));
+        serveMigrationsOnlyAt(REAL_TAG, 'Events/PheedLoop/migrations');
+
+        // No app name — exactly how all three orchestrator call sites used to call it.
+        const result = await DownloadMigrations(
+            'https://github.com/MemberJunction/Integrations', '1.4.6', 'migrations', dir, {},
+            'Events/PheedLoop'
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/Failed to download migrations/);
+        expect(requestedRefs()).toEqual(['Events-PheedLoop@1.4.6']);
+        expect(result.Files).toBeUndefined();
+    });
+
+    it('leaves a single-app repo on its repo-wide v-tag', async () => {
+        stubTags(['v2.0.0']);
+        serveMigrationsOnlyAt('v2.0.0', 'migrations');
+
+        const result = await DownloadMigrations('https://github.com/Acme/App', '2.0.0', 'migrations', dir, {});
+
+        expect(result.Success).toBe(true);
+        expect(requestedRefs()).toEqual(['v2.0.0', 'v2.0.0']);
+        // No candidates to resolve against, so no tag listing is issued at all.
+        expect(mocks.listTags).not.toHaveBeenCalled();
+    });
+
+    it('still falls back to the composed folder ref when the repo really tags that way', async () => {
+        stubTags(['Events-PheedLoop@1.4.6']);
+        serveMigrationsOnlyAt('Events-PheedLoop@1.4.6', 'Events/PheedLoop/migrations');
+
+        const result = await DownloadMigrations(
+            'https://github.com/MemberJunction/Integrations', '1.4.6', 'migrations', dir, {},
+            'Events/PheedLoop', 'connector-pheedloop'
+        );
+
+        expect(result.Success).toBe(true);
+        expect(requestedRefs()).toEqual(['Events-PheedLoop@1.4.6', 'Events-PheedLoop@1.4.6']);
+    });
+
+    it('reads no tag at all when no version is requested (HEAD install is untouched)', async () => {
+        serveMigrationsOnlyAt('HEAD', 'Events/PheedLoop/migrations');
+
+        const result = await DownloadMigrations(
+            'https://github.com/MemberJunction/Integrations', undefined, 'migrations', dir, {},
+            'Events/PheedLoop', 'connector-pheedloop'
+        );
+
+        expect(result.Success).toBe(true);
+        expect(requestedRefs()).toEqual(['HEAD', 'HEAD']);
+        expect(mocks.listTags).not.toHaveBeenCalled();
     });
 });
