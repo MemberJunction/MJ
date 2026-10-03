@@ -39,6 +39,7 @@ import { AutotagBaseEngine, FieldPathResolver } from '@memberjunction/content-au
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     KnowledgeHubMetadataEngine,
     type MJContentItemEntity,
@@ -254,12 +255,16 @@ async function loadChunks(ctx: IntegrationCheckContext, itemID: string): Promise
     return r.Results;
 }
 /**
- * Refresh the KH cache so a just-created source is visible to the engine. The fixture index needs no
- * reload: it is saved through BaseEntity, and AIEngineBase (which owns the Vector Indexes cache) picks
- * it up from the save event.
+ * Refresh the caches the vectorizer reads, so the rows a check just created are visible to it: the KH
+ * cache for sources, and the Vector Indexes cache in AIEngineBase for the fixture indexes.
+ *
+ * The index reload can't be left to the save event. AIEngineBase overrides AdditionalLoading, so
+ * BaseEngine refreshes it on a 1.5 s debounce rather than mutating the cache immediately, and a check
+ * that vectorizes inside that window finds no index.
  */
 async function refreshEngines(ctx: IntegrationCheckContext): Promise<void> {
     await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+    await AIEngineBase.Instance.RefreshItem('_vectorIndexes');
 }
 function resetCaptures(): void { S.Upserts.length = 0; S.DeletedVectorIds.length = 0; S.EmbedCalls.length = 0; }
 /** The single upserted vector record's metadata for a single-item run. */
