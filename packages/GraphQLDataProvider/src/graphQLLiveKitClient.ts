@@ -63,6 +63,11 @@ export interface StartLiveKitAgentRoomSessionInput {
    * agent). Opt-in; honoured only when the server is configured for handoffs, otherwise the agent starts as usual.
    */
   EnableHandoff?: boolean;
+  /**
+   * How the agent decides it was addressed: `Auto` (default — the model's own judgement when it is full-duplex,
+   * name matching otherwise), `ModelSide`, or `Regex`.
+   */
+  TurnAddressing?: 'Auto' | 'ModelSide' | 'Regex';
 }
 
 /** Result of starting an agent room session (includes a client token so the caller can immediately join). */
@@ -117,6 +122,89 @@ export interface LiveKitRecordingResult {
    * meeting-recording storage provider isn't configured.
    */
   RecordingFileID?: string;
+}
+
+/** The kinds of events a room's turn-taking log records. */
+export type LiveKitTurnEventType =
+  | 'FloorGranted'
+  | 'FloorReleased'
+  | 'FloorDenied'
+  | 'Yielded'
+  | 'Backchannel'
+  | 'HumanSpeech'
+  | 'HumanPreempted'
+  | 'LoopCapReached';
+
+/** One recorded turn-taking event. */
+export interface LiveKitRoomTurnEvent {
+  /** Monotonic per-room sequence number — poll with the last `Seq` seen to render only what is new. */
+  Seq: number;
+  /** Epoch-ms the event happened (server clock). */
+  AtMs: number;
+  /** What happened. */
+  Type: LiveKitTurnEventType;
+  /** The agent session the event is about, when it concerns one. */
+  AgentSessionId?: string;
+  /** For `Yielded`: the agent the floor was handed to. */
+  ToAgentSessionId?: string;
+  /** A short machine-readable reason (e.g. `HeldByOtherAgent`, `HumanSpeaking`, `LoopCapReached`). */
+  Reason?: string;
+}
+
+/** One agent seated in a room, as the turn-taking state describes it. */
+export interface LiveKitRoomTurnAgent {
+  /** The agent's `MJ: AI Agent Sessions` id (matches the ids in {@link LiveKitRoomTurnState}). */
+  AgentSessionID: string;
+  /** The bridge row id (what {@link GraphQLLiveKitClient.StopAgentRoomSession} removes it by). */
+  SessionBridgeID: string;
+  /** The names the agent answers to; the first is its display name. */
+  Names: string[];
+  /** The configured turn-taking mode. */
+  TurnMode: 'Passive' | 'Active' | 'Hybrid';
+  /** How it decides it was addressed (after the model's capability was taken into account). */
+  Addressing: 'ModelSide' | 'Regex';
+  /** Whether its model is full-duplex (its speech runs through the floor gate). */
+  FullDuplex: boolean;
+}
+
+/** A room's live turn-taking state. */
+export interface LiveKitRoomTurnState {
+  /** The room. */
+  RoomId: string;
+  /** The agent session ids seated in the room. */
+  AgentSessionIds: string[];
+  /** The facilitator's agent session id, or `null`. */
+  FacilitatorAgentSessionId: string | null;
+  /** The agent session holding the floor, or `null` when it is free. */
+  FloorHolderAgentSessionId: string | null;
+  /** Epoch-ms the holder took the floor, or `null`. */
+  FloorHeldSinceMs: number | null;
+  /** Whether a person is speaking right now. */
+  HumanSpeaking: boolean;
+  /** The agent session the floor is reserved for after a hand-off, or `null`. */
+  PendingHandoffToAgentSessionId: string | null;
+  /** Consecutive agent turns since a person last spoke. */
+  ConsecutiveAgentTurns: number;
+  /** The cap on consecutive agent turns for this room. */
+  MaxConsecutiveAgentTurns: number;
+  /** Whether the loop cap is reached — agents are passive until a person speaks. */
+  LoopCapReached: boolean;
+  /** How many backchannels the room has recorded. */
+  BackchannelCount: number;
+  /** The most recent events, oldest first. */
+  RecentEvents: LiveKitRoomTurnEvent[];
+  /** The agents seated in the room. */
+  Agents: LiveKitRoomTurnAgent[];
+}
+
+/** Result of {@link GraphQLLiveKitClient.GetRoomTurnState}. */
+export interface LiveKitRoomTurnStateResult {
+  /** Whether the query succeeded. */
+  Success: boolean;
+  /** Error detail when {@link Success} is false. */
+  ErrorMessage?: string;
+  /** The room's turn-taking state, or `null` when the room holds no agents. */
+  State: LiveKitRoomTurnState | null;
 }
 
 /** Typed wrapper over the LiveKit room GraphQL mutations. */
@@ -257,6 +345,38 @@ export class GraphQLLiveKitClient {
     } catch (e: any) {
       LogError('GraphQLLiveKitClient.InviteUsers failed', undefined, e);
       return false;
+    }
+  }
+
+  /**
+   * Reads a room's live turn-taking state — who holds the floor, whether a person is speaking, any pending
+   * hand-off, the agent-to-agent loop-cap progress, the most recent floor events, and who is seated. Poll it
+   * (about once a second) to drive a turn-taking display. Never throws; a failure resolves `{ Success: false }`.
+   *
+   * @param roomName The LiveKit room.
+   */
+  public async GetRoomTurnState(roomName: string): Promise<LiveKitRoomTurnStateResult> {
+    try {
+      const query = gql`
+        query GetLiveKitRoomTurnState($roomName: String!) {
+          GetLiveKitRoomTurnState(roomName: $roomName) {
+            Success
+            ErrorMessage
+            StateJSON
+          }
+        }
+      `;
+      const result = await this._dataProvider.ExecuteGQL(query, { roomName });
+      const raw: { Success: boolean; ErrorMessage?: string; StateJSON?: string | null } | undefined = result?.GetLiveKitRoomTurnState;
+      if (!raw) {
+        throw new Error('Invalid response from server');
+      }
+      const state: LiveKitRoomTurnState | null = raw.StateJSON ? JSON.parse(raw.StateJSON) : null;
+      return { Success: raw.Success, ErrorMessage: raw.ErrorMessage, State: raw.Success ? state : null };
+    } catch (error: unknown) {
+      const e = error as Error;
+      LogError('GraphQLLiveKitClient.GetRoomTurnState failed', undefined, e);
+      return { Success: false, ErrorMessage: e.message || 'Unknown error', State: null };
     }
   }
 

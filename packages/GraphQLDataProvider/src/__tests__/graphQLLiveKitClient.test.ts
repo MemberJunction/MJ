@@ -102,4 +102,63 @@ describe('GraphQLLiveKitClient', () => {
       expect(result.ErrorMessage).toMatch(/egress unavailable/);
     });
   });
+
+  describe('GetRoomTurnState', () => {
+    const state = {
+      RoomId: 'r1',
+      AgentSessionIds: ['a1', 'a2'],
+      FacilitatorAgentSessionId: null,
+      FloorHolderAgentSessionId: 'a1',
+      FloorHeldSinceMs: 1000,
+      HumanSpeaking: false,
+      PendingHandoffToAgentSessionId: null,
+      ConsecutiveAgentTurns: 2,
+      MaxConsecutiveAgentTurns: 8,
+      LoopCapReached: false,
+      BackchannelCount: 3,
+      RecentEvents: [{ Seq: 1, AtMs: 1000, Type: 'FloorGranted', AgentSessionId: 'a1', Reason: 'FloorFree' }],
+      Agents: [{ AgentSessionID: 'a1', SessionBridgeID: 'b1', Names: ['Sage'], TurnMode: 'Passive', Addressing: 'ModelSide', FullDuplex: true }],
+    };
+
+    it('queries by room name and parses the JSON state', async () => {
+      const { provider, calls } = makeProvider({ GetLiveKitRoomTurnState: { Success: true, StateJSON: JSON.stringify(state) } });
+      const result = await new GraphQLLiveKitClient(provider).GetRoomTurnState('r1');
+
+      expect(calls[0].variables).toEqual({ roomName: 'r1' });
+      expect(result.Success).toBe(true);
+      expect(result.State?.FloorHolderAgentSessionId).toBe('a1');
+      expect(result.State?.RecentEvents[0].Type).toBe('FloorGranted');
+      expect(result.State?.Agents[0].Addressing).toBe('ModelSide');
+    });
+
+    it('returns a null state when the room holds no agents', async () => {
+      const { provider } = makeProvider({ GetLiveKitRoomTurnState: { Success: true, StateJSON: null } });
+      const result = await new GraphQLLiveKitClient(provider).GetRoomTurnState('r1');
+      expect(result).toEqual({ Success: true, ErrorMessage: undefined, State: null });
+    });
+
+    it('reports a server-side failure without state', async () => {
+      const { provider } = makeProvider({ GetLiveKitRoomTurnState: { Success: false, ErrorMessage: 'nope', StateJSON: JSON.stringify(state) } });
+      const result = await new GraphQLLiveKitClient(provider).GetRoomTurnState('r1');
+      expect(result).toEqual({ Success: false, ErrorMessage: 'nope', State: null });
+    });
+
+    it('normalizes a transport error or unparseable state into a failure (never throws)', async () => {
+      const down = makeProvider(() => {
+        throw new Error('network down');
+      });
+      expect((await new GraphQLLiveKitClient(down.provider).GetRoomTurnState('r1')).ErrorMessage).toMatch(/network down/);
+
+      const garbled = makeProvider({ GetLiveKitRoomTurnState: { Success: true, StateJSON: '{not json' } });
+      const result = await new GraphQLLiveKitClient(garbled.provider).GetRoomTurnState('r1');
+      expect(result.Success).toBe(false);
+      expect(result.State).toBeNull();
+    });
+
+    it('rejects an empty reply', async () => {
+      const { provider } = makeProvider({});
+      const result = await new GraphQLLiveKitClient(provider).GetRoomTurnState('r1');
+      expect(result.Success).toBe(false);
+    });
+  });
 });

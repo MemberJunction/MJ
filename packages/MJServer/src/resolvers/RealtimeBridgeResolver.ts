@@ -1,11 +1,18 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { randomUUID } from 'crypto';
 import { LogError, LogStatusEx, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService, LiveKitUserIdentity, RoomHandoffEngine } from '@memberjunction/livekit-room-server';
+import type { TurnAddressingMode } from '@memberjunction/ai-bridge-base';
+import {
+  LiveKitTokenService,
+  LiveKitAgentRoomCoordinator,
+  LiveKitEgressService,
+  LiveKitUserIdentity,
+  RoomHandoffEngine,
+} from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
-import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices, CreateBridgeRoomTranscriptSink, RealtimeTurnModeratorDecision } from '@memberjunction/ai-agents';
+import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices, CreateBridgeRoomTranscriptSink, RealtimeTurnModeratorDecision, GetBridgeRealtimeRuntime } from '@memberjunction/ai-agents';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -20,6 +27,20 @@ import { RegisterMeetingRecordingFile, CorrelateRecordingStart } from './meeting
  * other. Idempotent (latest-wins).
  */
 LiveKitAgentRoomCoordinator.Instance.SetSessionFactory(CreateBridgeRealtimeSession);
+
+/**
+ * Binds the turn-taking tool handler seam (same module-load rationale as the factory above). A full-duplex model
+ * in a shared room calls `i_am_addressed` / `yield_turn`; the bridge engine owns what those mean, and this installs
+ * the engine's handler as the model session runtime's local tool handler (`@memberjunction/ai-agents`).
+ */
+LiveKitAgentRoomCoordinator.Instance.SetTurnToolBinder((session, handler) => {
+  const runtime = GetBridgeRealtimeRuntime(session);
+  if (!runtime) {
+    LogError('[RealtimeBridge] the model session has no bridge runtime; i_am_addressed / yield_turn will not execute for it.');
+    return;
+  }
+  runtime.SetLocalToolHandler(handler);
+});
 
 /**
  * Binds the co-agent run finalizer onto the bridge engine (same module-load rationale as the factory above).
@@ -135,6 +156,27 @@ export class StartLiveKitAgentRoomSessionInput {
    */
   @Field(() => Boolean, { nullable: true })
   EnableHandoff?: boolean;
+
+  /**
+   * How this agent decides it was addressed: `Auto` (default — the model's own judgement when it is full-duplex,
+   * name matching otherwise), `ModelSide`, or `Regex`.
+   */
+  @Field(() => String, { nullable: true })
+  TurnAddressing?: string;
+}
+
+/** The live turn-taking state of a room (floor holder, human speaking, hand-off, loop cap, recent events, seated agents). */
+@ObjectType()
+export class LiveKitRoomTurnStateResult {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+
+  /** JSON of the room's `RoomTurnSnapshot`; `null` when the room holds no agents. Parsed by the typed client. */
+  @Field(() => String, { nullable: true })
+  StateJSON?: string;
 }
 
 @ObjectType()
@@ -316,6 +358,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
         RealtimeModelID: input.RealtimeModelID,
         RealtimeVoice: input.RealtimeVoice,
         TurnMode: this.normalizeTurnMode(input.TurnMode),
+        TurnAddressing: this.normalizeTurnAddressing(input.TurnAddressing),
         ContextUser: user,
         MetadataProvider: provider,
       });
@@ -387,6 +430,32 @@ export class RealtimeBridgeResolver extends ResolverBase {
     } catch (error) {
       LogError(`EndLiveKitRoom failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
+    }
+  }
+
+  /**
+   * A room's live turn-taking state — who holds the floor, whether a person is speaking, any pending hand-off,
+   * the agent-to-agent loop-cap progress, the most recent floor/backchannel/yield events, and who is seated. The
+   * agent test bed polls it. Read-only. `StateJSON` is `null` when no agent is in the room.
+   *
+   * @param roomName The LiveKit room.
+   */
+  @Query(() => LiveKitRoomTurnStateResult)
+  async GetLiveKitRoomTurnState(
+    @Arg('roomName', () => String) roomName: string,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<LiveKitRoomTurnStateResult> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return { Success: false, ErrorMessage: 'Unable to determine current user.' };
+      }
+      const snapshot = LiveKitAgentRoomCoordinator.Instance.GetRoomTurnState(roomName);
+      return { Success: true, StateJSON: snapshot ? JSON.stringify(snapshot) : undefined };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      LogError(`GetLiveKitRoomTurnState failed: ${msg}`);
+      return { Success: false, ErrorMessage: msg };
     }
   }
 
@@ -562,6 +631,20 @@ export class RealtimeBridgeResolver extends ResolverBase {
   /** Builds a stable, lowercased participant identity from the authenticated user (shared with the handoff engine, which watches for it). */
   private participantIdentity(user: UserInfo): string {
     return LiveKitUserIdentity(user.ID);
+  }
+
+  /** Normalizes an addressing-mode string; unknown/absent leaves the coordinator's default (`Auto`). */
+  private normalizeTurnAddressing(mode?: string): TurnAddressingMode | undefined {
+    switch ((mode ?? '').trim().toLowerCase()) {
+      case 'auto':
+        return 'Auto';
+      case 'modelside':
+        return 'ModelSide';
+      case 'regex':
+        return 'Regex';
+      default:
+        return undefined;
+    }
   }
 
   /** Normalizes a turn-mode string to the bridge's accepted values. */

@@ -16,6 +16,9 @@ const h = vi.hoisted(() => ({
   startAgentRoomSession: vi.fn(async () => ({ SessionBridgeID: 'bridge-std', RoomName: 'room-std', ServerUrl: 'wss://x.livekit.cloud' })),
   handoffDeps: { AgentStarter: undefined as undefined | ((req: Record<string, unknown>) => Promise<{ SessionBridgeID: string }>) },
   startRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_ACTIVE' })),
+  getRoomTurnState: vi.fn((room: string): unknown => (room === 'busy-room' ? { RoomId: room, Agents: [] } : null)),
+  setTurnToolBinder: vi.fn(),
+  getBridgeRuntime: vi.fn(),
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
 }));
 
@@ -27,7 +30,14 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
     MintClientToken = h.mintClientToken;
   },
   // SetSessionFactory is exercised by the resolver's module-load binding of the realtime-session factory.
-  LiveKitAgentRoomCoordinator: { Instance: { StartAgentRoomSession: h.startAgentRoomSession, SetSessionFactory: vi.fn() } },
+  LiveKitAgentRoomCoordinator: {
+    Instance: {
+      StartAgentRoomSession: h.startAgentRoomSession,
+      SetSessionFactory: vi.fn(),
+      SetTurnToolBinder: h.setTurnToolBinder,
+      GetRoomTurnState: h.getRoomTurnState,
+    },
+  },
   LiveKitUserIdentity: (id: string) => `user-${id}`.toLowerCase(),
   RoomHandoffEngine: { Instance: { Deps: h.handoffDeps } },
   LiveKitEgressService: class {
@@ -43,6 +53,7 @@ vi.mock('@memberjunction/ai-agents', () => ({
   FinalizeBridgeCoAgentRuns: vi.fn(),
   GetRealtimeModelVoices: vi.fn(),
   CreateBridgeRoomTranscriptSink: vi.fn(),
+  GetBridgeRealtimeRuntime: h.getBridgeRuntime,
   // SessionManager's constructor defaults to `new RealtimeClientSessionService()` when this resolver
   // doesn't inject one (it never finalizes client-direct co-agent runs itself) — the mock must still
   // export the class so that default construction doesn't throw.
@@ -73,6 +84,11 @@ class TestableResolver extends RealtimeBridgeResolver {
 
 const ctx = {} as AppContext;
 
+// The resolver module installs the binder once, as it loads. `restoreMocks` clears call history before each test,
+// so take it now rather than reading `mock.calls` inside a test.
+type TurnToolBinderFn = (session: object, handler: object) => void;
+const installedTurnToolBinder = h.setTurnToolBinder.mock.calls[0]?.[0] as TurnToolBinderFn | undefined;
+
 describe('RealtimeBridgeResolver', () => {
   let resolver: TestableResolver;
 
@@ -98,6 +114,53 @@ describe('RealtimeBridgeResolver', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/current user/i);
       expect(result.RoomName).toBe('room-1');
+    });
+  });
+
+  describe('GetLiveKitRoomTurnState', () => {
+    it('serves a room\'s snapshot as JSON for the typed client to parse', async () => {
+      const result = await resolver.GetLiveKitRoomTurnState('busy-room', ctx);
+      expect(result.Success).toBe(true);
+      expect(JSON.parse(result.StateJSON as string)).toEqual({ RoomId: 'busy-room', Agents: [] });
+    });
+
+    it('reports success with no state when the room holds no agents', async () => {
+      const result = await resolver.GetLiveKitRoomTurnState('empty-room', ctx);
+      expect(result).toEqual({ Success: true, StateJSON: undefined });
+    });
+
+    it('requires an authenticated user', async () => {
+      resolver.user = undefined;
+      const result = await resolver.GetLiveKitRoomTurnState('busy-room', ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toMatch(/current user/i);
+    });
+
+    it('turns a failure into a structured error instead of throwing', async () => {
+      h.getRoomTurnState.mockImplementationOnce(() => {
+        throw new Error('boom');
+      });
+      const result = await resolver.GetLiveKitRoomTurnState('busy-room', ctx);
+      expect(result).toMatchObject({ Success: false, ErrorMessage: 'boom' });
+    });
+  });
+
+  describe('turn-taking tool binding', () => {
+    it('installs the engine\'s tool handler as the model session runtime\'s local tool handler', () => {
+      const binder = installedTurnToolBinder!;
+      const setLocalToolHandler = vi.fn();
+      h.getBridgeRuntime.mockReturnValueOnce({ SetLocalToolHandler: setLocalToolHandler });
+      const session = {};
+      const handler = {};
+      binder(session, handler);
+      expect(h.getBridgeRuntime).toHaveBeenCalledWith(session);
+      expect(setLocalToolHandler).toHaveBeenCalledWith(handler);
+    });
+
+    it('does not throw when the session has no bridge runtime', () => {
+      const binder = installedTurnToolBinder!;
+      h.getBridgeRuntime.mockReturnValueOnce(undefined);
+      expect(() => binder({}, {})).not.toThrow();
     });
   });
 

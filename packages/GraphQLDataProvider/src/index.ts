@@ -47,6 +47,11 @@ export type {
     StartLiveKitAgentRoomSessionInput,
     LiveKitAgentRoomSessionResult,
     LiveKitRecordingResult,
+    LiveKitRoomTurnState,
+    LiveKitRoomTurnStateResult,
+    LiveKitRoomTurnAgent,
+    LiveKitRoomTurnEvent,
+    LiveKitTurnEventType,
     RealtimeModelVoices,
     RealtimeVoiceOption
 } from './graphQLLiveKitClient';
