@@ -254,7 +254,11 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Schema proposal",
             "Purpose": "Evaluation",
             "IsDefault": true,
-            "Status": "Active"
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Database Designer"
+            }
           },
           "primaryKey": {
             "ID": "F0D66E1B-4FB8-44F5-9B23-A1673361A489"

@@ -22,6 +22,27 @@ import {
     ValidationWarning
 } from '../types';
 
+export interface AgentRubricResolution {
+    rubricId: string;
+    evaluatorConfig?: Record<string, unknown> | string;
+}
+
+/**
+ * Extract output payload from an agent run.
+ * Parses the FinalPayload string property; falls back to `{ message: agentRun.Message }`
+ * for conversational agents whose output sits in Message, or `{}` when both are empty.
+ */
+export function ExtractOutputPayload(agentRun: { FinalPayload?: string | null; Message?: string | null }): Record<string, unknown> {
+    const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
+    if (finalPayloadObject && Object.keys(finalPayloadObject).length > 0) {
+        return finalPayloadObject;
+    }
+    if (agentRun.Message) {
+        return { message: agentRun.Message };
+    }
+    return finalPayloadObject ?? {};
+}
+
 /**
  * Configuration for Agent Evaluation tests.
  */
@@ -758,15 +779,13 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /**
-     * Extract output payload from agent run.
-     * Parses the FinalPayload string property to get the agent's output for chaining to next turn.
-     * @private
+     * The agent run's output, used both as the payload chained into the next
+     * turn and as `outputPayload`, the actualOutput every oracle judges.
+     * Delegates to {@link ExtractOutputPayload}: the parsed FinalPayload, else
+     * `{ message }` for conversational agents whose output is in Message, else `{}`.
      */
     private extractOutputPayload(agentRun: MJAIAgentRunEntity): Record<string, unknown> {
-        // Parse the FinalPayload string property (which exists on base MJAIAgentRunEntity)
-        // SafeJSONParse returns the parsed object or an empty object if parsing fails
-        const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
-        return finalPayloadObject ?? {};
+        return ExtractOutputPayload(agentRun);
     }
 
 
@@ -864,15 +883,19 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     protected async WithResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
-        const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string } | undefined;
+        const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string; evaluator?: Record<string, unknown> | string } | undefined;
         const loaded = await this.LoadSuites(context);
+        const agentRubricRaw = context.options.agentEvaluationRubricId
+            ? { rubricId: context.options.agentEvaluationRubricId }
+            : await this.LoadAgentEvaluationRubric(context, config.agentId);
         const choice = ResolveRubric({
             run: context.options.rubricId ? { rubricId: context.options.rubricId, versionId: context.options.rubricVersionId } : undefined,
             oracle: named,
             testRubricId: context.test.RubricID,
             suites: loaded.suites,
             suiteId: loaded.suiteId,
-            agentRubricId: context.options.agentEvaluationRubricId ?? await this.LoadAgentEvaluationRubric(context, config.agentId),
+            agentRubricId: agentRubricRaw?.rubricId,
+            agentEvaluatorConfig: agentRubricRaw?.evaluatorConfig,
         });
         const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
         const suiteRunId = (context.testRun as { TestSuiteRunID?: string }).TestSuiteRunID || context.testRun.ID;
@@ -929,10 +952,18 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /** The agent's Active default Evaluation rubric, when this test is an agent eval. */
-    protected async LoadAgentEvaluationRubric(context: DriverExecutionContext, agentId: string): Promise<string | undefined> {
+    protected async LoadAgentEvaluationRubric(context: DriverExecutionContext, agentId: string): Promise<AgentRubricResolution | undefined> {
         const rows = await this.ReadMany(context, 'MJ: AI Agent Rubrics', `AgentID='${agentId}' AND Purpose='Evaluation' AND Status='Active'`);
         const chosen = rows.find(row => row.IsDefault === true || row.IsDefault === 1) ?? rows[0];
-        return chosen?.RubricID == null ? undefined : String(chosen.RubricID);
+        if (!chosen || chosen.RubricID == null) return undefined;
+        const rawConfig = chosen.EvaluatorConfig;
+        const evaluatorConfig = (typeof rawConfig === 'string' || (typeof rawConfig === 'object' && rawConfig !== null))
+            ? (rawConfig as Record<string, unknown> | string)
+            : undefined;
+        return {
+            rubricId: String(chosen.RubricID),
+            evaluatorConfig,
+        };
     }
 
     /** Latest Published version of the chosen rubric. The suite pin stores the first answer. */
