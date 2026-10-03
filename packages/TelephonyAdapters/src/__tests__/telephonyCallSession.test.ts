@@ -16,7 +16,7 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => ({
 }));
 
 import { LogError } from '@memberjunction/core';
-import { ResolveOutboundPolicy } from '../telephony/outboundCallPolicy.js';
+import { ResolveOutboundPolicy, type TransferTarget } from '../telephony/outboundCallPolicy.js';
 import { CallCapacityGate } from '../telephony/telephonyCapacity.js';
 import { CALL_CONTROL_SETTLE_MS } from '../telephony/telephonyCallTools.js';
 import {
@@ -74,7 +74,7 @@ interface Setup {
     active: { SessionBridgeID: string; RoomKey: string; Bridge: { TransferCall: ReturnType<typeof vi.fn>; SendDTMF: ReturnType<typeof vi.fn> }; RealtimeSession?: IRealtimeSession };
 }
 
-const DIRECTORY = [{ Name: 'Front desk', Number: '+14155550199', Description: 'general enquiries' }];
+const DIRECTORY: TransferTarget[] = [{ Kind: 'number', Name: 'Front desk', Number: '+14155550199', Description: 'general enquiries' }];
 
 function setup(features: Record<string, boolean> = { CallTransfer: true, DTMF: true }, transferTargets = DIRECTORY): Setup {
     const sessions: ReturnType<typeof fakeSession>[] = [];

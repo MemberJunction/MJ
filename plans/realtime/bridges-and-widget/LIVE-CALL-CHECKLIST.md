@@ -6,6 +6,12 @@
 > been exercised on a real carrier. Twilio DTMF is sent **in-band** (generated tones on the media stream); whether a
 > given IVR accepts those tones is the first thing to confirm in row 15.
 
+> **Rooms accept phone calls, and people can be brought in (PR 3):** rows 22-29 below cover LiveKit SIP into a room, dialing out
+> through the room, warm and blind transfer to a person, decline and timeout falling back to the person's phone, AI-to-AI transfer
+> and web-room escalation. They need a LiveKit project with SIP, a Twilio Elastic SIP trunk (see `DEPLOYMENT.md` §6c), two people
+> (the caller, and a person signed in to Explorer) and at least one extra phone. None of it has been run live, and the LiveKit SIP
+> API calls and Twilio trunk settings were written from documentation: the first runs are also the check on those.
+
 **Why this exists:** the last recorded live Twilio call (June 2026) ran against the old MJServer-hosted ingress.
 The ingress now lives in `@memberjunction/telephony-adapters` (moved 2026-09-12) and has since gained a configured
 inbound run-as user, per-call media-socket tokens, an outbound gate, status callbacks + answering-machine
@@ -54,6 +60,16 @@ Record, for every row: the **Call SID**, **date/time**, **pass/fail**, and anyth
 | 19 | **Model drop** | While a call is up, break the realtime model connection (e.g. block outbound to the model vendor for a few seconds, or kill the model socket). | Within a few seconds the model session is reopened **once** and the agent continues knowing what was said earlier. If it cannot be reopened the caller hears the apology (`<Say>`) and the call ends — it is never silent dead air. Log shows the single recovery attempt, no loop. | | | | |
 | 20 | **Barge-in keeps work running** | Ask the agent something that makes it delegate (a slow lookup), then talk over it (or say "mm-hm") mid-lookup. | The delegated work is **not** cancelled and its answer is still delivered; only a queued "still working on it" progress line is dropped. While delegated work runs the agent narrates progress aloud. | | | | |
 | 21 | **cancel_pending_work** | Start a slow lookup, then say "never mind, stop that". | The agent calls `cancel_pending_work`; log: `agent cancelled N pending run(s) at the caller's request`; the delegated run is aborted and no answer arrives. | | | | |
+| 22 | **SIP inbound into a room** | With a LiveKit inbound trunk + dispatch rule (or `autoProvision`) and the project webhook pointed at `/telephony/livekit-sip/webhook`, call the Twilio number mapped to a `LiveKitBridge` identity. | The call lands in a LiveKit room named `call-…` (visible in the LiveKit dashboard); the agent joins and greets you; two-way conversation. MJAPI log shows `[Telephony][LiveKitSip]` lines for the webhook and no `refused`. A bridge row, an agent session and a conversation exist, and the agent session is `Closed` after hang-up. A webhook with a bad signature is a 401. | | | | |
+| 22b | **SIP inbound refused** | Call a number with no identity row; then blank `inboundRunAsUserEmail` and call; then (with `maxConcurrentCalls: 1`) call while another call is up. | Each call is hung up (no spoken message on this path) and the log names the reason (`inbound call in <room> refused` or the identity / run-as message). No agent session is created for any of them. Restore the settings. | | | | |
+| 23 | **SIP outbound (dial out)** | With `outboundTrunkId` set, run `PlaceLiveKitSipCall` to your phone as a user who may run the agent; answer. Then try a destination outside `telephony.outbound.allowedPrefixes`. | Phone rings; the agent is in the room and speaks once you answer; two-way conversation. The out-of-range destination is refused with `Success:false` and no SIP participant is created. **Open:** the agent is started before the dial; if you hear nothing for the first second, record it. | | | | |
+| 24 | **Warm transfer to a person** | With a `kind: 'user'` target for a person signed in to Explorer, ask the agent on a live SIP call to transfer you to them by name. | The person sees an offer (the Conversation Console updates live and a notification arrives) naming the caller and the agent's summary, with a countdown. They accept; Explorer joins the room; the agent says a one- or two-sentence introduction **to the person**, then leaves; the caller and the person talk. The caller is never dropped or put on a new line. Offer status becomes `Accepted`; the agent session closes. | | | | |
+| 24b | **Offer is private** | While row 24's offer is pending, open the Console as a different user; also call `AcceptHandoffOffer` for that offer id as that user. | The other user sees nothing, and the accept fails exactly like an unknown offer id. The target user still sees and can accept it. | | | | |
+| 25 | **Decline / timeout, fallback** | Ask for the same `user` target (configured with `fallbackNumber`). Once decline the offer; once let the 45 s run out. | Decline: the offer closes at once and the fallback phone rings in the room; when answered it joins the caller's room and the agent leaves. Timeout: the same after 45 s. With no `fallbackNumber` (or no `outboundTrunkId`) the agent is told nobody is available and carries on with the caller. | | | | |
+| 26 | **Blind transfer** | Ask the agent to transfer you "right away, no introduction" to a `user` target (so it picks `blind`); the person accepts. | The person joins; the agent leaves within a couple of seconds **without** briefing; the caller and the person talk. | | | | |
+| 27 | **AI-to-AI transfer** | Ask the agent to transfer you to a `kind: 'agent'` target. | The second agent joins the same room, gives a short brief of the conversation so far, then the first agent leaves; the call is not dropped. A target naming an inactive or unknown agent is refused at startup (logged) and not offered. | | | | |
+| 28 | **Web room escalation** | In Explorer, start a Meet room with the agent using `EnableHandoff` (the room component input), then ask the agent to transfer you to a person. | The same offer / accept flow as row 24, with the visitor's room: the person joins that room, the agent leaves. Without `EnableHandoff` the agent has no transfer tools. | | | | |
+| 29 | **Tab closed / person leaves** | Accept an offer, then close the Console tab (or leave the room) before the agent has left; separately, hang up the caller while an offer is pending. | Closing the tab: the agent stays (it only leaves once the person is present); after 90 s of the accepted person not being in the room they are treated as unavailable (the fallback number rings, or the agent is told and carries on), so the caller is never left alone. Caller hangs up while pending: the offer shows `Cancelled` ("the caller is no longer waiting") and cannot be accepted. | | | | |
 
 ## After the run
 
@@ -84,3 +100,18 @@ first real calls:
       call.
 - [ ] Hanging up an already-ended call (the session stop after a terminal status) logs a harmless Twilio error rather than
       anything that stalls teardown.
+
+### LiveKit SIP (rows 22-29), written from documentation
+
+- [ ] The `livekit-server-sdk` `SipClient` calls MJ makes (`createSipInboundTrunk`, `createSipDispatchRule` with an `individual`
+      rule and `roomPrefix`, `createSipParticipant` with `waitUntilAnswered`, `listSipInboundTrunk` / `listSipOutboundTrunk`)
+      accept the parameter shapes MJ sends and behave as described in `DEPLOYMENT.md` §6c.
+- [ ] A signed LiveKit webhook is accepted, and a `participant_joined` event for a SIP participant carries kind `3` and the
+      attributes `sip.phoneNumber` (the caller), `sip.trunkPhoneNumber` (the number dialed) and `sip.callID`.
+- [ ] The Twilio trunk settings in `DEPLOYMENT.md` §6c (origination URI, termination URI and its authentication, number
+      association) are sufficient for both directions; in particular the credential-list vs IP-ACL choice for termination.
+- [ ] `createSipParticipant` for the fallback leg and for `PlaceLiveKitSipCall` rings the phone and only reports success once
+      answered (`waitUntilAnswered`), and the agent speaks first on an outbound call (the agent is started before the dial).
+- [ ] Removing a SIP participant (hang-up on refusal, end of call) ends the phone leg.
+- [ ] The room's recording / egress behaviour for SIP calls matches the governance expectations in
+      `plans/realtime/livekit-recording-governance.md` (a phone caller has not consented to anything by joining).

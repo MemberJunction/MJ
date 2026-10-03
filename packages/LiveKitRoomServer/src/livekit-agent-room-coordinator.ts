@@ -15,9 +15,9 @@
 
 import { BaseSingleton } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { IRealtimeSession } from '@memberjunction/ai';
+import type { IRealtimeSession, RealtimeToolDefinition } from '@memberjunction/ai';
 import { AlwaysAddressedMatcher, RegexAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode } from '@memberjunction/ai-bridge-base';
-import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
+import { AIBridgeEngine, type BridgeTranscriptSink } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
 
 /** The subset of {@link AIBridgeEngine} the coordinator drives — an injectable seam for unit testing. */
@@ -53,6 +53,45 @@ export interface RealtimeSessionStartContext {
   MeetingMode?: boolean;
   /** The names the agent answers to (display name + aliases) — phrasing for the meeting prompt. */
   SelfNames?: string[];
+  /** Tools the host declares and executes itself (call control, handoff). Added to the model's tool set. */
+  HostTools?: RealtimeToolDefinition[];
+  /** Host-authored instructions appended to the system prompt (for example the phone framing). */
+  HostFraming?: string;
+  /** Role-tagged transcript so far, framed into the prompt when a lost model session is re-opened mid-call. */
+  PriorTranscript?: string;
+  /** The `MJ: Conversations` row the session writes to — stamped on the co-agent observability run. */
+  ConversationID?: string;
+}
+
+/**
+ * What a HOST that owns the call (a phone call arriving in a room, a web room with handoff tools) adds to an agent's
+ * room session beyond the plain "join the room" the coordinator does for the Meet UI. All optional: a session started
+ * without it behaves exactly as before.
+ */
+export interface AgentRoomHostOptions {
+  /** Tools the host executes itself. */
+  HostTools?: RealtimeToolDefinition[];
+  /** Instructions appended to the agent's system prompt. */
+  HostFraming?: string;
+  /** The conversation the session's transcript belongs to. */
+  ConversationID?: string;
+  /**
+   * Called with every model session opened for this agent (the first one, and any re-opened after a drop) so the host
+   * can attach its tool handler to each.
+   */
+  OnModelSession?: (session: IRealtimeSession) => void;
+  /** Where this session's final transcript lines go (instead of the shared room transcript). */
+  TranscriptSink?: BridgeTranscriptSink;
+  /** The participant talked over the agent (a true barge-in). */
+  OnBargeIn?: () => void;
+  /** Re-open the model session once, with the conversation so far, if it drops mid-call. */
+  RecoverModelSession?: boolean;
+  /** Called once when the session has fully ended, for the host's own bookkeeping. */
+  OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
+  /** How the agent got into the room. Default `'OnDemand'`. */
+  JoinMethod?: 'InboundRoute' | 'OnDemand' | 'Invite';
+  /** Whether the agent was called into the room or placed the call. Default: not stated. */
+  Direction?: 'Inbound' | 'Outbound';
 }
 
 /**
@@ -88,6 +127,8 @@ export interface StartAgentRoomSessionParams {
   ContextUser?: UserInfo;
   /** The metadata provider for the session. */
   MetadataProvider?: IMetadataProvider;
+  /** What a host that owns the call adds (tools, framing, transcript, recovery). Absent for a plain Meet room. */
+  Host?: AgentRoomHostOptions;
 }
 
 /** One agent's membership in a room's roster (for multi-agent meeting detection). */
@@ -211,28 +252,42 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const moderatorMode = process.env.MJ_REALTIME_MODERATOR_MODE === 'on';
     const isMeeting = moderatorMode && existingAgents.length > 0;
 
-    const session = await this.sessionFactory({
-      AgentID: params.AgentID,
-      AgentName: params.AgentName,
-      TargetAgentID: params.TargetAgentID,
-      RealtimeModelID: params.RealtimeModelID,
-      RealtimeVoice: params.RealtimeVoice,
-      RoomName: params.RoomName,
-      ContextUser: params.ContextUser,
-      MetadataProvider: params.MetadataProvider,
-      // So the co-agent observability run groups under THIS agent session (parity with native chat).
-      AgentSessionID: params.AgentSessionID,
-      MeetingMode: isMeeting || undefined,
-      SelfNames: isMeeting ? selfNames : undefined,
-    });
+    const host = params.Host;
+    const openModelSession = async (priorTranscript?: string): Promise<IRealtimeSession> => {
+      const opened = await this.sessionFactory({
+        AgentID: params.AgentID,
+        AgentName: params.AgentName,
+        TargetAgentID: params.TargetAgentID,
+        RealtimeModelID: params.RealtimeModelID,
+        RealtimeVoice: params.RealtimeVoice,
+        RoomName: params.RoomName,
+        ContextUser: params.ContextUser,
+        MetadataProvider: params.MetadataProvider,
+        // So the co-agent observability run groups under THIS agent session (parity with native chat).
+        AgentSessionID: params.AgentSessionID,
+        MeetingMode: isMeeting || undefined,
+        SelfNames: isMeeting ? selfNames : undefined,
+        HostTools: host?.HostTools,
+        HostFraming: host?.HostFraming,
+        ConversationID: host?.ConversationID,
+        PriorTranscript: priorTranscript,
+      });
+      host?.OnModelSession?.(opened);
+      return opened;
+    };
+    const session = await openModelSession();
 
+    // The bridge id is known only after the engine starts the session, but the end-of-session hook is registered at start,
+    // so it reaches the id through this holder.
+    const started: { SessionBridgeID?: string } = {};
     const active = await this.bridgeOps.StartBridgeSession({
       AgentSessionID: params.AgentSessionID,
       AgentID: params.AgentID,
       Provider: provider,
       RealtimeSession: session,
       Address: botToken.ServerUrl,
-      JoinMethod: 'OnDemand',
+      JoinMethod: host?.JoinMethod ?? 'OnDemand',
+      Direction: host?.Direction,
       TurnMode: params.TurnMode ?? 'Passive',
       // Meeting: gate speech to ADDRESSED turns (RegexAddressedMatcher on the agent's names) AND tell the
       // engine the model's auto-response is off so the bridge becomes the sole trigger. Solo 1:1: respond to
@@ -259,7 +314,19 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       },
       ContextUser: params.ContextUser,
       MetadataProvider: params.MetadataProvider,
+      // Host-owned call: its own transcript, barge-in policy, model recovery and end-of-session bookkeeping.
+      TranscriptSink: host?.TranscriptSink,
+      OnBargeIn: host?.OnBargeIn,
+      RecoverRealtimeSession: host?.RecoverModelSession ? (request) => openModelSession(request.PriorTranscript) : undefined,
+      OnSessionEnded: async (reason) => {
+        // An agent that leaves on its own (every human gone, the model lost, a handoff) must drop off the room's roster too.
+        if (started.SessionBridgeID) {
+          this.removeFromRoster(started.SessionBridgeID);
+        }
+        await host?.OnSessionEnded?.(reason);
+      },
     });
+    started.SessionBridgeID = active.SessionBridgeID;
 
     this.addToRoster(roomKey, { AgentSessionID: params.AgentSessionID, SessionBridgeID: active.SessionBridgeID, Names: selfNames });
 

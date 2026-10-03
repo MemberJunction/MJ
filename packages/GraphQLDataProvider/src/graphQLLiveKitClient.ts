@@ -58,6 +58,11 @@ export interface StartLiveKitAgentRoomSessionInput {
   AgentSessionID?: string;
   /** Turn-taking mode. */
   TurnMode?: 'Passive' | 'Active' | 'Hybrid';
+  /**
+   * Start the agent able to bring someone into this room (a person who is offered the conversation, a phone number, or another
+   * agent). Opt-in; honoured only when the server is configured for handoffs, otherwise the agent starts as usual.
+   */
+  EnableHandoff?: boolean;
 }
 
 /** Result of starting an agent room session (includes a client token so the caller can immediately join). */

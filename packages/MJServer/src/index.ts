@@ -1403,6 +1403,15 @@ const setupComplete$ = new ReplaySubject(1);
         Settings: { ...sharedTelephonySettings, ...configInfo.telephony.ringcentral },
       });
     }
+    if (configInfo.telephony.livekitSip) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'LiveKitSipExtension',
+        RootPath: '/telephony/livekit-sip',
+        Phase: 'pre-auth',
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.livekitSip },
+      });
+    }
     if (configInfo.telephony.teams?.enabled) {
       telephonyExtensionConfigs.push({
         Enabled: true,

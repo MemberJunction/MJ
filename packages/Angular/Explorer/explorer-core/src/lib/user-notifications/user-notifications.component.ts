@@ -4,7 +4,7 @@ import { MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine 
 import { CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { ApplicationManager, NavItem } from '@memberjunction/ng-base-application';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
@@ -598,6 +598,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       if (this.navigateToMeetRoom(notification)) {
         return;
       }
+      if (this.navigateToHandoffConsole(notification)) {
+        return;
+      }
 
       this.navigateToResource(notification);
     }
@@ -630,6 +633,35 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       navConfig['room'] = config.room;
     }
     this.navigationService.OpenNavItemByName('Live Room', navConfig, meetApp.ID);
+    return true;
+  }
+
+  /**
+   * Opens the Conversation Console for a `handoff-offer` notification (the `{ type:'handoff-offer', offerId, room }`
+   * ResourceConfiguration the server sends when an AI agent offers a conversation to this person). The nav item is built here
+   * rather than looked up, so it works without an application metadata row; it lands in the Meet app when present, otherwise
+   * in whichever app the person is in. Returns `false` (not handled) for any other notification or when there is no app to host it.
+   */
+  private navigateToHandoffConsole(notification: MJUserNotificationEntity): boolean {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return false;
+    }
+    const config = SafeJSONParse<{ type?: string; offerId?: string }>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'handoff-offer') {
+      return false;
+    }
+    const app = this.appManager.GetAppByName('Meet') ?? this.appManager.GetActiveApp();
+    if (!app) {
+      return false;
+    }
+    const consoleItem: NavItem = {
+      Label: 'Conversation Console',
+      Icon: 'fa-solid fa-headset',
+      ResourceType: 'Custom',
+      DriverClass: 'HumanHandoffConsoleResource',
+      Configuration: config.offerId ? { offer: config.offerId } : {},
+    };
+    this.navigationService.OpenNavItem(app.ID, consoleItem, app.GetColor());
     return true;
   }
 
