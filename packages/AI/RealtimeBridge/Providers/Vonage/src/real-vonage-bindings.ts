@@ -41,7 +41,8 @@
  * @see `/plans/realtime/bridges-and-widget/telephony-vendor-bindings.md` §1c, §T2, §4, §5.
  */
 
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { GenerateMediaToken } from '@memberjunction/ai-bridge-base';
 import { IVonageClientBindings } from './vonage-call-sdk';
 
 /** Query parameter carrying the per-call media token on the media-websocket URI. */
@@ -52,14 +53,6 @@ export const VONAGE_MEDIA_CORRELATION_PARAM = 'mj_cid';
 
 /** Query parameter carrying the call UUID on an INBOUND media-websocket URI. */
 export const VONAGE_MEDIA_CALL_UUID_PARAM = 'call_uuid';
-
-/** Byte length of the per-call media token (rendered as hex, so the token is twice this many characters). */
-const MEDIA_TOKEN_BYTES = 32;
-
-/** Generates a fresh, unguessable per-call media-socket token (256 bits, hex). */
-export function GenerateVonageMediaToken(): string {
-    return randomBytes(MEDIA_TOKEN_BYTES).toString('hex');
-}
 
 /**
  * Appends query parameters to a media-websocket URL, preserving any query it already carries. Pure —
@@ -328,7 +321,7 @@ export class RealVonageBindings implements IVonageClientBindings {
     public async createCall(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string> {
         const eventUrl = readEventUrl(args) ?? this.eventUrl;
         const correlationId = randomUUID();
-        const token = GenerateVonageMediaToken();
+        const token = GenerateMediaToken();
         const mediaUrl = BuildVonageMediaUrl(this.mediaWssUrl, {
             [VONAGE_MEDIA_CORRELATION_PARAM]: correlationId,
             [VONAGE_MEDIA_TOKEN_PARAM]: token,

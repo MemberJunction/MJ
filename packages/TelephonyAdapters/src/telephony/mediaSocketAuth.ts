@@ -18,10 +18,7 @@
  * @module @memberjunction/telephony-adapters
  */
 
-import { randomBytes, timingSafeEqual } from 'node:crypto';
-
-/** Byte length of a media token (rendered as hex, so the token is twice this many characters). */
-const MEDIA_TOKEN_BYTES = 32;
+import { MediaTokensEqual } from '@memberjunction/ai-bridge-base';
 
 /**
  * How long an expected call may wait for its media socket to connect before the expectation is dropped.
@@ -35,31 +32,6 @@ export type SocketAuthFailure = 'unknown-call' | 'bad-token' | 'already-attached
 
 /** The verdict of {@link ExpectedCallStore.Verify}. */
 export type SocketAuthResult = { Ok: true } | { Ok: false; Reason: SocketAuthFailure };
-
-/** Mints a fresh, unguessable per-call media token (256 bits of CSPRNG output, hex). */
-export function GenerateMediaToken(): string {
-    return randomBytes(MEDIA_TOKEN_BYTES).toString('hex');
-}
-
-/**
- * Constant-time comparison of the registered token against the one a socket presented. A missing token or a
- * length mismatch is a plain `false` (the lengths of MJ-minted tokens are fixed, so this leaks nothing).
- *
- * @param expected The token MJ registered for the call.
- * @param presented The token the connecting socket supplied (may be absent).
- * @returns `true` only when both are present and byte-identical.
- */
-export function MediaTokensEqual(expected: string, presented: string | undefined): boolean {
-    if (!presented) {
-        return false;
-    }
-    const expectedBytes = new Uint8Array(Buffer.from(expected, 'utf8'));
-    const presentedBytes = new Uint8Array(Buffer.from(presented, 'utf8'));
-    if (expectedBytes.length !== presentedBytes.length) {
-        return false;
-    }
-    return timingSafeEqual(expectedBytes, presentedBytes);
-}
 
 /** One expected call: its secret token, whether a socket has attached, and the TTL timer while it has not. */
 interface CallExpectation {

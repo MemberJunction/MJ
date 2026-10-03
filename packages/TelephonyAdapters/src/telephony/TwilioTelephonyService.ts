@@ -22,6 +22,7 @@ import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
 import {
     BaseTelephonyBridge,
+    GenerateMediaToken,
     type BridgeNativeSdkBinding,
     DIRECTION_CONFIG_KEY,
     FROM_NUMBER_CONFIG_KEY,
@@ -38,7 +39,6 @@ import {
 import type { TwilioTelephonyConfig } from '../types.js';
 import { IAgentSessionManager, DefaultAgentSessionManager } from '../sessionManager.js';
 import { TwilioCallMediaRegistry } from './twilioMediaRegistry.js';
-import { GenerateMediaToken } from './mediaSocketAuth.js';
 import { CallLifecycleTracker } from './callLifecycleTracker.js';
 import { CallEndObserverSdk } from './callEndObserver.js';
 import {

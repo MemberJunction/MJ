@@ -26,8 +26,7 @@
  * @see `/plans/realtime/bridges-and-widget/telephony-vendor-bindings.md` §2, §3 (T1).
  */
 
-import { randomBytes } from 'node:crypto';
-import { muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridge-base';
+import { GenerateMediaToken, muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridge-base';
 import { ITwilioClientBindings } from './twilio-call-sdk';
 
 /**
@@ -36,14 +35,6 @@ import { ITwilioClientBindings } from './twilio-call-sdk';
  * how the media websocket proves it belongs to a call MJ itself accepted or placed.
  */
 export const TWILIO_MEDIA_TOKEN_PARAMETER = 'mjToken';
-
-/** Byte length of the per-call media token (rendered as hex, so the token is twice this many characters). */
-const MEDIA_TOKEN_BYTES = 32;
-
-/** Generates a fresh, unguessable per-call media-socket token (256 bits, hex). */
-export function GenerateTwilioMediaToken(): string {
-    return randomBytes(MEDIA_TOKEN_BYTES).toString('hex');
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Pure helpers — TwiML + Media-Streams frame transcode. No network, no SDK.
@@ -307,7 +298,7 @@ export class RealTwilioBindings implements ITwilioClientBindings {
      */
     public async createCall(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string> {
         const statusCallback = readStatusCallback(args) ?? this.statusCallbackUrl;
-        const token = GenerateTwilioMediaToken();
+        const token = GenerateMediaToken();
         const callSid = await this.rest.CreateCall({
             To: toNumber,
             From: fromNumber,

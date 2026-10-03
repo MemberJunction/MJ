@@ -3,7 +3,6 @@ import { muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridg
 import {
     RealTwilioBindings,
     BuildConnectStreamTwiML,
-    GenerateTwilioMediaToken,
     TWILIO_MEDIA_TOKEN_PARAMETER,
     BuildDialTwiML,
     BuildPlayDigitsTwiML,
@@ -261,12 +260,6 @@ describe('RealTwilioBindings — Media Streams mapping', () => {
 });
 
 describe('per-call media token', () => {
-    it('GenerateTwilioMediaToken yields 256 bits of hex that never repeats', () => {
-        const a = GenerateTwilioMediaToken();
-        expect(a).toMatch(/^[0-9a-f]{64}$/);
-        expect(GenerateTwilioMediaToken()).not.toBe(a);
-    });
-
     it('BuildConnectStreamTwiML adds <Parameter> children (escaped) when given parameters', () => {
         const twiml = BuildConnectStreamTwiML('wss://h/media', { mjToken: 'abc', 'we"ird': 'a&b' });
         expect(twiml).toContain('<Stream url="wss://h/media">');

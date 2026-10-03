@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
     RealVonageBindings,
     BuildVonageMediaUrl,
-    GenerateVonageMediaToken,
     VONAGE_MEDIA_CORRELATION_PARAM,
     VONAGE_MEDIA_TOKEN_PARAM,
     BuildConnectNcco,
@@ -270,14 +269,6 @@ describe('BuildVonageMediaUrl', () => {
 
     it('returns the URL untouched when there is nothing to append', () => {
         expect(BuildVonageMediaUrl('wss://h/media', {})).toBe('wss://h/media');
-    });
-});
-
-describe('GenerateVonageMediaToken', () => {
-    it('yields 256 bits of hex that never repeats', () => {
-        const a = GenerateVonageMediaToken();
-        expect(a).toMatch(/^[0-9a-f]{64}$/);
-        expect(GenerateVonageMediaToken()).not.toBe(a);
     });
 });
 
