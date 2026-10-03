@@ -37,6 +37,7 @@ import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { IsRealtimeChannelServerDataAware } from './realtime-channel-server-data-context';
+import { ClientOnlyChannelServer } from './client-only-channel-server';
 
 /** Entity name — kept in sync with the session machinery's `MJ:`-prefix convention. */
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
@@ -250,6 +251,37 @@ export class RealtimeChannelServerHost extends BaseSingleton<RealtimeChannelServ
     }
 
     /**
+     * Drops the server plugins of channels the session's resolved scope LEFT OUT.
+     *
+     * Server plugins start when the session row is created — before the browser's channel candidates
+     * have been scoped at mint — so a channel an agent or app excluded (or whose registry row is the
+     * kill switch) would otherwise keep running its server half. Only the named channels are touched:
+     * a server-only channel the browser never reported as a candidate has no scope decision and is
+     * left alone. Each dropped plugin is disposed (failures logged); an unknown session is a no-op.
+     *
+     * @param agentSessionID The session whose scope was resolved.
+     * @param channelNames The excluded channels' names (case/whitespace-insensitive).
+     * @returns The names of the plugins that were dropped (for logging and tests).
+     */
+    public PruneSessionChannels(agentSessionID: string, channelNames: ReadonlyArray<string>): string[] {
+        const entry = this.sessions.get(this.sessionKey(agentSessionID));
+        if (!entry) {
+            return [];
+        }
+        const dropped: string[] = [];
+        for (const name of channelNames) {
+            const key = this.channelKey(name);
+            const plugin = entry.plugins.get(key);
+            if (plugin) {
+                entry.plugins.delete(key);
+                this.safeDispose(plugin, name);
+                dropped.push(name);
+            }
+        }
+        return dropped;
+    }
+
+    /**
      * Channel-state-save entry point, invoked PRE-persistence. Routes the payload to the session's
      * matching plugin and returns the string to persist:
      *  - no live plugin for the channel (or unknown session) → the original `stateJson`;
@@ -414,6 +446,10 @@ export class RealtimeChannelServerHost extends BaseSingleton<RealtimeChannelServ
         if (!plugin) {
             LogError(`[RealtimeChannelServerHost] Failed to instantiate server plugin for channel '${row.Name}' (key '${key}').`);
             return null;
+        }
+        if (plugin instanceof ClientOnlyChannelServer) {
+            // One registered class serves every client-only channel: it takes its name from the row it was resolved for.
+            plugin.BindChannelName(row.Name);
         }
         if (this.channelKey(plugin.ChannelName) !== this.channelKey(row.Name)) {
             LogError(

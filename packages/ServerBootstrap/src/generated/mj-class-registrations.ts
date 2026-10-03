@@ -1168,18 +1168,21 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (22 classes)
+// @memberjunction/ai-agents (25 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
+    ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
+    IdentityVerificationChannelServer,
+    InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
@@ -1314,7 +1317,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (56 classes)
+// @memberjunction/core-entities-server (57 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1322,6 +1325,7 @@ import {
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
+    MJAIAgentSessionEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2387,12 +2391,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
+    ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
+    IdentityVerificationChannelServer,
+    InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
@@ -2407,13 +2414,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WhiteboardChannelServer,
     DefaultRuntimeActionBridgeBuilder,
     ClaudeCodeCliAdapter,
-    CodexAdapter,
-    GeminiCliAdapter,
-    HarnessAgentBase,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    CodexAdapter,
+    GeminiCliAdapter,
+    HarnessAgentBase,
     HarnessAgentType,
     OpenCodeAdapter,
     PiAdapter,
@@ -2491,6 +2498,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
+    MJAIAgentSessionEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
@@ -2610,14 +2618,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DirectoryExistsAction,
     DownloadSignedDocumentAction,
     ExcelReaderAction,
-    ExecuteAIPromptAction,
-    ExecuteAgentAction,
-    ExecuteCodeAction,
-    ExecuteMCPToolAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ExecuteAIPromptAction,
+    ExecuteAgentAction,
+    ExecuteCodeAction,
+    ExecuteMCPToolAction,
     ExploreDatabaseSchemaAction,
     ExternalChangeDetectionAction,
     FileCompressAction,
@@ -2740,7 +2748,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1106;
+export const CLASS_REGISTRATIONS_COUNT = 1110;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

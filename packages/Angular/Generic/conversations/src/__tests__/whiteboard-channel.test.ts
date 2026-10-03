@@ -495,6 +495,42 @@ describe('RealtimeWhiteboardChannel — plugin contract', () => {
     }
   });
 
+  it('tags frames with the change id of the state they describe, and emits typed state events (the lifted pump)', async () => {
+    const mockBridge = { PushFrame: () => true };
+    const c = channel as unknown as { videoBridge: typeof mockBridge };
+    vi.spyOn(channel, 'GetLatestFrame').mockResolvedValue('tagged-frame');
+    channel.Initialize({
+      ...makeContext(log),
+      Client: {
+        IsTrackEstablished: (modality: string, direction: string) => modality === 'video' && direction === 'inbound',
+      } as unknown as RealtimeChannelContext['Client'],
+    });
+    c.videoBridge = mockBridge;
+    const events: Array<{ Name: string; ChangeId?: number; Payload: Record<string, unknown> }> = [];
+    channel.Events$.subscribe((e) => events.push(e));
+
+    channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'hello' }, 'user');
+    await vi.waitFor(() => expect(events.some((e) => e.Name === 'frame_pushed')).toBe(true));
+
+    const change = events.find((e) => e.Name === 'state_changed');
+    const frame = events.find((e) => e.Name === 'frame_pushed');
+    expect(change?.Payload).toEqual({ author: 'user' });
+    expect(frame?.ChangeId).toBe(change?.ChangeId); // the pixels and the state event describe the same moment
+    expect(frame?.Payload).toMatchObject({ reason: 'change' });
+  });
+
+  it('does not add a structured perception note: the board already feeds the model its own scene deltas', async () => {
+    vi.useFakeTimers();
+    try {
+      channel.Initialize(makeContext(log));
+      channel.State.AddItem({ Kind: 'text', X: 0, Y: 0, Text: 'hello' }, 'user');
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(log.Notes.some((n) => n.startsWith('[channel:Whiteboard'))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ApplyAgentTool pushes exactly ONE confirmation frame with no-repetition etiquette note', async () => {
     const pushedFrames: string[] = [];
     const mockBridge = {

@@ -1,0 +1,76 @@
+:host {
+  display: block;
+}
+
+.perception-chip {
+  position: relative;
+  display: flex;
+  justify-content: flex-start;
+  padding: 8px 22px 0;
+}
+
+.perception-chip__trigger i {
+  margin-right: 6px;
+  color: var(--mj-status-success);
+}
+.perception-chip--off .perception-chip__trigger i {
+  color: var(--mj-text-muted);
+}
+
+.perception-chip__panel {
+  position: absolute;
+  bottom: 100%;
+  left: 22px;
+  z-index: 5;
+  min-width: 260px;
+  max-width: min(360px, calc(100vw - 44px));
+  padding: 12px 14px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px);
+  background: var(--mj-bg-surface-elevated);
+  color: var(--mj-text-primary);
+  box-shadow: var(--mj-shadow-md, 0 4px 16px color-mix(in srgb, var(--mj-text-primary) 18%, transparent));
+}
+
+.perception-chip__hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+
+.perception-chip__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.perception-chip__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+.perception-chip__row:first-child {
+  border-top: 0;
+}
+
+.perception-chip__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.perception-chip__status {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--mj-text-muted);
+}
+.perception-chip__status--live {
+  color: var(--mj-status-success-text, var(--mj-status-success));
+  font-weight: 600;
+}

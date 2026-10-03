@@ -44,6 +44,7 @@ import {
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
+    ResolveGeminiMaxInboundVideoStreams,
     ResolveGeminiThinkingLevel,
     GEMINI_LIVE_FALLBACK_PROFILE,
     type GeminiThinkingLevel,
@@ -292,6 +293,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
                     // package, by design), so the mint is the seam that carries it.
                     supportsInboundVideo: profile.SupportsInboundVideo,
                     maxInboundVideoRate: profile.MaxInboundVideoRate,
+                    // How many concurrent inbound video streams the model accepts (0 without video support).
+                    // The browser's source arbiter maps live sources onto this many streams.
+                    maxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(profile),
                 })
             ) as JSONObject,
         };
@@ -930,6 +934,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             CanReconfigureTurnMode: false,
             SupportsDynamicToolSet: GeminiRealtime.SupportsDynamicToolSet,
             SupportedInboundTracks: inbound,
+            MaxInboundVideoStreams: ResolveGeminiMaxInboundVideoStreams(this.profile),
             SupportedOutboundTracks: [{ Modality: 'audio', Direction: 'outbound' }],
             ProvidesThoughtSummaries: this.profile.SupportsThoughtSummaries,
             SupportsAsynchronousReasoning: !this.profile.Tooling.SupportsBlockingExecution,

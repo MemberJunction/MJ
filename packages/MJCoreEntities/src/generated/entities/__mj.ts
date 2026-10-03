@@ -52316,7 +52316,8 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`) —
+ *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`,
+ *    `MJAIModelTypeEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
@@ -52499,6 +52500,23 @@ export interface MJAIModelTypeEntity_AudioConfigurationSettings {
 }
 
 /**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIModelTypeEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -52537,6 +52555,8 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -52557,6 +52577,8 @@ export interface MJAIModelTypeEntity_IAIPromptConfiguration {
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -52574,6 +52596,8 @@ export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -52797,7 +52821,8 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`) —
+ *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`,
+ *    `MJAIModelVendorEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
@@ -52980,6 +53005,23 @@ export interface MJAIModelVendorEntity_AudioConfigurationSettings {
 }
 
 /**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIModelVendorEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -53018,6 +53060,8 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -53038,6 +53082,8 @@ export interface MJAIModelVendorEntity_IAIPromptConfiguration {
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -53055,6 +53101,8 @@ export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -53470,7 +53518,8 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`) —
+ *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`,
+ *    `MJAIModelEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
@@ -53653,6 +53702,23 @@ export interface MJAIModelEntity_AudioConfigurationSettings {
 }
 
 /**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIModelEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -53691,6 +53757,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -53711,6 +53779,8 @@ export interface MJAIModelEntity_IAIPromptConfiguration {
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -53728,6 +53798,8 @@ export interface MJAIModelEntity_IAIPromptModelConfiguration {
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -54847,7 +54919,8 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`) —
+ *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`,
+ *    `MJAIPromptModelEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
@@ -55030,6 +55103,23 @@ export interface MJAIPromptModelEntity_AudioConfigurationSettings {
 }
 
 /**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIPromptModelEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -55068,6 +55158,8 @@ export interface MJAIPromptModelEntity_IAIModelConfiguration {
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -55088,6 +55180,8 @@ export interface MJAIPromptModelEntity_IAIPromptConfiguration {
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -55105,6 +55199,8 @@ export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -57466,7 +57562,8 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`) —
+ *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`,
+ *    `MJAIPromptEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
@@ -57649,6 +57746,23 @@ export interface MJAIPromptEntity_AudioConfigurationSettings {
 }
 
 /**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIPromptEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -57687,6 +57801,8 @@ export interface MJAIPromptEntity_IAIModelConfiguration {
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -57707,6 +57823,8 @@ export interface MJAIPromptEntity_IAIPromptConfiguration {
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -57724,6 +57842,8 @@ export interface MJAIPromptEntity_IAIPromptModelConfiguration {
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -60656,7 +60776,8 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIVendorEntity_LLMConfigurationSettings`, `MJAIVendorEntity_RealtimeConfigurationSettings`,
- *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`) —
+ *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`,
+ *    `MJAIVendorEntity_PrivacyConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIVendorEntity_IAIModelConfiguration`, `MJAIVendorEntity_IAIPromptConfiguration`,
@@ -60839,6 +60960,23 @@ export interface MJAIVendorEntity_AudioConfigurationSettings {
 }
 
 /**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface MJAIVendorEntity_PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -60877,6 +61015,8 @@ export interface MJAIVendorEntity_IAIModelConfiguration {
     Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Honored at the catalog layers. */
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -60897,6 +61037,8 @@ export interface MJAIVendorEntity_IAIPromptConfiguration {
     Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -60914,6 +61056,8 @@ export interface MJAIVendorEntity_IAIPromptModelConfiguration {
     Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
     /** Typed-decision limits. Reserved at this layer. */
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+    /** Privacy posture. Reserved at this layer. */
+    Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
 }
 
 /**
@@ -65267,8 +65411,14 @@ export interface MJApplicationEntity_IDefaultNavItem {
  * realtime persona/disclosure overrides). Every field is optional — an app opts into
  * exactly what it needs.
  *
- * Disclosure values ('silent' | 'mention' | 'hand-voice') mirror the AgentDisclosurePolicy
- * union declared in @memberjunction/ai-core-plus. Keep the two in lockstep.
+ * Disclosure values ('silent' | 'mention' | 'hand-voice') mirror the RealtimeDisclosurePolicy
+ * union declared in @memberjunction/ai-agents.
+ *
+ * **Lockstep contract**: this interface is mirrored, field for field, by `MJApplicationEntity_IAgentSettings` in
+ * `packages/AI/CorePlus/src/agent-settings.ts` (`@memberjunction/ai-core-plus`). Runtime code parses
+ * the column with that mirror (`ParseAgentSettings`) rather than the CodeGen-generated
+ * `AgentSettingsObject` accessor, so a field added here is usable at runtime before CodeGen next
+ * regenerates the inline copy. Edit both in the same commit.
  */
 export interface MJApplicationEntity_IAgentSettings {
     /** The app's default/lead agent (conversational default AND realtime lead identity). Agent ID. */
@@ -65316,6 +65466,31 @@ export interface MJApplicationEntity_IAgentSettings {
         } | null;
         /** Model preference override (AI Models Name or ID). */
         ModelPreference?: string | null;
+        /**
+         * Which interactive realtime channels (Whiteboard, Remote Browser, an Open App's own widget, …)
+         * this app's sessions get. Layers into the same per-channel scoping cascade as the agent's own
+         * `realtime.channels` configuration (see `@memberjunction/ai-core-plus` `ResolveRealtimeChannelScope`):
+         * a layer's `Include` turns a channel on (the only way to get an `opt-in` channel), its `Exclude`
+         * turns one off, and the MOST SPECIFIC layer to mention a channel wins; within one layer `Exclude`
+         * beats `Include`. A channel's registry row `IsActive = false` remains a master kill switch that
+         * nothing here can override. Channel keys match the channel's name, case-insensitively.
+         */
+        Channels?: {
+            /** Channel keys to turn ON (required for `opt-in` channels; a no-op for `all-sessions` ones). */
+            Include?: string[] | null;
+            /** Channel keys to turn OFF. Beats `Include` within the same layer. */
+            Exclude?: string[] | null;
+            /** Per-channel opaque configuration, keyed by channel key; delivered to the channel at session start. */
+            Config?: { [channelKey: string]: { [key: string]: unknown } } | null;
+            /** Per-channel display override, keyed by channel key. */
+            DisplayPolicy?: { [channelKey: string]: 'open-on-start' | 'on-demand' | 'headless' } | null;
+            /**
+             * Exposure levels that need a zero-data-retention model. When the session model's configuration
+             * does not declare `Privacy.ZeroDataRetention: true`, exposure is lowered to below the lowest level
+             * listed, and the agent is told why. Applies to every channel in the session.
+             */
+            RequireZeroDataRetentionFor?: Array<'state' | 'pixels'> | null;
+        } | null;
     } | null;
 }
 

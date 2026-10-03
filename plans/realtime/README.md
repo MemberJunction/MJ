@@ -29,6 +29,7 @@ The realtime co-agent stack (1:1 voice + server-bridged meetings) is shipped and
 | [`native-marketplace-apps.md`](native-marketplace-apps.md) | Phase 9 design — per-platform marketplace shims (future, no engine code). |
 | [`livekit-recording-governance.md`](livekit-recording-governance.md) | Governed recording roadmap (basic control shipped; governance future). |
 | [`gemini-meeting-live-test-runbook.md`](gemini-meeting-live-test-runbook.md) | Runbook for the pending Gemini meeting-mode live validation (Next steps → 2). |
+| [`channels-v2/`](channels-v2/) | Build plan: the full channel (widget) contract, channel scoping, unified `ContextTool` dispatch, the Interactive Component (ComponentSpec) channel, multi-source visual perception with an "agent can see" chip, generic session events + mid-session identity verification, and the embeddable `<mj-realtime-widget>` element. |
 | [`resources-channel/`](resources-channel/) | Design proposal: a realtime "Resources" channel + multi-channel layout (no code). |
 | [`mockups/`](mockups/) | UX mockups (design assets). |
 
