@@ -6,3 +6,5 @@
  */
 
 export * from './lib/mj-livekit-room.component';
+export * from './lib/turn-state-poller';
+export * from './lib/turn-taking-options';
