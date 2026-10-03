@@ -1,0 +1,20 @@
+<section class="version-board" aria-label="Rubric versions">
+  @if (Cards.length === 0) {
+    <p>This rubric has no versions yet.</p>
+  }
+  @for (card of Cards; track card.id) {
+    <article class="version-card">
+      <h3>{{ card.label }}</h3>
+      <button mjButton variant="outline" size="sm" type="button" (click)="Open.emit(card.id)">Open</button>
+      <div class="version-facts">
+        <span class="pill">{{ card.status }}</span>
+        @if (card.bump) { <span class="pill-major">{{ card.bump }}</span> }
+        @if (card.threshold) { <span class="pill">Pass {{ card.threshold }}</span> }
+        <span class="pill">{{ card.criteria }} criteria</span>
+        @if (card.gates) { <span class="pill">{{ card.gates }} gates</span> }
+      </div>
+      @if (card.bands) { <p>Bands: {{ card.bands }}</p> }
+      @if (card.summary) { <p>{{ card.summary }}</p> }
+    </article>
+  }
+</section>

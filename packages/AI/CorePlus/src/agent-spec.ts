@@ -366,15 +366,17 @@ export interface AgentStep {
     LoopBodyType?: MJAIAgentStepEntity['LoopBodyType'];
 
     /**
-     * Step-specific settings, as a JSON string — the shape `AIAgentStep.Configuration` stores.
+     * Step-specific settings, as JSON text **or** as the object it parses to.
      *
      * For a loop step: `{ type, collectionPath?, itemVariable?, indexVariable?, maxIterations?,
-     * continueOnError?, condition? }`. Typed as a string rather than an object because that is what
-     * the column holds and what the runner parses; giving the spec a richer shape than the storage
-     * would put a translation step between authoring and execution, which is where the two would
-     * start to disagree.
+     * continueOnError?, condition? }`. For a Decision step: `{ key, state?, questions }`.
+     *
+     * Both shapes for the same reason as the mappings: the Architect's prompt documents this field
+     * as `string | object`, so a model sends either, and the Architect's validator accepts either.
+     * The column stores JSON text, and that is what the runner parses, so `AgentSpecSync` writes an
+     * object as text. A spec read back from the database always carries text.
      */
-    Configuration?: string;
+    Configuration?: string | Record<string, unknown>;
 
     /**
      * Per-step execution policy, mirroring the entity's `TimeoutSeconds` / `RetryCount` /

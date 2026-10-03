@@ -66,6 +66,24 @@
             "checksum": "7a24335c70b69b4d6a23b08097fc0c497fa9f09fefafdb6b1af9f1e4ef0a56d9"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Research answer",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C38D96BE-D1BD-4EAA-90D2-739B599EE711"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:25.097Z",
+            "checksum": "ba83d5a9b4b5956ade014ae9ebf74067a9e42d18b67a20f3e33151614f96e237"
+          }
+        }
       ]
     },
     "primaryKey": {

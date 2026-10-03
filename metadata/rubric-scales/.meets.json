@@ -1,0 +1,68 @@
+{
+  "fields": {
+    "Name": "Meets / Partial / Miss",
+    "ScaleType": "Levels",
+    "HigherIsBetter": true,
+    "Status": "Active",
+    "Description": "Meets is 1, Partial is 0.5, and Miss is 0. The default levels scale in guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "ID": "C882E907-2C02-49B1-919F-8AFCCCD4709F"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Scale Levels": [
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Miss",
+          "Value": 0,
+          "NormalizedValue": 0,
+          "Sequence": 0
+        },
+        "primaryKey": {
+          "ID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:21.948Z",
+          "checksum": "42ad764187d1d48dda4450861834a86c4fe1842e2752b3f4fc8708548ab0df24"
+        }
+      },
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Partial",
+          "Value": 1,
+          "NormalizedValue": 0.5,
+          "Sequence": 1
+        },
+        "primaryKey": {
+          "ID": "A9E1A258-D99F-47A4-87EF-646C160D0282"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:21.958Z",
+          "checksum": "3bdc07f233173a9a3a7dbc857254ef4cf4b20deb66794265f84f838fdcf02838"
+        }
+      },
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Meets",
+          "Value": 2,
+          "NormalizedValue": 1,
+          "Sequence": 2
+        },
+        "primaryKey": {
+          "ID": "42707415-F55B-4658-BDED-E6C63CEBAA5C"
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:21.968Z",
+          "checksum": "d9c653edf3e30d4d0069286525e37e287b4446e212f0870dc2f67af282812b06"
+        }
+      }
+    ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:21.938Z",
+    "checksum": "c6a611d6580a583c49e369c0033dfa3b231449c72ac877112f3f7fd099f37726"
+  }
+}

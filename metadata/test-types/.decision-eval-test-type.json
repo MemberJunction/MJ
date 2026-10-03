@@ -1,0 +1,15 @@
+{
+  "fields": {
+    "Name": "Decision Eval",
+    "Description": "Measures ONE typed decision (Likelihood, Choice, Score) against a label. The driver builds the decision from a frozen corpus point with the same builders production uses, runs it once through AIDecisionRunner with the cell's model pinned and failover off, and records the answers with their probabilities, the model that answered, the latency and the prompt run. The decision-label-match oracle compares the Likelihood's probability at a threshold with the label; ambiguous labels are reported, not scored. Repeated runs of each case feed the Decision Eval scorecard: agreement with labels, repeatability and calibration.",
+    "DriverClass": "DecisionEvalDriver",
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "4A09D06C-E758-4AAC-807C-022DF153B14A"
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:41.532Z",
+    "checksum": "fe212472d1572ba34d435ae3dfb6a5361b079fd7cf18a049383cc80d1958e265"
+  }
+}

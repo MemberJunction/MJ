@@ -1,0 +1,19 @@
+{
+  "fields": {
+    "Name": "Rubric Evaluator",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:templates/rubrics/rubric-evaluator.md",
+    "ResponseFormat": "JSON",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "Status": "Active",
+    "Description": "Renders a rubric version, its criteria and scale anchors, and the subject content fenced as untrusted input. LLMRubricEvaluator fills the tokens. SinglePass asks for the whole rubric. PerCriterion asks for one leaf.",
+    "EffortLevel": 1
+  },
+  "primaryKey": {
+    "ID": "71932BB5-CEC3-4484-947C-EB17704F992C"
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:21.588Z",
+    "checksum": "8aa45d791b1b0c78ad50bdd6301415482142c2158cf5a8e78401b46b0c40a909"
+  }
+}

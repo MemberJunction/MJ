@@ -138,6 +138,21 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 
 Conversational agent that runs in a loop: prompt -> decide -> act -> repeat. Best for interactive, chat-based agents. The LLM decides the next step at each iteration by producing a structured JSON response.
 
+##### Decision models
+
+An agent can ask a fast decision model typed questions in six places on its own. One master switch governs all of them: the Loop prompt param **`decisionsEnabled`**, `false` by default. Unless it is `true`, the agent never asks a decision model on its own, whatever the other settings say: their docs stay out of the prompt and the runtime refuses the call. With it `true`, each use still needs its own setting, and each of those is off by default too:
+
+| Use | Its own setting |
+|---|---|
+| Inline `decisions` on a turn | `includeDecisionsDocs: true` |
+| `finishIf` gates on an Actions or Sub-Agent step | `finishIfMode: 'shadow'` or `'on'` |
+| Decision discovery (suggest an agent before the first prompt) | `decisionDiscovery: true` |
+| Payload change check | `payloadFeedbackCheck: true` |
+| Catalog narrowing | `maxActionsInPrompt` / `maxSubAgentsInPrompt` > 0 |
+| Memory Manager note gate | run `data.enableDecisionGate: true` |
+
+Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finishIfMode": "shadow"}`) or for one run in `data.__agentTypePromptParams`. Uses someone placed explicitly do not read it: a Flow or task-graph Decision step, the Run Decision action, and other direct callers of `AgentDecisionService`. See the [Decision Models guide](./docs/loop-agent-decisions.md).
+
 #### FlowAgentType
 
 Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.
@@ -150,6 +165,8 @@ Consequences worth knowing before you debug one:
 - **A run that needs the result walks the flow in-process.** A sub-agent run (one with `parentRun`) does this automatically, and a top-level caller opts in with `agentTypeParams.executionMode: 'inRun'` (`FlowAgentExecuteParams`). The run returns the flow's final payload, as in 5.x, and `startAtStep` works. A dispatched run that reaches the walker by mistake is refused at its choke point.
 - **The mode is on the run.** A completed `Decision` step named "Workflow runs in this run" or "Workflow runs on the task-graph dispatcher" records which engine ran it and why.
 - **A dispatched `Sub-Agent` node starts its own `AIAgentRun`**, linked from `Task.AgentRunID` and parented to the submitting run. If that sub-agent is itself a Flow agent, it runs in-process and returns its result to the task.
+- **A `Decision` step routes the same way in both modes.** Paths read its answers only through `decisions.<key>.<question>`; its `stepResult.result` is the payload, which carries no answers. A flow with a Decision step is compiled and validated before its first step in-run too, so an incomplete Choice fork, a decision read before it can answer, or one read through the payload is refused in both modes. An answer below its `minConfidence` stops an in-run flow (the dispatcher holds the fork, and `Retry` on the step asks again). A failed decision call is a failed step: the paths that read its answers are passed over, and a recovery path such as `stepResult.Success === false` is taken whatever its rank.
+- **Answers live in the run, not the payload.** A run started with `startAtStep` past a Decision step has no answers from it, so every path that reads that decision stops the run with the reason. Start at or before the Decision step to route on it.
 
 See the **[Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)** for the full model: node kinds, exclusive groups, payload mappings, loops, failure semantics, observability, and a worked configuration example.
 
@@ -502,6 +519,7 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | Guide | Description |
 |---|---|
 | [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Decision Models](./docs/loop-agent-decisions.md) | The `decisionsEnabled` master switch, then each automatic use: inline decisions, finishIf gates, discovery, the payload change check, catalog narrowing, the Memory Manager note gate |
 | [Prompt-Cache Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md) | Before/after cached share and cost per model and topology for the trailing runtime-state layout; the action circuit breaker's before/after; what to re-measure |
 | [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md) | Repo-level guide: the trailing-state layout, the `PrefixPromptCache` flag from the model catalog, the Anthropic breakpoint seam, specialization placement, the circuit breaker |
 | [Client Tools Guide](./docs/CLIENT_TOOLS_GUIDE.md) | Browser-side tool invocation, runtime decoration, timeout config, prompt design, security |
