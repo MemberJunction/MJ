@@ -158,8 +158,12 @@ function makeField(opts: FieldOpts): EntityFieldInfo {
  * prototype, so the getter would be `undefined` — falsy — and every entity would silently take the
  * "no search surface" branch, making an assertion about the `(1=0)` fallback pass for the wrong
  * reason. Seeding `_Fields` on a prototype-backed object keeps the getter live. See MJ#4581.
+ *
+ * `ftxFunction` stays nullable: the cases below deliberately pass `null` and `''` for a
+ * FullTextSearchEnabled entity whose search function was never minted, and the body preserves
+ * them rather than defaulting them away.
  */
-function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string; fields: EntityFieldInfo[] }): EntityInfo {
+function makeEntity(opts: { ftx?: boolean; ftxFunction?: string | null; pkName?: string; fields: EntityFieldInfo[] }): EntityInfo {
     // EntityInfo has a heavy constructor / initialization path; we build a
     // minimal shape via Object.create + property assignment. The SUT only
     // touches FullTextSearchEnabled, FullTextSearchFunction, SchemaName,
@@ -174,7 +178,10 @@ function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string
     pkField.IsPrimaryKey = true;
     Object.assign(entity, {
         FullTextSearchEnabled: !!opts.ftx,
-        FullTextSearchFunction: opts.ftxFunction ?? 'fnSearchTest',
+        // `in`, not `??` — an explicit null/'' ftxFunction is a real case under test (a
+        // FullTextSearchEnabled entity whose search function was never minted), so it must
+        // survive as null/'' rather than being defaulted away.
+        FullTextSearchFunction: 'ftxFunction' in opts ? opts.ftxFunction : 'fnSearchTest',
         SchemaName: 'crm',
         _fields: [pkField, ...opts.fields],
     });
@@ -520,6 +527,53 @@ describe('createViewUserSearchSQL — FTX path is unchanged', () => {
         const sql = provider.buildSQL(e, 'foo AND bar');
         expect(sql).toContain('fnSearchAccount');
         expect(sql).toContain(' AND ');
+    });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FullTextSearchEnabled with no FullTextSearchFunction
+//
+// The two columns are independent: the flag can be set by hand or by a metadata sync before
+// CodeGen has minted the function. Taking the FTX branch on the flag alone emitted
+// `... IN (SELECT [ID] FROM [crm].[]('term'))` — a syntax error on EVERY user search of such
+// an entity, with no fallback. A blank name must fall through to the per-field LIKE path,
+// which needs no database object.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('createViewUserSearchSQL — FTX requires a function NAME, not just the flag', () => {
+    const searchableField = () => makeField({ name: 'Name', predicate: 'Contains' });
+    // Byte-identical to what a NON-FTX entity with the same one field produces (asserted first),
+    // so these prove the fall-through reaches the ordinary per-field path, not a variant of it.
+    const likePathSQL = `(([Name]  LIKE N'%inc%' ESCAPE '\\'))`;
+
+    it('produces the SAME SQL a non-FTX entity produces (the baseline for the three cases below)', () => {
+        const e = makeEntity({ fields: [searchableField()] });
+        expect(provider.buildSQL(e, 'inc')).toBe(likePathSQL);
+    });
+
+    it('falls through to the per-field LIKE path when FullTextSearchFunction is null', () => {
+        const e = makeEntity({ ftx: true, ftxFunction: null, fields: [searchableField()] });
+        expect(provider.buildSQL(e, 'inc')).toBe(likePathSQL);
+    });
+
+    it('falls through to the per-field LIKE path when FullTextSearchFunction is an empty string', () => {
+        const e = makeEntity({ ftx: true, ftxFunction: '', fields: [searchableField()] });
+        expect(provider.buildSQL(e, 'inc')).toBe(likePathSQL);
+    });
+
+    it('falls through to the per-field LIKE path when FullTextSearchFunction is whitespace only', () => {
+        const e = makeEntity({ ftx: true, ftxFunction: '   ', fields: [searchableField()] });
+        expect(provider.buildSQL(e, 'inc')).toBe(likePathSQL);
+    });
+
+    it('never emits the empty-object-name SQL that PostgreSQL and SQL Server both reject', () => {
+        for (const ftxFunction of [null, '', '   ']) {
+            const e = makeEntity({ ftx: true, ftxFunction, fields: [searchableField()] });
+            const sql = provider.buildSQL(e, 'inc');
+            // `[crm].[]` / `"crm".""` — a quoted EMPTY identifier is the syntax error.
+            expect(sql).not.toMatch(/\[\s*\]|""/);
+            expect(sql).not.toContain('[crm].');
+        }
     });
 });
 
