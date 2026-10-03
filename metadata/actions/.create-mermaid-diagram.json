@@ -175,6 +175,28 @@
             "lastModified": "2025-12-30T23:07:14.633Z",
             "checksum": "27f35c39dee42a175f1d5a99aebfdfb6c943c1406c2df090190d557fab6ff665"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "BROWSER_UNAVAILABLE",
+            "IsSuccess": false,
+            "Description": "The server has no headless Chromium to render Mermaid with (the playwright dependency is present but no browser could be launched). Retrying will not help; build the diagram with Create SVG Diagram or another SVG action instead."
+          },
+          "primaryKey": {
+            "ID": "500D5794-C306-4CFF-8B75-10BF7010A702"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TIMEOUT",
+            "IsSuccess": false,
+            "Description": "The diagram took longer than 20 seconds to render. Simplify the diagram or split it into several smaller ones."
+          },
+          "primaryKey": {
+            "ID": "AD380272-3972-4C1A-B623-876172744E4C"
+          }
         }
       ]
     },
