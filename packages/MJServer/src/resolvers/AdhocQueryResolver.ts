@@ -1,5 +1,5 @@
 import { Arg, Ctx, Query, Resolver, Field, Int, InputType } from 'type-graphql';
-import { DatabasePlatform, LogError } from '@memberjunction/core';
+import { DatabasePlatform, IMetadataProvider, LogError } from '@memberjunction/core';
 import { SQLExpressionValidator } from '@memberjunction/global';
 import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { AppContext } from '../types.js';
@@ -41,6 +41,10 @@ class AdhocQueryInput {
  *   RunView, entity permissions and row-level security, so the RLS scope tokens that confine a
  *   magic-link session are never applied on this path — there is no narrower filter to fall back
  *   to, only refusal.
+ * - Authorizes the RENDERED SQL: every table reference must be an entity base view the caller
+ *   reads unscoped (CanRead, no row-level filter, no denied fields). Entities with row/field
+ *   policy for this user are refused — raw SQL cannot apply that policy, so those reads belong
+ *   on RunView.
  *
  * Auto-discovered by MJServer's dynamic resolver import.
  */
@@ -108,6 +112,7 @@ export class AdhocQueryResolver extends ResolverBase {
 
             let dataSQL: string;
             let countSQL: string | null = null;
+            let renderedSQL: string;
             try {
                 const rendered = RenderPipeline.Run(input.SQL, {
                     Platform: platform,
@@ -116,9 +121,30 @@ export class AdhocQueryResolver extends ResolverBase {
                 });
                 dataSQL = rendered.FinalSQL;
                 countSQL = rendered.PagingResult?.CountSQL ?? null;
+                renderedSQL = rendered.Trace.AfterTemplates;
             } catch (renderErr) {
                 const renderMsg = renderErr instanceof Error ? renderErr.message : String(renderErr);
                 return this.buildErrorResult(`Ad-hoc query rendering failed: ${renderMsg}`);
+            }
+
+            // 5b. SECURITY: authorize the READ itself — against the SQL that will actually run.
+            // validateFullQuery guarantees a read-only statement but places no restriction on
+            // WHAT is read. This runs AFTER rendering because composition (`{{query:"..."}}`)
+            // and templates can introduce table references the raw input never named. Every
+            // table reference must be an entity base view the caller can read UNSCOPED — CanRead
+            // with no row-level filter and no denied fields — because raw SQL applies neither
+            // (see assertFullQueryUsesReadableEntityViews). Paging only wraps this SQL in
+            // server-built OFFSET/FETCH + COUNT(*), so AfterTemplates is the full set of reads.
+            try {
+                let mdProvider: IMetadataProvider | undefined;
+                try {
+                    mdProvider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+                } catch {
+                    mdProvider = undefined;
+                }
+                this.assertFullQueryUsesReadableEntityViews(renderedSQL, mdProvider, contextUser, 'ad-hoc SQL');
+            } catch (authErr) {
+                return this.buildErrorResult(authErr instanceof Error ? authErr.message : String(authErr));
             }
 
             // 6. Execute the page (and, only when a full page needs it, the count) under
