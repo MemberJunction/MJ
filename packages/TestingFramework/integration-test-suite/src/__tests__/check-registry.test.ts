@@ -117,7 +117,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 32],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
-        ['client-cache', ClientCacheChecks, 13],
+        ['client-cache', ClientCacheChecks, 14],
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
         ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks], 16],
@@ -152,7 +152,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
         ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
         ['agent-note-cache-types', AgentNoteCacheTypeChecks, 5], // NC1-NC3 entity_object cache-event invariant, NC4-NC5 identical-payload skip (IT84)
-        ['cache-architecture', CacheArchitectureChecks, 6], // CA1-CA6 engine/cache architecture pins (IT107)
+        ['cache-architecture', CacheArchitectureChecks, 11], // CA1-CA11 engine/cache architecture pins (IT107)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
@@ -212,9 +212,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         expect(mutating.sort()).toEqual(['server-cache.S17', 'server-cache.S23', 'server-cache.S24', 'server-cache.S29', 'server-cache.S30', 'server-cache.S31b']);
     });
 
-    it('client-cache marks exactly C10 as RequiresMutation', () => {
+    it('client-cache marks exactly C10 and C14 as RequiresMutation', () => {
         const mutating = ClientCacheChecks.filter(c => c.RequiresMutation).map(c => c.Id);
-        expect(mutating).toEqual(['client-cache.C10']);
+        expect(mutating).toEqual(['client-cache.C10', 'client-cache.C14']);
     });
 
     it('runquery-cache marks nothing RequiresMutation (the whole bundle mutates by design)', () => {
@@ -258,11 +258,11 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-wiring': 10,
         'auth-validation': 7,
         'binary-fields': 6,
-        'cache-architecture': 6,
+        'cache-architecture': 11,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'class-resolution': 5,
-        'client-cache': 13,
+        'client-cache': 14,
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
@@ -403,9 +403,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'app-behavioral.AB2',
         'binary-fields.BF4',
         'binary-fields.BF6',
+        'cache-architecture.CA10',
+        'cache-architecture.CA11',
         'cache-architecture.CA2',
         'cache-architecture.CA4',
         'cache-architecture.CA5',
+        'cache-architecture.CA7',
+        'cache-architecture.CA8',
+        'cache-architecture.CA9',
         'cache-gauntlet.CG1',
         'cache-gauntlet.CG2',
         'cache-gauntlet.CG3',
@@ -416,6 +421,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-gauntlet.CG8',
         'cache-immutability.F12',
         'client-cache.C10',
+        'client-cache.C14',
         'content-vectorization.CV1',
         'content-vectorization.CV10',
         'content-vectorization.CV2',
