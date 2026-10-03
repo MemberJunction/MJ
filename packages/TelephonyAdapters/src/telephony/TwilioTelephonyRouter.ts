@@ -220,13 +220,35 @@ function attachMediaStreamServer(registry: TwilioCallMediaRegistry): void {
 }
 
 /**
+ * How long a freshly-upgraded Media-Streams socket may stay open without presenting a valid `start` frame.
+ * Twilio sends `connected` then `start` within milliseconds, so anything slower is not a real stream; the
+ * deadline stops unauthenticated clients from parking idle sockets on the shared HTTP server.
+ */
+export const MEDIA_SOCKET_AUTH_DEADLINE_MS = 10 * 1000;
+
+/**
  * Wires one Media-Streams socket: authenticate + bind on `start`, dispatch inbound frames, tear down on close.
  * A socket whose `start` frame names an unknown call, carries a bad/missing `mjToken`, or targets a call that
  * already has a socket is closed and logged — and its later `close` does NOT end the (legitimate) call.
+ * A socket that never sends a valid `start` within {@link MEDIA_SOCKET_AUTH_DEADLINE_MS} is closed and logged.
  */
 export function WireTwilioMediaSocket(socket: WebSocket, registry: TwilioCallMediaRegistry): void {
     let callSid: string | null = null;
     const adapter = { send: (data: string) => socket.send(data), close: () => socket.close() };
+
+    let authTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+        authTimer = null;
+        if (!callSid) {
+            LogError(`[Telephony][Twilio] closing media socket: no valid start frame within ${MEDIA_SOCKET_AUTH_DEADLINE_MS}ms.`);
+            socket.close();
+        }
+    }, MEDIA_SOCKET_AUTH_DEADLINE_MS);
+    const clearAuthTimer = (): void => {
+        if (authTimer) {
+            clearTimeout(authTimer);
+            authTimer = null;
+        }
+    };
 
     socket.on('message', (raw: unknown) => {
         const message = parseWsMessage(raw);
@@ -236,6 +258,9 @@ export function WireTwilioMediaSocket(socket: WebSocket, registry: TwilioCallMed
         if (message.event === 'start' && message.start?.callSid) {
             if (!callSid) {
                 callSid = authenticateStart(socket, registry, adapter, message.start) ? message.start.callSid : null;
+                if (callSid) {
+                    clearAuthTimer();
+                }
             }
             return; // a repeated `start` on an authenticated socket is ignored — never re-authenticated or dispatched
         }
@@ -245,12 +270,14 @@ export function WireTwilioMediaSocket(socket: WebSocket, registry: TwilioCallMed
     });
 
     socket.on('close', () => {
+        clearAuthTimer();
         if (callSid) {
             registry.EndCall(callSid);
         }
     });
 
     socket.on('error', (err) => {
+        clearAuthTimer();
         LogError(`[Telephony][Twilio] media socket error for call ${callSid ?? 'unknown'}: ${err.message}`);
         if (callSid) {
             registry.EndCall(callSid);

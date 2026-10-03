@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type { Request, Response } from 'express';
 import type { WebSocket } from 'ws';
@@ -18,6 +18,7 @@ import {
     HandleTwilioAmdCallback,
     HandleTwilioInboundVoice,
     HandleTwilioStatusCallback,
+    MEDIA_SOCKET_AUTH_DEADLINE_MS,
     WireTwilioMediaSocket,
     type TwilioTelephonyServiceLike,
 } from '../telephony/TwilioTelephonyRouter.js';
@@ -342,5 +343,45 @@ describe('Media-Streams socket (WireTwilioMediaSocket)', () => {
         socket.emit('message', mediaFrame('early'));
         expect(received).toEqual([]);
         expect(socket.close).not.toHaveBeenCalled();
+    });
+
+    describe('auth deadline', () => {
+        beforeEach(() => vi.useFakeTimers());
+        afterEach(() => vi.useRealTimers());
+
+        it('closes and logs a socket that never sends a `start` frame', () => {
+            const socket = fakeSocket();
+            WireTwilioMediaSocket(socket, new TwilioCallMediaRegistry());
+            vi.advanceTimersByTime(MEDIA_SOCKET_AUTH_DEADLINE_MS - 1);
+            expect(socket.close).not.toHaveBeenCalled();
+            vi.advanceTimersByTime(1);
+            expect(socket.close).toHaveBeenCalledTimes(1);
+            expect(LogError).toHaveBeenCalled();
+        });
+
+        it('does not close an authenticated socket when the deadline passes', () => {
+            const registry = new TwilioCallMediaRegistry();
+            registry.ExpectCall('CA1', TOKEN);
+            const socket = fakeSocket();
+            WireTwilioMediaSocket(socket, registry);
+            socket.emit('message', startFrame('CA1', TOKEN));
+            expect(vi.getTimerCount()).toBe(0);
+            vi.advanceTimersByTime(MEDIA_SOCKET_AUTH_DEADLINE_MS * 2);
+            expect(socket.close).not.toHaveBeenCalled();
+        });
+
+        it('clears the pending deadline when the socket closes or errors before authenticating', () => {
+            const closed = fakeSocket();
+            WireTwilioMediaSocket(closed, new TwilioCallMediaRegistry());
+            closed.emit('close');
+            expect(vi.getTimerCount()).toBe(0);
+
+            const errored = fakeSocket();
+            WireTwilioMediaSocket(errored, new TwilioCallMediaRegistry());
+            errored.emit('error', new Error('boom'));
+            expect(vi.getTimerCount()).toBe(0);
+            vi.advanceTimersByTime(MEDIA_SOCKET_AUTH_DEADLINE_MS * 2);
+            expect(errored.close).not.toHaveBeenCalled();
+        });
     });
 });

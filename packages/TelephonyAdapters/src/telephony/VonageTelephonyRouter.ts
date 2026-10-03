@@ -187,6 +187,8 @@ function attachMediaStreamServer(registry: VonageCallMediaRegistry): void {
  * Wires one media socket: authenticate against the upgrade URL's call identity + `mj_token`, attach,
  * dispatch inbound frames, tear down on close. A refused socket (unknown call, bad/missing token, call
  * already has a socket) is closed and logged, and nothing is registered for it.
+ * Authentication happens synchronously at connection time (the credentials ride the upgrade URL), so an
+ * unauthenticated socket never lingers and no idle-auth deadline is needed here, unlike Twilio's `start` frame.
  */
 export function WireVonageMediaSocket(socket: WebSocket, request: IncomingMessage, registry: VonageCallMediaRegistry): void {
     const claim = readSocketClaim(request);
