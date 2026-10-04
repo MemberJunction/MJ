@@ -132,15 +132,11 @@ describe('composition tokens', () => {
             expect(RenderPipeline.HasCompositionTokens(`-- {{query:"x/y"}}\nSELECT 1`)).toBe(false);
         });
 
-        // KNOWN LIMITATION: HasCompositionTokens recognizes tokens inside string literals
-        // and bracket identifiers, even though full resolution correctly skips them.
-        // Wasted work only; not a correctness issue.
-        it.skip('returns false when the only token is inside a string literal', () => {
+        it('returns false when the only token is inside a string literal', () => {
             expect(RenderPipeline.HasCompositionTokens(`SELECT 'literal {{query:"x/y"}} text' FROM t`)).toBe(false);
         });
 
-        // KNOWN LIMITATION: same string-literal/bracket-identifier blind spot as above.
-        it.skip('returns false when the only token is inside a bracket identifier', () => {
+        it('returns false when the only token is inside a bracket identifier', () => {
             expect(RenderPipeline.HasCompositionTokens(`SELECT [{{query:"x/y"}}] FROM t`)).toBe(false);
         });
     });
