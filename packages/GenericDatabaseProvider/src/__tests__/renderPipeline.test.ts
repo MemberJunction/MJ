@@ -1415,15 +1415,12 @@ describe('dialect parity', () => {
         expect(pgResult.FinalSQL).toMatch(/LIMIT\s+10\b/i);
     });
 
-    // KNOWN LIMITATION: PostgreSQL dollar-quoted strings (`$$ … $$`, `$tag$ … $tag$`) are
-    // not currently recognized by StripComments. Skip until a PG caller exercises this.
-    it.skip('PG `$$ … $$` dollar-quoted strings are not eaten by comment stripping', () => {
+    it('PG `$$ … $$` dollar-quoted strings are not eaten by comment stripping', () => {
         const out = SQLParser.StripComments(`SELECT $$it -- has dashes$$ AS s`, pg);
         expect(out).toContain('$$it -- has dashes$$');
     });
 
-    // KNOWN LIMITATION: same dollar-quoting blind spot as above.
-    it.skip('PG tagged dollar-quoted strings are not eaten by comment stripping', () => {
+    it('PG tagged dollar-quoted strings are not eaten by comment stripping', () => {
         const out = SQLParser.StripComments(`SELECT $body$function_body -- $/* */$body$ AS s`, pg);
         expect(out).toContain('$body$function_body -- $/* */$body$');
     });
