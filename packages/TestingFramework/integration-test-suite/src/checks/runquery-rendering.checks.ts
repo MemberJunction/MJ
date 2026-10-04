@@ -179,6 +179,101 @@ const PLAIN_CASES: RenderCase[] = [
     }
 ];
 
+// ─── Query shapes with a cap or trailing clause of their own ──────────────────
+
+/** The first `n` fixture rows by ID, skipping `skip`. */
+function firstIds(items: RenderItem[], n: number, skip = 0): ComparableRow[] {
+    return ids(items.slice(skip, skip + n));
+}
+
+/** IDs from `start` up the ParentID chain to the root, with their distance from `start`. */
+function ancestorChain(items: RenderItem[], start: number): ComparableRow[] {
+    const byId = new Map(items.map(i => [i.ID, i]));
+    const rows: ComparableRow[] = [];
+    let current = byId.get(start);
+    for (let depth = 0; current; depth++) {
+        rows.push({ ID: current.ID, Depth: depth });
+        current = current.ParentID === null ? undefined : byId.get(current.ParentID);
+    }
+    return rows;
+}
+
+/**
+ * Shapes whose own cap or trailing clause the paging step must respect. Under every MaxRows /
+ * StartRow combination the query's own cap stays in force: the smaller of the two wins, and the
+ * total is the size of the capped result.
+ */
+const OWN_CAP_CASES: RenderCase[] = [
+    {
+        Name: 'RR Own TOP / LIMIT',
+        SQL: `SELECT TOP 7 ID FROM ${T} ORDER BY ID`,
+        Variants: { postgresql: `SELECT ID FROM ${T} ORDER BY ID LIMIT 7` },
+        Columns: ['ID'], Ordered: true,
+        Expect: items => firstIds(items, 7)
+    },
+    {
+        Name: 'RR Own TOP (n) DISTINCT',
+        SQL: `SELECT DISTINCT TOP (3) Category FROM ${T} ORDER BY Category`,
+        Variants: { postgresql: `SELECT DISTINCT Category FROM ${T} ORDER BY Category LIMIT 3` },
+        Columns: ['Category'], Ordered: true,
+        Expect: items => [...new Set(items.map(i => i.Category))].sort().slice(0, 3).map(c => ({ Category: c }))
+    },
+    {
+        Name: 'RR Own OFFSET FETCH',
+        SQL: `SELECT ID FROM ${T} ORDER BY ID OFFSET 5 ROWS FETCH NEXT 10 ROWS ONLY`,
+        Variants: { postgresql: `SELECT ID FROM ${T} ORDER BY ID LIMIT 10 OFFSET 5` },
+        Columns: ['ID'], Ordered: true,
+        Expect: items => firstIds(items, 10, 5)
+    },
+    {
+        Name: 'RR Own OFFSET Only',
+        SQL: `SELECT ID FROM ${T} WHERE ID <= 40 ORDER BY ID OFFSET 30 ROWS`,
+        Variants: { postgresql: `SELECT ID FROM ${T} WHERE ID <= 40 ORDER BY ID OFFSET 30` },
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID > 30 && i.ID <= 40))
+    },
+    {
+        Name: 'RR CTE With TOP',
+        SQL: `-- a comment before the WITH\nWITH c AS (SELECT ID, Category FROM ${T})\nSELECT TOP 12 ID FROM c WHERE Category <> 'Alpha' ORDER BY ID`,
+        Variants: { postgresql: `-- a comment before the WITH\nWITH c AS (SELECT ID, Category FROM ${T})\nSELECT ID FROM c WHERE Category <> 'Alpha' ORDER BY ID LIMIT 12` },
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.Category !== 'Alpha').slice(0, 12))
+    },
+    {
+        Name: 'RR OPTION Hint',
+        SQL: `SELECT ID FROM ${T} WHERE ID <= 30 ORDER BY ID OPTION (RECOMPILE)`,
+        Platforms: ['sqlserver'],
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 30))
+    },
+    {
+        Name: 'RR Parser Rejects With TOP',
+        SQL: `SELECT TOP 9 ID, TRY_CAST(Score AS INT) AS ScoreValue FROM ${T} ORDER BY ID`,
+        Platforms: ['sqlserver'],
+        Columns: ['ID', 'ScoreValue'], Ordered: true,
+        Expect: items => items.slice(0, 9).map(i => ({ ID: i.ID, ScoreValue: i.Score }))
+    },
+    {
+        Name: 'RR Recursive CTE',
+        SQL: `WITH chain AS (SELECT ID, ParentID, 0 AS Depth FROM ${T} WHERE ID = 200 UNION ALL SELECT p.ID, p.ParentID, c.Depth + 1 FROM ${T} p JOIN chain c ON p.ID = c.ParentID)\nSELECT ID, Depth FROM chain ORDER BY Depth`,
+        Variants: { postgresql: `WITH RECURSIVE chain AS (SELECT ID, ParentID, 0 AS Depth FROM ${T} WHERE ID = 200 UNION ALL SELECT p.ID, p.ParentID, c.Depth + 1 FROM ${T} p JOIN chain c ON p.ID = c.ParentID)\nSELECT ID, Depth FROM chain ORDER BY Depth` },
+        Columns: ['ID', 'Depth'], Ordered: true,
+        Expect: items => ancestorChain(items, 200)
+    },
+    {
+        Name: 'RR ORDER BY After Literal',
+        SQL: `SELECT ID FROM ${T} WHERE Category = 'Beta'ORDER BY ID DESC`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.Category === 'Beta').reverse())
+    },
+    {
+        Name: 'RR VALUES Column List',
+        SQL: 'SELECT N FROM (VALUES (1), (2), (3), (4), (5), (6), (7)) AS v(N) ORDER BY N',
+        Columns: ['N'], Ordered: true,
+        Expect: () => [1, 2, 3, 4, 5, 6, 7].map(n => ({ N: n }))
+    }
+];
+
 // ─── Parameters ────────────────────────────────────────────────────────────────
 
 const PARAM_FILTER_SQL = [
@@ -370,7 +465,7 @@ async function setupRenderFixtures(ctx: IntegrationCheckContext): Promise<void> 
         Variants: []
     };
     const platform = RenderPlatform(ctx);
-    for (const c of [...casesFor(PLAIN_CASES, platform), ...PARAM_QUERIES]) {
+    for (const c of [...casesFor(PLAIN_CASES, platform), ...casesFor(OWN_CAP_CASES, platform), ...PARAM_QUERIES]) {
         await CreateRenderQuery(fixtures, c, ctx.User);
     }
     // The category path is only known once the engine has seen a query in the category.
@@ -583,6 +678,14 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
             const expected: ExpectedResult = { Rows: ids(items.filter(i => i.Category === 'Beta')), Ordered: true };
             const failures = await RunCapAndPagingMatrix('pass-through', { QueryID: query.ID, Parameters: { OuterCat: 'Beta' } }, expected, ['ID'], ctx.User);
             FailOnMismatches('RR10', failures, 1);
+        }
+    },
+    {
+        Id: 'runquery-rendering.RR11',
+        Name: 'RR11: query shapes with their own cap or trailing clause keep it under every MaxRows / StartRow combination — the smaller cap wins and the total follows it',
+        Fn: async (ctx): Promise<void> => {
+            const cases = casesFor(OWN_CAP_CASES, RenderPlatform(ctx));
+            FailOnMismatches('RR11', await runCaseMatrix(cases, ctx.User), cases.length);
         }
     }
 ];
