@@ -167,6 +167,32 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
             }
             FailOnMismatches('RRC4 (expected 30s and 1min on every backend)', failures, runs.length);
         }
+    },
+    {
+        Id: 'runquery-rendering-client.RRC6',
+        Name: 'RRC6: on PostgreSQL, a session setting changed by caller-supplied SQL is not seen by later requests',
+        Fn: async (ctx): Promise<void> => {
+            const wire = requireWire(ctx);
+            const probe = await new RunQuery().RunQuery({ QueryID: queryID('RRC Session Timeouts') }, ctx.User);
+            Assert(probe.Success, `platform probe failed: ${probe.ErrorMessage}`);
+            if (ProjectRows(probe.Results, ['StatementTimeout'])[0].StatementTimeout === 'n/a') {
+                console.log('      → RRC6: SQL Server read queries cannot change session settings; nothing to check');
+                return;
+            }
+            const change = await runTestQuerySQL(wire, "SELECT set_config('statement_timeout', '3s', false) AS Changed", 1);
+            if (!change.Success && /Read-only data source is not available/i.test(change.ErrorMessage ?? '')) {
+                console.warn('  ⚠ runquery-rendering-client.RRC6 SKIPPED — the server has no read-only connection configured.');
+                return;
+            }
+            Assert(change.Success, `set_config call failed: ${change.ErrorMessage}`);
+            const failures: string[] = [];
+            for (let i = 0; i < 20; i++) {
+                const read = await runTestQuerySQL(wire, "SELECT current_setting('statement_timeout') AS StatementTimeout", 1);
+                const value = read.Success ? String(ProjectRows(JSON.parse(read.Results ?? '[]') as Record<string, unknown>[], ['StatementTimeout'])[0]?.StatementTimeout) : `error: ${read.ErrorMessage}`;
+                if (value !== '30s') failures.push(`request ${i + 1} saw statement_timeout '${value}'`);
+            }
+            FailOnMismatches('RRC6 (a later request must still see 30s)', failures, 20);
+        }
     }
 ];
 

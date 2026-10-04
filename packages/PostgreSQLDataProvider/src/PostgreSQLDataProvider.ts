@@ -371,6 +371,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 const bypassResult = await bypass.query(quotedQuery, processedParams);
                 return bypassResult.rows as T[];
             }
+            if (options?.readOnlyTransaction && !this._transaction) {
+                return await this.executeInRolledBackReadOnlyTransaction<T>(quotedQuery, processedParams);
+            }
             this.AssertAmbientTransactionUsable();
             const source = this._transaction ?? this._connectionManager.Pool;
             const result = await source.query(quotedQuery, processedParams);
@@ -379,6 +382,26 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const desc = options?.description ? ` [${options.description}]` : '';
             LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
             throw err;
+        }
+    }
+
+    /**
+     * Runs one statement on its own pooled connection inside `BEGIN READ ONLY … ROLLBACK`. The
+     * rollback undoes any session setting the statement made, so the connection goes back to the
+     * pool unchanged.
+     */
+    private async executeInRolledBackReadOnlyTransaction<T>(sql: string, params: unknown[] | undefined): Promise<Array<T>> {
+        const client = await this._connectionManager.AcquireClient();
+        try {
+            await client.query('BEGIN READ ONLY');
+            try {
+                const result = await client.query(sql, params);
+                return result.rows as T[];
+            } finally {
+                await client.query('ROLLBACK');
+            }
+        } finally {
+            client.release();
         }
     }
 

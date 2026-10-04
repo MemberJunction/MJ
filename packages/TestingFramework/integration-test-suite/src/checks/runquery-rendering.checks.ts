@@ -524,7 +524,7 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
     },
     {
         Id: 'runquery-rendering.RR9',
-        Name: 'RR9: caller-supplied SQL must be a single read query',
+        Name: 'RR9: caller-supplied SQL must be a single read query and cannot leave session settings behind',
         Fn: async (ctx): Promise<void> => {
             const rq = new RunQuery();
             const platform = RenderPlatform(ctx);
@@ -537,6 +537,16 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
             const copyCheck = await rq.RunQuery({ SQL: `SELECT COUNT(*) AS N FROM ${T} WHERE 1 = 0` }, ctx.User);
             Assert(copyCheck.Success, 'the fixture table must still be readable');
 
+            if (platform !== 'postgresql') return;
+            const changed = await rq.ExecuteFromSpec({ SQL: "SELECT set_config('statement_timeout', '3s', false) AS Changed", MaxRows: 1 }, ctx.User);
+            Assert(changed.Success, `set_config call failed: ${changed.ErrorMessage}`);
+            const failures: string[] = [];
+            for (let i = 0; i < 10; i++) {
+                const read = await rq.ExecuteFromSpec({ SQL: "SELECT current_setting('statement_timeout') AS StatementTimeout", MaxRows: 1 }, ctx.User);
+                const value = read.Success ? String(ProjectRows(read.Results, ['StatementTimeout'])[0]?.StatementTimeout) : `error: ${read.ErrorMessage}`;
+                if (value === '3s') failures.push(`spec call ${i + 1} saw the 3s statement_timeout set by an earlier call`);
+            }
+            FailOnMismatches('RR9 session isolation', failures, 10);
         }
     }
 ];
