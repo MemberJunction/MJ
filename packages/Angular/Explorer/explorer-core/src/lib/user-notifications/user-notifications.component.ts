@@ -601,6 +601,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       if (this.navigateToHandoffConsole(notification)) {
         return;
       }
+      if (this.navigateToMeeting(notification)) {
+        return;
+      }
 
       this.navigateToResource(notification);
     }
@@ -662,6 +665,42 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       Configuration: config.offerId ? { offer: config.offerId } : {},
     };
     this.navigationService.OpenNavItem(app.ID, consoleItem, app.GetColor());
+    return true;
+  }
+
+  /**
+   * Opens the Meet app's Meetings resource for a `meeting` or `meeting-invitation` notification (the
+   * `{ type:'meeting', meetingId }` ResourceConfiguration), or when NotificationType is 'Meeting Invitation'.
+   * Returns `false` (not handled) when the config isn't a meeting invite or the Meet app is absent.
+   */
+  private navigateToMeeting(notification: MJUserNotificationEntity): boolean {
+    let meetingId: string | undefined;
+    if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
+      const config = SafeJSONParse<{ type?: string; meetingId?: string }>(notification.ResourceConfiguration);
+      if (
+        config &&
+        (config.type?.trim().toLowerCase() === 'meeting' ||
+          config.type?.trim().toLowerCase() === 'meeting-invitation')
+      ) {
+        meetingId = config.meetingId;
+      }
+    }
+    const typeName = notification.NotificationType?.trim();
+    if (!meetingId && typeName !== 'Meeting Invitation') {
+      return false;
+    }
+    const app = this.appManager.GetAppByName('Meet') ?? this.appManager.GetActiveApp();
+    if (!app) {
+      return false;
+    }
+    const meetingItem: NavItem = {
+      Label: 'Meetings',
+      Icon: 'fa-solid fa-users',
+      ResourceType: 'Custom',
+      DriverClass: 'MeetingsResource',
+      Configuration: meetingId ? { meeting: meetingId } : {},
+    };
+    this.navigationService.OpenNavItem(app.ID, meetingItem, app.GetColor());
     return true;
   }
 

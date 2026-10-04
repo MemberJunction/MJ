@@ -209,13 +209,13 @@ describe('NotificationHandoffNotifier', () => {
   const user = { ID: 'run-as' } as unknown as UserInfo;
   const provider = {} as unknown as IMetadataProvider;
 
-  it('sends a notification to the person, routed to the handoff console, through the existing invite type', async () => {
+  it('sends a notification to the person, routed to the handoff console, through the dedicated handoff offer type', async () => {
     await new NotificationHandoffNotifier().NotifyOffer(VIEW as never, 'U1', user, provider);
     expect(h.notificationConfig).toHaveBeenCalledWith(false, user, provider);
     expect(h.sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'U1',
-        typeNameOrId: 'Live Room Invite',
+        typeNameOrId: 'Conversation Handoff Offer',
         title: expect.stringContaining('Phone caller ****0123'),
         message: expect.stringContaining('Wants a refund'),
         resourceConfiguration: { type: 'handoff-offer', offerId: 'offer-1', room: 'call-1' },

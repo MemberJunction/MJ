@@ -9,11 +9,39 @@
       "Status": "Active",
       "DefaultNavItems": [
         {
+          "Label": "Meetings",
+          "Icon": "fa-solid fa-users",
+          "ResourceType": "Custom",
+          "DriverClass": "MeetingsResource",
+          "isDefault": true
+        },
+        {
+          "Label": "Conversation Console",
+          "Icon": "fa-solid fa-headset",
+          "ResourceType": "Custom",
+          "DriverClass": "HumanHandoffConsoleResource",
+          "isDefault": false
+        },
+        {
+          "Label": "Operations",
+          "Icon": "fa-solid fa-chart-line",
+          "ResourceType": "Custom",
+          "DriverClass": "TelephonyOperationsDashboard",
+          "isDefault": false
+        },
+        {
           "Label": "Live Room",
           "Icon": "fa-solid fa-video",
           "ResourceType": "Custom",
           "DriverClass": "LiveKitRoomResource",
-          "isDefault": true
+          "isDefault": false
+        },
+        {
+          "Label": "Agent Test Bed",
+          "Icon": "fa-solid fa-robot",
+          "ResourceType": "Custom",
+          "DriverClass": "LiveKitRoomResource",
+          "isDefault": false
         }
       ]
     },
