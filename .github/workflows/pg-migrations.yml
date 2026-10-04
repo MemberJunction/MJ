@@ -42,6 +42,10 @@ on:
   schedule:
     - cron: '15 6 * * *'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   pg-parity:
     name: PG migration validation (release-time)

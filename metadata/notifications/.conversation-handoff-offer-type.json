@@ -1,0 +1,17 @@
+{
+  "fields": {
+    "Name": "Conversation Handoff Offer",
+    "Description": "Sent when an AI agent requests a human user to take over a live conversation or phone call. Clicking the notification opens the Conversation Console.",
+    "DefaultInApp": true,
+    "DefaultEmail": false,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "Icon": "fa-headset",
+    "Color": "#0076b6",
+    "AutoExpireDays": 1,
+    "Priority": 50
+  },
+  "primaryKey": {
+    "ID": "93E93B27-D9C3-4445-9616-91B6C6B6A849"
+  }
+}
