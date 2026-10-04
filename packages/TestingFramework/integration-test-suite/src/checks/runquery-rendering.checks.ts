@@ -442,6 +442,11 @@ const COMPOSITION_LIBRARY: RenderQueryDefinition[] = [
         SQL: `SELECT ID, TRY_CAST(Score AS INT) AS ScoreInt FROM ${T} WHERE ID <= 40`,
         Variants: { postgresql: `SELECT ID, Score::int AS ScoreInt FROM ${T} WHERE ID <= 40` }
     },
+    {
+        Name: 'RR Dep OPTION Hint', Reusable: true,
+        SQL: `SELECT ID FROM ${T} WHERE ID <= 25 OPTION (MAXDOP 1)`,
+        Variants: { postgresql: `SELECT ID FROM ${T} WHERE ID <= 25` }
+    },
     { Name: 'RR Dep Trailing Semicolon', Reusable: true, SQL: `SELECT ID FROM ${T} WHERE ID <= 12;` },
     {
         Name: 'RR Dep Template', Reusable: true,
@@ -586,6 +591,12 @@ const COMPOSED_CASES: RenderCase[] = [
         SQL: `SELECT r.ID, r.ScoreInt FROM {{query:"{P}/RR Dep Parser Rejects"}} r ORDER BY r.ID`,
         Columns: ['ID', 'ScoreInt'], Ordered: true,
         Expect: items => items.filter(i => i.ID <= 40).map(i => ({ ID: i.ID, ScoreInt: i.Score }))
+    },
+    {
+        Name: 'RR Comp OPTION Dependency',
+        SQL: `SELECT o.ID FROM {{query:"{P}/RR Dep OPTION Hint"}} o ORDER BY o.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 25))
     },
     {
         Name: 'RR Comp Semicolon Dependency',
