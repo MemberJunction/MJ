@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/rubrics-base",
   "type": "module",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.2",
   "description": "UI-safe rubric scoring and version classification. Pure functions: no database and no Angular.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,8 +31,8 @@
     }
   },
   "dependencies": {
-    "@memberjunction/core": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1"
+    "@memberjunction/core": "6.2.0-edge.2",
+    "@memberjunction/global": "6.2.0-edge.2"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

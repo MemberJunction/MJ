@@ -48,6 +48,8 @@ import {
     FindIgnoredRealtimeConfigKeys,
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
+    ResolveRealtimeCoAgentID,
+    FilterAllowedAgentsByCanRun,
     RealtimeAllowedAgent,
     RealtimeDirectActionsConfig,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
@@ -56,7 +58,7 @@ import {
     writeRealtimeRecordingSegment,
     deleteRealtimeRecordingSegments,
 } from '@memberjunction/ai-agents';
-import { AgentExecutionProgressCallback, MJAIAgentEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
+import { AgentExecutionProgressCallback, AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { ChatMessage, RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -70,32 +72,6 @@ import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../
  * noise is dropped so the model only narrates meaningful work.
  */
 const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
-
-/**
- * The seeded name of the internal orchestration agent that fronts a target agent in realtime
- * sessions (voice + interactive channels). This is the GLOBAL DEFAULT co-agent — the final step of
- * the co-agent resolution chain (see {@link RealtimeClientSessionResolver.resolveCoAgentID}).
- * Deployments can override it per agent (`AIAgent.DefaultCoAgentID`), per agent type (an
- * `AIAgentCoAgent` row with `TargetAgentTypeID` + `IsDefault`), or per call (the `coAgentId`
- * mutation argument) without
- * touching this seed.
- */
-const REALTIME_CO_AGENT_NAME = 'Realtime Co-Agent';
-
-/**
- * DEPRECATED legacy seed name of {@link REALTIME_CO_AGENT_NAME}, from before the agent's rename
- * from "Voice Co-Agent" to "Realtime Co-Agent". Deployments that have not re-synced the agent seed
- * still carry this name, so {@link RealtimeClientSessionResolver.resolveGlobalCoAgentID} falls
- * back to it (with a deprecation log) when no agent named {@link REALTIME_CO_AGENT_NAME} exists.
- */
-const LEGACY_REALTIME_CO_AGENT_NAME = 'Voice Co-Agent';
-
-/**
- * The seeded name of the Realtime agent TYPE. Every co-agent candidate (explicit or metadata
- * default) must be an Active agent of this type — a co-agent drives a streaming full-duplex
- * realtime session, which only `RealtimeAgentType`-driven agents support.
- */
-const REALTIME_AGENT_TYPE_NAME = 'Realtime';
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -414,7 +390,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      *    session is created.
      * 2. Resolve the co-agent id via the metadata-driven resolution chain (runtime `coAgentId` →
      *    agent's `DefaultCoAgentID` → type-level `AIAgentCoAgent` default row → global Realtime Co-Agent) —
-     *    see {@link RealtimeClientSessionResolver.resolveCoAgentID} for the full contract.
+     *    see {@link ResolveRealtimeCoAgentID} for the full contract.
      * 3. Create the durable `AIAgentSession` (run by the co-agent), storing `targetAgentID` in its
      *    config server-side — this is the authoritative target for all later relays.
      * 4. Mint the {@link import('@memberjunction/ai').ClientRealtimeSessionConfig} via the service.
@@ -463,7 +439,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
-        const coAgentID = await this.resolveCoAgentID(targetAgentId, coAgentId, contextUser, provider);
+        const coAgentID = await ResolveRealtimeCoAgentID(targetAgentId, coAgentId, contextUser, provider);
         // PAIRING CONSTRAINTS: a co-agent with pairing rows is restricted to that target list
         // (with the IsDefault row standing in when no runtime target was supplied); zero rows =
         // universal, today's behavior untouched. Resolves the AUTHORITATIVE target id.
@@ -578,7 +554,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 TargetAgentID: config.targetAgentID,
                 // Multi-target (Move 4): the session's persisted allowed-agent union — a model-named
                 // colleague in the call is validated against this; absent ⇒ single-target behavior.
-                AllowedAgents: await this.filterAllowedAgentsByCanRun(config.allowedAgents, contextUser),
+                AllowedAgents: await FilterAllowedAgentsByCanRun(config.allowedAgents, contextUser),
                 DirectActions: config.directActions,
                 // Attribution follows the VISITOR even when `runUser` is elevated: the delegated run
                 // row and its context-memory scope must stay the person's, not the system user's.
@@ -1251,39 +1227,6 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Narrows a session's colleague union (`allowedAgents`) to the agents the CALLER may run.
-     *
-     * {@link assertCanRunTarget} gates the LEAD target at session start, but the union it travels
-     * with was never gated at all — a model-named colleague resolves straight to a delegated run.
-     * That was survivable while the run carried the caller's own identity, because base-agent
-     * re-checks `CanRun` against `contextUser`. Once the run user is elevated for a scoped anonymous
-     * caller (issue #3371) that check sees the SYSTEM user, so this is the only remaining place the
-     * caller's own authority is applied to a colleague. It therefore runs for EVERY caller, elevated
-     * or not — the authorization identity must never depend on the elevation decision.
-     *
-     * `HasPermission` reads AIEngineBase's in-memory caches (no DB round trip) and already fails
-     * closed on error, so an unresolvable agent drops OUT of the union rather than becoming runnable.
-     * A filtered-out colleague is not an error: the delegation layer reports it as "not available in
-     * this session" and lists what remains, which is the same answer the model gets for a typo.
-     *
-     * @param allowedAgents The session's persisted colleague union (absent/empty ⇒ single-target).
-     * @param contextUser The ORIGINAL caller — never the elevated run user.
-     * @returns The subset the caller may run, preserving order.
-     */
-    private async filterAllowedAgentsByCanRun(
-        allowedAgents: RealtimeAllowedAgent[] | undefined,
-        contextUser: UserInfo,
-    ): Promise<RealtimeAllowedAgent[] | undefined> {
-        if (!allowedAgents || allowedAgents.length === 0) {
-            return allowedAgents;
-        }
-        const verdicts = await Promise.all(
-            allowedAgents.map((a) => AIAgentPermissionHelper.HasPermission(a.agentId, contextUser, 'run')),
-        );
-        return allowedAgents.filter((_, i) => verdicts[i]);
-    }
-
-    /**
      * Resolves the AUTHORITATIVE target agent id under the co-agent's PAIRING CONSTRAINTS
      * (`MJ: AI Agent Co Agents`, ordered by `Sequence`):
      *
@@ -1523,195 +1466,6 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
             return false;
         }
-    }
-
-    /**
-     * Resolves the co-agent (the Realtime-type agent that voices the target agent) for a new
-     * client-direct session via the metadata-driven **CO-AGENT RESOLUTION CHAIN** — first match
-     * wins, evaluated in precedence order:
-     *
-     * 1. **Runtime parameter** — the mutation's explicit `coAgentId`. A per-call override; an
-     *    invalid candidate (unknown, not Active, or not of the Realtime agent type) **throws**
-     *    (fail loud — the caller asked for something specific, mirroring `preferredModelId`).
-     * 2. **Per-agent persona** — the target agent's `AIAgent.DefaultCoAgentID`. An invalid
-     *    reference logs a warning and **falls through** to the next step (stale metadata should
-     *    degrade gracefully, never break calls).
-     * 3. **Per-type default** — an Active `AIAgentCoAgent` row of Type `'CoAgent'` whose
-     *    `TargetAgentTypeID` is the target agent's type and `IsDefault = 1` (lowest `Sequence`
-     *    wins a tie). Same tolerant warn-and-fall-through semantics as step 2.
-     * 4. **Global default** — the seeded {@link REALTIME_CO_AGENT_NAME} agent, looked up by name
-     *    (with a deprecated fallback to {@link LEGACY_REALTIME_CO_AGENT_NAME}). Throws when absent
-     *    entirely (the realtime feature is unconfigured in this deployment).
-     *
-     * Every candidate from steps 1–3 is validated by {@link findValidCoAgent}: it must exist in
-     * {@link AIEngine}'s cached agents, have Status `Active`, and be of the
-     * {@link REALTIME_AGENT_TYPE_NAME} agent type. Step 4 keeps its original name-lookup contract.
-     *
-     * @param targetAgentId The agent the co-agent will voice on behalf of (drives steps 2–3).
-     * @param explicitCoAgentId The runtime `coAgentId` mutation argument, when supplied (step 1).
-     * @returns The resolved co-agent's id (canonical casing from the metadata cache).
-     */
-    private async resolveCoAgentID(
-        targetAgentId: string | undefined,
-        explicitCoAgentId: string | undefined,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
-    ): Promise<string> {
-        await AIEngine.Instance.Config(false, contextUser, provider);
-
-        // Step 1 — explicit runtime parameter: fail LOUD on any problem.
-        if (explicitCoAgentId) {
-            const { agent, problem } = this.findValidCoAgent(explicitCoAgentId);
-            if (!agent) {
-                throw new Error(`Invalid coAgentId '${explicitCoAgentId}': ${problem}`);
-            }
-            return agent.ID;
-        }
-
-        const targetAgent = targetAgentId
-            ? (AIEngine.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, targetAgentId))
-            : undefined;
-
-        // Step 2 — the target agent's own DefaultCoAgentID (per-agent persona): warn + fall through.
-        const fromAgent = this.resolveMetadataDefault(
-            targetAgent?.DefaultCoAgentID,
-            `agent '${targetAgent?.Name}' (DefaultCoAgentID)`,
-        );
-        if (fromAgent) {
-            return fromAgent;
-        }
-
-        // Step 3 — the type-level AIAgentCoAgent default row (per-type default): warn + fall through.
-        const agentType = targetAgent?.TypeID
-            ? (AIEngine.Instance.AgentTypes ?? []).find(t => UUIDsEqual(t.ID, targetAgent.TypeID))
-            : undefined;
-        const typeDefaultCoAgentID = agentType
-            ? this.findTypeDefaultCoAgentID(agentType.ID, contextUser, provider)
-            : undefined;
-        const fromType = this.resolveMetadataDefault(
-            await typeDefaultCoAgentID,
-            `agent type '${agentType?.Name}' (AIAgentCoAgent type-default row)`,
-        );
-        if (fromType) {
-            return fromType;
-        }
-
-        // Step 4 — global default: the seeded Realtime Co-Agent, by name (original behavior).
-        return this.resolveGlobalCoAgentID();
-    }
-
-    /**
-     * Chain step 3 lookup: the TYPE-LEVEL default co-agent for an agent type — the Active
-     * `AIAgentCoAgent` row of Type `'CoAgent'` whose `TargetAgentTypeID` matches, with
-     * `IsDefault = 1` preferred and the lowest `Sequence` breaking ties (so a deployment can
-     * stage multiple type-level candidates deterministically). Reads {@link AIEngineBase}'s
-     * cached rows — no RunView. Tolerant: a failed cache read logs and returns `undefined`
-     * (the chain falls through to the global default).
-     */
-    private async findTypeDefaultCoAgentID(
-        agentTypeID: string,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
-    ): Promise<string | undefined> {
-        try {
-            const engine = await this.configuredAIEngineBase(contextUser, provider);
-            const candidates = (engine.AgentCoAgents ?? [])
-                .filter((r) =>
-                    r.Type === 'CoAgent' &&
-                    r.Status === 'Active' &&
-                    r.TargetAgentTypeID != null &&
-                    UUIDsEqual(r.TargetAgentTypeID, agentTypeID))
-                .sort((a, b) =>
-                    (a.IsDefault === b.IsDefault ? 0 : a.IsDefault ? -1 : 1) ||
-                    (a.Sequence ?? 0) - (b.Sequence ?? 0));
-            return candidates[0]?.CoAgentID;
-        } catch (error) {
-            LogError(
-                `StartRealtimeClientSession: ${CO_AGENT_ENTITY} cache read failed while resolving the type-level ` +
-                    `default co-agent for agent type ${agentTypeID} (${(error as Error).message}) — falling through.`,
-            );
-            return undefined;
-        }
-    }
-
-    /**
-     * Validates one metadata-level co-agent default (chain steps 2/3). Returns the resolved
-     * co-agent id when the reference is valid; logs a warning and returns `null` (caller falls
-     * through to the next chain step) when the reference is set but invalid — metadata drift must
-     * degrade, not break live calls. A `null`/absent reference returns `null` silently.
-     */
-    private resolveMetadataDefault(candidateId: string | null | undefined, source: string): string | null {
-        if (!candidateId) {
-            return null;
-        }
-        const { agent, problem } = this.findValidCoAgent(candidateId);
-        if (agent) {
-            return agent.ID;
-        }
-        LogError(
-            `StartRealtimeClientSession: ignoring co-agent default '${candidateId}' from ${source} — ${problem} ` +
-                'Falling through to the next step of the co-agent resolution chain.',
-        );
-        return null;
-    }
-
-    /**
-     * Validates a co-agent candidate against {@link AIEngine}'s cached metadata. A valid co-agent
-     * must (a) exist, (b) have Status `Active`, and (c) be of the {@link REALTIME_AGENT_TYPE_NAME}
-     * agent type. Returns the cached agent on success, or a human-readable `problem` on failure —
-     * the CALLER decides whether that's fatal (explicit runtime param) or tolerated (metadata default).
-     */
-    private findValidCoAgent(candidateId: string): { agent?: MJAIAgentEntityExtended; problem?: string } {
-        const agent = (AIEngine.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, candidateId));
-        if (!agent) {
-            return { problem: 'no agent with that ID exists.' };
-        }
-        if (agent.Status !== 'Active') {
-            return { problem: `agent '${agent.Name}' is not Active (Status: ${agent.Status}).` };
-        }
-        const realtimeType = (AIEngine.Instance.AgentTypes ?? []).find(
-            t => t.Name?.trim().toLowerCase() === REALTIME_AGENT_TYPE_NAME.toLowerCase(),
-        );
-        if (!realtimeType) {
-            return { problem: `the '${REALTIME_AGENT_TYPE_NAME}' agent type is not configured in this deployment.` };
-        }
-        if (!agent.TypeID || !UUIDsEqual(agent.TypeID, realtimeType.ID)) {
-            return { problem: `agent '${agent.Name}' is not of the '${REALTIME_AGENT_TYPE_NAME}' agent type.` };
-        }
-        return { agent };
-    }
-
-    /**
-     * Resolves the seeded Realtime Co-Agent's id from {@link AIEngine}'s cached agents — the GLOBAL
-     * DEFAULT (step 4) of the co-agent resolution chain. The engine is already configured by
-     * {@link resolveCoAgentID}. Looks up the current {@link REALTIME_CO_AGENT_NAME} first, then
-     * falls back to the DEPRECATED {@link LEGACY_REALTIME_CO_AGENT_NAME} (pre-rename seed) with a
-     * deprecation log so un-resynced deployments keep working. Throws a clear error when neither
-     * name is present in metadata.
-     */
-    private resolveGlobalCoAgentID(): string {
-        const coAgent = this.findAgentByName(REALTIME_CO_AGENT_NAME);
-        if (coAgent) {
-            return coAgent.ID;
-        }
-        const legacy = this.findAgentByName(LEGACY_REALTIME_CO_AGENT_NAME);
-        if (legacy) {
-            LogStatus(
-                `StartRealtimeClientSession: resolved the global co-agent via its DEPRECATED legacy name ` +
-                    `'${LEGACY_REALTIME_CO_AGENT_NAME}'. Re-sync the agent seed metadata to rename it to ` +
-                    `'${REALTIME_CO_AGENT_NAME}'.`,
-            );
-            return legacy.ID;
-        }
-        throw new Error(
-            `The '${REALTIME_CO_AGENT_NAME}' agent is not configured; cannot start a realtime voice session.`,
-        );
-    }
-
-    /** Case/whitespace-insensitive agent lookup by Name in {@link AIEngine}'s cached agents. */
-    private findAgentByName(name: string): MJAIAgentEntityExtended | undefined {
-        const wanted = name.toLowerCase();
-        return (AIEngine.Instance.Agents ?? []).find(a => a.Name?.trim().toLowerCase() === wanted);
     }
 
     /**
