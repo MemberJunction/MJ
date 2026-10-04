@@ -1032,7 +1032,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @throws When the driver cannot be resolved or `Connect` fails (the row is stamped `Failed`).
      */
     public async StartBridgeSession(params: StartBridgeSessionParams): Promise<ActiveBridgeSession> {
-        const bridgeRow = await this.createBridgeRow(params);
+        const fullDuplex = params.RealtimeSession.Capabilities?.FullDuplex === true;
+        const turn = this.buildTurnPolicy(params, fullDuplex);
+        const bridgeRow = await this.createBridgeRow(params, turn.Mode);
 
         try {
             // Resolve the driver inside the try so a resolution failure still stamps the row Failed
@@ -1052,8 +1054,6 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             bridgeRow.ConnectedAt = new Date();
             await this.transitionStatus(bridgeRow, 'Connected', params);
 
-            const fullDuplex = params.RealtimeSession.Capabilities?.FullDuplex === true;
-            const turn = this.buildTurnPolicy(params, fullDuplex);
             const active: ActiveBridgeSession = {
                 SessionBridgeID: bridgeRow.ID,
                 AgentSessionID: params.AgentSessionID,
@@ -2847,7 +2847,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @returns The saved bridge row.
      * @throws When the row cannot be created (no metadata provider, or save failure).
      */
-    private async createBridgeRow(params: StartBridgeSessionParams): Promise<MJAIAgentSessionBridgeEntity> {
+    private async createBridgeRow(
+        params: StartBridgeSessionParams,
+        addressingMode?: ResolvedTurnAddressingMode,
+    ): Promise<MJAIAgentSessionBridgeEntity> {
         const provider = params.MetadataProvider;
         if (!provider) {
             throw new Error('AIBridgeEngine.StartBridgeSession requires a MetadataProvider.');
@@ -2862,6 +2865,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         row.Direction = params.Direction ?? 'Outbound';
         row.JoinMethod = params.JoinMethod ?? 'OnDemand';
         row.TurnMode = params.TurnMode ?? 'Passive';
+        row.TurnAddressing = addressingMode ?? 'Regex';
         row.Address = params.Address;
         row.Status = 'Pending';
         row.HostInstanceID = this.hostIdentity.GetHostInstanceID();
