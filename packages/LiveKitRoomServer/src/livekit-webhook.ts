@@ -12,6 +12,7 @@
 import { WebhookReceiver } from 'livekit-server-sdk';
 import { LiveKitTokenService, type LiveKitServerConfig } from './livekit-token-service';
 import { LIVEKIT_PARTICIPANT_KIND_SIP, LIVEKIT_SIP_ATTRIBUTES } from './livekit-sip-service';
+import { RoomAudioPlayer } from './room-audio/room-audio-player';
 
 /** A LiveKit webhook event reduced to what MJ looks at. */
 export interface LiveKitRoomWebhookEvent {
@@ -63,6 +64,10 @@ export class LiveKitWebhookParser {
   /**
    * Verifies the request's signature and returns the event.
    *
+   * One event is also acted on here, because every LiveKit webhook MJ receives passes through this method: on a
+   * verified `room_finished` the room's {@link RoomAudioPlayer} playbacks (hold music) are stopped, so a bot never
+   * outlives its room. That cleanup runs in the background and never throws.
+   *
    * @param body The raw request body (the signature covers the exact bytes, so do not re-serialise parsed JSON).
    * @param authHeader The request's `Authorization` header.
    * @throws {Error} when the signature is missing or does not verify.
@@ -72,9 +77,13 @@ export class LiveKitWebhookParser {
     const participant = event.participant;
     const isSip = participant?.kind === LIVEKIT_PARTICIPANT_KIND_SIP;
     const attributes = participant?.attributes ?? {};
+    const roomName = event.room?.name ?? '';
+    if (event.event === 'room_finished' && roomName) {
+      void RoomAudioPlayer.Instance.StopAllInRoom(roomName);
+    }
     return {
       Event: event.event,
-      RoomName: event.room?.name ?? '',
+      RoomName: roomName,
       ParticipantIdentity: participant?.identity ?? '',
       IsSipParticipant: isSip,
       CallerNumber: isSip ? attributes[LIVEKIT_SIP_ATTRIBUTES.CallerNumber] : undefined,
