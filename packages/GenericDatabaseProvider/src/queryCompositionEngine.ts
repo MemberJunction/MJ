@@ -1,6 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { GetDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { SQLParser, AnalyzeTopLevelOrderBy, LexSQL, SplitLeadingCTEs } from "@memberjunction/sql-parser";
+import { SQLParser, AnalyzeTopLevelOrderBy, LexSQL, SignificantTokens, SplitLeadingCTEs } from "@memberjunction/sql-parser";
 import { DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 import { MJQueryEntityExtended, QueryEngine } from "@memberjunction/core-entities";
 import { SymbolTable } from "./symbolTable.js";
@@ -692,7 +692,8 @@ export class QueryCompositionEngine {
         let recursive = outer?.Recursive ?? false;
         const cteDefinitions: string[] = [];
         for (const entry of cteEntries) {
-            const strippedSQL = this.stripTrailingOrderBy(entry.SQL, dialect);
+            const statement = this.withoutStatementSemicolons(entry.SQL, dialect);
+            const strippedSQL = this.stripTrailingOrderBy(statement, dialect);
             const commentStrippedSQL = this.stripSQLComments(strippedSQL).trimStart();
 
             if (/^WITH\s/i.test(commentStrippedSQL)) {
@@ -723,6 +724,19 @@ export class QueryCompositionEngine {
         }
 
         return `${withKeyword} ${cteDefinitions.join(',\n')}\n${mainSQL}`;
+    }
+
+    /**
+     * A dependency's statement without the semicolons before or after it (`;WITH …`, `… ;`),
+     * which a CTE body cannot hold.
+     */
+    private withoutStatementSemicolons(sql: string, dialect: SQLDialect): string {
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        const first = tokens.findIndex(t => t.Kind !== 'semicolon');
+        if (first === -1) return sql;
+        let last = tokens.length - 1;
+        while (tokens[last].Kind === 'semicolon') last--;
+        return sql.substring(tokens[first].Start, tokens[last].End);
     }
 
     /**
