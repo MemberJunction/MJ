@@ -1,5 +1,244 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 8fd1c46: Moves the seven CodeGen AI prompts to current models, and makes AI model catalog ranks consistent within each model's version lineage. Metadata only, plus a new CI guard. (#4912)
+  - **CodeGen prompts** (Check Constraint Parser, Entity Description Generation, Entity Name Generation, Transitive Join Intelligence, Virtual Entity Field Decoration, Form Layout Generation, Smart Field Identification):
+    - Gemini 3.5 Flash → **Gemini 3.8 Flash**, on the same Google and Vertex AI routes.
+    - Gemini 3.1 Flash-Lite → **Gemini 3.5 Flash-Lite** (Form Layout Generation, Smart Field Identification). Google now comes before Vertex AI, matching Flash.
+    - GPT 5.5 Instant → **GPT-6 Luna** on OpenAI. GPT 5.5 Instant only ever called `gpt-5.5`.
+    - Claude Haiku 4.5 and GPT-OSS-120B are unchanged; they are still the newest in their families. The failover order is unchanged.
+  - **Review regenerated output.** CodeGen commits its AI output into each app: `Validate*()` methods parsed from CHECK constraints, entity and field descriptions, display names and form layouts. Apps that regenerate after upgrading may see different AI-written output and should review it before committing.
+  - **Catalog PowerRank fixes.** Within a lineage, a newer model no longer ranks below the model it replaces, and ranks above it where it is the more capable one (rank-based selection does not break ties):
+    - The GPT-5 generation (GPT 5, 5-mini, 5-nano) was ranked above its successors and now ranks 10, 9 and 8.
+    - GPT 5.5 → 15, GPT 5.5 Instant → 15 (the same `gpt-5.5` API model), GPT 5.5 Pro → 16, GPT 5.6 → 16, o3-mini → 9, o4-mini → 10, Claude Sonnet 5 → 21, MiniMax-M3 → 21 (ties M2.7, which it complements rather than replaces), Grok 4.3 → 23, Qwen3.8-Flash → 16.
+    - Prompts and agents that choose models by rank can pick a different model as a result.
+  - **`PriorVersionID` lineage.** Two links that pointed across tiers are corrected (Gemini 3.1 Flash-Lite, Qwen3.8-Flash). Three variants with no earlier version in the catalog are cleared (GLM-5.3-Flash, GLM 5V Turbo, Mercury Edit 2). Missing links are added for the GPT 5, GPT mini/nano, o-series mini and Gemini Flash lines.
+  - **New guard:** `.github/scripts/check-ai-model-ranks.mjs` (`pnpm run check:ai-model-ranks`, run in the Source guards CI job) fails when a model ranks below the prior version it names, or names a prior version that doesn't exist.
+
+### Patch Changes
+
+- 1580f34: CodeGen applies the `PrimaryKey` and `ForeignKeys` declared on `VirtualEntities` entries in `additionalSchemaInfo`, and finishes a config-declared virtual entity in one run.
+
+  Before, only `PrimaryKey[0]` was used (composite keys collapsed to one column), `ForeignKeys` were parsed and dropped, and the entity never joined `NewEntityList`, so its keys, relationships, entity class and GraphQL type appeared only on a second run. Users worked around it with a duplicate schema-key table entry naming the view.
+  - New `applyVirtualEntitySoftKeys` applies `VirtualEntities` keys on every run, right after the view-column sync (view name as `TableName`, string `PrimaryKey` normalized). Relationships are rebuilt in the same run when a key changed. `applySoftPKFKConfig` keeps handling table entries only.
+  - `processVirtualEntityConfig` creates the entity with logged INSERT statements (fixed CodeGen-generated ID, `Description` kept) instead of the unlogged `spCreateVirtualEntity` call, so the CodeGen_Run capture replays on other databases; it registers the entity in `NewEntityList`; `SchemaName` defaults to `dbo` as documented (was the core schema).
+  - An `EntityName` already in use (compared without case) skips the entry with an error before anything is captured; a name derived from the view gets the `__<schema>` suffix, like table-backed entities.
+  - The soft key writer skips a configured column that does not exist instead of writing an UPDATE that matches no row, and clears `IsUnique` on the columns of a composite `VirtualEntities` key.
+  - `manageSingleVirtualEntity` no longer counts fields it just removed when it checks for a primary key, so a view without an `ID` column and without a configured key no longer aborts SQL generation. It matches view columns without case and sets the field name to the view's casing, so a key named in different case is not deleted and re-added.
+  - Docs: Method 2 SQL includes the required `@PrimaryKeyFieldName`; the config template names the schema explicitly.
+
+- d4e30c3: PostgreSQL migration conversion fixes found while converting the v6.2.0-edge.2 migrations.
+  - sql-converter: BIT literals in `INSERT INTO t (...) SELECT ...` (CodeGen's EntityPermission grants) and in `COALESCE(<boolean column>, 0|1) = 0|1` (CodeGen's search-flag hygiene) are rewritten to TRUE/FALSE.
+  - cli: `migrate convert --bake-codegen` and `migrate rebake` disable SQLOutput while baking, so CodeGen's no-artifact guard no longer silently refuses the capture's metadata SQL; forward baking now applies the captured CodeGen to the working database (the generator never executed it), so later migrations bake against the objects earlier ones created.
+  - codegen-lib: a layered entity's base-view GRANTs are guarded once, not twice (the nested `DO $if_view_exists$` did not parse on PostgreSQL); the PostgreSQL view-regeneration fallback now restores dependents of dependents and their functions after DROP ... CASCADE.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [2ceedb4]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [7e57b48]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/core-entities-server@6.2.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.2
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.2
+  - @memberjunction/actions@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/external-data-sources@6.2.0-edge.2
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.2
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.2
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.2
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.2
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.2
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.2
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.2
+  - @memberjunction/query-processor@6.2.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.2
+  - @memberjunction/cli-core@6.2.0-edge.2
+  - @memberjunction/config@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+  - @memberjunction/sql-parser@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 17cc774: Capture a numeric or single-value `IN (...)` CHECK constraint as an entity field value list (#3978).
+
+  SQL Server renders a numeric or `bit` `IN (...)` CHECK with unquoted literals —
+  `([Level]=(3) OR [Level]=(2) OR [Level]=(1))` — where a string list comes back quoted.
+  `parseCheckConstraintValues` matched only the quoted form, so a numeric IN-list produced no
+  `EntityFieldValue` rows and no `ValueListType='List'`: the field lost its validation _and_ its
+  dropdown in Explorer, and with AI codegen off the constraint yielded nothing at all. The same
+  regexes required at least two values, so a single-value list was never captured for any type.
+
+  CodeGen now matches both literal forms and single-value lists, sorts an all-numeric list
+  numerically, and returns no list rather than an empty one. Two field shapes are excluded after
+  parsing, each no broader than its reason: a `bit` field (`IN (0,1)` is vacuous and `= 1` is a
+  validator, not a dropdown) and a primary key carrying a _single_ value (`CHECK (ID=1)` is a
+  single-row-table guard). A multi-value list on a natural-key primary key is still captured, as
+  it was before.
+
+  `@memberjunction/core` compares a numeric column's value list by numeric value rather than by
+  string form, so `CHECK (Price IN (0.50, 1.00))` accepts the runtime value `1`. Without it the
+  CodeGen change would make `Validate()` refuse values the database accepts.
+
+  **If you regenerate against a schema that has one of these constraints, the generated property
+  narrows.** A value list emits a literal union, so a numeric list now types the property as
+  `1 | 2 | 3` (and its Zod schema as `z.union([z.literal(1), ...])`) instead of `number` — which
+  means `entity.Level = someNumber` stops compiling until the value is a literal or the variable is
+  typed to the union. This is what string value lists have always done; it is newly reachable for
+  numeric and single-value constraints. Nothing in MJ's own generated code changes: across every
+  migration MJ ships there are 292 string `IN (...)` CHECKs and no numeric or single-value ones.
+  `ValueListType='ListOrUserEntry'` is unaffected — it keeps the widened base type.
+
+  **SQL Server only.** PostgreSQL renders these constraints differently (`ARRAY[1, 2, 3]` for a
+  numeric list, and spaced, cast equality such as `((one = 7))` for a single-value one), and
+  `parsePgArrayConstraint` still extracts quoted elements only — so on PostgreSQL a numeric or
+  single-value `IN (...)` CHECK continues to produce no value list. Tracked as #4713.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core-entities-server@6.2.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/config@6.2.0-edge.1
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.1
+  - @memberjunction/external-data-sources@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.1
+  - @memberjunction/query-processor@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+  - @memberjunction/sql-parser@6.2.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.1
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.1
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.1
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.1
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.1
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.1
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.1
+  - @memberjunction/cli-core@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Minor Changes

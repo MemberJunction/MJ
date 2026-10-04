@@ -1,5 +1,164 @@
 # Change Log - @memberjunction/cli
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+### Patch Changes
+
+- ca98152: `mj agent init --skip-docker-check` now does what its description says: it skips the Docker availability probe and assumes Docker is running. It previously decided Docker was _unavailable_, so the stack was never started and the user was told to launch Docker Desktop — exactly the users who pass the flag (remote daemon, colima, Podman) got no environment. Pass `--no-start` to scaffold without starting the stack.
+- 43c6e4c: `mj agent init` now pins the workspace it creates to the CLI's own release, and the workspace's container no longer reports success when provisioning fails.
+
+  Previously the scaffolded `docker/Dockerfile` installed `@memberjunction/cli` unpinned — npm's `latest`, which can be a different major line — and the entrypoint ran `mj install --yes` with no tag, which takes the newest stable GitHub release. A workspace created by an edge CLI therefore ran a v5 CLI against a v6 install, and the entrypoint's `|| echo "Notice: … completed or skipped."` guards hid any failure that caused.
+  - `mj agent init` writes `MJ_VERSION` to `.env`: its own version, read from its package.json (not `this.config.version`, which is the version of whatever package root oclif resolved). `docker-compose.yml` requires it, the Dockerfile installs `@memberjunction/cli@$MJ_VERSION`, and the entrypoint passes `--tag v$MJ_VERSION` to `mj install`.
+  - The entrypoint no longer masks failures of `mj install`, `mj app install`, `mj sync push` (now `--ci`, so it cannot hang on an interactive prompt in a headless container) or `mj migrate`. Each provisioning step that must not run twice records its own completion on the workspace volume, so a failed step is retried on the next start without re-running the steps before it — previously a failure after `mj install` left `package.json` behind and every later start skipped the Open App install and metadata push entirely. Workspaces provisioned by the earlier script are treated as provisioned.
+
+- d4e30c3: PostgreSQL migration conversion fixes found while converting the v6.2.0-edge.2 migrations.
+  - sql-converter: BIT literals in `INSERT INTO t (...) SELECT ...` (CodeGen's EntityPermission grants) and in `COALESCE(<boolean column>, 0|1) = 0|1` (CodeGen's search-flag hygiene) are rewritten to TRUE/FALSE.
+  - cli: `migrate convert --bake-codegen` and `migrate rebake` disable SQLOutput while baking, so CodeGen's no-artifact guard no longer silently refuses the capture's metadata SQL; forward baking now applies the captured CodeGen to the working database (the generator never executed it), so later migrations bake against the objects earlier ones created.
+  - codegen-lib: a layered entity's base-view GRANTs are guarded once, not twice (the nested `DO $if_view_exists$` did not parse on PostgreSQL); the PostgreSQL view-regeneration fallback now restores dependents of dependents and their functions after DROP ... CASCADE.
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [1580f34]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [01fafc6]
+- Updated dependencies [0adaf76]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [662d68f]
+- Updated dependencies [705ab4e]
+- Updated dependencies [125f40a]
+- Updated dependencies [d4e30c3]
+- Updated dependencies [7e57b48]
+- Updated dependencies [2ceedb4]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/codegen-lib@6.2.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.2
+  - @memberjunction/installer@6.2.0-edge.2
+  - @memberjunction/open-app-engine@6.2.0-edge.2
+  - @memberjunction/sql-converter@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.2
+  - @memberjunction/metadata-sync@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/testing-cli@6.2.0-edge.2
+  - @memberjunction/ai-cli@6.2.0-edge.2
+  - @memberjunction/query-gen@6.2.0-edge.2
+  - @memberjunction/db-auto-doc@6.2.0-edge.2
+  - @memberjunction/cli-core@6.2.0-edge.2
+  - @memberjunction/config@6.2.0-edge.2
+  - @memberjunction/dynamic-packages@6.2.0-edge.2
+  - @memberjunction/sqlglot-ts@6.2.0-edge.2
+  - @memberjunction/standards@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0080f80]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/standards@6.2.0-edge.1
+  - @memberjunction/codegen-lib@6.2.0-edge.1
+  - @memberjunction/ai-cli@6.2.0-edge.1
+  - @memberjunction/config@6.2.0-edge.1
+  - @memberjunction/db-auto-doc@6.2.0-edge.1
+  - @memberjunction/dynamic-packages@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/installer@6.2.0-edge.1
+  - @memberjunction/metadata-sync@6.2.0-edge.1
+  - @memberjunction/open-app-engine@6.2.0-edge.1
+  - @memberjunction/query-gen@6.2.0-edge.1
+  - @memberjunction/sql-converter@6.2.0-edge.1
+  - @memberjunction/sqlglot-ts@6.2.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.1
+  - @memberjunction/testing-cli@6.2.0-edge.1
+  - @memberjunction/cli-core@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Minor Changes

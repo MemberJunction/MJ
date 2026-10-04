@@ -171,6 +171,25 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   @Input() PendingNewViewIsShared: boolean = false;
 
   /**
+   * Pre-populated traditional filter from the quick save dialog (used when DefaultSaveAsNew is
+   * true). Without it, reopening this panel from the dialog would reset the filter the user had
+   * already configured. {@link ExternalFilterState} can't carry it back: the staged filter is the
+   * very object this panel is already bound to, so that input never registers a change.
+   */
+  @Input() PendingNewViewFilterState: CompositeFilterDescriptor | null = null;
+
+  /**
+   * Pre-populated smart-filter toggle from the quick save dialog (used when DefaultSaveAsNew is
+   * true) — the smart-mode counterpart of {@link PendingNewViewFilterState}.
+   */
+  @Input() PendingNewViewSmartFilterEnabled: boolean = false;
+
+  /**
+   * Pre-populated smart-filter prompt from the quick save dialog (used when DefaultSaveAsNew is true)
+   */
+  @Input() PendingNewViewSmartFilterPrompt: string = '';
+
+  /**
    * Emitted when user wants to duplicate the current view (F-005)
    */
   @Output() Duplicate = new EventEmitter<void>();
@@ -542,12 +561,22 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         this.SortDirection = 'asc';
         this.SortItems = [];
       }
-      this.SmartFilterPrompt = '';
+      // Carry a filter back from the quick-save dialog when continuing a new-view flow; otherwise
+      // start clean. Smart takes precedence, matching how a saved view's filter mode is chosen.
+      const carryingSmartFilter = this.DefaultSaveAsNew && this.PendingNewViewSmartFilterEnabled;
+      const carriedFilter = this.DefaultSaveAsNew && !carryingSmartFilter ? this.PendingNewViewFilterState : null;
+      this.SmartFilterPrompt = carryingSmartFilter ? this.PendingNewViewSmartFilterPrompt : '';
       this.SmartFilterExplanation = '';
-      this.FilterState = CreateEmptyFilter();
-      // Default to smart mode (promote AI filtering)
-      this.FilterMode = 'smart';
-      this.SmartFilterEnabled = true;
+      if (carriedFilter && this.countFilters(carriedFilter) > 0) {
+        this.FilterState = carriedFilter;
+        this.FilterMode = 'traditional';
+        this.SmartFilterEnabled = false;
+      } else {
+        this.FilterState = CreateEmptyFilter();
+        // Default to smart mode (promote AI filtering)
+        this.FilterMode = 'smart';
+        this.SmartFilterEnabled = true;
+      }
     }
 
     // Load aggregates from currentGridState if available

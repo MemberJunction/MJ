@@ -289,6 +289,18 @@ public async RecompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
           logError('Failed to regenerate some base views after refresh failure');
           bSuccess = false;
         }
+        // The inner view was just recreated, so an application-owned outer view that selects
+        // g.* is still cached against the previous column list. Refresh it after the rebuild
+        // or a new related-name column (Band, for example) never reaches the public view.
+        let outerRefresh = '';
+        for (const entity of failedEntities) {
+          if (!entity.HasLayeredBaseView) continue;
+          const refreshSQL = this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
+          outerRefresh += this.dbProvider.generateIfViewExistsSQL(entity.SchemaName, entity.BaseView, refreshSQL);
+        }
+        if (outerRefresh.length > 0) {
+          bSuccess = await this.ExecuteSQLScript(ds, outerRefresh, false) && bSuccess;
+        }
       }
     }
 

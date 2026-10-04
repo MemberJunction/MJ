@@ -14,6 +14,7 @@ import { BaseServerExtension, type ServerExtensionConfig } from '@memberjunction
 import { TwilioTelephonyExtension } from './server-extensions/TwilioTelephonyExtension.js';
 import { VonageTelephonyExtension } from './server-extensions/VonageTelephonyExtension.js';
 import { RingCentralTelephonyExtension } from './server-extensions/RingCentralTelephonyExtension.js';
+import { LiveKitSipExtension } from './server-extensions/LiveKitSipExtension.js';
 import { TeamsMeetingsExtension } from './server-extensions/TeamsMeetingsExtension.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -27,6 +28,7 @@ export * from './telephony/index.js';
 export { TwilioTelephonyExtension } from './server-extensions/TwilioTelephonyExtension.js';
 export { VonageTelephonyExtension } from './server-extensions/VonageTelephonyExtension.js';
 export { RingCentralTelephonyExtension } from './server-extensions/RingCentralTelephonyExtension.js';
+export { LiveKitSipExtension } from './server-extensions/LiveKitSipExtension.js';
 export { TeamsMeetingsExtension } from './server-extensions/TeamsMeetingsExtension.js';
 
 // ── Resolvers ──────────────────────────────────────────────────────────────
@@ -68,6 +70,13 @@ export const MJ_SERVER_EXTENSIONS: ServerExtensionConfig[] = [
     },
     {
         Enabled: false,
+        DriverClass: 'LiveKitSipExtension',
+        RootPath: '/telephony/livekit-sip',
+        Phase: 'pre-auth',
+        Settings: {},
+    },
+    {
+        Enabled: false,
         DriverClass: 'TeamsMeetingsExtension',
         RootPath: '/meetings/teams',
         Phase: 'pre-auth',
@@ -88,5 +97,6 @@ export function LoadTelephonyAdapters(): void {
     factory.Register(BaseServerExtension, TwilioTelephonyExtension, 'twilio-telephony');
     factory.Register(BaseServerExtension, VonageTelephonyExtension, 'vonage-telephony');
     factory.Register(BaseServerExtension, RingCentralTelephonyExtension, 'ringcentral-telephony');
+    factory.Register(BaseServerExtension, LiveKitSipExtension, 'livekit-sip-telephony');
     factory.Register(BaseServerExtension, TeamsMeetingsExtension, 'teams-meetings');
 }

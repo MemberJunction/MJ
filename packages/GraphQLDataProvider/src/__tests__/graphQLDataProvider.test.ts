@@ -22,12 +22,17 @@ vi.mock('uuid', () => ({
 
 vi.mock('rxjs', () => ({
   Observable: vi.fn(),
-  Subject: vi.fn().mockImplementation(() => ({
-    next: vi.fn(),
-    complete: vi.fn(),
-    subscribe: vi.fn(),
-    asObservable: vi.fn(),
-  })),
+  // A class, not `vi.fn().mockImplementation(...)`: an arrow-returning mock is not
+  // constructable, so any `new Subject()` in a field initializer throws
+  // "is not a constructor" before the provider is even built. Mirrors the
+  // BehaviorSubject mock directly below.
+  Subject: class {
+    next = vi.fn();
+    error = vi.fn();
+    complete = vi.fn();
+    subscribe = vi.fn();
+    asObservable = vi.fn();
+  },
   BehaviorSubject: class {
     value: unknown;
     constructor(initialValue: unknown) { this.value = initialValue; }
@@ -50,6 +55,11 @@ vi.mock('@memberjunction/core', () => {
   return {
     BaseEntity: vi.fn(),
     ProviderBase: MockProviderBase,
+    EntityRecordNameCache: class {
+      Get() { return undefined; }
+      Has() { return false; }
+      Set() {}
+    },
     ProviderConfigDataBase: class {
       Data: Record<string, unknown> = {};
       constructor(data: Record<string, unknown>) { this.Data = data; }
