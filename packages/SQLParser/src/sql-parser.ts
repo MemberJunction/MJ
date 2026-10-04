@@ -2335,11 +2335,12 @@ export class SQLParser {
     ): void {
         if (!fromItem) return;
 
-        if (fromItem.table) {
-            const alias = (fromItem.as || fromItem.table) as string;
+        const tableName = SQLParser.unwrapIdentifier(fromItem.table);
+        if (tableName) {
+            const alias = SQLParser.unwrapIdentifier(fromItem.as) ?? tableName;
             tableAliasMap.set(alias, {
-                schemaName: (fromItem.db as string) || 'dbo',
-                tableName: fromItem.table as string,
+                schemaName: SQLParser.unwrapIdentifier(fromItem.db) || 'dbo',
+                tableName,
             });
         }
 
@@ -2356,11 +2357,10 @@ export class SQLParser {
         if (fromItem.using) {
             const usings = Array.isArray(fromItem.using) ? fromItem.using : [fromItem.using];
             for (const col of usings) {
-                if (typeof col === 'string') {
-                    columnRefs.add(col);
-                } else if (col && typeof col === 'object' && 'column' in col) {
-                    columnRefs.add((col as Record<string, string>).column);
-                }
+                const name = col && typeof col === 'object' && 'column' in col
+                    ? SQLParser.unwrapIdentifier((col as Record<string, unknown>).column)
+                    : SQLParser.unwrapIdentifier(col);
+                if (name) columnRefs.add(name);
             }
         }
     }
@@ -2373,8 +2373,10 @@ export class SQLParser {
         if (!expr || typeof expr !== 'object') return;
 
         if (expr.type === 'column_ref') {
-            const colName = expr.table ? `${expr.table}.${expr.column}` : expr.column as string;
-            columnRefs.add(colName);
+            // The PostgreSQL grammar returns identifier nodes here, not strings.
+            const column = SQLParser.unwrapIdentifier(expr.column);
+            const table = SQLParser.unwrapIdentifier(expr.table);
+            if (column) columnRefs.add(table ? `${table}.${column}` : column);
         }
 
         if (expr.ast && tableAliasMap) {
