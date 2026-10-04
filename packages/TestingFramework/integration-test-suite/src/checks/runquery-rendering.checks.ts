@@ -18,10 +18,11 @@
  * queries create them in the same category, which teardown sweeps. The whole bundle writes, so no
  * check is gated on RequiresMutation.
  */
-import { RunQuery, RunView } from '@memberjunction/core';
+import { Metadata, RunQuery, RunView } from '@memberjunction/core';
 import type { DatabasePlatform, QueryDependencySpec, RunQueryResult, UserInfo } from '@memberjunction/core';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { QueryEngine } from '@memberjunction/core-entities';
+import type { MJQueryPermissionEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
@@ -324,6 +325,31 @@ const OWN_CAP_CASES: RenderCase[] = [
         SQL: 'SELECT N FROM (VALUES (1), (2), (3), (4), (5), (6), (7)) AS v(N) ORDER BY N',
         Columns: ['N'], Ordered: true,
         Expect: () => [1, 2, 3, 4, 5, 6, 7].map(n => ({ N: n }))
+    },
+    {
+        Name: 'RR Ordered Aggregate',
+        SQL: `SELECT Category, STRING_AGG(CAST(ID AS VARCHAR(10)), ',') WITHIN GROUP (ORDER BY ID) AS Ids FROM ${T} WHERE ID <= 20 GROUP BY Category ORDER BY Category`,
+        Variants: { postgresql: `SELECT Category, STRING_AGG(ID::text, ',' ORDER BY ID) AS Ids FROM ${T} WHERE ID <= 20 GROUP BY Category ORDER BY Category` },
+        Columns: ['Category', 'Ids'], Ordered: true,
+        Expect: items => {
+            const byCategory = new Map<string, number[]>();
+            for (const i of items.filter(item => item.ID <= 20)) byCategory.set(i.Category, [...(byCategory.get(i.Category) ?? []), i.ID]);
+            return [...byCategory.keys()].sort().map(c => ({ Category: c, Ids: (byCategory.get(c) ?? []).join(',') }));
+        }
+    },
+    {
+        Name: 'RR Quoted CTE Names',
+        SQL: `WITH [First Set] AS (SELECT ID FROM ${T} WHERE ID <= 30), [Second Set] AS (SELECT ID FROM [First Set] WHERE ID % 3 = 0)\nSELECT ID FROM [Second Set] ORDER BY ID`,
+        Variants: { postgresql: `WITH "First Set" AS (SELECT ID FROM ${T} WHERE ID <= 30), "Second Set" AS (SELECT ID FROM "First Set" WHERE ID % 3 = 0)\nSELECT ID FROM "Second Set" ORDER BY ID` },
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 30 && i.ID % 3 === 0))
+    },
+    {
+        Name: 'RR Concatenation And Colons',
+        SQL: `SELECT ID, Category + ':' + CAST(ID AS VARCHAR(10)) AS Tag, 'x:y' AS Lit FROM ${T} WHERE ID <= 15 ORDER BY ID`,
+        Variants: { postgresql: `SELECT ID, Category || ':' || ID::text AS Tag, 'x:y'::text AS Lit FROM ${T} WHERE ID <= 15 ORDER BY ID` },
+        Columns: ['ID', 'Tag', 'Lit'], Ordered: true,
+        Expect: items => items.filter(i => i.ID <= 15).map(i => ({ ID: i.ID, Tag: `${i.Category}:${i.ID}`, Lit: 'x:y' }))
     }
 ];
 
@@ -405,7 +431,27 @@ const COMPOSITION_LIBRARY: RenderQueryDefinition[] = [
         SQL: `WITH chain AS (SELECT ID, ParentID, 0 AS Depth FROM ${T} WHERE ID = 200 UNION ALL SELECT p.ID, p.ParentID, c.Depth + 1 FROM ${T} p JOIN chain c ON p.ID = c.ParentID)\nSELECT ID, Depth FROM chain`,
         Variants: { postgresql: `WITH RECURSIVE chain AS (SELECT ID, ParentID, 0 AS Depth FROM ${T} WHERE ID = 200 UNION ALL SELECT p.ID, p.ParentID, c.Depth + 1 FROM ${T} p JOIN chain c ON p.ID = c.ParentID)\nSELECT ID, Depth FROM chain` }
     },
-    { Name: 'RR Dep Not Reusable', Reusable: false, SQL: `SELECT ID FROM ${T}` }
+    { Name: 'RR Dep Not Reusable', Reusable: false, SQL: `SELECT ID FROM ${T}` },
+    {
+        Name: 'RR Dep Own Cap', Reusable: true,
+        SQL: `SELECT TOP 30 ID FROM ${T} ORDER BY ID`,
+        Variants: { postgresql: `SELECT ID FROM ${T} ORDER BY ID LIMIT 30` }
+    },
+    {
+        Name: 'RR Dep Parser Rejects', Reusable: true,
+        SQL: `SELECT ID, TRY_CAST(Score AS INT) AS ScoreInt FROM ${T} WHERE ID <= 40`,
+        Variants: { postgresql: `SELECT ID, Score::int AS ScoreInt FROM ${T} WHERE ID <= 40` }
+    },
+    {
+        Name: 'RR Dep Template', Reusable: true,
+        SQL: `SELECT ID, Category FROM ${T} WHERE ID <= {{ Limit | default(10) | sqlNumber }}{% if Cat %} AND Category = {{ Cat | sqlString }}{% endif %}`
+    },
+    { Name: 'RR Dep Token In Comment', Reusable: true, SQL: `-- built like {{query:"{P}/RR Dep Base"}}\nSELECT ID FROM ${T} WHERE ID <= 8` },
+    {
+        Name: 'RR Dep Variant', Reusable: true,
+        SQL: `SELECT ID, Category + '!' AS Tag FROM ${T} WHERE ID <= 6`,
+        Variants: { postgresql: `SELECT ID, Category || '!' AS Tag FROM ${T} WHERE ID <= 6` }
+    }
 ];
 
 /** Composed queries and the rows they return. */
@@ -527,6 +573,48 @@ const COMPOSED_CASES: RenderCase[] = [
         SQL: `SELECT c.ID FROM {{query:"{P}/RR Dep Comment"}} c ORDER BY c.ID`,
         Columns: ['ID'], Ordered: true,
         Expect: items => ids(items.filter(i => i.ID >= 100 && i.ID <= 110))
+    },
+    {
+        Name: 'RR Comp Dependency Own Cap',
+        SQL: `SELECT c.ID FROM {{query:"{P}/RR Dep Own Cap"}} c ORDER BY c.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => firstIds(items, 30)
+    },
+    {
+        Name: 'RR Comp Parser Rejects Dependency',
+        SQL: `SELECT r.ID, r.ScoreInt FROM {{query:"{P}/RR Dep Parser Rejects"}} r ORDER BY r.ID`,
+        Columns: ['ID', 'ScoreInt'], Ordered: true,
+        Expect: items => items.filter(i => i.ID <= 40).map(i => ({ ID: i.ID, ScoreInt: i.Score }))
+    },
+    {
+        Name: 'RR Comp Template Dependency Defaults',
+        SQL: `SELECT t.ID FROM {{query:"{P}/RR Dep Template"}} t ORDER BY t.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 10))
+    },
+    {
+        Name: 'RR Comp Dependency Token In Comment',
+        SQL: `SELECT d.ID FROM {{query:"{P}/RR Dep Token In Comment"}} d ORDER BY d.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 8))
+    },
+    {
+        Name: 'RR Comp Variant Dependency',
+        SQL: `SELECT v.ID, v.Tag FROM {{query:"{P}/RR Dep Variant"}} v ORDER BY v.ID`,
+        Columns: ['ID', 'Tag'], Ordered: true,
+        Expect: items => items.filter(i => i.ID <= 6).map(i => ({ ID: i.ID, Tag: `${i.Category}!` }))
+    },
+    {
+        Name: 'RR Comp In Join',
+        SQL: `SELECT t.ID FROM ${T} t JOIN {{query:"{P}/RR Dep Ordered"}} o ON o.ID = t.ID WHERE t.Category = 'Alpha' ORDER BY t.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 50 && i.Category === 'Alpha'))
+    },
+    {
+        Name: 'RR Comp Token In String Literal',
+        SQL: `SELECT b.ID, '{{query:"Nowhere/Nothing"}}' AS Note FROM {{query:"{P}/RR Dep Base"}} b WHERE b.ID <= 4 ORDER BY b.ID`,
+        Columns: ['ID', 'Note'], Ordered: true,
+        Expect: items => items.filter(i => i.ID <= 4).map(i => ({ ID: i.ID, Note: '{{query:"Nowhere/Nothing"}}' }))
     }
 ];
 
@@ -674,7 +762,7 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
     },
     {
         Id: 'runquery-rendering.RR5',
-        Name: 'RR5: composition failures name the problem — a missing dependency, a dependency that is not reusable, a circular reference',
+        Name: 'RR5: composition failures name the problem — a missing dependency, a dependency that is not reusable, a circular reference, a dependency the caller may not run',
         Fn: async (ctx): Promise<void> => {
             const fixtures = requireFixtures();
             const path = RenderCategoryPath(fixtures);
@@ -686,6 +774,7 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
             await expectFailure(missing.ID, /not found/i, 'missing dependency', ctx.User);
             await expectFailure(notReusable.ID, /not marked as Reusable/i, 'non-reusable dependency', ctx.User);
             await expectFailure(cycleA.ID, /Circular query dependency/i, 'circular reference', ctx.User);
+            await expectDeniedDependencyFailure(fixtures, path, ctx.User);
         }
     },
     {
@@ -845,6 +934,37 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
         }
     }
 ];
+
+/**
+ * Restricts a dependency to a role the caller does not hold, then expects a query composing it to
+ * fail on permissions. The run is refused for the composing query itself, since running it means
+ * running its dependencies. The restriction is removed afterwards so teardown can delete the query.
+ */
+async function expectDeniedDependencyFailure(fixtures: RenderFixtures, path: string, user: UserInfo): Promise<void> {
+    const role = await roleNotHeldBy(user);
+    if (!role) throw new Error('a role the test user does not hold must exist to restrict a dependency');
+    const restricted = await CreateRenderQuery(fixtures, { Name: 'RR Dep Restricted', Reusable: true, SQL: `SELECT ID FROM ${T}` }, user);
+    const composed = await CreateRenderQuery(fixtures, { Name: 'RR Comp Restricted', SQL: `SELECT r.ID FROM {{query:"${path}/RR Dep Restricted"}} r` }, user);
+    const permission = await new Metadata().GetEntityObject<MJQueryPermissionEntity>('MJ: Query Permissions', user);
+    permission.QueryID = restricted.ID;
+    permission.RoleID = role.ID;
+    Assert(await permission.Save(), `restricting the dependency failed: ${permission.LatestResult?.CompleteMessage}`);
+    try {
+        await RefreshRenderQueries(user);
+        await expectFailure(composed.ID, /does not have permission to run query 'RR Comp Restricted'/i, `dependency restricted to role '${role.Name}'`, user);
+    } finally {
+        if (!await permission.Delete()) console.error(`runquery-rendering: removing the dependency restriction failed: ${permission.LatestResult?.CompleteMessage}`);
+        await RefreshRenderQueries(user);
+    }
+}
+
+/** Any role the user does not hold. */
+async function roleNotHeldBy(user: UserInfo): Promise<{ ID: string; Name: string } | undefined> {
+    const roles = await new RunView().RunView<{ ID: string; Name: string }>({
+        EntityName: 'MJ: Roles', Fields: ['ID', 'Name'], ResultType: 'simple'
+    }, user);
+    return roles.Results.find(r => !user.UserRoles.some(ur => UUIDsEqual(ur.RoleID, r.ID)));
+}
 
 async function expectFailure(queryID: string, pattern: RegExp, label: string, user: UserInfo): Promise<void> {
     const result = await new RunQuery().RunQuery({ QueryID: queryID }, user);
