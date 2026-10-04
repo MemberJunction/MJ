@@ -93,65 +93,65 @@ describe('RoomHandoffEngine', () => {
   });
 
   describe('requesting a handoff', () => {
-    it('refuses a handoff with no summary', () => {
+    it('refuses a handoff with no summary', async () => {
       const { agent } = makeAgent();
-      expect(engine.RequestHandoff(agent, userRequest({ Summary: '   ' }))).toMatchObject({ Ok: false });
+      expect(await engine.RequestHandoff(agent, userRequest({ Summary: '   ' }))).toMatchObject({ Ok: false });
     });
 
-    it('refuses a kind whose collaborator is not configured, without starting anything', () => {
+    it('refuses a kind whose collaborator is not configured, without starting anything', async () => {
       engine.Reset(); // drops every collaborator
       const { agent } = makeAgent();
-      expect(engine.RequestHandoff(agent, userRequest())).toMatchObject({ Ok: false });
-      expect(engine.RequestHandoff(agent, { Mode: 'blind', Summary: 's', Destination: { Kind: 'number', Number: '+14155550123', DisplayName: 'Desk' } })).toMatchObject({ Ok: false });
-      expect(engine.RequestHandoff(agent, { Mode: 'warm', Summary: 's', Destination: { Kind: 'agent', AgentID: 'a', AgentName: 'Rex' } })).toMatchObject({ Ok: false });
+      expect(await engine.RequestHandoff(agent, userRequest())).toMatchObject({ Ok: false });
+      expect(await engine.RequestHandoff(agent, { Mode: 'blind', Summary: 's', Destination: { Kind: 'number', Number: '+14155550123', DisplayName: 'Desk' } })).toMatchObject({ Ok: false });
+      expect(await engine.RequestHandoff(agent, { Mode: 'warm', Summary: 's', Destination: { Kind: 'agent', AgentID: 'a', AgentName: 'Rex' } })).toMatchObject({ Ok: false });
       expect(engine.HasHandoff('call-1')).toBe(false);
     });
 
-    it('allows one handoff per room at a time', () => {
+    it('allows one handoff per room at a time', async () => {
       const { agent } = makeAgent();
-      expect(engine.RequestHandoff(agent, userRequest())).toEqual({ Ok: true, Status: 'offered' });
-      expect(engine.RequestHandoff(agent, userRequest())).toMatchObject({ Ok: false });
+      expect(await engine.RequestHandoff(agent, userRequest())).toEqual({ Ok: true, Status: 'offered' });
+      expect(await engine.RequestHandoff(agent, userRequest())).toMatchObject({ Ok: false });
     });
 
-    it('trims an over-long summary', () => {
+    it('trims an over-long summary', async () => {
       const { agent } = makeAgent();
-      engine.RequestHandoff(agent, userRequest({ Summary: 'x'.repeat(5000) }));
-      expect(engine.ListOffersForUser(PERSON)[0].Summary.length).toBeLessThan(1000);
+      await engine.RequestHandoff(agent, userRequest({ Summary: 'x'.repeat(5000) }));
+      expect((await engine.ListOffersForUser(PERSON))[0].Summary.length).toBeLessThan(1000);
     });
   });
 
   describe('a person: offer, accept, join, brief, leave (warm)', () => {
     it('pushes the offer to the person\'s console and notifies them', async () => {
       const { agent } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
+      await engine.RequestHandoff(agent, userRequest());
       await vi.advanceTimersByTimeAsync(0);
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({ UserID: PERSON, Kind: 'offered', Offer: { Status: 'Pending', AgentName: 'Sage', RoomName: 'call-1' } });
       expect(notified).toEqual([{ offerId: events[0].Offer.OfferID, userId: PERSON, provider: PROVIDER }]);
     });
 
-    it('lists the offer for its target and for nobody else', () => {
+    it('lists the offer for its target and for nobody else', async () => {
       const { agent } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
-      expect(engine.ListOffersForUser(PERSON)).toHaveLength(1);
-      expect(engine.ListOffersForUser(OTHER)).toHaveLength(0);
+      await engine.RequestHandoff(agent, userRequest());
+      expect(await engine.ListOffersForUser(PERSON)).toHaveLength(1);
+      expect(await engine.ListOffersForUser(OTHER)).toHaveLength(0);
     });
 
-    it('does not let another user accept or decline the offer', () => {
+    it('does not let another user accept or decline the offer', async () => {
       const { agent } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
-      const offerId = engine.ListOffersForUser(PERSON)[0].OfferID;
-      expect(engine.AcceptOffer(offerId, OTHER)).toMatchObject({ Ok: false });
-      expect(engine.DeclineOffer(offerId, OTHER)).toMatchObject({ Ok: false });
-      expect(engine.ListOffersForUser(PERSON)[0].Status).toBe('Pending');
+      await engine.RequestHandoff(agent, userRequest());
+      const offerId = (await engine.ListOffersForUser(PERSON))[0].OfferID;
+      expect(await engine.AcceptOffer(offerId, OTHER)).toMatchObject({ Ok: false });
+      expect(await engine.DeclineOffer(offerId, OTHER)).toMatchObject({ Ok: false });
+      expect((await engine.ListOffersForUser(PERSON))[0].Status).toBe('Pending');
     });
 
     it('briefs the AI once the person is actually in the room, then removes it after it calls finish_handoff', async () => {
       const { agent, notes, state } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
-      const offerId = engine.ListOffersForUser(PERSON)[0].OfferID;
+      await engine.RequestHandoff(agent, userRequest());
+      const offerId = (await engine.ListOffersForUser(PERSON))[0].OfferID;
 
-      expect(engine.AcceptOffer(offerId, PERSON)).toMatchObject({ Ok: true, Offer: { Status: 'Accepted' } });
+      expect(await engine.AcceptOffer(offerId, PERSON)).toMatchObject({ Ok: true, Offer: { Status: 'Accepted' } });
       expect(events.at(-1)).toMatchObject({ Kind: 'updated', Offer: { Status: 'Accepted' } });
 
       // Accepted, but not in the room yet: the AI is told nothing and does not leave.
@@ -175,8 +175,8 @@ describe('RoomHandoffEngine', () => {
 
     it('removes the AI after the briefing ceiling if it never calls finish_handoff', async () => {
       const { agent, state } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
-      engine.AcceptOffer(engine.ListOffersForUser(PERSON)[0].OfferID, PERSON);
+      await engine.RequestHandoff(agent, userRequest());
+      await engine.AcceptOffer((await engine.ListOffersForUser(PERSON))[0].OfferID, PERSON);
       presence.Present.add(LiveKitUserIdentity(PERSON));
       await vi.advanceTimersByTimeAsync(HANDOFF_PRESENCE_POLL_MS);
       await vi.advanceTimersByTimeAsync(HANDOFF_BRIEF_MAX_MS - 1);
@@ -185,10 +185,10 @@ describe('RoomHandoffEngine', () => {
       expect(state.left).toBe(true);
     });
 
-    it('does not accept a finish_handoff when no handoff is waiting for it', () => {
+    it('does not accept a finish_handoff when no handoff is waiting for it', async () => {
       expect(engine.AgentReadyToLeave('call-1')).toBe(false);
       const { agent } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
+      await engine.RequestHandoff(agent, userRequest());
       expect(engine.AgentReadyToLeave('call-1')).toBe(false); // still only offered
     });
   });
@@ -196,8 +196,8 @@ describe('RoomHandoffEngine', () => {
   describe('a person: blind', () => {
     it('removes the AI shortly after the person appears, with no briefing', async () => {
       const { agent, notes, state } = makeAgent();
-      engine.RequestHandoff(agent, userRequest({ Mode: 'blind' }));
-      engine.AcceptOffer(engine.ListOffersForUser(PERSON)[0].OfferID, PERSON);
+      await engine.RequestHandoff(agent, userRequest({ Mode: 'blind' }));
+      await engine.AcceptOffer((await engine.ListOffersForUser(PERSON))[0].OfferID, PERSON);
       presence.Present.add(LiveKitUserIdentity(PERSON));
       await vi.advanceTimersByTimeAsync(HANDOFF_PRESENCE_POLL_MS);
       expect(notes).toHaveLength(0);
@@ -210,9 +210,9 @@ describe('RoomHandoffEngine', () => {
   describe('a person: decline, expiry and no-show', () => {
     it('tells the AI nobody is available when the person declines and there is no fallback', async () => {
       const { agent, notes, state } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
-      const offerId = engine.ListOffersForUser(PERSON)[0].OfferID;
-      expect(engine.DeclineOffer(offerId, PERSON)).toEqual({ Ok: true });
+      await engine.RequestHandoff(agent, userRequest());
+      const offerId = (await engine.ListOffersForUser(PERSON))[0].OfferID;
+      expect(await engine.DeclineOffer(offerId, PERSON)).toEqual({ Ok: true });
       expect(events.at(-1)).toMatchObject({ Kind: 'updated', Offer: { Status: 'Declined' } });
       expect(notes).toHaveLength(1);
       expect(notes[0]).toContain('Nobody could take the conversation');
@@ -223,8 +223,8 @@ describe('RoomHandoffEngine', () => {
 
     it('dials the fallback number into the room when the person declines, then briefs and removes the AI', async () => {
       const { agent, notes, state } = makeAgent();
-      engine.RequestHandoff(agent, userRequest({}, '+14155550199'));
-      engine.DeclineOffer(engine.ListOffersForUser(PERSON)[0].OfferID, PERSON);
+      await engine.RequestHandoff(agent, userRequest({}, '+14155550199'));
+      await engine.DeclineOffer((await engine.ListOffersForUser(PERSON))[0].OfferID, PERSON);
       await vi.advanceTimersByTimeAsync(0);
       expect(dialed).toHaveLength(1);
       expect(dialed[0]).toMatchObject({ RoomName: 'call-1', Number: '+14155550199', DisplayName: 'Dana' });
@@ -240,7 +240,7 @@ describe('RoomHandoffEngine', () => {
 
     it('expires an unanswered offer, publishes that, and falls back', async () => {
       const { agent, notes } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
+      await engine.RequestHandoff(agent, userRequest());
       await vi.advanceTimersByTimeAsync(HANDOFF_OFFER_TIMEOUT_MS);
       expect(events.at(-1)).toMatchObject({ Kind: 'updated', Offer: { Status: 'Expired' } });
       expect(notes.at(-1)).toContain('did not answer in time');
@@ -249,8 +249,8 @@ describe('RoomHandoffEngine', () => {
 
     it('treats an accepted offer whose person never appears as unavailable', async () => {
       const { agent, notes, state } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
-      engine.AcceptOffer(engine.ListOffersForUser(PERSON)[0].OfferID, PERSON);
+      await engine.RequestHandoff(agent, userRequest());
+      await engine.AcceptOffer((await engine.ListOffersForUser(PERSON))[0].OfferID, PERSON);
       await vi.advanceTimersByTimeAsync(HANDOFF_JOIN_WAIT_MS + HANDOFF_PRESENCE_POLL_MS);
       expect(notes.at(-1)).toContain('accepted but did not join');
       expect(state.left).toBe(false);
@@ -265,8 +265,8 @@ describe('RoomHandoffEngine', () => {
         },
       });
       const { agent, notes, state } = makeAgent();
-      engine.RequestHandoff(agent, userRequest({}, '+14155550199'));
-      engine.DeclineOffer(engine.ListOffersForUser(PERSON)[0].OfferID, PERSON);
+      await engine.RequestHandoff(agent, userRequest({}, '+14155550199'));
+      await engine.DeclineOffer((await engine.ListOffersForUser(PERSON))[0].OfferID, PERSON);
       await vi.advanceTimersByTimeAsync(0);
       expect(notes.at(-1)).toContain('could not be reached by phone');
       expect(state.left).toBe(false);
@@ -279,7 +279,7 @@ describe('RoomHandoffEngine', () => {
 
     it('dials it into the room and removes the AI once it has answered', async () => {
       const { agent, state } = makeAgent();
-      expect(engine.RequestHandoff(agent, numberRequest)).toEqual({ Ok: true, Status: 'dialing' });
+      expect(await engine.RequestHandoff(agent, numberRequest)).toEqual({ Ok: true, Status: 'dialing' });
       await vi.advanceTimersByTimeAsync(0);
       expect(dialed[0]).toMatchObject({ Number: '+14155550123', RoomName: 'call-1' });
       presence.Present.add(dialed[0].ParticipantIdentity);
@@ -289,7 +289,7 @@ describe('RoomHandoffEngine', () => {
 
     it('tells the AI when the number does not pick up', async () => {
       const { agent, notes, state } = makeAgent();
-      engine.RequestHandoff(agent, numberRequest);
+      await engine.RequestHandoff(agent, numberRequest);
       await vi.advanceTimersByTimeAsync(HANDOFF_JOIN_WAIT_MS + HANDOFF_PRESENCE_POLL_MS);
       expect(notes.at(-1)).toContain('Front desk did not pick up');
       expect(state.left).toBe(false);
@@ -306,7 +306,7 @@ describe('RoomHandoffEngine', () => {
         },
       });
       const { agent, notes, state } = makeAgent();
-      const result = engine.RequestHandoff(agent, { Mode: 'warm', Summary: 'Needs legal help', Destination: { Kind: 'agent', AgentID: 'agent-2', AgentName: 'Rex' } });
+      const result = await engine.RequestHandoff(agent, { Mode: 'warm', Summary: 'Needs legal help', Destination: { Kind: 'agent', AgentID: 'agent-2', AgentName: 'Rex' } });
       expect(result).toEqual({ Ok: true, Status: 'agent-joining' });
       await vi.advanceTimersByTimeAsync(0);
       expect(started[0]).toMatchObject({ RoomName: 'call-1', AgentID: 'agent-2', AgentName: 'Rex', Brief: 'Needs legal help', PreviousAgentName: 'Sage' });
@@ -323,7 +323,7 @@ describe('RoomHandoffEngine', () => {
         },
       });
       const { agent, notes, state } = makeAgent();
-      engine.RequestHandoff(agent, { Mode: 'blind', Summary: 's', Destination: { Kind: 'agent', AgentID: 'agent-2', AgentName: 'Rex' } });
+      await engine.RequestHandoff(agent, { Mode: 'blind', Summary: 's', Destination: { Kind: 'agent', AgentID: 'agent-2', AgentName: 'Rex' } });
       await vi.advanceTimersByTimeAsync(0);
       expect(notes.at(-1)).toContain('Rex could not be started');
       expect(state.left).toBe(false);
@@ -333,18 +333,18 @@ describe('RoomHandoffEngine', () => {
   describe('when the call ends first', () => {
     it('withdraws the offer, tells the console, and refuses a late accept', async () => {
       const { agent } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
-      const offerId = engine.ListOffersForUser(PERSON)[0].OfferID;
+      await engine.RequestHandoff(agent, userRequest());
+      const offerId = (await engine.ListOffersForUser(PERSON))[0].OfferID;
       engine.CancelRoom('call-1');
       expect(events.at(-1)).toMatchObject({ Kind: 'updated', Offer: { Status: 'Cancelled' } });
-      expect(engine.AcceptOffer(offerId, PERSON)).toMatchObject({ Ok: false });
+      expect(await engine.AcceptOffer(offerId, PERSON)).toMatchObject({ Ok: false });
       expect(engine.HasHandoff('call-1')).toBe(false);
     });
 
     it('does not cancel a handoff that is already taking the AI out', async () => {
       const { agent, state } = makeAgent();
-      engine.RequestHandoff(agent, userRequest({ Mode: 'blind' }));
-      engine.AcceptOffer(engine.ListOffersForUser(PERSON)[0].OfferID, PERSON);
+      await engine.RequestHandoff(agent, userRequest({ Mode: 'blind' }));
+      await engine.AcceptOffer((await engine.ListOffersForUser(PERSON))[0].OfferID, PERSON);
       presence.Present.add(LiveKitUserIdentity(PERSON));
       await vi.advanceTimersByTimeAsync(HANDOFF_PRESENCE_POLL_MS);
       engine.CancelRoom('call-1'); // the AI's own teardown firing during its leave
@@ -354,8 +354,8 @@ describe('RoomHandoffEngine', () => {
 
     it('stops watching the room once cancelled', async () => {
       const { agent, notes } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
-      engine.AcceptOffer(engine.ListOffersForUser(PERSON)[0].OfferID, PERSON);
+      await engine.RequestHandoff(agent, userRequest());
+      await engine.AcceptOffer((await engine.ListOffersForUser(PERSON))[0].OfferID, PERSON);
       engine.CancelRoom('call-1');
       presence.Present.add(LiveKitUserIdentity(PERSON));
       await vi.advanceTimersByTimeAsync(HANDOFF_PRESENCE_POLL_MS * 5);
@@ -373,9 +373,9 @@ describe('RoomHandoffEngine', () => {
         },
       });
       const { agent } = makeAgent();
-      expect(engine.RequestHandoff(agent, userRequest())).toEqual({ Ok: true, Status: 'offered' });
+      expect(await engine.RequestHandoff(agent, userRequest())).toEqual({ Ok: true, Status: 'offered' });
       await vi.advanceTimersByTimeAsync(0);
-      expect(engine.ListOffersForUser(PERSON)).toHaveLength(1);
+      expect(await engine.ListOffersForUser(PERSON)).toHaveLength(1);
     });
 
     it('keeps watching when a presence check throws', async () => {
@@ -392,13 +392,13 @@ describe('RoomHandoffEngine', () => {
         },
       });
       const { agent, notes } = makeAgent();
-      engine.RequestHandoff(agent, userRequest());
-      engine.AcceptOffer(engine.ListOffersForUser(PERSON)[0].OfferID, PERSON);
+      await engine.RequestHandoff(agent, userRequest());
+      await engine.AcceptOffer((await engine.ListOffersForUser(PERSON))[0].OfferID, PERSON);
       await vi.advanceTimersByTimeAsync(HANDOFF_PRESENCE_POLL_MS * 2);
       expect(notes[0]).toContain('has joined');
     });
 
-    it('survives a publisher that throws', () => {
+    it('survives a publisher that throws', async () => {
       engine.Configure({
         Publisher: {
           Publish: () => {
@@ -407,7 +407,30 @@ describe('RoomHandoffEngine', () => {
         },
       });
       const { agent } = makeAgent();
-      expect(engine.RequestHandoff(agent, userRequest())).toEqual({ Ok: true, Status: 'offered' });
+      expect(await engine.RequestHandoff(agent, userRequest())).toEqual({ Ok: true, Status: 'offered' });
+    });
+  });
+
+  describe('cross-instance remote offer changes', () => {
+    it('handles remote acceptance on a local flow', async () => {
+      const { agent, notes, state } = makeAgent();
+      await engine.RequestHandoff(agent, userRequest());
+      const offer = (await engine.ListOffersForUser(PERSON))[0];
+
+      // Simulate remote instance accepting the offer
+      engine.OnRemoteOfferChange({
+        Kind: 'updated',
+        Offer: { ...offer, Status: 'Accepted' },
+        UserID: PERSON,
+      });
+
+      // Presence should be polled now
+      presence.Present.add(LiveKitUserIdentity(PERSON));
+      await vi.advanceTimersByTimeAsync(HANDOFF_PRESENCE_POLL_MS);
+      expect(notes[0]).toContain('Dana has joined');
+      engine.AgentReadyToLeave('call-1');
+      await vi.advanceTimersByTimeAsync(HANDOFF_LEAVE_SETTLE_MS);
+      expect(state.left).toBe(true);
     });
   });
 });

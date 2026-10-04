@@ -25,7 +25,7 @@
  * @module @memberjunction/livekit-room-server
  */
 
-import { LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import { LiveKitUserIdentity } from '../livekit-token-service';
 import { HandoffOfferRegistry, ToOfferView, type HandoffOfferRecord, type ResolveOfferResult } from './handoff-offer-registry';
@@ -108,6 +108,9 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
     /** Sets (merges) the collaborators. Called once at startup by the host that owns each one. */
     public Configure(deps: RoomHandoffDeps): void {
         this.deps = { ...this.deps, ...deps };
+        HandoffOfferRegistry.Instance.Configure({
+            Publisher: (evt) => this.publish(evt),
+        });
     }
 
     /** The collaborators currently set (a `Pick` for diagnostics; tests read it). */
@@ -128,7 +131,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
      * Starts handing the conversation over. Returns at once; what happens next is reported to the model through
      * {@link RoomHandoffAgentContext.NotifyModel}.
      */
-    public RequestHandoff(agent: RoomHandoffAgentContext, request: HandoffRequest): HandoffStartResult {
+    public async RequestHandoff(agent: RoomHandoffAgentContext, request: HandoffRequest): Promise<HandoffStartResult> {
         const key = roomKey(agent.RoomName);
         if (this.flows.has(key)) {
             return { Ok: false, Error: 'A handoff is already in progress for this call.' };
@@ -138,7 +141,7 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
             return prepared;
         }
         const flow: HandoffFlow = { FlowID: this.nextFlowID++, Agent: agent, Request: prepared.Request, Phase: 'offering', Cancelled: false, Timers: new Set() };
-        const started = this.begin(flow);
+        const started = await this.begin(flow);
         if (started.Ok) {
             this.flows.set(key, flow);
         }
@@ -176,43 +179,41 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
     }
 
     /** The offers to show a person (pending ones and recently resolved ones). */
-    public ListOffersForUser(userID: string): HandoffOfferView[] {
-        return HandoffOfferRegistry.Instance.ListForUser(userID).map(ToOfferView);
+    public async ListOffersForUser(userID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<HandoffOfferView[]> {
+        const offers = await HandoffOfferRegistry.Instance.ListForUser(userID, contextUser, provider);
+        return offers.map(ToOfferView);
     }
 
     /**
      * A person accepts an offer. Authorised by the offer's target; anything else answers as a missing offer. On success
      * the console should join the room; the engine watches for them and takes the AI out once they are there.
      */
-    public AcceptOffer(offerID: string, userID: string): { Ok: true; Offer: HandoffOfferView } | { Ok: false; Reason: string } {
-        const resolved = HandoffOfferRegistry.Instance.ResolveForUser(offerID, userID, 'Accepted');
+    public async AcceptOffer(offerID: string, userID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<{ Ok: true; Offer: HandoffOfferView } | { Ok: false; Reason: string }> {
+        const resolved = await HandoffOfferRegistry.Instance.ResolveForUser(offerID, userID, 'Accepted', contextUser, provider);
         if (!resolved.Ok) {
             return resolved;
         }
-        const flow = this.flowForOffer(resolved.Offer);
-        if (!flow) {
-            // The call ended between the offer and the accept without cancelling it (should not happen, but never accept into nothing).
-            HandoffOfferRegistry.Instance.Close(offerID, 'Cancelled');
-            return { Ok: false, Reason: 'This conversation is no longer in progress.' };
-        }
         this.publishUpdate(resolved.Offer);
-        this.deps.Observer?.OnHandoffEvent?.({
-            RoomName: resolved.Offer.RoomName,
-            EventType: 'Accepted',
-            ActorUserID: userID,
-            Details: { OfferID: offerID },
-            ContextUser: flow.Agent.ContextUser,
-            Provider: flow.Agent.Provider,
-        });
-        this.clearTimers(flow);
-        flow.Phase = 'joining';
-        void this.waitForUserToJoin(flow, userID);
+        const flow = this.flowForOffer(resolved.Offer);
+        if (flow) {
+            this.deps.Observer?.OnHandoffEvent?.({
+                RoomName: resolved.Offer.RoomName,
+                EventType: 'Accepted',
+                ActorUserID: userID,
+                Details: { OfferID: offerID },
+                ContextUser: flow.Agent.ContextUser,
+                Provider: flow.Agent.Provider,
+            });
+            this.clearTimers(flow);
+            flow.Phase = 'joining';
+            void this.waitForUserToJoin(flow, userID);
+        }
         return { Ok: true, Offer: ToOfferView(resolved.Offer) };
     }
 
     /** A person declines an offer. Authorised the same way as {@link AcceptOffer}. */
-    public DeclineOffer(offerID: string, userID: string): { Ok: true } | { Ok: false; Reason: string } {
-        const resolved: ResolveOfferResult = HandoffOfferRegistry.Instance.ResolveForUser(offerID, userID, 'Declined');
+    public async DeclineOffer(offerID: string, userID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<{ Ok: true } | { Ok: false; Reason: string }> {
+        const resolved: ResolveOfferResult = await HandoffOfferRegistry.Instance.ResolveForUser(offerID, userID, 'Declined', contextUser, provider);
         if (!resolved.Ok) {
             return resolved;
         }
@@ -231,6 +232,42 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
             this.onPartyUnavailable(flow, 'declined the conversation');
         }
         return { Ok: true };
+    }
+
+    /**
+     * Handles an offer update forwarded from another cluster instance via cross-instance pub/sub.
+     */
+    public OnRemoteOfferChange(payload: { UserID: string; Kind: string; Offer: HandoffOfferView }): void {
+        const flow = this.flows.get(roomKey(payload.Offer.RoomName));
+        if (!flow || flow.OfferID !== payload.Offer.OfferID) {
+            return;
+        }
+        if (payload.Offer.Status === 'Accepted') {
+            this.deps.Observer?.OnHandoffEvent?.({
+                RoomName: flow.Agent.RoomName,
+                EventType: 'Accepted',
+                ActorUserID: payload.UserID,
+                Details: { OfferID: payload.Offer.OfferID },
+                ContextUser: flow.Agent.ContextUser,
+                Provider: flow.Agent.Provider,
+            });
+            this.clearTimers(flow);
+            flow.Phase = 'joining';
+            void this.waitForUserToJoin(flow, payload.UserID);
+        } else if (payload.Offer.Status === 'Declined') {
+            this.deps.Observer?.OnHandoffEvent?.({
+                RoomName: flow.Agent.RoomName,
+                EventType: 'Declined',
+                ActorUserID: payload.UserID,
+                Details: { OfferID: payload.Offer.OfferID },
+                ContextUser: flow.Agent.ContextUser,
+                Provider: flow.Agent.Provider,
+            });
+            this.clearTimers(flow);
+            this.onPartyUnavailable(flow, 'declined the conversation');
+        } else if (payload.Offer.Status === 'Cancelled') {
+            this.cancelFlow(flow, 'Cancelled');
+        }
     }
 
     // ── starting ─────────────────────────────────────────────────────────────────
@@ -254,11 +291,11 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         return { Ok: true, Request: { ...request, Summary: summary } };
     }
 
-    private begin(flow: HandoffFlow): HandoffStartResult {
+    private async begin(flow: HandoffFlow): Promise<HandoffStartResult> {
         const destination = flow.Request.Destination;
         switch (destination.Kind) {
             case 'user':
-                return this.offerToUser(flow);
+                return await this.offerToUser(flow);
             case 'number':
                 flow.Phase = 'dialing';
                 void this.dialAndAwait(flow, destination.Number, destination.DisplayName, 'the number');
@@ -270,18 +307,22 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         }
     }
 
-    private offerToUser(flow: HandoffFlow): HandoffStartResult {
+    private async offerToUser(flow: HandoffFlow): Promise<HandoffStartResult> {
         const destination = flow.Request.Destination;
         if (destination.Kind !== 'user') {
             return { Ok: false, Error: 'Not a person.' };
         }
-        const offer = HandoffOfferRegistry.Instance.Create({
+        const offer = await HandoffOfferRegistry.Instance.Create({
             RoomName: flow.Agent.RoomName,
             TargetUserID: destination.UserID,
             Mode: flow.Request.Mode,
             Summary: flow.Request.Summary,
             CallerLabel: flow.Agent.CallerLabel,
             AgentName: flow.Agent.AgentName,
+            InteractionID: (flow.Agent as { InteractionID?: string }).InteractionID,
+            OfferedByAgentID: (flow.Agent as { AgentID?: string }).AgentID,
+            ContextUser: flow.Agent.ContextUser,
+            Provider: flow.Agent.Provider,
         });
         if (!offer) {
             return { Ok: false, Error: `${destination.DisplayName} has too many open conversation offers right now.` };
@@ -311,11 +352,11 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
 
     // ── person: waiting for the answer ───────────────────────────────────────────
 
-    private onOfferTimeout(flow: HandoffFlow): void {
+    private async onOfferTimeout(flow: HandoffFlow): Promise<void> {
         if (flow.Cancelled || !flow.OfferID) {
             return;
         }
-        const closed = HandoffOfferRegistry.Instance.Close(flow.OfferID, 'Expired');
+        const closed = await HandoffOfferRegistry.Instance.Close(flow.OfferID, 'Expired', flow.Agent.ContextUser, flow.Agent.Provider);
         if (!closed) {
             return; // accepted or declined in the same instant
         }
@@ -529,10 +570,11 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         flow.Cancelled = true;
         this.clearTimers(flow);
         if (flow.OfferID) {
-            const closed = HandoffOfferRegistry.Instance.Close(flow.OfferID, status);
-            if (closed) {
-                this.publishUpdate(closed);
-            }
+            void HandoffOfferRegistry.Instance.Close(flow.OfferID, status, flow.Agent.ContextUser, flow.Agent.Provider).then((closed) => {
+                if (closed) {
+                    this.publishUpdate(closed);
+                }
+            });
         }
     }
 
