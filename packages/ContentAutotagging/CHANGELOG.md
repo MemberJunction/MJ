@@ -1,5 +1,93 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- eaa9455: Introduce `AIEmbeddingRunner` extending `BaseModelRunner` with `RequiredModelType = 'Embeddings'`.
+  - Implement credential resolution, failover across candidate models/vendors, retry handling, and `MJAIPromptRun` persistence.
+  - Deprecate `AIModelRunner.RunEmbedding` and delegate transparently to `AIEmbeddingRunner`.
+  - Migrate embedding call sites in `@memberjunction/tag-engine`, `@memberjunction/ai-vector-dupe`, `@memberjunction/ai-vector-sync`, `@memberjunction/content-autotagging`, and `@memberjunction/search-engine` to use `AIEmbeddingRunner`.
+  - `AIEmbeddingRunner` runs a driver that needs no API key (`LocalEmbedding`, `OllamaEmbedding`) with no key configured, and follows the prompt's `FailoverStrategy` (`SameModelDifferentVendor` never switches models).
+  - With no Embedding prompt, the runner embeds under an unsaved stand-in and writes no run row. `EmbeddingRunParams.SkipRunRecord` skips the row on demand.
+  - `TagEngine` embeds tags, queries and new tags with one model (the Tag Semantic Matching prompt's, else the smallest) and persists that ID.
+  - Vector search keys its query-embedding cache by model and dimension, not by driver.
+- 1d38a22: `FieldPathResolver` no longer reports a record as missing just because an engine cache predates it.
+
+  `loadRowsByPK` consulted `BaseEngineRegistry` first and returned that answer whole whenever any engine cached the entity. But the registry hands back a FILTERED SUBSET, so a key the cache had never heard of came back as an empty result — indistinguishable from "no such row" — and the `PK IN (...)` RunView that would have found it was never reached.
+
+  A `BaseEngine` full-set cache is complete only as of the moment it loaded. It refreshes on local entity saves, but unless Redis cross-server cache sync is configured, nothing tells it about a row another PROCESS inserted, so on any deployment that writes through a second process (a worker, an importer, a sibling API instance) every record created after the reader booted resolved to nothing for that process's lifetime.
+
+  That is not a cosmetic miss. This resolver feeds `VectorDBBase.GetSourceRecordFieldPaths`, whose values route a record to its tenant partition, and a driver that requires one is entitled to fail closed when it is absent — so the symptom is a total, silent refusal to write, reported as though the related record did not exist. Seen in production: a content source created after the vectorization worker booted left every one of its items unembeddable, with a correct row in the database the whole time.
+  - A cache hit is now authoritative only for the keys it actually produced; the rest are queried. The fast path is unchanged when the cache covers the batch, so a cold row costs one extra `IN (...)` rather than a full reload.
+  - Keys are taken from what the cache produced, not from the row count, so a cached row with an unreadable PK counts as a miss instead of suppressing the query for a key nothing resolved.
+  - When that query fails, whatever the cache did serve still resolves; `null` stays reserved for "nothing to offer at all", which is what the caller turns into a failed load.
+
+  `AutotagBaseEngine` also reloads the KnowledgeHub cache once when a pass references a content source or content type the cache lacks. Unblocking the namespace was not enough on its own: the source row also carries the item's routing (its own embedding model + vector index) and its storage config (`VectorIDStrategy`, `ChunkTextStorage`, `VectorMetadata`, `VectorEntityName`), and read from the stale cache all of those silently fell back to the content type's values or the defaults, so the item would have been written into the wrong index with the wrong vector ids. Both ids are required foreign keys on the item, so a miss always means staleness. The check runs at every vectorization entry point (`VectorizeContentItems`, `PurgeDeletedChunks`, `EmbedPendingChunks`, vector dedup) and per batch of the tagging pass (the source's classification config, the type's model and tag limits). It is one batched, cache-bypassing `Config(true)`, paid only on a miss and at most once per call; a failed reload is logged and the pass carries on with the cache it has.
+
+- 2854a2e: Address vector indexes by their provider-side name (`ExternalID`), not the MJ display `Name`. Entity vectorization, duplicate detection and the entity-vectors resolver passed `Name`, so any index whose label differs from its provider name (e.g. "More Cheese Content (Pinecone)" vs `morecheese-content`) returned 404 on every upsert/query.
+
+  `AIEngineBase` now owns the single `MJ: Vector Indexes` cache (`VectorIndexes`, `GetVectorIndexByID`) and the one rule for the provider name (`GetProviderIndexName`: ExternalID, falling back to `Name`), proxied on `AIEngine`. `KnowledgeHubMetadataEngine` no longer caches Vector Indexes; its `VectorIndexes` / `GetVectorIndexByID` proxy the AIEngineBase cache. Every caller, including `MJVectorIndexEntityServer`'s delete path, now resolves the provider name through `GetProviderIndexName`.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [fb267da]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/tag-engine@6.2.0-edge.2
+  - @memberjunction/ai-vector-sync@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ai-vectors@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-segmentation@6.2.0-edge.2
+  - @memberjunction/templates@6.2.0-edge.2
+  - @memberjunction/entity-documents@6.2.0-edge.2
+  - @memberjunction/tag-engine-base@6.2.0-edge.2
+  - @memberjunction/ai-vectordb@6.2.0-edge.2
+  - @memberjunction/storage@6.2.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.2
+  - @memberjunction/network-utils@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes
