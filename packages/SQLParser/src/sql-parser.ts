@@ -1203,15 +1203,23 @@ export class SQLParser {
                     const root = varName.split(/[.\s]/, 1)[0];
                     if (root.toLowerCase() === 'loop') break;
 
-                    if (!paramMap.has(varName)) {
+                    // A `default(…)` filter renders the expression without the parameter, so a use
+                    // with one does not make the parameter required; any use without one does.
+                    const defaultValue = SQLParser.extractDefaultValue(parsed.filters);
+                    const hasDefault = parsed.filters.some(f => f.name === 'default');
+                    const existing = paramMap.get(varName);
+                    if (!existing) {
                         paramMap.set(varName, {
                             name: varName,
                             type: SQLParser.inferTypeFromFilters(parsed.filters),
-                            isRequired: true,
-                            defaultValue: SQLParser.extractDefaultValue(parsed.filters),
+                            isRequired: !hasDefault,
+                            defaultValue,
                             filters: parsed.filters,
                             usageLocations: [],
                         });
+                    } else {
+                        if (!hasDefault) existing.isRequired = true;
+                        if (existing.defaultValue === null) existing.defaultValue = defaultValue;
                     }
 
                     paramMap.get(varName)!.usageLocations.push(token.raw);
