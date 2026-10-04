@@ -195,8 +195,8 @@ export class SQLParser {
      *
      * On a direct-parse failure, applies preprocessing fallbacks — splitting a
      * trailing `OPTION (...)` clause and aliasing bracket-quoted identifiers
-     * whose interior contains parser-defeating characters (`[Active People]`,
-     * `[my-cte]`) — so a wider class of SQL becomes AST-addressable. {@link ToSQL}
+     * (`[Active People]`, `[my-cte]`, bracket-quoted CTE names) — so a wider
+     * class of SQL becomes AST-addressable. {@link ToSQL}
      * transparently restores both transforms.
      *
      * Never throws on unparseable SQL — check {@link IsValid}.
@@ -817,8 +817,7 @@ export class SQLParser {
 
         if (usedAST) {
             try {
-                const parser = new Parser();
-                const ast = parser.astify(cleanSQL, { database: parserDialect });
+                const ast = SQLParser.astifyChecked(cleanSQL, parserDialect);
                 const statements = Array.isArray(ast) ? ast : [ast];
                 for (const stmt of statements) {
                     SQLParser.walkASTForExtraction(stmt as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
@@ -890,8 +889,7 @@ export class SQLParser {
         const columnRefs = new Set<string>();
 
         try {
-            const parser = new Parser();
-            const ast = parser.astify(cleanSQL, { database: parserDialect });
+            const ast = SQLParser.astifyChecked(cleanSQL, parserDialect);
             const statements = Array.isArray(ast) ? ast : [ast];
             for (const statement of statements) {
                 SQLParser.walkASTForExtraction(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
@@ -927,8 +925,7 @@ export class SQLParser {
         const cleanSQL = SQLParser.getCleanSQL(sql);
 
         try {
-            const parser = new Parser();
-            const ast = parser.astify(cleanSQL, { database: dialect.ParserDialect });
+            const ast = SQLParser.astifyChecked(cleanSQL, dialect.ParserDialect);
             const statements = Array.isArray(ast) ? ast : [ast];
             const columns: SQLSelectColumn[] = [];
 
@@ -1769,15 +1766,13 @@ export class SQLParser {
     }
     private static parseSQL(sql: string, dialect: string): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
         try {
-            const parser = new Parser();
-            return parser.astify(sql, { database: dialect });
+            return SQLParser.astifyChecked(sql, dialect);
         } catch {
             // If direct parse fails, try with FOR XML workaround
             const forXmlResult = SQLParser.stripForXmlDirectives(sql);
             if (forXmlResult) {
                 try {
-                    const parser = new Parser();
-                    const ast = parser.astify(forXmlResult.cleanedSQL, { database: dialect });
+                    const ast = SQLParser.astifyChecked(forXmlResult.cleanedSQL, dialect);
                     // Restore the original FOR XML clause on the AST
                     SQLParser.restoreForXmlOnAST(ast, forXmlResult.originalForXml);
                     return ast;
@@ -1789,6 +1784,32 @@ export class SQLParser {
         }
     }
 
+    /**
+     * Parses with node-sql-parser and throws when the result is not a real reading of the SQL.
+     *
+     * The T-SQL grammar accepts some statements it cannot parse — notably a CTE with a
+     * bracket-quoted name, `WITH [x] AS (…) SELECT …` — as a run of bare `name = value`
+     * assignments (`WITH = [x]`, `AS = (…)`, `SELECT = …`). No real statement has that shape, so
+     * such a result is treated as a parse failure and callers take their fallback paths instead
+     * of reading a meaningless tree.
+     */
+    private static astifyChecked(sql: string, dialect: string): NodeSqlParser.AST | NodeSqlParser.AST[] {
+        const ast = new Parser().astify(sql, { database: dialect });
+        if (SQLParser.isMisreadAsAssignments(ast)) {
+            throw new Error('SQLParser: the statement was read as variable assignments, not as SQL');
+        }
+        return ast;
+    }
+
+    /** Whether any top-level node is a bare assignment wrapper rather than a statement. */
+    private static isMisreadAsAssignments(ast: NodeSqlParser.AST | NodeSqlParser.AST[]): boolean {
+        const statements = Array.isArray(ast) ? ast : [ast];
+        return statements.some(statement => {
+            const node = statement as unknown as { type?: unknown; stmt?: { type?: unknown } } | null;
+            return !node || (typeof node.type !== 'string' && node.stmt?.type === 'assign');
+        });
+    }
+
     // ═══════════════════════════════════════════════════
     // Private: Parse Preprocessing (fallback + restoration)
     // ═══════════════════════════════════════════════════
@@ -1797,8 +1818,8 @@ export class SQLParser {
      * Last-resort parse used when a direct parse fails. Rewrites SQL into a
      * form node-sql-parser accepts:
      *   1. Split a trailing `OPTION (...)` query hint (SQL Server).
-     *   2. Alias bracket-quoted identifiers whose interior contains
-     *      parser-defeating characters (`[Active People]`, `[my-cte]`).
+     *   2. Alias bracket-quoted identifiers (`[Active People]`, `[my-cte]`,
+     *      bracket-quoted CTE names).
      *
      * Returns the AST plus the data needed to restore the original SQL on
      * {@link ToSQL}. `ast` is `null` when even the rewritten SQL is unparseable
@@ -1909,9 +1930,10 @@ export class SQLParser {
     }
 
     /**
-     * Token-aware scan that aliases bracket-quoted identifiers whose interior
-     * contains characters node-sql-parser can't handle (`[Active People]`,
-     * `[my-cte]`, `[dbo.table]`). Aliases are stable, collision-safe tokens
+     * Token-aware scan that aliases every bracket-quoted identifier. node-sql-parser
+     * cannot handle brackets around some identifiers at all — interiors with spaces
+     * or punctuation (`[Active People]`, `[my-cte]`, `[dbo.table]`), and CTE names of
+     * any kind (`WITH [x] AS …`). Aliases are stable, collision-safe tokens
      * (`_mjid_<seq>`). Applies only to bracket-quoting dialects (SQL Server).
      *
      * Returns the rewritten SQL plus a forward map (original interior → alias).
@@ -1959,7 +1981,7 @@ export class SQLParser {
                     }
                     interior += sql[j]; j++;
                 }
-                if (interior.length > 0 && /[^A-Za-z0-9_]/.test(interior)) {
+                if (interior.length > 0) {
                     let alias = forward.get(interior);
                     if (!alias) { alias = `${SQLParser.BRACKET_ALIAS_PREFIX}${seq++}`; forward.set(interior, alias); }
                     // Emit a BARE identifier — node-sql-parser rejects bracket-quoted
@@ -2087,8 +2109,7 @@ export class SQLParser {
 
     private static extractTablesViaAST(sql: string, dialect: string): SQLTableReference[] | null {
         try {
-            const parser = new Parser();
-            const ast = parser.astify(sql, { database: dialect });
+            const ast = SQLParser.astifyChecked(sql, dialect);
             const tableAliasMap = new Map<string, { schemaName: string; tableName: string }>();
             const columnRefs = new Set<string>();
 
@@ -2157,7 +2178,7 @@ export class SQLParser {
     private static extractCTEsViaAST(sql: string, dialect: string): SQLCTEExtraction | null {
         try {
             const parser = new Parser();
-            const ast = parser.astify(sql, { database: dialect });
+            const ast = SQLParser.astifyChecked(sql, dialect);
             const singleAst = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
 
             if (!singleAst.with || !Array.isArray(singleAst.with) || singleAst.with.length === 0) {
