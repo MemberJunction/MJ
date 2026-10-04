@@ -88,3 +88,33 @@ describe('caller-supplied SQL runs in a rolled-back read-only transaction', () =
         expect(provider.Options.length).toBeGreaterThan(0);
     });
 });
+
+describe('ad-hoc SQL with MaxRows is paged in the database', () => {
+    it('asks the database for one page and a count, not every row', async () => {
+        const provider = new AdhocTestProvider('sqlserver');
+        provider.Answers = [[{ a: 21 }, { a: 22 }], [{ TotalRowCount: 300 }]];
+        const result = await provider.RunAdhoc({ SQL: 'SELECT a FROM t ORDER BY a', StartRow: 20, MaxRows: 2 });
+        expect(result.Success).toBe(true);
+        expect(provider.Executed).toHaveLength(2);
+        expect(provider.Executed[0]).toMatch(/OFFSET 20 ROWS FETCH NEXT 2 ROWS ONLY/);
+        expect(provider.Executed[1]).toMatch(/COUNT\(\*\) AS TotalRowCount/);
+        expect(result.Results).toEqual([{ a: 21 }, { a: 22 }]);
+        expect(result.TotalRowCount).toBe(300);
+        expect(result.RowCount).toBe(2);
+    });
+
+    it('PostgreSQL gets LIMIT … OFFSET', async () => {
+        const provider = new AdhocTestProvider('postgresql');
+        provider.Answers = [[{ a: 1 }], [{ TotalRowCount: 5 }]];
+        await provider.RunAdhoc({ SQL: 'SELECT a FROM t ORDER BY a', MaxRows: 1 });
+        expect(provider.Executed[0]).toMatch(/LIMIT 1 OFFSET 0/);
+    });
+
+    it('without MaxRows still returns every row', async () => {
+        const provider = new AdhocTestProvider('sqlserver');
+        provider.Answers = [[{ a: 1 }, { a: 2 }, { a: 3 }]];
+        const result = await provider.RunAdhoc({ SQL: 'SELECT a FROM t' });
+        expect(provider.Executed).toEqual(['SELECT a FROM t']);
+        expect(result.TotalRowCount).toBe(3);
+    });
+});
