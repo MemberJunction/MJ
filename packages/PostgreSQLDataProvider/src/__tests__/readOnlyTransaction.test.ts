@@ -47,6 +47,23 @@ describe('PostgreSQLDataProvider.ExecuteSQL with readOnlyTransaction', () => {
         expect(client.release).toHaveBeenCalledTimes(1);
     });
 
+    it('limits the statement with SET LOCAL statement_timeout inside the same transaction', async () => {
+        await provider.ExecuteSQL('SELECT 1 AS v', [], { readOnlyTransaction: true, timeoutMs: 5000 });
+        expect(client.queries).toEqual(['BEGIN READ ONLY', 'SET LOCAL statement_timeout = 5000', 'SELECT 1 AS v', 'ROLLBACK']);
+    });
+
+    it('commits a timed statement that is not read-only, so its writes land', async () => {
+        await provider.ExecuteSQL('UPDATE t SET a = 1', [], { timeoutMs: 2500 });
+        expect(client.queries).toEqual(['BEGIN', 'SET LOCAL statement_timeout = 2500', 'UPDATE t SET a = 1', 'COMMIT']);
+    });
+
+    it('rolls back a timed statement that fails, such as one cancelled at its timeout', async () => {
+        failOn = 'slow';
+        await expect(provider.ExecuteSQL('SELECT slow()', [], { timeoutMs: 10 })).rejects.toThrow('boom');
+        expect(client.queries).toEqual(['BEGIN', 'SET LOCAL statement_timeout = 10', 'SELECT slow()', 'ROLLBACK']);
+        expect(client.release).toHaveBeenCalledTimes(1);
+    });
+
     it('runs inside the ambient transaction when one is open, without nesting another', async () => {
         await provider.BeginTransaction();
         await provider.ExecuteSQL('SELECT 1 AS v', [], { readOnlyTransaction: true });

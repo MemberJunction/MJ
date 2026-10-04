@@ -3329,33 +3329,61 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Runs validated ad-hoc SQL. With `MaxRows` it asks the database for that page and a count, as
-     * saved queries do, so the server sends one page rather than every row; without it every row
-     * is returned, offset by `StartRow` when one is given.
+     * Runs validated ad-hoc SQL. It is rendered the way caller-supplied SQL always is: composition
+     * tokens resolved, comments removed, and a single read query required. With `MaxRows` the
+     * database returns that page and a count runs beside it, as for saved queries, so the server
+     * sends one page rather than every row; without it every row is returned, offset by `StartRow`
+     * when one is given. `TimeoutSeconds` limits every statement the run sends.
      */
     private async runAdhocSQL(
         params: RunQueryParams,
         contextUser?: UserInfo,
     ): Promise<{ rows: Record<string, unknown>[]; totalRowCount: number; executionTime: number }> {
-        if (!QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows)) {
-            const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser, undefined, CALLER_SQL_OPTIONS);
+        const usePaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+        const startRow = QueryPagingEngine.ResolveStartRow(params.StartRow);
+        const rendered = RenderPipeline.Run(params.SQL!, {
+            Platform: this.PlatformKey as DatabasePlatform,
+            ContextUser: contextUser,
+            RequireReadStatement: true,
+            ...(usePaging ? { Paging: { StartRow: startRow, MaxRows: params.MaxRows! } } : {}),
+        });
+        const options = this.adhocSQLOptions(params);
+        if (!usePaging) {
+            const { result, executionTime } = await this.executeQueryWithTiming(rendered.FinalSQL, contextUser, undefined, options);
             const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
             return { rows: paginatedResult, totalRowCount, executionTime };
         }
-        const paging = QueryPagingEngine.WrapWithPaging(
-            params.SQL!,
-            QueryPagingEngine.ResolveStartRow(params.StartRow),
-            params.MaxRows!,
-            this.PlatformKey as DatabasePlatform,
-        );
         const start = Date.now();
-        const [dataResult, countResult] = await Promise.all([
-            this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, CALLER_SQL_OPTIONS, contextUser),
-            this.ExecuteSQL<{ TotalRowCount: number }>(paging.CountSQL, undefined, CALLER_SQL_OPTIONS, contextUser),
+        const [dataResult, total] = await Promise.all([
+            this.ExecuteSQL<Record<string, unknown>>(rendered.FinalSQL, undefined, options, contextUser),
+            this.countAdhocRows(rendered.PagingResult?.CountSQL ?? null, options, contextUser),
         ]);
         const rows = dataResult ?? [];
-        const total = countResult?.[0]?.TotalRowCount;
-        return { rows, totalRowCount: total != null ? Number(total) : rows.length, executionTime: Date.now() - start };
+        return { rows, totalRowCount: total ?? startRow + rows.length, executionTime: Date.now() - start };
+    }
+
+    /**
+     * The total row count for a page of ad-hoc SQL, or `null` when it cannot be had. A count that
+     * fails does not fail the run: some queries page fine but cannot be counted (duplicate column
+     * names are legal in a result but not inside the count's wrap), so the caller reports a lower
+     * bound instead.
+     */
+    private async countAdhocRows(countSQL: string | null, options: ExecuteSQLOptions, contextUser?: UserInfo): Promise<number | null> {
+        if (!countSQL) return null;
+        try {
+            const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, options, contextUser);
+            const total = Number(countResult?.[0]?.TotalRowCount);
+            return Number.isFinite(total) && total >= 0 ? Math.floor(total) : null;
+        } catch (e) {
+            LogError(`Ad-hoc query row count failed; reporting a lower-bound total. ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+        }
+    }
+
+    /** The options every statement of an ad-hoc run uses: caller-SQL protections, plus its timeout. */
+    private adhocSQLOptions(params: RunQueryParams): ExecuteSQLOptions {
+        const seconds = params.TimeoutSeconds;
+        return seconds && seconds > 0 ? { ...CALLER_SQL_OPTIONS, timeoutMs: seconds * 1000 } : CALLER_SQL_OPTIONS;
     }
 
     /**
