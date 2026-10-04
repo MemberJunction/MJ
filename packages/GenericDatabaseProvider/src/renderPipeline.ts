@@ -1,7 +1,7 @@
 import { DatabasePlatform, UserInfo, QueryDependencySpec } from '@memberjunction/core';
 import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
 import { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
 import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
@@ -69,6 +69,14 @@ export interface RenderContext {
     Paging?: { StartRow: number; MaxRows: number };
     /** MaxRows safety limit. Mutually exclusive with {@link Paging}. */
     MaxRows?: number;
+    /**
+     * Require the rendered SQL to be a single read query: one statement that starts with `SELECT`
+     * or `WITH`, reads in every CTE, and does not `SELECT … INTO` a table. Set it wherever the
+     * caller, not a saved query, supplies the SQL (ad-hoc SQL, transient test queries). Anything
+     * else is refused with an error that says why. Saved queries are admin-authored and are not
+     * held to it.
+     */
+    RequireReadStatement?: boolean;
 }
 
 /**
@@ -160,7 +168,7 @@ export class RenderPipeline {
         // StatementKind reflects the user's actual statement (paging wrapping
         // below always produces a SELECT). Saved queries otherwise skip the
         // dangerous-keyword validation that ad-hoc queries get at execution.
-        RenderPipeline.assertSafeToExecute(afterTemplates, ctx.Platform);
+        RenderPipeline.assertSafeToExecute(afterTemplates, ctx.Platform, ctx.RequireReadStatement ?? false);
 
         // ── Step 3: MaxRows safety limit (if specified) ──────────────
         if (hasMaxRows) {
@@ -216,14 +224,27 @@ export class RenderPipeline {
      * parse, so there is no AST to classify). A rendered read query must be a
      * single statement.
      *
+     * When `requireReadStatement` is set (SQL a caller supplied rather than a
+     * saved query), the statement must first pass {@link IsReadOnlyQuery}: one
+     * statement, starting with SELECT or WITH, reading in every CTE, and not
+     * writing its rows into a table. That check works from tokens, so it also
+     * refuses a `SET` or `DECLARE` the AST check lets through, and it still
+     * accepts read queries the parser cannot read.
+     *
      * The broader dangerous-keyword scan
      * ({@link SQLExpressionValidator.validateFullQuery}) deliberately stays on
      * the ad-hoc execution path (untrusted free-text input); it is unsuitable as
      * a blanket gate here because it rejects legitimate read constructs (the
      * `REPLACE()` string function, parenthesized SELECTs, etc.).
      */
-    private static assertSafeToExecute(sql: string, platform: DatabasePlatform): void {
+    private static assertSafeToExecute(sql: string, platform: DatabasePlatform, requireReadStatement: boolean): void {
         const dialect = GetDialect(platform);
+        if (requireReadStatement) {
+            const check = IsReadOnlyQuery(sql, dialect);
+            if (!check.IsReadOnly) {
+                throw new Error(`RenderPipeline: only a single read query may be run here, and this SQL is not one: ${check.Reason}.`);
+            }
+        }
         const parsed = new SQLParser(sql, dialect);
         if (parsed.HasWriteStatement) {
             throw new Error(
