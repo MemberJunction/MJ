@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EntityPermissionType } from '@memberjunction/core';
+import { BaseEntityResult, EntityPermissionType, ValidationResult } from '@memberjunction/core';
 
 // Neutralize the class-factory registration decorator.
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -14,7 +14,9 @@ vi.mock('@memberjunction/core-entities', () => {
     class MockMJInteractionEventEntity {
         public saveCalled = false;
         public deleteCalled = false;
+        public ID = 'test-event-id';
         private _saved = false;
+        private _results: BaseEntityResult[] = [];
 
         public get IsSaved(): boolean {
             return this._saved;
@@ -26,6 +28,18 @@ vi.mock('@memberjunction/core-entities', () => {
 
         public CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
             return true;
+        }
+
+        public Validate(): ValidationResult {
+            return { Success: true, Errors: [] };
+        }
+
+        public RegisterResultHistoryEntry(result: BaseEntityResult): void {
+            this._results.push(result);
+        }
+
+        public get LatestResult(): BaseEntityResult | undefined {
+            return this._results.length > 0 ? this._results[this._results.length - 1] : undefined;
         }
 
         public async Save(): Promise<boolean> {
@@ -90,6 +104,23 @@ describe('MJInteractionEventEntityServer', () => {
         });
     });
 
+    describe('Validate', () => {
+        it('passes validation for unsaved entity', () => {
+            const entity = makeEntity(false);
+            const val = entity.Validate();
+            expect(val.Success).toBe(true);
+            expect(val.Errors.length).toBe(0);
+        });
+
+        it('fails validation for already saved entity', () => {
+            const entity = makeEntity(true);
+            const val = entity.Validate();
+            expect(val.Success).toBe(false);
+            expect(val.Errors.length).toBeGreaterThan(0);
+            expect(val.Errors[0].Message).toMatch(/append-only: updates are prohibited/i);
+        });
+    });
+
     describe('Save', () => {
         it('allows saving a new record', async () => {
             const entity = makeEntity(false);
@@ -98,18 +129,22 @@ describe('MJInteractionEventEntityServer', () => {
             expect(entity.saveCalled).toBe(true);
         });
 
-        it('throws when saving an already saved record', async () => {
+        it('refuses and returns false with LatestResult when saving an already saved record', async () => {
             const entity = makeEntity(true);
-            await expect(entity.Save()).rejects.toThrow(/append-only/i);
+            const result = await entity.Save();
+            expect(result).toBe(false);
             expect(entity.saveCalled).toBe(false);
+            expect(entity.LatestResult?.Message).toMatch(/append-only: updates are prohibited/i);
         });
     });
 
     describe('Delete', () => {
-        it('always throws when attempting to delete', async () => {
+        it('refuses and returns false with LatestResult when attempting to delete', async () => {
             const entity = makeEntity(true);
-            await expect(entity.Delete()).rejects.toThrow(/append-only/i);
+            const result = await entity.Delete();
+            expect(result).toBe(false);
             expect(entity.deleteCalled).toBe(false);
+            expect(entity.LatestResult?.Message).toMatch(/append-only: deletes are prohibited/i);
         });
     });
 });

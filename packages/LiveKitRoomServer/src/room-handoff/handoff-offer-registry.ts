@@ -68,7 +68,7 @@ export interface CreateOfferInput {
 export type ResolveOfferResult = { Ok: true; Offer: HandoffOfferRecord } | { Ok: false; Reason: string };
 
 /** The one answer for "no such offer", "not yours" and "too late", so an offer's existence is not leaked. */
-const OFFER_UNAVAILABLE = 'This conversation offer is no longer available.';
+export const OFFER_UNAVAILABLE = 'This conversation offer is no longer available.';
 
 /** Converts a stored offer to what a console may see. */
 export function ToOfferView(offer: HandoffOfferRecord): HandoffOfferView {
@@ -618,7 +618,8 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
         }
         try {
             return Metadata.Provider as IMetadataProvider | undefined;
-        } catch {
+        } catch (err) {
+            LogError('[HandoffOfferRegistry] Failed to obtain Metadata.Provider', undefined, err);
             return undefined;
         }
     }

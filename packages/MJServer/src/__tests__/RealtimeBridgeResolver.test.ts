@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
   setTurnToolBinder: vi.fn(),
   getBridgeRuntime: vi.fn(),
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
+  getRoomForEgress: vi.fn(async (_id: string): Promise<string | undefined> => 'room-1'),
   stopAgentRoomSession: vi.fn(async () => true),
   stopAllAgentsInRoom: vi.fn(async () => 1),
   getRoomForBridge: vi.fn((_id: string): string | undefined => 'room-1'),
@@ -49,6 +50,7 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
   LiveKitEgressService: class {
     StartRoomRecording = h.startRecording;
     StopRecording = h.stopRecording;
+    GetRoomForEgress = h.getRoomForEgress;
   },
   RoomAuthorizationService: (() => {
     let testAuthorizer: ((roomName: string, user: unknown, provider?: unknown) => Promise<{ Authorized: boolean; Reason?: string }>) | undefined = undefined;
@@ -203,6 +205,23 @@ describe('RealtimeBridgeResolver', () => {
       expect(result.Status).toBe('EGRESS_COMPLETE');
       // The registration mock returns a file id, which the resolver surfaces on the result.
       expect(result.RecordingFileID).toBe('file-1');
+    });
+
+    it('refuses to stop a recording when user is unauthorized for the room', async () => {
+      RoomAuthorizationService.Instance.SetAuthorizerForTesting(async () => ({
+        Authorized: false,
+        Reason: 'Not allowed to access this room',
+      }));
+      const result = await resolver.StopLiveKitRecording('eg-1', ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toMatch(/Not allowed to access this room/);
+    });
+
+    it('refuses to stop a recording when room cannot be determined for egress ID', async () => {
+      h.getRoomForEgress.mockResolvedValueOnce(undefined);
+      const result = await resolver.StopLiveKitRecording('unknown-egress', ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toMatch(/Unable to determine room/);
     });
 
     it('requires an authenticated user to record', async () => {

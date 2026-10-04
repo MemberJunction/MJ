@@ -64,11 +64,9 @@ vi.mock('@memberjunction/notifications', () => ({
 
 import {
   MeetingResolver,
-  DialInRateLimiter,
   type CreateMeetingInput,
   type UpdateMeetingInput,
   type RSVPMeetingInput,
-  type VerifyDialInCodeInput,
 } from '../resolvers/MeetingResolver.js';
 import type { AppContext } from '../types.js';
 
@@ -184,36 +182,6 @@ class TestableMeetingResolver extends MeetingResolver {
   }
 }
 
-describe('DialInRateLimiter', () => {
-  beforeEach(() => {
-    DialInRateLimiter.Instance.ClearForTesting();
-  });
-
-  it('allows initial attempts and tracks failures up to limit', () => {
-    const key = '+15559876543';
-    expect(DialInRateLimiter.Instance.CheckAllowed(key).allowed).toBe(true);
-
-    for (let i = 0; i < 4; i++) {
-      DialInRateLimiter.Instance.RecordFailure(key);
-      expect(DialInRateLimiter.Instance.CheckAllowed(key).allowed).toBe(true);
-    }
-
-    // 5th failure triggers lockout
-    DialInRateLimiter.Instance.RecordFailure(key);
-    const check = DialInRateLimiter.Instance.CheckAllowed(key);
-    expect(check.allowed).toBe(false);
-    expect(check.remainingMs).toBeGreaterThan(0);
-  });
-
-  it('resets attempts on success', () => {
-    const key = '+15559876543';
-    DialInRateLimiter.Instance.RecordFailure(key);
-    DialInRateLimiter.Instance.RecordFailure(key);
-    DialInRateLimiter.Instance.RecordSuccess(key);
-    expect(DialInRateLimiter.Instance.CheckAllowed(key).allowed).toBe(true);
-  });
-});
-
 describe('MeetingResolver', () => {
   let resolver: TestableMeetingResolver;
   let mockProvider: IMetadataProvider;
@@ -225,7 +193,6 @@ describe('MeetingResolver', () => {
     ctx = {
       providers: [{ type: 'Read-Write', provider: mockProvider }],
     } as unknown as AppContext;
-    DialInRateLimiter.Instance.ClearForTesting();
     mocks.mintClientToken.mockClear();
     mocks.startAgentRoomSession.mockClear();
     mocks.stopAllAgentsInRoom.mockClear();
@@ -402,25 +369,6 @@ describe('MeetingResolver', () => {
       const result = await resolver.RSVPMeeting({ MeetingID: 'mtg-1', InviteStatus: 'Maybe' }, ctx);
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toContain('Invalid RSVP status');
-    });
-  });
-
-  describe('VerifyMeetingDialInCode', () => {
-    it('returns error when caller is locked out by rate limiter', async () => {
-      const caller = '+15559998888';
-      for (let i = 0; i < 5; i++) {
-        DialInRateLimiter.Instance.RecordFailure(caller);
-      }
-
-      const input: VerifyDialInCodeInput = {
-        PhoneNumberID: 'phone-1',
-        DialInCode: '123456',
-        CallerPhone: caller,
-      };
-
-      const result = await resolver.VerifyMeetingDialInCode(input, ctx);
-      expect(result.Success).toBe(false);
-      expect(result.ErrorMessage).toContain('Too many invalid attempts');
     });
   });
 });

@@ -331,7 +331,8 @@ function readString(argumentsJson: string, name: 'target' | 'digits' | 'reason')
         const parsed = JSON.parse(argumentsJson || '{}') as Partial<Record<'target' | 'digits' | 'reason', string | number>>;
         const value = parsed?.[name];
         return typeof value === 'string' ? value : '';
-    } catch {
+    } catch (err) {
+        LogError(`[telephonyCallTools] Failed to parse arguments JSON: ${argumentsJson}`, undefined, err);
         return '';
     }
 }

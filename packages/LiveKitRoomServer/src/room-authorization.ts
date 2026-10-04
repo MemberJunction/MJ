@@ -1,10 +1,7 @@
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type {
-  MJMeetingEntity,
-  MJMeetingParticipantEntity,
-  MJInteractionOfferEntity,
-} from '@memberjunction/core-entities';
+
+export const SIP_CALL_ROOM_PREFIX = 'call-';
 
 export interface RoomAuthorizationResult {
   Authorized: boolean;
@@ -16,6 +13,35 @@ export type RoomAuthorizerFn = (
   user: UserInfo,
   provider?: IMetadataProvider,
 ) => Promise<RoomAuthorizationResult>;
+
+interface MeetingLookupRow {
+  ID: string;
+  Status: string;
+  HostUserID: string;
+}
+
+interface InteractionLookupRow {
+  ID: string;
+  Status: string;
+  AgentSessionID: string | null;
+}
+
+interface OfferLookupRow {
+  ID: string;
+  Status: string;
+  TargetUserID: string;
+}
+
+interface ParticipantLookupRow {
+  ID: string;
+  InviteStatus: string;
+  UserID: string;
+}
+
+interface AgentSessionLookupRow {
+  ID: string;
+  UserID: string;
+}
 
 /**
  * Service enforcing per-room authorization for LiveKit rooms.
@@ -29,12 +55,19 @@ export type RoomAuthorizerFn = (
  *      - If `InviteStatus` is `'Invited'`, `'Accepted'`, or `'Tentative'`, access is granted.
  *    - Non-participants are refused access.
  *
- * 2. Rooms tied to an `MJ: Interaction Offers` record:
+ * 2. Rooms tied to an `MJ: Interactions` record OR starting with the SIP call prefix (`call-`):
+ *    - Never ad-hoc.
+ *    - User who has an `Accepted` offer for this room is granted access.
+ *    - User who started it (the Interaction's agent-session owner) is granted access.
+ *    - Otherwise access is refused.
+ *
+ * 3. Rooms tied to an `MJ: Interaction Offers` record:
  *    - User must be the `TargetUserID` AND have `Status === 'Accepted'`.
  *    - Otherwise access is refused.
  *
- * 3. Ad-hoc rooms (not tied to a Meeting or an InteractionOffer):
- *    - Any authenticated user is granted access.
+ * 4. Ad-hoc rooms:
+ *    - Only rooms with NO Meeting, NO Interaction, and NO Offer row (and not starting with `call-`)
+ *      are ad-hoc and open to authenticated users.
  */
 export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationService> {
   private authorizerOverride?: RoomAuthorizerFn;
@@ -75,19 +108,36 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
       return { Authorized: false, Reason: 'Room name cannot be empty.' };
     }
 
-    const escapedRoom = trimmedRoom.replace(/'/g, "''");
-    const escapedUserID = user.ID.replace(/'/g, "''");
+    const escapedRoom = EscapeSQLString(trimmedRoom);
+    const escapedUserID = EscapeSQLString(user.ID);
 
     const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
 
     try {
-      // 1. Check if room is tied to an MJ: Meetings record
-      const meetingResult = await rv.RunView<MJMeetingEntity>(
-        {
-          EntityName: 'MJ: Meetings',
-          ExtraFilter: `RoomName = '${escapedRoom}'`,
-          ResultType: 'entity_object',
-        },
+      // Batch initial lookups for Meetings, Interactions, and Interaction Offers
+      const [meetingResult, interactionResult, offerResult] = await rv.RunViews<
+        MeetingLookupRow | InteractionLookupRow | OfferLookupRow
+      >(
+        [
+          {
+            EntityName: 'MJ: Meetings',
+            ExtraFilter: `RoomName = '${escapedRoom}'`,
+            Fields: ['ID', 'Status', 'HostUserID'],
+            ResultType: 'simple',
+          },
+          {
+            EntityName: 'MJ: Interactions',
+            ExtraFilter: `RoomName = '${escapedRoom}'`,
+            Fields: ['ID', 'Status', 'AgentSessionID'],
+            ResultType: 'simple',
+          },
+          {
+            EntityName: 'MJ: Interaction Offers',
+            ExtraFilter: `RoomName = '${escapedRoom}'`,
+            Fields: ['ID', 'Status', 'TargetUserID'],
+            ResultType: 'simple',
+          },
+        ],
         user,
       );
 
@@ -96,21 +146,37 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
         return { Authorized: false, Reason: 'Error verifying meeting authorization.' };
       }
 
-      if (meetingResult.Results && meetingResult.Results.length > 0) {
-        const meeting = meetingResult.Results[0];
+      if (!interactionResult.Success) {
+        LogError(`[RoomAuthorizationService] Error querying MJ: Interactions for room '${trimmedRoom}': ${interactionResult.ErrorMessage}`);
+        return { Authorized: false, Reason: 'Error verifying interaction authorization.' };
+      }
+
+      if (!offerResult.Success) {
+        LogError(`[RoomAuthorizationService] Error querying MJ: Interaction Offers for room '${trimmedRoom}': ${offerResult.ErrorMessage}`);
+        return { Authorized: false, Reason: 'Error verifying interaction offer authorization.' };
+      }
+
+      const meetings = (meetingResult.Results ?? []) as MeetingLookupRow[];
+      const interactions = (interactionResult.Results ?? []) as InteractionLookupRow[];
+      const offers = (offerResult.Results ?? []) as OfferLookupRow[];
+
+      // 1. Check if room is tied to an MJ: Meetings record
+      if (meetings.length > 0) {
+        const meeting = meetings[0];
         if (meeting.Status === 'Cancelled') {
           return { Authorized: false, Reason: 'Meeting is cancelled.' };
         }
 
-        if (meeting.HostUserID === user.ID) {
+        if (UUIDsEqual(meeting.HostUserID, user.ID)) {
           return { Authorized: true };
         }
 
-        const participantResult = await rv.RunView<MJMeetingParticipantEntity>(
+        const participantResult = await rv.RunView<ParticipantLookupRow>(
           {
             EntityName: 'MJ: Meeting Participants',
-            ExtraFilter: `MeetingID = '${meeting.ID}' AND UserID = '${escapedUserID}'`,
-            ResultType: 'entity_object',
+            ExtraFilter: `MeetingID = '${EscapeSQLString(meeting.ID)}' AND UserID = '${escapedUserID}'`,
+            Fields: ['ID', 'InviteStatus', 'UserID'],
+            ResultType: 'simple',
           },
           user,
         );
@@ -120,8 +186,9 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
           return { Authorized: false, Reason: 'Error verifying participant authorization.' };
         }
 
-        if (participantResult.Results && participantResult.Results.length > 0) {
-          const participant = participantResult.Results[0];
+        const participants = (participantResult.Results ?? []) as ParticipantLookupRow[];
+        if (participants.length > 0) {
+          const participant = participants[0];
           if (participant.InviteStatus === 'Declined') {
             return { Authorized: false, Reason: 'User declined the invitation to this meeting.' };
           }
@@ -131,24 +198,50 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
         return { Authorized: false, Reason: 'User is not a host or participant in this meeting.' };
       }
 
-      // 2. Check if room is tied to an MJ: Interaction Offers record
-      const offerResult = await rv.RunView<MJInteractionOfferEntity>(
-        {
-          EntityName: 'MJ: Interaction Offers',
-          ExtraFilter: `RoomName = '${escapedRoom}'`,
-          ResultType: 'entity_object',
-        },
-        user,
-      );
+      // 2. Check if room is tied to an Interaction or has a SIP call prefix (never ad-hoc)
+      const isSipCallRoom = trimmedRoom.startsWith(SIP_CALL_ROOM_PREFIX);
+      if (interactions.length > 0 || isSipCallRoom) {
+        // User with an Accepted offer for it
+        const hasAcceptedOffer = offers.some(
+          (o) => UUIDsEqual(o.TargetUserID, user.ID) && o.Status === 'Accepted',
+        );
+        if (hasAcceptedOffer) {
+          return { Authorized: true };
+        }
 
-      if (!offerResult.Success) {
-        LogError(`[RoomAuthorizationService] Error querying MJ: Interaction Offers for room '${trimmedRoom}': ${offerResult.ErrorMessage}`);
-        return { Authorized: false, Reason: 'Error verifying interaction offer authorization.' };
+        // User who started it (the Interaction's agent-session owner)
+        if (interactions.length > 0) {
+          const interaction = interactions[0];
+          if (interaction.AgentSessionID) {
+            const sessionResult = await rv.RunView<AgentSessionLookupRow>(
+              {
+                EntityName: 'MJ: AI Agent Sessions',
+                ExtraFilter: `ID = '${EscapeSQLString(interaction.AgentSessionID)}'`,
+                Fields: ['ID', 'UserID'],
+                ResultType: 'simple',
+              },
+              user,
+            );
+
+            if (!sessionResult.Success) {
+              LogError(`[RoomAuthorizationService] Error querying MJ: AI Agent Sessions for session '${interaction.AgentSessionID}': ${sessionResult.ErrorMessage}`);
+              return { Authorized: false, Reason: 'Error verifying session authorization.' };
+            }
+
+            const sessions = (sessionResult.Results ?? []) as AgentSessionLookupRow[];
+            if (sessions.length > 0 && UUIDsEqual(sessions[0].UserID, user.ID)) {
+              return { Authorized: true };
+            }
+          }
+        }
+
+        return { Authorized: false, Reason: 'User is not authorized to access this call.' };
       }
 
-      if (offerResult.Results && offerResult.Results.length > 0) {
-        const acceptedOffer = offerResult.Results.find(
-          (o) => o.TargetUserID === user.ID && o.Status === 'Accepted',
+      // 3. Rooms tied to an MJ: Interaction Offers record
+      if (offers.length > 0) {
+        const acceptedOffer = offers.find(
+          (o) => UUIDsEqual(o.TargetUserID, user.ID) && o.Status === 'Accepted',
         );
         if (acceptedOffer) {
           return { Authorized: true };
@@ -156,7 +249,7 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
         return { Authorized: false, Reason: 'User has not accepted a handoff offer for this room.' };
       }
 
-      // 3. Ad-hoc rooms are accessible to authenticated users
+      // 4. Ad-hoc rooms: only rooms with no Meeting, no Interaction, and no Offer row
       return { Authorized: true };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -314,7 +314,8 @@ function readArg(argumentsJson: string, name: 'target' | 'mode' | 'summary' | 'r
         const parsed = JSON.parse(argumentsJson || '{}') as Partial<Record<'target' | 'mode' | 'summary' | 'reason', string | number>>;
         const value = parsed?.[name];
         return typeof value === 'string' ? value : '';
-    } catch {
+    } catch (err) {
+        LogError(`[roomCallTools] Failed to parse arguments JSON: ${argumentsJson}`, undefined, err);
         return '';
     }
 }

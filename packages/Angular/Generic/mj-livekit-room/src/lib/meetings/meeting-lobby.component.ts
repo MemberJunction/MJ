@@ -173,7 +173,7 @@ import type { MeetingInfo } from '@memberjunction/graphql-dataprovider';
       }
       .mj-mtg-lobby__preview {
         background: var(--mj-bg-surface-card, #0f172a);
-        color: #ffffff;
+        color: var(--mj-text-inverse, #ffffff);
         border-radius: 12px;
         height: 280px;
         display: flex;
@@ -204,7 +204,7 @@ import type { MeetingInfo } from '@memberjunction/graphql-dataprovider';
         align-items: center;
         gap: 8px;
         font-size: 1rem;
-        color: #38bdf8;
+        color: var(--mj-brand-accent, #38bdf8);
       }
       .mj-mtg-lobby__video-placeholder i {
         font-size: 2.5rem;
@@ -222,7 +222,7 @@ import type { MeetingInfo } from '@memberjunction/graphql-dataprovider';
         border-radius: 50%;
         border: none;
         background: rgba(255, 255, 255, 0.2);
-        color: #ffffff;
+        color: var(--mj-text-inverse, #ffffff);
         font-size: 1.1rem;
         cursor: pointer;
         display: flex;
@@ -267,16 +267,16 @@ import type { MeetingInfo } from '@memberjunction/graphql-dataprovider';
         margin-bottom: 8px;
       }
       .mj-mtg-status--live {
-        background: #dcfce7;
-        color: #15803d;
+        background: var(--mj-status-success-subtle, #dcfce7);
+        color: var(--mj-status-success, #15803d);
       }
       .mj-mtg-status--scheduled {
-        background: #e0f2fe;
-        color: #0369a1;
+        background: var(--mj-status-info-subtle, #e0f2fe);
+        color: var(--mj-status-info, #0369a1);
       }
       .mj-mtg-status--ended {
-        background: #f1f5f9;
-        color: #64748b;
+        background: var(--mj-bg-surface-card, #f1f5f9);
+        color: var(--mj-text-secondary, #64748b);
       }
       .mj-mtg-lobby__title {
         margin: 0 0 var(--mj-space-2, 8px) 0;
@@ -371,20 +371,20 @@ import type { MeetingInfo } from '@memberjunction/graphql-dataprovider';
         font-weight: 600;
       }
       .mj-mtg-rsvp--accepted {
-        background: #dcfce7;
-        color: #15803d;
+        background: var(--mj-status-success-subtle, #dcfce7);
+        color: var(--mj-status-success, #15803d);
       }
       .mj-mtg-rsvp--declined {
-        background: #fee2e2;
-        color: #b91c1c;
+        background: var(--mj-status-error-subtle, #fee2e2);
+        color: var(--mj-status-error, #b91c1c);
       }
       .mj-mtg-rsvp--invited {
-        background: #f1f5f9;
-        color: #64748b;
+        background: var(--mj-bg-surface-card, #f1f5f9);
+        color: var(--mj-text-secondary, #64748b);
       }
       .mj-mtg-rsvp--tentative {
-        background: #fef3c7;
-        color: #b45309;
+        background: var(--mj-status-warning-subtle, #fef3c7);
+        color: var(--mj-status-warning, #b45309);
       }
     `,
   ],

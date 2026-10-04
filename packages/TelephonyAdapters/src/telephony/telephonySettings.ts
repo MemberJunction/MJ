@@ -9,6 +9,7 @@
  * @module @memberjunction/telephony-adapters
  */
 
+import { LogError } from '@memberjunction/core';
 import type { OnMachineAction, TelephonySharedSettings } from '../types.js';
 
 /**
@@ -54,7 +55,8 @@ export function BuildCallbackUrl(publicUrl: string, rootPath: string, route: str
 export function PublicOrigin(publicUrl: string): string {
     try {
         return new URL(publicUrl).origin;
-    } catch {
+    } catch (err) {
+        LogError(`[Telephony] Invalid publicUrl passed to PublicOrigin: ${publicUrl}`, undefined, err);
         return TrimTrailingSlashes(publicUrl);
     }
 }

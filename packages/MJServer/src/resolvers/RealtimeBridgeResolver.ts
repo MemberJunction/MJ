@@ -1,6 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { randomUUID } from 'crypto';
-import { LogError, LogStatusEx, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { LogError, LogStatusEx, UserInfo, IMetadataProvider, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { TurnAddressingMode } from '@memberjunction/ai-bridge-base';
 import {
   LiveKitTokenService,
@@ -282,7 +283,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return failure('Unable to determine current user.');
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(input.RoomName, user, provider);
       if (!auth.Authorized) {
         return failure(auth.Reason ?? 'Unauthorized room access.');
@@ -320,7 +321,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return failure('Unable to determine current user.');
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       const roomName = input.RoomName?.trim() || `mj-${randomUUID()}`;
 
       if (input.RoomName?.trim()) {
@@ -411,7 +412,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return false;
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       const roomName = LiveKitAgentRoomCoordinator.Instance.GetRoomForBridge(sessionBridgeID);
       if (roomName) {
         const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
@@ -445,7 +446,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return false;
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
       if (!auth.Authorized) {
         LogError(`EndLiveKitRoom unauthorized: user ${user.ID} cannot access room ${roomName} (${auth.Reason})`);
@@ -476,7 +477,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.' };
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
       if (!auth.Authorized) {
         return { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.' };
@@ -504,7 +505,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return [];
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       return await GetRealtimeModelVoices(user, provider);
     } catch (error) {
       LogError(`GetRealtimeModelVoices failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -534,7 +535,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return false;
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
       if (!auth.Authorized) {
         LogError(`InviteUsersToLiveKitRoom unauthorized: user ${user.ID} cannot access room ${roomName} (${auth.Reason})`);
@@ -581,7 +582,7 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: '', Status: '' };
       }
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
       const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(input.RoomName, user, provider);
       if (!auth.Authorized) {
         return { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.', EgressID: '', Status: '' };
@@ -613,8 +614,43 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: egressID, Status: '' };
       }
-      const info = await new LiveKitEgressService().StopRecording(egressID);
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const provider = GetReadWriteProvider(context.providers) as IMetadataProvider;
+
+      // Map egress ID to room name: check LiveKit egress service first, fallback to Conversation if available.
+      const egressService = new LiveKitEgressService();
+      let roomName = await egressService.GetRoomForEgress(egressID);
+      if (!roomName && provider) {
+        try {
+          const rv = RunView.FromMetadataProvider(provider);
+          const convResult = await rv.RunView<{ ExternalID: string }>(
+            {
+              EntityName: 'MJ: Conversations',
+              ExtraFilter: `EgressID='${EscapeSQLString(egressID)}' AND (IsArchived IS NULL OR IsArchived=0)`,
+              Fields: ['ExternalID'],
+              OrderBy: '__mj_CreatedAt DESC',
+              MaxRows: 1,
+              ResultType: 'simple',
+            },
+            user,
+          );
+          if (convResult.Success && convResult.Results.length > 0 && convResult.Results[0].ExternalID) {
+            roomName = convResult.Results[0].ExternalID;
+          }
+        } catch (err) {
+          LogError(`StopLiveKitRecording: error looking up Conversation for egress ID '${egressID}'`, undefined, err);
+        }
+      }
+
+      if (roomName) {
+        const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+        if (!auth.Authorized) {
+          return { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.', EgressID: egressID, Status: '' };
+        }
+      } else {
+        return { Success: false, ErrorMessage: `Unable to determine room for egress ID '${egressID}'.`, EgressID: egressID, Status: '' };
+      }
+
+      const info = await egressService.StopRecording(egressID);
 
       // Register the completed egress MP4 as a Files row on the Meeting-Room Conversation. Best-effort:
       // any failure (e.g. storage provider not configured) leaves RecordingFileID unset but still

@@ -245,7 +245,8 @@ function readSocketClaim(request: IncomingMessage): SocketClaim {
             CorrelationId: nonEmpty(url.searchParams.get(VONAGE_MEDIA_CORRELATION_PARAM)),
             Token: nonEmpty(url.searchParams.get(VONAGE_MEDIA_TOKEN_PARAM)),
         };
-    } catch {
+    } catch (err) {
+        LogError('[Telephony][Vonage] Failed to read socket claim from request URL', undefined, err);
         return {};
     }
 }

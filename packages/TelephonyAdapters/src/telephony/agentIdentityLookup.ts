@@ -24,7 +24,8 @@ function getRunView(metadataProvider?: IMetadataProvider): RunView | null {
             return rv;
         }
         return null;
-    } catch {
+    } catch (err) {
+        LogError('[agentIdentityLookup] Failed to obtain RunView instance', undefined, err);
         return null;
     }
 }

@@ -304,7 +304,8 @@ function resolveServerVersion(): string | undefined {
     const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
     return pkg.version;
-  } catch {
+  } catch (err) {
+    LogError('Failed to resolve server version from package.json', undefined, err);
     return undefined;
   }
 }
@@ -344,8 +345,9 @@ async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, st
           message: payload.message,
           SourceServerId: payload.SourceServerId,
         });
-      } catch {
+      } catch (err) {
         // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing push-status fan-out message', undefined, err);
       }
     });
 
@@ -386,8 +388,9 @@ async function wireHandoffOfferFanOut(redisProvider: RedisLocalStorageProvider, 
           Offer: payload.Offer,
         });
         RoomHandoffEngine.Instance.OnRemoteOfferChange(payload);
-      } catch {
+      } catch (err) {
         // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing handoff-offer fan-out message', undefined, err);
       }
     });
 

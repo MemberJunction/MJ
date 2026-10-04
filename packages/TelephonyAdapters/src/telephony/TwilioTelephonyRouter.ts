@@ -318,7 +318,8 @@ function parseWsMessage(raw: unknown): TwilioWsMessage | null {
     try {
         const text = typeof raw === 'string' ? raw : raw instanceof Buffer ? raw.toString('utf8') : String(raw);
         return JSON.parse(text) as TwilioWsMessage;
-    } catch {
+    } catch (err) {
+        LogError('[Telephony][Twilio] Failed to parse WebSocket message', undefined, err);
         return null;
     }
 }

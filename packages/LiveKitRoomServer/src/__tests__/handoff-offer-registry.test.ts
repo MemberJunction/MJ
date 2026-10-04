@@ -4,9 +4,11 @@ import {
   HANDOFF_OFFER_RETENTION_MS,
   HANDOFF_OFFER_TIMEOUT_MS,
   MAX_PENDING_OFFERS_PER_USER,
+  OFFER_UNAVAILABLE,
   ToOfferView,
   type CreateOfferInput,
 } from '../room-handoff/handoff-offer-registry';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 const USER_A = '11111111-1111-1111-1111-111111111111';
 const USER_B = '22222222-2222-2222-2222-222222222222';
@@ -114,4 +116,106 @@ describe('HandoffOfferRegistry', () => {
     await registry.Sweep();
     expect((await registry.Get(offer.OfferID))?.Status).toBe('Expired');
   });
+
+  it('handles two connections racing to accept an offer atomically: winning connection succeeds, losing connection receives OFFER_UNAVAILABLE', async () => {
+    interface DbRow {
+      ID: string;
+      InteractionID: string;
+      TargetUserID: string;
+      Status: 'Pending' | 'Accepted' | 'Declined';
+      ExpiresAt: Date;
+      OfferedAt: Date;
+      RoomName: string;
+      Mode: 'warm' | 'cold';
+    }
+
+    const dbState = {
+      acceptedCount: 0,
+      rows: new Map<string, DbRow>([
+        [
+          'offer-race-1',
+          {
+            ID: 'offer-race-1',
+            InteractionID: 'interaction-race-1',
+            TargetUserID: USER_A,
+            Status: 'Pending',
+            ExpiresAt: new Date(Date.now() + 60000),
+            OfferedAt: new Date(),
+            RoomName: 'call-race',
+            Mode: 'warm',
+          },
+        ],
+      ]),
+    };
+
+    class MockOfferEntity {
+      public ID = '';
+      public InteractionID = '';
+      public TargetUserID = '';
+      public Status: 'Pending' | 'Accepted' | 'Declined' = 'Pending';
+      public ExpiresAt: Date = new Date();
+      public OfferedAt: Date = new Date();
+      public RoomName = '';
+      public Mode: 'warm' | 'cold' = 'warm';
+      public OfferedByAgentID = '';
+      public OfferedByAgent = 'Agent';
+      public Summary = '';
+      public CallerLabel = '';
+      public RespondedAt?: Date;
+
+      async Load(id: string): Promise<boolean> {
+        const row = dbState.rows.get(id);
+        if (!row) return false;
+        this.ID = row.ID;
+        this.InteractionID = row.InteractionID;
+        this.TargetUserID = row.TargetUserID;
+        this.Status = row.Status;
+        this.ExpiresAt = row.ExpiresAt;
+        this.OfferedAt = row.OfferedAt;
+        this.RoomName = row.RoomName;
+        this.Mode = row.Mode;
+        return true;
+      }
+
+      async Save(): Promise<boolean> {
+        // Enforce UX_InteractionOffer_OneAccepted: only one row per InteractionID can have Status = 'Accepted'
+        if (this.Status === 'Accepted') {
+          if (dbState.acceptedCount > 0) {
+            // Unique filtered index violation in database
+            throw new Error("Violation of UNIQUE KEY constraint 'UX_InteractionOffer_OneAccepted'. Cannot insert duplicate key in object 'admin.InteractionOffer'.");
+          }
+          dbState.acceptedCount++;
+        }
+        const row = dbState.rows.get(this.ID);
+        if (row) {
+          row.Status = this.Status;
+        }
+        return true;
+      }
+    }
+
+    const mockProvider = {
+      GetEntityObject: async <T>(_entityName: string): Promise<T> => {
+        return new MockOfferEntity() as T;
+      },
+    } as IMetadataProvider;
+
+    const testUser = { ID: USER_A, Name: 'User A', Email: 'usera@example.com' } as UserInfo;
+
+    // Both connections race concurrently to accept the offer
+    const [res1, res2] = await Promise.all([
+      registry.ResolveForUser('offer-race-1', USER_A, 'Accepted', testUser, mockProvider),
+      registry.ResolveForUser('offer-race-1', USER_A, 'Accepted', testUser, mockProvider),
+    ]);
+
+    const successes = [res1, res2].filter((r) => r.Ok);
+    const failures = [res1, res2].filter((r) => !r.Ok);
+
+    expect(successes).toHaveLength(1);
+    expect(successes[0].Offer?.Status).toBe('Accepted');
+
+    expect(failures).toHaveLength(1);
+    expect(failures[0].Reason).toBe(OFFER_UNAVAILABLE);
+  });
 });
+

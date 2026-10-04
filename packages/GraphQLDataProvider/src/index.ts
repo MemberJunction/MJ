@@ -141,8 +141,6 @@ export type {
   CreateMeetingInput,
   UpdateMeetingInput,
   RSVPMeetingInput,
-  VerifyDialInCodeInput,
   MeetingResult,
   StartMeetingResult,
-  VerifyDialInCodeResult,
 } from './graphQLMeetingClient';

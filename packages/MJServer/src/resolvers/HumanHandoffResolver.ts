@@ -140,7 +140,8 @@ export function ParseReplicatedHandoffOfferUpdate(raw: string, localServerId: st
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch {
+  } catch (err) {
+    LogError('Failed to parse replicated handoff offer update payload', undefined, err);
     return null;
   }
   if (typeof parsed !== 'object' || parsed === null) {

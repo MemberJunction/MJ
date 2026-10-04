@@ -85,12 +85,6 @@ export interface RSVPMeetingInput {
   InviteStatus: 'Accepted' | 'Declined' | 'Tentative';
 }
 
-export interface VerifyDialInCodeInput {
-  PhoneNumberID: string;
-  DialInCode: string;
-  CallerPhone?: string;
-}
-
 export interface MeetingResult {
   Success: boolean;
   ErrorMessage?: string;
@@ -103,13 +97,6 @@ export interface StartMeetingResult {
   Meeting?: MeetingInfo;
   RoomName?: string;
   ClientToken?: string;
-}
-
-export interface VerifyDialInCodeResult {
-  Success: boolean;
-  ErrorMessage?: string;
-  RoomName?: string;
-  MeetingID?: string;
 }
 
 const MEETING_FIELDS = `
@@ -381,27 +368,6 @@ export class GraphQLMeetingClient {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       LogError(`GraphQLMeetingClient.RSVPMeeting error: ${msg}`);
-      return { Success: false, ErrorMessage: msg };
-    }
-  }
-
-  public async VerifyMeetingDialInCode(input: VerifyDialInCodeInput): Promise<VerifyDialInCodeResult> {
-    try {
-      const mutation = gql`
-        mutation VerifyMeetingDialInCode($input: VerifyDialInCodeInput!) {
-          VerifyMeetingDialInCode(input: $input) {
-            Success
-            ErrorMessage
-            RoomName
-            MeetingID
-          }
-        }
-      `;
-      const result = await this._dataProvider.ExecuteGQL(mutation, { input });
-      return (result?.VerifyMeetingDialInCode ?? { Success: false, ErrorMessage: 'No response' }) as VerifyDialInCodeResult;
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      LogError(`GraphQLMeetingClient.VerifyMeetingDialInCode error: ${msg}`);
       return { Success: false, ErrorMessage: msg };
     }
   }

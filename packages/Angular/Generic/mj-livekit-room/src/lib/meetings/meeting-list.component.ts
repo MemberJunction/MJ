@@ -247,9 +247,9 @@ import {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #16a34a;
+        background: var(--mj-status-success, #16a34a);
         display: inline-block;
-        box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+        box-shadow: 0 0 0 2px var(--mj-status-success-subtle, rgba(22, 163, 74, 0.2));
         animation: pulse 2s infinite;
       }
       @keyframes pulse {
@@ -276,8 +276,8 @@ import {
         box-shadow: var(--mj-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.05));
       }
       .mj-mtg-card--live {
-        border-color: #22c55e;
-        background: #f0fdf4;
+        border-color: var(--mj-status-success, #22c55e);
+        background: var(--mj-status-success-subtle, #f0fdf4);
       }
       .mj-mtg-card__header {
         display: flex;
@@ -296,20 +296,20 @@ import {
         text-transform: uppercase;
       }
       .mj-mtg-pill--live {
-        background: #dcfce7;
-        color: #15803d;
+        background: var(--mj-status-success-subtle, #dcfce7);
+        color: var(--mj-status-success, #15803d);
       }
       .mj-mtg-pill--scheduled {
-        background: #e0f2fe;
-        color: #0369a1;
+        background: var(--mj-status-info-subtle, #e0f2fe);
+        color: var(--mj-status-info, #0369a1);
       }
       .mj-mtg-pill--ended {
-        background: #f1f5f9;
-        color: #64748b;
+        background: var(--mj-bg-surface-card, #f1f5f9);
+        color: var(--mj-text-secondary, #64748b);
       }
       .mj-mtg-pill--cancelled {
-        background: #fee2e2;
-        color: #b91c1c;
+        background: var(--mj-status-error-subtle, #fee2e2);
+        color: var(--mj-status-error, #b91c1c);
       }
       .mj-mtg-badge-rec {
         font-size: 0.6875rem;
@@ -374,7 +374,8 @@ import {
         color: var(--mj-text-inverse, #ffffff);
       }
       .mj-btn--success {
-        background: #16a34a;
+        background: var(--mj-status-success, #16a34a);
+        color: var(--mj-text-inverse, #ffffff);
       }
       .mj-btn--secondary {
         background: var(--mj-bg-surface, #ffffff);
