@@ -31,8 +31,7 @@ export interface LeadingCTEs {
  * clause cannot be read (an unbalanced parenthesis, a missing `AS`).
  */
 export function SplitLeadingCTEs(sql: string, dialect: SQLParserDialect): LeadingCTEs | null {
-    const all = LexSQL(sql, dialect);
-    const tokens = SignificantTokens(all);
+    const tokens = WithoutLeadingSemicolons(SignificantTokens(LexSQL(sql, dialect)));
     if (!IsKeyword(tokens[0], 'WITH')) return null;
     let i = 1;
     const recursive = IsKeyword(tokens[i], 'RECURSIVE');
@@ -73,6 +72,12 @@ function readDefinition(sql: string, tokens: SQLLexToken[], i: number): { Defini
     };
 }
 
+/** Drops semicolons before the first statement token; `;WITH` is one statement, not two. */
+export function WithoutLeadingSemicolons(tokens: SQLLexToken[]): SQLLexToken[] {
+    const first = tokens.findIndex(t => t.Kind !== 'semicolon');
+    return first <= 0 ? (first === -1 ? [] : tokens) : tokens.slice(first);
+}
+
 /** Index of the `close` token matching the `open` at `openIndex`, or `tokens.length` if none. */
 function matchingClose(tokens: SQLLexToken[], openIndex: number): number {
     const depth = tokens[openIndex].Depth;
@@ -100,7 +105,7 @@ export interface ReadOnlyQueryCheck {
  * timeout is what contains those.
  */
 export function IsReadOnlyQuery(sql: string, dialect: SQLParserDialect): ReadOnlyQueryCheck {
-    const { Statement: statement, Stacked: stacked } = firstStatement(SignificantTokens(LexSQL(sql, dialect)));
+    const { Statement: statement, Stacked: stacked } = firstStatement(WithoutLeadingSemicolons(SignificantTokens(LexSQL(sql, dialect))));
     if (stacked) return refuse('it contains more than one statement');
     if (statement.length === 0) return refuse('it is empty');
     const lead = firstWord(statement);
