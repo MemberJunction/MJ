@@ -598,11 +598,12 @@ export class QueryCompositionEngine {
                 const outerVarName = value.slice(2, -2).trim();
                 result = SQLParser.RenameTemplateVariable(result, name, outerVarName);
             } else {
-                // Static value: replace entire template expression with literal
-                const literal = /^-?\d+(\.\d+)?$/.test(value)
-                    ? value // Numeric: bare literal
-                    : `'${value.replace(/'/g, "''")}'`; // String: quoted literal
-                result = SQLParser.SubstituteTemplateVariable(result, name, literal);
+                // Static value: replace entire template expression with a SQL literal, and reads of
+                // the variable in template tags with the same value as a template literal
+                const isNumeric = /^-?\d+(\.\d+)?$/.test(value);
+                const literal = isNumeric ? value : `'${value.replace(/'/g, "''")}'`;
+                const tagLiteral = isNumeric ? value : JSON.stringify(value);
+                result = SQLParser.SubstituteTemplateVariable(result, name, literal, tagLiteral);
             }
         }
 

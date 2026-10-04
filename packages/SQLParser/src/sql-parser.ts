@@ -16,6 +16,7 @@
 import NodeSqlParser from 'node-sql-parser';
 const { Parser } = NodeSqlParser;
 import { MJLexer } from './mj-lexer.js';
+import { ReplaceVariableInTag, VARIABLE_READING_TAGS } from './templateTagVariables.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { GetASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
@@ -934,8 +935,9 @@ export class SQLParser {
     // ─── MJ Template Extraction ────────────────────────
 
     /**
-     * Renames a template variable in all `{{ variable | filters }}` expressions throughout the SQL.
-     * Preserves the filter chain and whitespace formatting.
+     * Renames a template variable throughout the SQL: in every `{{ variable | filters }}`
+     * expression, preserving the filter chain, and in every read of it inside `{% if %}`,
+     * `{% elif %}`, `{% for %}` and `{% set %}` tags.
      *
      * Example: `RenameTemplateVariable("WHERE x = {{ region | sqlString }}", "region", "userRegion")`
      *   → `"WHERE x = {{ userRegion | sqlString }}"`
@@ -943,24 +945,9 @@ export class SQLParser {
      * Uses MJLexer for deterministic token identification — no regex guessing.
      */
     static RenameTemplateVariable(sql: string, oldName: string, newName: string): string {
-        const tokens = MJLexer.Tokenize(sql);
-        const oldNameLower = oldName.toLowerCase();
-
-        // Collect matching tokens in reverse order so positional replacements don't shift offsets
-        const matches = tokens
-            .filter(t =>
-                t.type === 'MJ_TEMPLATE_EXPR' &&
-                (t.parsed as MJTemplateExprContent).variable.toLowerCase() === oldNameLower
-            )
-            .sort((a, b) => b.start - a.start); // reverse order
-
-        let result = sql;
-        for (const token of matches) {
-            const rebuilt = SQLParser.rebuildTemplateExpr(newName, (token.parsed as MJTemplateExprContent).filters);
-            result = result.substring(0, token.start) + rebuilt + result.substring(token.end);
-        }
-
-        return result;
+        return SQLParser.replaceTemplateVariable(sql, oldName,
+            token => SQLParser.rebuildTemplateExpr(newName, (token.parsed as MJTemplateExprContent).filters),
+            newName);
     }
 
     /**
@@ -971,25 +958,40 @@ export class SQLParser {
      * Example: `SubstituteTemplateVariable("WHERE x = {{ region | sqlString }}", "region", "'West'")`
      *   → `"WHERE x = 'West'"`
      *
+     * When `tagLiteral` is given, reads of the variable inside `{% if %}`, `{% elif %}`,
+     * `{% for %}` and `{% set %}` tags are replaced with it too, so conditions see the value.
+     * It must be a template-language literal (`"West"`, `42`), not a SQL one.
+     *
      * Uses MJLexer for deterministic token identification — no regex guessing.
      */
-    static SubstituteTemplateVariable(sql: string, variableName: string, literalValue: string): string {
-        const tokens = MJLexer.Tokenize(sql);
-        const varNameLower = variableName.toLowerCase();
+    static SubstituteTemplateVariable(sql: string, variableName: string, literalValue: string, tagLiteral?: string): string {
+        return SQLParser.replaceTemplateVariable(sql, variableName, () => literalValue, tagLiteral);
+    }
 
-        // Collect matching tokens in reverse order
-        const matches = tokens
-            .filter(t =>
-                t.type === 'MJ_TEMPLATE_EXPR' &&
-                (t.parsed as MJTemplateExprContent).variable.toLowerCase() === varNameLower
-            )
-            .sort((a, b) => b.start - a.start);
-
-        let result = sql;
-        for (const token of matches) {
-            result = result.substring(0, token.start) + literalValue + result.substring(token.end);
+    /**
+     * Replaces a variable's `{{ }}` expressions with `exprText(token)` and, when `tagText` is
+     * given, its reads inside block tags with `tagText`. Edits apply from the end of the SQL so
+     * earlier offsets stay valid.
+     */
+    private static replaceTemplateVariable(
+        sql: string,
+        variableName: string,
+        exprText: (token: MJToken) => string,
+        tagText: string | undefined
+    ): string {
+        const nameLower = variableName.toLowerCase();
+        const edits: Array<{ token: MJToken; text: string }> = [];
+        for (const token of MJLexer.Tokenize(sql)) {
+            if (token.type === 'MJ_TEMPLATE_EXPR' && (token.parsed as MJTemplateExprContent).variable.toLowerCase() === nameLower) {
+                edits.push({ token, text: exprText(token) });
+            } else if (tagText !== undefined && VARIABLE_READING_TAGS.has(token.type)) {
+                edits.push({ token, text: ReplaceVariableInTag(token.raw, variableName, tagText) });
+            }
         }
-
+        let result = sql;
+        for (const { token, text } of edits.sort((a, b) => b.token.start - a.token.start)) {
+            result = result.substring(0, token.start) + text + result.substring(token.end);
+        }
         return result;
     }
 
