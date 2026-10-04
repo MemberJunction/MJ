@@ -600,6 +600,12 @@ const COMPOSED_CASES: RenderCase[] = [
         Expect: items => ids(items.filter(i => i.ID <= 10))
     },
     {
+        Name: 'RR Comp Template Dependency Static',
+        SQL: `SELECT t.ID FROM {{query:"{P}/RR Dep Template(Cat='Alpha', Limit=60)"}} t ORDER BY t.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 60 && i.Category === 'Alpha'))
+    },
+    {
         Name: 'RR Comp Dependency Token In Comment',
         SQL: `SELECT d.ID FROM {{query:"{P}/RR Dep Token In Comment"}} d ORDER BY d.ID`,
         Columns: ['ID'], Ordered: true,
