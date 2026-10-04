@@ -36,6 +36,7 @@ import type {
     IHandoffNotifier,
     IHandoffPublisher,
     IRoomDialer,
+    IRoomHandoffObserver,
     IRoomPresence,
     RoomAgentStarter,
     RoomHandoffAgentContext,
@@ -72,6 +73,7 @@ export interface RoomHandoffDeps {
     Notifier?: IHandoffNotifier;
     Publisher?: IHandoffPublisher;
     AgentStarter?: RoomAgentStarter;
+    Observer?: IRoomHandoffObserver;
 }
 
 /** Where a handoff is in its life. */
@@ -194,6 +196,14 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
             return { Ok: false, Reason: 'This conversation is no longer in progress.' };
         }
         this.publishUpdate(resolved.Offer);
+        this.deps.Observer?.OnHandoffEvent?.({
+            RoomName: resolved.Offer.RoomName,
+            EventType: 'Accepted',
+            ActorUserID: userID,
+            Details: { OfferID: offerID },
+            ContextUser: flow.Agent.ContextUser,
+            Provider: flow.Agent.Provider,
+        });
         this.clearTimers(flow);
         flow.Phase = 'joining';
         void this.waitForUserToJoin(flow, userID);
@@ -209,6 +219,14 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         this.publishUpdate(resolved.Offer);
         const flow = this.flowForOffer(resolved.Offer);
         if (flow) {
+            this.deps.Observer?.OnHandoffEvent?.({
+                RoomName: resolved.Offer.RoomName,
+                EventType: 'Declined',
+                ActorUserID: userID,
+                Details: { OfferID: offerID },
+                ContextUser: flow.Agent.ContextUser,
+                Provider: flow.Agent.Provider,
+            });
             this.clearTimers(flow);
             this.onPartyUnavailable(flow, 'declined the conversation');
         }
@@ -271,6 +289,22 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
         flow.OfferID = offer.OfferID;
         this.publish({ UserID: offer.TargetUserID, Kind: 'offered', Offer: ToOfferView(offer) });
         void this.notify(offer, flow);
+        this.deps.Observer?.OnHandoffEvent?.({
+            RoomName: flow.Agent.RoomName,
+            EventType: 'Offered',
+            ActorUserID: destination.UserID,
+            Details: { OfferID: offer.OfferID, Summary: flow.Request.Summary, Mode: flow.Request.Mode },
+            ContextUser: flow.Agent.ContextUser,
+            Provider: flow.Agent.Provider,
+        });
+        this.deps.Observer?.OnHandoffEvent?.({
+            RoomName: flow.Agent.RoomName,
+            EventType: 'Escalated',
+            ActorUserID: destination.UserID,
+            Details: { OfferID: offer.OfferID, Summary: flow.Request.Summary },
+            ContextUser: flow.Agent.ContextUser,
+            Provider: flow.Agent.Provider,
+        });
         this.armTimer(flow, offer.ExpiresAtMs - offer.CreatedAtMs, () => this.onOfferTimeout(flow));
         return { Ok: true, Status: 'offered' };
     }
@@ -393,6 +427,17 @@ export class RoomHandoffEngine extends BaseSingleton<RoomHandoffEngine> {
             return;
         }
         const name = displayNameOf(flow);
+        this.deps.Observer?.OnHandoffEvent?.({
+            RoomName: flow.Agent.RoomName,
+            EventType: 'Transferred',
+            Details: {
+                Target: name,
+                Kind: flow.Request.Destination.Kind,
+                Mode: flow.Request.Mode,
+            },
+            ContextUser: flow.Agent.ContextUser,
+            Provider: flow.Agent.Provider,
+        });
         if (flow.Request.Mode === 'blind') {
             flow.Phase = 'leaving';
             this.armTimer(flow, HANDOFF_BLIND_LEAVE_DELAY_MS, () => this.leave(flow));

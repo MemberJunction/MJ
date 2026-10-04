@@ -42,12 +42,14 @@ function fakeSession() {
 function fakeDb() {
     const saved: Array<Record<string, unknown>> = [];
     const provider = {
-        GetEntityObject: vi.fn(async () => {
+        GetEntityObject: vi.fn(async (entityName: string) => {
             const row: Record<string, unknown> = {
                 Status: 'Active',
                 Load: async () => true,
                 Save: async () => {
-                    saved.push({ Status: row['Status'], CloseReason: row['CloseReason'] });
+                    if (entityName === 'MJ: AI Agent Sessions') {
+                        saved.push({ Status: row['Status'], CloseReason: row['CloseReason'] });
+                    }
                     return true;
                 },
             };

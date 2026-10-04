@@ -43,8 +43,9 @@ import { TelephonyCapacity, type CallCapacityLease, type ICallCapacity } from '.
 import { AuthorizeOutboundCallOrRelease } from './telephonyCallSession.js';
 import { OutboundCallRefusedError, OutboundRateLimiter, ResolveOutboundPolicy, ResolveTransferDirectory, MaskNumber, type OutboundGuardDeps } from './outboundCallPolicy.js';
 import { CreateSipTrunkCarrier } from './sipTrunkCarrier.js';
-import { FindPhoneAgentIdentity, LoadActiveAgentIdentity } from './agentIdentityLookup.js';
+import { FindInboundRoute, FindPhoneAgentIdentity, LoadActiveAgentIdentity } from './agentIdentityLookup.js';
 import { RoomCallSessionStarter } from './roomCallSession.js';
+import { InteractionLifecycleService } from './interactionLifecycle.js';
 
 /** The part of the bridge engine this service drives (a `Pick` so tests inject a fake). */
 type SipBridgeEngine = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass'>;
@@ -130,6 +131,8 @@ export class LiveKitSipTelephonyService {
                 Targets: ResolveTransferDirectory(config.transferTargets, policy),
                 Destinations: { Policy: policy, CanRunAgent: deps.canRunAgent },
                 Capacity: this.capacity,
+                InteractionLifecycle: InteractionLifecycleService.Instance,
+                CostPerMinute: config.costPerMinute,
             });
         this.tracker = new CallLifecycleTracker((session, reason) => this.stopCall(session, reason), config.maxCallSeconds);
         this.wireHandoffEngine();
@@ -230,16 +233,53 @@ export class LiveKitSipTelephonyService {
         const identity = await FindPhoneAgentIdentity(dialed, carrier.ID, contextUser);
         if (!identity) {
             await this.hangUpLeg(event.RoomName, event.ParticipantIdentity);
+            void this.recordRefusedInteraction(event, undefined, 'NoAgent', contextUser, provider);
             return { accepted: false, reason: `No active agent identity for dialed number '${dialed}'.` };
         }
         const lease = this.capacity.TryAcquire();
         if (!lease) {
             LogError(`[Telephony][LiveKitSip] inbound call in ${event.RoomName} refused: at the concurrent-call cap.`);
             await this.hangUpLeg(event.RoomName, event.ParticipantIdentity);
+            void this.recordRefusedInteraction(event, undefined, 'Capacity', contextUser, provider);
             return { accepted: false, Busy: true, reason: 'All agent lines are busy.' };
         }
         const Started = this.startInboundInBackground(event, identity.AgentID, lease, contextUser, provider);
         return { accepted: true, Started };
+    }
+
+    private async recordRefusedInteraction(
+        event: LiveKitRoomWebhookEvent,
+        phoneNumberId: string | undefined,
+        reason: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
+        try {
+            const lifecycle = InteractionLifecycleService.Instance;
+            const interaction = await lifecycle.CreateInteraction({
+                Channel: 'Phone',
+                Direction: 'Inbound',
+                PhoneNumberID: phoneNumberId ?? null,
+                RemoteAddress: event.CallerNumber ?? null,
+                ExternalID: event.ParticipantIdentity ?? null,
+                RoomName: event.RoomName,
+                Status: 'Abandoned',
+                StartedAt: new Date(),
+                ContextUser: contextUser,
+                MetadataProvider: provider,
+            });
+            if (interaction) {
+                await lifecycle.CloseInteraction({
+                    InteractionID: interaction.ID,
+                    EndReason: reason,
+                    Abandoned: true,
+                    ContextUser: contextUser,
+                    MetadataProvider: provider,
+                });
+            }
+        } catch (e) {
+            LogError(`[Telephony][LiveKitSip] recording refused interaction failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /** Starts the inbound agent session; on failure logs, hangs the phone leg up and frees the call's state. Never rejects. */
@@ -356,6 +396,21 @@ export class LiveKitSipTelephonyService {
         const trunkID = this.config.outboundTrunkId;
         this.handoff.Configure({
             Presence: this.sip,
+            Observer: {
+                OnHandoffEvent: (event) => {
+                    if (event.ContextUser && event.Provider) {
+                        void InteractionLifecycleService.Instance.RecordRoomEvent(
+                            event.RoomName,
+                            event.EventType,
+                            event.ContextUser,
+                            event.Provider,
+                            event.ActorUserID,
+                            event.ActorAgentID,
+                            event.Details,
+                        );
+                    }
+                },
+            },
             Dialer: trunkID
                 ? {
                       DialIntoRoom: (request: DialIntoRoomRequest) =>
