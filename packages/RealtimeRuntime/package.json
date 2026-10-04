@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/realtime-runtime",
   "type": "module",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.2",
   "description": "MemberJunction: Framework-agnostic Realtime Session Runtime — client-direct realtime co-agent session orchestration (mint, driver resolution, transcripts, tool relay, delegation narration, channel lifecycle, usage relay). Pure TypeScript, zero UX dependencies. Consumable from browser (Angular/React/Vue), React Native, or Node test harnesses.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,14 +16,14 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/ai": "6.2.0-edge.1",
-    "@memberjunction/ai-core-plus": "6.2.0-edge.1",
-    "@memberjunction/ai-engine-base": "6.2.0-edge.1",
-    "@memberjunction/ai-realtime-client": "6.2.0-edge.1",
-    "@memberjunction/core": "6.2.0-edge.1",
-    "@memberjunction/core-entities": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1",
-    "@memberjunction/graphql-dataprovider": "6.2.0-edge.1",
+    "@memberjunction/ai": "6.2.0-edge.2",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.2",
+    "@memberjunction/ai-engine-base": "6.2.0-edge.2",
+    "@memberjunction/ai-realtime-client": "6.2.0-edge.2",
+    "@memberjunction/core": "6.2.0-edge.2",
+    "@memberjunction/core-entities": "6.2.0-edge.2",
+    "@memberjunction/global": "6.2.0-edge.2",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

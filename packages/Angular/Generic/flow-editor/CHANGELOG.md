@@ -1,5 +1,43 @@
 # @memberjunction/ng-flow-editor
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- 594f2e0: Flow Agent Editor now supports Decision steps: palette entry with scale icon and teal color, visual node subtitles and warning banners, dedicated properties panel editor for Decision key, prompt picker filtered to Decision model type, state expression, and questions list (Likelihood, Choice, Score) with full CRUD and reordering. Supports "Route on Answer" outgoing path condition builder with live Choice coverage hints. Renaming a Decision step key, a question or an option rewrites the path conditions that read it, once, on commit. The editor checks the flow with the runtime's own compiler and validator as it is edited, and flags each problem on the step or path it is about. ai-core-plus adds writers and rewriters for `decisions` conditions (`DecisionReferenceText`, `DecisionConditionLiteral`, `RewriteDecisionQuestionReferences`, `RewriteDecisionChoiceValues`) and exports the Decision key check (`FlowDecisionKeyProblem`).
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-code-editor@6.2.0-edge.2
+  - @memberjunction/ng-shared-generic@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes
