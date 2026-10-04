@@ -134,11 +134,12 @@ export class SQLServerDialect extends SQLDialect {
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
-        return `[${name}]`;
+        // Double any embedded `]` so the name cannot end early and the rest of it read as SQL.
+        return `[${name.replace(/]/g, ']]')}]`;
     }
 
     QuoteSchema(schema: string, object: string): string {
-        return `[${schema}].[${object}]`;
+        return `${this.QuoteIdentifier(schema)}.${this.QuoteIdentifier(object)}`;
     }
 
     /**
@@ -383,6 +384,38 @@ export class SQLServerDialect extends SQLDialect {
 
     get DefaultPagingOrderBy(): string {
         return '(SELECT NULL)';
+    }
+
+    get SelectListPagingOrderBy(): string | null {
+        return '1';
+    }
+
+    get PagingRequiresOrderBy(): boolean {
+        return true;
+    }
+
+    get SupportsEscapeStringLiterals(): boolean {
+        return false;
+    }
+
+    get SupportsDollarQuotedStrings(): boolean {
+        return false;
+    }
+
+    get QueryHintKeyword(): string | null {
+        return 'OPTION';
+    }
+
+    StringLiteralPrefix(text: string): string {
+        return /[^\x00-\x7F]/.test(text) ? 'N' : '';
+    }
+
+    EscapeLikePattern(text: string): string {
+        return text.replace(/\[/g, '[[]').replace(/%/g, '[%]').replace(/_/g, '[_]');
+    }
+
+    BooleanParameterValue(value: boolean): boolean | number {
+        return value ? 1 : 0;
     }
 
     // ─── Data Types ──────────────────────────────────────────────────

@@ -488,6 +488,38 @@ export class PostgreSQLDialect extends SQLDialect {
         return '1';
     }
 
+    get SelectListPagingOrderBy(): string | null {
+        return null;
+    }
+
+    get PagingRequiresOrderBy(): boolean {
+        return false;
+    }
+
+    get SupportsEscapeStringLiterals(): boolean {
+        return true;
+    }
+
+    get SupportsDollarQuotedStrings(): boolean {
+        return true;
+    }
+
+    get QueryHintKeyword(): string | null {
+        return null;
+    }
+
+    StringLiteralPrefix(_text: string): string {
+        return '';
+    }
+
+    EscapeLikePattern(text: string): string {
+        return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    }
+
+    BooleanParameterValue(value: boolean): boolean | number {
+        return value;
+    }
+
     // ─── Data Types ──────────────────────────────────────────────────
 
     get TypeMap(): DataTypeMap {

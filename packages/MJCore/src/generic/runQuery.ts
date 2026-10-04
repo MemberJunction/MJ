@@ -26,6 +26,12 @@ export type RunQueryParams = {
      */
     SQL?: string
     /**
+     * For ad-hoc SQL ({@link SQL}) only: the longest the query may run, in seconds. When it is
+     * exceeded the database cancels the query and the run fails with a timeout error. Omitted
+     * means the connection's usual limit applies. Ignored for saved queries.
+     */
+    TimeoutSeconds?: number
+    /**
      * Optional, if provided, the query to be run will be selected to match the specified Category by hierarchical path
      * (e.g., "/MJ/AI/Agents/") or simple category name for backward compatibility
      */
@@ -42,7 +48,17 @@ export type RunQueryParams = {
     Parameters?: Record<string, any>
     /**
      * Optional maximum number of rows to return from the query.
-     * If not provided, all rows will be returned.
+     *
+     * There is no default. Without `MaxRows`, and with no `TOP` / `LIMIT` in the query's own SQL,
+     * the query returns every row it matches: bounding the result is the caller's and the query
+     * author's job.
+     *
+     * `MaxRows` limits the rows returned, not the work the database does. The query still reads
+     * everything its SQL asks for, and with paging the total row count is computed over the whole
+     * result. When the query carries its own cap (`TOP n`, `LIMIT n`, `OFFSET … FETCH`), the
+     * smaller of the two applies and `TotalRowCount` counts the capped result. A query that returns
+     * a document (`FOR JSON` / `FOR XML`) cannot be paged; asking for a page of one fails with an
+     * error that says so.
      */
     MaxRows?: number
     /**

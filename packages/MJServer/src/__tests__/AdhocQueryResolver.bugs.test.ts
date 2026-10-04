@@ -60,20 +60,13 @@ function stubMetadata(): void {
 
 describe('AdhocQueryResolver source-shape contract', () => {
 
-    it('Bug #2: AdhocQueryResolver must import RenderPipeline (currently does not)', () => {
+    it('Bug #2: AdhocQueryResolver must hand the SQL to the provider ad-hoc path, which renders it', () => {
         const src = readResolverSource();
-        // After the fix, the resolver should delegate composition + Nunjucks +
-        // MaxRows handling to the canonical pipeline rather than re-implementing
-        // a partial subset.
-        const importsRenderPipeline =
-            /import\s*\{[^}]*\bRenderPipeline\b[^}]*\}\s*from\s*['"]@memberjunction\/generic-database-provider['"]/.test(src);
-        expect(importsRenderPipeline).toBe(true);
-    });
-
-    it('Bug #2: AdhocQueryResolver must call RenderPipeline.Run() somewhere (currently does not)', () => {
-        const src = readResolverSource();
-        const callsRenderPipelineRun = /\bRenderPipeline\.Run\s*\(/.test(src);
-        expect(callsRenderPipelineRun).toBe(true);
+        // Composition, comment removal, the single-read rule and the row cap all happen in the
+        // provider's ad-hoc path (RenderPipeline), shared with in-process callers. The resolver must
+        // delegate there rather than re-implement a partial subset.
+        expect(/\.RunQuery\(\{[\s\S]*SQL: input\.SQL/.test(src)).toBe(true);
+        expect(/\bRenderPipeline\b/.test(src)).toBe(false);
     });
 
     it('Bug #3: AdhocQueryResolver must NOT contain the manual `SELECT TOP N * FROM (...)` wrap', () => {
@@ -126,29 +119,13 @@ ORDER BY JoinYear DESC`;
         // success/failure, the resolver should never hand a string containing
         // "{{query:" to SQL Server.
         //
-        // We encode this as a contract on the resolver source: it must call
-        // into RenderPipeline whenever composition tokens are present, OR
-        // reject early with a clear error. Either way, the literal text
-        // "{{query:" must not reach `request.query(...)`.
+        // We encode this as a contract on the resolver source: it must not execute SQL itself.
+        // It hands input.SQL to the read-only provider's ad-hoc path, which renders it through
+        // RenderPipeline (resolving composition tokens) before anything reaches the database.
         const src = readResolverSource();
-
-        // Acceptable post-fix shape: source mentions RenderPipeline.Run and
-        // passes input.SQL through it. We've already asserted the import +
-        // call above; here we additionally require that input.SQL flows
-        // through RenderPipeline.Run rather than directly to request.query.
-        //
-        // The current code contains `request.query(executableSql)` where
-        // `executableSql` is derived from input.SQL via a string concat —
-        // bypassing the pipeline entirely.
-        const directlyExecutesInputSQL = /request\.query\s*\(\s*input\.SQL\s*\)/.test(src);
-        expect(directlyExecutesInputSQL).toBe(false);
-
-        // And — the executable string must be derived from a pipeline result,
-        // not from an inline template literal that just concatenates input.SQL.
-        // Heuristic: the file should reference `FinalSQL` (the pipeline's
-        // output field) somewhere — this is what gets sent to the DB.
-        const referencesFinalSQL = /\bFinalSQL\b/.test(src);
-        expect(referencesFinalSQL).toBe(true);
+        const executesSQLItself = /request\.query\s*\(|\.ExecuteSQL\s*\(|new sql\.Request/.test(src);
+        expect(executesSQLItself).toBe(false);
+        expect(/\.RunQuery\(\{[\s\S]*SQL: input\.SQL/.test(src)).toBe(true);
     });
 });
 

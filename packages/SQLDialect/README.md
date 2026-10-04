@@ -346,9 +346,24 @@ export class MySQLDialect extends SQLDialect {
         return { prefix: '', suffix };
     }
     BooleanLiteral(value: boolean): string { return value ? '1' : '0'; }
+
+    // Query rendering: the pipeline reads these instead of checking the platform name
+    get SelectListPagingOrderBy(): string | null { return null; }
+    get PagingRequiresOrderBy(): boolean { return false; }
+    get SupportsEscapeStringLiterals(): boolean { return false; }
+    get SupportsDollarQuotedStrings(): boolean { return false; }
+    get QueryHintKeyword(): string | null { return null; }
+    StringLiteralPrefix(_text: string): string { return ''; }
+    EscapeLikePattern(text: string): string {
+        return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    }
+    BooleanParameterValue(value: boolean): boolean | number { return value ? 1 : 0; }
     // ... implement all remaining abstract methods (~25+)
 }
 ```
+
+The query rendering members decide how row caps, paging, composed queries and the RunQuery
+template filters behave on the platform; see [Query rendering members](#query-rendering-members).
 
 3. **Update the `DatabasePlatform` type** in `sqlDialect.ts` to include the new platform key.
 
@@ -391,6 +406,31 @@ export { MySQLDialect } from './mysqlDialect.js';
 | **Object existence** | `IF OBJECT_ID(...) IS NOT NULL` | `SELECT EXISTS (... pg_catalog ...)` |
 | **Comments/descriptions** | `sp_addextendedproperty` | `COMMENT ON ...` |
 | **Grants** | `GRANT ... ON [s].[o] TO [r]` | `GRANT ... ON s."o" TO "r"` |
+
+## Query rendering members
+
+The RunQuery rendering pipeline (SQLParser's lexer and paging-shape analysis, the paging and
+composition engines in `@memberjunction/generic-database-provider`, the template filters in
+`@memberjunction/core` and the parameter processor) reads these members rather than the platform
+name, so a new dialect gets correct rendering by declaring them:
+
+| Member | SQL Server | PostgreSQL | Used for |
+|---|---|---|---|
+| `LimitClause(limit, offset?)` | `TOP n` / `OFFSET … FETCH` | `LIMIT … OFFSET` | Row caps and pages |
+| `DefaultPagingOrderBy` | `(SELECT NULL)` | `1` | Paging a query with no ORDER BY |
+| `SelectListPagingOrderBy` | `1` | `null` | Paging a set operation or `SELECT DISTINCT` with no ORDER BY |
+| `PagingRequiresOrderBy` | `true` | `false` | Whether a page from a derived table needs an ORDER BY |
+| `AllowsOrderByInCTE` | `false` | `true` | Stripping a composed dependency's ORDER BY |
+| `RecursiveCTESyntax()` | `WITH` | `WITH RECURSIVE` | Composing into a recursive WITH clause |
+| `QueryHintKeyword` | `OPTION` | `null` | Keeping a trailing hint clause last; lifting a dependency's hints |
+| `SupportsEscapeStringLiterals` | `false` | `true` | Lexing `E'…'` strings |
+| `SupportsDollarQuotedStrings` | `false` | `true` | Lexing `$$…$$` strings |
+| `QuoteIdentifier(name)` | `[name]` | `"name"` | Lexing quoted identifiers; `sqlIdentifier` |
+| `StringLiteralPrefix(text)` | `N` for non-ASCII | none | `sqlString`, `sqlIn`, LIKE filters |
+| `EscapeLikePattern(text)` | `[%]`, `[_]`, `[[]` | `\%`, `\_`, `\\` | LIKE filters |
+| `BooleanLiteral(value)` | `1` / `0` | `true` / `false` | `sqlBoolean` |
+| `BooleanParameterValue(value)` | `1` / `0` | `true` / `false` | Binding a boolean query parameter |
+| `ParserDialect` | `TransactSQL` | `PostgresQL` | node-sql-parser grammar, where the AST is used |
 
 ## Installation
 
