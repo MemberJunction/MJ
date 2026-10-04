@@ -18,7 +18,7 @@ import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultConte
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
-import { AgentRunWatchdog } from './agent-run-watchdog';
+import { AgentRunWatchdog, USER_CANCEL_ABORT_REASON } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -987,6 +987,14 @@ export class BaseAgent {
     protected static readonly DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
 
     private _agentRun: MJAIAgentRunEntityExtended | null = null;
+
+    /**
+     * The abort controller that governs the current `Execute` call (the merged timeout/upstream
+     * signal). Held so {@link initializeAgentRun} can register it with the watchdog's stop relay:
+     * when someone marks this run's row `Cancelled`, the watchdog aborts it and the loop's
+     * existing cancellation checks end the run. Null outside an execution.
+     */
+    private _runAbortController: AbortController | null = null;
 
     /**
      * The task graph this run submitted and is now waiting on, or null.
@@ -2032,6 +2040,8 @@ export class BaseAgent {
         // Execute (and downstream sub-agent invocations that propagate
         // `cancellationToken`) observe it.
         params.cancellationToken = timeoutController.signal;
+        // Hold it for the watchdog's stop relay (registered once the run row exists).
+        this._runAbortController = timeoutController;
 
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
@@ -2380,6 +2390,7 @@ export class BaseAgent {
             // consumers that re-read `params` after the call see what they
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
+            this._runAbortController = null;
             // A cancellation, or an error thrown out of the step loop, leaves any held decision
             // requests unasked. The terminate path has already logged and cleared its own.
             this.skipHeldDecisions(params, this.runEndForHeldDecisions());
@@ -11509,7 +11520,7 @@ The context is now within limits. Please retry your request with the recovered c
         // server-side DB provider can heartbeat via SQL; client/non-DB providers simply opt out.
         const runProvider = params.provider || this._activeProvider;
         if (runProvider instanceof DatabaseProviderBase && params.contextUser) {
-            AgentRunWatchdog.Instance.Track(this._agentRun.ID, runProvider, params.contextUser);
+            AgentRunWatchdog.Instance.Track(this._agentRun.ID, runProvider, params.contextUser, this._runAbortController ?? undefined);
         }
 
         // Invoke callback if provided
@@ -17294,17 +17305,66 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = false;
             this._agentRun.ErrorMessage = message;
-            
+            // Save() writes every column, so an in-memory null here would overwrite the reason the
+            // Stop button wrote on the row. Record the reason the abort signal carried instead. The
+            // signal is consulted first because most call sites pass a fixed message naming WHERE
+            // the run was cancelled ('during prompt execution'), not WHY.
+            const signalReason = this._runAbortController?.signal.reason;
+            this._agentRun.CancellationReason = BaseAgent.CancellationReasonForAbort(
+                typeof signalReason === 'string' ? signalReason : message
+            );
+
+            // A stop is not supposed to lose the work. The run row only learns its FinalPayload on a
+            // normal finish, but every completed step already recorded the payload as it stood, so
+            // the last of those is what the next turn (chained by LastRunID) starts from.
+            if (!this._agentRun.FinalPayload) {
+                const lastPayload = BaseAgent.LastStepPayload(this._agentRun.Steps);
+                if (lastPayload) {
+                    this._agentRun.FinalPayload = lastPayload;
+                }
+            }
+
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             await this._agentRun.Save();
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
         }
         
         return {
             success: false,
             agentRun: this._agentRun!
         };
+    }
+
+    /**
+     * Maps the reason an abort signal carried to the run's `CancellationReason` value: the
+     * watchdog's stop relay raises {@link USER_CANCEL_ABORT_REASON} for a row marked
+     * `User Request`; the wall-clock guard's message names `maxExecutionTimeMs`; anything else
+     * (an upstream caller's token, a shutdown) is `System`.
+     */
+    public static CancellationReasonForAbort(reason: string | null | undefined): 'User Request' | 'Timeout' | 'System' {
+        if (reason === USER_CANCEL_ABORT_REASON) {
+            return 'User Request';
+        }
+        if (reason && reason.includes('maxExecutionTimeMs')) {
+            return 'Timeout';
+        }
+        return 'System';
+    }
+
+    /**
+     * The payload recorded at the end of the latest step that recorded one, as its serialized
+     * string, or null when no step has. Steps are examined from the highest `StepNumber` down
+     * (array order is spawn order, which a sub-step can interleave).
+     */
+    public static LastStepPayload(steps: ReadonlyArray<{ StepNumber: number; PayloadAtEnd: string | null }> | null | undefined): string | null {
+        if (!steps || steps.length === 0) {
+            return null;
+        }
+        const ordered = [...steps].sort((a, b) => (b.StepNumber ?? 0) - (a.StepNumber ?? 0));
+        const withPayload = ordered.find(s => typeof s.PayloadAtEnd === 'string' && s.PayloadAtEnd.length > 0);
+        return withPayload?.PayloadAtEnd ?? null;
     }
 
     /**

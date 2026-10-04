@@ -5022,6 +5022,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Stop the agent run behind an in-progress AI reply. Uses the run already mapped to the
+   * reply when there is one; otherwise looks it up by the reply's detail id, since the run row
+   * appears a moment after the placeholder. The run's own completion event then flows through
+   * the normal path and the message leaves In-Progress on its own.
+   */
+  async OnStopMessage(message: MJConversationDetailEntity): Promise<void> {
+    const mappedRun = this.AgentRunsByDetailId.get(message.ID);
+    const stopped = mappedRun
+      ? await this.agentStateService.CancelAgent(mappedRun.ID)
+      : await this.agentStateService.CancelAgentForDetail(message.ID);
+    if (!stopped) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Could not stop the run. It may have already finished.',
+        'warning',
+        3000
+      );
+    }
+  }
+
+  /**
    * Handle attachment click - opens the image viewer for images
    */
   OnAttachmentClicked(attachment: MessageAttachment): void {

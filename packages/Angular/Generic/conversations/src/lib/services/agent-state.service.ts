@@ -268,33 +268,76 @@ export class AgentStateService implements OnDestroy {
   }
 
   /**
-   * Cancels an agent run
-   * @param agentRunId The agent run ID to cancel
+   * Stops an agent run that is still in flight.
+   *
+   * The run's row is the control channel: this marks it `Cancelled` with reason `User Request`,
+   * and the server process that owns the run notices within a few seconds (the agent-run
+   * watchdog's cancellation poll), aborts the in-flight step through the run's cancellation
+   * token, and finalizes the run — keeping the payload as it stood — and its reply as stopped.
+   * No request reaches the running process directly, so this works whichever replica owns it.
+   *
+   * The row is loaded fresh rather than taken from the polled active-agent list, which refreshes
+   * every 30 seconds and may not hold a run that started a moment ago.
+   *
+   * @returns true when the row was marked; false when the run was not found, had already
+   *   finished (nothing to stop), or the save was refused.
    */
   async CancelAgent(agentRunId: string): Promise<boolean> {
-    if (!this.currentUser) {
-      return false;
-    }
-
     try {
-      const agent = this.GetAgent(agentRunId);
-      if (!agent) {
+      const run = await this.Provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.currentUser);
+      if (!await run.Load(agentRunId)) {
+        return false;
+      }
+      if (run.Status !== 'Running' && run.Status !== 'Paused') {
         return false;
       }
 
-      agent.run.Status = 'Cancelled';
-      const saved = await agent.run.Save();
-
-      if (saved) {
-        // Refresh the active agents list
-        await this.Refresh();
-        return true;
+      run.Status = 'Cancelled';
+      run.CancellationReason = 'User Request';
+      const saved = await run.Save();
+      if (!saved) {
+        console.error(`Failed to stop agent run ${agentRunId}: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        return false;
       }
+
+      await this.Refresh();
+      return true;
     } catch (error) {
       console.error('Failed to cancel agent:', error);
+      return false;
     }
+  }
 
-    return false;
+  /**
+   * Stops the in-flight run behind an agent's reply message, for callers that know the
+   * conversation detail but not yet the run (the run row is created a moment after the reply
+   * placeholder). Finds the newest Running or Paused run for that detail and stops it.
+   *
+   * @returns true when a run was found and marked; false otherwise.
+   */
+  async CancelAgentForDetail(conversationDetailId: string): Promise<boolean> {
+    try {
+      const rv = RunView.FromMetadataProvider(this.Provider);
+      const result = await rv.RunView<{ ID: string }>(
+        {
+          EntityName: 'MJ: AI Agent Runs',
+          ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Status IN ('Running', 'Paused')`,
+          OrderBy: 'StartedAt DESC',
+          MaxRows: 1,
+          Fields: ['ID'],
+          ResultType: 'simple'
+        },
+        this.currentUser
+      );
+      const runId = result.Success ? result.Results?.[0]?.ID : undefined;
+      if (!runId) {
+        return false;
+      }
+      return await this.CancelAgent(runId);
+    } catch (error) {
+      console.error('Failed to find the agent run to cancel:', error);
+      return false;
+    }
   }
 
   /** @deprecated Use {@link CancelAgent}. */

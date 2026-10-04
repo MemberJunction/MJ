@@ -598,6 +598,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public diagnosticRequested = this.DiagnosticRequested; // emits messageId
+
+  /** Relays a message item's Stop click: the host stops the run behind that AI reply. */
+  @Output() public StopMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public MessagePinToggled = new EventEmitter<MJConversationDetailEntity>();
 
   /**
@@ -1891,6 +1894,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.EditMessage.emit(msg));
     instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.DeleteMessage.emit(msg));
     instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.RetryMessage.emit(msg));
+    instance.StopClicked.subscribe((msg: MJConversationDetailEntity) => this.StopMessage.emit(msg));
     instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.TestFeedbackMessage.emit(msg));
     instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.ArtifactClicked.emit(data));
     instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.MessageEdited.emit(msg));
