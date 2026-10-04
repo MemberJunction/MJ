@@ -278,19 +278,11 @@ function findTopLevelOrderByPositions(sql: string): number[] {
 
             if (ch === "'") { inString = true; i++; continue; }
 
-            // Skip bracket-quoted identifiers: [Order By Description] etc.
+            // Skip bracket-quoted identifiers ([Order By Description]) and double-quoted ones
+            // ("Order"), where a doubled closing character is part of the name.
             // These don't carry across MJ token boundaries in practice.
-            if (ch === '[') {
-                i++;
-                while (i < text.length && text[i] !== ']') i++;
-                if (i < text.length) i++;
-                continue;
-            }
-            // Skip double-quoted identifiers: "Order" etc.
-            if (ch === '"') {
-                i++;
-                while (i < text.length && text[i] !== '"') i++;
-                if (i < text.length) i++;
+            if (ch === '[' || ch === '"') {
+                i = skipQuotedIdentifier(text, i, ch === '[' ? ']' : '"');
                 continue;
             }
 
@@ -322,6 +314,22 @@ function findTopLevelOrderByPositions(sql: string): number[] {
     }
 
     return positions;
+}
+
+/**
+ * Index just past the quoted identifier opening at `start`, treating a doubled `close`
+ * character as part of the name.
+ */
+function skipQuotedIdentifier(text: string, start: number, close: string): number {
+    let i = start + 1;
+    while (i < text.length) {
+        if (text[i] === close) {
+            if (text[i + 1] === close) { i += 2; continue; }
+            return i + 1;
+        }
+        i++;
+    }
+    return text.length;
 }
 
 // ════════════════════════════════════════════════════════════════════
