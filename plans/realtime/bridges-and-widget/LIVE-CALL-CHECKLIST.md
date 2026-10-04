@@ -23,6 +23,27 @@ Vonage and RingCentral have never been run live; this checklist covers Twilio on
 Setup is in [`DEPLOYMENT.md`](./DEPLOYMENT.md) (§4 config, §6 ngrok + number webhook). Constants and the GraphQL
 snippet for outbound are in [`TESTING.md`](./TESTING.md) (Tier 1).
 
+## Automated / Local Verification Status (Step 6 Integration)
+
+The following components have been verified via local unit tests, deterministic integration suites, and schema consistency audits on the local SQL Server database (`MJ_telephony_local_20261003`):
+
+- **Unit Test Coverage (100% Passing):**
+  - `@memberjunction/livekit-room-server`: 111/111 tests passing (`RoomAuthorizationService`, `HandoffOfferRegistry`, `LiveKitAgentRoomCoordinator`, `LiveKitEgressService`, egress, turn-taking, host options).
+  - `@memberjunction/telephony-adapters`: Unit tests passing for Twilio, Vonage, RingCentral, and LiveKit SIP adapters, capacity managers, call session lifecycle, call tools, and webhook parsers.
+  - `@memberjunction/server`: `RealtimeBridgeResolver` (25/25 tests passing), per-room authorization enforcement on all resolvers and mutations, live recording start/stop.
+- **Deterministic Integration Suite (`IT51` - 12/12 Checks Passing):**
+  - `RD10`: Interaction lifecycle (`MJ: Interactions`), append-only events (`MJ: Interaction Events`), caller linking (`MJ: Interaction Links`), computed call duration and cost estimates, and append-only database mutation/deletion guards.
+  - `RD11`: Durable hand-off offers (`MJ: Interaction Offers`), state transitions (`Pending` -> `Accepted`), target-user authorization verification, and compare-and-set concurrency guard.
+  - `RD12`: LiveKit room authorization rules (`MJ: Meetings`, `MJ: Meeting Participants`, meeting host authorization, invited attendee authorization, declined attendee refusal, cancelled meeting refusal, and ad-hoc room fallback).
+- **Metadata and Schema Consistency Audit (`IT24` - 7/7 Checks Passing):**
+  - `MC5`: Field sequence continuity and view-column alignment (0 offenders across 413 entities). Base views, virtual fields, and generated stored procedures (`spCreateInteraction`, `spCreateMeetingParticipant`, `spCreateMeeting`, etc.) aligned across physical columns and metadata definitions.
+
+### Items Requiring Live Carrier / LiveKit Infrastructure
+The items in the tables below require real carrier accounts, public webhooks, and live hardware to execute end-to-end:
+1. **Twilio Carrier Audio & In-Band DTMF (Rows 1–21):** Requires live PSTN phone call, Twilio Voice webhook routing, Media Streams WebSocket connection, and live carrier audio quality/latency validation.
+2. **LiveKit SIP Inbound/Outbound Trunks (Rows 22–29):** Requires LiveKit Cloud / Server with SIP enabled, Twilio Elastic SIP trunk configured per `DEPLOYMENT.md` §6c, and live phone ringing.
+3. **Multi-Agent Room Turn-Taking with Live Models (Rows M1–M12):** Requires live model endpoint API keys (OpenAI Realtime / Google Gemini Live) and multi-party LiveKit audio session.
+
 ## Before you start
 
 - [ ] `telephony.inboundRunAsUserEmail` names a **dedicated least-privilege** user (not the system user, not an Owner).

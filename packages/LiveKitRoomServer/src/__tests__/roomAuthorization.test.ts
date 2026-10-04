@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { RoomAuthorizationService } from '@memberjunction/livekit-room-server';
+import { RoomAuthorizationService } from '../room-authorization.js';
 import type {
   MJMeetingEntity,
   MJMeetingParticipantEntity,

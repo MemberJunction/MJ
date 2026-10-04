@@ -156,12 +156,12 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
         return { Authorized: false, Reason: 'User has not accepted a handoff offer for this room.' };
       }
 
-      // 3. Ad-hoc unmanaged room: allowed for authenticated users
+      // 3. Ad-hoc rooms are accessible to authenticated users
       return { Authorized: true };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       LogError(`[RoomAuthorizationService] Unexpected error authorizing room '${trimmedRoom}': ${msg}`);
-      return { Authorized: false, Reason: 'Internal authorization error.' };
+      return { Authorized: false, Reason: `Internal authorization error: ${msg}` };
     }
   }
 }

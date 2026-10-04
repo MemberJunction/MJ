@@ -50,6 +50,22 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
     StartRoomRecording = h.startRecording;
     StopRecording = h.stopRecording;
   },
+  RoomAuthorizationService: (() => {
+    let testAuthorizer: ((roomName: string, user: unknown, provider?: unknown) => Promise<{ Authorized: boolean; Reason?: string }>) | undefined = undefined;
+    return {
+      Instance: {
+        AuthorizeRoomAccess: vi.fn(async (roomName: string, user: unknown, provider?: unknown) => {
+          if (testAuthorizer) {
+            return await testAuthorizer(roomName, user, provider);
+          }
+          return { Authorized: true };
+        }),
+        SetAuthorizerForTesting: vi.fn((fn?: (roomName: string, user: unknown, provider?: unknown) => Promise<{ Authorized: boolean; Reason?: string }>) => {
+          testAuthorizer = fn;
+        }),
+      },
+    };
+  })(),
 }));
 
 // Mock the agent factory so importing the resolver doesn't pull the heavy @memberjunction/ai-agents graph
@@ -78,7 +94,7 @@ vi.mock('../resolvers/meetingRecordingRegistration', () => ({
 }));
 
 import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput, StartLiveKitAgentRoomSessionInput } from '../resolvers/RealtimeBridgeResolver';
-import { RoomAuthorizationService } from '../resolvers/roomAuthorization.js';
+import { RoomAuthorizationService } from '@memberjunction/livekit-room-server';
 import type { AppContext } from '../types.js';
 
 /** A resolver subclass that supplies a fake authenticated user (GetUserFromPayload is protected). */
@@ -252,6 +268,7 @@ describe('RealtimeBridgeResolver', () => {
 
   describe('Per-room authorization enforcement', () => {
     beforeEach(() => {
+      vi.clearAllMocks();
       RoomAuthorizationService.Instance.SetAuthorizerForTesting(async () => ({
         Authorized: false,
         Reason: 'User is not authorized for this room.',

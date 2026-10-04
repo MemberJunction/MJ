@@ -17,7 +17,7 @@ import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
 import { RegisterMeetingRecordingFile, CorrelateRecordingStart } from './meetingRecordingRegistration.js';
-import { RoomAuthorizationService } from './roomAuthorization.js';
+import { RoomAuthorizationService } from '@memberjunction/livekit-room-server';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.

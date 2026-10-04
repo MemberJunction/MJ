@@ -51,3 +51,4 @@ export { LiveKitWebhookParser, type LiveKitRoomWebhookEvent, type WebhookReceive
 export * from './room-handoff/handoff-types';
 export * from './room-handoff/handoff-offer-registry';
 export * from './room-handoff/room-handoff-engine';
+export * from './room-authorization';

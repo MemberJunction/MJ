@@ -7567,6 +7567,69 @@ GO
          )
       END;
 
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1607593c-cf57-41a3-b452-9da4b6559d4c' OR (EntityID = '4A355A56-EAE0-47D9-84CD-CE2BB49160DB' AND Name = 'PhoneNumber')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1607593c-cf57-41a3-b452-9da4b6559d4c',
+            '4A355A56-EAE0-47D9-84CD-CE2BB49160DB', -- Entity: MJ: Interactions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A355A56-EAE0-47D9-84CD-CE2BB49160DB'),
+            'PhoneNumber',
+            'Phone Number',
+            NULL,
+            'nvarchar',
+            40,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '833a2074-2a11-42f5-9979-2e1eedecd4aa' OR (EntityID = '58D95AA3-52C3-4131-BF62-E84E75B04BD2' AND Name = 'TurnAddressing')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
@@ -14193,6 +14256,69 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
       END;
 
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e55f0b48-3561-4df2-a3ce-8f0a9db519b0' OR (EntityID = 'DB511323-5673-45F9-A47F-5A4604FB19B0' AND Name = 'Meeting')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e55f0b48-3561-4df2-a3ce-8f0a9db519b0',
+            'DB511323-5673-45F9-A47F-5A4604FB19B0', -- Entity: MJ: Meeting Participants
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'DB511323-5673-45F9-A47F-5A4604FB19B0'),
+            'Meeting',
+            'Meeting',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a7bca307-8f6b-43cb-9705-db186c0c8105' OR (EntityID = 'DB511323-5673-45F9-A47F-5A4604FB19B0' AND Name = 'User')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
@@ -14363,6 +14489,69 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
             0,
             0,
             0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b72b8314-871d-4726-b816-5a46e5553c31' OR (EntityID = 'D2A67D87-F495-43E3-A91B-5A46E5553C31' AND Name = 'DialInPhoneNumber')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b72b8314-871d-4726-b816-5a46e5553c31',
+            'D2A67D87-F495-43E3-A91B-5A46E5553C31', -- Entity: MJ: Meetings
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2A67D87-F495-43E3-A91B-5A46E5553C31'),
+            'DialInPhoneNumber',
+            'Dial-In Phone Number',
+            NULL,
+            'nvarchar',
+            40,
+            0,
+            0,
+            1,
             NULL,
             0,
             0,
