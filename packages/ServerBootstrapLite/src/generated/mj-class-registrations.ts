@@ -205,7 +205,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (432 classes)
+// @memberjunction/core-entities (433 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -563,6 +563,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1757,6 +1758,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -1946,11 +1948,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferGetPendingPostsAction,
     BufferGetSentPostsAction,
     BufferReorderQueueAction,
-    BufferSearchPostsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    BufferSearchPostsAction,
     CreateVideoPostAction,
     FacebookBoostPostAction,
     FacebookCreateAlbumAction,

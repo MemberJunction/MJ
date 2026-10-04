@@ -348,6 +348,7 @@ import { MJScheduledJobFormComponent } from "./Entities/MJScheduledJob/mjschedul
 import { MJScheduledJobRunFormComponent } from "./Entities/MJScheduledJobRun/mjscheduledjobrun.form.component";
 import { MJScheduledJobTypeFormComponent } from "./Entities/MJScheduledJobType/mjscheduledjobtype.form.component";
 import { MJSchemaInfoFormComponent } from "./Entities/MJSchemaInfo/mjschemainfo.form.component";
+import { MJScopedNotificationConfigFormComponent } from "./Entities/MJScopedNotificationConfig/mjscopednotificationconfig.form.component";
 import { MJScopedPromptConfigFormComponent } from "./Entities/MJScopedPromptConfig/mjscopedpromptconfig.form.component";
 import { MJScopedPromptPartFormComponent } from "./Entities/MJScopedPromptPart/mjscopedpromptpart.form.component";
 import { MJSearchExecutionLogFormComponent } from "./Entities/MJSearchExecutionLog/mjsearchexecutionlog.form.component";
@@ -785,6 +786,7 @@ declarations: [
     MJCredentialFormComponent,
     MJMLAlgorithmUseCaseFormComponent,
     MJOAuthAuthorizationStateFormComponent,
+    MJScopedNotificationConfigFormComponent,
     MJTagSynonymFormComponent,
     MJUserNotificationPreferenceFormComponent,
     MJVectorIndexFormComponent

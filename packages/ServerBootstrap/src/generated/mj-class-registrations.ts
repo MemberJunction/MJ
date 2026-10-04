@@ -222,7 +222,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (432 classes)
+// @memberjunction/core-entities (433 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -580,6 +580,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -2025,6 +2026,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
@@ -2205,11 +2207,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetBundlesAction,
     GetCertificatesAction,
     GetCourseAnalyticsAction,
-    GetLearnWorldsBulkDataAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
     GetLearnWorldsCoursesAction,
     GetLearnWorldsUserDetailsAction,
