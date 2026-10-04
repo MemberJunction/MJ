@@ -253,7 +253,7 @@ export class RoomCallToolExecutor implements BridgeLocalToolHandler {
         if (!resolved.Ok) {
             return fail(resolved.Error);
         }
-        const started = this.deps.Engine.RequestHandoff(agent, { Mode: mode, Destination: resolved.Destination, Summary: readArg(call.Arguments, 'summary') });
+        const started = await this.deps.Engine.RequestHandoff(agent, { Mode: mode, Destination: resolved.Destination, Summary: readArg(call.Arguments, 'summary') });
         if (!started.Ok) {
             return fail(started.Error);
         }

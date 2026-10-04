@@ -34,6 +34,8 @@ import {
   HandoffOfferChangeFilter,
   NotificationHandoffNotifier,
   PubSubHandoffPublisher,
+  SetHandoffOfferPublishHook,
+  ParseReplicatedHandoffOfferUpdate,
   HANDOFF_OFFER_TOPIC,
 } from '../resolvers/HumanHandoffResolver';
 import { PubSubManager } from '../generic/PubSubManager.js';
@@ -85,7 +87,7 @@ describe('HumanHandoffResolver', () => {
     it('lists the signed-in user\'s offers, and only asks the engine about that user', async () => {
       h.listOffersForUser.mockReturnValue([VIEW]);
       const offers = await resolver.MyHandoffOffers(ctx);
-      expect(h.listOffersForUser).toHaveBeenCalledWith('U1');
+      expect(h.listOffersForUser).toHaveBeenCalledWith('U1', resolver.user);
       expect(offers).toEqual([VIEW]);
     });
 
@@ -100,7 +102,7 @@ describe('HumanHandoffResolver', () => {
     it('accepts as the signed-in user (never a user id from the client) and returns the room to join', async () => {
       h.acceptOffer.mockReturnValue({ Ok: true, Offer: { ...VIEW, Status: 'Accepted' } });
       const result = await resolver.AcceptHandoffOffer('offer-1', ctx);
-      expect(h.acceptOffer).toHaveBeenCalledWith('offer-1', 'U1');
+      expect(h.acceptOffer).toHaveBeenCalledWith('offer-1', 'U1', resolver.user);
       expect(result).toMatchObject({ Success: true, RoomName: 'call-1', Offer: { Status: 'Accepted' } });
     });
 
@@ -128,7 +130,7 @@ describe('HumanHandoffResolver', () => {
     it('declines as the signed-in user', async () => {
       h.declineOffer.mockReturnValue({ Ok: true });
       expect(await resolver.DeclineHandoffOffer('offer-1', ctx)).toEqual({ Success: true });
-      expect(h.declineOffer).toHaveBeenCalledWith('offer-1', 'U1');
+      expect(h.declineOffer).toHaveBeenCalledWith('offer-1', 'U1', resolver.user);
     });
 
     it('passes a refusal back, and requires a user', async () => {
@@ -171,6 +173,36 @@ describe('PubSubHandoffPublisher', () => {
     expect(publish).toHaveBeenCalledWith(HANDOFF_OFFER_TOPIC, { UserID: 'U1', Kind: 'updated', Offer: VIEW });
     publish.mockRestore();
   });
+
+  it('forwards the change to the cluster hook if set', () => {
+    const hook = vi.fn();
+    SetHandoffOfferPublishHook(hook);
+    new PubSubHandoffPublisher().Publish({ UserID: 'U1', Kind: 'updated', Offer: VIEW as never });
+    expect(hook).toHaveBeenCalledWith(expect.objectContaining({ UserID: 'U1', Kind: 'updated', Offer: VIEW }));
+    SetHandoffOfferPublishHook(null);
+  });
+});
+
+describe('ParseReplicatedHandoffOfferUpdate', () => {
+  it('parses valid replicated offer payload', () => {
+    const raw = JSON.stringify({
+      UserID: 'U1',
+      Kind: 'updated',
+      Offer: VIEW,
+    });
+    const parsed = ParseReplicatedHandoffOfferUpdate(raw);
+    expect(parsed).toMatchObject({
+      UserID: 'U1',
+      Kind: 'updated',
+      Offer: { OfferID: 'offer-1' },
+    });
+  });
+
+  it('rejects invalid payloads cleanly', () => {
+    expect(ParseReplicatedHandoffOfferUpdate('invalid json')).toBeNull();
+    expect(ParseReplicatedHandoffOfferUpdate(JSON.stringify({ Kind: 'unknown' }))).toBeNull();
+    expect(ParseReplicatedHandoffOfferUpdate(JSON.stringify({ Kind: 'updated' }))).toBeNull();
+  });
 });
 
 describe('NotificationHandoffNotifier', () => {
@@ -197,3 +229,4 @@ describe('NotificationHandoffNotifier', () => {
     await expect(new NotificationHandoffNotifier().NotifyOffer(VIEW as never, 'U1', user, provider)).rejects.toThrow('type not found');
   });
 });
+

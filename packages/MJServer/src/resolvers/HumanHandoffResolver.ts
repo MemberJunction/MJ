@@ -1,6 +1,6 @@
 import { Resolver, Mutation, Query, Subscription, Arg, Ctx, Root, ObjectType, Field, ResolverFilterData } from 'type-graphql';
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { NotificationEngine } from '@memberjunction/notifications';
 import {
   LiveKitSipService,
@@ -118,10 +118,63 @@ export function HandoffOfferChangeFilter(data: { payload: HandoffOfferEvent; con
   return UUIDsEqual(data.payload.UserID, connectionUserID);
 }
 
-/** Publishes offer changes onto the GraphQL subscription topic. */
+/** Redis channel carrying replicated handoff offer updates between server instances. */
+export const HANDOFF_OFFER_FANOUT_CHANNEL = 'handoff-offer-changes';
+
+export interface HandoffOfferFanOutPayload {
+  UserID: string;
+  Kind: 'offered' | 'updated';
+  Offer: HandoffOfferView;
+  SourceServerId?: string;
+}
+
+export type HandoffOfferPublishHook = (payload: HandoffOfferFanOutPayload) => void;
+
+let _handoffPublishHook: HandoffOfferPublishHook | undefined;
+
+export function SetHandoffOfferPublishHook(hook?: HandoffOfferPublishHook): void {
+  _handoffPublishHook = hook;
+}
+
+export function ParseReplicatedHandoffOfferUpdate(raw: string, localServerId: string): HandoffOfferFanOutPayload | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return null;
+  }
+  const candidate = parsed as Record<string, unknown>;
+  if (typeof candidate.SourceServerId === 'string' && candidate.SourceServerId === localServerId) {
+    return null; // echo suppression
+  }
+  if (typeof candidate.UserID !== 'string' || typeof candidate.Kind !== 'string' || !candidate.Offer) {
+    return null;
+  }
+  const offer = candidate.Offer as Record<string, unknown>;
+  if (typeof offer.OfferID !== 'string' || typeof offer.RoomName !== 'string' || typeof offer.Status !== 'string') {
+    return null;
+  }
+  return {
+    UserID: candidate.UserID,
+    Kind: candidate.Kind as 'offered' | 'updated',
+    Offer: offer as unknown as HandoffOfferView,
+    SourceServerId: typeof candidate.SourceServerId === 'string' ? candidate.SourceServerId : undefined,
+  };
+}
+
+/** Publishes offer changes onto the GraphQL subscription topic and forwards across instances. */
 export class PubSubHandoffPublisher implements IHandoffPublisher {
   public Publish(event: HandoffOfferEvent): void {
     PubSubManager.Instance.Publish(HANDOFF_OFFER_TOPIC, { UserID: event.UserID, Kind: event.Kind, Offer: event.Offer });
+    _handoffPublishHook?.({
+      UserID: event.UserID,
+      Kind: event.Kind,
+      Offer: event.Offer,
+      SourceServerId: MJGlobal.Instance.ProcessUUID,
+    });
   }
 }
 
@@ -170,7 +223,8 @@ export class HumanHandoffResolver extends ResolverBase {
     if (!user) {
       return [];
     }
-    return RoomHandoffEngine.Instance.ListOffersForUser(user.ID).map(toGraphQLOffer);
+    const offers = await RoomHandoffEngine.Instance.ListOffersForUser(user.ID, user);
+    return offers.map(toGraphQLOffer);
   }
 
   /**
@@ -188,7 +242,7 @@ export class HumanHandoffResolver extends ResolverBase {
       if (!user) {
         return failure('Unable to determine current user.');
       }
-      const result = RoomHandoffEngine.Instance.AcceptOffer(offerID, user.ID);
+      const result = await RoomHandoffEngine.Instance.AcceptOffer(offerID, user.ID, user);
       if ('Reason' in result) {
         return failure(result.Reason);
       }
@@ -210,7 +264,7 @@ export class HumanHandoffResolver extends ResolverBase {
       if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.' };
       }
-      const result = RoomHandoffEngine.Instance.DeclineOffer(offerID, user.ID);
+      const result = await RoomHandoffEngine.Instance.DeclineOffer(offerID, user.ID, user);
       return 'Reason' in result ? { Success: false, ErrorMessage: result.Reason } : { Success: true };
     } catch (error) {
       LogError(`DeclineHandoffOffer failed: ${error instanceof Error ? error.message : String(error)}`);
