@@ -700,7 +700,7 @@ describe('MaxRows row cap — hard cap guarantee', () => {
 
 describe('MaxRows row cap — CTE fallback', () => {
 
-    it('caps a CTE with bracket-quoted CTE name via OFFSET/FETCH', () => {
+    it('caps a CTE with a bracket-quoted CTE name via AST TOP injection', () => {
         stubMetadata();
         const sql = `WITH [ActivePeople] AS (
     SELECT [CompanyID], COUNT([ID]) AS [ActivePeopleCount]
@@ -713,9 +713,11 @@ FROM [dbo].[vwCompanies] c
 LEFT JOIN [ActivePeople] ap ON c.[ID] = ap.[CompanyID]
 ORDER BY ap.[ActivePeopleCount] DESC`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 100 });
-        expect(result.FinalSQL).toMatch(/FETCH\s+NEXT\s+100\s+ROWS\s+ONLY/i);
+        expect(result.FinalSQL).toMatch(/\)\s*SELECT\s+TOP\s+100\b/i);
+        expect(result.FinalSQL.match(/\bTOP\b/gi)).toHaveLength(1);
         expect(result.FinalSQL).toMatch(/ORDER\s+BY/i);
         expect(result.FinalSQL).toMatch(/WITH\s+\[ActivePeople\]\s+AS/i);
+        expect(result.FinalSQL).not.toMatch(/_mjid_/);
     });
 
     it('caps a CTE with a hyphenated bracket name via AST TOP injection', () => {
@@ -2148,7 +2150,7 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'JOIN no cap', path: 'ast', sql: `SELECT m.[ID], c.[Name] FROM [Members] m INNER JOIN [Chapters] c ON m.[ChapterID]=c.[ID]` },
         { name: 'GROUP BY', path: 'ast', sql: `SELECT [ChapterID], COUNT(*) FROM [Members] GROUP BY [ChapterID]` },
         { name: 'CTE plain', path: 'ast', sql: `WITH a AS (SELECT [ID] FROM [Members]) SELECT * FROM a` },
-        { name: 'CTE bracket-named', path: 'fetch', sql: `WITH [hi] AS (SELECT 1 AS x) SELECT * FROM [hi]` },
+        { name: 'CTE bracket-named', path: 'ast', sql: `WITH [hi] AS (SELECT 1 AS x) SELECT * FROM [hi]` },
         { name: 'CTE with hyphens in name', path: 'ast', sql: `WITH [my-cte] AS (SELECT 1 AS x) SELECT * FROM [my-cte]` },
         { name: 'multi CTE', path: 'ast', sql: `WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) SELECT a.x, b.y FROM a, b` },
         { name: 'window function', path: 'ast', sql: `SELECT [ID], ROW_NUMBER() OVER (ORDER BY [JoinedAt]) AS rn FROM [Members]` },

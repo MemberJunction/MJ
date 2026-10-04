@@ -318,8 +318,28 @@ const COMPOSED_CASES: RenderCase[] = [
         SQL: `SELECT b.ID FROM {{query:"{P}/RR Dep Base"}} b WHERE b.Category = 'Delta'`,
         Columns: ['ID'], Ordered: false,
         Expect: items => ids(items.filter(i => i.Category === 'Delta'))
+    },
+    {
+        Name: 'RR Comp Static Parameter',
+        SQL: `SELECT d.ID FROM {{query:"{P}/RR Dep Param(Cat='Gamma')"}} d ORDER BY d.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.Category === 'Gamma'))
+    },
+    {
+        Name: 'RR Comp Distinct Dependency',
+        SQL: `SELECT d.Category FROM {{query:"{P}/RR Dep Distinct"}} d ORDER BY d.Category`,
+        Columns: ['Category'], Ordered: true,
+        Expect: items => [...new Set(items.map(i => i.Category))].sort().map(c => ({ Category: c }))
+    },
+    {
+        Name: 'RR Comp Commented Dependency',
+        SQL: `SELECT c.ID FROM {{query:"{P}/RR Dep Comment"}} c ORDER BY c.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID >= 100 && i.ID <= 110))
     }
 ];
+
+const PASS_THROUGH_SQL = `SELECT d.ID FROM {{query:"{P}/RR Dep Param(Cat=OuterCat)"}} d ORDER BY d.ID`;
 
 // ─── Fixture lifecycle ─────────────────────────────────────────────────────────
 
@@ -442,7 +462,7 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
     },
     {
         Id: 'runquery-rendering.RR4',
-        Name: 'RR4: composed queries — one, two, nested three deep, repeated, diamond, CTE-bearing and UNION dependencies — return the right rows under every MaxRows / StartRow combination',
+        Name: 'RR4: composed queries — one, two, nested three deep, repeated, diamond, parameterized, CTE-bearing, DISTINCT, UNION and commented dependencies — return the right rows under every MaxRows / StartRow combination',
         Fn: async (ctx): Promise<void> => {
             const cases = casesFor(COMPOSED_CASES, RenderPlatform(ctx));
             FailOnMismatches('RR4', await runCaseMatrix(cases, ctx.User), cases.length);
@@ -547,6 +567,22 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
                 if (value === '3s') failures.push(`spec call ${i + 1} saw the 3s statement_timeout set by an earlier call`);
             }
             FailOnMismatches('RR9 session isolation', failures, 10);
+        }
+    },
+    {
+        Id: 'runquery-rendering.RR10',
+        Name: 'RR10: a composed query passes its own parameter through to a dependency',
+        Fn: async (ctx): Promise<void> => {
+            const fixtures = requireFixtures();
+            const query = await CreateRenderQuery(fixtures, {
+                Name: 'RR Comp Pass Through',
+                SQL: withPath(PASS_THROUGH_SQL, RenderCategoryPath(fixtures))
+            }, ctx.User);
+            await RefreshRenderQueries(ctx.User);
+            const items = BuildRenderItems();
+            const expected: ExpectedResult = { Rows: ids(items.filter(i => i.Category === 'Beta')), Ordered: true };
+            const failures = await RunCapAndPagingMatrix('pass-through', { QueryID: query.ID, Parameters: { OuterCat: 'Beta' } }, expected, ['ID'], ctx.User);
+            FailOnMismatches('RR10', failures, 1);
         }
     }
 ];
