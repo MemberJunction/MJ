@@ -1,6 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { GetDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { SQLParser, AnalyzeTopLevelOrderBy, LexSQL } from "@memberjunction/sql-parser";
+import { SQLParser, AnalyzeTopLevelOrderBy, LexSQL, SplitLeadingCTEs } from "@memberjunction/sql-parser";
 import { DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 import { MJQueryEntityExtended, QueryEngine } from "@memberjunction/core-entities";
 import { SymbolTable } from "./symbolTable.js";
@@ -677,9 +677,8 @@ export class QueryCompositionEngine {
     private assembleCTEs(cteEntries: CTEEntry[], mainSQL: string, platform: DatabasePlatform): string {
         if (cteEntries.length === 0) return mainSQL;
 
-        const trimmedMain = mainSQL.trimStart();
-        const startsWithWith = /^WITH\s/i.test(trimmedMain);
         const dialect = this.getDialect(platform);
+        const outer = SplitLeadingCTEs(mainSQL, dialect);
 
         // SymbolTable guarantees CTE name uniqueness at registration time.
         const symTable = new SymbolTable(dialect);
@@ -690,13 +689,15 @@ export class QueryCompositionEngine {
             symTable.Seed(this.canonicalCTEName(entry.CTEName));
         }
 
+        let recursive = outer?.Recursive ?? false;
         const cteDefinitions: string[] = [];
         for (const entry of cteEntries) {
             const strippedSQL = this.stripTrailingOrderBy(entry.SQL, dialect);
             const commentStrippedSQL = this.stripSQLComments(strippedSQL).trimStart();
 
             if (/^WITH\s/i.test(commentStrippedSQL)) {
-                const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(commentStrippedSQL, dialect);
+                const { innerCTEDefinitions, mainSelect, isRecursive } = this.hoistInnerCTEs(commentStrippedSQL, dialect);
+                recursive = recursive || isRecursive;
 
                 // Use SymbolTable for deconfliction instead of raw Set
                 const { definitions, rewrittenMainSelect } =
@@ -713,12 +714,15 @@ export class QueryCompositionEngine {
             this.validateCTEBodies(cteDefinitions, cteEntries, dialect);
         }
 
-        if (startsWithWith) {
-            const mainWithoutWith = trimmedMain.replace(/^WITH\s+/i, '');
-            return `WITH ${cteDefinitions.join(',\n')},\n${mainWithoutWith}`;
+        // One WITH clause: the composed CTEs first, then the outer query's own. PostgreSQL marks
+        // the whole clause RECURSIVE when any CTE in it refers to itself; SQL Server has no keyword.
+        const withKeyword = recursive && platform === 'postgresql' ? 'WITH RECURSIVE' : 'WITH';
+        if (outer) {
+            const all = [...cteDefinitions, ...outer.Definitions.map(d => d.Text)];
+            return `${withKeyword} ${all.join(',\n')}\n${outer.Main}`;
         }
 
-        return `WITH ${cteDefinitions.join(',\n')}\n${mainSQL}`;
+        return `${withKeyword} ${cteDefinitions.join(',\n')}\n${mainSQL}`;
     }
 
     /**
@@ -842,27 +846,37 @@ export class QueryCompositionEngine {
     }
 
     /**
-     * Extracts inner CTE definitions from SQL that starts with a WITH clause.
+     * Extracts inner CTE definitions from SQL that starts with a WITH clause, and whether the
+     * clause is `WITH RECURSIVE`.
      *
-     * Delegates to {@link SQLParser.ExtractCTEs} which uses AST parsing first
-     * (via node-sql-parser), falling back to a paren-depth regex approach when
-     * AST parsing fails (e.g. SQL contains Nunjucks template tokens).
+     * Splits by position ({@link SplitLeadingCTEs}) so each definition is kept as written; when
+     * that cannot read the clause, falls back to {@link SQLParser.ExtractCTEs}.
      *
      * @param sql SQL starting with a WITH clause
      * @param dialect SQL dialect for AST parsing
      */
-    private hoistInnerCTEs(sql: string, dialect: SQLDialect): { innerCTEDefinitions: string[]; mainSelect: string } {
-        const extraction = SQLParser.ExtractCTEs(sql, dialect);
+    private hoistInnerCTEs(sql: string, dialect: SQLDialect): { innerCTEDefinitions: string[]; mainSelect: string; isRecursive: boolean } {
+        // Split by position, so each definition is kept exactly as written (no re-emission).
+        const split = SplitLeadingCTEs(sql, dialect);
+        if (split) {
+            return {
+                innerCTEDefinitions: split.Definitions.map(d => d.Text),
+                mainSelect: split.Main,
+                isRecursive: split.Recursive,
+            };
+        }
 
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
         if (!extraction) {
             // Should not happen since caller already verified WITH prefix,
             // but handle gracefully by treating the whole SQL as the main select
-            return { innerCTEDefinitions: [], mainSelect: sql };
+            return { innerCTEDefinitions: [], mainSelect: sql, isRecursive: false };
         }
 
         return {
             innerCTEDefinitions: extraction.CTEDefinitions,
             mainSelect: extraction.MainStatement,
+            isRecursive: false,
         };
     }
 

@@ -392,6 +392,11 @@ const COMPOSITION_LIBRARY: RenderQueryDefinition[] = [
     { Name: 'RR Dep Left', Reusable: true, SQL: `SELECT ID FROM {{query:"{P}/RR Dep Base"}} WHERE ID <= 100` },
     { Name: 'RR Dep Right', Reusable: true, SQL: `SELECT ID FROM {{query:"{P}/RR Dep Base"}} WHERE ID >= 60` },
     { Name: 'RR Dep Literal Order', Reusable: true, SQL: `SELECT ID FROM ${T} WHERE Category = 'Gamma'ORDER BY ID` },
+    {
+        Name: 'RR Dep Recursive', Reusable: true,
+        SQL: `WITH chain AS (SELECT ID, ParentID, 0 AS Depth FROM ${T} WHERE ID = 200 UNION ALL SELECT p.ID, p.ParentID, c.Depth + 1 FROM ${T} p JOIN chain c ON p.ID = c.ParentID)\nSELECT ID, Depth FROM chain`,
+        Variants: { postgresql: `WITH RECURSIVE chain AS (SELECT ID, ParentID, 0 AS Depth FROM ${T} WHERE ID = 200 UNION ALL SELECT p.ID, p.ParentID, c.Depth + 1 FROM ${T} p JOIN chain c ON p.ID = c.ParentID)\nSELECT ID, Depth FROM chain` }
+    },
     { Name: 'RR Dep Not Reusable', Reusable: false, SQL: `SELECT ID FROM ${T}` }
 ];
 
@@ -473,6 +478,25 @@ const COMPOSED_CASES: RenderCase[] = [
         Expect: items => ids(items.filter(i => i.ID <= 15))
     },
     {
+        Name: 'RR Comp Outer Comment Then WITH',
+        SQL: `-- header comment\nWITH Picked AS (SELECT ID FROM {{query:"{P}/RR Dep Base"}} WHERE ID <= 20)\nSELECT p.ID FROM Picked p ORDER BY p.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 20))
+    },
+    {
+        Name: 'RR Comp Outer Recursive',
+        SQL: `WITH chain AS (SELECT ID, ParentID, 0 AS Depth FROM {{query:"{P}/RR Dep Base"}} b WHERE b.ID = 200 UNION ALL SELECT p.ID, p.ParentID, c.Depth + 1 FROM {{query:"{P}/RR Dep Base"}} p JOIN chain c ON p.ID = c.ParentID)\nSELECT ID, Depth FROM chain ORDER BY Depth`,
+        Variants: { postgresql: `WITH RECURSIVE chain AS (SELECT ID, ParentID, 0 AS Depth FROM {{query:"{P}/RR Dep Base"}} b WHERE b.ID = 200 UNION ALL SELECT p.ID, p.ParentID, c.Depth + 1 FROM {{query:"{P}/RR Dep Base"}} p JOIN chain c ON p.ID = c.ParentID)\nSELECT ID, Depth FROM chain ORDER BY Depth` },
+        Columns: ['ID', 'Depth'], Ordered: true,
+        Expect: items => ancestorChain(items, 200)
+    },
+    {
+        Name: 'RR Comp Recursive Dependency',
+        SQL: `SELECT r.ID, r.Depth FROM {{query:"{P}/RR Dep Recursive"}} r ORDER BY r.Depth`,
+        Columns: ['ID', 'Depth'], Ordered: true,
+        Expect: items => ancestorChain(items, 200)
+    },
+    {
         Name: 'RR Comp Unordered',
         SQL: `SELECT b.ID FROM {{query:"{P}/RR Dep Base"}} b WHERE b.Category = 'Delta'`,
         Columns: ['ID'], Ordered: false,
@@ -521,6 +545,15 @@ function withPath(sql: string, path: string): string {
     return sql.split('{P}').join(path);
 }
 
+/** A query definition with `{P}` replaced in its SQL and in every platform variant. */
+function withPathEverywhere(definition: RenderQueryDefinition, path: string): RenderQueryDefinition {
+    const variants: Partial<Record<DatabasePlatform, string>> = {};
+    for (const [platform, sql] of Object.entries(definition.Variants ?? {}) as Array<[DatabasePlatform, string]>) {
+        variants[platform] = withPath(sql, path);
+    }
+    return { ...definition, SQL: withPath(definition.SQL, path), Variants: variants };
+}
+
 async function setupRenderFixtures(ctx: IntegrationCheckContext): Promise<void> {
     await CreateRenderTable(ctx);
     const fixtures: RenderFixtures = renderFixtures = {
@@ -536,10 +569,10 @@ async function setupRenderFixtures(ctx: IntegrationCheckContext): Promise<void> 
     await RefreshRenderQueries(ctx.User);
     const path = RenderCategoryPath(fixtures);
     for (const dep of COMPOSITION_LIBRARY) {
-        await CreateRenderQuery(fixtures, { ...dep, SQL: withPath(dep.SQL, path) }, ctx.User);
+        await CreateRenderQuery(fixtures, withPathEverywhere(dep, path), ctx.User);
     }
     for (const c of casesFor(COMPOSED_CASES, platform)) {
-        await CreateRenderQuery(fixtures, { ...c, SQL: withPath(c.SQL, path) }, ctx.User);
+        await CreateRenderQuery(fixtures, withPathEverywhere(c, path), ctx.User);
     }
     await RefreshRenderQueries(ctx.User);
 }
