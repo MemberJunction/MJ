@@ -2912,31 +2912,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Rubric Versions Section -->
-    <mj-collapsible-panel
-        SectionKey="mJRubricVersions"
-        SectionName="Rubric Versions"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRubricVersions')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Versions','PublishedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Rubric Versions','PublishedByUserID')"
-                [AllowLoad]="IsSectionExpanded('mJRubricVersions')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRubricVersions', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Work Queue Messages Section -->
     <mj-collapsible-panel
         SectionKey="mJWorkQueueMessages"
@@ -2956,6 +2931,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJWorkQueueMessages', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Rubric Versions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRubricVersions"
+        SectionName="Rubric Versions"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRubricVersions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Versions','PublishedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Versions','PublishedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricVersions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricVersions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

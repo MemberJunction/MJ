@@ -213,8 +213,7 @@ export class WorkQueueDashboardComponent extends BaseDashboard implements AfterV
     }
 
     public OnOpenRecord(request: WorkQueueRecordOpenRequest): void {
-        // first-pk-ok: MJ core work-queue entities are single-column ID keyed
-        this.navigationService.OpenEntityRecord(request.EntityName, CompositeKey.FromID(request.ID));
+        this.navigationService.OpenEntityRecord(request.EntityName, CompositeKey.FromID(request.ID)); // first-pk-ok: the request names an MJ core work-queue entity, all single-column ID keyed
     }
 
     public OnDeadLettersLoaded(event: { Count: number; Selected: number }): void {

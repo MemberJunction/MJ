@@ -97172,7 +97172,7 @@ export class MJWebSearchProviderResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Work Queue Deduplications
 //****************************************************************************
-@ObjectType({ description: `Publish deduplication ledger for every transport: a key suppresses repeat publishes to a topic until ExpiresAt.` })
+@ObjectType({ description: "Publish deduplication ledger for every transport: a key suppresses repeat publishes to a topic until ExpiresAt." })
 export class MJWorkQueueDeduplication_ {
     @Field() 
     @MaxLength(36)
@@ -97182,19 +97182,19 @@ export class MJWorkQueueDeduplication_ {
     @MaxLength(36)
     TopicID?: string;
         
-    @Field({nullable: true, description: `Producer-supplied key identifying one logical message within the topic. Compared case-sensitively (binary collation).`}) 
+    @Field({nullable: true, description: "Producer-supplied key identifying one logical message within the topic. Compared case-sensitively (binary collation)."}) 
     @MaxLength(200)
     DeduplicationKey?: string;
         
-    @Field({nullable: true, description: `MessageID of the publish that owns the key. Not a foreign key: cloud messages have no row.`}) 
+    @Field({nullable: true, description: "MessageID of the publish that owns the key. Not a foreign key: cloud messages have no row."}) 
     @MaxLength(36)
     MessageID?: string;
         
-    @Field({nullable: true, description: `Reserved: a send is in progress (short expiry) and proves nothing about its outcome. Confirmed: the publish was accepted. Only Confirmed rows make a later publish a Duplicate.`}) 
+    @Field({nullable: true, description: "Reserved: a send is in progress (short expiry) and proves nothing about its outcome. Confirmed: the publish was accepted. Only Confirmed rows make a later publish a Duplicate."}) 
     @MaxLength(20)
     Status?: string;
         
-    @Field({nullable: true, description: `When the key stops suppressing duplicates. Expired rows are replaced on publish and purged by the sweeper.`}) 
+    @Field({nullable: true, description: "When the key stops suppressing duplicates. Expired rows are replaced on publish and purged by the sweeper."}) 
     ExpiresAt?: Date;
         
     @Field() 
@@ -97273,7 +97273,7 @@ export class MJWorkQueueDeduplicationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Work Queue Deliveries
 //****************************************************************************
-@ObjectType({ description: `One subscription\'s processing of one message: status, attempts and lease.` })
+@ObjectType({ description: "One subscription's processing of one message: status, attempts and lease." })
 export class MJWorkQueueDelivery_ {
     @Field() 
     @MaxLength(36)
@@ -97287,65 +97287,65 @@ export class MJWorkQueueDelivery_ {
     @MaxLength(36)
     SubscriptionID?: string;
         
-    @Field({nullable: true, description: `Pending: awaiting claim. InFlight: leased. Completed: handler succeeded. DeadLettered: exhausted or rejected, needs an operator. Discarded: cancelled or resolved by an operator.`}) 
+    @Field({nullable: true, description: "Pending: awaiting claim. InFlight: leased. Completed: handler succeeded. DeadLettered: exhausted or rejected, needs an operator. Discarded: cancelled or resolved by an operator."}) 
     @MaxLength(20)
     Status?: string;
         
-    @Field({nullable: true, description: `Copy of the message partition key, populated only for Exclusive and Ordered subscriptions. Drives the in-flight uniqueness rule.`}) 
+    @Field({nullable: true, description: "Copy of the message partition key, populated only for Exclusive and Ordered subscriptions. Drives the in-flight uniqueness rule."}) 
     @MaxLength(200)
     PartitionKey?: string;
         
-    @Field(() => Int, {nullable: true, description: `Position within the partition key: always the message PublishOrdinal.`}) 
+    @Field(() => Int, {nullable: true, description: "Position within the partition key: always the message PublishOrdinal."}) 
     OrderKey?: number;
         
-    @Field(() => Int, {nullable: true, description: `Claims so far, including claims whose lease expired. Reset to 0 by replay.`}) 
+    @Field(() => Int, {nullable: true, description: "Claims so far, including claims whose lease expired. Reset to 0 by replay."}) 
     AttemptCount?: number;
         
-    @Field(() => Boolean, {nullable: true, description: `1 once an operator has replayed this delivery from the dead-letter state.`}) 
+    @Field(() => Boolean, {nullable: true, description: "1 once an operator has replayed this delivery from the dead-letter state."}) 
     IsReplay?: boolean;
         
-    @Field({nullable: true, description: `Earliest time the delivery may be claimed; retry backoff moves it forward.`}) 
+    @Field({nullable: true, description: "Earliest time the delivery may be claimed; retry backoff moves it forward."}) 
     VisibleAt?: Date;
         
-    @Field({nullable: true, description: `Worker instance holding the current lease.`}) 
+    @Field({nullable: true, description: "Worker instance holding the current lease."}) 
     @MaxLength(200)
     LeaseOwner?: string;
         
-    @Field({nullable: true, description: `New value per claim; a cancel leaves it unchanged. Every heartbeat and settle must present it, so a worker that lost its lease cannot overwrite a newer claim.`}) 
+    @Field({nullable: true, description: "New value per claim; a cancel leaves it unchanged. Every heartbeat and settle must present it, so a worker that lost its lease cannot overwrite a newer claim."}) 
     @MaxLength(36)
     LeaseToken?: string;
         
-    @Field({nullable: true, description: `When the current lease expires, on the database clock.`}) 
+    @Field({nullable: true, description: "When the current lease expires, on the database clock."}) 
     LeaseExpiresAt?: Date;
         
-    @Field({nullable: true, description: `When the lease was last renewed.`}) 
+    @Field({nullable: true, description: "When the lease was last renewed."}) 
     LastHeartbeatAt?: Date;
         
-    @Field({nullable: true, description: `Latest handler progress JSON ({"Percent","Message","Checkpoint"}).`}) 
+    @Field({nullable: true, description: "Latest handler progress JSON ({\"Percent\",\"Message\",\"Checkpoint\"})."}) 
     @MaxLength(4000)
     Progress?: string;
         
-    @Field({nullable: true, description: `Most recent failure text, including LeaseExpired.`}) 
+    @Field({nullable: true, description: "Most recent failure text, including LeaseExpired."}) 
     LastError?: string;
         
-    @Field({nullable: true, description: `Why the delivery was dead-lettered: a handler reason, MaxAttemptsExceeded, LeaseExpired or HandlerNotRegistered.`}) 
+    @Field({nullable: true, description: "Why the delivery was dead-lettered: a handler reason, MaxAttemptsExceeded, LeaseExpired or HandlerNotRegistered."}) 
     @MaxLength(100)
     DeadLetterReason?: string;
         
-    @Field({nullable: true, description: `When the delivery entered DeadLettered.`}) 
+    @Field({nullable: true, description: "When the delivery entered DeadLettered."}) 
     DeadLetteredAt?: Date;
         
-    @Field({nullable: true, description: `Terminal time for both Completed and Discarded; the retention purge key.`}) 
+    @Field({nullable: true, description: "Terminal time for both Completed and Discarded; the retention purge key."}) 
     CompletedAt?: Date;
         
-    @Field({nullable: true, description: `Set when an operator cancels an in-flight delivery. From then on every holder write except AcknowledgeCancel fails; the holder acknowledges and the row becomes Discarded at once, or ExpireLeases discards it when the lease runs out. Never retried.`}) 
+    @Field({nullable: true, description: "Set when an operator cancels an in-flight delivery. From then on every holder write except AcknowledgeCancel fails; the holder acknowledges and the row becomes Discarded at once, or ExpireLeases discards it when the lease runs out. Never retried."}) 
     CancelRequestedAt?: Date;
         
     @Field({nullable: true}) 
     @MaxLength(36)
     ResolvedByUserID?: string;
         
-    @Field({nullable: true, description: `Operator note recorded with a replay or the reason recorded with a discard.`}) 
+    @Field({nullable: true, description: "Operator note recorded with a replay or the reason recorded with a discard."}) 
     @MaxLength(1000)
     ResolutionNote?: string;
         
@@ -97429,39 +97429,39 @@ export class MJWorkQueueDeliveryResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Work Queue Messages
 //****************************************************************************
-@ObjectType({ description: `One published unit of work (the envelope). Immutable. Stored for Database-transport topics only. ID is the globally unique MessageID.` })
+@ObjectType({ description: "One published unit of work (the envelope). Immutable. Stored for Database-transport topics only. ID is the globally unique MessageID." })
 export class MJWorkQueueMessage_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field(() => Int, {nullable: true, description: `Publish order, assigned by the database. Every delivery of the message carries it as its OrderKey.`}) 
+    @Field(() => Int, {nullable: true, description: "Publish order, assigned by the database. Every delivery of the message carries it as its OrderKey."}) 
     PublishOrdinal?: number;
         
     @Field({nullable: true}) 
     @MaxLength(36)
     TopicID?: string;
         
-    @Field({nullable: true, description: `Producer-supplied key used by Exclusive and Ordered subscriptions. Compared case-sensitively (binary collation).`}) 
+    @Field({nullable: true, description: "Producer-supplied key used by Exclusive and Ordered subscriptions. Compared case-sensitively (binary collation)."}) 
     @MaxLength(200)
     PartitionKey?: string;
         
-    @Field({nullable: true, description: `JSON object of string attributes (at most 10). The only envelope fields subscription filters see.`}) 
+    @Field({nullable: true, description: "JSON object of string attributes (at most 10). The only envelope fields subscription filters see."}) 
     @MaxLength(4000)
     Attributes?: string;
         
-    @Field({nullable: true, description: `Inline JSON payload. Mutually exclusive with PayloadRef.`}) 
+    @Field({nullable: true, description: "Inline JSON payload. Mutually exclusive with PayloadRef."}) 
     Payload?: string;
         
-    @Field({nullable: true, description: `JSON claim-check reference ({"Uri":...}) to data held outside the queue.`}) 
+    @Field({nullable: true, description: "JSON claim-check reference ({\"Uri\":...}) to data held outside the queue."}) 
     @MaxLength(2000)
     PayloadRef?: string;
         
-    @Field({nullable: true, description: `Caller-supplied identifier for tracing related work.`}) 
+    @Field({nullable: true, description: "Caller-supplied identifier for tracing related work."}) 
     @MaxLength(200)
     CorrelationID?: string;
         
-    @Field({nullable: true, description: `When MJ accepted the publish, on the database clock.`}) 
+    @Field({nullable: true, description: "When MJ accepted the publish, on the database clock."}) 
     PublishedAt?: Date;
         
     @Field({nullable: true}) 
@@ -97548,7 +97548,7 @@ export class MJWorkQueueMessageResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Work Queue Subscriptions
 //****************************************************************************
-@ObjectType({ description: `A consumer\'s standing request for a topic\'s messages: filter, partition mode, retry and lease policy, and where the handler runs.` })
+@ObjectType({ description: "A consumer's standing request for a topic's messages: filter, partition mode, retry and lease policy, and where the handler runs." })
 export class MJWorkQueueSubscription_ {
     @Field() 
     @MaxLength(36)
@@ -97558,55 +97558,55 @@ export class MJWorkQueueSubscription_ {
     @MaxLength(36)
     TopicID?: string;
         
-    @Field({nullable: true, description: `Globally unique subscription name, used in manifests and consumer configuration.`}) 
+    @Field({nullable: true, description: "Globally unique subscription name, used in manifests and consumer configuration."}) 
     @MaxLength(200)
     Name?: string;
         
-    @Field({nullable: true, description: `What this consumer does and who owns it.`}) 
+    @Field({nullable: true, description: "What this consumer does and who owns it."}) 
     Description?: string;
         
-    @Field({nullable: true, description: `Optional attribute filter as MJ CompositeFilterDescriptor JSON (03 section 4), restricted to the broker-translatable operators eq, neq, startswith, isnull and isnotnull over envelope attribute names. Null matches every message.`}) 
+    @Field({nullable: true, description: "Optional attribute filter as MJ CompositeFilterDescriptor JSON (03 section 4), restricted to the broker-translatable operators eq, neq, startswith, isnull and isnotnull over envelope attribute names. Null matches every message."}) 
     Filter?: string;
         
-    @Field({nullable: true, description: `None: no key constraints. Exclusive: one delivery in flight per partition key, no order promise. Ordered (Database transport only): a key's deliveries run in publish order, one at a time, and a dead-lettered head blocks its key. Immutable once the subscription has deliveries.`}) 
+    @Field({nullable: true, description: "None: no key constraints. Exclusive: one delivery in flight per partition key, no order promise. Ordered (Database transport only): a key's deliveries run in publish order, one at a time, and a dead-lettered head blocks its key. Immutable once the subscription has deliveries."}) 
     @MaxLength(20)
     PartitionMode?: string;
         
-    @Field(() => Int, {nullable: true, description: `Attempts allowed per delivery, including lease expiries, before it is dead-lettered.`}) 
+    @Field(() => Int, {nullable: true, description: "Attempts allowed per delivery, including lease expiries, before it is dead-lettered."}) 
     MaxAttempts?: number;
         
-    @Field(() => Int, {nullable: true, description: `Base retry delay in seconds; full-jitter exponential backoff doubles it per attempt.`}) 
+    @Field(() => Int, {nullable: true, description: "Base retry delay in seconds; full-jitter exponential backoff doubles it per attempt."}) 
     BackoffBaseSeconds?: number;
         
-    @Field(() => Int, {nullable: true, description: `Upper bound on the retry delay, in seconds.`}) 
+    @Field(() => Int, {nullable: true, description: "Upper bound on the retry delay, in seconds."}) 
     BackoffMaxSeconds?: number;
         
-    @Field(() => Int, {nullable: true, description: `Seconds a claim lasts before it expires unless renewed by a heartbeat. Measured on the transport clock.`}) 
+    @Field(() => Int, {nullable: true, description: "Seconds a claim lasts before it expires unless renewed by a heartbeat. Measured on the transport clock."}) 
     LeaseSeconds?: number;
         
-    @Field({nullable: true, description: `Auto: the runtime renews the lease while the handler runs. Manual: only handler heartbeats renew it, so hung handlers are detected.`}) 
+    @Field({nullable: true, description: "Auto: the runtime renews the lease while the handler runs. Manual: only handler heartbeats renew it, so hung handlers are detected."}) 
     @MaxLength(20)
     HeartbeatMode?: string;
         
-    @Field(() => Int, {nullable: true, description: `Optional cap on handler run time; Auto heartbeats stop and the handler is aborted after it. Above a host's known ceiling it produces a validation warning.`}) 
+    @Field(() => Int, {nullable: true, description: "Optional cap on handler run time; Auto heartbeats stop and the handler is aborted after it. Above a host's known ceiling it produces a validation warning."}) 
     MaxProcessingSeconds?: number;
         
-    @Field({nullable: true, description: `MJWorker: the handler runs inside an MJ server process. External: the handler runs elsewhere, for example a Lambda (cloud transports only).`}) 
+    @Field({nullable: true, description: "MJWorker: the handler runs inside an MJ server process. External: the handler runs elsewhere, for example a Lambda (cloud transports only)."}) 
     @MaxLength(20)
     HostType?: string;
         
-    @Field({nullable: true, description: `ClassFactory key of the BaseWorkHandler registration that processes deliveries. Required for MJWorker subscriptions.`}) 
+    @Field({nullable: true, description: "ClassFactory key of the BaseWorkHandler registration that processes deliveries. Required for MJWorker subscriptions."}) 
     @MaxLength(200)
     HandlerKey?: string;
         
-    @Field({nullable: true, description: `Informational reference to an external consumer, for example a Lambda ARN.`}) 
+    @Field({nullable: true, description: "Informational reference to an external consumer, for example a Lambda ARN."}) 
     @MaxLength(500)
     ExternalRef?: string;
         
-    @Field({nullable: true, description: `Transport binding JSON imported after provisioning, for example queue and dead-letter queue URLs. Empty for Database subscriptions.`}) 
+    @Field({nullable: true, description: "Transport binding JSON imported after provisioning, for example queue and dead-letter queue URLs. Empty for Database subscriptions."}) 
     BindingConfig?: string;
         
-    @Field({nullable: true, description: `Active: deliveries are created and processed. Paused: deliveries are created but nothing is claimed. Disabled: no new deliveries are created.`}) 
+    @Field({nullable: true, description: "Active: deliveries are created and processed. Paused: deliveries are created but nothing is claimed. Disabled: no new deliveries are created."}) 
     @MaxLength(20)
     Status?: string;
         
@@ -97838,42 +97838,42 @@ export class MJWorkQueueSubscriptionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Work Queue Topics
 //****************************************************************************
-@ObjectType({ description: `A named destination producers publish work to. Each topic is bound to one transport and fans out to its subscriptions.` })
+@ObjectType({ description: "A named destination producers publish work to. Each topic is bound to one transport and fans out to its subscriptions." })
 export class MJWorkQueueTopic_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true, description: `Unique dotted lowercase topic name, for example email.events.`}) 
+    @Field({nullable: true, description: "Unique dotted lowercase topic name, for example email.events."}) 
     @MaxLength(200)
     Name?: string;
         
-    @Field({nullable: true, description: `What the topic represents and who publishes to it.`}) 
+    @Field({nullable: true, description: "What the topic represents and who publishes to it."}) 
     Description?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
     TransportID?: string;
         
-    @Field(() => Boolean, {nullable: true, description: `Cloud transports: the topic uses FIFO resources. Required on AWS when any subscription is Exclusive.`}) 
+    @Field(() => Boolean, {nullable: true, description: "Cloud transports: the topic uses FIFO resources. Required on AWS when any subscription is Exclusive."}) 
     IsFifo?: boolean;
         
-    @Field(() => Boolean, {nullable: true, description: `When 1, API callers may publish to this topic through POST /work-queue/topics/{topic}/messages. In-process code may publish to any active topic.`}) 
+    @Field(() => Boolean, {nullable: true, description: "When 1, API callers may publish to this topic through POST /work-queue/topics/{topic}/messages. In-process code may publish to any active topic."}) 
     AllowExternalPublish?: boolean;
         
-    @Field(() => Int, {nullable: true, description: `Largest serialized envelope accepted, in bytes (at most 262144).`}) 
+    @Field(() => Int, {nullable: true, description: "Largest serialized envelope accepted, in bytes (at most 262144)."}) 
     MaxPayloadBytes?: number;
         
-    @Field(() => Int, {nullable: true, description: `Window, in seconds, during which a DeduplicationKey suppresses repeat publishes when the publisher does not supply one.`}) 
+    @Field(() => Int, {nullable: true, description: "Window, in seconds, during which a DeduplicationKey suppresses repeat publishes when the publisher does not supply one."}) 
     DefaultDeduplicationTTLSeconds?: number;
         
-    @Field(() => Int, {nullable: true, description: `Days completed and discarded deliveries, and their messages, are kept before the sweeper purges them (Database transport).`}) 
+    @Field(() => Int, {nullable: true, description: "Days completed and discarded deliveries, and their messages, are kept before the sweeper purges them (Database transport)."}) 
     RetentionDays?: number;
         
-    @Field({nullable: true, description: `Transport binding JSON imported after provisioning, for example {"SnsTopicArn":"..."}. Empty for Database topics.`}) 
+    @Field({nullable: true, description: "Transport binding JSON imported after provisioning, for example {\"SnsTopicArn\":\"...\"}. Empty for Database topics."}) 
     BindingConfig?: string;
         
-    @Field({nullable: true, description: `Active topics accept publishes; Disabled topics reject them.`}) 
+    @Field({nullable: true, description: "Active topics accept publishes; Disabled topics reject them."}) 
     @MaxLength(20)
     Status?: string;
         
@@ -98069,31 +98069,31 @@ export class MJWorkQueueTopicResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Work Queue Transports
 //****************************************************************************
-@ObjectType({ description: `A configured backend that stores and delivers work-queue messages (Database, AWS, ...). Topics bind to exactly one transport.` })
+@ObjectType({ description: "A configured backend that stores and delivers work-queue messages (Database, AWS, ...). Topics bind to exactly one transport." })
 export class MJWorkQueueTransport_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true, description: `Unique transport name, for example Database or AWS-prod-us-east-1.`}) 
+    @Field({nullable: true, description: "Unique transport name, for example Database or AWS-prod-us-east-1."}) 
     @MaxLength(100)
     Name?: string;
         
-    @Field({nullable: true, description: `What this transport is used for and who operates it.`}) 
+    @Field({nullable: true, description: "What this transport is used for and who operates it."}) 
     Description?: string;
         
-    @Field({nullable: true, description: `ClassFactory key of the BaseTransportDriverFactory registration that builds the driver: Database or AWS.`}) 
+    @Field({nullable: true, description: "ClassFactory key of the BaseTransportDriverFactory registration that builds the driver: Database or AWS."}) 
     @MaxLength(100)
     DriverClass?: string;
         
-    @Field({nullable: true, description: `Driver-specific JSON configuration, for example {"Region":"us-east-1"}. Never holds secrets; use CredentialID.`}) 
+    @Field({nullable: true, description: "Driver-specific JSON configuration, for example {\"Region\":\"us-east-1\"}. Never holds secrets; use CredentialID."}) 
     Configuration?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
     CredentialID?: string;
         
-    @Field({nullable: true, description: `Active transports can deliver; Disabled transports reject publishes.`}) 
+    @Field({nullable: true, description: "Active transports can deliver; Disabled transports reject publishes."}) 
     @MaxLength(20)
     Status?: string;
         
