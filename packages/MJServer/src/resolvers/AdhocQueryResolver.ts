@@ -97,6 +97,7 @@ export class AdhocQueryResolver extends ResolverBase {
                 const rendered = RenderPipeline.Run(input.SQL, {
                     Platform: platform,
                     ContextUser: contextUser,
+                    RequireReadStatement: true,
                     ...(usePaging ? { Paging: { StartRow: startRow, MaxRows: maxRows! } } : {}),
                 });
                 dataSQL = rendered.FinalSQL;

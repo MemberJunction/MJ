@@ -785,6 +785,38 @@ describe('MaxRows row cap — numeric sanitation', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
+// Read-statement gate for caller-supplied SQL
+// ════════════════════════════════════════════════════════════════════
+
+describe('RequireReadStatement — caller-supplied SQL must be a single read query', () => {
+    const refused: Array<[string, 'sqlserver' | 'postgresql']> = [
+        ["SET statement_timeout = '3s'", 'postgresql'],
+        ['SET LOCK_TIMEOUT 0', 'sqlserver'],
+        ['SELECT * INTO copy_of_users FROM Users', 'sqlserver'],
+        ['WITH gone AS (DELETE FROM users RETURNING *) SELECT * FROM gone', 'postgresql'],
+        ['DECLARE @x INT = 1 SELECT @x', 'sqlserver']
+    ];
+    for (const [sql, platform] of refused) {
+        it(`refuses ${sql} on ${platform}`, () => {
+            stubMetadata();
+            expect(() => RenderPipeline.Run(sql, { Platform: platform, RequireReadStatement: true }))
+                .toThrow(/only a single read query/i);
+        });
+    }
+
+    it('still runs read queries the AST parser cannot read', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run('SELECT TRY_CAST(a AS INT) AS a FROM t', { Platform: 'sqlserver', RequireReadStatement: true });
+        expect(result.FinalSQL).toContain('TRY_CAST');
+    });
+
+    it('leaves saved-query rendering alone when the flag is not set', () => {
+        stubMetadata();
+        expect(() => RenderPipeline.Run('DECLARE @x INT = 1 SELECT @x', { Platform: 'sqlserver' })).not.toThrow();
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
 // Safety guard — mutation rejection
 // ════════════════════════════════════════════════════════════════════
 
