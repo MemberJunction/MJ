@@ -7728,7 +7728,7 @@ The context is now within limits. Please retry your request with the recovered c
                 return;
             }
             const steps = await this.loadStoppedRunResultSteps(stoppedRunId, params);
-            const body = BaseAgent.BuildStoppedRunResultsMessage(steps, this.maxStandaloneToolResultChars);
+            const body = BaseAgent.BuildStoppedRunResultsMessage(steps, BaseAgent.maxStoppedRunResultChars);
             if (!body) {
                 return;
             }
@@ -7792,6 +7792,13 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Budget for the stopped-run carry-forward message. Smaller than a standalone tool result on
+     * purpose: this rides at the front of a continuation turn's context, and a stopped run can
+     * hold dozens of search results. ~7k tokens keeps the useful values and drops the long tails.
+     */
+    protected static readonly maxStoppedRunResultChars = 28_000;
+
+    /**
      * Renders a stopped run's completed step results into the carried-forward message body.
      * Pure and static for testability. An Actions step renders as the action call (name and
      * params) with its output parameters, or its message when it produced none; a Tool step
@@ -7823,9 +7830,10 @@ The context is now within limits. Please retry your request with the recovered c
         if (sections.length === 0) {
             return null;
         }
-        const header = 'Your previous turn was stopped by the user before it finished. It had already completed the calls ' +
-            'below and their results are still valid: reuse them instead of re-calling, and continue from where it ' +
-            'left off rather than starting over.';
+        const header = 'Your previous turn was stopped by the user before it finished. The actions and tools listed below ' +
+            'were ALREADY EXECUTED in that turn and their results are still valid. Treat each entry as a result you already ' +
+            'have: do not run the action or call a tool again for it, and do not invoke the action names below as tools. ' +
+            'Continue from where the stopped turn left off rather than starting over.';
         const droppedNote = dropped > 0 ? `\n\n[${dropped} additional result(s) omitted for size; re-call those if needed]` : '';
         return `${header}\n${sections.join('\n\n')}${droppedNote}`;
     }
@@ -7861,7 +7869,10 @@ The context is now within limits. Please retry your request with the recovered c
         if (!body) {
             return null;
         }
-        return FormatToolResultSection({ tool: input.actionName, input: input.actionParams, ordinal: step.StepNumber }, body);
+        // Deliberately NOT the inline-tool heading (`### tool({...})`): an agent shown that shape for an
+        // action tried to call the action as a conversation tool. Say what it is in words.
+        return `### Already executed: action "${input.actionName}" with params ${JSON.stringify(input.actionParams ?? {})}\n` +
+            `Result:\n\`\`\`json\n${body}\n\`\`\``;
     }
 
     /**

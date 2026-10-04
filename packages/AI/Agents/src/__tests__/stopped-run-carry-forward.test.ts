@@ -62,10 +62,13 @@ describe('BaseAgent.BuildStoppedRunResultsMessage', () => {
             100_000
         );
         expect(body).toContain('stopped by the user before it finished');
-        expect(body).toContain('continue from where it left off');
-        expect(body).toContain('### 4. Get Weather({"Location":"Sydney"})');
+        expect(body).toContain('ALREADY EXECUTED');
+        expect(body).toContain('do not invoke the action names below as tools');
+        expect(body).toContain('### Already executed: action "Get Weather" with params {"Location":"Sydney"}');
         expect(body).toContain('"CurrentTemp": "57.7°F"');
-        expect(body).not.toContain('"Location": "Sydney"'); // inputs live in the heading, not the body
+        // Never the inline-tool heading shape — an agent shown `Name({...})` for an action tried to
+        // call it as a conversation tool (observed: four "Unknown conversation tool" steps).
+        expect(body).not.toMatch(/### \d+\. Get Weather\(/);
     });
 
     it('falls back to the action message when it produced no output parameters', () => {
@@ -81,8 +84,8 @@ describe('BaseAgent.BuildStoppedRunResultsMessage', () => {
             [actionStep(4, 'Get Weather', { Location: 'Perth' }, { CurrentTemp: '70°F' }), toolStep(5, 'getMessageBySequence', 'the brief')],
             100_000
         );
-        expect(body).toContain('Get Weather');
-        expect(body).toContain('getMessageBySequence({"sequence":3})');
+        expect(body).toContain('Already executed: action "Get Weather"');
+        expect(body).toContain('getMessageBySequence({"sequence":3})'); // real inline tools keep their own contract
         expect(body).toContain('the brief');
     });
 
