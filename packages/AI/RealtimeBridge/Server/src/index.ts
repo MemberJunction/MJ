@@ -1,5 +1,6 @@
 export * from './ai-bridge-engine';
 export * from './multi-agent-room-coordinator';
+export * from './full-duplex-turn-gate';
 export * from './loopback-bridge';
 export * from './openai-sip-bridge';
 export * from './join-url-resolver';
