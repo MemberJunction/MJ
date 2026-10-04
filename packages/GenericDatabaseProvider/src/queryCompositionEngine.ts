@@ -1,6 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { GetDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { SQLParser, AnalyzeTopLevelOrderBy } from "@memberjunction/sql-parser";
+import { SQLParser, AnalyzeTopLevelOrderBy, LexSQL } from "@memberjunction/sql-parser";
 import { DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 import { MJQueryEntityExtended, QueryEngine } from "@memberjunction/core-entities";
 import { SymbolTable } from "./symbolTable.js";
@@ -140,19 +140,40 @@ export class QueryCompositionEngine {
     /**
      * Checks whether SQL contains any {{query:"..."}} composition tokens.
      * Use this as a fast guard before calling ResolveComposition().
-     * Only considers tokens outside of SQL comments.
+     * Only tokens that are SQL count: not those inside a comment, a string literal or a
+     * bracket-quoted identifier.
      */
-    public HasCompositionTokens(sql: string): boolean {
+    public HasCompositionTokens(sql: string, platform: DatabasePlatform = 'sqlserver'): boolean {
         if (!sql) return false;
-        const stripped = this.stripSQLComments(sql);
-        const tokens = SQLParser.Tokenize(stripped);
+        const tokens = SQLParser.Tokenize(this.maskNonSQL(sql, platform));
         return tokens.some(t => t.type === 'MJ_COMPOSITION_REF');
+    }
+
+    /**
+     * `sql` with every comment, string literal and bracket-quoted identifier blanked out to
+     * spaces of the same length, so a composition token found in the result is real SQL and sits
+     * at the same position in the original.
+     */
+    private maskNonSQL(sql: string, platform: DatabasePlatform): string {
+        return LexSQL(sql, this.getDialect(platform))
+            .map(t => t.Kind === 'comment' || t.Kind === 'string' || (t.Kind === 'identifier' && t.Text.startsWith('['))
+                ? ' '.repeat(t.Text.length)
+                : t.Text)
+            .join('');
+    }
+
+    /** Replaces the first occurrence of `token` that is real SQL, leaving comments and literals as written. */
+    private replaceToken(sql: string, token: string, replacement: string, platform: DatabasePlatform): string {
+        const at = this.maskNonSQL(sql, platform).indexOf(token);
+        if (at === -1) return sql;
+        return sql.substring(0, at) + replacement + sql.substring(at + token.length);
     }
 
     /**
      * Parses all {{query:"..."}} tokens from SQL without resolving them.
      * Useful for dependency extraction during the save pipeline.
-     * Only considers tokens outside of SQL comments.
+     * Only tokens that are SQL count: not those inside a comment, a string literal or a
+     * bracket-quoted identifier.
      *
      * Uses MJLexer for structured tokenization instead of regex, providing
      * full parsing of category paths, query names, and parameter lists.
@@ -160,11 +181,10 @@ export class QueryCompositionEngine {
      * @param sql - The SQL text to parse
      * @returns Array of parsed token metadata
      */
-    public ParseCompositionTokens(sql: string): ParsedCompositionToken[] {
+    public ParseCompositionTokens(sql: string, platform: DatabasePlatform = 'sqlserver'): ParsedCompositionToken[] {
         if (!sql) return [];
 
-        const stripped = this.stripSQLComments(sql);
-        const refs = SQLParser.ExtractCompositionRefs(stripped);
+        const refs = SQLParser.ExtractCompositionRefs(this.maskNonSQL(sql, platform));
 
         return refs.map(ref => {
             const categorySegments = ref.categoryPath
@@ -267,7 +287,7 @@ export class QueryCompositionEngine {
             );
         }
 
-        const tokens = this.ParseCompositionTokens(sql);
+        const tokens = this.ParseCompositionTokens(sql, platform);
         if (tokens.length === 0) return sql;
 
         let resolvedSQL = sql;
@@ -305,9 +325,7 @@ export class QueryCompositionEngine {
             // Check if we already have this exact CTE
             const existingCTE = cteEntries.find(e => e.DeduplicationKey === dedupeKey);
             if (existingCTE) {
-                // safe-replace: CTEName is only ever generateCTEName(), which strips every
-                // char outside [a-zA-Z0-9_ ] and appends a base36 hash — it cannot hold a `$`
-                resolvedSQL = resolvedSQL.replace(token.FullToken, existingCTE.CTEName);
+                resolvedSQL = this.replaceToken(resolvedSQL, token.FullToken, existingCTE.CTEName, platform);
                 continue;
             }
 
@@ -373,9 +391,7 @@ export class QueryCompositionEngine {
             };
 
             cteEntries.push(cteEntry);
-            // safe-replace: cteName is generateCTEName() output — sanitised to
-            // [a-zA-Z0-9_ ] plus a base36 hash, so it cannot hold a `$`
-            resolvedSQL = resolvedSQL.replace(token.FullToken, cteName);
+            resolvedSQL = this.replaceToken(resolvedSQL, token.FullToken, cteName, platform);
         }
 
         return resolvedSQL;
