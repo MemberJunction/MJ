@@ -134,11 +134,12 @@ export class SQLServerDialect extends SQLDialect {
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
-        return `[${name}]`;
+        // Double any embedded `]` so the name cannot end early and the rest of it read as SQL.
+        return `[${name.replace(/]/g, ']]')}]`;
     }
 
     QuoteSchema(schema: string, object: string): string {
-        return `[${schema}].[${object}]`;
+        return `${this.QuoteIdentifier(schema)}.${this.QuoteIdentifier(object)}`;
     }
 
     /**
