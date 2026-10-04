@@ -2381,16 +2381,20 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+    optionalDependencies:
+      '@memberjunction/ai-bridge-livekit-native':
+        specifier: 6.2.0-edge.2
+        version: link:../LiveKitNative
 
   packages/AI/RealtimeBridge/Providers/LiveKitNative:
     dependencies:
-      '@memberjunction/ai-bridge-livekit':
-        specifier: 6.2.0-edge.2
-        version: link:../LiveKit
       '@memberjunction/core':
         specifier: 6.2.0-edge.2
         version: link:../../../../MJCore
     devDependencies:
+      '@memberjunction/ai-bridge-livekit':
+        specifier: 6.2.0-edge.2
+        version: link:../LiveKit
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -11445,6 +11449,9 @@ importers:
       '@memberjunction/ai-bridge-livekit':
         specifier: 6.2.0-edge.2
         version: link:../AI/RealtimeBridge/Providers/LiveKit
+      '@memberjunction/ai-bridge-livekit-native':
+        specifier: 6.2.0-edge.2
+        version: link:../AI/RealtimeBridge/Providers/LiveKitNative
       '@memberjunction/ai-bridge-server':
         specifier: 6.2.0-edge.2
         version: link:../AI/RealtimeBridge/Server
@@ -11476,6 +11483,9 @@ importers:
       '@memberjunction/ai':
         specifier: 6.2.0-edge.2
         version: link:../AI/Core
+      '@memberjunction/ai-bridge-livekit-native':
+        specifier: 6.2.0-edge.2
+        version: link:../AI/RealtimeBridge/Providers/LiveKitNative
       '@memberjunction/communication-sendgrid':
         specifier: 6.2.0-edge.2
         version: link:../Communication/providers/sendgrid
