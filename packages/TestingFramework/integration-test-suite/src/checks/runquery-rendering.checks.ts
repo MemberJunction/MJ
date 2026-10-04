@@ -18,9 +18,11 @@
  * queries create them in the same category, which teardown sweeps. The whole bundle writes, so no
  * check is gated on RequiresMutation.
  */
-import { RunQuery } from '@memberjunction/core';
+import { RunQuery, RunView } from '@memberjunction/core';
 import type { DatabasePlatform, QueryDependencySpec, RunQueryResult, UserInfo } from '@memberjunction/core';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { QueryEngine } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import {
@@ -817,6 +819,29 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
                 failures.push(...compareRows('FOR JSON in a subquery [MaxRows 5]', result, ids(items.slice(0, 5)), ['ID'], true));
             }
             FailOnMismatches('RR12', failures, cases.length + 1);
+        }
+    },
+    {
+        Id: 'runquery-rendering.RR13',
+        Name: 'RR13: a templated query that references the same dependency twice saves its dependency once and keeps its template parameters',
+        Fn: async (ctx): Promise<void> => {
+            const fixtures = requireFixtures();
+            const path = RenderCategoryPath(fixtures);
+            const query = await CreateRenderQuery(fixtures, {
+                Name: 'RR Comp Same Dependency Twice Templated',
+                SQL: `SELECT a.ID FROM {{query:"${path}/RR Dep Base"}} a JOIN {{query:"${path}/RR Dep Base"}} b ON b.ID = a.ID WHERE a.ID <= {{ MaxId | sqlNumber }} ORDER BY a.ID`
+            }, ctx.User);
+            await RefreshRenderQueries(ctx.User);
+            const dependencies = await new RunView().RunView<{ ID: string }>({
+                EntityName: 'MJ: Query Dependencies', ExtraFilter: `QueryID='${query.ID}'`, Fields: ['ID'], ResultType: 'simple'
+            }, ctx.User);
+            const failures: string[] = [];
+            if (dependencies.Results.length !== 1) failures.push(`expected one dependency row, found ${dependencies.Results.length}`);
+            const reloaded = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, query.ID));
+            if (reloaded?.UsesTemplate !== true) failures.push(`expected UsesTemplate true after save, found ${reloaded?.UsesTemplate}`);
+            const result = await new RunQuery().RunQuery({ QueryID: query.ID, Parameters: { MaxId: 9 } }, ctx.User);
+            failures.push(...compareRows('run with MaxId 9', result, ids(BuildRenderItems().filter(i => i.ID <= 9)), ['ID'], true));
+            FailOnMismatches('RR13', failures, 1);
         }
     }
 ];
