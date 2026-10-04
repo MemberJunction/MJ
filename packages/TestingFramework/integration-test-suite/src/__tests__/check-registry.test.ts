@@ -282,7 +282,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runquery-catalog': 6,
         'runquery-features': 16,
         'runquery-params': 10,
-        'runquery-rendering': 10,
+        'runquery-rendering': 11,
         'runquery-rendering-client': 6,
         'runview-features': 6,
         'role-elevation': 6,
