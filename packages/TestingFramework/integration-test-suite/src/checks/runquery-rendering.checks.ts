@@ -343,7 +343,8 @@ const PARAM_FILTER_SQL = [
 
 const PARAM_QUERIES: RenderQueryDefinition[] = [
     { Name: 'RR Param Filters', SQL: PARAM_FILTER_SQL },
-    { Name: 'RR Param Required', SQL: `SELECT ID FROM ${T} WHERE Category = {{ Category | sqlString }} ORDER BY ID` }
+    { Name: 'RR Param Required', SQL: `SELECT ID FROM ${T} WHERE Category = {{ Category | sqlString }} ORDER BY ID` },
+    { Name: 'RR Param Default', SQL: `SELECT ID FROM ${T} WHERE ID <= {{ MaxId | default(7) | sqlNumber }} ORDER BY ID` }
 ];
 
 /** One parameter set for the filter query and the rows it selects. */
@@ -647,14 +648,18 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
     },
     {
         Id: 'runquery-rendering.RR3',
-        Name: 'RR3: a required parameter that is missing fails the run; supplied, it selects the expected rows',
+        Name: 'RR3: a required parameter that is missing fails the run; a template default applies when its parameter is omitted',
         Fn: async (ctx): Promise<void> => {
             const items = BuildRenderItems();
             const missing = await new RunQuery().RunQuery({ QueryID: savedQueryID('RR Param Required') }, ctx.User);
             AssertEqual(missing.Success, false, 'a required parameter that is omitted must fail the run');
             const supplied = await new RunQuery().RunQuery({ QueryID: savedQueryID('RR Param Required'), Parameters: { Category: 'Beta' } }, ctx.User);
             const failures = compareRows('required supplied', supplied, ids(items.filter(i => i.Category === 'Beta')), ['ID'], true);
-            FailOnMismatches('RR3', failures, 1);
+            const defaulted = await new RunQuery().RunQuery({ QueryID: savedQueryID('RR Param Default') }, ctx.User);
+            failures.push(...compareRows('default applied', defaulted, ids(items.filter(i => i.ID <= 7)), ['ID'], true));
+            const overridden = await new RunQuery().RunQuery({ QueryID: savedQueryID('RR Param Default'), Parameters: { MaxId: 12 } }, ctx.User);
+            failures.push(...compareRows('default overridden', overridden, ids(items.filter(i => i.ID <= 12)), ['ID'], true));
+            FailOnMismatches('RR3', failures, 3);
         }
     },
     {
