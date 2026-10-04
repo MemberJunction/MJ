@@ -21,7 +21,7 @@
 
 import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import type { IRealtimeSession } from '@memberjunction/ai';
-import type { MJAIAgentSessionEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentSessionEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderEntity, MJInteractionEntity } from '@memberjunction/core-entities';
 import type { AIBridgeEngine, ActiveBridgeSession, BridgeRealtimeSessionRecoveryRequest } from '@memberjunction/ai-bridge-server';
 import { CreateBridgeRealtimeSession, CreateBridgeSessionTranscriptSink, GetBridgeRealtimeRuntime, ResolveRealtimeCoAgentID } from '@memberjunction/ai-agents';
 import {
@@ -44,6 +44,8 @@ import {
     type TransferTarget,
 } from './outboundCallPolicy.js';
 import { BuildPhoneFraming, BuildTelephonyTools, TelephonyCallToolExecutor, type TelephonyToolFeatures } from './telephonyCallTools.js';
+import { FindPhoneNumber } from './agentIdentityLookup.js';
+import { InteractionLifecycleService } from './interactionLifecycle.js';
 
 const AGENT_SESSION_ENTITY = 'MJ: AI Agent Sessions';
 
@@ -63,6 +65,10 @@ export interface TelephonyCallStarterDeps {
     OutboundPolicy: OutboundCallPolicy;
     /** The validated transfer directory (`telephony.transferTargets`); empty means the agent cannot transfer. */
     TransferTargets?: readonly TransferTarget[];
+    /** Manages Interaction, InteractionEvent, and InteractionLink rows. */
+    InteractionLifecycle?: InteractionLifecycleService;
+    /** Estimated carrier cost per minute for computing CostEstimate on Interaction. */
+    CostPerMinute?: number;
 }
 
 /** One call to start. */
@@ -163,18 +169,50 @@ export class TelephonyCallSessionStarter {
      */
     public async Start(args: TelephonyCallStartArgs): Promise<StartedTelephonyCall> {
         let agentSession: MJAIAgentSessionEntity | undefined;
+        let interaction: MJInteractionEntity | null = null;
         const ref: CallRuntimeRef = {};
+        const lifecycle = this.deps.InteractionLifecycle ?? InteractionLifecycleService.Instance;
         try {
             await this.deps.Engine.Config(false, args.ContextUser, args.MetadataProvider);
             const carrier = args.ResolveProvider();
             const coAgentID = await this.deps.CoAgentResolver(args.Identity.AgentID, undefined, args.ContextUser, args.MetadataProvider);
             agentSession = await this.deps.SessionManager.CreateSession({ agentID: coAgentID, userID: args.ContextUser.ID }, args.ContextUser, args.MetadataProvider);
-            return await this.startWithSession(args, carrier, coAgentID, agentSession, ref);
+
+            const phone = await FindPhoneNumber(
+                args.Direction === 'Inbound' ? args.Identity.IdentityValue : ((args.Configuration[FROM_NUMBER_CONFIG_KEY] as string) ?? ''),
+                carrier.ID,
+                args.ContextUser,
+                args.MetadataProvider,
+            );
+
+            interaction = await lifecycle.CreateInteraction({
+                Channel: 'Phone',
+                Direction: args.Direction,
+                PhoneNumberID: phone?.ID ?? null,
+                RemoteAddress: args.RemoteNumber,
+                ExternalID: (args.Configuration[INBOUND_CALL_ID_CONFIG_KEY] as string) ?? null,
+                AgentSessionID: agentSession.ID,
+                RoomName: args.RemoteNumber,
+                Status: 'Active',
+                StartedAt: new Date(),
+                ContextUser: args.ContextUser,
+                MetadataProvider: args.MetadataProvider,
+            });
+
+            return await this.startWithSession(args, carrier, coAgentID, agentSession, ref, interaction?.ID);
         } catch (e) {
             args.Lease.Release();
             await this.closeQuietly(ref.Initial);
             if (agentSession) {
                 await this.closeAgentSession(agentSession.ID, 'Error', args.ContextUser, args.MetadataProvider);
+            }
+            if (interaction) {
+                await lifecycle.CloseInteraction({
+                    InteractionID: interaction.ID,
+                    EndReason: 'Error',
+                    ContextUser: args.ContextUser,
+                    MetadataProvider: args.MetadataProvider,
+                });
             }
             throw e;
         }
@@ -186,10 +224,12 @@ export class TelephonyCallSessionStarter {
         coAgentID: string,
         agentSession: MJAIAgentSessionEntity,
         ref: CallRuntimeRef,
+        interactionID?: string,
     ): Promise<StartedTelephonyCall> {
+        const lifecycle = this.deps.InteractionLifecycle ?? InteractionLifecycleService.Instance;
         const features = readToolFeatures(carrier);
         const executor = this.buildExecutor(args, features, ref);
-        const framing = await this.buildFraming(args, features);
+        const framing = await this.buildFraming(args, features, interactionID);
         const tools = BuildTelephonyTools(features, this.deps.TransferTargets ?? []);
 
         const openModelSession = async (priorTranscript?: string): Promise<IRealtimeSession> => {
@@ -236,19 +276,44 @@ export class TelephonyCallSessionStarter {
             // cancel button, so explicit cancellation is the `cancel_pending_work` tool.
             OnBargeIn: () => this.cancelPendingNarration(ref),
             RecoverRealtimeSession: (request: BridgeRealtimeSessionRecoveryRequest) => openModelSession(request.PriorTranscript),
-            OnSessionEnded: (reason) => this.onSessionEnded(args, agentSession.ID, reason),
+            OnSessionEnded: (reason) => this.onSessionEnded(args, agentSession.ID, reason, interactionID),
         });
         ref.Active = active;
+        if (active.RoomKey && interactionID) {
+            await lifecycle.UpdateExternalID(interactionID, active.RoomKey, args.ContextUser, args.MetadataProvider);
+        }
         LogStatus(`[Telephony] ${args.Direction} call session ${active.SessionBridgeID} started (agent session ${agentSession.ID}).`);
         return { RoomKey: active.RoomKey, SessionBridgeID: active.SessionBridgeID };
     }
 
     /** What the agent is told about the call: phone etiquette, who is on the line, and the tools it has. */
-    private async buildFraming(args: TelephonyCallStartArgs, features: TelephonyToolFeatures): Promise<string> {
+    private async buildFraming(args: TelephonyCallStartArgs, features: TelephonyToolFeatures, interactionID?: string): Promise<string> {
         const caller =
             args.Direction === 'Inbound'
                 ? await ResolveCallerSafely(this.deps.CallerResolver, args.RemoteNumber, args.Identity.IdentityValue, args.ContextUser)
                 : undefined;
+        if (caller && interactionID) {
+            const lifecycle = this.deps.InteractionLifecycle ?? InteractionLifecycleService.Instance;
+            if (caller.LinkedRecord) {
+                void lifecycle.CreateLink({
+                    InteractionID: interactionID,
+                    EntityID: caller.LinkedRecord.EntityID,
+                    RecordID: caller.LinkedRecord.RecordID,
+                    Role: 'Caller',
+                    ContextUser: args.ContextUser,
+                    MetadataProvider: args.MetadataProvider,
+                });
+            } else if (caller.PersonRecordID && caller.PersonEntityID) {
+                void lifecycle.CreateLink({
+                    InteractionID: interactionID,
+                    EntityID: caller.PersonEntityID,
+                    RecordID: caller.PersonRecordID,
+                    Role: 'Caller',
+                    ContextUser: args.ContextUser,
+                    MetadataProvider: args.MetadataProvider,
+                });
+            }
+        }
         return BuildPhoneFraming({
             Direction: args.Direction,
             RemoteNumber: args.RemoteNumber,
@@ -300,10 +365,20 @@ export class TelephonyCallSessionStarter {
         return session ? GetBridgeRealtimeRuntime(session)?.CancelInFlightDelegations() ?? 0 : 0;
     }
 
-    /** End-of-call bookkeeping: free the capacity slot and close the agent-session row. Never throws. */
-    private async onSessionEnded(args: TelephonyCallStartArgs, agentSessionID: string, reason: BridgeDisconnectReason): Promise<void> {
+    /** End-of-call bookkeeping: free the capacity slot, close the agent-session row, and close the interaction. Never throws. */
+    private async onSessionEnded(args: TelephonyCallStartArgs, agentSessionID: string, reason: BridgeDisconnectReason, interactionID?: string): Promise<void> {
         args.Lease.Release();
         await this.closeAgentSession(agentSessionID, reason, args.ContextUser, args.MetadataProvider);
+        if (interactionID) {
+            const lifecycle = this.deps.InteractionLifecycle ?? InteractionLifecycleService.Instance;
+            await lifecycle.CloseInteraction({
+                InteractionID: interactionID,
+                EndReason: reason,
+                CostPerMinute: this.deps.CostPerMinute,
+                ContextUser: args.ContextUser,
+                MetadataProvider: args.MetadataProvider,
+            });
+        }
     }
 
     /** Moves the agent-session row to `Closed`. A row that is already closed (or missing) is left alone. */

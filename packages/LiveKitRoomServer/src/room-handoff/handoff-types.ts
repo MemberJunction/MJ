@@ -155,6 +155,19 @@ export interface StartRoomAgentRequest {
     RealtimeVoice?: string;
 }
 
+/** Observer for handoff lifecycle events (offered, accepted, declined, transferred, escalated). */
+export interface IRoomHandoffObserver {
+    OnHandoffEvent?: (event: {
+        RoomName: string;
+        EventType: 'Offered' | 'Accepted' | 'Declined' | 'Transferred' | 'Escalated';
+        ActorUserID?: string;
+        ActorAgentID?: string;
+        Details?: Record<string, unknown>;
+        ContextUser?: UserInfo;
+        Provider?: IMetadataProvider;
+    }) => void | Promise<void>;
+}
+
 /** What the host reports back once the agent is in the room. */
 export interface StartedRoomAgent {
     /** The `MJ: AI Agent Session Bridges` row id (use it to stop that agent). */

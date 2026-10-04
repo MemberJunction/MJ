@@ -24,7 +24,7 @@ import { IMetadataProvider, LogError, LogStatus, UserInfo } from '@memberjunctio
 import type { IRealtimeSession } from '@memberjunction/ai';
 import { CreateBridgeSessionTranscriptSink, GetBridgeRealtimeRuntime, ResolveRealtimeCoAgentID } from '@memberjunction/ai-agents';
 import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
-import type { LiveKitAgentRoomCoordinator, RoomHandoffEngine, StartedRoomAgent, StartRoomAgentRequest } from '@memberjunction/livekit-room-server';
+import type { LiveKitAgentRoomCoordinator, RoomHandoffDeps, RoomHandoffEngine, StartedRoomAgent, StartRoomAgentRequest } from '@memberjunction/livekit-room-server';
 import type { IAgentSessionManager } from '../sessionManager.js';
 import { ResolveCallerSafely, type CallerIdentity, type ICallerIdentityResolver } from './callerIdentity.js';
 import type { CallCapacityLease, ICallCapacity } from './telephonyCapacity.js';
@@ -33,12 +33,16 @@ import { FindAgentNameByID, ResolveHandoffDestination, type HandoffDestinationDe
 import { BuildRoomCallFraming, BuildRoomCallTools, ComputeHandoffCapabilities, RoomCallToolExecutor, SupportedRoomTargets } from './roomCallTools.js';
 import { CloseAgentSessionRow } from './telephonyCallSession.js';
 import { MaskNumber } from './outboundCallPolicy.js';
+import { FindPhoneNumber } from './agentIdentityLookup.js';
+import { InteractionLifecycleService } from './interactionLifecycle.js';
 
 /** The part of the room coordinator the starter drives (a `Pick` so tests inject a fake). */
 export type RoomCallCoordinator = Pick<LiveKitAgentRoomCoordinator, 'StartAgentRoomSession' | 'StopAgentRoomSession'>;
 
 /** The part of the handoff engine the starter drives. */
-export type RoomCallHandoffEngine = Pick<RoomHandoffEngine, 'RequestHandoff' | 'AgentReadyToLeave' | 'CancelRoom' | 'Deps'>;
+export type RoomCallHandoffEngine = Pick<RoomHandoffEngine, 'RequestHandoff' | 'AgentReadyToLeave' | 'CancelRoom' | 'Deps'> & {
+    Configure?: (deps: Partial<RoomHandoffDeps>) => void;
+};
 
 /** The collaborators the starter uses. */
 export interface RoomCallStarterDeps {
@@ -57,6 +61,10 @@ export interface RoomCallStarterDeps {
     Capacity: ICallCapacity;
     /** The display name of an agent by id (defaults to the AI engine's agent cache). */
     AgentNameResolver?: typeof FindAgentNameByID;
+    /** Manages Interaction, InteractionEvent, and InteractionLink rows. */
+    InteractionLifecycle?: InteractionLifecycleService;
+    /** Estimated carrier cost per minute for computing CostEstimate on Interaction. */
+    CostPerMinute?: number;
 }
 
 /** One agent session to start in a room. */
@@ -104,6 +112,7 @@ interface RoomCallContext {
     ConversationID?: string;
     CallerLabel: string;
     HangUp?: () => Promise<void>;
+    InteractionID?: string;
     /** How many agent sessions of this call are live. The context goes when the last one ends. */
     LiveAgents: number;
 }
@@ -119,7 +128,23 @@ interface AgentRef {
 export class RoomCallSessionStarter {
     private readonly rooms = new Map<string, RoomCallContext>();
 
-    constructor(private readonly deps: RoomCallStarterDeps) {}
+    constructor(private readonly deps: RoomCallStarterDeps) {
+        if (typeof this.deps.Engine.Configure === 'function') {
+            this.deps.Engine.Configure({
+                Observer: {
+                    OnHandoffEvent: (event) => {
+                        const lifecycle = this.deps.InteractionLifecycle ?? InteractionLifecycleService.Instance;
+                        const destinations = this.deps.Destinations as { User?: UserInfo; Provider?: IMetadataProvider };
+                        const contextUser = event.ContextUser ?? destinations.User;
+                        const provider = event.Provider ?? destinations.Provider;
+                        if (contextUser && provider) {
+                            void lifecycle.RecordRoomEvent(event.RoomName, event.EventType, contextUser, provider, event.ActorUserID, event.ActorAgentID, event.Details);
+                        }
+                    },
+                },
+            });
+        }
+    }
 
     /**
      * Starts the agent's session in the room. On ANY failure the lease is released and the agent-session row is closed
@@ -128,6 +153,8 @@ export class RoomCallSessionStarter {
     public async Start(args: RoomCallStartArgs): Promise<StartedRoomCall> {
         const ref: AgentRef = {};
         let agentSessionID: string | undefined;
+        let createdInteractionID: string | undefined;
+        const lifecycle = this.deps.InteractionLifecycle ?? InteractionLifecycleService.Instance;
         try {
             const coAgentID = await this.deps.CoAgentResolver(args.Agent.AgentID, undefined, args.ContextUser, args.MetadataProvider);
             const agentName = await this.resolveAgentName(args);
@@ -138,11 +165,51 @@ export class RoomCallSessionStarter {
                 args.MetadataProvider,
             );
             agentSessionID = session.ID;
-            return await this.startWithSession(args, coAgentID, agentName, session.ID, session.ConversationID ?? undefined, ref);
+
+            let interactionID = context?.InteractionID;
+            if (!interactionID) {
+                const phone = args.Channel === 'phone'
+                    ? await FindPhoneNumber(args.DialedNumber ?? args.RemoteNumber ?? '', undefined, args.ContextUser)
+                    : null;
+
+                const interaction = await lifecycle.CreateInteraction({
+                    Channel: args.Channel === 'phone' ? 'Phone' : 'Web',
+                    Direction: args.Direction,
+                    PhoneNumberID: phone?.ID ?? null,
+                    RemoteAddress: args.RemoteNumber ?? args.CallerLabel ?? null,
+                    ExternalID: args.RoomName,
+                    AgentSessionID: session.ID,
+                    RoomName: args.RoomName,
+                    Status: 'Active',
+                    StartedAt: new Date(),
+                    ContextUser: args.ContextUser,
+                    MetadataProvider: args.MetadataProvider,
+                });
+                interactionID = interaction?.ID;
+                createdInteractionID = interaction?.ID;
+            } else if (args.Takeover) {
+                await lifecycle.RecordEvent({
+                    InteractionID: interactionID,
+                    EventType: 'Transferred',
+                    Details: { PreviousAgentName: args.Takeover.PreviousAgentName, Brief: args.Takeover.Brief },
+                    ContextUser: args.ContextUser,
+                    MetadataProvider: args.MetadataProvider,
+                });
+            }
+
+            return await this.startWithSession(args, coAgentID, agentName, session.ID, session.ConversationID ?? undefined, ref, interactionID);
         } catch (e) {
             args.Lease?.Release();
             if (agentSessionID) {
                 await CloseAgentSessionRow(agentSessionID, 'Error', args.ContextUser, args.MetadataProvider);
+            }
+            if (createdInteractionID) {
+                await lifecycle.CloseInteraction({
+                    InteractionID: createdInteractionID,
+                    EndReason: 'Error',
+                    ContextUser: args.ContextUser,
+                    MetadataProvider: args.MetadataProvider,
+                });
             }
             await closeQuietly(ref.Session);
             throw e;
@@ -187,11 +254,12 @@ export class RoomCallSessionStarter {
         agentSessionID: string,
         conversationID: string | undefined,
         ref: AgentRef,
+        interactionID?: string,
     ): Promise<StartedRoomCall> {
         const supported = SupportedRoomTargets(this.deps.Targets, ComputeHandoffCapabilities(this.deps.Engine.Deps));
         const callerLabel = this.callerLabel(args);
         const executor = this.buildExecutor(args, agentName, callerLabel, supported, ref);
-        const framing = await this.buildFraming(args, supported);
+        const framing = await this.buildFraming(args, supported, interactionID);
 
         const started = await this.deps.Coordinator.StartAgentRoomSession({
             AgentSessionID: agentSessionID,
@@ -222,7 +290,7 @@ export class RoomCallSessionStarter {
             },
         });
         ref.BridgeID = started.SessionBridgeID;
-        this.rememberRoom(args, callerLabel, conversationID);
+        this.rememberRoom(args, callerLabel, conversationID, interactionID);
         LogStatus(`[Telephony] room call session ${started.SessionBridgeID} started in ${args.RoomName} (agent session ${agentSessionID}).`);
         return { SessionBridgeID: started.SessionBridgeID, AgentSessionID: agentSessionID, ConversationID: conversationID };
     }
@@ -269,11 +337,33 @@ export class RoomCallSessionStarter {
         }
     }
 
-    private async buildFraming(args: RoomCallStartArgs, supported: readonly TransferTarget[]): Promise<string> {
+    private async buildFraming(args: RoomCallStartArgs, supported: readonly TransferTarget[], interactionID?: string): Promise<string> {
         const caller: CallerIdentity | undefined =
             args.Channel === 'phone' && args.Direction === 'Inbound' && args.RemoteNumber
                 ? await ResolveCallerSafely(this.deps.CallerResolver, args.RemoteNumber, args.DialedNumber ?? '', args.ContextUser)
                 : undefined;
+        if (caller && interactionID) {
+            const lifecycle = this.deps.InteractionLifecycle ?? InteractionLifecycleService.Instance;
+            if (caller.LinkedRecord) {
+                void lifecycle.CreateLink({
+                    InteractionID: interactionID,
+                    EntityID: caller.LinkedRecord.EntityID,
+                    RecordID: caller.LinkedRecord.RecordID,
+                    Role: 'Caller',
+                    ContextUser: args.ContextUser,
+                    MetadataProvider: args.MetadataProvider,
+                });
+            } else if (caller.PersonRecordID && caller.PersonEntityID) {
+                void lifecycle.CreateLink({
+                    InteractionID: interactionID,
+                    EntityID: caller.PersonEntityID,
+                    RecordID: caller.PersonRecordID,
+                    Role: 'Caller',
+                    ContextUser: args.ContextUser,
+                    MetadataProvider: args.MetadataProvider,
+                });
+            }
+        }
         return BuildRoomCallFraming({
             Channel: args.Channel,
             Direction: args.Direction,
@@ -305,9 +395,26 @@ export class RoomCallSessionStarter {
     /** End-of-session bookkeeping: free the slot, close the row, withdraw a handoff that was waiting on this agent. Never throws. */
     private async onSessionEnded(args: RoomCallStartArgs, agentSessionID: string, reason: BridgeDisconnectReason): Promise<void> {
         args.Lease?.Release();
+        const key = roomKey(args.RoomName);
+        const context = this.rooms.get(key);
+        const isLastAgent = !context || context.LiveAgents <= 1;
+        const interactionID = context?.InteractionID;
+
         this.forgetAgent(args.RoomName);
         this.deps.Engine.CancelRoom(args.RoomName);
         await CloseAgentSessionRow(agentSessionID, reason, args.ContextUser, args.MetadataProvider);
+
+        if (isLastAgent && interactionID) {
+            const lifecycle = this.deps.InteractionLifecycle ?? InteractionLifecycleService.Instance;
+            await lifecycle.CloseInteraction({
+                InteractionID: interactionID,
+                EndReason: reason,
+                CostPerMinute: this.deps.CostPerMinute,
+                ContextUser: args.ContextUser,
+                MetadataProvider: args.MetadataProvider,
+            });
+        }
+
         try {
             args.OnEnded?.(reason);
         } catch (e) {
@@ -315,11 +422,14 @@ export class RoomCallSessionStarter {
         }
     }
 
-    private rememberRoom(args: RoomCallStartArgs, callerLabel: string, conversationID: string | undefined): void {
+    private rememberRoom(args: RoomCallStartArgs, callerLabel: string, conversationID: string | undefined, interactionID?: string): void {
         const key = roomKey(args.RoomName);
         const existing = this.rooms.get(key);
         if (existing) {
             existing.LiveAgents++;
+            if (!existing.InteractionID && interactionID) {
+                existing.InteractionID = interactionID;
+            }
             return;
         }
         this.rooms.set(key, {
@@ -329,6 +439,7 @@ export class RoomCallSessionStarter {
             ConversationID: conversationID,
             CallerLabel: callerLabel,
             HangUp: args.HangUp,
+            InteractionID: interactionID,
             LiveAgents: 1,
         });
     }

@@ -21,6 +21,8 @@ export * from './roomCallTools.js';
 export * from './roomCallSession.js';
 export * from './agentIdentityLookup.js';
 export * from './webhookParams.js';
+export * from './interactionLifecycle.js';
+export * from './numberPoolSelector.js';
 
 // ── Twilio Programmable Voice + Media Streams ──────────────────────────────────────────
 export { TwilioCallMediaRegistry } from './twilioMediaRegistry.js';

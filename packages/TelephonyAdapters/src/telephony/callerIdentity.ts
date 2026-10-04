@@ -28,6 +28,11 @@ export interface CallerIdentity {
     Verified: boolean;
     /** Free-text facts the agent may use (membership status, open cases) — written for the model to read. */
     ContextNotes?: string;
+    /** The linked record in the host CRM / database (e.g. Person, Contact) to record on InteractionLink. */
+    LinkedRecord?: { EntityID: string; RecordID: string };
+    /** Convenience Person record ID for linking when EntityID is resolved separately. */
+    PersonRecordID?: string;
+    PersonEntityID?: string;
 }
 
 /** Resolves an inbound caller's identity. */

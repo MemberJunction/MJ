@@ -29,6 +29,11 @@ export interface TelephonySharedSettings {
      * all, even on a carrier that supports it: the agent never names a free-form number.
      */
     transferTargets?: TransferTargetSettings[];
+    /**
+     * Estimated carrier cost rate per minute in reporting currency (e.g. 0.015 for 1.5 cents/min).
+     * Used to compute Interaction.CostEstimate at call end. Defaults to 0.015 if unset.
+     */
+    costPerMinute?: number;
 }
 
 /** What to do when answering-machine detection says a machine (or fax) answered an outbound call. */
