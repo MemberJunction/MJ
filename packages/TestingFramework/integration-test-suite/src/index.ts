@@ -55,6 +55,8 @@ export * from './checks/runview-features.checks';
 export * from './checks/runquery-catalog.checks';
 export * from './checks/runquery-params.checks';
 export * from './checks/runquery-features.checks';
+export * from './checks/runquery-rendering.checks';
+export * from './checks/runquery-rendering-client.checks';
 export * from './checks/scope-enforcement.checks';
 export * from './checks/subscription-isolation.checks';
 export * from './checks/templates.checks';

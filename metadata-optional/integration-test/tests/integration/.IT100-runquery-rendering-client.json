@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT100 - RunQuery Rendering over GraphQL",
+    "Description": "Client-transport slice of the query rendering matrix; needs a running MJAPI. Creates a query category and saved queries over GraphQL that read a literal derived table (valid unchanged on SQL Server and PostgreSQL), then runs a saved query and a composed query through every MaxRows / StartRow combination of the matrix over the wire, and TestQuerySQL with MaxRows. Every call asserts returned rows and TotalRowCount. TestQuerySQL needs a read-only connection on the server; without one that check reports a skip. Fixtures are removed in teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Saved and composed queries return exactly the expected rows and totals on every MaxRows / StartRow combination over GraphQL; TestQuerySQL honours MaxRows; fixtures cleaned up."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "runquery-rendering-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "3C461C71-B7E5-4C2F-819A-00EBEB4EE7C3"
+  }
+}
