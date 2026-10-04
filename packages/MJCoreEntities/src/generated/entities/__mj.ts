@@ -22868,6 +22868,10 @@ export const MJInteractionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    PhoneNumber: z.string().nullable().describe(`
+        * * Field Name: PhoneNumber
+        * * Display Name: Phone Number
+        * * SQL Data Type: nvarchar(20)`),
 });
 
 export type MJInteractionEntityType = z.infer<typeof MJInteractionSchema>;
@@ -25314,6 +25318,10 @@ export const MJMeetingParticipantSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Meeting: z.string().describe(`
+        * * Field Name: Meeting
+        * * Display Name: Meeting
+        * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User Name
@@ -25436,6 +25444,10 @@ export const MJMeetingSchema = z.object({
         * * Field Name: HostUser
         * * Display Name: Host User
         * * SQL Data Type: nvarchar(100)`),
+    DialInPhoneNumber: z.string().nullable().describe(`
+        * * Field Name: DialInPhoneNumber
+        * * Display Name: Dial-In Phone Number
+        * * SQL Data Type: nvarchar(20)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -29836,6 +29848,26 @@ export const MJRubricCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Parent ID Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Parent ID Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Parent ID Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Parent ID Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJRubricCategoryEntityType = z.infer<typeof MJRubricCategorySchema>;
@@ -29981,6 +30013,26 @@ export const MJRubricCriterionSchema = z.object({
         * * Field Name: Scale
         * * Display Name: Scale
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Parent ID Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Parent ID Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Parent ID Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Parent ID Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJRubricCriterionEntityType = z.infer<typeof MJRubricCriterionSchema>;
@@ -101023,6 +101075,15 @@ export class MJInteractionEntity extends BaseEntity<MJInteractionEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: PhoneNumber
+    * * Display Name: Phone Number
+    * * SQL Data Type: nvarchar(20)
+    */
+    get PhoneNumber(): string | null {
+        return this.Get('PhoneNumber');
+    }
 }
 
 
@@ -107285,6 +107346,15 @@ export class MJMeetingParticipantEntity extends BaseEntity<MJMeetingParticipantE
     }
 
     /**
+    * * Field Name: Meeting
+    * * Display Name: Meeting
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Meeting(): string {
+        return this.Get('Meeting');
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -107632,6 +107702,15 @@ export class MJMeetingEntity extends BaseEntity<MJMeetingEntityType> {
     */
     get HostUser(): string {
         return this.Get('HostUser');
+    }
+
+    /**
+    * * Field Name: DialInPhoneNumber
+    * * Display Name: Dial-In Phone Number
+    * * SQL Data Type: nvarchar(20)
+    */
+    get DialInPhoneNumber(): string | null {
+        return this.Get('DialInPhoneNumber');
     }
 
     /**
@@ -119145,6 +119224,51 @@ export class MJRubricCategoryEntity extends BaseEntity<MJRubricCategoryEntityTyp
     get Parent(): string | null {
         return this.Get('Parent');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Parent ID Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Parent ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Parent ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Parent ID Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
+    }
 }
 
 
@@ -119719,6 +119843,51 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
     */
     get Scale(): string | null {
         return this.Get('Scale');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Parent ID Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Parent ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Parent ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Parent ID Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 

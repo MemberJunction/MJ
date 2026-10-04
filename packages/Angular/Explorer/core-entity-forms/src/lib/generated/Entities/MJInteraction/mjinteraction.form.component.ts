@@ -20,6 +20,7 @@ export class MJInteractionFormComponent extends BaseFormComponent {
             { sectionKey: 'technicalContext', sectionName: 'Technical Context', isExpanded: true },
             { sectionKey: 'interactionTimeline', sectionName: 'Interaction Timeline', isExpanded: true },
             { sectionKey: 'financialDetails', sectionName: 'Financial Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJInteractionEvents', sectionName: 'Interaction Events', isExpanded: false },
             { sectionKey: 'mJInteractionLinks', sectionName: 'Interaction Links', isExpanded: false },

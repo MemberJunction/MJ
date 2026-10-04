@@ -407,6 +407,11 @@ CREATE TABLE ${flyway:defaultSchema}.InteractionOffer (
 );
 GO
 
+CREATE UNIQUE INDEX UX_InteractionOffer_OneAccepted
+    ON ${flyway:defaultSchema}.InteractionOffer (InteractionID)
+    WHERE Status = 'Accepted';
+GO
+
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'An offer to a specific person to take over or join a live Interaction (a warm or blind hand-off from an AI agent). Durable so any server instance can list, accept or decline it and so every response or expiry is auditable. Only the target user may accept or decline.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
