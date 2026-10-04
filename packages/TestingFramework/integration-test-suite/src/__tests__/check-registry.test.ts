@@ -159,7 +159,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
         ['jsontype-live-sync', JSONTypeLiveSyncChecks, 9], // JL1-JL9 live JSONType accessor round trip, server tier (IT95)
-        ['jsontype-live-sync-client', JSONTypeLiveSyncClientChecks, 9], // JL1-JL9 same, GraphQL wire (IT98)
+        ['jsontype-live-sync-client', JSONTypeLiveSyncClientChecks, 9], // JL1-JL9 same, GraphQL wire (IT100)
         ['task-graph-orchestration', TaskGraphOrchestrationChecks, 18], // TG1-TG18 submission, validation and trigger bindings (IT71)
         // TX1-TX27, the dispatcher actually running graphs (IT74). TX8-TX11 landed with Round 1
         // (#3745), TX12-TX17 with Round 2, TX18-TX26 with Round 3, and TX27 with the two-instance exercise. TX14 arrived in a substituted

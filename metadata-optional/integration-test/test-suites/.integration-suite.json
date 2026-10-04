@@ -1135,7 +1135,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT97 - JSONType Live Sync",
+            "TestID": "@lookup:MJ: Tests.Name=IT99 - JSONType Live Sync",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1146,7 +1146,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT98 - JSONType Live Sync (client transport)",
+            "TestID": "@lookup:MJ: Tests.Name=IT100 - JSONType Live Sync (client transport)",
             "Sequence": 71,
             "Status": "Active"
           },
