@@ -1,6 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { GetDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { SQLParser, AnalyzeTopLevelOrderBy, LexSQL, SignificantTokens, SplitLeadingCTEs } from "@memberjunction/sql-parser";
+import { SQLParser, AnalyzePagingShape, AnalyzeTopLevelOrderBy, IsKeyword, LexSQL, SignificantTokens, SplitLeadingCTEs } from "@memberjunction/sql-parser";
 import { DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 import { MJQueryEntityExtended, QueryEngine } from "@memberjunction/core-entities";
 import { SymbolTable } from "./symbolTable.js";
@@ -692,8 +692,10 @@ export class QueryCompositionEngine {
 
         let recursive = outer?.Recursive ?? false;
         const cteDefinitions: string[] = [];
+        const queryHints: string[] = [];
         for (const entry of cteEntries) {
-            const statement = this.withoutStatementSemicolons(entry.SQL, dialect);
+            const { Body: statement, Hints } = this.splitQueryHints(this.withoutStatementSemicolons(entry.SQL, dialect), dialect, platform);
+            queryHints.push(...Hints);
             const strippedSQL = this.stripTrailingOrderBy(statement, dialect);
             const commentStrippedSQL = this.stripSQLComments(strippedSQL).trimStart();
 
@@ -719,12 +721,73 @@ export class QueryCompositionEngine {
         // One WITH clause: the composed CTEs first, then the outer query's own. PostgreSQL marks
         // the whole clause RECURSIVE when any CTE in it refers to itself; SQL Server has no keyword.
         const withKeyword = recursive && platform === 'postgresql' ? 'WITH RECURSIVE' : 'WITH';
-        if (outer) {
-            const all = [...cteDefinitions, ...outer.Definitions.map(d => d.Text)];
-            return `${withKeyword} ${all.join(',\n')}\n${outer.Main}`;
-        }
+        const composed = outer
+            ? `${withKeyword} ${[...cteDefinitions, ...outer.Definitions.map(d => d.Text)].join(',\n')}\n${outer.Main}`
+            : `${withKeyword} ${cteDefinitions.join(',\n')}\n${mainSQL}`;
+        return this.appendQueryHints(composed, queryHints, dialect);
+    }
 
-        return `${withKeyword} ${cteDefinitions.join(',\n')}\n${mainSQL}`;
+    /**
+     * Takes a SQL Server statement's trailing `OPTION (…)` off, returning the hints in it. A CTE
+     * body cannot carry query hints; they belong to the statement the dependency is composed into.
+     */
+    private splitQueryHints(statement: string, dialect: SQLDialect, platform: DatabasePlatform): { Body: string; Hints: string[] } {
+        if (platform !== 'sqlserver') return { Body: statement, Hints: [] };
+        const list = this.findOptionList(statement, dialect);
+        if (!list) return { Body: statement, Hints: [] };
+        return { Body: statement.substring(0, list.OptionStart).trimEnd(), Hints: list.Hints };
+    }
+
+    /**
+     * Adds query hints to a statement: into its own `OPTION (…)` when it has one, otherwise as a
+     * new `OPTION (…)` after its last token, ahead of any trailing semicolon or comment. A hint
+     * already present, compared ignoring case and spacing, is not added twice.
+     */
+    private appendQueryHints(sql: string, hints: string[], dialect: SQLDialect): string {
+        if (hints.length === 0) return sql;
+        const list = this.findOptionList(sql, dialect);
+        const merged = this.distinctHints([...(list?.Hints ?? []), ...hints]).join(', ');
+        if (list) {
+            return sql.substring(0, list.ListStart) + merged + sql.substring(list.ListEnd);
+        }
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        let last = tokens.length - 1;
+        while (last > 0 && tokens[last].Kind === 'semicolon') last--;
+        const at = tokens[last].End;
+        return `${sql.substring(0, at)} OPTION (${merged})${sql.substring(at)}`;
+    }
+
+    /**
+     * Finds a statement's top-level trailing `OPTION (…)`: where the keyword starts, where the
+     * list inside the parentheses starts and ends, and the hints in it split at top-level commas.
+     */
+    private findOptionList(sql: string, dialect: SQLDialect): { OptionStart: number; ListStart: number; ListEnd: number; Hints: string[] } | null {
+        const shape = AnalyzePagingShape(sql, dialect);
+        const tokens = SignificantTokens(LexSQL(sql, dialect)).filter(t => t.Start >= shape.TailStart);
+        if (!IsKeyword(tokens[0], 'OPTION') || tokens[1]?.Kind !== 'open') return null;
+        const depth = tokens[1].Depth;
+        const close = tokens.findIndex((t, i) => i > 1 && t.Kind === 'close' && t.Depth === depth);
+        if (close === -1) return null;
+        const hints: string[] = [];
+        let hintStart = 2;
+        for (let i = 2; i <= close; i++) {
+            const endsHint = i === close || (tokens[i].Kind === 'comma' && tokens[i].Depth === depth + 1);
+            if (!endsHint) continue;
+            if (i > hintStart) hints.push(sql.substring(tokens[hintStart].Start, tokens[i - 1].End));
+            hintStart = i + 1;
+        }
+        return { OptionStart: tokens[0].Start, ListStart: tokens[1].End, ListEnd: tokens[close].Start, Hints: hints };
+    }
+
+    /** Hints with repeats removed, comparing case- and spacing-insensitively; first spelling kept. */
+    private distinctHints(hints: string[]): string[] {
+        const seen = new Set<string>();
+        return hints.filter(h => {
+            const key = h.replace(/\s+/g, ' ').toUpperCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
     }
 
     /**
