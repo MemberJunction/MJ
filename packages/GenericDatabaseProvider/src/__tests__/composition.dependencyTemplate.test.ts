@@ -51,6 +51,11 @@ describe('a dependency template block and the values passed to it', () => {
         expect(sql).toContain('ID >= 5');
     });
 
+    it('passes a static value written with a doubled quote as one quote', () => {
+        const sql = render(`SELECT d.ID FROM {{query:"Lib/Dep(Cat='it''s')"}} d`);
+        expect(sql).toContain("Category = 'it''s'");
+    });
+
     it('does not rewrite an attribute or a string that only looks like the variable', () => {
         const dep: QueryDependencySpec = {
             ...DEP,
