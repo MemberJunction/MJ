@@ -28,3 +28,17 @@ describe('ORDER BY with no space before it', () => {
         expect(AnalyzeTopLevelOrderBy('SELECT a AS XORDER FROM t', ss).Positions).toHaveLength(0);
     });
 });
+
+describe('quoted identifiers with doubled closing characters', () => {
+    it('does not find an ORDER BY inside a bracket identifier containing ]]', () => {
+        const analysis = AnalyzeTopLevelOrderBy('SELECT a AS [x]] ORDER BY y] FROM t ORDER BY a', ss);
+        expect(analysis.Positions).toHaveLength(1);
+        expect(analysis.OrderByClause).toBe('a');
+    });
+
+    it('does not find an ORDER BY inside a double-quoted identifier containing ""', () => {
+        const analysis = AnalyzeTopLevelOrderBy('SELECT a AS "x"" ORDER BY y" FROM t ORDER BY a', ss);
+        expect(analysis.Positions).toHaveLength(1);
+        expect(analysis.OrderByClause).toBe('a');
+    });
+});
