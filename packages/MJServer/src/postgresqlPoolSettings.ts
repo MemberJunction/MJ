@@ -20,10 +20,13 @@
  *   statement timeout, so a transaction left open by an abandoned request is ended and its locks
  *   released.
  * - MJAPI opens a raw compatibility pool and a provider pool, each up to `connectionPool.max`, plus
- *   a CodeGen pool of 10, where SQL Server opens one pool.
+ *   a CodeGen pool of 10 and, when a read-only login is configured, a read-only pool of at most 10,
+ *   where SQL Server opens one pool (and a read-only one). PostgreSQL's default `max_connections`
+ *   is 100, so the read-only and CodeGen pools are kept small.
  */
 import type { PGConnectionConfig } from '@memberjunction/postgresql-dataprovider';
-import type { PoolConfig } from 'pg';
+import type { Pool, PoolConfig } from 'pg';
+import { BaseSingleton } from '@memberjunction/global';
 import type { DatabaseSettingsInfo } from './config.js';
 
 /** Statement timeout for the CodeGen/DDL pool, matching the SQL Server CodeGen pool. */
@@ -32,8 +35,14 @@ export const CODEGEN_STATEMENT_TIMEOUT_MS = 600000;
 /** Pool size for the CodeGen/DDL pool. */
 const CODEGEN_MAX_CONNECTIONS = 10;
 
-/** Which pool the settings are for: API traffic, or CodeGen and DDL work. */
-export type PostgreSQLPoolPurpose = 'api' | 'codegen';
+/** Largest pool size for the read-only pool, which serves only caller-supplied SQL. */
+const READ_ONLY_MAX_CONNECTIONS = 10;
+
+/**
+ * Which pool the settings are for: API traffic, the read-only pool for caller-supplied SQL, or
+ * CodeGen and DDL work.
+ */
+export type PostgreSQLPoolPurpose = 'api' | 'read-only' | 'codegen';
 
 /** Where a PostgreSQL pool connects and as whom. */
 export interface PostgreSQLEndpoint {
@@ -76,10 +85,13 @@ export function BuildPostgreSQLConnectionConfig(
         };
     }
     const statementTimeoutMs = Math.max(0, settings.requestTimeout);
+    const apiMax = pool?.max ?? 50;
+    const apiMin = pool?.min ?? 5;
+    const readOnly = purpose === 'read-only';
     return {
         ...endpoint,
-        MaxConnections: pool?.max ?? 50,
-        MinConnections: pool?.min ?? 5,
+        MaxConnections: readOnly ? Math.min(READ_ONLY_MAX_CONNECTIONS, apiMax) : apiMax,
+        MinConnections: readOnly ? 0 : apiMin,
         IdleTimeoutMillis: pool?.idleTimeoutMillis ?? 30000,
         ConnectionTimeoutMillis: pool?.acquireTimeoutMillis ?? 30000,
         StatementTimeoutMs: statementTimeoutMs,
@@ -106,4 +118,55 @@ export function ToPGPoolConfig(config: PGConnectionConfig): PoolConfig {
     if (config.StatementTimeoutMs) pool.statement_timeout = config.StatementTimeoutMs;
     if (config.IdleInTransactionSessionTimeoutMs) pool.idle_in_transaction_session_timeout = config.IdleInTransactionSessionTimeoutMs;
     return pool;
+}
+
+/** Credentials for a read-only database login. */
+export interface ReadOnlyCredentials {
+    User: string;
+    Password: string;
+}
+
+/**
+ * The read-only login for PostgreSQL: the `dbReadOnlyUsername` / `dbReadOnlyPassword` settings
+ * SQL Server uses (which default from `DB_READ_ONLY_USERNAME` / `DB_READ_ONLY_PASSWORD`), then
+ * `PG_READ_ONLY_USERNAME` / `PG_READ_ONLY_PASSWORD`. `null` when neither pair is complete.
+ */
+export function ResolvePostgreSQLReadOnlyCredentials(
+    configured: { dbReadOnlyUsername?: string; dbReadOnlyPassword?: string },
+    env: NodeJS.ProcessEnv = process.env
+): ReadOnlyCredentials | null {
+    if (configured.dbReadOnlyUsername && configured.dbReadOnlyPassword) {
+        return { User: configured.dbReadOnlyUsername, Password: configured.dbReadOnlyPassword };
+    }
+    if (env.PG_READ_ONLY_USERNAME && env.PG_READ_ONLY_PASSWORD) {
+        return { User: env.PG_READ_ONLY_USERNAME, Password: env.PG_READ_ONLY_PASSWORD };
+    }
+    return null;
+}
+
+/**
+ * Holds MJAPI's PostgreSQL read-only pool, opened once at startup with the read-only login.
+ * Per-request read-only providers share it, so they connect as the read-only user rather than
+ * through the read-write pool.
+ */
+export class PostgreSQLReadOnlyPool extends BaseSingleton<PostgreSQLReadOnlyPool> {
+    private _pool: Pool | null = null;
+
+    /** Use {@link PostgreSQLReadOnlyPool.Instance}. */
+    public constructor() {
+        super();
+    }
+
+    public static get Instance(): PostgreSQLReadOnlyPool {
+        return PostgreSQLReadOnlyPool.getInstance<PostgreSQLReadOnlyPool>();
+    }
+
+    /** The read-only pool, or `null` when no read-only login is configured. */
+    public get Pool(): Pool | null {
+        return this._pool;
+    }
+
+    public set Pool(pool: Pool | null) {
+        this._pool = pool;
+    }
 }
