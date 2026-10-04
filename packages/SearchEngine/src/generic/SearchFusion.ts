@@ -18,6 +18,27 @@
 import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
 import { SearchResultItem, SearchSource, SearchScoreBreakdown, FusionWeightsByProvider } from './search.types';
 
+/** The RRF smoothing constant: a result at rank r in a list contributes weight / (RRF_K + r). */
+export const RRF_K = 60;
+
+/**
+ * Apply `MinScore` to one lane's results, before fusion.
+ *
+ * Only the semantic (vector) lane gets a numeric floor: its score is a similarity, so "below X"
+ * means "not similar enough". Keyword, full-text, tag and storage hits have no floor — a hit
+ * there already means the text matched, and their scores (a match-breadth heuristic, a rank) say
+ * nothing a threshold could use. Fused RRF scores are rank-based and never compared to MinScore.
+ *
+ * @param source - The lane the results came from.
+ * @param results - That lane's results, as the provider returned them.
+ * @param minScore - The caller's MinScore (0 or unset = no floor).
+ * @returns The results that pass, order unchanged.
+ */
+export function ApplySemanticFloor(source: SearchSource, results: SearchResultItem[], minScore: number | undefined): SearchResultItem[] {
+    if (source !== 'vector' || !minScore || minScore <= 0) return results;
+    return results.filter(r => (r.ScoreBreakdown?.Vector ?? r.Score) >= minScore);
+}
+
 /**
  * A labeled list of search results from a single source.
  */
@@ -37,9 +58,9 @@ export class SearchFusion {
      * Fuse multiple ranked result lists using RRF, deduplicate, and return
      * the top results up to maxResults.
      *
-     * When only one source has results, scores are normalized relative to
-     * the top result so the best match appears at ~95% rather than raw
-     * cosine similarity (~40-50%).
+     * `Score` on every returned item is the RRF score divided by its maximum (see
+     * `normalizeByRRFMax`), in [0, 1], including when only one source has results.
+     * Each provider's raw score stays in `ScoreBreakdown`.
      *
      * @param lists - Labeled result lists from each search source
      * @param maxResults - Maximum number of results to return
@@ -73,9 +94,14 @@ export class SearchFusion {
         const nonEmpty = sanitized.filter(l => l.Results.length > 0);
         if (nonEmpty.length === 0) return [];
 
-        // Single source: return as-is (no normalization needed, scores are native to that source)
+        // Single source: RRF over one list is just its rank order, so Score = 1/(k+r) divided by
+        // its maximum 1/(k+1), i.e. (k+1)/(k+r). The same scale as the multi-source path, so a
+        // MinScore-free client sees one meaning of Score; the raw score stays in ScoreBreakdown.
         if (nonEmpty.length === 1) {
-            return nonEmpty[0].Results.slice(0, maxResults);
+            return nonEmpty[0].Results.slice(0, maxResults).map((r, i) => ({
+                ...r,
+                Score: (RRF_K + 1) / (RRF_K + i + 1),
+            }));
         }
 
         // Multiple sources: apply RRF with optional weights
@@ -138,7 +164,7 @@ export class SearchFusion {
             if (item) return { ...item, Score: candidate.Score };
             return this.createFallbackItem(candidate);
         });
-        return this.toDisplayScores(ranked, this.bestRawScore(entries.map(([, list]) => list)));
+        return this.normalizeByRRFMax(ranked, weights);
     }
 
     /**
@@ -182,7 +208,7 @@ export class SearchFusion {
                 });
             }
         }
-        // Score is the RANKING score: RRF (mapped onto the display scale by `toDisplayScores`) or
+        // Score is the RANKING score: RRF divided by its maximum (`normalizeByRRFMax`) or
         // a reranker's relevance. It is deliberately NOT raised to the max ScoreBreakdown value:
         // breakdowns are raw, per-provider scores on different scales (cosine ~0.8 vs the keyword
         // scorer's ~0.6), and sorting by them threw the fused order away, so an exact keyword
@@ -243,7 +269,7 @@ export class SearchFusion {
             // Fallback (shouldn't happen in practice)
             return this.createFallbackItem(candidate);
         });
-        return this.toDisplayScores(ranked, this.bestRawScore(lists.map(l => l.Results)));
+        return this.normalizeByRRFMax(ranked, weights);
     }
 
     /**
@@ -258,57 +284,28 @@ export class SearchFusion {
     private computeWeightedRRF(
         rankedLists: ScoredCandidate[][],
         weights: number[],
-        k: number = 60
+        k: number = RRF_K
     ): ScoredCandidate[] {
         return ComputeRRF(rankedLists, k, weights);
     }
 
     /**
-     * Normalize scores when only one search source returned results.
-     * Scales scores relative to the top result so the best match shows
-     * ~95% instead of raw cosine similarity (~40-50%).
-     */
-    private normalizeScores(results: SearchResultItem[]): SearchResultItem[] {
-        if (results.length === 0) return results;
-
-        const maxScore = results[0].Score; // Results are already sorted desc
-        if (maxScore <= 0) return results;
-
-        const scaleFactor = 0.95 / maxScore;
-        return results.map(r => ({
-            ...r,
-            Score: Math.min(0.99, r.Score * scaleFactor)
-        }));
-    }
-
-    /**
-     * Map RRF scores onto a readable 0-1 display scale WITHOUT changing the order.
+     * Divide each fused RRF score by the largest RRF score possible for these lists.
      *
-     * Raw RRF values are tiny (1/61 ≈ 0.016 at the top) and mean nothing to a person, but the
-     * order they produce is the whole point of fusion. So the top result shows the best raw
-     * score in the fused set, and every other result shows that value scaled by its RRF score
-     * relative to the top one. The mapping is monotone, so anything that sorts by `Score`
-     * afterwards (Deduplicate, the Explorer results grid) keeps the RRF order, and tied RRF
-     * positions show the same score.
+     * A result ranked #1 by every list scores Σ weight / (k + 1); that is the maximum, so the
+     * normalized Score is in [0, 1] and 1.0 means "every list that returned results ranked it
+     * first". The mapping is a constant divisor, so order (and ties) are unchanged, it uses ranks
+     * only (no provider's raw scale leaks in), and it means the same thing on every query. RRF is
+     * not a calibrated relevance or confidence, so this is not either; thresholds belong on a
+     * lane's own score before fusion (see `SearchEngine` MinScore).
+     *
+     * @param ranked - Results in fused order, `Score` holding the raw RRF value.
+     * @param weights - The per-list weights passed to RRF; zero-weight lists can't contribute.
      */
-    private toDisplayScores(ranked: SearchResultItem[], bestRaw: number): SearchResultItem[] {
-        const topFused = ranked.length > 0 ? ranked[0].Score : 0;
-        if (topFused <= 0 || bestRaw <= 0) return ranked;
-        return ranked.map(r => ({ ...r, Score: bestRaw * (r.Score / topFused) }));
-    }
-
-    /** The best raw score across the lists being fused: each item's Score and its breakdown values. */
-    private bestRawScore(lists: SearchResultItem[][]): number {
-        let best = 0;
-        for (const list of lists) {
-            for (const r of list) {
-                if (r.Score > best) best = r.Score;
-                for (const v of Object.values(r.ScoreBreakdown ?? {})) {
-                    if (typeof v === 'number' && v > best) best = v;
-                }
-            }
-        }
-        return best;
+    private normalizeByRRFMax(ranked: SearchResultItem[], weights: number[]): SearchResultItem[] {
+        const maxPossible = weights.filter(w => w > 0).reduce((sum, w) => sum + w, 0) / (RRF_K + 1);
+        if (maxPossible <= 0) return ranked;
+        return ranked.map(r => ({ ...r, Score: r.Score / maxPossible }));
     }
 
     /**

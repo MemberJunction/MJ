@@ -71,7 +71,7 @@ describe('SearchFusion', () => {
             expect(result).toEqual([]);
         });
 
-        it('should return single source results as-is without normalization', () => {
+        it('scores a single source by rank, normalized so its #1 is 1.0', () => {
             const items: SearchResultItem[] = [
                 makeResult({ EntityName: 'People', RecordID: '1', Score: 0.45 }),
                 makeResult({ EntityName: 'People', RecordID: '2', Score: 0.30 }),
@@ -84,11 +84,13 @@ describe('SearchFusion', () => {
 
             const result = fusion.Fuse(lists, 10);
 
-            // Single source: returned as-is, scores unchanged
+            // Single source: RRF over one list, divided by its maximum (1/61): rank r -> 61/(60+r).
+            // The provider's raw score stays in ScoreBreakdown.
             expect(result).toHaveLength(3);
-            expect(result[0].Score).toBe(0.45);
-            expect(result[1].Score).toBe(0.30);
-            expect(result[2].Score).toBe(0.20);
+            expect(result.map(r => r.RecordID)).toEqual(['1', '2', '3']);
+            expect(result[0].Score).toBeCloseTo(1, 10);
+            expect(result[1].Score).toBeCloseTo(61 / 62, 10);
+            expect(result[2].Score).toBeCloseTo(61 / 63, 10);
         });
 
         it('should respect maxResults when single source has more results', () => {
@@ -342,20 +344,55 @@ describe('SearchFusion', () => {
             expect(fusion.Deduplicate(fused).map(r => r.RecordID)).toEqual(fused.map(r => r.RecordID));
         });
 
-        it('shows a readable score: the best raw score at the top, never increasing down the list', () => {
+        it('normalizes by the RRF maximum: a lane #1 found by one of two lanes scores 0.5', () => {
+            // Two equal-weight lanes returned results: max = 2/61. (1/61)/(2/61) = 0.5.
             const scores = fuseAndDedup().map(r => r.Score);
-            expect(scores[0]).toBeCloseTo(0.81, 10);
+            expect(scores[0]).toBeCloseTo(0.5, 10);
+            expect(scores[1]).toBeCloseTo(0.5, 10); // tied RRF positions show the same score
             for (let i = 1; i < scores.length; i++) {
                 expect(scores[i]).toBeLessThanOrEqual(scores[i - 1]);
             }
-            // Tied RRF positions show the same score.
-            expect(scores[1]).toBeCloseTo(scores[0], 10);
         });
 
-        it('scales each score by its fused score relative to the top one', () => {
+        it('scores each result as RRF over the maximum, from ranks alone', () => {
             const results = fuseAndDedup();
-            // v2 is rank 2 in its lane: 1/62 vs the top's 1/61.
-            expect(results[2].Score).toBeCloseTo(0.81 * (61 / 62), 10);
+            // v2 is rank 2 in the vector lane only: (1/62) / (2/61).
+            expect(results[2].Score).toBeCloseTo((1 / 62) / (2 / 61), 10);
+        });
+
+        it('gives 1.0 to a result ranked #1 by every lane', () => {
+            const fused = fusion.Fuse([
+                { Source: 'vector', Results: [makeResult({ EntityName: 'People', RecordID: 'both', Score: 0.7, SourceType: 'vector', ScoreBreakdown: { Vector: 0.7 } }), ...vectorLane()] },
+                { Source: 'entity', Results: [makeResult({ EntityName: 'People', RecordID: 'both', Score: 0.4, SourceType: 'entity', ScoreBreakdown: { Entity: 0.4 } })] },
+            ], 10);
+            const results = fusion.Deduplicate(fused);
+            expect(results[0].RecordID).toBe('both');
+            expect(results[0].Score).toBeCloseTo(1, 10);
+        });
+
+        it('does not depend on raw score scales: halving every raw score changes nothing', () => {
+            const half = (items: SearchResultItem[]) => items.map(r => ({ ...r, Score: r.Score / 2 }));
+            const a = fusion.Deduplicate(fusion.Fuse([{ Source: 'vector', Results: vectorLane() }, { Source: 'entity', Results: keywordLane() }], 10));
+            const b = fusion.Deduplicate(fusion.Fuse([{ Source: 'vector', Results: half(vectorLane()) }, { Source: 'entity', Results: half(keywordLane()) }], 10));
+            expect(b.map(r => r.Score)).toEqual(a.map(r => r.Score));
+        });
+
+        it('normalizes by the weighted maximum when lanes are weighted', () => {
+            const fused = fusion.Fuse([
+                { Source: 'vector', Results: vectorLane() },
+                { Source: 'entity', Results: keywordLane() },
+            ], 10, { vector: 1, entity: 3 });
+            // max = (1 + 3)/61. The keyword #1 = 3/61 -> 0.75; the vector #1 = 1/61 -> 0.25.
+            expect(fused[0].RecordID).toBe('exact');
+            expect(fused[0].Score).toBeCloseTo(0.75, 10);
+            expect(fused.find(r => r.RecordID === 'v1')?.Score).toBeCloseTo(0.25, 10);
+        });
+
+        it('leaves out empty lanes when computing the maximum', () => {
+            // Only the vector lane returned anything, so its #1 is 1.0 even though an
+            // entity lane was asked.
+            const fused = fusion.Fuse([{ Source: 'vector', Results: vectorLane() }, { Source: 'entity', Results: [] }], 10);
+            expect(fused[0].Score).toBeCloseTo(1, 10);
         });
 
         it('leaves each provider\'s raw evidence in ScoreBreakdown', () => {
@@ -371,11 +408,12 @@ describe('SearchFusion', () => {
             expect(twice.map(r => r.Score)).toEqual(once.map(r => r.Score));
         });
 
-        it('leaves a single-source result set exactly as the provider scored it', () => {
+        it('keeps a single-source set in provider order, with raw scores in the breakdown', () => {
             const fused = fusion.Fuse([{ Source: 'vector', Results: vectorLane() }], 10);
             const results = fusion.Deduplicate(fused);
             expect(results.map(r => r.RecordID)).toEqual(['v1', 'v2', 'v3', 'v4']);
-            expect(results.map(r => r.Score)).toEqual([0.81, 0.80, 0.79, 0.78]);
+            results.forEach((r, i) => expect(r.Score).toBeCloseTo(61 / (61 + i), 10));
+            expect(results.map(r => r.ScoreBreakdown.Vector)).toEqual([0.81, 0.80, 0.79, 0.78]);
         });
 
         it('keeps a reranker\'s order even when the raw vector scores disagree', () => {
@@ -390,12 +428,12 @@ describe('SearchFusion', () => {
             expect(results.map(r => r.Score)).toEqual([0.9, 0.5, 0.2]);
         });
 
-        it('CrossScopeFusion also returns readable, non-increasing scores', () => {
+        it('CrossScopeFusion also normalizes by the RRF maximum, non-increasing', () => {
             const map = new Map<string, SearchResultItem[]>();
             map.set('scope-a', vectorLane());
             map.set('scope-b', keywordLane());
             const scores = fusion.CrossScopeFusion(map, 10).map(r => r.Score);
-            expect(scores[0]).toBeCloseTo(0.81, 10);
+            expect(scores[0]).toBeCloseTo(0.5, 10);
             for (let i = 1; i < scores.length; i++) {
                 expect(scores[i]).toBeLessThanOrEqual(scores[i - 1]);
             }
@@ -598,7 +636,7 @@ describe('SearchFusion', () => {
     });
 
     describe('Single-provider scope (post-fusion-fix regression guard)', () => {
-        it('returns vector results unchanged when only Vector contributes', () => {
+        it('returns vector results in order with their evidence when only Vector contributes', () => {
             // Common production setup: a scope wired only to the Vector
             // provider. We just changed `applyRRF` to merge ScoreBreakdowns
             // for multi-provider hits — verify the single-provider fast
@@ -616,9 +654,10 @@ describe('SearchFusion', () => {
             const result = fusion.Fuse(lists, 10);
             expect(result).toHaveLength(3);
             expect(result.map(r => r.RecordID)).toEqual(['a', 'b', 'c']);
-            // Source type and breakdown preserved verbatim
+            // Source type and breakdown preserved verbatim; Score is the normalized RRF.
             expect(result[0].SourceType).toBe('vector');
             expect((result[0].ScoreBreakdown as { Vector?: number }).Vector).toBe(0.9);
+            expect(result[0].Score).toBeCloseTo(1, 10);
         });
 
         it('truncates to maxResults in single-provider mode', () => {
