@@ -521,6 +521,23 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
             failures.push(...compareRows('inline dependency', composed, ids(items.filter(i => i.ID <= 40 && i.Category === 'Delta')), ['ID'], true));
             FailOnMismatches('RR8', failures, 3);
         }
+    },
+    {
+        Id: 'runquery-rendering.RR9',
+        Name: 'RR9: caller-supplied SQL must be a single read query',
+        Fn: async (ctx): Promise<void> => {
+            const rq = new RunQuery();
+            const platform = RenderPlatform(ctx);
+            const setStatement = platform === 'postgresql' ? "SET statement_timeout = '3s'" : 'SET LOCK_TIMEOUT 0';
+            const set = await rq.ExecuteFromSpec({ SQL: setStatement, MaxRows: 10 }, ctx.User);
+            Assert(!set.Success && /only a single read query/i.test(set.ErrorMessage ?? ''), `the spec path must refuse ${setStatement}, got: ${set.Success ? 'success' : set.ErrorMessage}`);
+
+            const into = await rq.RunQuery({ SQL: `SELECT * INTO ${T}Copy FROM ${T}` }, ctx.User);
+            Assert(!into.Success && /SELECT … INTO/.test(into.ErrorMessage ?? ''), `ad-hoc SELECT … INTO must be refused, got: ${into.Success ? 'success' : into.ErrorMessage}`);
+            const copyCheck = await rq.RunQuery({ SQL: `SELECT COUNT(*) AS N FROM ${T} WHERE 1 = 0` }, ctx.User);
+            Assert(copyCheck.Success, 'the fixture table must still be readable');
+
+        }
     }
 ];
 
