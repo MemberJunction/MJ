@@ -1,5 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- test mocks return minimal cast fixtures for the engine / session seams */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
+import type { ActiveBridgeSession, StartBridgeSessionParams } from '@memberjunction/ai-bridge-server';
+import type { IRealtimeSession } from '@memberjunction/ai';
 import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type AgentRoomHostOptions, type BridgeOps, type RealtimeSessionStartContext } from '../livekit-agent-room-coordinator';
 import { LiveKitTokenService } from '../livekit-token-service';
 
@@ -8,14 +10,29 @@ const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSec
 // Module-level so bridge ids stay unique across tests: the coordinator's room roster is a process-wide singleton.
 let seq = 0;
 
+function createStubSession(): IRealtimeSession {
+  return {
+    SendInput: () => {},
+    RegisterTools: async () => {},
+    OnOutput: () => {},
+    OnTranscript: () => {},
+    OnToolCall: () => {},
+    SendToolResult: async () => {},
+    OnInterruption: () => {},
+    OnError: () => {},
+    OnUsage: () => {},
+    Close: async () => {},
+  };
+}
+
 function makeBridgeOps() {
-  const startCalls: Record<string, any>[] = [];
+  const startCalls: StartBridgeSessionParams[] = [];
   const ops = {
     Config: vi.fn(async () => undefined),
-    ProviderByDriverClass: vi.fn(() => ({ ID: 'p1', DriverClass: LIVEKIT_BRIDGE_DRIVER_CLASS }) as any),
-    StartBridgeSession: vi.fn(async (params: Record<string, any>) => {
+    ProviderByDriverClass: vi.fn(() => ({ ID: 'p1', DriverClass: LIVEKIT_BRIDGE_DRIVER_CLASS } as unknown as MJAIBridgeProviderEntity)),
+    StartBridgeSession: vi.fn(async (params: StartBridgeSessionParams) => {
       startCalls.push(params);
-      return { SessionBridgeID: `bridge-${++seq}` } as any;
+      return { SessionBridgeID: `bridge-${++seq}` } as unknown as ActiveBridgeSession;
     }),
     StopBridgeSession: vi.fn(async () => true),
     ReconfigureSessionToMeeting: vi.fn(() => true),
@@ -26,7 +43,7 @@ function makeBridgeOps() {
 describe('LiveKitAgentRoomCoordinator host options (a host that owns the call)', () => {
   let coordinator: LiveKitAgentRoomCoordinator;
   let factoryCalls: RealtimeSessionStartContext[];
-  let sessions: object[];
+  let sessions: IRealtimeSession[];
 
   beforeEach(() => {
     coordinator = LiveKitAgentRoomCoordinator.Instance;
@@ -35,9 +52,9 @@ describe('LiveKitAgentRoomCoordinator host options (a host that owns the call)',
     sessions = [];
     coordinator.SetSessionFactory(async (ctx) => {
       factoryCalls.push(ctx);
-      const session = { id: sessions.length };
+      const session = createStubSession();
       sessions.push(session);
-      return session as any;
+      return session;
     });
   });
 
@@ -58,7 +75,7 @@ describe('LiveKitAgentRoomCoordinator host options (a host that owns the call)',
   it('hands every model session it opens to the host, so tool handlers can be attached to each', async () => {
     const { ops, startCalls } = makeBridgeOps();
     coordinator.SetBridgeOps(ops);
-    const seen: object[] = [];
+    const seen: IRealtimeSession[] = [];
     await coordinator.StartAgentRoomSession({
       AgentSessionID: 's',
       RoomName: 'host-room-2',

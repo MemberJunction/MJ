@@ -27,6 +27,7 @@ describe('RoomAuthorizationService', () => {
     { Success: true, Results: [] },
     { Success: true, Results: [] },
     { Success: true, Results: [] },
+    { Success: true, Results: [] },
   ];
 
   beforeEach(() => {
@@ -61,7 +62,7 @@ describe('RoomAuthorizationService', () => {
       expect(result.Authorized).toBe(true);
       expect(mockRunViews).toHaveBeenCalledTimes(1);
       const batchParams = mockRunViews.mock.calls[0][0];
-      expect(batchParams.length).toBe(3);
+      expect(batchParams.length).toBe(4);
       expect(batchParams[0].EntityName).toBe('MJ: Meetings');
       expect(batchParams[0].ResultType).toBe('simple');
       expect(batchParams[0].Fields).toEqual(['ID', 'Status', 'HostUserID']);
@@ -71,6 +72,9 @@ describe('RoomAuthorizationService', () => {
       expect(batchParams[2].EntityName).toBe('MJ: Interaction Offers');
       expect(batchParams[2].ResultType).toBe('simple');
       expect(batchParams[2].Fields).toEqual(['ID', 'Status', 'TargetUserID']);
+      expect(batchParams[3].EntityName).toBe('MJ: AI Agent Session Bridges');
+      expect(batchParams[3].ResultType).toBe('simple');
+      expect(batchParams[3].Fields).toEqual(['ID', 'AgentSessionID']);
     });
 
     it('refuses ad-hoc access when room name starts with SIP call prefix even if no records exist', async () => {
@@ -79,6 +83,19 @@ describe('RoomAuthorizationService', () => {
       const result = await service.AuthorizeRoomAccess(`${SIP_CALL_ROOM_PREFIX}inbound-123`, user, provider);
       expect(result.Authorized).toBe(false);
       expect(result.Reason).toMatch(/not authorized to access this call/i);
+    });
+
+    it('refuses ad-hoc access when room name starts with a custom SIP prefix', async () => {
+      service.SetSipRoomPrefix('custom-sip-');
+      try {
+        mockRunViews.mockResolvedValueOnce(emptyBatch());
+
+        const result = await service.AuthorizeRoomAccess('custom-sip-inbound-456', user, provider);
+        expect(result.Authorized).toBe(false);
+        expect(result.Reason).toMatch(/not authorized to access this call/i);
+      } finally {
+        service.SetSipRoomPrefix();
+      }
     });
   });
 
@@ -92,6 +109,7 @@ describe('RoomAuthorizationService', () => {
 
       mockRunViews.mockResolvedValueOnce([
         { Success: true, Results: [mockMeeting] },
+        { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [] },
       ]);
@@ -110,6 +128,7 @@ describe('RoomAuthorizationService', () => {
 
       mockRunViews.mockResolvedValueOnce([
         { Success: true, Results: [mockMeeting] },
+        { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [] },
       ]);
@@ -135,6 +154,7 @@ describe('RoomAuthorizationService', () => {
 
       mockRunViews.mockResolvedValueOnce([
         { Success: true, Results: [mockMeeting] },
+        { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [] },
       ]);
@@ -165,6 +185,7 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [mockMeeting] },
         { Success: true, Results: [] },
         { Success: true, Results: [] },
+        { Success: true, Results: [] },
       ]);
       mockRunView.mockResolvedValueOnce({ Success: true, Results: [mockParticipant] });
 
@@ -190,6 +211,7 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [mockMeeting] },
         { Success: true, Results: [] },
         { Success: true, Results: [] },
+        { Success: true, Results: [] },
       ]);
       mockRunView.mockResolvedValueOnce({ Success: true, Results: [mockParticipant] });
 
@@ -207,6 +229,7 @@ describe('RoomAuthorizationService', () => {
 
       mockRunViews.mockResolvedValueOnce([
         { Success: true, Results: [mockMeeting] },
+        { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [] },
       ]);
@@ -234,6 +257,7 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [] },
         { Success: true, Results: [mockInteraction] },
         { Success: true, Results: [] },
+        { Success: true, Results: [] },
       ]);
       mockRunView.mockResolvedValueOnce({ Success: true, Results: [mockSession] });
 
@@ -260,6 +284,7 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [] },
         { Success: true, Results: [mockInteraction] },
         { Success: true, Results: [mockOffer] },
+        { Success: true, Results: [] },
       ]);
 
       const result = await service.AuthorizeRoomAccess('call-room-offer', user, provider);
@@ -282,6 +307,7 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [] },
         { Success: true, Results: [mockInteraction] },
         { Success: true, Results: [] },
+        { Success: true, Results: [] },
       ]);
       mockRunView.mockResolvedValueOnce({ Success: true, Results: [mockSession] });
 
@@ -301,6 +327,7 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [mockOffer] },
+        { Success: true, Results: [] },
       ]);
 
       const result = await service.AuthorizeRoomAccess(`${SIP_CALL_ROOM_PREFIX}inbound-offer`, user, provider);
@@ -318,9 +345,82 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [mockOffer] },
+        { Success: true, Results: [] },
       ]);
 
       const result = await service.AuthorizeRoomAccess(`${SIP_CALL_ROOM_PREFIX}inbound-pending`, user, provider);
+      expect(result.Authorized).toBe(false);
+      expect(result.Reason).toMatch(/not authorized to access this call/i);
+    });
+  });
+
+  describe('Web agent rooms (tied to Agent Session)', () => {
+    it('grants access when user is the agent-session owner of an active bridge', async () => {
+      const mockBridge = {
+        ID: 'bridge-1',
+        AgentSessionID: 'session-web-1',
+      };
+      const mockSession = {
+        ID: 'session-web-1',
+        UserID: user.ID,
+      };
+
+      mockRunViews.mockResolvedValueOnce([
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [mockBridge] },
+      ]);
+      mockRunView.mockResolvedValueOnce({ Success: true, Results: [mockSession] });
+
+      const result = await service.AuthorizeRoomAccess('web-agent-room', user, provider);
+      expect(result.Authorized).toBe(true);
+      expect(mockRunView).toHaveBeenCalledTimes(1);
+      expect(mockRunView.mock.calls[0][0].EntityName).toBe('MJ: AI Agent Sessions');
+    });
+
+    it('grants access when user has an Accepted handoff offer for the web agent room', async () => {
+      const mockBridge = {
+        ID: 'bridge-1',
+        AgentSessionID: 'session-web-1',
+      };
+      const mockOffer = {
+        ID: 'offer-web-1',
+        Status: 'Accepted',
+        TargetUserID: user.ID,
+      };
+
+      mockRunViews.mockResolvedValueOnce([
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [mockOffer] },
+        { Success: true, Results: [mockBridge] },
+      ]);
+
+      const result = await service.AuthorizeRoomAccess('web-agent-room', user, provider);
+      expect(result.Authorized).toBe(true);
+      expect(mockRunView).not.toHaveBeenCalled();
+    });
+
+    it('refuses access when user is a stranger (not owner and has no accepted offer)', async () => {
+      const mockBridge = {
+        ID: 'bridge-1',
+        AgentSessionID: 'session-web-1',
+      };
+      const mockSession = {
+        ID: 'session-web-1',
+        UserID: 'other-user',
+      };
+
+      mockRunViews.mockResolvedValueOnce([
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [mockBridge] },
+      ]);
+      mockRunView.mockResolvedValueOnce({ Success: true, Results: [mockSession] });
+
+      const result = await service.AuthorizeRoomAccess('web-agent-room', user, provider);
       expect(result.Authorized).toBe(false);
       expect(result.Reason).toMatch(/not authorized to access this call/i);
     });
@@ -338,6 +438,7 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [mockOffer] },
+        { Success: true, Results: [] },
       ]);
 
       const result = await service.AuthorizeRoomAccess('web-room-offer', user, provider);
@@ -355,6 +456,7 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [mockOffer] },
+        { Success: true, Results: [] },
       ]);
 
       const result = await service.AuthorizeRoomAccess('web-room-offer', user, provider);
@@ -373,6 +475,7 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [mockOffer] },
+        { Success: true, Results: [] },
       ]);
 
       const result = await service.AuthorizeRoomAccess('web-room-offer', user, provider);
@@ -387,6 +490,7 @@ describe('RoomAuthorizationService', () => {
         { Success: false, ErrorMessage: 'DB connection error' },
         { Success: true, Results: [] },
         { Success: true, Results: [] },
+        { Success: true, Results: [] },
       ]);
 
       const result = await service.AuthorizeRoomAccess('err-room', user, provider);
@@ -398,6 +502,7 @@ describe('RoomAuthorizationService', () => {
       mockRunViews.mockResolvedValueOnce([
         { Success: true, Results: [] },
         { Success: false, ErrorMessage: 'Interactions table error' },
+        { Success: true, Results: [] },
         { Success: true, Results: [] },
       ]);
 
@@ -411,11 +516,25 @@ describe('RoomAuthorizationService', () => {
         { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: false, ErrorMessage: 'Offers table error' },
+        { Success: true, Results: [] },
       ]);
 
       const result = await service.AuthorizeRoomAccess('err-room', user, provider);
       expect(result.Authorized).toBe(false);
       expect(result.Reason).toMatch(/verifying interaction offer authorization/i);
+    });
+
+    it('returns fail-closed result when batch query fails for Bridges', async () => {
+      mockRunViews.mockResolvedValueOnce([
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: false, ErrorMessage: 'Bridges table error' },
+      ]);
+
+      const result = await service.AuthorizeRoomAccess('err-room', user, provider);
+      expect(result.Authorized).toBe(false);
+      expect(result.Reason).toMatch(/verifying agent bridge authorization/i);
     });
 
     it('returns fail-closed result when participant query fails', async () => {
@@ -427,6 +546,7 @@ describe('RoomAuthorizationService', () => {
 
       mockRunViews.mockResolvedValueOnce([
         { Success: true, Results: [mockMeeting] },
+        { Success: true, Results: [] },
         { Success: true, Results: [] },
         { Success: true, Results: [] },
       ]);
@@ -447,6 +567,7 @@ describe('RoomAuthorizationService', () => {
       mockRunViews.mockResolvedValueOnce([
         { Success: true, Results: [] },
         { Success: true, Results: [mockInteraction] },
+        { Success: true, Results: [] },
         { Success: true, Results: [] },
       ]);
       mockRunView.mockResolvedValueOnce({ Success: false, ErrorMessage: 'Session table error' });

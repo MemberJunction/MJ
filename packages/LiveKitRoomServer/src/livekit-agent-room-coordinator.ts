@@ -157,7 +157,7 @@ export interface StartAgentRoomSessionParams {
 }
 
 /** One agent's membership in a room's roster (for multi-agent meeting detection). */
-interface RoomAgentEntry {
+export interface RoomAgentEntry {
   /** The MJ agent-session id of this agent in the room. */
   AgentSessionID: string;
   /** The durable bridge row id — the key {@link LiveKitAgentRoomCoordinator.StopAgentRoomSession} removes by. */
@@ -556,5 +556,13 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       }
     }
     return undefined;
+  }
+
+  /**
+   * Returns the agent sessions currently active in the given room.
+   */
+  public GetAgentsInRoom(roomName: string): ReadonlyArray<RoomAgentEntry> {
+    const roomKey = roomName.trim().toLowerCase();
+    return this.roomRosters.get(roomKey) ?? [];
   }
 }

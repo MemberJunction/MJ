@@ -1,7 +1,9 @@
 import { BaseSingleton, EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { LiveKitAgentRoomCoordinator } from './livekit-agent-room-coordinator.js';
 
-export const SIP_CALL_ROOM_PREFIX = 'call-';
+export const DEFAULT_SIP_CALL_ROOM_PREFIX = 'call-';
+export const SIP_CALL_ROOM_PREFIX = DEFAULT_SIP_CALL_ROOM_PREFIX;
 
 export interface RoomAuthorizationResult {
   Authorized: boolean;
@@ -30,6 +32,11 @@ interface OfferLookupRow {
   ID: string;
   Status: string;
   TargetUserID: string;
+}
+
+interface BridgeLookupRow {
+  ID: string;
+  AgentSessionID: string;
 }
 
 interface ParticipantLookupRow {
@@ -71,6 +78,7 @@ interface AgentSessionLookupRow {
  */
 export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationService> {
   private authorizerOverride?: RoomAuthorizerFn;
+  private sipRoomPrefix: string = (process.env.LIVEKIT_SIP_ROOM_PREFIX ?? DEFAULT_SIP_CALL_ROOM_PREFIX).trim() || DEFAULT_SIP_CALL_ROOM_PREFIX;
 
   public constructor() {
     super();
@@ -85,6 +93,20 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
    */
   public SetAuthorizerForTesting(fn?: RoomAuthorizerFn): void {
     this.authorizerOverride = fn;
+  }
+
+  /**
+   * Sets or resets the SIP call room prefix (e.g. to match LiveKitSipTelephonyService.roomPrefix).
+   */
+  public SetSipRoomPrefix(prefix?: string): void {
+    this.sipRoomPrefix = (prefix ?? process.env.LIVEKIT_SIP_ROOM_PREFIX ?? DEFAULT_SIP_CALL_ROOM_PREFIX).trim() || DEFAULT_SIP_CALL_ROOM_PREFIX;
+  }
+
+  /**
+   * Gets the active SIP call room prefix.
+   */
+  public get SipRoomPrefix(): string {
+    return this.sipRoomPrefix;
   }
 
   /**
@@ -114,9 +136,9 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
     const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
 
     try {
-      // Batch initial lookups for Meetings, Interactions, and Interaction Offers
-      const [meetingResult, interactionResult, offerResult] = await rv.RunViews<
-        MeetingLookupRow | InteractionLookupRow | OfferLookupRow
+      // Batch initial lookups for Meetings, Interactions, Interaction Offers, and Agent Session Bridges
+      const [meetingResult, interactionResult, offerResult, bridgeResult] = await rv.RunViews<
+        MeetingLookupRow | InteractionLookupRow | OfferLookupRow | BridgeLookupRow
       >(
         [
           {
@@ -135,6 +157,12 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
             EntityName: 'MJ: Interaction Offers',
             ExtraFilter: `RoomName = '${escapedRoom}'`,
             Fields: ['ID', 'Status', 'TargetUserID'],
+            ResultType: 'simple',
+          },
+          {
+            EntityName: 'MJ: AI Agent Session Bridges',
+            ExtraFilter: `ExternalConnectionID = '${escapedRoom}' AND Status = 'Active'`,
+            Fields: ['ID', 'AgentSessionID'],
             ResultType: 'simple',
           },
         ],
@@ -156,9 +184,27 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
         return { Authorized: false, Reason: 'Error verifying interaction offer authorization.' };
       }
 
+      if (!bridgeResult.Success) {
+        LogError(`[RoomAuthorizationService] Error querying MJ: AI Agent Session Bridges for room '${trimmedRoom}': ${bridgeResult.ErrorMessage}`);
+        return { Authorized: false, Reason: 'Error verifying agent bridge authorization.' };
+      }
+
       const meetings = (meetingResult.Results ?? []) as MeetingLookupRow[];
       const interactions = (interactionResult.Results ?? []) as InteractionLookupRow[];
       const offers = (offerResult.Results ?? []) as OfferLookupRow[];
+      const bridges = (bridgeResult.Results ?? []) as BridgeLookupRow[];
+      const activeRoster = LiveKitAgentRoomCoordinator.Instance.GetAgentsInRoom(trimmedRoom);
+
+      const agentSessionIDs = new Set<string>();
+      for (const i of interactions) {
+        if (i.AgentSessionID) agentSessionIDs.add(i.AgentSessionID);
+      }
+      for (const b of bridges) {
+        if (b.AgentSessionID) agentSessionIDs.add(b.AgentSessionID);
+      }
+      for (const r of activeRoster) {
+        if (r.AgentSessionID) agentSessionIDs.add(r.AgentSessionID);
+      }
 
       // 1. Check if room is tied to an MJ: Meetings record
       if (meetings.length > 0) {
@@ -198,9 +244,9 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
         return { Authorized: false, Reason: 'User is not a host or participant in this meeting.' };
       }
 
-      // 2. Check if room is tied to an Interaction or has a SIP call prefix (never ad-hoc)
-      const isSipCallRoom = trimmedRoom.startsWith(SIP_CALL_ROOM_PREFIX);
-      if (interactions.length > 0 || isSipCallRoom) {
+      // 2. Check if room is tied to an Interaction, has active agent sessions (e.g. web agent rooms), or has a SIP call prefix (never ad-hoc)
+      const isSipCallRoom = trimmedRoom.startsWith(this.sipRoomPrefix);
+      if (interactions.length > 0 || isSipCallRoom || agentSessionIDs.size > 0) {
         // User with an Accepted offer for it
         const hasAcceptedOffer = offers.some(
           (o) => UUIDsEqual(o.TargetUserID, user.ID) && o.Status === 'Accepted',
@@ -209,33 +255,31 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
           return { Authorized: true };
         }
 
-        // User who started it (the Interaction's agent-session owner)
-        if (interactions.length > 0) {
-          const interaction = interactions[0];
-          if (interaction.AgentSessionID) {
-            const sessionResult = await rv.RunView<AgentSessionLookupRow>(
-              {
-                EntityName: 'MJ: AI Agent Sessions',
-                ExtraFilter: `ID = '${EscapeSQLString(interaction.AgentSessionID)}'`,
-                Fields: ['ID', 'UserID'],
-                ResultType: 'simple',
-              },
-              user,
-            );
+        // User who started it (the Interaction's or Agent Session's owner)
+        if (agentSessionIDs.size > 0) {
+          const filter = [...agentSessionIDs].map((id) => `ID = '${EscapeSQLString(id)}'`).join(' OR ');
+          const sessionResult = await rv.RunView<AgentSessionLookupRow>(
+            {
+              EntityName: 'MJ: AI Agent Sessions',
+              ExtraFilter: filter,
+              Fields: ['ID', 'UserID'],
+              ResultType: 'simple',
+            },
+            user,
+          );
 
-            if (!sessionResult.Success) {
-              LogError(`[RoomAuthorizationService] Error querying MJ: AI Agent Sessions for session '${interaction.AgentSessionID}': ${sessionResult.ErrorMessage}`);
-              return { Authorized: false, Reason: 'Error verifying session authorization.' };
-            }
+          if (!sessionResult.Success) {
+            LogError(`[RoomAuthorizationService] Error querying MJ: AI Agent Sessions for room '${trimmedRoom}': ${sessionResult.ErrorMessage}`);
+            return { Authorized: false, Reason: 'Error verifying session authorization.' };
+          }
 
-            const sessions = (sessionResult.Results ?? []) as AgentSessionLookupRow[];
-            if (sessions.length > 0 && UUIDsEqual(sessions[0].UserID, user.ID)) {
-              return { Authorized: true };
-            }
+          const sessions = (sessionResult.Results ?? []) as AgentSessionLookupRow[];
+          if (sessions.some((s) => UUIDsEqual(s.UserID, user.ID))) {
+            return { Authorized: true };
           }
         }
 
-        return { Authorized: false, Reason: 'User is not authorized to access this call.' };
+        return { Authorized: false, Reason: 'User is not authorized to access this call or agent session room.' };
       }
 
       // 3. Rooms tied to an MJ: Interaction Offers record
@@ -249,7 +293,7 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
         return { Authorized: false, Reason: 'User has not accepted a handoff offer for this room.' };
       }
 
-      // 4. Ad-hoc rooms: only rooms with no Meeting, no Interaction, and no Offer row
+      // 4. Ad-hoc rooms: only rooms with no Meeting, no Interaction, no Agent Session, and no Offer row
       return { Authorized: true };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -30,6 +30,7 @@ import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
 import {
     LiveKitAgentRoomCoordinator,
     LiveKitSipService,
+    RoomAuthorizationService,
     RoomHandoffEngine,
     type DialIntoRoomRequest,
     type LiveKitRoomWebhookEvent,
@@ -114,6 +115,7 @@ export class LiveKitSipTelephonyService {
         this.coordinator = deps.coordinator ?? LiveKitAgentRoomCoordinator.Instance;
         this.handoff = deps.handoff ?? RoomHandoffEngine.Instance;
         this.roomPrefix = (config.roomPrefix ?? DEFAULT_LIVEKIT_SIP_ROOM_PREFIX).trim() || DEFAULT_LIVEKIT_SIP_ROOM_PREFIX;
+        RoomAuthorizationService.Instance.SetSipRoomPrefix(this.roomPrefix);
         const policy = ResolveOutboundPolicy(config.outbound);
         this.outboundGuard = { Policy: policy, Limiter: new OutboundRateLimiter(policy.MaxCallsPerUserPerHour), CanRunAgent: deps.canRunAgent };
         if (!deps.capacity) {

@@ -41,7 +41,7 @@ import {
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { BaseRealtimeBridge } from '@memberjunction/ai-bridge-base';
 import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '@memberjunction/ai-bridge-server';
-import { HandoffOfferRegistry, RoomAuthorizationService } from '@memberjunction/livekit-room-server';
+import { HandoffOfferRegistry, RoomAuthorizationService, OFFER_UNAVAILABLE } from '@memberjunction/livekit-room-server';
 import { InteractionLifecycleService } from '@memberjunction/telephony-adapters';
 import { ProductionModelPromotionGate, detectSingleFeatureDominance } from '@memberjunction/predictive-studio';
 import type { PromoteModelRequest } from '@memberjunction/predictive-studio';
@@ -496,7 +496,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Id: 'realtime-deterministic.RD10',
         Name: 'RD10: interaction records, events, links, computed duration, and append-only event guard',
         Fn: async (ctx): Promise<void> => {
-            const md = new Metadata();
+            const md = ctx.Provider ?? new Metadata();
             if (!md.EntityByName('MJ: Interactions') || !md.EntityByName('MJ: Interaction Events')) {
                 console.warn('  ⚠ realtime-deterministic.RD10 SKIPPED — MJ: Interactions not in metadata');
                 return;
@@ -618,7 +618,7 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
         Id: 'realtime-deterministic.RD11',
         Name: 'RD11: durable hand-off offers transition state with compare-and-set concurrency guard',
         Fn: async (ctx): Promise<void> => {
-            const md = new Metadata();
+            const md = ctx.Provider ?? new Metadata();
             if (!md.EntityByName('MJ: Interaction Offers')) {
                 console.warn('  ⚠ realtime-deterministic.RD11 SKIPPED — MJ: Interaction Offers not in metadata');
                 return;
@@ -642,6 +642,10 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 return;
             }
             AssertEqual(offer.Status, 'Pending', 'Initial offer status must be Pending');
+
+            let raceInteractionID: string | undefined;
+            let raceOffer1ID: string | undefined;
+            let raceOffer2ID: string | undefined;
 
             try {
                 // 1. Refuse resolution by wrong target user
@@ -676,22 +680,87 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                     ctx.Provider,
                 );
                 AssertEqual(raceRes.Ok, false, 'CAS guard: resolving an already resolved offer must fail');
+
+                // 4. Real DB CAS race test: two concurrent accepts against the real database for offers sharing an InteractionID.
+                // Exactly one should win, enforced by UX_InteractionOffer_OneAccepted, and the loser should get OFFER_UNAVAILABLE.
+                const interaction = await md.GetEntityObject<MJInteractionEntity>('MJ: Interactions', ctx.User);
+                interaction.Channel = 'Web';
+                interaction.Direction = 'Inbound';
+                interaction.RoomName = `it-rd11-race-${Date.now()}`;
+                interaction.Status = 'Active';
+                interaction.StartedAt = new Date();
+                Assert(await interaction.Save(), 'Failed to create interaction for race check');
+                raceInteractionID = interaction.ID;
+
+                const raceOffer1 = await registry.Create({
+                    InteractionID: interaction.ID,
+                    RoomName: interaction.RoomName,
+                    TargetUserID: ctx.User.ID,
+                    Mode: 'warm',
+                    Summary: 'Concurrent offer 1 for RD11',
+                    CallerLabel: 'Race Caller 1',
+                    AgentName: 'TestAgent',
+                    ContextUser: ctx.User,
+                    Provider: ctx.Provider,
+                });
+                const raceOffer2 = await registry.Create({
+                    InteractionID: interaction.ID,
+                    RoomName: interaction.RoomName,
+                    TargetUserID: ctx.User.ID,
+                    Mode: 'warm',
+                    Summary: 'Concurrent offer 2 for RD11',
+                    CallerLabel: 'Race Caller 2',
+                    AgentName: 'TestAgent',
+                    ContextUser: ctx.User,
+                    Provider: ctx.Provider,
+                });
+                Assert(!!raceOffer1 && !!raceOffer1.OfferID, 'Failed to create raceOffer1');
+                Assert(!!raceOffer2 && !!raceOffer2.OfferID, 'Failed to create raceOffer2');
+                if (!raceOffer1 || !raceOffer2) {
+                    return;
+                }
+                raceOffer1ID = raceOffer1.OfferID;
+                raceOffer2ID = raceOffer2.OfferID;
+
+                const [res1, res2] = await Promise.all([
+                    registry.ResolveForUser(raceOffer1.OfferID, ctx.User.ID, 'Accepted', ctx.User, ctx.Provider),
+                    registry.ResolveForUser(raceOffer2.OfferID, ctx.User.ID, 'Accepted', ctx.User, ctx.Provider),
+                ]);
+
+                const successCount = (res1.Ok ? 1 : 0) + (res2.Ok ? 1 : 0);
+                AssertEqual(successCount, 1, 'Exactly one concurrent accept must succeed under UX_InteractionOffer_OneAccepted');
+                const loser = res1.Ok ? res2 : res1;
+                AssertEqual(loser.Ok, false, 'Losing accept must have Ok === false');
+                if (!loser.Ok) {
+                    AssertEqual(loser.Reason, OFFER_UNAVAILABLE, `Losing accept must receive OFFER_UNAVAILABLE, got ${loser.Reason}`);
+                }
             } finally {
                 if (ctx.Pool) {
                     const s = ctx.Schema ?? '__mj';
+                    const offerIDs = [offer.OfferID, raceOffer1ID, raceOffer2ID].filter(Boolean).map(id => `'${id}'`).join(',');
+                    if (offerIDs.length > 0) {
+                        await ctx.Pool.request().query(`
+                            DELETE FROM [${s}].[InteractionOffer] WHERE ID IN (${offerIDs});
+                        `).catch(() => undefined);
+                    }
+                    if (raceInteractionID) {
+                        await ctx.Pool.request().query(`
+                            DELETE FROM [${s}].[Interaction] WHERE ID = '${raceInteractionID}';
+                        `).catch(() => undefined);
+                    }
                     await ctx.Pool.request().query(`
-                        DELETE FROM [${s}].[InteractionOffer] WHERE ID = '${offer.OfferID}';
+                        DELETE FROM [${s}].[Interaction] WHERE RoomName = '${roomName}';
                     `).catch(() => undefined);
                 }
             }
-            console.log('      → durable offer creation, user authorization, and CAS guard hold');
+            console.log('      → durable offer creation, user authorization, and CAS guard hold (including real DB race)');
         }
     },
     {
         Id: 'realtime-deterministic.RD12',
         Name: 'RD12: LiveKit room authorization enforces participant, host, cancelled meeting, and ad-hoc rules',
         Fn: async (ctx): Promise<void> => {
-            const md = new Metadata();
+            const md = ctx.Provider ?? new Metadata();
             if (!md.EntityByName('MJ: Meetings') || !md.EntityByName('MJ: Meeting Participants')) {
                 console.warn('  ⚠ realtime-deterministic.RD12 SKIPPED — MJ: Meetings not in metadata');
                 return;

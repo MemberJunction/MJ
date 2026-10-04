@@ -14,7 +14,7 @@ import {
     ExtensionInitResult,
     ExtensionHealthResult,
 } from '@memberjunction/server-extensions-core';
-import { LiveKitAgentRoomCoordinator, LiveKitSipService, LiveKitWebhookParser } from '@memberjunction/livekit-room-server';
+import { LiveKitAgentRoomCoordinator, LiveKitSipService, LiveKitWebhookParser, RoomAuthorizationService } from '@memberjunction/livekit-room-server';
 import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
 import type { LiveKitSipSettings } from '../types.js';
 import {
@@ -66,6 +66,7 @@ export class LiveKitSipExtension extends BaseServerExtension {
         // The room coordinator opens the agent's model session through this factory. MJServer binds the same function;
         // binding it here too means a host that loads this extension does not depend on that import order.
         LiveKitAgentRoomCoordinator.Instance.SetSessionFactory(CreateBridgeRealtimeSession);
+        RoomAuthorizationService.Instance.SetSipRoomPrefix(config.roomPrefix);
 
         const service = new LiveKitSipTelephonyService(config, { sip });
         this.service = service;

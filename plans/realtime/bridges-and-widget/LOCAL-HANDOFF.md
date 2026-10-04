@@ -190,9 +190,7 @@ Built on the shared room components (`ng-livekit-room` L1, `mj-livekit-room` L2)
   `GetLiveKitRoomTurnState`. Today any signed-in user can join any room by name.
 - **Invitations.** `MeetingParticipant` rows, a "Meeting Invitation" notification type, and RSVP updates to
   `InviteStatus`. External guests get a link through the existing magic-link flow, scoped to that one room.
-- **Phone dial-in.** When `AllowPhoneDialIn`, a LiveKit SIP dispatch for the meeting's `DialInPhoneNumberID`; the caller
-  enters `DialInCode` (DTMF) to be placed in the room. Generate codes randomly (at least 6 digits) and refuse a code
-  already used by another live meeting on the same number. Rate-limit wrong codes per caller number.
+- **Phone dial-in (DEFERRED).** Server-side verification service (`MeetingDialInService`) and crypto-random code generation with dual rate-limiters (caller-phone and dialed-number) are implemented and unit tested. However, end-to-end inbound execution is deferred pending the missing seam: **LiveKit SIP DTMF IVR prompt dispatch and audio collection seam** (prompting inbound SIP caller via IVR audio, collecting DTMF pin digits, and transferring the participant into the meeting room). Wire when LiveKit SIP IVR dispatch actions are available.
 - **AI agents as participants.** `Role='Agent'` rows start agents through `LiveKitAgentRoomCoordinator` when the
   meeting goes live; PR 4's turn-taking applies.
 - **Recording.** Honour `RecordingPolicy`: announce to every participant (spoken for phone legs, a banner for browser

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, In
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RunView, Metadata, type IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { MeetingParticipantInput } from '@memberjunction/graphql-dataprovider';
 
 interface SelectableOption {
@@ -371,7 +372,7 @@ export class MJMeetingParticipantPickerComponent implements OnInit {
 
   @Input() Provider?: IMetadataProvider;
   public get ProviderToUse(): IMetadataProvider {
-    return this.Provider || Metadata.Provider;
+    return this.Provider ?? Metadata.Provider;
   }
 
   @Input() set InitialParticipants(val: MeetingParticipantInput[] | undefined) {
@@ -511,7 +512,7 @@ export class MJMeetingParticipantPickerComponent implements OnInit {
 
   public GetParticipantDisplayName(p: MeetingParticipantInput): string {
     if (p.AgentID) {
-      const matched = this.AgentOptions.find((a) => a.ID === p.AgentID);
+      const matched = this.AgentOptions.find((a) => UUIDsEqual(a.ID, p.AgentID));
       return matched ? `Agent: ${matched.Name}` : `Agent (${p.AgentID})`;
     }
     if (p.UserID) {

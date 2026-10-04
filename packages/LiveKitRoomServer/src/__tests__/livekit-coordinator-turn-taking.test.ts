@@ -1,20 +1,37 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- test mocks return minimal cast fixtures for the SDK/engine seams */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
+import type { ActiveBridgeSession, StartBridgeSessionParams, RoomTurnSnapshot } from '@memberjunction/ai-bridge-server';
+import type { IRealtimeSession } from '@memberjunction/ai';
 import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type BridgeOps, type RealtimeSessionStartContext } from '../livekit-agent-room-coordinator';
 import { LiveKitTokenService } from '../livekit-token-service';
 
 const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSecret: 'devsecretdevsecretdevsecret123456' };
 
+function createStubSession(): IRealtimeSession {
+  return {
+    SendInput: () => {},
+    RegisterTools: async () => {},
+    OnOutput: () => {},
+    OnTranscript: () => {},
+    OnToolCall: () => {},
+    SendToolResult: async () => {},
+    OnInterruption: () => {},
+    OnError: () => {},
+    OnUsage: () => {},
+    Close: async () => {},
+  };
+}
+
 /** A bridge-ops mock whose started session optionally carries the engine's turn-taking tool handler. */
 function makeBridgeOps(handler?: { Handles: (n: string) => boolean; Execute: (c: { ToolName: string; Arguments: string }) => Promise<string> }) {
-  const startCalls: Record<string, unknown>[] = [];
+  const startCalls: StartBridgeSessionParams[] = [];
   let seq = 0;
   const ops = {
     Config: vi.fn(async () => undefined),
-    ProviderByDriverClass: vi.fn(() => ({ ID: 'p1', DriverClass: LIVEKIT_BRIDGE_DRIVER_CLASS }) as any),
-    StartBridgeSession: vi.fn(async (params: Record<string, unknown>) => {
+    ProviderByDriverClass: vi.fn(() => ({ ID: 'p1', DriverClass: LIVEKIT_BRIDGE_DRIVER_CLASS } as unknown as MJAIBridgeProviderEntity)),
+    StartBridgeSession: vi.fn(async (params: StartBridgeSessionParams) => {
       startCalls.push(params);
-      return { SessionBridgeID: `bridge-${++seq}`, TurnTakingToolHandler: handler } as any;
+      return { SessionBridgeID: `bridge-${++seq}`, TurnTakingToolHandler: handler } as unknown as ActiveBridgeSession;
     }),
     StopBridgeSession: vi.fn(async () => true),
     ReconfigureSessionToMeeting: vi.fn(() => true),
@@ -25,7 +42,7 @@ function makeBridgeOps(handler?: { Handles: (n: string) => boolean; Execute: (c:
 describe('LiveKitAgentRoomCoordinator — full-duplex turn-taking wiring', () => {
   let coordinator: LiveKitAgentRoomCoordinator;
   const factoryContexts: RealtimeSessionStartContext[] = [];
-  const session = { marker: 'session' } as any;
+  const session: IRealtimeSession = createStubSession();
 
   beforeEach(() => {
     factoryContexts.length = 0;
@@ -102,7 +119,17 @@ describe('LiveKitAgentRoomCoordinator — full-duplex turn-taking wiring', () =>
   });
 
   it('serves a room\'s turn-taking snapshot from the injected source, trimming the room name, and null for an empty room', () => {
-    const snapshot = { RoomId: 'tt-room-9', Agents: [] } as any;
+    const snapshot: RoomTurnSnapshot = {
+      RoomId: 'tt-room-9',
+      Agents: [],
+      AgentSessionIds: [],
+      FacilitatorAgentSessionId: null,
+      FloorHolderAgentSessionId: null,
+      FloorHeldSinceMs: null,
+      HumanSpeaking: false,
+      PendingHandoffToAgentSessionId: null,
+      ConsecutiveAgentTurns: 0,
+    };
     const source = vi.fn((roomKey: string) => (roomKey === 'tt-room-9' ? snapshot : null));
     coordinator.SetTurnStateSource(source);
 

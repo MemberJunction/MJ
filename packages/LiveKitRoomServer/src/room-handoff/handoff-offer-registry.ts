@@ -610,18 +610,7 @@ export class HandoffOfferRegistry extends BaseSingleton<HandoffOfferRegistry> {
     }
 
     private getProvider(callProvider?: IMetadataProvider): IMetadataProvider | undefined {
-        if (callProvider) {
-            return callProvider;
-        }
-        if (this.deps.Provider) {
-            return this.deps.Provider;
-        }
-        try {
-            return Metadata.Provider as IMetadataProvider | undefined;
-        } catch (err) {
-            LogError('[HandoffOfferRegistry] Failed to obtain Metadata.Provider', undefined, err);
-            return undefined;
-        }
+        return callProvider ?? this.deps.Provider ?? Metadata.Provider;
     }
 
     private getRunView(provider: IMetadataProvider): RunView {
