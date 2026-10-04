@@ -15,6 +15,11 @@ export * from './callerIdentity.js';
 export * from './telephonyCapacity.js';
 export * from './telephonyCallTools.js';
 export * from './telephonyCallSession.js';
+export * from './sipTrunkCarrier.js';
+export * from './handoffDestinations.js';
+export * from './roomCallTools.js';
+export * from './roomCallSession.js';
+export * from './agentIdentityLookup.js';
 export * from './webhookParams.js';
 
 // ── Twilio Programmable Voice + Media Streams ──────────────────────────────────────────
@@ -32,6 +37,11 @@ export * from './vonage-runtime.js';
 // ── RingCentral SIP softphone ──────────────────────────────────────────────────────────
 export { RingCentralTelephonyService, type RingCentralTelephonyServiceDeps } from './RingCentralTelephonyService.js';
 export * from './ringcentral-runtime.js';
+
+// ── LiveKit SIP: phone calls carried by a SIP trunk, landed in a LiveKit room ──────────
+export { LiveKitSipTelephonyService, DEFAULT_LIVEKIT_SIP_ROOM_PREFIX, type LiveKitSipInboundResult, type LiveKitSipTelephonyServiceDeps } from './LiveKitSipTelephonyService.js';
+export * from './LiveKitSipRouter.js';
+export * from './livekit-sip-runtime.js';
 
 // ── Teams meetings (Microsoft Graph cloud-communications + ACS application-hosted media) ──
 export * from './teamsAcsMediaRegistry.js';

@@ -86,12 +86,26 @@ export interface OutboundPolicySettings {
     maxCallsPerUserPerHour?: number;
 }
 
-/** One raw `telephony.transferTargets` entry: a named place the agent may transfer a live call to. */
+/** What kind of place a transfer target is. */
+export type TransferTargetKind = 'number' | 'user' | 'agent';
+
+/**
+ * One raw `telephony.transferTargets` entry: a named place the agent may hand a live call to. The agent names a target,
+ * never a number, an email or an agent id.
+ */
 export interface TransferTargetSettings {
-    /** What the agent calls it (e.g. `Front desk`); the agent names a target, never a number. */
+    /** What the agent calls it (e.g. `Front desk`). */
     name: string;
-    /** Where it goes, in E.164. Checked against the outbound allow/block lists at startup. */
-    number: string;
+    /** `number` (a phone number; the default), `user` (a person at an Explorer console) or `agent` (another AI agent). */
+    kind?: TransferTargetKind;
+    /** `number` targets: where it goes, in E.164. Checked against the outbound allow/block lists at startup. */
+    number?: string;
+    /** `user` targets: the MJ user (by email) who is offered the conversation. */
+    userEmail?: string;
+    /** `user` targets: E.164 number the room dials when the person declines or does not answer. Checked like `number`. */
+    fallbackNumber?: string;
+    /** `agent` targets: the name of the MJ AI agent that takes over. */
+    agentName?: string;
     /** What it is for; shown to the agent so it knows when to use it. */
     description?: string;
 }
@@ -300,27 +314,52 @@ export function CheckTransferDestination(
     return { Allowed: true, Number: to };
 }
 
-/** A validated entry of the transfer directory. */
-export interface TransferTarget {
+/** The fields every validated directory entry carries. */
+interface TransferTargetBase {
     Name: string;
-    /** E.164, already checked against the outbound policy. */
-    Number: string;
     Description?: string;
 }
+
+/** A phone number. On a carrier call this is a carrier transfer; in a room it is dialed into the room. */
+export interface NumberTransferTarget extends TransferTargetBase {
+    Kind: 'number';
+    /** E.164, already checked against the outbound policy. */
+    Number: string;
+}
+
+/** A person at an Explorer console, who is offered the conversation. Room calls only. */
+export interface UserTransferTarget extends TransferTargetBase {
+    Kind: 'user';
+    /** The user's email, trimmed and lower-cased. Whether it names an active user is checked when a transfer is requested. */
+    UserEmail: string;
+    /** E.164, already checked against the outbound policy; dialed into the room when the person does not take it. */
+    FallbackNumber?: string;
+}
+
+/** Another AI agent that takes the conversation over. Room calls only. */
+export interface AgentTransferTarget extends TransferTargetBase {
+    Kind: 'agent';
+    /** The agent's name. Whether it names an agent the call may run is checked when a transfer is requested. */
+    AgentName: string;
+}
+
+/** A validated entry of the transfer directory. */
+export type TransferTarget = NumberTransferTarget | UserTransferTarget | AgentTransferTarget;
 
 const MAX_TRANSFER_TARGETS = 20;
 const MAX_TRANSFER_NAME_CHARS = 60;
 const MAX_TRANSFER_DESCRIPTION_CHARS = 200;
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Builds the transfer directory from `telephony.transferTargets`: each entry needs a name, a unique name (case
- * insensitive) and a number that passes the same E.164 + allow/block checks as an outbound dial. An entry that
- * fails any of them is DROPPED and logged, never half-kept — a typo must not turn into a forwarding destination.
+ * insensitive) and what its kind needs. A number (a `number` target, or a `user` target's fallback) must pass the same
+ * E.164 + allow/block checks as an outbound dial; a `user` target needs an email-shaped address; an `agent` target needs a
+ * name. An entry that fails any of them is DROPPED and logged, never half-kept: a typo must not turn into a forwarding
+ * destination.
  *
- * The directory is the only thing `transfer_call` can reach. Letting the model (and so an unverified caller)
- * name an arbitrary number would be free call forwarding at the operator's expense.
- *
- * Later routing work (queues, human-agent targets) extends this directory rather than relaxing it.
+ * The directory is the only thing `transfer_call` can reach. Letting the model (and so an unverified caller) name an
+ * arbitrary number would be free call forwarding at the operator's expense.
  */
 export function ResolveTransferDirectory(raw: TransferTargetSettings[] | undefined, policy: OutboundCallPolicy): TransferTarget[] {
     const targets: TransferTarget[] = [];
@@ -350,13 +389,60 @@ function validateTransferEntry(entry: TransferTargetSettings, policy: OutboundCa
         LogError(`[Telephony] ignoring duplicate telephony.transferTargets name '${name}'.`);
         return undefined;
     }
+    const description = typeof entry.description === 'string' ? entry.description.trim().slice(0, MAX_TRANSFER_DESCRIPTION_CHARS) : '';
+    const base: TransferTargetBase = { Name: name, ...(description ? { Description: description } : {}) };
+    switch (entry.kind ?? 'number') {
+        case 'number':
+            return validateNumberTarget(entry, base, policy);
+        case 'user':
+            return validateUserTarget(entry, base, policy);
+        case 'agent':
+            return validateAgentTarget(entry, base);
+        default:
+            LogError(`[Telephony] ignoring telephony.transferTargets entry '${name}': kind must be 'number', 'user' or 'agent'.`);
+            return undefined;
+    }
+}
+
+function validateNumberTarget(entry: TransferTargetSettings, base: TransferTargetBase, policy: OutboundCallPolicy): NumberTransferTarget | undefined {
     const verdict = CheckTransferDestination(policy, typeof entry.number === 'string' ? entry.number : '');
     if (!verdict.Allowed) {
-        LogError(`[Telephony] ignoring telephony.transferTargets entry '${name}': ${verdict.Reason}`);
+        LogError(`[Telephony] ignoring telephony.transferTargets entry '${base.Name}': ${verdict.Reason}`);
         return undefined;
     }
-    const description = typeof entry.description === 'string' ? entry.description.trim().slice(0, MAX_TRANSFER_DESCRIPTION_CHARS) : '';
-    return { Name: name, Number: verdict.Number, ...(description ? { Description: description } : {}) };
+    return { ...base, Kind: 'number', Number: verdict.Number };
+}
+
+function validateUserTarget(entry: TransferTargetSettings, base: TransferTargetBase, policy: OutboundCallPolicy): UserTransferTarget | undefined {
+    const email = typeof entry.userEmail === 'string' ? entry.userEmail.trim().toLowerCase() : '';
+    if (!EMAIL_SHAPE.test(email)) {
+        LogError(`[Telephony] ignoring telephony.transferTargets entry '${base.Name}': a user target needs a userEmail.`);
+        return undefined;
+    }
+    const fallback = typeof entry.fallbackNumber === 'string' ? entry.fallbackNumber.trim() : '';
+    if (!fallback) {
+        return { ...base, Kind: 'user', UserEmail: email };
+    }
+    const verdict = CheckTransferDestination(policy, fallback);
+    if (!verdict.Allowed) {
+        LogError(`[Telephony] ignoring telephony.transferTargets entry '${base.Name}': its fallbackNumber is refused: ${verdict.Reason}`);
+        return undefined;
+    }
+    return { ...base, Kind: 'user', UserEmail: email, FallbackNumber: verdict.Number };
+}
+
+function validateAgentTarget(entry: TransferTargetSettings, base: TransferTargetBase): AgentTransferTarget | undefined {
+    const agentName = typeof entry.agentName === 'string' ? entry.agentName.trim() : '';
+    if (!agentName) {
+        LogError(`[Telephony] ignoring telephony.transferTargets entry '${base.Name}': an agent target needs an agentName.`);
+        return undefined;
+    }
+    return { ...base, Kind: 'agent', AgentName: agentName };
+}
+
+/** The directory's phone-number entries: the only ones a carrier call (no room to bring anyone into) can transfer to. */
+export function NumberTransferTargets(targets: readonly TransferTarget[]): NumberTransferTarget[] {
+    return targets.filter((t): t is NumberTransferTarget => t.Kind === 'number');
 }
 
 /** Finds a directory entry by the name the agent gave (case and surrounding whitespace insensitive). */

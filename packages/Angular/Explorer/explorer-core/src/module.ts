@@ -68,6 +68,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { ConversationFeedbackResource } from './lib/conversation-feedback';
 import { LiveKitRoomResource } from './lib/resource-wrappers/livekit-room-resource.component';
+import { HumanHandoffConsoleResource } from './lib/resource-wrappers/human-handoff-console-resource.component';
+import { MJConversationOffersComponent } from '@memberjunction/ng-conversation-offers';
 import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
 
 @NgModule({
@@ -99,6 +101,7 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
     LiveKitRoomResource,
+    HumanHandoffConsoleResource,
   ],
   imports: [
     MarkdownModule,
@@ -141,6 +144,7 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     MJWindowTitlebarComponent,
     PaginationComponent,
     MJLiveKitRoomComponent,
+    MJConversationOffersComponent,
     MJEmptyStateComponent,
     MJAlertComponent
   ],

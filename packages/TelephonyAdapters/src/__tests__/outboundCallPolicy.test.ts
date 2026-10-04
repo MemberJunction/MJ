@@ -13,12 +13,14 @@ import {
     FindTransferTarget,
     IsValidE164,
     MaskNumber,
+    NumberTransferTargets,
     OutboundCallRefusedError,
     OutboundRateLimiter,
     ResolveOutboundPolicy,
     ResolveTransferDirectory,
     type OutboundCallRequest,
     type OutboundGuardDeps,
+    type TransferTarget,
 } from '../telephony/outboundCallPolicy.js';
 
 const USER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001' } as unknown as UserInfo;
@@ -318,8 +320,8 @@ describe('ResolveTransferDirectory', () => {
             policy,
         );
         expect(directory).toEqual([
-            { Name: 'Front desk', Number: '+14155550100', Description: 'general enquiries' },
-            { Name: 'Billing', Number: '+14155550101' },
+            { Kind: 'number', Name: 'Front desk', Number: '+14155550100', Description: 'general enquiries' },
+            { Kind: 'number', Name: 'Billing', Number: '+14155550101' },
         ]);
     });
 
@@ -356,7 +358,7 @@ describe('ResolveTransferDirectory', () => {
             ],
             policy,
         );
-        expect(directory).toEqual([{ Name: 'Sales', Number: '+14155550101' }]);
+        expect(directory).toEqual([{ Kind: 'number', Name: 'Sales', Number: '+14155550101' }]);
     });
 
     it('survives a malformed entry (wrong types) without throwing', () => {
@@ -377,10 +379,10 @@ describe('ResolveTransferDirectory', () => {
 });
 
 describe('FindTransferTarget', () => {
-    const targets = [{ Name: 'Front desk', Number: '+14155550100' }];
+    const targets: TransferTarget[] = [{ Kind: 'number', Name: 'Front desk', Number: '+14155550100' }];
 
     it('finds by name regardless of case and surrounding whitespace', () => {
-        expect(FindTransferTarget(targets, ' FRONT DESK ')?.Number).toBe('+14155550100');
+        expect(FindTransferTarget(targets, ' FRONT DESK ')).toMatchObject({ Kind: 'number', Number: '+14155550100' });
     });
 
     it('never resolves a number, a blank, or an unknown name', () => {
@@ -388,5 +390,80 @@ describe('FindTransferTarget', () => {
         expect(FindTransferTarget(targets, '')).toBeUndefined();
         expect(FindTransferTarget(targets, 'Back office')).toBeUndefined();
         expect(FindTransferTarget(targets, undefined as unknown as string)).toBeUndefined();
+    });
+});
+
+describe('ResolveTransferDirectory: user and agent targets', () => {
+    const policy = ResolveOutboundPolicy();
+
+    it('keeps a person target, lower-casing the email and validating the fallback number like an outbound dial', () => {
+        const directory = ResolveTransferDirectory(
+            [{ name: 'Billing team', kind: 'user', userEmail: ' Dana@Example.com ', fallbackNumber: ' +14155550199 ', description: 'refunds' }],
+            policy,
+        );
+        expect(directory).toEqual([{ Kind: 'user', Name: 'Billing team', UserEmail: 'dana@example.com', FallbackNumber: '+14155550199', Description: 'refunds' }]);
+    });
+
+    it('keeps a person target that has no fallback', () => {
+        expect(ResolveTransferDirectory([{ name: 'Dana', kind: 'user', userEmail: 'dana@example.com' }], policy)).toEqual([
+            { Kind: 'user', Name: 'Dana', UserEmail: 'dana@example.com' },
+        ]);
+    });
+
+    it('drops a person target without a usable email, or whose fallback number the outbound policy refuses (never half-kept)', () => {
+        vi.mocked(LogError).mockClear();
+        const directory = ResolveTransferDirectory(
+            [
+                { name: 'No email', kind: 'user' },
+                { name: 'Bad email', kind: 'user', userEmail: 'not-an-email' },
+                { name: 'Premium fallback', kind: 'user', userEmail: 'a@b.co', fallbackNumber: '+19005551234' },
+                { name: 'Typo fallback', kind: 'user', userEmail: 'a@b.co', fallbackNumber: '4155550100' },
+            ],
+            policy,
+        );
+        expect(directory).toEqual([]);
+        const logged = vi.mocked(LogError).mock.calls.map((c) => String(c[0])).join('\n');
+        for (const name of ['No email', 'Bad email', 'Premium fallback', 'Typo fallback']) {
+            expect(logged).toContain(`'${name}'`);
+        }
+    });
+
+    it('keeps an agent target and drops one with no agent name', () => {
+        const directory = ResolveTransferDirectory([{ name: 'Legal', kind: 'agent', agentName: ' Rex ' }, { name: 'Nobody', kind: 'agent' }], policy);
+        expect(directory).toEqual([{ Kind: 'agent', Name: 'Legal', AgentName: 'Rex' }]);
+    });
+
+    it('treats an entry with no kind as a number target (existing configuration keeps working)', () => {
+        expect(ResolveTransferDirectory([{ name: 'Front desk', number: '+14155550100' }], policy)).toEqual([{ Kind: 'number', Name: 'Front desk', Number: '+14155550100' }]);
+    });
+
+    it('drops an entry with an unknown kind', () => {
+        const unknownKind = [{ name: 'Odd', kind: 'carrier-pigeon' }] as unknown as Parameters<typeof ResolveTransferDirectory>[0];
+        expect(ResolveTransferDirectory(unknownKind, policy)).toEqual([]);
+    });
+
+    it('shares one name space across kinds', () => {
+        const directory = ResolveTransferDirectory(
+            [
+                { name: 'Support', kind: 'user', userEmail: 'a@b.co' },
+                { name: 'support', kind: 'agent', agentName: 'Rex' },
+            ],
+            policy,
+        );
+        expect(directory.map((t) => t.Kind)).toEqual(['user']);
+    });
+
+    it('finds a person or agent target by name, and a carrier call can only ever use the number entries', () => {
+        const directory = ResolveTransferDirectory(
+            [
+                { name: 'Dana', kind: 'user', userEmail: 'dana@example.com' },
+                { name: 'Legal', kind: 'agent', agentName: 'Rex' },
+                { name: 'Front desk', number: '+14155550100' },
+            ],
+            policy,
+        );
+        expect(FindTransferTarget(directory, 'dana')?.Kind).toBe('user');
+        expect(FindTransferTarget(directory, 'LEGAL')?.Kind).toBe('agent');
+        expect(NumberTransferTargets(directory).map((t) => t.Name)).toEqual(['Front desk']);
     });
 });

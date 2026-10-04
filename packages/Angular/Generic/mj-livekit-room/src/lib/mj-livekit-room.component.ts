@@ -423,6 +423,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   /** Per-session VOICE override for the INITIAL agent (from the host's pre-join picker). */
   @Input() public RealtimeVoice: string | null = null;
   /**
+   * Start the initial agent able to bring a person, a phone number or another agent into this same room (a "transfer to a human"
+   * that the visitor never leaves the room for). Honoured only when the server has handoff configured; otherwise ignored.
+   */
+  @Input() public EnableHandoff = false;
+  /**
    * Whether the dev model/voice pickers are shown in the in-room "Add an agent" control. The HOST
    * computes this (the `Realtime: Advanced Session Controls` authorization) and passes it down — this
    * generic component never evaluates authorizations itself.
@@ -828,6 +833,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       RealtimeVoice: this.RealtimeVoice ?? undefined,
       RoomName: this.RoomName ?? undefined,
       TurnMode: this.TurnMode ?? undefined,
+      EnableHandoff: this.EnableHandoff || undefined,
     });
     if (!result.Success) {
       this.fail(result.ErrorMessage ?? 'Failed to start the agent session.');

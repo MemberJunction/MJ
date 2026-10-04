@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { randomUUID } from 'crypto';
 import { LogError, LogStatusEx, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService } from '@memberjunction/livekit-room-server';
+import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService, LiveKitUserIdentity, RoomHandoffEngine } from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -127,6 +127,14 @@ export class StartLiveKitAgentRoomSessionInput {
 
   @Field(() => String, { nullable: true })
   TurnMode?: string;
+
+  /**
+   * Start the agent able to bring someone into this room: a person (who is offered the conversation and may accept), a
+   * phone number, or another agent. Opt-in, and honoured only when this server has the handoff collaborators configured
+   * (the LiveKit SIP extension); otherwise the agent starts as it always did.
+   */
+  @Field(() => Boolean, { nullable: true })
+  EnableHandoff?: boolean;
 }
 
 @ObjectType()
@@ -266,6 +274,21 @@ export class RealtimeBridgeResolver extends ResolverBase {
       }
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
       const roomName = input.RoomName?.trim() || `mj-${randomUUID()}`;
+
+      // Opt-in: an agent that can bring a person, a number or another agent into this room (the same room, so a visitor
+      // is escalated without leaving it). Falls through to the standard start when the server cannot do handoffs.
+      const handoffSessionBridgeID = await this.startWithHandoff(input, roomName, user, provider);
+      if (handoffSessionBridgeID) {
+        const handoffToken = await new LiveKitTokenService().MintClientToken(roomName, this.participantIdentity(user), user.Name ?? user.Email);
+        return {
+          Success: true,
+          SessionBridgeID: handoffSessionBridgeID,
+          RoomName: roomName,
+          ServerUrl: handoffToken.ServerUrl,
+          ClientToken: handoffToken.Token,
+          Identity: handoffToken.Identity,
+        };
+      }
 
       // Resolve the AIAgentSession the bridge will reference. The bridge row FK-references
       // AIAgentSession(ID), so we must use an EXISTING session — either one the caller supplied, or a
@@ -504,9 +527,41 @@ export class RealtimeBridgeResolver extends ResolverBase {
     }
   }
 
-  /** Builds a stable, lowercased participant identity from the authenticated user. */
+  /**
+   * Starts the agent through the handoff-capable room starter when the caller asked for it and the server can do it.
+   * Returns the bridge id, or `undefined` to mean "use the standard start" (not requested, no starter, no agent named).
+   */
+  private async startWithHandoff(
+    input: StartLiveKitAgentRoomSessionInput,
+    roomName: string,
+    user: UserInfo,
+    provider: IMetadataProvider,
+  ): Promise<string | undefined> {
+    if (!input.EnableHandoff) {
+      return undefined;
+    }
+    const starter = RoomHandoffEngine.Instance.Deps.AgentStarter;
+    const agentID = input.TargetAgentID?.trim() || input.AgentID?.trim();
+    if (!starter || !agentID) {
+      LogError('StartLiveKitAgentRoomSession: handoff was requested but this server has no handoff-capable agent starter; starting the agent without it.');
+      return undefined;
+    }
+    const started = await starter({
+      RoomName: roomName,
+      AgentID: agentID,
+      AgentName: input.AgentName?.trim() ?? '',
+      CallerLabel: user.Name?.trim() || user.Email || 'Web visitor',
+      ContextUser: user,
+      Provider: provider,
+      RealtimeModelID: input.RealtimeModelID,
+      RealtimeVoice: input.RealtimeVoice,
+    });
+    return started.SessionBridgeID;
+  }
+
+  /** Builds a stable, lowercased participant identity from the authenticated user (shared with the handoff engine, which watches for it). */
   private participantIdentity(user: UserInfo): string {
-    return `user-${user.ID}`.toLowerCase();
+    return LiveKitUserIdentity(user.ID);
   }
 
   /** Normalizes a turn-mode string to the bridge's accepted values. */

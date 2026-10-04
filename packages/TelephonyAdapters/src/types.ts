@@ -1,6 +1,7 @@
 import { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import type { OutboundPolicySettings, TransferTargetSettings } from './telephony/outboundCallPolicy.js';
+import type { SipTrunkCarrierSettings } from './telephony/sipTrunkCarrier.js';
 
 /**
  * Settings that apply to every carrier. They are configured once under `telephony` and merged into each
@@ -109,6 +110,38 @@ export interface RingCentralTelephonyConfig extends TelephonySharedSettings {
 }
 
 /**
+ * LiveKit SIP binding: phone calls carried by a SIP trunk, landing in a LiveKit room. The carrier is whoever the trunk
+ * belongs to (Twilio Elastic SIP Trunking, Telnyx, …); MJ routes the call and runs the agent in the room.
+ *
+ * LiveKit credentials come from here or, when omitted, from `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`
+ * (the same ones the Meet room uses).
+ */
+export interface LiveKitSipSettings extends TelephonySharedSettings {
+    /** LiveKit server URL (`wss://…`). Defaults to `LIVEKIT_URL`. */
+    serverUrl?: string;
+    /** LiveKit API key. Defaults to `LIVEKIT_API_KEY`. */
+    apiKey?: string;
+    /** LiveKit API secret. Defaults to `LIVEKIT_API_SECRET`. */
+    apiSecret?: string;
+    /** Inbound calls land in a room whose name starts with this (default `call-`). Rooms that do not are not phone calls. */
+    roomPrefix?: string;
+    /** The numbers (E.164) this deployment answers. Each routes to the agent identity registered for that number. */
+    numbers?: string[];
+    /** The LiveKit inbound trunk id, when it was created by hand. Checked at startup; created for you when `autoProvision` is set. */
+    inboundTrunkId?: string;
+    /** The LiveKit OUTBOUND trunk used to dial out (an outbound call, a fallback leg, a transfer to a number). Dialing out is off without it. */
+    outboundTrunkId?: string;
+    /** The caller ID presented on a call dialed out through the outbound trunk. Defaults to the trunk's own number. */
+    outboundFromNumber?: string;
+    /** Create the inbound trunk and dispatch rule at startup when they do not exist (idempotent). Default false. */
+    autoProvision?: boolean;
+    /** Source addresses the inbound trunk accepts calls from (the carrier's SIP signalling addresses). Used when provisioning. */
+    allowedAddresses?: string[];
+    /** The carrier behind the trunk, for configuration checks only. */
+    carrier?: SipTrunkCarrierSettings;
+}
+
+/**
  * Teams meetings binding configuration.
  */
 export interface TeamsMeetingsConfig {
@@ -136,6 +169,7 @@ export interface TelephonyConfig extends TelephonySharedSettings {
     twilio?: TwilioTelephonyConfig;
     vonage?: VonageTelephonyConfig;
     ringcentral?: RingCentralTelephonyConfig;
+    livekitSip?: LiveKitSipSettings;
     teams?: TeamsMeetingsConfig;
 }
 

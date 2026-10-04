@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
     Identity: identity,
     RoomName: room,
   })),
+  startAgentRoomSession: vi.fn(async () => ({ SessionBridgeID: 'bridge-std', RoomName: 'room-std', ServerUrl: 'wss://x.livekit.cloud' })),
+  handoffDeps: { AgentStarter: undefined as undefined | ((req: Record<string, unknown>) => Promise<{ SessionBridgeID: string }>) },
   startRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_ACTIVE' })),
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
 }));
@@ -25,7 +27,9 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
     MintClientToken = h.mintClientToken;
   },
   // SetSessionFactory is exercised by the resolver's module-load binding of the realtime-session factory.
-  LiveKitAgentRoomCoordinator: { Instance: { StartAgentRoomSession: vi.fn(), SetSessionFactory: vi.fn() } },
+  LiveKitAgentRoomCoordinator: { Instance: { StartAgentRoomSession: h.startAgentRoomSession, SetSessionFactory: vi.fn() } },
+  LiveKitUserIdentity: (id: string) => `user-${id}`.toLowerCase(),
+  RoomHandoffEngine: { Instance: { Deps: h.handoffDeps } },
   LiveKitEgressService: class {
     StartRoomRecording = h.startRecording;
     StopRecording = h.stopRecording;
@@ -56,7 +60,7 @@ vi.mock('../resolvers/meetingRecordingRegistration', () => ({
     get correlateRecordingStart() { return this.CorrelateRecordingStart; },
 }));
 
-import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput } from '../resolvers/RealtimeBridgeResolver';
+import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput, StartLiveKitAgentRoomSessionInput } from '../resolvers/RealtimeBridgeResolver';
 import type { AppContext } from '../types.js';
 
 /** A resolver subclass that supplies a fake authenticated user (GetUserFromPayload is protected). */
@@ -118,6 +122,58 @@ describe('RealtimeBridgeResolver', () => {
       resolver.user = undefined;
       const input = Object.assign(new LiveKitRecordingInput(), { RoomName: 'room-1' });
       const result = await resolver.StartLiveKitRecording(input, ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toMatch(/current user/i);
+    });
+  });
+  describe('StartLiveKitAgentRoomSession with handoff', () => {
+    const input = (over: Partial<StartLiveKitAgentRoomSessionInput> = {}) =>
+      Object.assign(new StartLiveKitAgentRoomSessionInput(), { RoomName: 'room-h', AgentID: 'co-agent', TargetAgentID: 'target-agent', AgentName: 'Sage', AgentSessionID: 'AS1', ...over });
+
+    beforeEach(() => {
+      h.startAgentRoomSession.mockClear();
+      h.mintClientToken.mockClear();
+      h.handoffDeps.AgentStarter = undefined;
+    });
+
+    it('starts the agent through the handoff-capable starter when asked, naming the signed-in user as the caller, and returns a token for the same room', async () => {
+      const starter = vi.fn(async () => ({ SessionBridgeID: 'bridge-h' }));
+      h.handoffDeps.AgentStarter = starter;
+      const result = await resolver.StartLiveKitAgentRoomSession(input({ EnableHandoff: true, RealtimeVoice: 'echo' }), ctx);
+      expect(result).toMatchObject({ Success: true, SessionBridgeID: 'bridge-h', RoomName: 'room-h', ClientToken: 'jwt-user-u1', Identity: 'user-u1' });
+      expect(starter).toHaveBeenCalledWith(
+        expect.objectContaining({ RoomName: 'room-h', AgentID: 'target-agent', AgentName: 'Sage', CallerLabel: 'Amith', RealtimeVoice: 'echo' }),
+      );
+      expect(h.startAgentRoomSession).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the standard room start when handoff is requested but the server cannot do it', async () => {
+      const result = await resolver.StartLiveKitAgentRoomSession(input({ EnableHandoff: true }), ctx);
+      expect(result).toMatchObject({ Success: true, SessionBridgeID: 'bridge-std' });
+      expect(h.startAgentRoomSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not touch the handoff starter unless asked', async () => {
+      const starter = vi.fn(async () => ({ SessionBridgeID: 'bridge-h' }));
+      h.handoffDeps.AgentStarter = starter;
+      await resolver.StartLiveKitAgentRoomSession(input(), ctx);
+      expect(starter).not.toHaveBeenCalled();
+      expect(h.startAgentRoomSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports a failure to start the handoff-capable agent instead of silently starting a plain one', async () => {
+      h.handoffDeps.AgentStarter = vi.fn(async () => {
+        throw new Error('All agent lines are busy right now.');
+      });
+      const result = await resolver.StartLiveKitAgentRoomSession(input({ EnableHandoff: true }), ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('busy');
+      expect(h.startAgentRoomSession).not.toHaveBeenCalled();
+    });
+
+    it('requires an authenticated user', async () => {
+      resolver.user = undefined;
+      const result = await resolver.StartLiveKitAgentRoomSession(input({ EnableHandoff: true }), ctx);
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/current user/i);
     });
