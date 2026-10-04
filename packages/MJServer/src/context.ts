@@ -8,7 +8,8 @@ import sql from 'mssql';
 import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload } from './auth/index.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { authCache } from './cache.js';
-import { userEmailMap, apiKey, mj_core_schema } from './config.js';
+import { userEmailMap, apiKey, mj_core_schema, configInfo } from './config.js';
+import { BuildPostgreSQLConnectionConfig, ResolvePostgreSQLEndpoint } from './postgresqlPoolSettings.js';
 import { buildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
@@ -769,15 +770,10 @@ async function createPerRequestProviders(
  */
 async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-  const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-  const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-  const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
-  const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
-  const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
 
   const pgProvider = new PostgreSQLDataProvider();
   const pgConfig = new PostgreSQLProviderConfigData(
-    { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgUser, Password: pgPass },
+    BuildPostgreSQLConnectionConfig(ResolvePostgreSQLEndpoint(), configInfo.databaseSettings, 'api'),
     mj_core_schema,
     0,
     undefined,
@@ -809,13 +805,10 @@ async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase
 
   try {
     const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
-    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
-    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
-    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
 
     const roProvider = new PostgreSQLDataProvider();
     const roConfig = new PostgreSQLProviderConfigData(
-      { Host: pgHost, Port: pgPort, Database: pgDatabase, User: roUser, Password: roPass },
+      BuildPostgreSQLConnectionConfig({ ...ResolvePostgreSQLEndpoint(), User: roUser, Password: roPass }, configInfo.databaseSettings, 'api'),
       mj_core_schema,
       0,
       undefined,
