@@ -255,16 +255,14 @@ async function loadChunks(ctx: IntegrationCheckContext, itemID: string): Promise
     return r.Results;
 }
 /**
- * Refresh the caches the vectorizer reads, so the rows a check just created are visible to it: the KH
- * cache for sources, and the Vector Indexes cache in AIEngineBase for the fixture indexes.
- *
- * The index reload can't be left to the save event. AIEngineBase overrides AdditionalLoading, so
- * BaseEngine refreshes it on a 1.5 s debounce rather than mutating the cache immediately, and a check
- * that vectorizes inside that window finds no index.
+ * Refresh the KH cache so a just-created source is visible to the engine, and AIEngineBase so a
+ * just-created fixture index is. AIEngineBase owns the Vector Indexes cache and overrides
+ * AdditionalLoading, so BaseEngine applies a save event to it only as a debounced full refresh,
+ * seconds later — the check would look the index up before it lands.
  */
 async function refreshEngines(ctx: IntegrationCheckContext): Promise<void> {
     await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
-    await AIEngineBase.Instance.RefreshItem('_vectorIndexes');
+    await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider);
 }
 function resetCaptures(): void { S.Upserts.length = 0; S.DeletedVectorIds.length = 0; S.EmbedCalls.length = 0; }
 /** The single upserted vector record's metadata for a single-item run. */

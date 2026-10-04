@@ -317,6 +317,21 @@ describe('RealtimeClientSessionService.PrepareClientSession', () => {
         expect(result.ErrorMessage).toContain('Realtime Co-Agent could not be resolved');
     });
 
+    it('adds host tools to the tool set and host framing to the prompt WITHOUT the interactive-surface clause', async () => {
+        const svc = new TestableService();
+        const hostTool: RealtimeToolDefinition = { Name: 'end_call', Description: 'Ends the call', ParametersSchema: { type: 'object', properties: {} } };
+        const duplicate: RealtimeToolDefinition = { Name: INVOKE_TARGET_AGENT_TOOL_NAME, Description: 'dup', ParametersSchema: { type: 'object', properties: {} } };
+        const result = await svc.PrepareClientSession(
+            makePrepInput({ HostTools: [hostTool, duplicate], HostFraming: 'PHONE CALL: audio only.' }),
+            contextUser, provider,
+        );
+        const names = (result.SessionParams!.Tools ?? []).map(t => t.Name);
+        expect(names).toContain('end_call');
+        expect(names.filter(n => n === INVOKE_TARGET_AGENT_TOOL_NAME)).toHaveLength(1);
+        expect(result.SessionParams!.SystemPrompt).toContain('PHONE CALL: audio only.');
+        expect(result.SessionParams!.SystemPrompt).not.toContain('interactive-surface');
+    });
+
     it('returns a failure result (no throw) when the model rejects minting', async () => {
         const svc = new TestableService();
         vi.spyOn(svc.Model, 'CreateClientSession').mockRejectedValue(new Error('provider down'));

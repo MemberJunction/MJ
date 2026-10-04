@@ -1,5 +1,24 @@
 # @memberjunction/ai-openrouter
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- d6fd68d: Add `OpenRouterDecision`, a `BaseDecision` driver for OpenRouter's Decisions API, which serves TypeSafe's Jev typed-decision model, together with the `Jev` model (pinned to `typesafe/jev-1.13-20260917`, with its cost and decision limits) and its binding as the first choice of the `Default Decision` prompt. An unmappable response fails over to the next decision model. The legacy key variable is `AI_VENDOR_API_KEY__OPENROUTERDECISION`.
+
+### Patch Changes
+
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [4d647e6]
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-openai@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes
