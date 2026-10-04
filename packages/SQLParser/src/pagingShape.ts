@@ -1,7 +1,7 @@
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { IsKeyword, LexSQL, SignificantTokens } from './sqlLexer.js';
 import type { SQLLexToken } from './sqlLexer.js';
-import { SplitLeadingCTEs } from './sqlShape.js';
+import { SplitLeadingCTEs, WithoutLeadingSemicolons } from './sqlShape.js';
 import type { LeadingCTEs } from './sqlShape.js';
 
 /** A row cap the query itself carries, as written. */
@@ -74,9 +74,9 @@ export function AnalyzePagingShape(statement: string, dialect: SQLParserDialect)
     };
 }
 
-/** Offset of the first token that is not whitespace or a comment. */
+/** Offset of the first token that is not whitespace, a comment or a leading semicolon. */
 function leadingTriviaEnd(statement: string, dialect: SQLParserDialect): number {
-    const first = SignificantTokens(LexSQL(statement, dialect))[0];
+    const first = WithoutLeadingSemicolons(SignificantTokens(LexSQL(statement, dialect)))[0];
     return first ? first.Start : statement.length;
 }
 
