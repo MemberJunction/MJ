@@ -350,7 +350,7 @@ export function findOrderByStatement(stmt: Record<string, unknown>): Record<stri
  */
 export function IsOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
     if (stmt.top) return true;
-    if (stmt.limit) return true;
+    if (hasLimitValue(stmt.limit)) return true;
     if (stmt.offset) return true;
 
     const forClause = stmt.for as Record<string, unknown> | null | undefined;
@@ -360,6 +360,19 @@ export function IsOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
     }
 
     return false;
+}
+
+/**
+ * Whether a `limit` node carries a LIMIT / OFFSET. The PostgreSQL grammar gives every SELECT a
+ * limit node, empty (`{ value: [] }`) when the query has neither.
+ */
+function hasLimitValue(limit: unknown): boolean {
+    if (!limit) return false;
+    if (typeof limit === 'object' && 'value' in limit) {
+        const value = (limit as { value: unknown }).value;
+        return !Array.isArray(value) || value.length > 0;
+    }
+    return true;
 }
 
 /** @deprecated Use {@link IsOrderByLegalInCTE}. */
