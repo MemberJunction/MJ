@@ -467,6 +467,12 @@ const COMPOSED_CASES: RenderCase[] = [
         Expect: items => ids(items.filter(i => i.Category === 'Gamma' && i.ID > 100))
     },
     {
+        Name: 'RR Comp Token Also In A Comment',
+        SQL: `-- reads {{query:"{P}/RR Dep Base"}}\nSELECT b.ID FROM {{query:"{P}/RR Dep Base"}} b WHERE b.ID <= 15 ORDER BY b.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID <= 15))
+    },
+    {
         Name: 'RR Comp Unordered',
         SQL: `SELECT b.ID FROM {{query:"{P}/RR Dep Base"}} b WHERE b.Category = 'Delta'`,
         Columns: ['ID'], Ordered: false,
