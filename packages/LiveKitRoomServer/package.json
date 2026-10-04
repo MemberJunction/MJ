@@ -24,7 +24,11 @@
     "@memberjunction/ai-bridge-server": "6.2.0-edge.2",
     "@memberjunction/ai-bridge-livekit": "6.2.0-edge.2",
     "@memberjunction/ai-bridge-livekit-native": "6.2.0-edge.2",
-    "livekit-server-sdk": "^2.9.7"
+    "livekit-server-sdk": "^2.9.7",
+    "@memberjunction/storage": "6.2.0-edge.2",
+    "@memberjunction/ai-prompts": "6.2.0-edge.2",
+    "mpg123-decoder": "^1.0.3",
+    "@memberjunction/network-utils": "6.2.0-edge.2"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

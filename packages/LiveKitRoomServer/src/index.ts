@@ -53,3 +53,14 @@ export * from './room-handoff/handoff-offer-registry';
 export * from './room-handoff/room-handoff-engine';
 export * from './room-authorization';
 export * from './meeting-dial-in-service';
+
+export { DEFAULT_LIVEKIT_NATIVE_MODULE, ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
+
+// Room audio player (contact-center hold music + ducked announcements).
+export * from './room-audio/audio-decoder';
+export * from './room-audio/comfort-tone';
+export * from './room-audio/pcm-frame-pump';
+export * from './room-audio/room-audio-decode-cache';
+export * from './room-audio/room-audio-sources';
+export * from './room-audio/room-speech-synthesizer';
+export * from './room-audio/room-audio-player';
