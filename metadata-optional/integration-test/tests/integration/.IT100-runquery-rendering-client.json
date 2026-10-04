@@ -2,10 +2,10 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT100 - RunQuery Rendering over GraphQL",
-    "Description": "Client-transport slice of the query rendering matrix; needs a running MJAPI. Creates a query category and saved queries over GraphQL that read a literal derived table (valid unchanged on SQL Server and PostgreSQL), then runs a saved query and a composed query through every MaxRows / StartRow combination of the matrix over the wire, and TestQuerySQL with MaxRows. Every call asserts returned rows and TotalRowCount. TestQuerySQL needs a read-only connection on the server; without one that check reports a skip. Fixtures are removed in teardown.",
+    "Description": "Client-transport slice of the query rendering matrix; needs a running MJAPI. Creates a query category and saved queries over GraphQL that read a literal derived table (valid unchanged on SQL Server and PostgreSQL), then runs a saved query and a composed query through every MaxRows / StartRow combination of the matrix over the wire, and TestQuerySQL with MaxRows. Every call asserts returned rows and TotalRowCount. On PostgreSQL, twelve concurrent runs of a saved query read statement_timeout and idle_in_transaction_session_timeout from MJAPI's pooled backends and must see the values derived from the default requestTimeout (30s and 1min). TestQuerySQL needs a read-only connection on the server; without one that check reports a skip. Fixtures are removed in teardown.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "Saved and composed queries return exactly the expected rows and totals on every MaxRows / StartRow combination over GraphQL; TestQuerySQL honours MaxRows; fixtures cleaned up."
+      "summary": "Saved and composed queries return exactly the expected rows and totals on every MaxRows / StartRow combination over GraphQL; TestQuerySQL honours MaxRows; PostgreSQL backends carry the statement and idle-in-transaction timeouts; fixtures cleaned up."
     },
     "Configuration": {
       "tier": "deterministic",
