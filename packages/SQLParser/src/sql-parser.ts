@@ -19,6 +19,7 @@ import { MJLexer } from './mj-lexer.js';
 import { ReplaceVariableInTag, VARIABLE_READING_TAGS } from './templateTagVariables.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
 import { getASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
 import { IsKeyword, LexSQL, SignificantTokens } from './sqlLexer.js';
 import {
@@ -62,6 +63,12 @@ export interface MJAstifyResult {
 }
 
 /** A table/view reference extracted from SQL */
+/** Lexing rules for FOR XML, which only SQL Server has. */
+const SQL_SERVER_LEXING: SQLParserDialect = new SQLServerDialect();
+
+/** The FOR XML modes node-sql-parser knows. */
+const FOR_XML_DIRECTIVES = ['PATH', 'RAW', 'AUTO', 'EXPLICIT'];
+
 export interface SQLTableReference {
     /** The table or view name as it appears in SQL */
     TableName: string;
@@ -1840,36 +1847,43 @@ export class SQLParser {
      * Returns null if no problematic FOR XML pattern is found.
      */
     private static stripForXmlDirectives(sql: string): { cleanedSQL: string; originalForXml: string } | null {
-        // Match FOR XML <directive> with optional quoted arg and optional comma-separated extras
-        const forXmlRegex = /\bFOR\s+XML\s+(PATH|RAW|AUTO|EXPLICIT)(\s*\('[^']*'\))?(\s*,\s*[^;]*)?$/i;
-        const match = sql.match(forXmlRegex);
-        if (!match) return null;
+        // Read from tokens, not a regex: a trailing-clause regex backtracks polynomially on long
+        // whitespace runs, and tokens also keep a FOR XML inside a subquery or string out of it.
+        const tokens = SignificantTokens(LexSQL(sql, SQL_SERVER_LEXING));
+        const forAt = tokens.findIndex((t, i) =>
+            t.Depth === 0 && IsKeyword(t, 'FOR') && IsKeyword(tokens[i + 1], 'XML') &&
+            FOR_XML_DIRECTIVES.some(d => IsKeyword(tokens[i + 2], d)));
+        if (forAt === -1) return null;
 
-        const fullForXml = match[0];
-        const directive = match[1].toUpperCase(); // PATH, RAW, etc.
-        const hasQuotedArg = !!match[2];
-        const hasExtraDirectives = !!match[3];
+        const directive = tokens[forAt + 2].Text.toUpperCase(); // PATH, RAW, etc.
+        let next = forAt + 3;
+        let quotedArg: string | null = null;
+        if (tokens[next]?.Kind === 'open' && tokens[next + 1]?.Kind === 'string' && tokens[next + 2]?.Kind === 'close') {
+            quotedArg = sql.substring(tokens[next].Start, tokens[next + 2].End);
+            next += 3;
+        }
+        const rest = tokens.slice(next);
+        // The clause must run to the end of the statement: nothing may follow it except
+        // comma-separated directives, and no statement may follow a semicolon.
+        if (rest.some(t => t.Kind === 'semicolon')) return null;
+        const hasExtraDirectives = rest.length > 0 && rest[0].Kind === 'comma';
+        if (rest.length > 0 && !hasExtraDirectives) return null;
 
         // Only needs workaround if there are extra comma-separated directives
         // OR if it's RAW/EXPLICIT with a quoted arg (parser can't handle those)
         const needsWorkaround = hasExtraDirectives ||
-            (hasQuotedArg && (directive === 'RAW' || directive === 'EXPLICIT'));
-
+            (quotedArg !== null && (directive === 'RAW' || directive === 'EXPLICIT'));
         if (!needsWorkaround) return null;
 
         // Simplify to a form the parser accepts:
         // PATH('arg') → PATH('arg')  (parser handles this)
         // RAW('arg')  → RAW          (parser can't handle quoted arg on RAW)
         // Any + comma extras → strip extras
-        let simplifiedDirective: string;
-        if (directive === 'PATH' && hasQuotedArg) {
-            simplifiedDirective = `FOR XML PATH${match[2]}`;
-        } else {
-            simplifiedDirective = `FOR XML ${directive}`;
-        }
-
-        const cleanedSQL = sql.substring(0, match.index!) + simplifiedDirective;
-        return { cleanedSQL, originalForXml: fullForXml };
+        const simplifiedDirective = directive === 'PATH' && quotedArg !== null
+            ? `FOR XML PATH${quotedArg}`
+            : `FOR XML ${directive}`;
+        const clauseStart = tokens[forAt].Start;
+        return { cleanedSQL: sql.substring(0, clauseStart) + simplifiedDirective, originalForXml: sql.substring(clauseStart) };
     }
 
     /**
