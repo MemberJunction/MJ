@@ -154,6 +154,20 @@ const PLAIN_CASES: RenderCase[] = [
         Expect: items => ids(items.filter(i => i.ID % 5 === 0))
     },
     {
+        Name: 'RR Union All Unordered',
+        SQL: `SELECT ID FROM ${T} WHERE ID <= 5 UNION ALL SELECT ID FROM ${T} WHERE ID > 235`,
+        Columns: ['ID'],
+        Ordered: false,
+        Expect: items => ids(items.filter(i => i.ID <= 5 || i.ID > 235))
+    },
+    {
+        Name: 'RR Distinct Unordered',
+        SQL: `SELECT DISTINCT Category FROM ${T}`,
+        Columns: ['Category'],
+        Ordered: false,
+        Expect: items => [...new Set(items.map(i => i.Category))].map(c => ({ Category: c }))
+    },
+    {
         Name: 'RR Quoted Identifiers',
         SQL: `SELECT "ID", "DisplayName" FROM "mjit_render"."RenderItem" WHERE "ID" BETWEEN 10 AND 40 ORDER BY "ID"`,
         Columns: ['ID', 'DisplayName'],

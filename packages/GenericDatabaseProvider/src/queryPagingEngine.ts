@@ -348,9 +348,19 @@ export class QueryPagingEngine {
 
     /** Appends ORDER BY (when the statement has none), the paging clause and the trailing clause. */
     private static appendPage(shape: PagingShape, head: string, offset: number, rows: number, dialect: SQLDialect): string {
-        const orderBy = shape.OrderBy ? '' : `\nORDER BY ${dialect.DefaultPagingOrderBy}`;
+        const orderBy = shape.OrderBy ? '' : `\nORDER BY ${QueryPagingEngine.defaultOrderBy(shape, dialect)}`;
         const limit = dialect.LimitClause(rows, offset);
         return `${head}${orderBy}\n${limit.suffix}${QueryPagingEngine.tail(shape)}`;
+    }
+
+    /**
+     * The ORDER BY to page by when the statement has none. SQL Server needs one for OFFSET and
+     * allows only select-list items with UNION / INTERSECT / EXCEPT and with SELECT DISTINCT, so
+     * those shapes are ordered by their first column; anything else uses the dialect's default.
+     */
+    private static defaultOrderBy(shape: PagingShape, dialect: SQLDialect): string {
+        if (dialect.PlatformKey === 'sqlserver' && (shape.IsSetOperation || shape.IsDistinct)) return '1';
+        return dialect.DefaultPagingOrderBy;
     }
 
     /**
