@@ -22,9 +22,6 @@
     "@memberjunction/core-entities": "6.2.0-edge.2",
     "@memberjunction/ai-bridge-base": "6.2.0-edge.2"
   },
-  "optionalDependencies": {
-    "@memberjunction/ai-bridge-livekit-native": "6.2.0-edge.2"
-  },
   "devDependencies": {
     "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
