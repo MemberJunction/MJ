@@ -61,6 +61,19 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
+import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
+import {
+  PUSH_STATUS_UPDATES_TOPIC,
+  SetPushStatusPublishHook,
+  ParseReplicatedStatusUpdate,
+} from './generic/PushStatusResolver.js';
+import {
+  HANDOFF_OFFER_FANOUT_CHANNEL,
+  HANDOFF_OFFER_TOPIC,
+  SetHandoffOfferPublishHook,
+  ParseReplicatedHandoffOfferUpdate,
+} from './resolvers/HumanHandoffResolver.js';
+import { RoomHandoffEngine } from '@memberjunction/livekit-room-server';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
@@ -167,7 +180,9 @@ export * from './generic/refusalExtensions.js';
 export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
+export * from './resolvers/RunDecisionResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
+export { AgentRunStatusPublisher } from './resolvers/AgentRunStatusPublisher.js';
 export * from './resolvers/VectorizeEntityResolver.js';
 export * from './resolvers/SearchKnowledgeResolver.js';
 export * from './resolvers/SearchKnowledgeStreamResolver.js';
@@ -224,6 +239,7 @@ export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
+export * from './resolvers/DuplicateEntryCheckResolver.js';
 export * from './resolvers/RunTestResolver.js';
 export * from './resolvers/SearchEntitiesResolver.js';
 export * from './resolvers/UserFavoriteResolver.js';
@@ -234,6 +250,7 @@ export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
 export * from './resolvers/AgentSessionResolver.js';
 export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './resolvers/MeetingResolver.js';
 export * from './resolvers/RemoteBrowserActionResolver.js';
 export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
@@ -287,10 +304,107 @@ function resolveServerVersion(): string | undefined {
     const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
     return pkg.version;
-  } catch {
+  } catch (err) {
+    LogError('Failed to resolve server version from package.json', undefined, err);
     return undefined;
   }
 }
+
+/** How often to re-check for conversation details left behind by finished runs. */
+const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+/** Redis channel carrying replicated push-status updates between server instances. */
+const PUSH_STATUS_FANOUT_CHANNEL = 'push-status-updates';
+
+/**
+ * Replicate push-status updates across server instances over Redis (MJ #4222).
+ *
+ * Outbound: every locally-published update is forwarded on a shared channel. Inbound: a message
+ * from another instance is republished onto THIS instance's local topic, where the normal
+ * subscription filter decides who receives it — so the identity gate (`ownerUserId` vs. the
+ * connection's authenticated user) still applies to a replicated message exactly as it does to a
+ * local one. The replica has no say in who sees what.
+ *
+ * Republishing goes straight to `PubSubManager`, never back through `publishStatusUpdate`, so an
+ * inbound message cannot be re-broadcast and loop. `SourceServerId` guards the remaining case: a
+ * publisher also receives its own message from Redis.
+ */
+async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(PUSH_STATUS_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = ParseReplicatedStatusUpdate(raw, MJGlobal.Instance.ProcessUUID);
+        if (!payload) {
+          return;
+        }
+        // Rebuilt as a plain record: the topic's publish signature takes an index-signature type,
+        // and listing the fields keeps the wire shape explicit at the one place it crosses hosts.
+        PubSubManager.Instance.Publish(PUSH_STATUS_UPDATES_TOPIC, {
+          sessionId: payload.sessionId,
+          ownerUserId: payload.ownerUserId,
+          message: payload.message,
+          SourceServerId: payload.SourceServerId,
+        });
+      } catch (err) {
+        // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing push-status fan-out message', undefined, err);
+      }
+    });
+
+    SetPushStatusPublishHook((payload) => {
+      redisProvider.PublishMessage(PUSH_STATUS_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+
+    // Printed unconditionally, not verbose-gated. "Is fan-out actually on?" is the first question
+    // anyone debugging a hung conversation behind a load balancer asks, and a silent default left
+    // no way to answer it.
+    console.log('[MJAPI] Push-status updates: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    // Single-instance delivery still works, and the durable tail query covers the rest. Degraded,
+    // not broken — so this must not stop the server from starting.
+    console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Replicate handoff-offer updates across server instances over Redis.
+ *
+ * Outbound: every locally-published offer change is forwarded on a shared Redis channel.
+ * Inbound: a message from another instance is republished onto THIS instance's local GraphQL
+ * topic (where the subscription filter scopes to the target user) and delivered to RoomHandoffEngine
+ * so the call-hosting instance can transition its local flow (e.g. wait for the user to join the room).
+ */
+async function wireHandoffOfferFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(HANDOFF_OFFER_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = ParseReplicatedHandoffOfferUpdate(raw, MJGlobal.Instance.ProcessUUID);
+        if (!payload) {
+          return;
+        }
+        PubSubManager.Instance.Publish(HANDOFF_OFFER_TOPIC, {
+          UserID: payload.UserID,
+          Kind: payload.Kind,
+          Offer: payload.Offer,
+        });
+        RoomHandoffEngine.Instance.OnRemoteOfferChange(payload);
+      } catch (err) {
+        // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing handoff-offer fan-out message', undefined, err);
+      }
+    });
+
+    SetHandoffOfferPublishHook((payload) => {
+      redisProvider.PublishMessage(HANDOFF_OFFER_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+
+    console.log('[MJAPI] Handoff-offer updates: cross-instance fan-out enabled via Redis');
+    startupLog.LogIf('verbose', 'Handoff-offer updates: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    console.warn(`Handoff-offer fan-out unavailable: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 
 // Bind MJStorage as the conversation-attachment blob store. The attachment service itself no longer
 // imports `@memberjunction/storage` — that dependency made it unusable from any browser or React
@@ -720,6 +834,16 @@ const setupComplete$ = new ReplaySubject(1);
         }
     });
 
+    // Fan push-status updates across server instances (MJ #4222).
+    //
+    // Behind a load balancer the browser's WebSocket lives on one replica while the mutation that
+    // drives the agent can be handled by another. The push topic is an in-process PubSub, so a
+    // completion published on replica B never reaches a subscriber on replica A — the browser waits
+    // forever for an event that was delivered to nobody. Replicating progress and completion over
+    // Redis closes that, and the durable tail query remains the backstop if Redis is down.
+    await wirePushStatusFanOut(redisProvider, startupLog);
+    await wireHandoffOfferFanOut(redisProvider, startupLog);
+
     startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
 
@@ -1075,6 +1199,15 @@ const setupComplete$ = new ReplaySubject(1);
     }
   });
 
+  // graphql-ws's ws integration takes its keepalive as a THIRD POSITIONAL argument to useServer,
+  // defaulting to 12_000 when omitted. That default was doing real work here while being invisible
+  // at the call site: the server pings every 12s and terminates the socket after an unanswered
+  // pong, which is why MJAPI notices a half-open link in ~12-24s while the browser — whose
+  // graphql-ws client does nothing on an unanswered pong — noticed nothing at all (MJ #4222).
+  // Stated explicitly so the behaviour is visible and tunable, and so the next reader does not
+  // conclude from the call site that no server-side heartbeat exists. Value unchanged.
+  const WS_SERVER_KEEPALIVE_MS = 12_000;
+
   // Track per-connection expiry timers so we can clean them up on close
   const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
 
@@ -1149,7 +1282,8 @@ const setupComplete$ = new ReplaySubject(1);
         console.error('WebSocket error:', errors);
       },
     },
-    webSocketServer
+    webSocketServer,
+    WS_SERVER_KEEPALIVE_MS
   );
 
   const apolloServer = buildApolloServer(
@@ -1284,13 +1418,22 @@ const setupComplete$ = new ReplaySubject(1);
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
   const telephonyExtensionConfigs: ServerExtensionConfig[] = [];
   if (configInfo.telephony?.enabled) {
+    // Settings every carrier shares (inbound run-as user, call cap, outbound policy). Each carrier's own block is
+    // spread AFTER them, so a carrier can override one explicitly.
+    const sharedTelephonySettings: Record<string, unknown> = {
+      inboundRunAsUserEmail: configInfo.telephony.inboundRunAsUserEmail,
+      maxCallSeconds: configInfo.telephony.maxCallSeconds,
+      maxConcurrentCalls: configInfo.telephony.maxConcurrentCalls,
+      transferTargets: configInfo.telephony.transferTargets,
+      outbound: configInfo.telephony.outbound,
+    };
     if (configInfo.telephony.twilio) {
       telephonyExtensionConfigs.push({
         Enabled: true,
         DriverClass: 'TwilioTelephonyExtension',
         RootPath: '/telephony/twilio',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.twilio as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.twilio },
       });
     }
     if (configInfo.telephony.vonage) {
@@ -1299,7 +1442,7 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'VonageTelephonyExtension',
         RootPath: '/telephony/vonage',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.vonage as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.vonage },
       });
     }
     if (configInfo.telephony.ringcentral) {
@@ -1308,7 +1451,16 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'RingCentralTelephonyExtension',
         RootPath: '/telephony/ringcentral',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.ringcentral as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.ringcentral },
+      });
+    }
+    if (configInfo.telephony.livekitSip) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'LiveKitSipExtension',
+        RootPath: '/telephony/livekit-sip',
+        Phase: 'pre-auth',
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.livekitSip },
       });
     }
     if (configInfo.telephony.teams?.enabled) {
@@ -1580,8 +1732,25 @@ const setupComplete$ = new ReplaySubject(1);
   // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
   // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-    AgentRunWatchdog.SweepOrphanedRuns(Metadata.Provider, resumeUser) // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+    const sweepUser = resumeUser;
+    const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+    AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
       .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+
+    // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
+    // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
+    // beside a message that still claims to be generating, and it spins forever for anyone who
+    // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
+    // mirroring the watchdog's own two-phase shape.
+    const reconcileOrphans = () =>
+      ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
+        .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
+    void reconcileOrphans();
+    const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
+    ShutdownRegistry.Instance.Register({
+      ShutdownName: 'OrphanDetailReconciler',
+      Shutdown: () => { clearInterval(orphanDetailTimer); },
+    });
   }
 
   // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a

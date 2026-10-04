@@ -7,3 +7,5 @@
  */
 export * from './g711';
 export * from './resample';
+export * from './streaming-resampler';
+export * from './dtmf';

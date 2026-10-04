@@ -34,6 +34,7 @@ export type AgentFormTabPlan = {
 export const AGENT_TAB_DESIGNER = 'designer';
 export const AGENT_TAB_DETAILS = 'details';
 export const AGENT_TAB_INVOCATIONS = 'invocations';
+export const AGENT_TAB_RUBRICS = 'rubrics';
 
 /**
  * Builds the tab strip and resolves which tab is active.
@@ -59,6 +60,7 @@ export function BuildAgentFormTabs(context: AgentFormTabContext, storedTab: stri
 
     if (context.HasRecordID) {
         tabs.push({ key: AGENT_TAB_INVOCATIONS, label: 'Invocations', icon: 'fa-solid fa-tower-broadcast' });
+        tabs.push({ key: AGENT_TAB_RUBRICS, label: 'Rubrics', icon: 'fa-solid fa-scale-balanced' });
     }
 
     return { Tabs: tabs, ActiveKey: ResolveActiveTab(tabs, storedTab) };

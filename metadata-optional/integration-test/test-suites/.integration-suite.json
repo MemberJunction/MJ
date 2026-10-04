@@ -1165,6 +1165,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT98 - Rubric Immutability Triggers",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F30C408B-B1CF-47AC-92A4-D1DF726D75F1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT95 - Trailing Runtime State",
             "Sequence": 48,
             "Status": "Active"
@@ -1205,6 +1216,28 @@
           "sync": {
             "lastModified": "2026-09-13T20:08:49.403Z",
             "checksum": "8b999ce08a53bcd562be1dc253cdabc1967b15bf2b3824564676be246e4dacbd"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT97 - Agent Decisions Master Switch",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "859FD956-CAE2-45B0-8E16-E5C7318B571C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT96 - Record Cloning",
+            "Sequence": 71,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D0A93B02-FD0F-4B47-89D0-914DC49D13B6"
           }
         }
       ]

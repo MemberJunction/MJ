@@ -14,6 +14,7 @@ import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { BasePromptBackedReranker } from './BasePromptBackedReranker';
 
 /**
  * Result item from LLM reranking response
@@ -59,7 +60,7 @@ interface LLMRerankItem {
  * ```
  */
 @RegisterClass(BaseReranker, 'LLMReranker')
-export class LLMReranker extends BaseReranker {
+export class LLMReranker extends BasePromptBackedReranker {
     private _promptID: string;
     private _contextUser: UserInfo;
     private _promptRunner: AIPromptRunner;
@@ -197,6 +198,9 @@ export class LLMReranker extends BaseReranker {
         promptParams.prompt = prompt;
         promptParams.contextUser = this._contextUser;
         promptParams.attemptJSONRepair = true;
+        if (this.ParentPromptRunID) {
+            promptParams.parentPromptRunId = this.ParentPromptRunID;
+        }
 
         // Set template data for the rerank prompt
         promptParams.data = {
@@ -211,6 +215,11 @@ export class LLMReranker extends BaseReranker {
         LogStatus(`LLMReranker: Query: "${params.query}"`);
         LogStatus(`LLMReranker: Documents:\n${this.formatDocumentsForPrompt(params.documents)}`);
         const result = await this._promptRunner.ExecutePrompt(promptParams);
+        // The chat run's cost is computed when its row is saved, and the runner saves it
+        // fire-and-forget. Wait for the save, so UsageOf can read the cost, and so the save's
+        // cost rollup to the parent run lands before the parent run is finalized.
+        await this._promptRunner.WaitForPendingPromptRunSaves();
+        this.RecordUsage(params, this.UsageOf(result));
 
         if (!result.success) {
             throw new Error(`LLMReranker: Prompt execution failed: ${result.errorMessage || 'Unknown error'}`);

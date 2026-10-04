@@ -1,0 +1,243 @@
+{
+  "fields": {
+    "Name": "Picture from the data",
+    "Status": "Active",
+    "Description": "Judges a chart: the title matches the request, and every series is one the person supplied."
+  },
+  "primaryKey": {
+    "ID": "2E3280F6-0C20-49DD-B1E5-6B250532CEC6"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Score each criterion Meets, Partial, or Miss. Partial is below the gate, so a gate scored Partial fails the chart. Not applicable is not allowed: every criterion applies to the chart. Use the guidance and the anchors."
+        },
+        "primaryKey": {
+          "ID": "3FE999E0-1DF0-499E-9CC4-38F0581FA92F"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "the-title-matches-the-request",
+                "Name": "The title matches the request",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The title is the chart title. It matches the request, not a nearby topic."
+              },
+              "primaryKey": {
+                "ID": "826516AE-A6BC-40A5-B35E-61EC92803749"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The title matches the request."
+                    },
+                    "primaryKey": {
+                      "ID": "198283CC-4108-4456-8BBC-FB87D7400F59"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:23.449Z",
+                      "checksum": "80d45c617cfb59187ab7db08492f76f296d48c334a292d4421502899f1d46fea"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The title matches part of the request and leaves part of it out."
+                    },
+                    "primaryKey": {
+                      "ID": "1C9BE14E-42C9-4F1C-82D8-F7F62D631A3F"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:23.461Z",
+                      "checksum": "67a99d5205f02cf273abf01da2d05dafdfc28100422f2650c6a77e77b7990b0d"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The title does not match the request."
+                    },
+                    "primaryKey": {
+                      "ID": "61F6A796-872B-421A-9BA8-62E8ED14E2BA"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:23.473Z",
+                      "checksum": "5cd62c6cfc354696ced50e5e0c4212735a17ad46b8293568a900e1c93a1a48f7"
+                    }
+                  }
+                ]
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:23.397Z",
+                "checksum": "7c917747f70f5cc792677e2afa82dc4ae654eb688ff133fc0bfb72f7b5c77e11"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "every-series-is-one-the-person-supplied",
+                "Name": "Every series is one the person supplied",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "A series counts only when the person supplied it. A derived series that was not supplied is not one of those series."
+              },
+              "primaryKey": {
+                "ID": "C6552A93-8D61-42C2-AA87-56B36C5C93A4"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Every series is one the person supplied."
+                    },
+                    "primaryKey": {
+                      "ID": "DD072AC6-4F21-4350-B343-61384E1B5D17"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:23.495Z",
+                      "checksum": "0671bc9fba012c09c436f3a14ad57b4f93b38c8e2cb7f1788c3ae62fbeac2e6b"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Some series were supplied and at least one was not."
+                    },
+                    "primaryKey": {
+                      "ID": "EA0EF656-A896-4131-98EA-2F9CD6209B18"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:23.505Z",
+                      "checksum": "0c151714e2d319c215e093a595973e887415508adfd2a75d0d90888351250a5f"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The chart uses series the person did not supply."
+                    },
+                    "primaryKey": {
+                      "ID": "11156EC5-A74B-4D65-91D1-1CD05FBE4480"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:23.516Z",
+                      "checksum": "437598b9204d623eebc59bb9c0c4d4127610c7e86b3a01d4aa89c67271090c3f"
+                    }
+                  }
+                ]
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:23.411Z",
+                "checksum": "8e3f9509c25274d73f098b175857c196a61ba065b66c397b7c3f08fe97dd1649"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "labels-or-a-legend-name-those-series",
+                "Name": "Labels or a legend name those series",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Each series is named by a label or by the legend. An unlabeled series is unnamed."
+              },
+              "primaryKey": {
+                "ID": "F0BAB0C5-3289-46C2-A41C-734BF07FAC1A"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Labels or a legend name every series."
+                    },
+                    "primaryKey": {
+                      "ID": "C42F4175-CD51-406A-87E6-89BCF398DD9D"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:23.539Z",
+                      "checksum": "211d1b479f0c4fb719acd12cc3a2e2919260be06d71f1d3070218da8508411ae"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Labels or a legend name some series and leave at least one unnamed."
+                    },
+                    "primaryKey": {
+                      "ID": "D0FE69BC-DD27-43C2-892B-B025553E9037"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:23.550Z",
+                      "checksum": "3d0e2650691d295c15c87f6fb872bfd786b602b9a35a27429d78d4a1a06bd760"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The series are not named by labels or a legend."
+                    },
+                    "primaryKey": {
+                      "ID": "09F14A24-F1DB-42EB-8FA8-015AB59DEEA6"
+                    },
+                    "sync": {
+                      "lastModified": "2026-10-02T21:42:23.561Z",
+                      "checksum": "7a08f5c175a20b7c2fe166052c8a534019550c672a6c8912df5b2bd661b50475"
+                    }
+                  }
+                ]
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:23.425Z",
+                "checksum": "9f5eb1d2d8a4961d9eef8222ea9d95698155fea25d19f45445b5a6e2883ef0b0"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:23.378Z",
+          "checksum": "a61e981ce2d82203c60163f6759395fdba6caa0d84bc48864a219c9630dfdda0"
+        }
+      }
+    ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:23.364Z",
+    "checksum": "9714b29a5cadc7248a8aab4653b4c87c82a02ebc15df95680cda1e0a15183dbd"
+  }
+}

@@ -232,3 +232,34 @@ export class DecisionResult extends BaseResult {
         super(success, startTime, endTime);
     }
 }
+
+/**
+ * Platt scaling for one decision model's probabilities: `sigmoid(A · logit(p) + B)`.
+ *
+ * A decision model's raw probabilities are not calibrated. Among answers of 0.9, the share that is
+ * right is not 0.9, and the gap differs by model. So a consumer that acts on a threshold fits these
+ * two numbers per model and per question on labelled data, and applies them before comparing.
+ * `A > 1` sharpens and `A < 1` softens; `B` shifts the whole curve.
+ */
+export interface PlattCalibration {
+    /** The slope on logit(p). */
+    A: number;
+    /** The intercept. */
+    B: number;
+}
+
+/**
+ * How far a probability is clamped from 0 and 1 before its logit is taken, so the logit is finite.
+ * It must match the value the calibration was fitted with.
+ */
+export const PLATT_LOGIT_CLAMP = 1e-6;
+
+/**
+ * Applies Platt scaling to a probability: `1 / (1 + exp(-(A · logit(p) + B)))`, with `p` clamped
+ * to `[PLATT_LOGIT_CLAMP, 1 - PLATT_LOGIT_CLAMP]`.
+ */
+export function ApplyPlattCalibration(p: number, calibration: PlattCalibration): number {
+    const clamped = Math.min(1 - PLATT_LOGIT_CLAMP, Math.max(PLATT_LOGIT_CLAMP, p));
+    const logit = Math.log(clamped / (1 - clamped));
+    return 1 / (1 + Math.exp(-(calibration.A * logit + calibration.B)));
+}

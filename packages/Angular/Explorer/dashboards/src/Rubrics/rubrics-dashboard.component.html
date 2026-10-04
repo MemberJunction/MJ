@@ -1,0 +1,42 @@
+<mj-page-layout>
+  <mj-page-header Title="Rubrics" Icon="fa-solid fa-scale-balanced" Subtitle="Author rubrics, then open one to edit its tree.">
+    <div actions>
+      <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+      <button mjButton variant="primary" type="button" (click)="NewRubric()">New rubric</button>
+    </div>
+    <div toolbar>
+      <mj-page-search Placeholder="Search rubrics" [Value]="Search" (ValueChange)="OnSearch($event)"></mj-page-search>
+    </div>
+  </mj-page-header>
+  <mj-page-body>
+    @if (Loading) {
+      <mj-loading text="Loading rubrics..."></mj-loading>
+    } @else if (LoadError) {
+      <p role="alert">{{ LoadError }}</p>
+    } @else if (Visible.length === 0) {
+      <mj-empty-state Icon="fa-solid fa-scale-balanced" Title="No rubrics" Message="Create a rubric to start a catalog."></mj-empty-state>
+    } @else {
+      <ag-grid-angular
+        class="catalog-grid"
+        [theme]="Theme"
+        [columnDefs]="ColumnDefs"
+        [gridOptions]="GridOptions"
+        [rowData]="Visible"
+        (rowClicked)="OnRow($event)">
+      </ag-grid-angular>
+      <div class="catalog-cards">
+        @for (row of Visible; track row.id) {
+          <article class="catalog-card">
+            <strong>{{ row.name }}</strong>
+            @if (row.description) { <span>{{ row.description }}</span> }
+            <span>Category {{ row.categoryName }}</span>
+            <span>Published {{ row.publishedLabel }}</span>
+            <span>Draft {{ row.draftLabel }}</span>
+            <span>{{ row.criteriaCount }} criteria@if (row.scaleName) { · {{ row.scaleName }} }</span>
+            <button mjButton variant="outline" size="sm" type="button" (click)="Open(row.id)">Open</button>
+          </article>
+        }
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>

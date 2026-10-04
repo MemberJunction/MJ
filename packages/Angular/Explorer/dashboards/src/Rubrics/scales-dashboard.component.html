@@ -1,0 +1,39 @@
+<mj-page-layout>
+  <mj-page-header Title="Scales" Icon="fa-solid fa-sliders" Subtitle="Level and numeric scales used by criteria.">
+    <div actions>
+      <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+      <button mjButton variant="primary" type="button" (click)="NewScale()">New scale</button>
+    </div>
+    <div toolbar>
+      <mj-page-search Placeholder="Search scales" [Value]="Search" (ValueChange)="OnSearch($event)"></mj-page-search>
+    </div>
+  </mj-page-header>
+  <mj-page-body>
+    @if (Loading) {
+      <mj-loading text="Loading scales..."></mj-loading>
+    } @else if (LoadError) {
+      <p role="alert">{{ LoadError }}</p>
+    } @else if (Visible.length === 0) {
+      <mj-empty-state Icon="fa-solid fa-sliders" Title="No scales" Message="Create a scale before a criterion can use it."></mj-empty-state>
+    } @else {
+      <ag-grid-angular
+        class="catalog-grid"
+        [theme]="Theme"
+        [columnDefs]="ColumnDefs"
+        [gridOptions]="GridOptions"
+        [rowData]="Visible"
+        (rowClicked)="OnRow($event)">
+      </ag-grid-angular>
+      <div class="catalog-cards">
+        @for (row of Visible; track row.Id) {
+          <article class="catalog-card">
+            <strong>{{ row.Name }}</strong>
+            <span>{{ row.Type }}</span>
+            <span>{{ row.Frozen ? 'Locked by a published rubric' : 'Editable' }}</span>
+            <button mjButton variant="outline" size="sm" type="button" (click)="Open(row.Id)">Open</button>
+          </article>
+        }
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>

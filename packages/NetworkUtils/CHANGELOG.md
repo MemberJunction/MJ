@@ -1,5 +1,9 @@
 # @memberjunction/network-utils
 
+## 6.2.0-edge.2
+
+## 6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ## 6.1.0
