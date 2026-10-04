@@ -47,3 +47,6 @@ cost analytics, FLS, or realtime work (in flight).
 ## Process note
 Plan-only PRs remain unshipped: of 15 prior ideas, only Accessibility has an implementation attempt
 (#3609, stalled). Weeks 2026-09-19 and 2026-09-26 have no log entry.
+
+## Feedback (2026-10-04)
+None of the three ideas were approved. Noted for the next round of exploration.
