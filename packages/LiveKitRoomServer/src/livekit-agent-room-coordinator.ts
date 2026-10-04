@@ -542,4 +542,19 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     await Promise.all(bridgeIDs.map((id) => this.StopAgentRoomSession(id, reason, contextUser, provider)));
     return bridgeIDs.length;
   }
+
+  /**
+   * Looks up the room name associated with a session bridge ID if present in the coordinator's active rosters.
+   *
+   * @param sessionBridgeID The `MJ: AI Agent Session Bridges` row id.
+   * @returns The room name, or `undefined` if not tracked in the active rosters.
+   */
+  public GetRoomForBridge(sessionBridgeID: string): string | undefined {
+    for (const [roomKey, roster] of this.roomRosters) {
+      if (roster.some((e) => e.SessionBridgeID === sessionBridgeID)) {
+        return roomKey;
+      }
+    }
+    return undefined;
+  }
 }

@@ -17,6 +17,7 @@ import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
 import { RegisterMeetingRecordingFile, CorrelateRecordingStart } from './meetingRecordingRegistration.js';
+import { RoomAuthorizationService } from './roomAuthorization.js';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -281,6 +282,11 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return failure('Unable to determine current user.');
       }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(input.RoomName, user, provider);
+      if (!auth.Authorized) {
+        return failure(auth.Reason ?? 'Unauthorized room access.');
+      }
       const tokenService = new LiveKitTokenService();
       const minted = await tokenService.MintClientToken(input.RoomName, this.participantIdentity(user), input.DisplayName ?? user.Name ?? user.Email);
       return { Success: true, ...minted };
@@ -316,6 +322,13 @@ export class RealtimeBridgeResolver extends ResolverBase {
       }
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
       const roomName = input.RoomName?.trim() || `mj-${randomUUID()}`;
+
+      if (input.RoomName?.trim()) {
+        const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+        if (!auth.Authorized) {
+          return failure(auth.Reason ?? 'Unauthorized room access.', roomName);
+        }
+      }
 
       // Opt-in: an agent that can bring a person, a number or another agent into this room (the same room, so a visitor
       // is escalated without leaving it). Falls through to the standard start when the server cannot do handoffs.
@@ -399,6 +412,14 @@ export class RealtimeBridgeResolver extends ResolverBase {
         return false;
       }
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const roomName = LiveKitAgentRoomCoordinator.Instance.GetRoomForBridge(sessionBridgeID);
+      if (roomName) {
+        const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+        if (!auth.Authorized) {
+          LogError(`StopLiveKitAgentRoomSession unauthorized: user ${user.ID} cannot access room ${roomName} (${auth.Reason})`);
+          return false;
+        }
+      }
       return await LiveKitAgentRoomCoordinator.Instance.StopAgentRoomSession(sessionBridgeID, 'Explicit', user, provider);
     } catch (error) {
       LogError(`StopLiveKitAgentRoomSession failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -425,6 +446,11 @@ export class RealtimeBridgeResolver extends ResolverBase {
         return false;
       }
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+      if (!auth.Authorized) {
+        LogError(`EndLiveKitRoom unauthorized: user ${user.ID} cannot access room ${roomName} (${auth.Reason})`);
+        return false;
+      }
       await LiveKitAgentRoomCoordinator.Instance.StopAllAgentsInRoom(roomName, 'Explicit', user, provider);
       return true;
     } catch (error) {
@@ -449,6 +475,11 @@ export class RealtimeBridgeResolver extends ResolverBase {
       const user = this.GetUserFromPayload(context.userPayload);
       if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.' };
+      }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+      if (!auth.Authorized) {
+        return { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.' };
       }
       const snapshot = LiveKitAgentRoomCoordinator.Instance.GetRoomTurnState(roomName);
       return { Success: true, StateJSON: snapshot ? JSON.stringify(snapshot) : undefined };
@@ -504,6 +535,11 @@ export class RealtimeBridgeResolver extends ResolverBase {
         return false;
       }
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(roomName, user, provider);
+      if (!auth.Authorized) {
+        LogError(`InviteUsersToLiveKitRoom unauthorized: user ${user.ID} cannot access room ${roomName} (${auth.Reason})`);
+        return false;
+      }
       await NotificationEngine.Instance.Config(false, user, provider);
 
       const inviter = user.Name?.trim() || user.Email || 'Someone';
@@ -545,11 +581,15 @@ export class RealtimeBridgeResolver extends ResolverBase {
       if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: '', Status: '' };
       }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      const auth = await RoomAuthorizationService.Instance.AuthorizeRoomAccess(input.RoomName, user, provider);
+      if (!auth.Authorized) {
+        return { Success: false, ErrorMessage: auth.Reason ?? 'Unauthorized room access.', EgressID: '', Status: '' };
+      }
       const info = await new LiveKitEgressService().StartRoomRecording({ RoomName: input.RoomName, Layout: input.Layout });
 
       // Best-effort: correlate the live recording with the room's Meeting-Room Conversation (if it exists
       // yet) by stamping its EgressID. Never fail the start on this — the stop-flow resolves/creates it.
-      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
       void CorrelateRecordingStart(input.RoomName, info.EgressID, user, provider);
 
       return { Success: true, EgressID: info.EgressID, Status: info.Status };
