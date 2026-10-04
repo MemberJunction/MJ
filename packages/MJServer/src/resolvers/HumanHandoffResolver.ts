@@ -180,8 +180,8 @@ export class PubSubHandoffPublisher implements IHandoffPublisher {
 
 /**
  * Tells the person about a new offer outside the live subscription, through the unified notification engine (in-app, and
- * MJ Comms when the type is configured for it). Reuses the existing "Live Room Invite" notification type so no new metadata
- * is needed; the `handoff-offer` resource configuration is what Explorer routes to the console.
+ * MJ Comms when the type is configured for it), using the dedicated "Conversation Handoff Offer" notification type.
+ * The `handoff-offer` resource configuration is what Explorer routes to the Conversation Console.
  */
 export class NotificationHandoffNotifier implements IHandoffNotifier {
   public async NotifyOffer(offer: HandoffOfferView, targetUserID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
@@ -189,7 +189,7 @@ export class NotificationHandoffNotifier implements IHandoffNotifier {
     const result = await NotificationEngine.Instance.SendNotification(
       {
         userId: targetUserID,
-        typeNameOrId: 'Live Room Invite',
+        typeNameOrId: 'Conversation Handoff Offer',
         title: `Incoming conversation: ${offer.CallerLabel}`,
         message: `${offer.AgentName} is asking you to take over a conversation. ${offer.Summary}`,
         resourceConfiguration: { type: 'handoff-offer', offerId: offer.OfferID, room: offer.RoomName },
