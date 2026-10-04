@@ -17,7 +17,7 @@
  * @author MemberJunction.com
  */
 
-import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, GetAIAPIKey } from '@memberjunction/ai';
+import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, RealtimeToolDefinition, AIAPIKeyResolver, MakeAIAPIKeyResolver } from '@memberjunction/ai';
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -72,6 +72,24 @@ export interface BridgeRealtimeSessionContext {
     MeetingMode?: boolean;
     /** The names the agent answers to (display name + aliases) — phrasing for the meeting prompt only. */
     SelfNames?: string[];
+    /**
+     * Tools the host declares and executes itself (a phone call's `transfer_call` / `send_dtmf` / `end_call`).
+     * Added to the model's tool set; executed through the runtime's local tool handler
+     * (see `GetBridgeRealtimeRuntime`).
+     */
+    HostTools?: RealtimeToolDefinition[];
+    /** Host-authored instructions appended to the system prompt (e.g. the phone-call and caller framing). */
+    HostFraming?: string;
+    /**
+     * Role-tagged transcript lines (`User: …` / `Assistant: …`) of the conversation so far, framed into the
+     * prompt as "earlier in this conversation". Set when a lost model session is re-opened mid-call so the new
+     * session remembers what was said.
+     */
+    PriorTranscript?: string;
+    /** Earlier turns to seed the model's context. Defaults to none (a fresh call has no history). */
+    ConversationMessages?: ChatMessage[];
+    /** The `MJ: Conversations` row the session writes to — stamped on the co-agent observability run. */
+    ConversationID?: string;
 }
 
 /**
@@ -154,8 +172,9 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
         agent,
         contextUser: ctx.ContextUser,
         provider,
-        // A fresh bridge session starts with no prior turns; memory context degrades gracefully to empty.
-        conversationMessages: [] as ChatMessage[],
+        // A fresh bridge session starts with no prior turns; memory context degrades gracefully to empty. A
+        // re-opened session (model-drop recovery) is given what was said so far via PriorTranscript instead.
+        conversationMessages: ctx.ConversationMessages ?? ([] as ChatMessage[]),
         // Realtime extras ride params.data: the TARGET agent the co-agent voices via `invoke-target-agent`
         // (without it the co-agent stays idle), plus optional per-session dev overrides for the model/voice
         // so two agents in the same room can sound distinct. Omitted keys are simply absent.
@@ -184,6 +203,18 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
     }
     if (ctx.MeetingMode === true) {
         data.realtimeMeetingMode = true;
+    }
+    if (ctx.HostTools && ctx.HostTools.length > 0) {
+        data.realtimeHostTools = ctx.HostTools;
+    }
+    if (ctx.HostFraming && ctx.HostFraming.trim().length > 0) {
+        data.realtimeHostFraming = ctx.HostFraming.trim();
+    }
+    if (ctx.PriorTranscript && ctx.PriorTranscript.trim().length > 0) {
+        data.realtimePriorTranscript = ctx.PriorTranscript.trim();
+    }
+    if (ctx.ConversationID && ctx.ConversationID.trim().length > 0) {
+        data.conversationId = ctx.ConversationID.trim();
     }
     if (ctx.SelfNames && ctx.SelfNames.length > 0) {
         data.realtimeSelfNames = ctx.SelfNames;
@@ -233,11 +264,15 @@ export interface RealtimeModelVoices {
  *
  * @param contextUser The user the engine config runs as (server-side).
  * @param provider The request-scoped metadata provider (multi-provider safe).
+ * @param resolveAPIKey Key-resolution seam deciding which vendors count as runnable. Defaults to the
+ *   platform lookup (`AI_VENDOR_API_KEY__<driver>`); the voice-picker query has no run context and
+ *   passes none, so today the list always reflects the platform's keys.
  * @returns Active realtime models, each with its driver's voices.
  */
 export async function GetRealtimeModelVoices(
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
+    resolveAPIKey: AIAPIKeyResolver = MakeAIAPIKeyResolver(),
 ): Promise<RealtimeModelVoices[]> {
     await AIEngine.Instance.Config(false, contextUser, provider);
     const isRealtime = (t: string | null | undefined): boolean =>
@@ -248,7 +283,7 @@ export async function GetRealtimeModelVoices(
 
     const out: RealtimeModelVoices[] = [];
     for (const model of models) {
-        const selection = SelectRealtimeVendorForModel(model.ID);
+        const selection = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
         const driverClass = selection?.DriverClass ?? null;
         if (!driverClass) {
             continue; // no active vendor with a resolvable key — not runnable, so omit
@@ -269,7 +304,7 @@ export async function GetRealtimeModelVoices(
 
         // 2. Union with driver SupportedVoices: append any driver voices not already present or explicitly excluded
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel, driverClass, GetAIAPIKey(driverClass),
+            BaseRealtimeModel, driverClass, resolveAPIKey(driverClass),
         );
         for (const dv of instance?.SupportedVoices ?? []) {
             const dvIdLower = dv.ID.toLowerCase();

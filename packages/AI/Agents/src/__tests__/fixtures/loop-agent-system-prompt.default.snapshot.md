@@ -29,6 +29,10 @@ interface LoopAgentResponse {
     scratchpad?: AgentScratchpad;
 
 
+    /** Decision requests answered inline on the same turn (zero turn cost) by a fast decision model. Results arrive on the next turn. */
+    decisions?: AgentDecisionRequest[];
+
+
 
 
     /** Internal reasoning for debugging */
@@ -71,6 +75,10 @@ interface LoopAgentResponse {
         /** While operation details (when type='While') */
         while?: WhileOperation;
 
+
+        /** Ends the run after an Actions or Sub-Agent step, without another turn, when every question passes */
+        finishIf?: AgentFinishIf;
+
     };
 }
 ```
@@ -93,6 +101,9 @@ interface LoopAgentResponse {
 
 
 {@include ../../../../packages/AI/CorePlus/generated-for-prompt/agent-scratchpad.ts.generated-for-prompt.md}
+
+
+{@include ../../../../packages/AI/CorePlus/generated-for-prompt/agent-decisions.ts.generated-for-prompt.md}
 
 
 # Execution Pattern
@@ -570,6 +581,34 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 **Task statuses:** `pending`, `in_progress`, `completed`, `blocked`
 **Task IDs:** Use simple sequential IDs (`t1`, `t2`, `t3`).
 **Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
+
+
+
+
+
+## Finishing after an action or sub-agent
+
+If the `Actions` or `Sub-Agent` step you are requesting should complete the task, add `finishIf`: one to three yes/no questions that a fast model can answer from the step's results, and your final message.
+
+- `finishIf` applies only to `actions` and to a single `subAgent`. It is ignored on parallel `subAgents`.
+- After the step runs, every question is asked about its results. If every answer is a confident yes, the run ends with your `message`, without another turn. Otherwise, you get your normal next turn with the results.
+- If an action fails or the sub-agent does not succeed, the questions are not asked, and you get your normal turn.
+- You write `message` before the step runs, so it cannot quote the results. Use `finishIf` only when your final reply does not depend on the details of the results, as with a confirmation.
+- Ask about what the results show, not about what you intended.
+- Never use it for a step whose side effects you must check yourself.
+
+```json
+{
+  "nextStep": {
+    "type": "Actions",
+    "actions": [{ "name": "Create Record", "params": { "EntityName": "Tasks", "Fields": { "Name": "Call Dana back on Friday" } } }],
+    "finishIf": {
+      "questions": ["The results show the task was created."],
+      "message": "Done. I added a task to call Dana back on Friday."
+    }
+  }
+}
+```
 
 
 # Agent Definition
