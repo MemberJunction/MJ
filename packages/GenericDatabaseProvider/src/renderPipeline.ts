@@ -1,9 +1,9 @@
-import { DatabasePlatform, UserInfo, QueryDependencySpec } from '@memberjunction/core';
+import { DatabasePlatform, UserInfo, QueryDependencySpec, LogStatus } from '@memberjunction/core';
 import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, IsReadOnlyQuery } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
-import { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
+import { QueryPagingEngine, PagingWrappedSQL, RowCapOutcome } from './queryPagingEngine.js';
 import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
 
 // ════════════════════════════════════════════════════════════════════
@@ -95,6 +95,11 @@ export interface RenderResult {
     Trace: RenderTrace;
     /** Paging result (if paging was applied) */
     PagingResult: PagingWrappedSQL | null;
+    /**
+     * Whether the {@link RenderContext.MaxRows} cap holds for {@link FinalSQL}, and how it was
+     * applied; `null` when no MaxRows cap was requested.
+     */
+    RowCap: RowCapOutcome | null;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -171,8 +176,14 @@ export class RenderPipeline {
         RenderPipeline.assertSafeToExecute(afterTemplates, ctx.Platform, ctx.RequireReadStatement ?? false);
 
         // ── Step 3: MaxRows safety limit (if specified) ──────────────
+        let rowCap: RowCapOutcome | null = null;
         if (hasMaxRows) {
-            currentSQL = QueryPagingEngine.WrapWithMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
+            const capResult = QueryPagingEngine.ApplyMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
+            currentSQL = capResult.SQL;
+            rowCap = capResult.Outcome;
+            if (!rowCap.Applied) {
+                LogStatus(`RenderPipeline: MaxRows ${ctx.MaxRows} was not applied — ${rowCap.Reason}. The query runs uncapped.`);
+            }
         }
 
         // ── Step 4: Paging (if requested) ────────────────────────────
@@ -199,6 +210,7 @@ export class RenderPipeline {
                 AfterPaging: afterPaging,
             },
             PagingResult: pagingResult,
+            RowCap: rowCap,
         };
     }
 

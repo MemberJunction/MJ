@@ -18,6 +18,40 @@ export interface PagingWrappedSQL {
 }
 
 /**
+ * How a requested row cap was applied.
+ *
+ * - `top` / `limit` / `fetch`: a `TOP n`, `LIMIT n`, or `OFFSET 0 ROWS FETCH NEXT n ROWS ONLY`
+ *   clause in the statement itself.
+ * - `own-cap`: the statement's own cap was already as tight or tighter, so it was left as is.
+ * - `derived-table`: the statement was capped as a derived table.
+ * - `none`: no cap was applied; {@link RowCapOutcome.Reason} says why.
+ */
+export type RowCapMethod = 'top' | 'limit' | 'fetch' | 'own-cap' | 'derived-table' | 'none';
+
+/** Whether a requested row cap holds for the rendered SQL, and how. */
+export interface RowCapOutcome {
+    /** True when the rendered SQL returns at most the requested number of rows. */
+    Applied: boolean;
+    Method: RowCapMethod;
+    /** Why no cap was applied; `null` when one was. */
+    Reason: string | null;
+}
+
+/** The capped SQL and the outcome, from {@link QueryPagingEngine.ApplyMaxRows}. */
+export interface RowCapResult {
+    SQL: string;
+    Outcome: RowCapOutcome;
+}
+
+function capped(sql: string, method: Exclude<RowCapMethod, 'none'>): RowCapResult {
+    return { SQL: sql, Outcome: { Applied: true, Method: method, Reason: null } };
+}
+
+function notCapped(sql: string, reason: string): RowCapResult {
+    return { SQL: sql, Outcome: { Applied: false, Method: 'none', Reason: reason } };
+}
+
+/**
  * Handles server-side pagination for query SQL by applying platform-specific
  * paging clauses.
  *
@@ -103,12 +137,21 @@ export class QueryPagingEngine {
         maxRows: number,
         platform: DatabasePlatform,
     ): string {
+        return QueryPagingEngine.ApplyMaxRows(resolvedSQL, maxRows, platform).SQL;
+    }
+
+    /**
+     * Applies a row cap exactly as {@link WrapWithMaxRows} does, and also reports whether the cap
+     * holds and how, so a caller that asked for a cap can tell whether it got one.
+     */
+    static ApplyMaxRows(resolvedSQL: string, maxRows: number, platform: DatabasePlatform): RowCapResult {
         const cleanedSQL = QueryPagingEngine.stripTrailingSemicolons(resolvedSQL);
-        if (!Number.isFinite(maxRows) || maxRows <= 0) return cleanedSQL;
-        if (cleanedSQL.trim().length === 0) return cleanedSQL;
+        if (!Number.isFinite(maxRows) || maxRows <= 0) return notCapped(cleanedSQL, 'MaxRows is not a positive number');
+        if (cleanedSQL.trim().length === 0) return notCapped(cleanedSQL, 'the statement is empty');
         const cap = Math.floor(maxRows);
         const dialect = QueryPagingEngine.getDialect(platform);
-        if (!IsReadOnlyQuery(cleanedSQL, dialect).IsReadOnly) return cleanedSQL;
+        const readCheck = IsReadOnlyQuery(cleanedSQL, dialect);
+        if (!readCheck.IsReadOnly) return notCapped(cleanedSQL, `the statement is not a single read query: ${readCheck.Reason}`);
 
         const shape = AnalyzePagingShape(cleanedSQL, dialect);
         const caps = shape.OwnCaps;
@@ -118,27 +161,29 @@ export class QueryPagingEngine {
     }
 
     /** Caps a statement that has no cap of its own. */
-    private static addCap(shape: PagingShape, cap: number, dialect: SQLDialect): string {
+    private static addCap(shape: PagingShape, cap: number, dialect: SQLDialect): RowCapResult {
         const limit = dialect.LimitClause(cap);
         if (limit.prefix) {
-            if (shape.IsSetOperation && shape.ReturnsDocument) return shape.Statement;
-            if (shape.IsSetOperation) return QueryPagingEngine.appendPage(shape, QueryPagingEngine.head(shape), 0, cap, dialect);
+            if (shape.IsSetOperation && shape.ReturnsDocument) {
+                return notCapped(shape.Statement, `a set operation that ends in FOR ${shape.ReturnsDocument.toUpperCase()} returns one document and has no single SELECT to cap`);
+            }
+            if (shape.IsSetOperation) return capped(QueryPagingEngine.appendPage(shape, QueryPagingEngine.head(shape), 0, cap, dialect), 'fetch');
             if (shape.SelectListStart === null) return QueryPagingEngine.capAsDerivedTable(shape, cap, dialect);
             const at = shape.SelectListStart;
-            return `${shape.Statement.substring(0, at)} ${limit.prefix}${shape.Statement.substring(at)}`;
+            return capped(`${shape.Statement.substring(0, at)} ${limit.prefix}${shape.Statement.substring(at)}`, 'top');
         }
-        return `${QueryPagingEngine.head(shape)}\n${limit.suffix}${QueryPagingEngine.tail(shape)}`;
+        return capped(`${QueryPagingEngine.head(shape)}\n${limit.suffix}${QueryPagingEngine.tail(shape)}`, 'limit');
     }
 
     /** Lowers a numeric cap of the query's own to `cap`, or leaves it when it is already tighter. */
-    private static tightenCap(shape: PagingShape, own: OwnRowCap, cap: number, dialect: SQLDialect): string {
-        if (own.Rows !== null && own.Rows <= cap) return shape.Statement;
+    private static tightenCap(shape: PagingShape, own: OwnRowCap, cap: number, dialect: SQLDialect): RowCapResult {
+        if (own.Rows !== null && own.Rows <= cap) return capped(shape.Statement, 'own-cap');
         const statement = shape.Statement;
         if (own.Form === 'top') {
-            return `${statement.substring(0, own.Start)}${dialect.LimitClause(cap).prefix}${statement.substring(own.End)}`;
+            return capped(`${statement.substring(0, own.Start)}${dialect.LimitClause(cap).prefix}${statement.substring(own.End)}`, 'top');
         }
         const limit = dialect.LimitClause(cap, own.Skip);
-        return `${statement.substring(0, own.Start)}${limit.suffix}${QueryPagingEngine.tail(shape)}`;
+        return capped(`${statement.substring(0, own.Start)}${limit.suffix}${QueryPagingEngine.tail(shape)}`, dialect.PlatformKey === 'sqlserver' ? 'fetch' : 'limit');
     }
 
     /**
@@ -147,9 +192,11 @@ export class QueryPagingEngine {
      * where SQL Server allows it beside the query's own TOP; a set operation's ORDER BY, which
      * names output columns, moves outside.
      */
-    private static capAsDerivedTable(shape: PagingShape, cap: number, dialect: SQLDialect): string {
+    private static capAsDerivedTable(shape: PagingShape, cap: number, dialect: SQLDialect): RowCapResult {
         const statement = shape.Statement;
-        if (shape.ReturnsDocument) return statement;
+        if (shape.ReturnsDocument) {
+            return notCapped(statement, `the statement ends in FOR ${shape.ReturnsDocument.toUpperCase()}, which cannot appear inside a derived table`);
+        }
         const prefix = statement.substring(0, shape.MainStart);
         const moveOrderBy = shape.IsSetOperation && shape.OrderBy !== null;
         const inner = statement.substring(shape.MainStart, moveOrderBy ? shape.OrderBy!.Start : shape.TailStart).trim();
@@ -157,7 +204,8 @@ export class QueryPagingEngine {
         const limit = dialect.LimitClause(cap);
         const top = limit.prefix ? `${limit.prefix} ` : '';
         const suffix = limit.suffix ? `\n${limit.suffix}` : '';
-        return `${prefix}SELECT ${top}* FROM (\n${inner}\n) AS ${dialect.QuoteIdentifier('_mj_capped')}${orderBy}${suffix}${QueryPagingEngine.tail(shape)}`;
+        const sql = `${prefix}SELECT ${top}* FROM (\n${inner}\n) AS ${dialect.QuoteIdentifier('_mj_capped')}${orderBy}${suffix}${QueryPagingEngine.tail(shape)}`;
+        return capped(sql, 'derived-table');
     }
 
     /**

@@ -17,6 +17,7 @@ export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 export { SqlLoggingSessionImpl } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
 export { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
+export type { RowCapOutcome, RowCapMethod, RowCapResult } from './queryPagingEngine.js';
 export { RenderPipeline, RenderContext, RenderResult, RenderTrace, CompositionDiagnostic } from './renderPipeline.js';
 export { SymbolTable } from './symbolTable.js';
 // Re-export from @memberjunction/sql-parser for backward compatibility
