@@ -247,7 +247,10 @@ export class QueryPagingEngine {
 
     /** Removes trailing semicolons and whitespace; a statement-ending `;` cannot precede a paging clause. */
     private static stripTrailingSemicolons(sql: string): string {
-        return sql.replace(/[\s;]+$/, '');
+        // A loop from the end rather than a `[\s;]+$` regex, which backtracks on long whitespace runs.
+        let end = sql.length;
+        while (end > 0 && (sql[end - 1] === ';' || /\s/.test(sql[end - 1]))) end--;
+        return sql.substring(0, end);
     }
 
     /**
