@@ -570,6 +570,8 @@ export class SQLParser {
         const n = sql.length;
         let i = 0;
         let sawSemicolon = false;
+        // A semicolon before any content (the `;WITH` idiom) separates nothing.
+        let sawContent = false;
 
         while (i < n) {
             const c = sql[i];
@@ -591,16 +593,19 @@ export class SQLParser {
                 (recognizeBrackets && c === '[') ||
                 (recognizeBackticks && c === '`')) {
                 const close = c === '[' ? ']' : c;
+                if (sawSemicolon) return true;
+                sawContent = true;
                 i = SQLParser.skipQuotedFrom(sql, i, close);
                 continue;
             }
 
-            if (c === ';') { sawSemicolon = true; i++; continue; }
+            if (c === ';') { if (sawContent) sawSemicolon = true; i++; continue; }
             if (c === ' ' || c === '\t' || c === '\n' || c === '\r') { i++; continue; }
 
             // any other character is real statement content; if a top-level
             // semicolon already appeared, this content is a second statement
             if (sawSemicolon) return true;
+            sawContent = true;
             i++;
         }
 

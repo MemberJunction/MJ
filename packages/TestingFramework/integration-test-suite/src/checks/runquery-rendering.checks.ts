@@ -123,6 +123,14 @@ const PLAIN_CASES: RenderCase[] = [
         Expect: items => ids(items.filter(i => i.ID % 2 === 0 && i.ID <= 80))
     },
     {
+        Name: 'RR Leading Semicolon CTE',
+        SQL: `;WITH Picked AS (SELECT ID FROM ${T} WHERE ID % 3 = 0)\nSELECT ID FROM Picked WHERE ID <= 99 ORDER BY ID`,
+        Platforms: ['sqlserver'],
+        Columns: ['ID'],
+        Ordered: true,
+        Expect: items => ids(items.filter(i => i.ID % 3 === 0 && i.ID <= 99))
+    },
+    {
         Name: 'RR Subquery',
         SQL: `SELECT ID FROM ${T} WHERE ParentID IN (SELECT ID FROM ${T} WHERE Category = 'Gamma') ORDER BY ID`,
         Columns: ['ID'],
