@@ -31,7 +31,9 @@ import {
     LiveKitAgentRoomCoordinator,
     LiveKitSipService,
     RoomHandoffEngine,
+    type DialIntoRoomRequest,
     type LiveKitRoomWebhookEvent,
+    type StartRoomAgentRequest,
 } from '@memberjunction/livekit-room-server';
 import type { LiveKitSipSettings } from '../types.js';
 import { DefaultAgentSessionManager, type IAgentSessionManager } from '../sessionManager.js';
@@ -356,11 +358,11 @@ export class LiveKitSipTelephonyService {
             Presence: this.sip,
             Dialer: trunkID
                 ? {
-                      DialIntoRoom: (request) =>
+                      DialIntoRoom: (request: DialIntoRoomRequest) =>
                           this.sip.DialIntoRoom({ ...request, TrunkID: trunkID, FromNumber: this.config.outboundFromNumber, WaitUntilAnswered: true }),
                   }
                 : undefined,
-            AgentStarter: (request) => this.starter.StartRoomAgent(request),
+            AgentStarter: (request: StartRoomAgentRequest) => this.starter.StartRoomAgent(request),
         });
     }
 

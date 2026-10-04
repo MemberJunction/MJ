@@ -209,14 +209,14 @@ export class RoomCallSessionStarter {
                 HostTools: BuildRoomCallTools(supported),
                 HostFraming: framing,
                 ConversationID: conversationID,
-                OnModelSession: (session) => this.bindLocalTools(session, executor, ref),
+                OnModelSession: (session: IRealtimeSession) => this.bindLocalTools(session, executor, ref),
                 TranscriptSink: conversationID
                     ? CreateBridgeSessionTranscriptSink({ ConversationID: conversationID, AgentSessionID: agentSessionID, AgentID: args.Agent.AgentID })
                     : undefined,
                 // Same host policy as the carrier path: a talk-over drops queued narration but does not abort delegated work.
                 OnBargeIn: () => this.cancelPendingNarration(ref),
                 RecoverModelSession: true,
-                OnSessionEnded: (reason) => this.onSessionEnded(args, agentSessionID, reason),
+                OnSessionEnded: (reason: BridgeDisconnectReason) => this.onSessionEnded(args, agentSessionID, reason),
                 JoinMethod: args.Channel === 'phone' && args.Direction === 'Inbound' ? 'InboundRoute' : 'OnDemand',
                 Direction: args.Direction,
             },
