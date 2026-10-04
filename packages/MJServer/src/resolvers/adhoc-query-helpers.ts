@@ -48,3 +48,43 @@ export function resolveAdhocTotalRowCount(
     }
     return fallback;
 }
+
+/** A statement request that can be cancelled while it runs; an `mssql` Request has this shape. */
+export interface CancellableRequest<T> {
+    query(sqlText: string): Promise<T>;
+    cancel(): void;
+}
+
+/**
+ * Runs `sqlText` on `request` and, if it has not finished by `deadline` (epoch milliseconds),
+ * cancels it on the server and rejects with `Query timeout exceeded`. Cancelling, rather than
+ * only giving up waiting, frees the connection and stops the work. A deadline already passed
+ * rejects without starting the query.
+ */
+export async function RunWithDeadline<T>(request: CancellableRequest<T>, sqlText: string, deadline: number): Promise<T> {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+        throw new Error('Query timeout exceeded');
+    }
+    const running = request.query(sqlText);
+    // The cancelled query rejects after the race has settled; that rejection is expected.
+    running.catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        return await Promise.race([
+            running,
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => {
+                    // Settle first, so the caller sees the timeout rather than the driver's
+                    // cancellation error.
+                    reject(new Error('Query timeout exceeded'));
+                    request.cancel();
+                }, remaining);
+            }),
+        ]);
+    } finally {
+        if (timer) {
+            clearTimeout(timer);
+        }
+    }
+}
