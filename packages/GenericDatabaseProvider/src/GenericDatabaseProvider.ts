@@ -125,6 +125,12 @@ export interface ExecuteSQLBatchOptions {
     ignoreAmbientTransaction?: boolean;
 }
 
+/**
+ * Execution options for SQL a caller supplied rather than a saved query (ad-hoc SQL, transient test
+ * queries): run it read-only and roll back, so it can neither write nor leave session state behind.
+ */
+const CALLER_SQL_OPTIONS: ExecuteSQLOptions = { readOnlyTransaction: true, description: 'caller-supplied query' };
+
 /** A {@link GenericDatabaseProvider.RunAfterCommit} task waiting for the outermost commit. */
 interface PostCommitEntry {
     Task: PostCommitTask;
@@ -4328,7 +4334,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 };
             }
 
-            const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser);
+            const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser, undefined, CALLER_SQL_OPTIONS);
 
             const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
 
@@ -4556,7 +4562,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             finalSQL = resolved.finalSQL;
 
             // Execute
-            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser, undefined, CALLER_SQL_OPTIONS);
 
             return {
                 Success: true,
@@ -4657,9 +4663,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         sql: string,
         contextUser?: UserInfo,
         parameters?: unknown[],
+        options?: ExecuteSQLOptions,
     ): Promise<{ result: Record<string, unknown>[]; executionTime: number }> {
         const start = Date.now();
-        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, undefined, contextUser);
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, options, contextUser);
         const executionTime = Date.now() - start;
 
         if (!result) {
