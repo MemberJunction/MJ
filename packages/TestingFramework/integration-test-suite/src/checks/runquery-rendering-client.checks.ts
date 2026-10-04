@@ -273,6 +273,22 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
             if (description === 'changed by RRC9') failures.push('the fixture category was changed');
             FailOnMismatches('RRC9', failures, attempts.length);
         }
+    },
+    {
+        Id: 'runquery-rendering-client.RRC10',
+        Name: 'RRC10: ad-hoc SQL over GraphQL stops at the caller timeout and reports it',
+        Fn: async (ctx): Promise<void> => {
+            requireWire(ctx);
+            // Seven copies of the 30-row source cross joined: far too many rows to count in a second.
+            const copies = Array.from({ length: 7 }, (_, i) => NUMBER_SOURCE.replace(/ AS v$/, ` AS v${i}`)).join(' CROSS JOIN ');
+            const started = Date.now();
+            const result = await new RunQuery().RunQuery({ SQL: `SELECT COUNT(*) AS Total FROM ${copies}`, TimeoutSeconds: 1 }, ctx.User);
+            const elapsedMs = Date.now() - started;
+            Assert(!result.Success, `the query must not finish inside 1 second (it returned ${JSON.stringify(result.Results)})`);
+            Assert(/exceeded 1 second timeout/i.test(result.ErrorMessage ?? ''), `expected the timeout to be reported, got: ${result.ErrorMessage}`);
+            Assert(elapsedMs < 10000, `the run took ${elapsedMs} ms; the database should have stopped it at about 1 second`);
+            console.log(`      → RRC10: stopped after ${elapsedMs} ms`);
+        }
     }
 ];
 
