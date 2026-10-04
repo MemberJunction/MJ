@@ -7,6 +7,7 @@
  * include a table; the queries read a literal derived table instead, which is valid unchanged on
  * SQL Server and PostgreSQL.
  */
+import { RunQuery } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Assert } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -57,6 +58,13 @@ async function setupClientFixtures(ctx: IntegrationCheckContext): Promise<void> 
     };
     await CreateRenderQuery(fixtures, { Name: 'RRC Numbers', SQL: `SELECT N FROM ${NUMBER_SOURCE} ORDER BY N` }, ctx.User);
     await CreateRenderQuery(fixtures, { Name: 'RRC Dep Numbers', Reusable: true, SQL: `SELECT N FROM ${NUMBER_SOURCE}` }, ctx.User);
+    await CreateRenderQuery(fixtures, {
+        Name: 'RRC Session Timeouts',
+        SQL: `SELECT 'n/a' AS StatementTimeout, 'n/a' AS IdleInTransactionTimeout`,
+        Variants: {
+            postgresql: `SELECT current_setting('statement_timeout') AS StatementTimeout, current_setting('idle_in_transaction_session_timeout') AS IdleInTransactionTimeout`
+        }
+    }, ctx.User);
     await RefreshRenderQueries(ctx.User);
     const path = RenderCategoryPath(fixtures);
     await CreateRenderQuery(fixtures, {
@@ -132,6 +140,32 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
             const rows = ProjectRows(JSON.parse(result.Results ?? '[]') as Record<string, unknown>[], ['N']);
             const mismatch = DescribeRowMismatch(rows, numbers(n => n <= 7), true);
             Assert(mismatch === null, `TestQuerySQL MaxRows 7: ${mismatch}`);
+        }
+    },
+    {
+        Id: 'runquery-rendering-client.RRC4',
+        Name: 'RRC4: on PostgreSQL, every MJAPI backend runs with the statement and idle-in-transaction timeouts from the default requestTimeout',
+        Fn: async (ctx): Promise<void> => {
+            requireWire(ctx);
+            // Concurrent runs land on different pooled backends, including ones the pool opens now.
+            const runs = await Promise.all(Array.from({ length: 12 }, () =>
+                new RunQuery().RunQuery({ QueryID: queryID('RRC Session Timeouts') }, ctx.User)));
+            const failures: string[] = [];
+            for (const run of runs) {
+                if (!run.Success) {
+                    failures.push(`run failed: ${run.ErrorMessage}`);
+                    continue;
+                }
+                const row = ProjectRows(run.Results, ['StatementTimeout', 'IdleInTransactionTimeout'])[0];
+                if (row.StatementTimeout === 'n/a') {
+                    console.log('      → RRC4: SQL Server applies requestTimeout in the driver; nothing to read from the server');
+                    return;
+                }
+                if (row.StatementTimeout !== '30s' || row.IdleInTransactionTimeout !== '1min') {
+                    failures.push(`statement_timeout '${row.StatementTimeout}', idle_in_transaction_session_timeout '${row.IdleInTransactionTimeout}'`);
+                }
+            }
+            FailOnMismatches('RRC4 (expected 30s and 1min on every backend)', failures, runs.length);
         }
     }
 ];
