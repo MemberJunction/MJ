@@ -19,6 +19,7 @@ import { MJLexer } from './mj-lexer.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { getASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
+import { IsKeyword, LexSQL, SignificantTokens } from './sqlLexer.js';
 import {
     MJToken,
     MJTemplateExpr,
@@ -477,78 +478,20 @@ export class SQLParser {
     }
 
     /**
-     * Token-aware scan for SQL clauses that cannot legally appear inside a
-     * derived table — wrapping a query that contains one of these in
-     * `SELECT ... FROM (<sql>) AS t` would produce invalid SQL.
+     * Whether the statement ends in a clause that cannot legally appear inside a derived table,
+     * so wrapping it in `SELECT ... FROM (<sql>) AS t` would produce invalid SQL:
+     *   - `FOR JSON …` / `FOR XML …` at the top level
+     *   - a trailing `OPTION (…)` query hint
      *
-     * Detects (case-insensitive, outside string literals and quoted
-     * identifiers):
-     *   - `FOR JSON …`
-     *   - `FOR XML …`
-     *   - `OPTION (…)`
-     *
-     * The dialect determines which identifier quoting styles are recognized
-     * (`[…]` for SQL Server, `` `…` `` for MySQL, `"…"` always).
+     * Only the top level of the statement counts. The same words inside a subquery (a correlated
+     * `(SELECT … FOR JSON PATH)` column), a string literal, a quoted identifier or a comment do
+     * not stop a wrap.
      */
     static HasUnwrappableTrailingClause(sql: string, dialect: SQLParserDialect): boolean {
-        const quoteSample = dialect.QuoteIdentifier('x');
-        const recognizeBrackets = quoteSample.startsWith('[');
-        const recognizeBackticks = quoteSample.startsWith('`');
-
-        const len = sql.length;
-        let i = 0;
-
-        const isWordChar = (ch: string): boolean =>
-            (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-            (ch >= '0' && ch <= '9') || ch === '_';
-
-        const isWS = (ch: string): boolean =>
-            ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
-
-        const matchWord = (start: number, word: string): boolean => {
-            if (start + word.length > len) return false;
-            if (sql.substring(start, start + word.length).toUpperCase() !== word) return false;
-            const after = start + word.length;
-            return after === len || !isWordChar(sql[after]);
-        };
-
-        const skipQuoted = (close: string): void => {
-            i++;
-            while (i < len) {
-                if (sql[i] === close) {
-                    if (i + 1 < len && sql[i + 1] === close) { i += 2; continue; }
-                    i++; break;
-                }
-                i++;
-            }
-        };
-
-        while (i < len) {
-            const c = sql[i];
-
-            if (c === "'") { skipQuoted("'"); continue; }
-            if (recognizeBrackets && c === '[') { skipQuoted(']'); continue; }
-            if (c === '"') { skipQuoted('"'); continue; }
-            if (recognizeBackticks && c === '`') { skipQuoted('`'); continue; }
-
-            const prevIsWord = i > 0 && isWordChar(sql[i - 1]);
-            if (!prevIsWord) {
-                if (matchWord(i, 'FOR')) {
-                    let j = i + 3;
-                    while (j < len && isWS(sql[j])) j++;
-                    if (matchWord(j, 'JSON') || matchWord(j, 'XML')) return true;
-                }
-                if (matchWord(i, 'OPTION')) {
-                    let j = i + 6;
-                    while (j < len && isWS(sql[j])) j++;
-                    if (j < len && sql[j] === '(') return true;
-                }
-            }
-
-            i++;
-        }
-
-        return false;
+        const top = SignificantTokens(LexSQL(sql, dialect)).filter(t => t.Depth === 0);
+        return top.some((t, i) =>
+            (IsKeyword(t, 'FOR') && (IsKeyword(top[i + 1], 'JSON') || IsKeyword(top[i + 1], 'XML'))) ||
+            (IsKeyword(t, 'OPTION') && top[i + 1]?.Kind === 'open'));
     }
 
     /**
