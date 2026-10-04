@@ -5152,6 +5152,9 @@ importers:
       '@memberjunction/ng-container-directives':
         specifier: 6.2.0-edge.2
         version: link:../../Generic/container-directives
+      '@memberjunction/ng-conversation-offers':
+        specifier: 6.2.0-edge.2
+        version: link:../../Generic/conversation-offers
       '@memberjunction/ng-conversations':
         specifier: 6.2.0-edge.2
         version: link:../../Generic/conversations
@@ -6636,6 +6639,49 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/Angular/Generic/conversation-offers:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.2
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.2
+        version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.2.0-edge.2
+        version: link:../../../GraphQLDataProvider
+      '@memberjunction/ng-base-types':
+        specifier: 6.2.0-edge.2
+        version: link:../base-types
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.2.0-edge.2
+        version: link:../shared
+      '@memberjunction/ng-ui-components':
+        specifier: 6.2.0-edge.2
+        version: link:../ui-components
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/Angular/Generic/conversations:
     dependencies:
       '@angular/animations':
@@ -8072,6 +8118,9 @@ importers:
       '@angular/core':
         specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
       '@memberjunction/core':
         specifier: 6.2.0-edge.2
         version: link:../../../MJCore
@@ -15122,6 +15171,9 @@ importers:
 
   packages/TelephonyAdapters:
     dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.2
+        version: link:../AI/Core
       '@memberjunction/ai-agents':
         specifier: 6.2.0-edge.2
         version: link:../AI/Agents
@@ -15158,6 +15210,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.2
         version: link:../MJGlobal
+      '@memberjunction/livekit-room-server':
+        specifier: 6.2.0-edge.2
+        version: link:../LiveKitRoomServer
       '@memberjunction/server-extensions-core':
         specifier: 6.2.0-edge.2
         version: link:../ServerExtensionsCore
@@ -15504,6 +15559,9 @@ importers:
       '@memberjunction/graphql-dataprovider':
         specifier: 6.2.0-edge.2
         version: link:../../GraphQLDataProvider
+      '@memberjunction/livekit-room-server':
+        specifier: 6.2.0-edge.2
+        version: link:../../LiveKitRoomServer
       '@memberjunction/metadata-sync':
         specifier: 6.2.0-edge.2
         version: link:../../MetadataSync
@@ -15558,6 +15616,9 @@ importers:
       '@memberjunction/task-graph':
         specifier: 6.2.0-edge.2
         version: link:../../TaskGraph
+      '@memberjunction/telephony-adapters':
+        specifier: 6.2.0-edge.2
+        version: link:../../TelephonyAdapters
       '@memberjunction/templates':
         specifier: 6.2.0-edge.2
         version: link:../../Templates/engine
@@ -15582,6 +15643,9 @@ importers:
       mssql:
         specifier: ^12.2.0
         version: 12.7.0
+      reflect-metadata:
+        specifier: ^0.2.2
+        version: 0.2.2
     devDependencies:
       '@types/mssql':
         specifier: ^9.1.9

@@ -107,6 +107,18 @@ export class LiveKitEgressService {
     return list.map((info) => this.toRecordingInfo(info, roomName));
   }
 
+  /**
+   * Looks up the room name for an egress id.
+   *
+   * @param egressId The egress id to query.
+   * @returns The room name, or `undefined` if not found.
+   */
+  public async GetRoomForEgress(egressId: string): Promise<string | undefined> {
+    const list = await this.client.listEgress({ egressId });
+    const info = list?.[0];
+    return info?.roomName || undefined;
+  }
+
   /** Maps an SDK `EgressInfo` to the normalized {@link RecordingInfo}. */
   private toRecordingInfo(info: EgressInfo, roomName: string): RecordingInfo {
     const result: RecordingInfo = {

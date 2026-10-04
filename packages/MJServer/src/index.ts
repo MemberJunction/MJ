@@ -67,6 +67,13 @@ import {
   SetPushStatusPublishHook,
   ParseReplicatedStatusUpdate,
 } from './generic/PushStatusResolver.js';
+import {
+  HANDOFF_OFFER_FANOUT_CHANNEL,
+  HANDOFF_OFFER_TOPIC,
+  SetHandoffOfferPublishHook,
+  ParseReplicatedHandoffOfferUpdate,
+} from './resolvers/HumanHandoffResolver.js';
+import { RoomHandoffEngine } from '@memberjunction/livekit-room-server';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
@@ -243,6 +250,7 @@ export * from './resolvers/CurrentUserContextResolver.js';
 export * from './resolvers/RSUResolver.js';
 export * from './resolvers/AgentSessionResolver.js';
 export * from './resolvers/RealtimeClientSessionResolver.js';
+export * from './resolvers/MeetingResolver.js';
 export * from './resolvers/RemoteBrowserActionResolver.js';
 export * from './agentSessions/index.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
@@ -296,7 +304,8 @@ function resolveServerVersion(): string | undefined {
     const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string };
     return pkg.version;
-  } catch {
+  } catch (err) {
+    LogError('Failed to resolve server version from package.json', undefined, err);
     return undefined;
   }
 }
@@ -336,8 +345,9 @@ async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, st
           message: payload.message,
           SourceServerId: payload.SourceServerId,
         });
-      } catch {
+      } catch (err) {
         // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing push-status fan-out message', undefined, err);
       }
     });
 
@@ -355,6 +365,46 @@ async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, st
     console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
   }
 }
+
+/**
+ * Replicate handoff-offer updates across server instances over Redis.
+ *
+ * Outbound: every locally-published offer change is forwarded on a shared Redis channel.
+ * Inbound: a message from another instance is republished onto THIS instance's local GraphQL
+ * topic (where the subscription filter scopes to the target user) and delivered to RoomHandoffEngine
+ * so the call-hosting instance can transition its local flow (e.g. wait for the user to join the room).
+ */
+async function wireHandoffOfferFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(HANDOFF_OFFER_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = ParseReplicatedHandoffOfferUpdate(raw, MJGlobal.Instance.ProcessUUID);
+        if (!payload) {
+          return;
+        }
+        PubSubManager.Instance.Publish(HANDOFF_OFFER_TOPIC, {
+          UserID: payload.UserID,
+          Kind: payload.Kind,
+          Offer: payload.Offer,
+        });
+        RoomHandoffEngine.Instance.OnRemoteOfferChange(payload);
+      } catch (err) {
+        // A malformed message on a shared channel must not take down the subscriber.
+        LogError('Error processing handoff-offer fan-out message', undefined, err);
+      }
+    });
+
+    SetHandoffOfferPublishHook((payload) => {
+      redisProvider.PublishMessage(HANDOFF_OFFER_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+
+    console.log('[MJAPI] Handoff-offer updates: cross-instance fan-out enabled via Redis');
+    startupLog.LogIf('verbose', 'Handoff-offer updates: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    console.warn(`Handoff-offer fan-out unavailable: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 
 // Bind MJStorage as the conversation-attachment blob store. The attachment service itself no longer
 // imports `@memberjunction/storage` — that dependency made it unusable from any browser or React
@@ -792,6 +842,7 @@ const setupComplete$ = new ReplaySubject(1);
     // forever for an event that was delivered to nobody. Replicating progress and completion over
     // Redis closes that, and the durable tail query remains the backstop if Redis is down.
     await wirePushStatusFanOut(redisProvider, startupLog);
+    await wireHandoffOfferFanOut(redisProvider, startupLog);
 
     startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
@@ -1372,6 +1423,8 @@ const setupComplete$ = new ReplaySubject(1);
     const sharedTelephonySettings: Record<string, unknown> = {
       inboundRunAsUserEmail: configInfo.telephony.inboundRunAsUserEmail,
       maxCallSeconds: configInfo.telephony.maxCallSeconds,
+      maxConcurrentCalls: configInfo.telephony.maxConcurrentCalls,
+      transferTargets: configInfo.telephony.transferTargets,
       outbound: configInfo.telephony.outbound,
     };
     if (configInfo.telephony.twilio) {
@@ -1399,6 +1452,15 @@ const setupComplete$ = new ReplaySubject(1);
         RootPath: '/telephony/ringcentral',
         Phase: 'pre-auth',
         Settings: { ...sharedTelephonySettings, ...configInfo.telephony.ringcentral },
+      });
+    }
+    if (configInfo.telephony.livekitSip) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'LiveKitSipExtension',
+        RootPath: '/telephony/livekit-sip',
+        Phase: 'pre-auth',
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.livekitSip },
       });
     }
     if (configInfo.telephony.teams?.enabled) {

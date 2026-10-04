@@ -29,6 +29,7 @@
   "peerDependencies": {
     "@angular/common": "^21.2.22",
     "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22",
     "rxjs": "^7.8.2"
   },
   "dependencies": {

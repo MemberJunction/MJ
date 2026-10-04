@@ -86,6 +86,30 @@ export interface OutboundPolicySettings {
     maxCallsPerUserPerHour?: number;
 }
 
+/** What kind of place a transfer target is. */
+export type TransferTargetKind = 'number' | 'user' | 'agent';
+
+/**
+ * One raw `telephony.transferTargets` entry: a named place the agent may hand a live call to. The agent names a target,
+ * never a number, an email or an agent id.
+ */
+export interface TransferTargetSettings {
+    /** What the agent calls it (e.g. `Front desk`). */
+    name: string;
+    /** `number` (a phone number; the default), `user` (a person at an Explorer console) or `agent` (another AI agent). */
+    kind?: TransferTargetKind;
+    /** `number` targets: where it goes, in E.164. Checked against the outbound allow/block lists at startup. */
+    number?: string;
+    /** `user` targets: the MJ user (by email) who is offered the conversation. */
+    userEmail?: string;
+    /** `user` targets: E.164 number the room dials when the person declines or does not answer. Checked like `number`. */
+    fallbackNumber?: string;
+    /** `agent` targets: the name of the MJ AI agent that takes over. */
+    agentName?: string;
+    /** What it is for; shown to the agent so it knows when to use it. */
+    description?: string;
+}
+
 /** The effective, validated policy. */
 export interface OutboundCallPolicy {
     AllowedPrefixes: string[];
@@ -101,7 +125,8 @@ export type OutboundRefusalCode =
     | 'prefix-not-allowed'
     | 'prefix-blocked'
     | 'agent-not-permitted'
-    | 'rate-limited';
+    | 'rate-limited'
+    | 'at-capacity';
 
 /** The verdict of {@link AuthorizeOutboundCall}. */
 export type OutboundAuthorization = { Allowed: true } | { Allowed: false; Code: OutboundRefusalCode; Reason: string };
@@ -261,6 +286,169 @@ function checkDestinationPrefixes(policy: OutboundCallPolicy, toNumber: string):
         return { Code: 'prefix-not-allowed', Reason: 'The destination number is outside the allowed calling ranges.' };
     }
     return undefined;
+}
+
+/**
+ * Checks a destination the AGENT asked to transfer a live call to against the same E.164 rule and
+ * allow/block prefix lists as outbound calls. A transfer sends a caller to a number the model chose, so it is
+ * as much a toll-fraud primitive as an outbound dial and must not be a way around the gate. The rate budget is
+ * not spent (a transfer places no new call from the account).
+ *
+ * @param policy The effective outbound policy.
+ * @param toNumber The requested destination.
+ * @returns `{Allowed:true, Number}` with the trimmed number, or the refusal with a caller-safe reason.
+ */
+export function CheckTransferDestination(
+    policy: OutboundCallPolicy,
+    toNumber: string,
+): { Allowed: true; Number: string } | { Allowed: false; Code: OutboundRefusalCode; Reason: string } {
+    const to = (toNumber ?? '').trim();
+    if (!IsValidE164(to)) {
+        return { Allowed: false, Code: 'invalid-number', Reason: 'The destination must be an E.164 number such as +14155550123.' };
+    }
+    const refusal = checkDestinationPrefixes(policy, to);
+    if (refusal) {
+        LogError(`[Telephony] call transfer refused (${refusal.Code}) for destination ${MaskNumber(to)}: ${refusal.Reason}`);
+        return { Allowed: false, ...refusal };
+    }
+    return { Allowed: true, Number: to };
+}
+
+/** The fields every validated directory entry carries. */
+interface TransferTargetBase {
+    Name: string;
+    Description?: string;
+}
+
+/** A phone number. On a carrier call this is a carrier transfer; in a room it is dialed into the room. */
+export interface NumberTransferTarget extends TransferTargetBase {
+    Kind: 'number';
+    /** E.164, already checked against the outbound policy. */
+    Number: string;
+}
+
+/** A person at an Explorer console, who is offered the conversation. Room calls only. */
+export interface UserTransferTarget extends TransferTargetBase {
+    Kind: 'user';
+    /** The user's email, trimmed and lower-cased. Whether it names an active user is checked when a transfer is requested. */
+    UserEmail: string;
+    /** E.164, already checked against the outbound policy; dialed into the room when the person does not take it. */
+    FallbackNumber?: string;
+}
+
+/** Another AI agent that takes the conversation over. Room calls only. */
+export interface AgentTransferTarget extends TransferTargetBase {
+    Kind: 'agent';
+    /** The agent's name. Whether it names an agent the call may run is checked when a transfer is requested. */
+    AgentName: string;
+}
+
+/** A validated entry of the transfer directory. */
+export type TransferTarget = NumberTransferTarget | UserTransferTarget | AgentTransferTarget;
+
+const MAX_TRANSFER_TARGETS = 20;
+const MAX_TRANSFER_NAME_CHARS = 60;
+const MAX_TRANSFER_DESCRIPTION_CHARS = 200;
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Builds the transfer directory from `telephony.transferTargets`: each entry needs a name, a unique name (case
+ * insensitive) and what its kind needs. A number (a `number` target, or a `user` target's fallback) must pass the same
+ * E.164 + allow/block checks as an outbound dial; a `user` target needs an email-shaped address; an `agent` target needs a
+ * name. An entry that fails any of them is DROPPED and logged, never half-kept: a typo must not turn into a forwarding
+ * destination.
+ *
+ * The directory is the only thing `transfer_call` can reach. Letting the model (and so an unverified caller) name an
+ * arbitrary number would be free call forwarding at the operator's expense.
+ */
+export function ResolveTransferDirectory(raw: TransferTargetSettings[] | undefined, policy: OutboundCallPolicy): TransferTarget[] {
+    const targets: TransferTarget[] = [];
+    const seen = new Set<string>();
+    for (const entry of raw ?? []) {
+        if (targets.length >= MAX_TRANSFER_TARGETS) {
+            LogError(`[Telephony] telephony.transferTargets is capped at ${MAX_TRANSFER_TARGETS} entries; ignoring the rest.`);
+            break;
+        }
+        const target = validateTransferEntry(entry, policy, seen);
+        if (target) {
+            seen.add(target.Name.toLowerCase());
+            targets.push(target);
+        }
+    }
+    return targets;
+}
+
+/** Validates one directory entry, logging why it was dropped. */
+function validateTransferEntry(entry: TransferTargetSettings, policy: OutboundCallPolicy, seen: Set<string>): TransferTarget | undefined {
+    const name = typeof entry?.name === 'string' ? entry.name.trim() : '';
+    if (!name || name.length > MAX_TRANSFER_NAME_CHARS) {
+        LogError(`[Telephony] ignoring a telephony.transferTargets entry: its name must be 1-${MAX_TRANSFER_NAME_CHARS} characters.`);
+        return undefined;
+    }
+    if (seen.has(name.toLowerCase())) {
+        LogError(`[Telephony] ignoring duplicate telephony.transferTargets name '${name}'.`);
+        return undefined;
+    }
+    const description = typeof entry.description === 'string' ? entry.description.trim().slice(0, MAX_TRANSFER_DESCRIPTION_CHARS) : '';
+    const base: TransferTargetBase = { Name: name, ...(description ? { Description: description } : {}) };
+    switch (entry.kind ?? 'number') {
+        case 'number':
+            return validateNumberTarget(entry, base, policy);
+        case 'user':
+            return validateUserTarget(entry, base, policy);
+        case 'agent':
+            return validateAgentTarget(entry, base);
+        default:
+            LogError(`[Telephony] ignoring telephony.transferTargets entry '${name}': kind must be 'number', 'user' or 'agent'.`);
+            return undefined;
+    }
+}
+
+function validateNumberTarget(entry: TransferTargetSettings, base: TransferTargetBase, policy: OutboundCallPolicy): NumberTransferTarget | undefined {
+    const verdict = CheckTransferDestination(policy, typeof entry.number === 'string' ? entry.number : '');
+    if (!verdict.Allowed) {
+        LogError(`[Telephony] ignoring telephony.transferTargets entry '${base.Name}': ${verdict.Reason}`);
+        return undefined;
+    }
+    return { ...base, Kind: 'number', Number: verdict.Number };
+}
+
+function validateUserTarget(entry: TransferTargetSettings, base: TransferTargetBase, policy: OutboundCallPolicy): UserTransferTarget | undefined {
+    const email = typeof entry.userEmail === 'string' ? entry.userEmail.trim().toLowerCase() : '';
+    if (!EMAIL_SHAPE.test(email)) {
+        LogError(`[Telephony] ignoring telephony.transferTargets entry '${base.Name}': a user target needs a userEmail.`);
+        return undefined;
+    }
+    const fallback = typeof entry.fallbackNumber === 'string' ? entry.fallbackNumber.trim() : '';
+    if (!fallback) {
+        return { ...base, Kind: 'user', UserEmail: email };
+    }
+    const verdict = CheckTransferDestination(policy, fallback);
+    if (!verdict.Allowed) {
+        LogError(`[Telephony] ignoring telephony.transferTargets entry '${base.Name}': its fallbackNumber is refused: ${verdict.Reason}`);
+        return undefined;
+    }
+    return { ...base, Kind: 'user', UserEmail: email, FallbackNumber: verdict.Number };
+}
+
+function validateAgentTarget(entry: TransferTargetSettings, base: TransferTargetBase): AgentTransferTarget | undefined {
+    const agentName = typeof entry.agentName === 'string' ? entry.agentName.trim() : '';
+    if (!agentName) {
+        LogError(`[Telephony] ignoring telephony.transferTargets entry '${base.Name}': an agent target needs an agentName.`);
+        return undefined;
+    }
+    return { ...base, Kind: 'agent', AgentName: agentName };
+}
+
+/** The directory's phone-number entries: the only ones a carrier call (no room to bring anyone into) can transfer to. */
+export function NumberTransferTargets(targets: readonly TransferTarget[]): NumberTransferTarget[] {
+    return targets.filter((t): t is NumberTransferTarget => t.Kind === 'number');
+}
+
+/** Finds a directory entry by the name the agent gave (case and surrounding whitespace insensitive). */
+export function FindTransferTarget(targets: readonly TransferTarget[], name: string): TransferTarget | undefined {
+    const wanted = (name ?? '').trim().toLowerCase();
+    return wanted ? targets.find((t) => t.Name.toLowerCase() === wanted) : undefined;
 }
 
 /** Why the identity cannot be used for this carrier, or `undefined` when it can. */
