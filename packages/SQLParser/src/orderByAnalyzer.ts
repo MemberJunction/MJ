@@ -310,7 +310,10 @@ function findTopLevelOrderByPositions(sql: string): number[] {
 
             if (parenDepth === 0 && /^ORDER\s+BY\b/i.test(text.substring(i))) {
                 const absPos = token.start + i;
-                if (absPos === 0 || /[\s,;()\n]/.test(sql[absPos - 1])) {
+                // Any character that cannot be part of an identifier ends the previous token,
+                // including the quote that closes a literal or a quoted identifier: rendered
+                // templates can leave `'2024-01-01'ORDER BY` with no space between them.
+                if (absPos === 0 || !/[A-Za-z0-9_$@#]/.test(sql[absPos - 1])) {
                     positions.push(absPos);
                 }
             }
