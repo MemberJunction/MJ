@@ -7,7 +7,7 @@ import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { RunQueryResultType } from './QueryResolver.js';
-import { exactTotalFromPage, resolveAdhocTotalRowCount } from './adhoc-query-helpers.js';
+import { exactTotalFromPage, resolveAdhocTotalRowCount, RunWithDeadline } from './adhoc-query-helpers.js';
 import sql from 'mssql';
 
 /**
@@ -219,32 +219,15 @@ export class AdhocQueryResolver extends ResolverBase {
     }
 
     /**
-     * Executes one SQL statement on the read-only pool, racing it against the shared
-     * wall-clock `deadline`. The timer is always cleared on completion so a settled
-     * query never leaves a dangling timeout armed.
+     * Executes one SQL statement on the read-only pool under the shared wall-clock `deadline`,
+     * cancelling it on the server if it runs past the deadline.
      */
     private async runSqlWithDeadline<T>(
         ds: sql.ConnectionPool,
         sqlText: string,
         deadline: number,
     ): Promise<sql.IResult<T>> {
-        const remaining = deadline - Date.now();
-        if (remaining <= 0) {
-            throw new Error('Query timeout exceeded');
-        }
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-            return await Promise.race([
-                new sql.Request(ds).query<T>(sqlText),
-                new Promise<never>((_, reject) => {
-                    timer = setTimeout(() => reject(new Error('Query timeout exceeded')), remaining);
-                }),
-            ]);
-        } finally {
-            if (timer) {
-                clearTimeout(timer);
-            }
-        }
+        return RunWithDeadline<sql.IResult<T>>(new sql.Request(ds), sqlText, deadline);
     }
 
     private buildErrorResult(errorMessage: string): RunQueryResultType {
