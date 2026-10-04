@@ -375,6 +375,7 @@ const COMPOSITION_LIBRARY: RenderQueryDefinition[] = [
     { Name: 'RR Dep Nested Deeper', Reusable: true, SQL: `SELECT ID FROM {{query:"{P}/RR Dep Nested"}} WHERE Category = 'Beta'` },
     { Name: 'RR Dep Left', Reusable: true, SQL: `SELECT ID FROM {{query:"{P}/RR Dep Base"}} WHERE ID <= 100` },
     { Name: 'RR Dep Right', Reusable: true, SQL: `SELECT ID FROM {{query:"{P}/RR Dep Base"}} WHERE ID >= 60` },
+    { Name: 'RR Dep Literal Order', Reusable: true, SQL: `SELECT ID FROM ${T} WHERE Category = 'Gamma'ORDER BY ID` },
     { Name: 'RR Dep Not Reusable', Reusable: false, SQL: `SELECT ID FROM ${T}` }
 ];
 
@@ -442,6 +443,12 @@ const COMPOSED_CASES: RenderCase[] = [
         SQL: `/* outer comment */\nSELECT b.ID FROM {{query:"{P}/RR Dep Base"}} b WHERE b.ID > 225 ORDER BY b.ID`,
         Columns: ['ID'], Ordered: true,
         Expect: items => ids(items.filter(i => i.ID > 225))
+    },
+    {
+        Name: 'RR Comp Dependency Ordered After Literal',
+        SQL: `SELECT d.ID FROM {{query:"{P}/RR Dep Literal Order"}} d WHERE d.ID > 100 ORDER BY d.ID`,
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids(items.filter(i => i.Category === 'Gamma' && i.ID > 100))
     },
     {
         Name: 'RR Comp Unordered',
