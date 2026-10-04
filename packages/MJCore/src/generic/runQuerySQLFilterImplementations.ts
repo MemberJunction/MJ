@@ -7,7 +7,7 @@
  * @module @memberjunction/core/runQuerySQLFilterImplementations
  */
 
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString } from '@memberjunction/global';
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
 import { DatabasePlatform } from './platformSQL';
 
@@ -282,15 +282,48 @@ function stripBoundaryWildcards(value: string, side: 'leading' | 'trailing' | 'b
 }
 
 /**
- * Escapes literal % and _ characters inside a LIKE value in a platform-aware way.
- * SQL Server uses bracket escaping [%] [_]; PostgreSQL uses backslash escaping \% \_.
+ * Escapes the characters a LIKE pattern treats specially, so the value matches literally.
+ * SQL Server: `[` opens a character class and `%` / `_` are wildcards, each escaped with
+ * brackets (`[[]`, `[%]`, `[_]`). PostgreSQL: `%` / `_` are wildcards and `\` is the default
+ * escape character, each escaped with a backslash.
  */
 function escapeLikeValue(value: string, platform: DatabasePlatform): string {
     const escaped = value.replace(/'/g, "''");
     if (platform === 'postgresql') {
-        return escaped.replace(/%/g, '\\%').replace(/_/g, '\\_');
+        return escaped.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
     }
-    return escaped.replace(/%/g, '[%]').replace(/_/g, '[_]');
+    return escaped.replace(/\[/g, '[[]').replace(/%/g, '[%]').replace(/_/g, '[_]');
+}
+
+/**
+ * The prefix a string literal needs on the platform: `N` on SQL Server when the text has
+ * characters outside ASCII, which a plain literal would lose to the database code page. ASCII
+ * text keeps a plain literal, so comparing it with a VARCHAR column does not force a conversion.
+ */
+function literalPrefix(text: string, platform: DatabasePlatform): string {
+    return platform === 'sqlserver' && /[^\x00-\x7F]/.test(text) ? 'N' : '';
+}
+
+/** A string literal for `value` on the platform, quotes escaped. */
+function textLiteral(value: unknown, platform: DatabasePlatform): string {
+    const text = String(value);
+    return `${literalPrefix(text, platform)}'${EscapeSQLString(text)}'`;
+}
+
+/** Creates a platform-aware sqlString filter implementation. */
+function createPlatformSqlString(platform: DatabasePlatform): (value: unknown) => string {
+    return (value: unknown) => (value === null || value === undefined ? 'NULL' : textLiteral(value, platform));
+}
+
+/** Creates a platform-aware sqlIn filter implementation. */
+function createPlatformSqlIn(platform: DatabasePlatform): (values: unknown) => string {
+    return (values: unknown) => {
+        if (!Array.isArray(values) || values.length === 0) {
+            return '(NULL)'; // matches nothing
+        }
+        const items = values.map(v => typeof v === 'number' ? String(v) : v === null || v === undefined ? 'NULL' : textLiteral(v, platform));
+        return `(${items.join(', ')})`;
+    };
 }
 
 /**
@@ -301,7 +334,7 @@ function createPlatformSqlLikeContains(platform: DatabasePlatform): (value: any)
     return (value: any) => {
         if (value === null || value === undefined) return 'NULL';
         const stripped = stripBoundaryWildcards(String(value), 'both');
-        return `'%${escapeLikeValue(stripped, platform)}%'`;
+        return `${literalPrefix(stripped, platform)}'%${escapeLikeValue(stripped, platform)}%'`;
     };
 }
 
@@ -309,7 +342,7 @@ function createPlatformSqlLikeBegins(platform: DatabasePlatform): (value: any) =
     return (value: any) => {
         if (value === null || value === undefined) return 'NULL';
         const stripped = stripBoundaryWildcards(String(value), 'trailing');
-        return `'${escapeLikeValue(stripped, platform)}%'`;
+        return `${literalPrefix(stripped, platform)}'${escapeLikeValue(stripped, platform)}%'`;
     };
 }
 
@@ -317,7 +350,7 @@ function createPlatformSqlLikeEnds(platform: DatabasePlatform): (value: any) => 
     return (value: any) => {
         if (value === null || value === undefined) return 'NULL';
         const stripped = stripBoundaryWildcards(String(value), 'leading');
-        return `'%${escapeLikeValue(stripped, platform)}'`;
+        return `${literalPrefix(stripped, platform)}'%${escapeLikeValue(stripped, platform)}'`;
     };
 }
 
@@ -358,6 +391,14 @@ export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterMan
      * Applies platform-specific overrides for sqlBoolean and sqlIdentifier filters.
      */
     private applyPlatformOverrides(): void {
+        const stringFilter = this._filters.get('sqlString');
+        if (stringFilter) {
+            stringFilter.implementation = createPlatformSqlString(this._platform);
+        }
+        const inFilter = this._filters.get('sqlIn');
+        if (inFilter) {
+            inFilter.implementation = createPlatformSqlIn(this._platform);
+        }
         const boolFilter = this._filters.get('sqlBoolean');
         if (boolFilter) {
             boolFilter.implementation = createPlatformSqlBoolean(this._platform);
