@@ -35,7 +35,8 @@ export interface SQLLexToken {
 interface LexFeatures {
     Brackets: boolean;
     Backticks: boolean;
-    PostgreSQL: boolean;
+    EscapeStrings: boolean;
+    DollarQuotes: boolean;
 }
 
 function featuresFor(dialect: SQLParserDialect): LexFeatures {
@@ -43,7 +44,8 @@ function featuresFor(dialect: SQLParserDialect): LexFeatures {
     return {
         Brackets: sample.startsWith('['),
         Backticks: sample.startsWith('`'),
-        PostgreSQL: dialect.ParserDialect === 'PostgresQL'
+        EscapeStrings: dialect.SupportsEscapeStringLiterals,
+        DollarQuotes: dialect.SupportsDollarQuotedStrings
     };
 }
 
@@ -56,11 +58,13 @@ const DIGIT = /[0-9]/;
  * including SQL the AST parser rejects. Every character of the input belongs to exactly one
  * token, so joining the tokens' text reproduces the input.
  *
- * Recognizes, per dialect: string literals with doubled-quote escapes and the `N` prefix;
- * PostgreSQL `E'…'` strings with backslash escapes and dollar-quoted strings (`$$…$$`,
- * `$tag$…$tag$`); double-quoted identifiers everywhere, bracket identifiers on SQL Server and
- * backtick identifiers on MySQL; `--` line comments and nested block comments. An unterminated
- * literal or comment runs to the end of the input.
+ * Recognizes string literals with doubled-quote escapes and the `N` prefix, double-quoted
+ * identifiers, `--` line comments and nested block comments everywhere, and per dialect:
+ * bracket or backtick identifiers when the dialect quotes identifiers that way, `E'…'` strings
+ * with backslash escapes when {@link SQLParserDialect.SupportsEscapeStringLiterals} is set, and
+ * dollar-quoted strings (`$$…$$`, `$tag$…$tag$`) when
+ * {@link SQLParserDialect.SupportsDollarQuotedStrings} is set. An unterminated literal or comment
+ * runs to the end of the input.
  */
 export function LexSQL(sql: string, dialect: SQLParserDialect): SQLLexToken[] {
     const features = featuresFor(dialect);
@@ -86,8 +90,8 @@ function readToken(sql: string, i: number, f: LexFeatures): [SQLLexTokenKind, nu
     if (ch === '/' && next === '*') return ['comment', skipBlockComment(sql, i)];
     if (ch === "'") return ['string', skipQuoted(sql, i, "'", false)];
     if ((ch === 'N' || ch === 'n') && next === "'") return ['string', skipQuoted(sql, i + 1, "'", false)];
-    if (f.PostgreSQL && (ch === 'E' || ch === 'e') && next === "'") return ['string', skipQuoted(sql, i + 1, "'", true)];
-    if (f.PostgreSQL && ch === '$') {
+    if (f.EscapeStrings && (ch === 'E' || ch === 'e') && next === "'") return ['string', skipQuoted(sql, i + 1, "'", true)];
+    if (f.DollarQuotes && ch === '$') {
         const end = skipDollarQuoted(sql, i);
         if (end > i) return ['string', end];
     }

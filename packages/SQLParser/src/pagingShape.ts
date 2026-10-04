@@ -94,11 +94,16 @@ function leadingTriviaEnd(statement: string, dialect: SQLParserDialect): number 
     return first ? first.Start : statement.length;
 }
 
-/** Start of a trailing `OPTION (…)` (SQL Server) or `FOR UPDATE` / `FOR SHARE` (PostgreSQL). */
+/**
+ * Start of a trailing clause that must stay last: the dialect's query-hint clause
+ * ({@link SQLParserDialect.QueryHintKeyword}, `OPTION (…)` on SQL Server) or a row-lock clause
+ * (`FOR UPDATE` / `FOR SHARE`).
+ */
 function findTailStart(top: SQLLexToken[], dialect: SQLParserDialect, length: number): number {
+    const hintKeyword = dialect.QueryHintKeyword;
     for (let i = 0; i < top.length; i++) {
         const t = top[i];
-        if (IsKeyword(t, 'OPTION') && top[i + 1]?.Kind === 'open') return t.Start;
+        if (hintKeyword && IsKeyword(t, hintKeyword.toUpperCase()) && top[i + 1]?.Kind === 'open') return t.Start;
         if (IsKeyword(t, 'FOR') && isRowLockClause(top, i + 1)) return t.Start;
     }
     return length;
