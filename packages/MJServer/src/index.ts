@@ -404,7 +404,7 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
-    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } = await import('@memberjunction/postgresql-dataprovider');
 
     const pgEndpoint = ResolvePostgreSQLEndpoint();
     const { Host: pgHost, Port: pgPort, User: pgUser, Database: pgDatabase } = pgEndpoint;
@@ -422,9 +422,12 @@ const setupComplete$ = new ReplaySubject(1);
     // providers (TestQuerySQL and other caller-supplied SQL) share it instead of the primary pool.
     const pgReadOnlyCredentials = ResolvePostgreSQLReadOnlyCredentials(configInfo);
     if (pgReadOnlyCredentials) {
-      const readOnlyPgPool = new pg.default.Pool(ToPGPoolConfig(
-        BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only'),
-      ));
+      // A pool a provider runs on must carry the provider's type parsers, so BIGINT and NUMERIC
+      // come back as numbers here as they do on the provider's own pool.
+      const readOnlyPgPool = new pg.default.Pool({
+        ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
+        types: MJPostgresTypes,
+      });
       const readOnlyTestClient = await readOnlyPgPool.connect();
       await readOnlyTestClient.query('SELECT 1');
       readOnlyTestClient.release();
