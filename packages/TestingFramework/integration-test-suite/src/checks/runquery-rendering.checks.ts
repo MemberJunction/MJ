@@ -335,6 +335,7 @@ const PARAM_FILTER_SQL = [
     `{% endif %}{% if Ids %}AND ID IN {{ Ids | sqlIn }}`,
     `{% endif %}{% if Since %}AND CreatedOn >= {{ Since | sqlDate }}`,
     `{% endif %}{% if Exact %}AND Notes = {{ Exact | sqlString }}`,
+    `{% endif %}{% if NoteIn %}AND Notes IN {{ NoteIn | sqlIn }}`,
     `{% endif %}{% if Contains %}AND Notes LIKE {{ Contains | sqlLikeContains }}`,
     `{% endif %}{% if OnlyActive %}AND IsActive = {{ OnlyActive | sqlBoolean }}`,
     `{% endif %}ORDER BY ID`
@@ -367,6 +368,10 @@ const PARAM_CASES: ParamCase[] = [
     { Label: 'square brackets', Parameters: { Exact: '[bracketed]' }, Matches: i => i.Notes === '[bracketed]' },
     { Label: 'SQL keyword', Parameters: { Exact: 'SELECT' }, Matches: i => i.Notes === 'SELECT' },
     { Label: 'non-ASCII', Parameters: { Exact: 'Ünïcödé café' }, Matches: i => i.Notes === 'Ünïcödé café' },
+    { Label: 'text outside the code page (Japanese)', Parameters: { Exact: '日本語のメモ' }, Matches: i => i.Notes === '日本語のメモ' },
+    { Label: 'sqlIn with Japanese text', Parameters: { NoteIn: ['日本語のメモ', 'SELECT'] }, Matches: i => i.Notes === '日本語のメモ' || i.Notes === 'SELECT' },
+    { Label: 'LIKE with square brackets', Parameters: { Contains: '[bracketed]' }, Matches: i => i.Notes.includes('[bracketed]') },
+    { Label: 'LIKE with a backslash', Parameters: { Contains: 'a\\b' }, Matches: i => i.Notes.includes('a\\b') },
     { Label: 'LIKE with a literal %', Parameters: { Contains: '0% s' }, Matches: i => i.Notes.includes('0% s') },
     { Label: 'LIKE with a literal _', Parameters: { Contains: '%_off' }, Matches: i => i.Notes.includes('%_off') },
     { Label: 'LIKE with an apostrophe', Parameters: { Contains: "n's" }, Matches: i => i.Notes.includes("n's") },

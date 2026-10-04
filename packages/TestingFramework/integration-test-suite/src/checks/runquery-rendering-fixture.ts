@@ -47,7 +47,8 @@ export interface RenderItem {
 
 /**
  * Text values that stress quoting and pattern matching: an apostrophe, `%`, `_`, `[`, a SQL
- * keyword, non-ASCII text, a semicolon and a line-comment marker. Row `ID` uses entry `ID % 10`.
+ * keyword, accented and Japanese text, a semicolon, a line-comment marker and a backslash. Row
+ * `ID` uses entry `ID % RENDER_NOTES.length`.
  */
 export const RENDER_NOTES: readonly string[] = [
     'plain text',
@@ -59,7 +60,9 @@ export const RENDER_NOTES: readonly string[] = [
     'Ünïcödé café',
     'semi;colon',
     'dash -- dash',
-    "it's 50%_off [x]"
+    "it's 50%_off [x]",
+    '日本語のメモ',
+    'x a\\b y'
 ];
 
 /** Category values; row `ID` uses entry `ID % 4`. */
