@@ -482,7 +482,7 @@ export class SQLParser {
      * Whether the statement ends in a clause that cannot legally appear inside a derived table,
      * so wrapping it in `SELECT ... FROM (<sql>) AS t` would produce invalid SQL:
      *   - `FOR JSON …` / `FOR XML …` at the top level
-     *   - a trailing `OPTION (…)` query hint
+     *   - a trailing query-hint clause ({@link SQLParserDialect.QueryHintKeyword}, `OPTION (…)` on SQL Server)
      *
      * Only the top level of the statement counts. The same words inside a subquery (a correlated
      * `(SELECT … FOR JSON PATH)` column), a string literal, a quoted identifier or a comment do
@@ -490,9 +490,10 @@ export class SQLParser {
      */
     static HasUnwrappableTrailingClause(sql: string, dialect: SQLParserDialect): boolean {
         const top = SignificantTokens(LexSQL(sql, dialect)).filter(t => t.Depth === 0);
+        const hintKeyword = dialect.QueryHintKeyword?.toUpperCase();
         return top.some((t, i) =>
             (IsKeyword(t, 'FOR') && (IsKeyword(top[i + 1], 'JSON') || IsKeyword(top[i + 1], 'XML'))) ||
-            (IsKeyword(t, 'OPTION') && top[i + 1]?.Kind === 'open'));
+            (hintKeyword !== undefined && IsKeyword(t, hintKeyword) && top[i + 1]?.Kind === 'open'));
     }
 
     /**
@@ -1698,73 +1699,30 @@ export class SQLParser {
     }
 
     /**
-     * Token-aware scan for a trailing `OPTION (...)` query hint at the
-     * outermost level (outside string literals, quoted identifiers, and
-     * comments). Returns the SQL without the clause plus the clause text, or
-     * `null` when there is no trailing OPTION.
+     * Finds a trailing query-hint clause (the dialect's {@link SQLParserDialect.QueryHintKeyword},
+     * `OPTION (...)` on SQL Server) at the top level of the statement, outside string literals,
+     * quoted identifiers and comments. Returns the SQL without the clause plus the clause text, or
+     * `null` when the dialect has no hint clause or the statement does not end in one (only a
+     * semicolon may follow it).
      */
     private static splitTrailingOption(
         sql: string,
         dialect: SQLParserDialect,
     ): { sqlWithoutOption: string; optionClause: string } | null {
-        const quoteSample = dialect.QuoteIdentifier('x');
-        const recognizeBrackets = quoteSample.startsWith('[');
-        const recognizeBackticks = quoteSample.startsWith('`');
-        const n = sql.length;
-        const isWordChar = (ch: string): boolean =>
-            (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-            (ch >= '0' && ch <= '9') || ch === '_';
-
-        let i = 0;
-        let optionStart = -1;
-        while (i < n) {
-            const ch = sql[i];
-            if (ch === "'") { i = SQLParser.skipQuotedFrom(sql, i, "'"); continue; }
-            if (ch === '"') { i = SQLParser.skipQuotedFrom(sql, i, '"'); continue; }
-            if (recognizeBrackets && ch === '[') { i = SQLParser.skipQuotedFrom(sql, i, ']'); continue; }
-            if (recognizeBackticks && ch === '`') { i = SQLParser.skipQuotedFrom(sql, i, '`'); continue; }
-            if (ch === '-' && i + 1 < n && sql[i + 1] === '-') { while (i < n && sql[i] !== '\n') i++; continue; }
-            if (ch === '/' && i + 1 < n && sql[i + 1] === '*') {
-                i += 2;
-                while (i < n && !(sql[i] === '*' && i + 1 < n && sql[i + 1] === '/')) i++;
-                if (i < n) i += 2;
-                continue;
-            }
-
-            const prevIsWord = i > 0 && isWordChar(sql[i - 1]);
-            if (!prevIsWord && i + 6 <= n && sql.substring(i, i + 6).toUpperCase() === 'OPTION' &&
-                (i + 6 === n || !isWordChar(sql[i + 6]))) {
-                let j = i + 6;
-                while (j < n && /\s/.test(sql[j])) j++;
-                if (j < n && sql[j] === '(') {
-                    optionStart = i; // remember the last top-level OPTION (
-                    i = j;
-                    continue;
-                }
-            }
-            i++;
+        const keyword = dialect.QueryHintKeyword?.toUpperCase();
+        if (!keyword) return null;
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        let open = -1;
+        for (let i = 0; i < tokens.length - 1; i++) {
+            if (tokens[i].Depth === 0 && IsKeyword(tokens[i], keyword) && tokens[i + 1].Kind === 'open') open = i;
         }
-
-        if (optionStart === -1) return null;
-
-        // Match the balanced paren group following OPTION.
-        let k = optionStart + 6;
-        while (k < n && /\s/.test(sql[k])) k++;
-        let depth = 0;
-        for (; k < n; k++) {
-            const ch = sql[k];
-            if (ch === "'") { k = SQLParser.skipQuotedFrom(sql, k, "'") - 1; continue; }
-            if (ch === '(') depth++;
-            else if (ch === ')') { depth--; if (depth === 0) { k++; break; } }
-        }
-        if (depth !== 0) return null; // unbalanced — leave alone
-
-        const rest = sql.substring(k).trim();
-        if (rest !== '' && rest !== ';') return null; // not a trailing OPTION
-
+        if (open === -1) return null;
+        const close = tokens.findIndex((t, k) => k > open + 1 && t.Kind === 'close' && t.Depth === 0);
+        if (close === -1) return null; // unbalanced — leave alone
+        if (tokens.slice(close + 1).some(t => t.Kind !== 'semicolon')) return null; // not trailing
         return {
-            sqlWithoutOption: sql.substring(0, optionStart).trimEnd(),
-            optionClause: sql.substring(optionStart, k).trim(),
+            sqlWithoutOption: sql.substring(0, tokens[open].Start).trimEnd(),
+            optionClause: sql.substring(tokens[open].Start, tokens[close].End).trim(),
         };
     }
 
