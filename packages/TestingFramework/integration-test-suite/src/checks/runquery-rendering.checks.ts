@@ -191,6 +191,14 @@ const PLAIN_CASES: RenderCase[] = [
         Expect: items => items.filter(i => i.ID <= 45).map(i => ({ ID: i.ID, ScoreValue: i.Score }))
     },
     {
+        Name: 'RR PostgreSQL Quoted Strings With Comment Markers',
+        SQL: `SELECT ID, $$a -- b /* c */$$ AS Dollar, E'it\\'s -- not a comment' AS Escaped FROM ${T} WHERE ID <= 12 -- a real comment\nORDER BY ID`,
+        Platforms: ['postgresql'],
+        Columns: ['ID', 'Dollar', 'Escaped'],
+        Ordered: true,
+        Expect: items => items.filter(i => i.ID <= 12).map(i => ({ ID: i.ID, Dollar: 'a -- b /* c */', Escaped: "it's -- not a comment" }))
+    },
+    {
         Name: 'RR PostgreSQL Casts',
         SQL: `SELECT ID, CAST(Score AS VARCHAR(10)) AS ScoreText FROM ${T} WHERE ID <= 20 ORDER BY ID`,
         Variants: { postgresql: `SELECT ID, Score::text AS ScoreText FROM ${T} WHERE ID <= 20 ORDER BY ID` },
