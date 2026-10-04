@@ -182,3 +182,59 @@ describe('IsValidUUID', () => {
         expect(IsValidUUID('g1b2c3d4-e5f6-7890-abcd-ef1234567890')).toBe(false);
     });
 });
+
+/**
+ * UUIDsEqual compares without allocating, but must give EXACTLY the answer of the original
+ * expression for every input, including non-ASCII and every whitespace character `trim()` removes.
+ */
+describe('UUIDsEqual matches the original trim().toLowerCase() comparison', () => {
+    const reference = (a: string | null | undefined, b: string | null | undefined): boolean => {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return a.trim().toLowerCase() === b.trim().toLowerCase();
+    };
+
+    it('on UUID-shaped input in every casing and padding', () => {
+        const id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+        const variants = [id, id.toUpperCase(), ` ${id}`, `${id.toUpperCase()}\n`, ' ' + id + '﻿', id.replace('a1', 'a2')];
+        for (const a of variants) {
+            for (const b of variants) {
+                expect(UUIDsEqual(a, b), `${JSON.stringify(a)} vs ${JSON.stringify(b)}`).toBe(reference(a, b));
+            }
+        }
+    });
+
+    it('on Unicode case rules that ASCII folding cannot decide', () => {
+        const pairs: Array<[string, string]> = [
+            ['İ', 'i̇'],     // lower-cases to two code units
+            ['İ', 'i'],
+            ['K', 'K'],      // Kelvin sign lower-cases to ASCII 'k'
+            ['k', 'K'],
+            ['ß', 'SS'],
+            ['Σ', 'σ'],
+            ['aΣ', 'aς'],         // final-sigma rule
+            ['É', 'é'],
+            ['ÉA', 'éa'],
+            ['x', 'xé'],
+        ];
+        for (const [a, b] of pairs) {
+            expect(UUIDsEqual(a, b), `${a} vs ${b}`).toBe(reference(a, b));
+            expect(UUIDsEqual(b, a), `${b} vs ${a}`).toBe(reference(b, a));
+        }
+    });
+
+    it('on 100,000 seeded random pairs over ASCII, Unicode and whitespace', () => {
+        const alphabet = ['a', 'A', 'f', 'F', '0', '9', '-', ' ', '\t', '\n', ' ', ' ', '﻿', '　', 'İ', 'i', '̇', 'ß', 'K', 'K', 'é', 'É', 'Σ', 'σ', 'ς', 'z'];
+        let seed = 20260924;
+        const next = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+        const word = () => Array.from({ length: Math.floor(next() * 7) }, () => alphabet[Math.floor(next() * alphabet.length)]).join('');
+        let mismatches = 0;
+        for (let i = 0; i < 100_000; i++) {
+            const a = word();
+            // Bias half the pairs toward near-matches, which are the cases that exercise the fold.
+            const b = next() < 0.5 ? (next() < 0.5 ? a.toUpperCase() : ` ${a.toLowerCase()} `) : word();
+            if (UUIDsEqual(a, b) !== reference(a, b)) mismatches++;
+        }
+        expect(mismatches).toBe(0);
+    });
+});
