@@ -172,10 +172,43 @@ describe('RealTwilioBindings — REST mapping', () => {
         expect(rest.Updates[0].params.Twiml).toContain('<Dial>+15550001111</Dial>');
     });
 
-    it('playDigits updates with <Play digits> TwiML', async () => {
+    it('playDigits sends in-band tones over the media stream and never replaces the call TwiML', async () => {
+        const { bindings, rest, pump } = makeBindings();
+        await bindings.playDigits('CA9', '5');
+        expect(rest.Updates).toEqual([]); // a TwiML update would end <Connect><Stream> and the agent's audio
+        // 100 ms tone = 800 samples = 5 frames of 20 ms (160 samples each); every frame is a μ-law media frame.
+        expect(pump.Sent.length).toBe(5);
+        expect(pump.Sent.every((f) => f.callSid === 'CA9' && f.frame.event === 'media')).toBe(true);
+        const decoded = muLawToPcm16Buffer(Uint8Array.from(Buffer.from(pump.Sent.map((f) => f.frame.media!.payload).join(''), 'base64')).buffer);
+        const samples = new Int16Array(decoded);
+        const power = (freq: number): number => {
+            const coeff = 2 * Math.cos((2 * Math.PI * freq) / 8000);
+            let s1 = 0;
+            let s2 = 0;
+            for (const x of samples) {
+                const s0 = x + coeff * s1 - s2;
+                s2 = s1;
+                s1 = s0;
+            }
+            return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+        };
+        // Key 5 is 770 Hz + 1336 Hz.
+        expect(power(770)).toBeGreaterThan(power(697) * 20);
+        expect(power(1336)).toBeGreaterThan(power(1209) * 20);
+        expect(power(770)).toBeGreaterThan(power(852) * 20);
+    });
+
+    it('playDigits spans a gap between digits (two digits = 100 ms tone + 100 ms gap + 100 ms tone)', async () => {
+        const { bindings, pump } = makeBindings();
+        await bindings.playDigits('CA9', '12');
+        expect(pump.Sent.length).toBe(Math.ceil((800 + 800 + 800) / 160));
+    });
+
+    it('sayAndHangup replaces the TwiML with <Say> + <Hangup/> (the call is ending anyway)', async () => {
         const { bindings, rest } = makeBindings();
-        await bindings.playDigits('CA9', '456#');
-        expect(rest.Updates[0].params.Twiml).toContain('<Play digits="456#" />');
+        await bindings.sayAndHangup('CA9', 'We hit a problem & must end the call.');
+        expect(rest.Updates[0].callSid).toBe('CA9');
+        expect(rest.Updates[0].params.Twiml).toContain('<Say>We hit a problem &amp; must end the call.</Say><Hangup/>');
     });
 });
 

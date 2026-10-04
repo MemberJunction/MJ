@@ -146,6 +146,16 @@ export function BuildTransferNccoAction(toNumber: string): NccoAction[] {
     return [{ action: 'connect', endpoint: [{ type: 'phone', number: toNumber } as unknown as NccoEndpoint] }];
 }
 
+/**
+ * Builds a one-action NCCO that speaks `message` and ends — used with a Voice API transfer to say goodbye and
+ * hang up (the call ends when the NCCO has no further action).
+ *
+ * @param message The text to speak.
+ */
+export function BuildTalkNcco(message: string): NccoAction[] {
+    return [{ action: 'talk', text: message }];
+}
+
 /** @deprecated Use {@link BuildTransferNccoAction}. */
 export function buildTransferNccoAction(toNumber: string): NccoAction[] {
     return BuildTransferNccoAction(toNumber);
@@ -393,6 +403,11 @@ export class RealVonageBindings implements IVonageClientBindings {
                 cb();
             }
         });
+    }
+
+    /** @inheritdoc — a `talk` NCCO is the whole replacement script, so the call ends when it finishes speaking. */
+    public async sayAndHangup(callUuid: string, message: string): Promise<void> {
+        await this.voice.TransferCall(callUuid, { Ncco: BuildTalkNcco(message) });
     }
 
     /** @inheritdoc — barge-in: tell Vonage to discard its queued outbound audio so the agent stops mid-utterance. */

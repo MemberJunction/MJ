@@ -6,6 +6,7 @@ import {
     VONAGE_MEDIA_TOKEN_PARAM,
     BuildConnectNcco,
     BuildTransferNccoAction,
+    BuildTalkNcco,
     ParseVonageControlEvent,
     IVonageVoiceLike,
     IVonageMediaPump,
@@ -196,6 +197,14 @@ describe('RealVonageBindings — Voice API mapping', () => {
         const { bindings, voice } = makeBindings();
         await bindings.playDigits('von9', '456#');
         expect(voice.Dtmfs).toEqual([{ callUuid: 'von9', digits: '456#' }]);
+    });
+
+    it('sayAndHangup transfers to a one-action talk NCCO (the call ends when it finishes)', async () => {
+        const { bindings, voice } = makeBindings();
+        await bindings.sayAndHangup('von9', 'We hit a problem.');
+        expect(voice.Transfers[0].callUuid).toBe('von9');
+        expect(voice.Transfers[0].params.Ncco).toEqual(BuildTalkNcco('We hit a problem.'));
+        expect(voice.Transfers[0].params.Ncco).toEqual([{ action: 'talk', text: 'We hit a problem.' }]);
     });
 
     it('acceptInbound is a no-op (no Voice call — the answer webhook already returned the connect NCCO)', async () => {

@@ -26,7 +26,7 @@
  * @see `/plans/realtime/bridges-and-widget/telephony-vendor-bindings.md` §2, §3 (T1).
  */
 
-import { GenerateMediaToken, muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridge-base';
+import { GenerateDtmfPcm16, GenerateMediaToken, muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridge-base';
 import { ITwilioClientBindings } from './twilio-call-sdk';
 
 /**
@@ -207,7 +207,7 @@ export interface TwilioCreateCallParams {
 export interface TwilioUpdateCallParams {
     /** New call status — `'completed'` ends the call. */
     Status?: 'completed' | 'canceled';
-    /** Replacement TwiML — used for transfer (`<Dial>…`) and DTMF (`<Play digits>…`). */
+    /** Replacement TwiML — used for transfer (`<Dial>…`) and the goodbye-and-hang-up (`<Say>…<Hangup/>`). */
     Twiml?: string;
 }
 
@@ -337,9 +337,25 @@ export class RealTwilioBindings implements ITwilioClientBindings {
         });
     }
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     *
+     * Sent IN-BAND over the media stream as synthesized tones. The REST alternative (`<Play digits>`) replaces the
+     * call's TwiML, which ends `<Connect><Stream>` — the agent would lose the call's audio and the stream `stop`
+     * would tear the whole call down. Tones go out in 20 ms frames like any other agent audio, so they queue
+     * behind whatever the agent is already saying.
+     */
     public async playDigits(callSid: string, digits: string): Promise<void> {
-        await this.rest.UpdateCall(callSid, { Twiml: BuildPlayDigitsTwiML(digits) });
+        const tones = GenerateDtmfPcm16(digits, TWILIO_MEDIA_SAMPLE_RATE);
+        for (let offset = 0; offset < tones.length; offset += TWILIO_FRAME_SAMPLES) {
+            const frame = tones.slice(offset, offset + TWILIO_FRAME_SAMPLES);
+            this.pushStreamAudio(callSid, frame.buffer.slice(frame.byteOffset, frame.byteOffset + frame.byteLength) as ArrayBuffer);
+        }
+    }
+
+    /** @inheritdoc */
+    public async sayAndHangup(callSid: string, message: string): Promise<void> {
+        await this.rest.UpdateCall(callSid, { Twiml: BuildSayHangupTwiML(message) });
     }
 
     /** @inheritdoc */
@@ -373,7 +389,23 @@ export class RealTwilioBindings implements ITwilioClientBindings {
     }
 }
 
-/** Builds the `<Play digits>` TwiML used to emit DTMF tones on a live call (REST update). */
+/** Twilio Media Streams audio rate (G.711 μ-law at 8 kHz). */
+const TWILIO_MEDIA_SAMPLE_RATE = 8000;
+
+/** Samples per 20 ms Media-Streams frame at {@link TWILIO_MEDIA_SAMPLE_RATE}. */
+const TWILIO_FRAME_SAMPLES = 160;
+
+/** Builds the `<Say>…</Say><Hangup/>` TwiML that speaks a goodbye and ends the call (REST update). */
+export function BuildSayHangupTwiML(message: string): string {
+    return '<?xml version="1.0" encoding="UTF-8"?><Response>' + `<Say>${escapeXmlAttribute(message)}</Say><Hangup/>` + '</Response>';
+}
+
+/**
+ * Builds the `<Play digits>` TwiML for a REST-update DTMF send.
+ *
+ * Not used for live agent calls: replacing the TwiML ends the `<Connect><Stream>`, so {@link RealTwilioBindings}
+ * sends DTMF in-band instead. Kept for callers outside a media-streamed call.
+ */
 export function BuildPlayDigitsTwiML(digits: string): string {
     return (
         '<?xml version="1.0" encoding="UTF-8"?>' +

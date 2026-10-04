@@ -19,6 +19,7 @@ import {
     MJAIBridgeProviderChannelEntity,
     MJAIAgentSessionBridgeEntity,
     MJAIAgentSessionBridgeParticipantEntity,
+    MJAIAgentSessionEntity,
 } from '@memberjunction/core-entities';
 import {
     AIBridgeEngineBase,
@@ -42,6 +43,8 @@ import {
     BridgeNativeSdkBinding,
 } from '@memberjunction/ai-bridge-base';
 import { MultiAgentRoomCoordinator } from './multi-agent-room-coordinator';
+import { DtmfCoalescer } from './dtmf-coalescer';
+import { AppendTranscriptTurn, BridgeTranscriptTurn, BuildPriorTranscript } from './bridge-prior-transcript';
 
 /**
  * Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place.
@@ -93,6 +96,25 @@ const ROOM_AGENT_TURN_HARD_CEILING = 30;
 const SESSION_IDLE_TTL_MS = 10 * 60 * 1000; // 10 min with no transcript activity
 const SESSION_MAX_DURATION_MS = 4 * 60 * 60 * 1000; // 4 h absolute cap
 const STALE_SWEEP_INTERVAL_MS = 60 * 1000; // sweep cadence when self-scheduled
+
+/**
+ * How often a live session's `MJ: AI Agent Sessions.LastActiveAt` is refreshed. The host session janitor closes any
+ * session idle past its threshold (15 min by default); a phone call that never touches the row would be closed
+ * mid-call, finalizing its run while the caller is still talking. Well under that threshold.
+ */
+const SESSION_HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
+
+/** How often prior-boot orphans are reconciled after the one-off pass at startup. */
+const ORPHAN_RECONCILE_INTERVAL_MS = 10 * 60 * 1000;
+
+/** How many times a dropped model session is re-opened before the call is ended. Never a loop. */
+const MAX_MODEL_RECOVERY_ATTEMPTS = 1;
+
+/** Said to the caller, at the carrier, when the model session is lost and cannot be recovered. */
+const MODEL_LOSS_CALLER_MESSAGE =
+    'We are sorry, we are having technical difficulties and cannot continue this call. Please try again later. Goodbye.';
+
+const AGENT_SESSION_ENTITY = 'MJ: AI Agent Sessions';
 
 /** Context note injected into a re-gated agent so it knows it's now in a meeting (its prompt predates it). */
 const MEETING_REGATE_CONTEXT_NOTE =
@@ -373,7 +395,50 @@ export interface StartBridgeSessionParams {
      * + per-agent `turnTaking.mode` from this agent's config.
      */
     TargetAgentID?: string;
+
+    /**
+     * Where THIS session's final transcript lines go. When set, every final line (both roles) is written through
+     * it directly — no room scribe is elected and the process-wide transcript sink is bypassed. A phone call uses
+     * it to write into the call's own conversation instead of a shared "Meeting Room" one.
+     */
+    TranscriptSink?: BridgeTranscriptSink;
+
+    /**
+     * Called when the caller/participant talks over the agent (a true barge-in). The telephony host uses it to drop
+     * queued spoken progress, which is now stale. It must NOT abort delegated work: the host policy (mirroring the
+     * browser runtime, `RealtimeSessionRuntime.ts` ~L1956-1963) is that the user keeps talking while delegated work
+     * runs, and cancelling on speech would kill exactly the jobs they asked for. Explicit cancellation is a separate
+     * act (the phone's `cancel_pending_work` tool). Must not throw; a throw is logged and swallowed.
+     */
+    OnBargeIn?: () => void;
+
+    /**
+     * Re-opens the model session after it drops mid-call, seeded with the conversation so far. When absent a
+     * dropped model session ends the call. Called at most {@link MAX_MODEL_RECOVERY_ATTEMPTS} time(s) per session;
+     * the returned session MUST use the same audio sample rates as the one it replaces.
+     */
+    RecoverRealtimeSession?: BridgeRealtimeSessionRecovery;
+
+    /**
+     * Called once at the end of {@link AIBridgeEngine.StopBridgeSession} for this session, after the bridge row is
+     * terminal — the place for the host to close the rest of the session's bookkeeping (the agent session row, a
+     * capacity lease). Must not throw; a throw is logged and swallowed.
+     */
+    OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
 }
+
+/** What {@link StartBridgeSessionParams.RecoverRealtimeSession} is told about the loss it is recovering from. */
+export interface BridgeRealtimeSessionRecoveryRequest {
+    /** Role-tagged transcript of the conversation so far, ready to frame into the new session's prompt. */
+    PriorTranscript: string;
+    /** 1-based attempt number. */
+    Attempt: number;
+    /** Why the previous session was considered lost. */
+    Reason: string;
+}
+
+/** Opens a replacement realtime model session after the current one was lost. */
+export type BridgeRealtimeSessionRecovery = (request: BridgeRealtimeSessionRecoveryRequest) => Promise<IRealtimeSession>;
 
 /**
  * The live, in-memory handle for one running bridged session held by the engine. Carries the driver,
@@ -503,6 +568,36 @@ export interface ActiveBridgeSession {
      * when no channel host was supplied. Never throws — resolves to a structured failure.
      */
     ExecuteServerChannelTool?: (toolName: string, argsJson: string) => Promise<BridgeChannelToolResult>;
+
+    /** This session's own transcript sink (see {@link StartBridgeSessionParams.TranscriptSink}), when supplied. */
+    TranscriptSink?: BridgeTranscriptSink;
+
+    /** Barge-in hook (see {@link StartBridgeSessionParams.OnBargeIn}). */
+    OnBargeIn?: () => void;
+
+    /** Model-session recovery factory (see {@link StartBridgeSessionParams.RecoverRealtimeSession}). */
+    RecoverRealtimeSession?: BridgeRealtimeSessionRecovery;
+
+    /** End-of-session hook (see {@link StartBridgeSessionParams.OnSessionEnded}). */
+    OnSessionEnded?: (reason: BridgeDisconnectReason) => void | Promise<void>;
+
+    /** The last final transcript turns, kept so a re-opened model session can be told what was said. */
+    TranscriptTail: BridgeTranscriptTurn[];
+
+    /** How many times the model session has been re-opened (capped by {@link MAX_MODEL_RECOVERY_ATTEMPTS}). */
+    ModelRecoveryAttempts: number;
+
+    /** Whether a model-session recovery is in flight; inbound audio is dropped meanwhile. */
+    ModelRecovering: boolean;
+
+    /** Set once the session is being torn down, so a model-loss signal during teardown is ignored. */
+    Ending: boolean;
+
+    /** Coalesces the caller's keypad presses into one note for the model (telephony only). */
+    DtmfCoalescer?: DtmfCoalescer;
+
+    /** Epoch-ms of the last write of the agent session row's `LastActiveAt`. */
+    LastSessionHeartbeatMs: number;
 }
 
 /**
@@ -548,6 +643,9 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
     /** Interval handle for the self-scheduled stale-session sweep (started via {@link StartStaleSessionSweep}). */
     private staleSweepTimer?: ReturnType<typeof setInterval>;
+
+    /** Interval handle for the periodic prior-boot orphan reconciliation (see {@link StartOrphanReconciliation}). */
+    private orphanReconcileTimer?: ReturnType<typeof setInterval>;
 
     // Session timing thresholds (defaults from the module consts; overridable via {@link ConfigureSessionTimings}).
     private idleTtlMs = SESSION_IDLE_TTL_MS;
@@ -633,6 +731,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Begin reaping stale live sessions (idle / over-duration) — the same-process backstop to the
         // occupancy auto-leave + the prior-boot orphan reconcile. Idempotent.
         this.StartStaleSessionSweep();
+        // Reconcile prior-boot orphans now and periodically. Needs a user + provider for the writes.
+        if (contextUser && provider) {
+            this.StartOrphanReconciliation(contextUser, provider);
+        }
     }
 
     /**
@@ -888,6 +990,15 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 MetadataProvider: params.MetadataProvider,
                 ChannelHost: params.ChannelHost,
                 ServerChannelTools: [],
+                TranscriptSink: params.TranscriptSink,
+                OnBargeIn: params.OnBargeIn,
+                RecoverRealtimeSession: params.RecoverRealtimeSession,
+                OnSessionEnded: params.OnSessionEnded,
+                TranscriptTail: [],
+                ModelRecoveryAttempts: 0,
+                ModelRecovering: false,
+                Ending: false,
+                LastSessionHeartbeatMs: Date.now(),
             };
 
             this.electTranscriptScribe(active);
@@ -933,18 +1044,30 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         const active = this.activeSessions.get(key);
 
         if (active) {
+            active.Ending = true; // ignore model-loss signals that race the teardown
             await this.disconnectDriver(active, reason);
             this.activeSessions.delete(key);
-            return this.markBridgeDisconnected(
+            const done = await this.markBridgeDisconnected(
                 sessionBridgeID,
                 reason,
                 active.ContextUser ?? contextUser,
                 active.MetadataProvider ?? provider,
             );
+            await this.runSessionEndedHook(active, reason);
+            return done;
         }
 
         // Not held by this process — still reconcile the durable row (janitor / cross-host close).
         return this.markBridgeDisconnected(sessionBridgeID, reason, contextUser, provider);
+    }
+
+    /** Runs the host's end-of-session hook. A failure is logged — teardown bookkeeping must not be blocked by it. */
+    private async runSessionEndedHook(active: ActiveBridgeSession, reason: BridgeDisconnectReason): Promise<void> {
+        try {
+            await active.OnSessionEnded?.(reason);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] session-ended hook failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────────
@@ -971,26 +1094,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param active The live bridged session whose driver and realtime session are wired together.
      */
     private wireTransportSeam(active: ActiveBridgeSession): void {
-        const { Bridge, RealtimeSession } = active;
-
-        // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
-        // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
-        // agent goes quiet immediately. Without this, interruption "doesn't work" on the bridge surface.
-        RealtimeSession.OnInterruption(() => {
-            if (this.diagOutbound.has(active.SessionBridgeID)) {
-                LogStatusEx({ message: `[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`, verboseOnly: true });
-            }
-            Bridge.FlushOutboundMedia();
-            // A human cut in → any moderator decision staged for the prior turn is now stale. Drop the queued
-            // speakers (the human's new turn will drive a fresh decision); also free the floor this agent held.
-            if (active.RoomKey) {
-                this.clearRoomModeratorState(active.RoomKey, false);
-                if (active.HoldsFloor) {
-                    this.releaseRoomFloor(active);
-                }
-            }
-        });
-
+        const { Bridge } = active;
+        this.wireModelSession(active);
         if (Bridge.Features.DetachedMediaPlane) {
             // Detached media plane (e.g. OpenAISipBridge): the carrier/platform terminates the media leg
             // directly with the AI provider. MJ is NOT in the media relay path.
@@ -999,6 +1104,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
         // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's
         // Track tags the plane, so a human's camera (`video-in`) reaches the model as a `video` frame.
+        // Always read `active.RealtimeSession` — a recovered session replaces it mid-call.
         Bridge.OnMedia((frame: BridgeMediaFrame) => {
             active.LastActivityMs = Date.now();
             // DIARIZATION: the inbound frame carries the speaking participant's identity (when the provider
@@ -1009,17 +1115,42 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 active.LastInboundSpeaker = frame.SpeakerLabel;
             }
             const chunk = this.frameToArrayBuffer(frame);
-            if (chunk) {
+            if (chunk && !active.ModelRecovering) {
                 if (!this.diagInbound.has(active.SessionBridgeID)) {
                     this.diagInbound.add(active.SessionBridgeID);
                     LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST inbound media frame reached the agent (bridge ${active.SessionBridgeID}, track=${frame.Track}). The agent is HEARING you.`, verboseOnly: true });
                 }
-                RealtimeSession.SendInput(chunk, frame.Track === 'video-in' ? 'video' : 'audio');
+                active.RealtimeSession.SendInput(chunk, frame.Track === 'video-in' ? 'video' : 'audio');
             }
         });
+    }
+
+    /**
+     * Wires everything that hangs off the MODEL session: barge-in, the lifecycle (drop) signals, and — unless the
+     * media plane is detached — the agent's outbound audio/video. Called at connect AND again for a replacement
+     * session after a recovery, so every handler checks it still belongs to the active session.
+     *
+     * @param active The live bridged session.
+     */
+    private wireModelSession(active: ActiveBridgeSession): void {
+        const { Bridge } = active;
+        const session = active.RealtimeSession;
+
+        // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
+        // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
+        // agent goes quiet immediately. Without this, interruption "doesn't work" on the bridge surface.
+        session.OnInterruption(() => this.handleBargeIn(active));
+        this.wireModelLifecycle(active, session);
+
+        if (Bridge.Features.DetachedMediaPlane) {
+            return;
+        }
 
         // Outbound: the agent speaks → into the meeting/call.
-        RealtimeSession.OnOutput((chunk: ArrayBuffer) => {
+        session.OnOutput((chunk: ArrayBuffer) => {
+            if (active.RealtimeSession !== session) {
+                return; // a stale (replaced) session
+            }
             active.LastActivityMs = Date.now();
             if (!this.diagOutbound.has(active.SessionBridgeID)) {
                 this.diagOutbound.add(active.SessionBridgeID);
@@ -1032,11 +1163,40 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Outbound VIDEO: a video-capable session ALSO emits a synced avatar/video track. Optional —
         // audio-only sessions don't implement OnVideoOutput, so call it null-safely. The bridge driver
         // gates the actual publish on its `VideoOut` capability.
-        RealtimeSession.OnVideoOutput?.((chunk: ArrayBuffer) => {
+        session.OnVideoOutput?.((chunk: ArrayBuffer) => {
+            if (active.RealtimeSession !== session) {
+                return;
+            }
             active.LastActivityMs = Date.now();
             const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
+    }
+
+    /** A true barge-in: flush queued audio, drop stale room moderator state, free the floor, tell the host. */
+    private handleBargeIn(active: ActiveBridgeSession): void {
+        if (this.diagOutbound.has(active.SessionBridgeID)) {
+            LogStatusEx({ message: `[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`, verboseOnly: true });
+        }
+        active.Bridge.FlushOutboundMedia();
+        // A human cut in → any moderator decision staged for the prior turn is now stale. Drop the queued
+        // speakers (the human's new turn will drive a fresh decision); also free the floor this agent held.
+        if (active.RoomKey) {
+            this.clearRoomModeratorState(active.RoomKey, false);
+            if (active.HoldsFloor) {
+                this.releaseRoomFloor(active);
+            }
+        }
+        this.notifyBargeIn(active);
+    }
+
+    /** Tells the host about a barge-in so it can drop now-stale narration (never delegated work). A hook failure is logged, never fatal. */
+    private notifyBargeIn(active: ActiveBridgeSession): void {
+        try {
+            active.OnBargeIn?.();
+        } catch (err) {
+            LogError(`[AIBridgeEngine] barge-in hook failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**
@@ -1131,6 +1291,112 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 LogStatus(`[AIBridgeEngine] Telephony call ended for bridge ${active.SessionBridgeID} — stopping bridge session.`);
                 void this.StopBridgeSession(active.SessionBridgeID, 'HostEnded', active.ContextUser, active.MetadataProvider);
             });
+            this.wireInboundDtmf(active, active.Bridge);
+        }
+    }
+
+    /**
+     * Routes the caller's keypad presses to the model as one short context note per burst ("the caller pressed
+     * 1234"). Capability-gated: a provider with DTMF off throws from `OnDTMF`, which just means no keypad input.
+     */
+    private wireInboundDtmf(active: ActiveBridgeSession, bridge: BaseTelephonyBridge): void {
+        const coalescer = new DtmfCoalescer((digits) => {
+            if (!active.Ending) {
+                active.RealtimeSession.SendContextNote?.(`[caller keypad] The caller pressed: ${digits}`);
+            }
+        });
+        try {
+            bridge.OnDTMF((digits) => coalescer.Push(digits));
+            active.DtmfCoalescer = coalescer;
+        } catch (err) {
+            coalescer.Dispose();
+            LogStatusEx({ message: `[AIBridgeEngine] inbound DTMF not routed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`, verboseOnly: true });
+        }
+    }
+
+    /**
+     * Subscribes to the model session's fatal-error and unexpected-close signals. Either means the caller is now
+     * talking to a dead line, so it starts {@link handleModelLoss}. Both can fire for one drop; the handler
+     * de-duplicates.
+     */
+    private wireModelLifecycle(active: ActiveBridgeSession, session: IRealtimeSession): void {
+        session.OnError((error) => {
+            if (error.Fatal) {
+                void this.handleModelLoss(active, session, `fatal session error${error.Code ? ` [${error.Code}]` : ''}: ${error.Message}`);
+            }
+        });
+        session.OnClose?.(() => {
+            void this.handleModelLoss(active, session, 'the provider closed the connection');
+        });
+    }
+
+    /**
+     * The model session dropped mid-call. Re-open it ONCE, seeded with what was said, and carry on; if that is not
+     * possible (no recovery factory, attempts spent, the factory fails, or the replacement uses different audio
+     * rates) end the call cleanly instead of leaving the caller in silence.
+     */
+    private async handleModelLoss(active: ActiveBridgeSession, lost: IRealtimeSession, why: string): Promise<void> {
+        if (active.Ending || active.ModelRecovering || active.RealtimeSession !== lost) {
+            return; // already tearing down, already recovering, or a signal from a session we replaced
+        }
+        LogError(`[AIBridgeEngine] model session lost for bridge ${active.SessionBridgeID}: ${why}`);
+        if (!active.RecoverRealtimeSession || active.ModelRecoveryAttempts >= MAX_MODEL_RECOVERY_ATTEMPTS) {
+            await this.endCallAfterModelLoss(active);
+            return;
+        }
+        active.ModelRecovering = true;
+        active.ModelRecoveryAttempts++;
+        try {
+            const fresh = await active.RecoverRealtimeSession({
+                PriorTranscript: BuildPriorTranscript(active.TranscriptTail),
+                Attempt: active.ModelRecoveryAttempts,
+                Reason: why,
+            });
+            await this.adoptRecoveredSession(active, lost, fresh);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] model session recovery failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+            active.ModelRecovering = false;
+            await this.endCallAfterModelLoss(active);
+        }
+    }
+
+    /** Swaps a recovered model session in for the lost one, or refuses it when it cannot carry the call's audio. */
+    private async adoptRecoveredSession(active: ActiveBridgeSession, lost: IRealtimeSession, fresh: IRealtimeSession): Promise<void> {
+        const sameRates = (fresh.InputSampleRate ?? 24000) === (lost.InputSampleRate ?? 24000) && (fresh.OutputSampleRate ?? 24000) === (lost.OutputSampleRate ?? 24000);
+        if (active.Ending || !sameRates) {
+            await this.closeQuietly(fresh);
+            throw new Error(active.Ending ? 'the call ended during recovery' : 'the replacement session uses different audio sample rates');
+        }
+        active.RealtimeSession = fresh;
+        this.wireModelSession(active);
+        this.wireTurnTaking(active);
+        active.ModelRecovering = false;
+        LogStatus(`[AIBridgeEngine] model session re-opened for bridge ${active.SessionBridgeID} (attempt ${active.ModelRecoveryAttempts}).`);
+        await this.closeQuietly(lost); // releases the dead socket and finalizes its observability run
+    }
+
+    /** Ends a call whose model session cannot be recovered: a spoken goodbye at the carrier (telephony), then a clean stop. */
+    private async endCallAfterModelLoss(active: ActiveBridgeSession): Promise<void> {
+        if (active.Ending) {
+            return;
+        }
+        active.Ending = true; // a signal that races this one must not start a second teardown
+        if (active.Bridge instanceof BaseTelephonyBridge) {
+            try {
+                await active.Bridge.AnnounceAndEndCall(MODEL_LOSS_CALLER_MESSAGE);
+            } catch (err) {
+                LogError(`[AIBridgeEngine] could not announce the failure to the caller on bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        await this.StopBridgeSession(active.SessionBridgeID, 'Error', active.ContextUser, active.MetadataProvider);
+    }
+
+    /** Closes a realtime session, logging (never throwing) a provider error. */
+    private async closeQuietly(session: IRealtimeSession): Promise<void> {
+        try {
+            await session.Close();
+        } catch (err) {
+            LogError(`[AIBridgeEngine] closing a realtime session failed: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -1279,13 +1545,20 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param active The live bridged session.
      */
     private wireTurnTaking(active: ActiveBridgeSession): void {
-        active.RealtimeSession.OnTranscript((t: RealtimeTranscript) => {
+        const session = active.RealtimeSession;
+        session.OnTranscript((t: RealtimeTranscript) => {
+            if (active.RealtimeSession !== session) {
+                return; // a stale (replaced) session
+            }
             active.LastActivityMs = Date.now(); // any transcript = the session is alive (drives the idle sweep)
             if (!t.IsFinal) {
                 return; // partials fire per-word — act only on a completed turn (and don't flood the log)
             }
             LogStatusEx({ message: `[AIBridgeEngine][diag] transcript(final): role=${t.Role} text="${(t.Text ?? '').slice(0, 80)}" (bridge ${active.SessionBridgeID})`, verboseOnly: true });
-            // Persist the unified room transcript (scribe only — emits both roles).
+            if (t.Role === 'user' || t.Role === 'assistant') {
+                AppendTranscriptTurn(active.TranscriptTail, { Role: t.Role, Text: t.Text ?? '' });
+            }
+            // Persist the transcript: this session's own sink, or the unified room transcript (scribe only).
             this.emitTranscriptLine(active, t);
             // Record into the room's diarized lookback so the moderator (and observability) see the full thread.
             this.recordRoomTurn(active, t);
@@ -1769,8 +2042,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param active The freshly connected session.
      */
     private electTranscriptScribe(active: ActiveBridgeSession): void {
-        if (!this.transcriptSink || !active.RoomKey) {
-            return;
+        if (active.TranscriptSink || !this.transcriptSink || !active.RoomKey) {
+            return; // a session with its own sink never takes part in the room's scribe election
         }
         const roomKey = active.RoomKey.toLowerCase();
         if (!this.roomScribes.has(roomKey)) {
@@ -1816,7 +2089,8 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
      * @param t The final transcript line.
      */
     private emitTranscriptLine(active: ActiveBridgeSession, t: RealtimeTranscript): void {
-        if (!active.IsTranscriptScribe || !this.transcriptSink || !active.RoomKey) {
+        const sink = active.TranscriptSink ?? (active.IsTranscriptScribe ? this.transcriptSink : undefined);
+        if (!sink || !active.RoomKey) {
             return;
         }
         const text = (t.Text ?? '').trim();
@@ -1825,7 +2099,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         const isAgentSpeech = t.Role === 'assistant';
         void Promise.resolve(
-            this.transcriptSink(
+            sink(
                 {
                     RoomKey: active.RoomKey,
                     AgentSessionID: active.AgentSessionID,
@@ -1976,12 +2250,86 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             return;
         }
         this.staleSweepTimer = setInterval(() => {
-            void this.SweepStaleSessions().catch((err) =>
-                LogError(`[AIBridgeEngine] stale sweep tick failed: ${err instanceof Error ? err.message : String(err)}`),
-            );
+            void this.SweepStaleSessions()
+                .then(() => this.HeartbeatLiveSessions())
+                .catch((err) => LogError(`[AIBridgeEngine] stale sweep tick failed: ${err instanceof Error ? err.message : String(err)}`));
         }, intervalMs);
         // Don't keep the process alive solely for the sweep (Node-only; guarded for non-Node hosts).
         (this.staleSweepTimer as { unref?: () => void })?.unref?.();
+    }
+
+    /**
+     * Refreshes `LastActiveAt` on the agent-session row of every live bridge that has not been touched for
+     * {@link SESSION_HEARTBEAT_INTERVAL_MS}. The host session janitor closes sessions idle past its threshold; a
+     * long phone call writes nothing else to the row, so without this it would be closed (and its run finalized)
+     * mid-call. Tolerant: a failed write is logged and the rest are still touched.
+     *
+     * @param nowMs Current epoch-ms (injectable for tests).
+     * @returns The number of rows refreshed.
+     */
+    public async HeartbeatLiveSessions(nowMs: number = Date.now()): Promise<number> {
+        let touched = 0;
+        for (const active of this.activeSessions.values()) {
+            if (nowMs - active.LastSessionHeartbeatMs < SESSION_HEARTBEAT_INTERVAL_MS) {
+                continue;
+            }
+            active.LastSessionHeartbeatMs = nowMs;
+            if (await this.touchAgentSession(active)) {
+                touched++;
+            }
+        }
+        return touched;
+    }
+
+    /** Writes `LastActiveAt = now` on the session's agent-session row. Returns whether it saved. */
+    private async touchAgentSession(active: ActiveBridgeSession): Promise<boolean> {
+        const provider = active.MetadataProvider;
+        if (!provider || !active.AgentSessionID) {
+            return false;
+        }
+        try {
+            const row = await provider.GetEntityObject<MJAIAgentSessionEntity>(AGENT_SESSION_ENTITY, active.ContextUser);
+            if (!(await row.Load(active.AgentSessionID))) {
+                return false;
+            }
+            row.LastActiveAt = new Date();
+            if (await row.Save()) {
+                return true;
+            }
+            LogError(`[AIBridgeEngine] session heartbeat save failed for ${active.AgentSessionID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] session heartbeat failed for ${active.AgentSessionID}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return false;
+    }
+
+    /**
+     * Reconciles prior-boot orphans ({@link ReconcileOrphans}) once now and then every
+     * {@link ORPHAN_RECONCILE_INTERVAL_MS}. Idempotent — a no-op while already scheduled. The timer is `unref`'d.
+     *
+     * @param contextUser The user the reconciliation writes run as.
+     * @param provider The metadata provider for the reads/writes.
+     */
+    public StartOrphanReconciliation(contextUser: UserInfo, provider: IMetadataProvider, intervalMs: number = ORPHAN_RECONCILE_INTERVAL_MS): void {
+        if (this.orphanReconcileTimer) {
+            return;
+        }
+        const tick = (): void => {
+            void this.ReconcileOrphans(contextUser, provider).catch((err) =>
+                LogError(`[AIBridgeEngine] orphan reconciliation failed: ${err instanceof Error ? err.message : String(err)}`),
+            );
+        };
+        tick();
+        this.orphanReconcileTimer = setInterval(tick, intervalMs);
+        (this.orphanReconcileTimer as { unref?: () => void })?.unref?.();
+    }
+
+    /** Cancels the periodic orphan reconciliation, if running. */
+    public StopOrphanReconciliation(): void {
+        if (this.orphanReconcileTimer) {
+            clearInterval(this.orphanReconcileTimer);
+            this.orphanReconcileTimer = undefined;
+        }
     }
 
     /** Cancels the self-scheduled stale-session sweep, if running. */
@@ -2214,6 +2562,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             clearTimeout(active.LeaveGraceTimer);
             active.LeaveGraceTimer = undefined;
         }
+        active.DtmfCoalescer?.Dispose();
         // Hand the transcript scribe role to another live session in the room (if this was the scribe), so a
         // multi-agent room keeps recording after the first agent leaves. Done before the active map removal.
         this.releaseTranscriptScribe(active);

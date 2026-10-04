@@ -1372,6 +1372,8 @@ const setupComplete$ = new ReplaySubject(1);
     const sharedTelephonySettings: Record<string, unknown> = {
       inboundRunAsUserEmail: configInfo.telephony.inboundRunAsUserEmail,
       maxCallSeconds: configInfo.telephony.maxCallSeconds,
+      maxConcurrentCalls: configInfo.telephony.maxConcurrentCalls,
+      transferTargets: configInfo.telephony.transferTargets,
       outbound: configInfo.telephony.outbound,
     };
     if (configInfo.telephony.twilio) {

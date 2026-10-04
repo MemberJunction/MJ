@@ -11,6 +11,10 @@ export * from './mediaSocketAuth.js';
 export * from './callLifecycleTracker.js';
 export * from './callEndObserver.js';
 export * from './telephonySettings.js';
+export * from './callerIdentity.js';
+export * from './telephonyCapacity.js';
+export * from './telephonyCallTools.js';
+export * from './telephonyCallSession.js';
 export * from './webhookParams.js';
 
 // ── Twilio Programmable Voice + Media Streams ──────────────────────────────────────────

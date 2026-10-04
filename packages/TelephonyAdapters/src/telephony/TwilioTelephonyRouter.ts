@@ -31,7 +31,7 @@ import type { TwilioTelephonyConfig } from '../types.js';
 import { TwilioCallMediaRegistry } from './twilioMediaRegistry.js';
 import { TwilioTelephonyService } from './TwilioTelephonyService.js';
 import { ResolveInboundContext } from './runAsIdentity.js';
-import { TrimTrailingSlashes } from './telephonySettings.js';
+import { PublicOrigin } from './telephonySettings.js';
 import { CoerceWebhookParams } from './webhookParams.js';
 
 /** The mount path for the Twilio telephony public router. */
@@ -43,6 +43,10 @@ export const TWILIO_MEDIA_WSS_PATH = '/telephony/twilio/media';
 /** A polite TwiML response played when no agent is available for the dialed number. */
 const NO_AGENT_TWIML =
     '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, no agent is available to take this call.</Say><Hangup/></Response>';
+
+/** A polite TwiML response played when every agent line is in use (the server is at its concurrent-call cap). */
+const BUSY_TWIML =
+    '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, all of our agents are busy right now. Please try again in a few minutes.</Say><Hangup/></Response>';
 
 /** A polite TwiML response played when MJ cannot admit the call (no run-as user, malformed webhook, …). */
 const UNAVAILABLE_TWIML =
@@ -109,7 +113,9 @@ export function createTwilioTelephonyHandler(
  */
 function verifyTwilioRequest(config: TwilioTelephonyConfig, publicUrl: string, req: Request, res: Response): Record<string, string> | null {
     const params = CoerceWebhookParams(req.body);
-    const fullUrl = `${TrimTrailingSlashes(publicUrl)}${req.originalUrl}`;
+    // Extension routes mount at the app root, so the signed URL is the public ORIGIN + the request's own path;
+    // the public URL's own path (e.g. `/graphql`) must not be counted twice.
+    const fullUrl = `${PublicOrigin(publicUrl)}${req.originalUrl}`;
     if (!config.authToken || !verifyTwilioSignature(config.authToken, req.get('X-Twilio-Signature'), fullUrl, params)) {
         res.status(403).type('text/plain').send('Invalid Twilio signature.');
         return null;
@@ -161,7 +167,7 @@ async function admitAndAnswer(
     const result = await service.HandleInboundCall(call, user, provider);
     if (!result.accepted || !result.MediaToken) {
         LogStatus(`[Telephony][Twilio] inbound ${call.callSid} not accepted: ${result.reason ?? 'unknown'}`);
-        res.status(200).type('text/xml').send(NO_AGENT_TWIML);
+        res.status(200).type('text/xml').send(result.Busy ? BUSY_TWIML : NO_AGENT_TWIML);
         return;
     }
     res.status(200).type('text/xml').send(BuildInboundVoiceTwiML(config.streamPublicUrl, { [TWILIO_MEDIA_TOKEN_PARAMETER]: result.MediaToken }));

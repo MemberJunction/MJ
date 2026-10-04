@@ -91,6 +91,21 @@ beforeEach(() => {
     vi.mocked(ResolveInboundContext).mockReturnValue({ Ok: true, User: USER, Provider: PROVIDER });
 });
 
+describe('signature URL', () => {
+    it('is the public ORIGIN plus the request path, even when the public URL carries the GraphQL path', async () => {
+        const service = fakeService();
+        const publicUrl = 'https://api.acme.com/graphql';
+        const path = '/telephony/twilio/status';
+        const params = { CallSid: 'CA1', CallStatus: 'completed' };
+        const signature = ComputeTwilioSignature(AUTH_TOKEN, `https://api.acme.com${path}`, params);
+        const req = { body: params, originalUrl: path, get: (h: string) => (h === 'X-Twilio-Signature' ? signature : undefined) } as unknown as Request;
+        const res = fakeRes();
+        await HandleTwilioStatusCallback(service, CONFIG, publicUrl, req, res);
+        expect(res.statusCode).not.toBe(403);
+        expect(service.HandleStatusCallback).toHaveBeenCalledWith('CA1', 'completed');
+    });
+});
+
 describe('POST /voice (HandleTwilioInboundVoice)', () => {
     it('answers 403 and never touches the service when the signature is wrong', async () => {
         const service = fakeService();
@@ -173,6 +188,18 @@ describe('POST /voice (HandleTwilioInboundVoice)', () => {
         await HandleTwilioInboundVoice(fakeService(), CONFIG, PUBLIC_URL, signedReq('/telephony/twilio/voice', { CallSid: 'CA1' }), res);
         expect(res.statusCode).toBe(200);
         expect(String(res.body)).toContain('<Hangup/>');
+    });
+});
+
+describe('POST /voice — concurrent-call cap', () => {
+    it('answers a polite "all agents are busy" (not "no agent") when the server is at its cap', async () => {
+        const service = fakeService({ HandleInboundCall: vi.fn(async () => ({ accepted: false, Busy: true, reason: 'All agent lines are busy.' })) });
+        const res = fakeRes();
+        await HandleTwilioInboundVoice(service, CONFIG, PUBLIC_URL, signedReq('/telephony/twilio/voice', VOICE_PARAMS), res);
+        expect(res.statusCode).toBe(200);
+        expect(String(res.body)).toMatch(/busy/i);
+        expect(String(res.body)).toContain('<Hangup/>');
+        expect(String(res.body)).not.toContain('no agent is available');
     });
 });
 

@@ -124,6 +124,14 @@ describe('POST /answer (HandleVonageInboundAnswer)', () => {
         expect(JSON.stringify(res.body)).toContain('connect');
     });
 
+    it('answers a polite "all agents are busy" NCCO (not "no agent") when the server is at its cap', async () => {
+        const service = fakeService({ HandleInboundCall: vi.fn(async () => ({ accepted: false, Busy: true, reason: 'All agent lines are busy.' })) });
+        const res = fakeRes();
+        await HandleVonageInboundAnswer(service, CONFIG, signedReq(ANSWER_PARAMS), res);
+        expect(JSON.stringify(res.body)).toMatch(/busy/i);
+        expect(JSON.stringify(res.body)).not.toContain('no agent is available');
+    });
+
     it('answers a "no agent" NCCO when the call is not accepted, and never a connect without a token', async () => {
         const service = fakeService({ HandleInboundCall: vi.fn(async () => ({ accepted: false, reason: 'No active agent identity' })) });
         const res = fakeRes();

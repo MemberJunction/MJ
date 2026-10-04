@@ -1,6 +1,6 @@
 import { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import type { OutboundPolicySettings } from './telephony/outboundCallPolicy.js';
+import type { OutboundPolicySettings, TransferTargetSettings } from './telephony/outboundCallPolicy.js';
 
 /**
  * Settings that apply to every carrier. They are configured once under `telephony` and merged into each
@@ -15,8 +15,19 @@ export interface TelephonySharedSettings {
     inboundRunAsUserEmail?: string;
     /** Maximum length of one phone call in seconds (default 1800). The session is stopped at the cap. */
     maxCallSeconds?: number;
+    /**
+     * Most phone calls (every carrier together, both directions) the server will carry at once (default 25).
+     * Keep this at or below the realtime model plan's concurrent-session limit: past the cap an inbound caller
+     * hears a polite "all agents are busy" and an outbound call is refused, instead of every call degrading.
+     */
+    maxConcurrentCalls?: number;
     /** Outbound destination policy and per-user rate limit applied to every `Place*Call` mutation. */
     outbound?: OutboundPolicySettings;
+    /**
+     * The places the agent may transfer a live call to, by name. Empty or absent means the agent cannot transfer at
+     * all, even on a carrier that supports it: the agent never names a free-form number.
+     */
+    transferTargets?: TransferTargetSettings[];
 }
 
 /** What to do when answering-machine detection says a machine (or fax) answered an outbound call. */

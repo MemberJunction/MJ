@@ -44,6 +44,9 @@ export const VONAGE_MEDIA_WSS_PATH = '/telephony/vonage/media';
 /** A polite NCCO returned when no agent is available for the dialed number. */
 const NO_AGENT_NCCO = [{ action: 'talk', text: 'Sorry, no agent is available to take this call.' }];
 
+/** A polite NCCO returned when every agent line is in use (the server is at its concurrent-call cap). */
+const BUSY_NCCO = [{ action: 'talk', text: 'Sorry, all of our agents are busy right now. Please try again in a few minutes.' }];
+
 /** A polite NCCO returned when MJ cannot admit the call (no run-as user, malformed webhook, …). */
 const UNAVAILABLE_NCCO = [{ action: 'talk', text: 'Sorry, we are unable to take your call right now. Goodbye.' }];
 
@@ -126,7 +129,7 @@ export async function HandleVonageInboundAnswer(
     const result = await service.HandleInboundCall(resolved, context.User, context.Provider);
     if (!result.accepted || !result.MediaToken) {
         LogStatus(`[Telephony][Vonage] inbound ${resolved.callId} not accepted: ${result.reason ?? 'unknown'}`);
-        res.status(200).type('application/json').json(NO_AGENT_NCCO);
+        res.status(200).type('application/json').json(result.Busy ? BUSY_NCCO : NO_AGENT_NCCO);
         return;
     }
     const mediaUrl = BuildVonageMediaUrl(config.mediaPublicUrl, {

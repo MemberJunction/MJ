@@ -8,3 +8,5 @@ export * from './calendar-clients';
 export * from './calendar-watcher';
 export * from './scheduled-bridge-runner';
 export * from './identity-provisioner';
+export * from './dtmf-coalescer';
+export * from './bridge-prior-transcript';
