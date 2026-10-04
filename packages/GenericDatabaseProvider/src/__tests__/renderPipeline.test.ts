@@ -465,13 +465,12 @@ describe('MaxRows row cap — tighter cap wins', () => {
 
 describe('MaxRows row cap — outer wrap', () => {
 
-    it('wraps a UNION ALL with an outer TOP cap', () => {
+    it('caps a UNION ALL with OFFSET … FETCH after its rows, in place', () => {
         stubMetadata();
         const sql = `SELECT ID FROM A UNION ALL SELECT ID FROM B`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
-        expect(result.FinalSQL).toMatch(/UNION\s+ALL/i);
+        expect(result.FinalSQL).toMatch(/^SELECT ID FROM A UNION ALL SELECT ID FROM B\s+ORDER BY 1\s+OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY$/);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
     });
 
     it('wraps TOP WITH TIES with an outer cap (inner TOP keeps ORDER BY legal)', () => {
@@ -483,13 +482,11 @@ describe('MaxRows row cap — outer wrap', () => {
         expect(result.FinalSQL).toMatch(/_mj_capped/);
     });
 
-    it('wraps CROSS APPLY OPENJSON with an outer cap', () => {
+    it('caps CROSS APPLY OPENJSON in place', () => {
         stubMetadata();
         const sql = `SELECT j.Name FROM dbo.T t CROSS APPLY OPENJSON(t.Data) WITH ([Name] NVARCHAR(100)) j`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/CROSS\s+APPLY/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toBe(`SELECT TOP 10 j.Name FROM dbo.T t CROSS APPLY OPENJSON(t.Data) WITH ([Name] NVARCHAR(100)) j`);
     });
 });
 
@@ -639,14 +636,13 @@ describe('MaxRows row cap — hard cap guarantee', () => {
         expect(result.FinalSQL).toMatch(/_mj_capped/);
     });
 
-    it('caps a UNION ALL via outer wrap', () => {
+    it('caps a UNION ALL with OFFSET … FETCH', () => {
         stubMetadata();
         const result = RenderPipeline.Run('SELECT ID FROM A UNION ALL SELECT ID FROM B UNION ALL SELECT ID FROM C', {
             Platform: 'sqlserver',
             MaxRows: 100,
         });
-        expect(result.FinalSQL).toMatch(/\bTOP\s+100\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toMatch(/FETCH\s+NEXT\s+100\s+ROWS\s+ONLY$/i);
     });
 
     it('caps a CTE with bracket-quoted names via AST TOP injection', () => {
@@ -664,14 +660,14 @@ describe('MaxRows row cap — hard cap guarantee', () => {
         expect(result.FinalSQL).not.toMatch(/_mjid_/);
     });
 
-    it('caps a SELECT with CROSS APPLY via outer wrap', () => {
+    it('caps a SELECT with CROSS APPLY in place', () => {
         stubMetadata();
         const result = RenderPipeline.Run(
             'SELECT j.Name FROM Users u CROSS APPLY OPENJSON(u.Meta) WITH ([Name] NVARCHAR(100)) j',
             { Platform: 'sqlserver', MaxRows: 100 },
         );
-        expect(result.FinalSQL).toMatch(/\bTOP\s+100\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 100 j\.Name/);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
     });
 
     it('caps a plain SELECT on PostgreSQL', () => {
@@ -1165,9 +1161,9 @@ ORDER BY Cnt DESC`;
         // AfterTemplates: Nunjucks resolved, but no MaxRows wrapping yet
         expect(result.Trace.AfterTemplates).toMatch(/2024-01-01/);
         expect(result.Trace.AfterTemplates).not.toMatch(/_mj_capped/);
-        // FinalSQL: MaxRows applied (outer wrap with ORDER BY moved outside)
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        // FinalSQL: MaxRows applied in place, with the ORDER BY where the query put it
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 10 t\.ID/);
+        expect(result.FinalSQL).toMatch(/ORDER\s+BY\s+Cnt\s+DESC$/i);
         // The trace makes it possible to diagnose the transformation
         expect(result.Trace.AfterTemplates).toMatch(/ORDER\s+BY\s+Cnt\s+DESC/i);
     });
@@ -1292,11 +1288,10 @@ describe('sqlify output characteristics', () => {
         expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
     });
 
-    it('auto-brackets unquoted identifiers on SQL Server', () => {
+    it('keeps the caller’s identifiers as written on SQL Server', () => {
         stubMetadata();
         const result = RenderPipeline.Run('SELECT id, name FROM users', { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).toMatch(/\[id\]/i);
-        expect(result.FinalSQL).toMatch(/\[users\]/i);
+        expect(result.FinalSQL).toBe('SELECT TOP 10 id, name FROM users');
     });
 
     it('preserves already-bracketed identifiers through a sqlify round-trip', () => {
@@ -1908,16 +1903,10 @@ WHERE mel.IsMemberInitiated = 1
 GROUP BY t.ID, t.Name
 ORDER BY EngagementCount DESC`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        // Must be capped (outer wrap with TOP 10)
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
-        // ORDER BY must NOT be inside the derived table — it must be on the outer SELECT
-        const innerMatch = result.FinalSQL.match(/\([\s\S]*\)\s+AS\s+_mj_capped/i);
-        expect(innerMatch).not.toBeNull();
-        expect(innerMatch![0]).not.toMatch(/ORDER\s+BY/i);
-        // ORDER BY must appear after _mj_capped (on the outer SELECT)
-        const afterCapped = result.FinalSQL.split('_mj_capped')[1];
-        expect(afterCapped).toMatch(/ORDER\s+BY\s+EngagementCount\s+DESC/i);
+        // Capped in place: TOP on the SELECT, the ORDER BY untouched and still in scope
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 10 t\.ID AS TagID/);
+        expect(result.FinalSQL).toMatch(/ORDER BY EngagementCount DESC$/);
+        expect(result.FinalSQL).not.toMatch(/_mj_capped/);
     });
 
     it('TRY_CAST without ORDER BY — no ORDER BY to strip', () => {
@@ -1926,8 +1915,7 @@ ORDER BY EngagementCount DESC`;
 FROM [document].[vwMemberEngagementLogs] mel
 WHERE mel.IsMemberInitiated = 1`;
         const result = RenderPipeline.Run(sql, { Platform: 'sqlserver', MaxRows: 10 });
-        expect(result.FinalSQL).toMatch(/\bTOP\s+10\b/i);
-        expect(result.FinalSQL).toMatch(/_mj_capped/);
+        expect(result.FinalSQL).toMatch(/^SELECT TOP 10 mel\.ID, TRY_CAST/);
         // No ORDER BY anywhere
         expect(result.FinalSQL).not.toMatch(/ORDER\s+BY/i);
     });
@@ -2154,10 +2142,10 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'CTE with hyphens in name', path: 'ast', sql: `WITH [my-cte] AS (SELECT 1 AS x) SELECT * FROM [my-cte]` },
         { name: 'multi CTE', path: 'ast', sql: `WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y) SELECT a.x, b.y FROM a, b` },
         { name: 'window function', path: 'ast', sql: `SELECT [ID], ROW_NUMBER() OVER (ORDER BY [JoinedAt]) AS rn FROM [Members]` },
-        { name: 'UNION ALL', path: 'wrap', sql: `SELECT [ID] FROM [A] UNION ALL SELECT [ID] FROM [B]` },
-        { name: 'UNION (deduped)', path: 'wrap', sql: `SELECT [ID] FROM [A] UNION SELECT [ID] FROM [B]` },
-        { name: 'INTERSECT', path: 'wrap', sql: `SELECT [ID] FROM [A] INTERSECT SELECT [ID] FROM [B]` },
-        { name: 'EXCEPT', path: 'wrap', sql: `SELECT [ID] FROM [A] EXCEPT SELECT [ID] FROM [B]` },
+        { name: 'UNION ALL', path: 'fetch', sql: `SELECT [ID] FROM [A] UNION ALL SELECT [ID] FROM [B]` },
+        { name: 'UNION (deduped)', path: 'fetch', sql: `SELECT [ID] FROM [A] UNION SELECT [ID] FROM [B]` },
+        { name: 'INTERSECT', path: 'fetch', sql: `SELECT [ID] FROM [A] INTERSECT SELECT [ID] FROM [B]` },
+        { name: 'EXCEPT', path: 'fetch', sql: `SELECT [ID] FROM [A] EXCEPT SELECT [ID] FROM [B]` },
         { name: 'TOP 5', path: 'ast', sql: `SELECT TOP 5 * FROM [Members]` },
         { name: 'TOP huge', path: 'ast', sql: `SELECT TOP 999999 * FROM [Members]` },
         { name: 'TOP (N)', path: 'ast', sql: `SELECT TOP (1000000) * FROM [Members]` },
@@ -2172,14 +2160,14 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'CASE expression', path: 'ast', sql: `SELECT CASE WHEN [X]>1 THEN 'a' ELSE 'b' END FROM [Members]` },
         { name: 'VALUES table', path: 'ast', sql: `SELECT * FROM (VALUES (1),(2),(3)) AS t(x)` },
         { name: 'three-part name', path: 'ast', sql: `SELECT * FROM [DB1].[dbo].[Members]` },
-        { name: 'with parens', path: 'ast', sql: `(SELECT * FROM [Members])` },
+        { name: 'with parens', path: 'wrap', sql: `(SELECT * FROM [Members])` },
         { name: 'comment-only', path: 'passthrough', sql: `/* nothing */` },
         { name: 'whitespace-only', path: 'passthrough', sql: `   ` },
         { name: 'just semicolon', path: 'passthrough', sql: `;` },
-        { name: 'CROSS APPLY', path: 'wrap', sql: `SELECT m.[ID], j.[Name] FROM [Members] m CROSS APPLY OPENJSON(m.[Meta]) WITH ([Name] NVARCHAR(100)) j` },
+        { name: 'CROSS APPLY', path: 'ast', sql: `SELECT m.[ID], j.[Name] FROM [Members] m CROSS APPLY OPENJSON(m.[Meta]) WITH ([Name] NVARCHAR(100)) j` },
         { name: 'JSON_VALUE', path: 'ast', sql: `SELECT JSON_VALUE([Meta],'$.x') FROM [Members]` },
         { name: 'CTE + GROUP BY + JOIN', path: 'ast', sql: `WITH d AS (SELECT [MID], SUM([Amt]) AS T FROM [Don] GROUP BY [MID]) SELECT m.[ID], d.T FROM [Members] m LEFT JOIN d ON d.[MID]=m.[ID]` },
-        { name: 'FOR JSON AUTO', path: 'passthrough', sql: `SELECT [ID] FROM [Members] FOR JSON AUTO` },
+        { name: 'FOR JSON AUTO', path: 'ast', sql: `SELECT [ID] FROM [Members] FOR JSON AUTO` },
         { name: 'FOR XML AUTO', path: 'ast', sql: `SELECT [ID] FROM [Members] FOR XML AUTO` },
         { name: 'OPTION RECOMPILE', path: 'ast', sql: `SELECT [ID] FROM [Members] OPTION (RECOMPILE)` },
         { name: 'SELECT INTO temp', path: 'passthrough', sql: `SELECT * INTO #t FROM [Members]` },
@@ -2191,7 +2179,7 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'comment-hidden TOP', path: 'ast', sql: `SELECT /* TOP 999999 */ [ID] FROM [Members]` },
         { name: 'CRLF line breaks', path: 'ast', sql: `SELECT\r\n*\r\nFROM\r\n[Members]` },
         { name: 'mixed case keywords', path: 'ast', sql: `seLect * fRom [Members]` },
-        { name: 'trailing semicolons', path: 'wrap', sql: `SELECT * FROM [Members];;;` },
+        { name: 'trailing semicolons', path: 'ast', sql: `SELECT * FROM [Members];;;` },
     ];
 
     for (const { name, sql, path } of corpus) {
@@ -2210,7 +2198,7 @@ describe('bulletproof — fuzzed invariant over a corpus of shapes', () => {
         { name: 'CTE', path: 'ast', sql: `WITH a AS (SELECT id FROM members) SELECT * FROM a` },
         { name: 'multi CTE', path: 'ast', sql: `WITH a AS (SELECT 1 x), b AS (SELECT 2 y) SELECT * FROM a, b` },
         { name: 'window', path: 'ast', sql: `SELECT id, ROW_NUMBER() OVER (ORDER BY joined) AS rn FROM members` },
-        { name: 'UNION ALL', path: 'wrap', sql: `SELECT id FROM a UNION ALL SELECT id FROM b` },
+        { name: 'UNION ALL', path: 'ast', sql: `SELECT id FROM a UNION ALL SELECT id FROM b` },
         { name: 'LIMIT 5', path: 'ast', sql: `SELECT * FROM members LIMIT 5` },
         { name: 'LIMIT huge', path: 'ast', sql: `SELECT * FROM members LIMIT 999999` },
         { name: 'LIMIT N OFFSET M', path: 'ast', sql: `SELECT * FROM members LIMIT 999999 OFFSET 10` },
