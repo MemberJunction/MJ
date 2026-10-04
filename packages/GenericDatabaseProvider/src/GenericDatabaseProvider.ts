@@ -3042,6 +3042,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
+                // A param carrying BypassCache lands here because it is ineligible for a cache status,
+                // NOT because the caller has nothing cached — and those two must not be treated alike.
+                // Serving it from the server cache is precisely what it asked not to happen: its
+                // documented contract is "the query always hits the database", and it is the only way a
+                // client can escape a server slot that a missed invalidation left stale. The write side
+                // already refuses to store such a result (runViewCacheEligible starts with
+                // !param.BypassCache); this is the matching read-side gate.
+                if (entry.item.params.BypassCache) {
+                    LogStatusEx({ message: `    🚫 [SmartCache BYPASS] "${entry.item.params.EntityName || 'unknown'}" — BypassCache requested, going to the database`, verboseOnly: true });
+                    noCacheStatusNeedsDB.push(entry);
+                    continue;
+                }
                 if (LocalCacheManager.Instance.IsInitialized) {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(entry.item.params, contextUser);
                     const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(entry.item.params);
