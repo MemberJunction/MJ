@@ -50,7 +50,8 @@ describe('LiveKitAgentRoomCoordinator host options (a host that owns the call)',
       ConversationID: 'conv-1',
     };
     await coordinator.StartAgentRoomSession({ AgentSessionID: 's', RoomName: 'host-room-1', Host: host });
-    expect(factoryCalls[0]).toMatchObject({ HostTools: host.HostTools, HostFraming: 'You are on a phone call.', ConversationID: 'conv-1' });
+    expect(factoryCalls[0].HostTools).toEqual(expect.arrayContaining(host.HostTools!));
+    expect(factoryCalls[0]).toMatchObject({ HostFraming: 'You are on a phone call.', ConversationID: 'conv-1' });
     expect(factoryCalls[0].PriorTranscript).toBeUndefined();
   });
 
@@ -108,7 +109,7 @@ describe('LiveKitAgentRoomCoordinator host options (a host that owns the call)',
     const { ops, startCalls } = makeBridgeOps();
     coordinator.SetBridgeOps(ops);
     await coordinator.StartAgentRoomSession({ AgentSessionID: 's', RoomName: 'plain-room-1', AgentName: 'Sage' });
-    expect(factoryCalls[0].HostTools).toBeUndefined();
+    expect(factoryCalls[0].HostTools?.map((t) => t.Name)).toEqual(['i_am_addressed', 'yield_turn']);
     expect(factoryCalls[0].HostFraming).toBeUndefined();
     expect(startCalls[0].TranscriptSink).toBeUndefined();
     expect(startCalls[0].RecoverRealtimeSession).toBeUndefined();
