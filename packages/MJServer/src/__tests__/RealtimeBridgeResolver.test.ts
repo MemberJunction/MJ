@@ -20,6 +20,9 @@ const h = vi.hoisted(() => ({
   setTurnToolBinder: vi.fn(),
   getBridgeRuntime: vi.fn(),
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
+  stopAgentRoomSession: vi.fn(async () => true),
+  stopAllAgentsInRoom: vi.fn(async () => 1),
+  getRoomForBridge: vi.fn((_id: string): string | undefined => 'room-1'),
 }));
 
 // These two are instantiated with `new` by the resolver, so they must be constructible. They were
@@ -36,6 +39,9 @@ vi.mock('@memberjunction/livekit-room-server', () => ({
       SetSessionFactory: vi.fn(),
       SetTurnToolBinder: h.setTurnToolBinder,
       GetRoomTurnState: h.getRoomTurnState,
+      StopAgentRoomSession: h.stopAgentRoomSession,
+      StopAllAgentsInRoom: h.stopAllAgentsInRoom,
+      GetRoomForBridge: h.getRoomForBridge,
     },
   },
   LiveKitUserIdentity: (id: string) => `user-${id}`.toLowerCase(),
@@ -72,6 +78,7 @@ vi.mock('../resolvers/meetingRecordingRegistration', () => ({
 }));
 
 import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput, StartLiveKitAgentRoomSessionInput } from '../resolvers/RealtimeBridgeResolver';
+import { RoomAuthorizationService } from '../resolvers/roomAuthorization.js';
 import type { AppContext } from '../types.js';
 
 /** A resolver subclass that supplies a fake authenticated user (GetUserFromPayload is protected). */
@@ -94,6 +101,7 @@ describe('RealtimeBridgeResolver', () => {
 
   beforeEach(() => {
     resolver = new TestableResolver();
+    RoomAuthorizationService.Instance.SetAuthorizerForTesting(async () => ({ Authorized: true }));
   });
 
   describe('MintLiveKitClientToken', () => {
@@ -239,6 +247,81 @@ describe('RealtimeBridgeResolver', () => {
       const result = await resolver.StartLiveKitAgentRoomSession(input({ EnableHandoff: true }), ctx);
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/current user/i);
+    });
+  });
+
+  describe('Per-room authorization enforcement', () => {
+    beforeEach(() => {
+      RoomAuthorizationService.Instance.SetAuthorizerForTesting(async () => ({
+        Authorized: false,
+        Reason: 'User is not authorized for this room.',
+      }));
+    });
+
+    it('MintLiveKitClientToken rejects unauthorized room access', async () => {
+      const input = Object.assign(new MintLiveKitClientTokenInput(), { RoomName: 'private-room' });
+      const result = await resolver.MintLiveKitClientToken(input, ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('User is not authorized for this room.');
+      expect(h.mintClientToken).not.toHaveBeenCalled();
+    });
+
+    it('StartLiveKitAgentRoomSession rejects unauthorized room access', async () => {
+      const input = Object.assign(new StartLiveKitAgentRoomSessionInput(), {
+        RoomName: 'private-room',
+        AgentID: 'agent-1',
+      });
+      const result = await resolver.StartLiveKitAgentRoomSession(input, ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('User is not authorized for this room.');
+      expect(h.startAgentRoomSession).not.toHaveBeenCalled();
+    });
+
+    it('StopLiveKitAgentRoomSession rejects unauthorized room access', async () => {
+      h.getRoomForBridge.mockReturnValueOnce('private-room');
+      const result = await resolver.StopLiveKitAgentRoomSession('bridge-1', ctx);
+      expect(result).toBe(false);
+      expect(h.stopAgentRoomSession).not.toHaveBeenCalled();
+    });
+
+    it('StopLiveKitAgentRoomSession proceeds when room access is authorized', async () => {
+      RoomAuthorizationService.Instance.SetAuthorizerForTesting(async () => ({ Authorized: true }));
+      h.getRoomForBridge.mockReturnValueOnce('private-room');
+      const result = await resolver.StopLiveKitAgentRoomSession('bridge-1', ctx);
+      expect(result).toBe(true);
+      expect(h.stopAgentRoomSession).toHaveBeenCalledWith('bridge-1', 'Explicit', resolver.user, null);
+    });
+
+    it('EndLiveKitRoom rejects unauthorized room access', async () => {
+      const result = await resolver.EndLiveKitRoom('private-room', ctx);
+      expect(result).toBe(false);
+      expect(h.stopAllAgentsInRoom).not.toHaveBeenCalled();
+    });
+
+    it('EndLiveKitRoom proceeds when room access is authorized', async () => {
+      RoomAuthorizationService.Instance.SetAuthorizerForTesting(async () => ({ Authorized: true }));
+      const result = await resolver.EndLiveKitRoom('private-room', ctx);
+      expect(result).toBe(true);
+      expect(h.stopAllAgentsInRoom).toHaveBeenCalledWith('private-room', 'Explicit', resolver.user, null);
+    });
+
+    it('GetLiveKitRoomTurnState rejects unauthorized room access', async () => {
+      const result = await resolver.GetLiveKitRoomTurnState('private-room', ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('User is not authorized for this room.');
+    });
+
+    it('InviteUsersToLiveKitRoom rejects unauthorized room access', async () => {
+      const result = await resolver.InviteUsersToLiveKitRoom('private-room', ['user-2'], ctx);
+      expect(result).toBe(false);
+    });
+
+    it('StartLiveKitRecording rejects unauthorized room access', async () => {
+      const input = Object.assign(new LiveKitRecordingInput(), { RoomName: 'private-room' });
+      const result = await resolver.StartLiveKitRecording(input, ctx);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('User is not authorized for this room.');
+      expect(h.startRecording).not.toHaveBeenCalled();
     });
   });
 });
