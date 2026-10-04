@@ -10,7 +10,12 @@ describe('exactTotalFromPage', () => {
     it('returns startRow + pageLength for a SHORT page (fewer rows than the page size)', () => {
         expect(exactTotalFromPage(0, 47, 100)).toBe(47);   // page 1, short → exact total
         expect(exactTotalFromPage(200, 30, 100)).toBe(230); // page 3, short last page
-        expect(exactTotalFromPage(100, 0, 100)).toBe(100);  // empty page past the end
+    });
+
+    it('returns null for an empty page after the first — it only says the total is at most startRow', () => {
+        expect(exactTotalFromPage(100, 0, 100)).toBeNull();
+        expect(exactTotalFromPage(20, 0, 5)).toBeNull();
+        expect(exactTotalFromPage(0, 0, 5)).toBe(0); // an empty first page does prove the total
     });
 
     it('returns null for a FULL page — a COUNT is required because more rows may exist', () => {
