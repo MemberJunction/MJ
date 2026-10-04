@@ -95,7 +95,7 @@ describe('shipped rubric metadata', () => {
         const app = JSON.parse(readFileSync(join(root, 'applications/.testing-application.json'), 'utf8'));
         const row = app.relatedEntities['MJ: Application Entities'].find((item: { primaryKey: { ID: string } }) => item.primaryKey.ID === 'F3DC86D9-5698-4492-A5D9-FC6EA8C65024');
         expect(row?.fields.EntityID).toBe('@lookup:MJ: Entities.Name=MJ: Test Rubrics');
-        expect(row?.deleteRecord).toEqual({ delete: true });
+        expect(row?.deleteRecord).toEqual({ delete: true, deletedAt: '2026-10-02T21:42:50.885Z' });
     });
 
     it('does not give the Rubric Evaluation Agent Get Rubric Consensus', () => {
