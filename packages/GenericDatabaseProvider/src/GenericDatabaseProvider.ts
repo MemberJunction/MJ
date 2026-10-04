@@ -4334,16 +4334,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 };
             }
 
-            const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser, undefined, CALLER_SQL_OPTIONS);
-
-            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+            const { rows, totalRowCount, executionTime } = await this.runAdhocSQL(params, contextUser);
 
             return {
                 Success: true,
                 QueryID: '',
                 QueryName: 'Ad-Hoc Query',
-                Results: paginatedResult,
-                RowCount: paginatedResult.length,
+                Results: rows,
+                RowCount: rows.length,
                 TotalRowCount: totalRowCount,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
@@ -4362,6 +4360,36 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ErrorMessage: `Ad-hoc query execution failed: ${errorMessage}`,
             };
         }
+    }
+
+    /**
+     * Runs validated ad-hoc SQL. With `MaxRows` it asks the database for that page and a count, as
+     * saved queries do, so the server sends one page rather than every row; without it every row
+     * is returned, offset by `StartRow` when one is given.
+     */
+    private async runAdhocSQL(
+        params: RunQueryParams,
+        contextUser?: UserInfo,
+    ): Promise<{ rows: Record<string, unknown>[]; totalRowCount: number; executionTime: number }> {
+        if (!QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows)) {
+            const { result, executionTime } = await this.executeQueryWithTiming(params.SQL!, contextUser, undefined, CALLER_SQL_OPTIONS);
+            const { paginatedResult, totalRowCount } = this.applyQueryPagination(result, params);
+            return { rows: paginatedResult, totalRowCount, executionTime };
+        }
+        const paging = QueryPagingEngine.WrapWithPaging(
+            params.SQL!,
+            QueryPagingEngine.ResolveStartRow(params.StartRow),
+            params.MaxRows!,
+            this.PlatformKey as DatabasePlatform,
+        );
+        const start = Date.now();
+        const [dataResult, countResult] = await Promise.all([
+            this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, undefined, CALLER_SQL_OPTIONS, contextUser),
+            this.ExecuteSQL<{ TotalRowCount: number }>(paging.CountSQL, undefined, CALLER_SQL_OPTIONS, contextUser),
+        ]);
+        const rows = dataResult ?? [];
+        const total = countResult?.[0]?.TotalRowCount;
+        return { rows, totalRowCount: total != null ? Number(total) : rows.length, executionTime: Date.now() - start };
     }
 
     /**
