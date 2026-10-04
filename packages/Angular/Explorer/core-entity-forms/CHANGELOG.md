@@ -1,5 +1,141 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- a9e96dd: The Entities form's Settings section gains a Record cloning panel that edits `Configuration.Clone` without raw JSON: enable/never-clone switches, scope defaults, naming, field rules (prompt, exclude, ownership, server-assigned), per-relationship policies, and an Advanced JSON box for the rest. It can validate the configuration, preview a clone plan for a record, and copy the `.clone-configurations.json` metadata entry.
+- ef43cf3: Add `MJ: Feature Pipeline Types`, the catalog of Knowledge Hub Feature Pipeline types. Each type names the driver class that turns a record's context into its output values, so a new type is a row plus a registered class. Seeds the `LLM` type, which is what every existing pipeline is.
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+- c35f7e5: Ship the Rubric Categories/Criteria hierarchy CodeGen output and regenerate stale generated types (fixes Integration Tier on next).
+
+  The hierarchy SQL is appended to `V202609302342__v6.2.x__Rubrics.sql` (unreleased) as a second CodeGen section, not shipped as a new migration.
+
+  What changed in generated output:
+  - MJ: Rubric Categories & MJ: Rubric Criteria: hierarchy functions (fnRubricCategoryParentID_GetHierarchyMeta / \_GetDescendants / \_GetAncestors / \_GetRootID, fnRubricCriterionParentID_GetHierarchyMeta / \_GetDescendants / \_GetAncestors / \_GetRootID), rebuilt views (vwRubricCategories, vwRubricCriteria) with hier_ParentID joins, and 10 EntityField records (RootParentID, ParentIDDepth, ParentIDPath, ParentIDIsLeaf, ParentIDChildCount)
+  - MJ: Rubric Evaluation Scores & MJ: Rubric Criterion Levels: 22 missing CD3 fields in \_\_mj.ts (ScaleLevel, CriterionKey, CriterionNodeType, CriterionParentID, EvaluationStatus, EvaluatorType, EvaluatorUserID, SubjectEntityID, SubjectRecordID, ContextEntityID, ContextRecordID, RubricID, RubricMajorVersion, CriterionCohortCount, CriterionCohortMeanScore, CriterionCohortMinScore, CriterionCohortMaxScore, CriterionCohortScoreStdDev, CriterionCohortHumanMeanScore, etc.)
+  - MJRecordChange.ChangeContext: field moved, now a typed ChangeContextObject accessor, and new IRecordChangeContext / IRecordChangeCloneContext interfaces (#4585, record cloning)
+  - MJRecordCloneLog.PlanJSON: now a typed IClonePlan field (#4585)
+  - MJEntityFieldEntity_IEntityFieldCloneConfiguration and IJsonRemapSpec interfaces (#4585)
+  - MJAIAgentStep.StepType and Configuration descriptions (Decision step, #4874)
+  - MJTestSuiteRun.Score: decimal(5,4) changed to decimal(9,6)
+  - MJRubricEvaluation.Band, the cascade-delete transaction Delete() override on MJRubricEvaluation, and the vwRubricCriterions → vwRubricCriteria base-view fix
+  - The MJ: Test Rubrics "DEPRECATED" description in the GraphQL schema
+
+### Patch Changes
+
+- 513e608: Add pipeline type picker, capability-aware output filtering and validation, Decision-specific constraint editors, and type badges for Feature Pipelines. What each pipeline type can produce is now one rule set, shared by the server, the builder and the save check. A Decision pipeline reads enum values and descriptions from its own entity's fields only; before, it read them from any entity with a field of the same name. An enum reads field metadata only when it sets FromFieldMetadata or lists no values, and only a type that needs listed values (Decision) requires them.
+
+  A Record Process now refuses at save an Infer pipeline its type cannot run, on both tiers and every save path, through the shared MJRecordProcessEntityExtended; the Record Process form also refuses while the builder reports errors. The builder loads and edits CaptureReasoning, and keeps Watermark. Its pickers now show the saved pipeline type, prompt, entity document, target and constraint, not the first option, and a placeholder when the saved value is not offered.
+
+- 8655198: Annotate the rubric form's single-key row load so the primary-key compliance gate passes.
+- fb267da: Two template-content fixes: `EntityRecordDocument.DocumentText` now holds each record's rendered text, and the Templates admin form now saves the content typed into its editor.
+
+  **`DocumentText` stored the raw template.** `EntityVectorSyncer.renderAndEmbedBatch()` rendered every record correctly and embedded the rendered text, but the per-record result carried `templateContent.TemplateText` (the Nunjucks source) instead of the rendered output, so every `EntityRecordDocument.DocumentText` row for an entity was the same `Name: {{ (org_name or '') | lower | trim }}` boilerplate (7,095 identical rows on one tenant). Search and duplicate detection were unaffected (the embedding used the right text); the audit trail for "what text was embedded for record X" was unusable. The result now carries the rendered text for that record, i.e. exactly what was embedded. The unused worker-thread copy gets the same fix, and `EmbeddingData.TemplateContent` documents what it holds.
+
+  **The Templates form discarded content.** Creating or editing a Template in Data Explorer saved the top-level fields and silently dropped the content from the nested `mj-template-editor`: the form saved each content row on its own after the template save had already reported success, a row whose save returned false only reached `console.error`, no mutation carrying the content was issued, and the editor kept showing "Unsaved changes". The editor now exposes `getPendingChanges()` (its new/dirty contents as `PendingRecordItem`s) and `markContentsSaved()`, and the Templates form folds those into `PopulatePendingRecords()`, so the template and its contents are validated together and committed in one transaction group by the base form's `InternalSaveRecord()`; a content that fails validation now blocks the save with the field painted instead of vanishing. The AI Prompt form already probed the editor for `getPendingChanges` and skipped when it was missing, so its embedded template contents ride along in its save transaction too; its `PopulatePendingRecords()` now keeps one pending record per entity object, since it preserves the previous list and re-collects on every call and a retry after a failed save would otherwise save the same content twice in one group. When the host form discards its edit, the editor now reloads its rows from the saved state (it listens for the form's `REVERT_PENDING_CHANGES` broadcast), so the screen no longer keeps showing text the user just threw away.
+
+- 74c5280: The Users form's Assigned Security Roles panel queried the legacy entity name 'User Roles', which no longer resolves, so it always showed "0 Roles" and logged errors. It now queries 'MJ: User Roles'.
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [a3d6182]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [664baea]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [e9ab27b]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [93f1254]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [7bcba8c]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+- Updated dependencies [8766e99]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.2
+  - @memberjunction/ng-timeline@6.2.0-edge.2
+  - @memberjunction/feature-pipelines@6.2.0-edge.2
+  - @memberjunction/ng-base-forms@6.2.0-edge.2
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.2
+  - @memberjunction/ng-flow-editor@6.2.0-edge.2
+  - @memberjunction/record-cloning-base@6.2.0-edge.2
+  - @memberjunction/ng-record-clone@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-agents@6.2.0-edge.2
+  - @memberjunction/ng-rubrics@6.2.0-edge.2
+  - @memberjunction/ng-testing@6.2.0-edge.2
+  - @memberjunction/rubrics-base@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-shared@6.2.0-edge.2
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/ng-base-application@6.2.0-edge.2
+  - @memberjunction/ng-link-directives@6.2.0-edge.2
+  - @memberjunction/ng-action-gallery@6.2.0-edge.2
+  - @memberjunction/ng-actions@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-code-editor@6.2.0-edge.2
+  - @memberjunction/ng-deep-diff@6.2.0-edge.2
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.2
+  - @memberjunction/ng-hierarchy-tree@6.2.0-edge.2
+  - @memberjunction/ng-join-grid@6.2.0-edge.2
+  - @memberjunction/ng-list-management@6.2.0-edge.2
+  - @memberjunction/ng-notifications@6.2.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.2
+  - @memberjunction/ng-search@6.2.0-edge.2
+  - @memberjunction/ng-shared-generic@6.2.0-edge.2
+  - @memberjunction/ng-trees@6.2.0-edge.2
+  - @memberjunction/ng-versions@6.2.0-edge.2
+  - @memberjunction/templates-base-types@6.2.0-edge.2
+  - @memberjunction/ng-tabstrip@6.2.0-edge.2
+  - @memberjunction/ng-markdown@6.2.0-edge.2
+  - @memberjunction/predictive-studio-core@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Minor Changes

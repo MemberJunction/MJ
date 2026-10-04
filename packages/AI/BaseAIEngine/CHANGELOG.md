@@ -1,5 +1,52 @@
 # @memberjunction/ai-engine-base
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- bb33c77: Loop agents can now suggest the agent to delegate to before their first prompt: with the new `decisionDiscovery` prompt param on (off by default), one decision over the agents the user may run and the host allows adds a `<suggested_agent>` message when it is confident, and Sage's prompt delegates to that agent directly instead of calling Find Candidate Agents first. It asks only about a conversation's opening request, and only when at least three agents are left to choose from. The agent run-permission filter the Find Candidate Agents actions use now lives on `AIAgentPermissionHelper` (`FilterRunnableAgents`, `IsDirectlyDiscoverable`), so both offer the same agents.
+
+### Patch Changes
+
+- 2854a2e: Address vector indexes by their provider-side name (`ExternalID`), not the MJ display `Name`. Entity vectorization, duplicate detection and the entity-vectors resolver passed `Name`, so any index whose label differs from its provider name (e.g. "More Cheese Content (Pinecone)" vs `morecheese-content`) returned 404 on every upsert/query.
+
+  `AIEngineBase` now owns the single `MJ: Vector Indexes` cache (`VectorIndexes`, `GetVectorIndexByID`) and the one rule for the provider name (`GetProviderIndexName`: ExternalID, falling back to `Name`), proxied on `AIEngine`. `KnowledgeHubMetadataEngine` no longer caches Vector Indexes; its `VectorIndexes` / `GetVectorIndexByID` proxy the AIEngineBase cache. Every caller, including `MJVectorIndexEntityServer`'s delete path, now resolves the provider name through `GetProviderIndexName`.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/templates-base-types@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

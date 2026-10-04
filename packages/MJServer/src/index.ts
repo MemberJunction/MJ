@@ -1367,13 +1367,20 @@ const setupComplete$ = new ReplaySubject(1);
   // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
   const telephonyExtensionConfigs: ServerExtensionConfig[] = [];
   if (configInfo.telephony?.enabled) {
+    // Settings every carrier shares (inbound run-as user, call cap, outbound policy). Each carrier's own block is
+    // spread AFTER them, so a carrier can override one explicitly.
+    const sharedTelephonySettings: Record<string, unknown> = {
+      inboundRunAsUserEmail: configInfo.telephony.inboundRunAsUserEmail,
+      maxCallSeconds: configInfo.telephony.maxCallSeconds,
+      outbound: configInfo.telephony.outbound,
+    };
     if (configInfo.telephony.twilio) {
       telephonyExtensionConfigs.push({
         Enabled: true,
         DriverClass: 'TwilioTelephonyExtension',
         RootPath: '/telephony/twilio',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.twilio as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.twilio },
       });
     }
     if (configInfo.telephony.vonage) {
@@ -1382,7 +1389,7 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'VonageTelephonyExtension',
         RootPath: '/telephony/vonage',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.vonage as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.vonage },
       });
     }
     if (configInfo.telephony.ringcentral) {
@@ -1391,7 +1398,7 @@ const setupComplete$ = new ReplaySubject(1);
         DriverClass: 'RingCentralTelephonyExtension',
         RootPath: '/telephony/ringcentral',
         Phase: 'pre-auth',
-        Settings: configInfo.telephony.ringcentral as unknown as Record<string, unknown>,
+        Settings: { ...sharedTelephonySettings, ...configInfo.telephony.ringcentral },
       });
     }
     if (configInfo.telephony.teams?.enabled) {
