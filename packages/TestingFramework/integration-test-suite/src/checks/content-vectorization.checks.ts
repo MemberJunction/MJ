@@ -1,5 +1,5 @@
 /**
- * content-vectorization.checks.ts — the 'content-vectorization' bundle (CV1–CV6): the
+ * content-vectorization.checks.ts — the 'content-vectorization' bundle (CV1–CV10): the
  * ContentSource / autotag vectorization pipeline (AutotagBaseEngine), end-to-end against the live DB.
  *
  * TRANSPORT: **SERVER** — AutotagBaseEngine is a server-side engine with no client surface, so
@@ -17,21 +17,29 @@
  * WHAT IS PINNED: CV1 default chunk creation + chunk identity; CV2 multi-chunk + re-vectorize
  * soft-delete; CV3 PurgeDeletedChunks removes the superseded vectors and tombstones the rows;
  * CV4 EmbedPendingChunks backfills a Pending chunk; CV5 explicit metadata strategy is minimal;
- * CV6 dimensions + namespace routing thread through to the (captured) embed + upsert.
+ * CV6 dimensions + namespace routing thread through to the (captured) embed + upsert; CV7/CV8 a
+ * declared VectorEntityName omits Entity only when the reader can honor it; CV9 a content source
+ * another process created after the engine cache loaded still routes, stores and namespaces by its
+ * own configuration; CV10 FieldPathResolver queries a related row its engine cache has never seen.
+ *
+ * CV9/CV10 create that source with a raw INSERT through `ctx.Pool`, so they are SQL Server only and
+ * skip loudly without a pool (see insertSourceBehindEngine for why a BaseEntity save cannot do it).
  *
  * ANTI-VACUITY: needs a Vector Index to borrow an embedding model + vector DB from. If the
  * deployment has none, every check SKIPS-AS-PASS LOUDLY. All fixtures are name-prefixed per run
  * and tagged "(mj-integration-test — safe to delete)"; Teardown removes them children-first.
  */
-import { RunView, BaseEntity, CompositeKey } from '@memberjunction/core';
+import { RunView, BaseEntity, BaseEngineRegistry, CompositeKey } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, uuidv4 } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { AutotagBaseEngine } from '@memberjunction/content-autotagging';
-import { AIModelRunner } from '@memberjunction/ai-prompts';
+import { AutotagBaseEngine, FieldPathResolver } from '@memberjunction/content-autotagging';
+import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
+import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     KnowledgeHubMetadataEngine,
     type MJContentItemEntity,
@@ -66,9 +74,8 @@ interface BundleState {
     Upserts: CapturedUpsert[];
     DeletedVectorIds: string[];
     EmbedCalls: Array<{ count: number; dimensions?: number }>;
-    OrigCreateEmbedding?: (driverClass: string) => unknown;
     OrigCreateVectorDB?: (classKey: string) => unknown;
-    OrigRunEmbedding?: typeof AIModelRunner.prototype.RunEmbedding;
+    OrigRunEmbedding?: typeof AIEmbeddingRunner.prototype.RunEmbedding;
 }
 let S: BundleState;
 
@@ -81,28 +88,29 @@ function guardSkip(id: string): boolean {
     return false;
 }
 
-/** Install the two external-seam stubs on the engine singleton (idempotent), capturing payloads. */
+/** Install the two external-seam stubs (the engine's vector-DB factory and AIEmbeddingRunner.RunEmbedding), idempotently, capturing payloads. */
 function installStubs(): void {
     if (S.Installed) return;
     const seams = AutotagBaseEngine.Instance as unknown as {
-        createEmbeddingInstance: (driverClass: string) => unknown;
         createVectorDBInstance: (classKey: string) => unknown;
     };
-    S.OrigCreateEmbedding = seams.createEmbeddingInstance;
     S.OrigCreateVectorDB = seams.createVectorDBInstance;
-    S.OrigRunEmbedding = AIModelRunner.prototype.RunEmbedding;
+    S.OrigRunEmbedding = AIEmbeddingRunner.prototype.RunEmbedding;
 
-    seams.createEmbeddingInstance = () => ({ EmbedTexts: async () => ({ vectors: [] }) });
     seams.createVectorDBInstance = () => ({
         // Mimic Pinecone's namespace derivation so namespace routing is exercised for real.
         BuildProviderDirectives: (sourceRecord: Record<string, unknown>, providerConfig: Record<string, unknown>) => {
             const field = typeof providerConfig?.['namespaceField'] === 'string' ? (providerConfig['namespaceField'] as string) : undefined;
             return field && sourceRecord?.[field] != null ? { namespace: String(sourceRecord[field]) } : {};
         },
-        // Declares no source-record dependencies — the namespace field lives on the item itself, so
-        // resolveDriverFieldPaths short-circuits and CV6 still exercises namespace routing through
-        // BuildProviderDirectives. Mirrors the unit-test double in AutotagBaseEngine.test.ts.
-        GetSourceRecordFieldPaths: () => [] as string[],
+        // Mirrors PineconeDatabase: a namespaceField naming a field on a RELATED record (the dotted
+        // `<FK>.<Field>` form) is declared as a source-record dependency, so the pipeline pre-resolves
+        // it through FieldPathResolver and injects it under the full path key. A plain field needs no
+        // declaration — it is already on the item — so CV6 keeps short-circuiting exactly as before.
+        GetSourceRecordFieldPaths: (providerConfig?: Record<string, unknown>) => {
+            const field = typeof providerConfig?.['namespaceField'] === 'string' ? (providerConfig['namespaceField'] as string) : undefined;
+            return field && field.includes('.') ? [field] : ([] as string[]);
+        },
         CreateRecords: async (records: CapturedRecord[], _indexName?: string, providerConfig?: Record<string, unknown>) => {
             S.Upserts.push({ providerConfig, records: records.map(r => ({ id: r.id, metadata: r.metadata, providerTemporaryDirectives: r.providerTemporaryDirectives })) });
             return { success: true, message: 'stubbed upsert (captured)' };
@@ -112,19 +120,19 @@ function installStubs(): void {
             return { success: true, message: 'stubbed delete (captured)' };
         },
     });
-    // Test-stub install: cast a fake through `unknown` (the sanctioned way to swap a prototype method).
-    AIModelRunner.prototype.RunEmbedding = (async (params: { Texts: string[]; Dimensions?: number }) => {
+    // The autotag pipeline embeds through AIEmbeddingRunner (AIModelRunner delegates to it too), so
+    // the stub goes on its prototype. It matches RunEmbedding's signature, so no cast is needed.
+    AIEmbeddingRunner.prototype.RunEmbedding = async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => {
         S.EmbedCalls.push({ count: params.Texts.length, dimensions: params.Dimensions });
         return { Success: true, Vectors: params.Texts.map(() => [0.01, 0.02, 0.03]), PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0 };
-    }) as unknown as typeof AIModelRunner.prototype.RunEmbedding;
+    };
     S.Installed = true;
 }
 function restoreStubs(): void {
     if (!S?.Installed) return;
-    const seams = AutotagBaseEngine.Instance as unknown as { createEmbeddingInstance: unknown; createVectorDBInstance: unknown };
-    if (S.OrigCreateEmbedding) seams.createEmbeddingInstance = S.OrigCreateEmbedding;
+    const seams = AutotagBaseEngine.Instance as unknown as { createVectorDBInstance: unknown };
     if (S.OrigCreateVectorDB) seams.createVectorDBInstance = S.OrigCreateVectorDB;
-    if (S.OrigRunEmbedding) AIModelRunner.prototype.RunEmbedding = S.OrigRunEmbedding;
+    if (S.OrigRunEmbedding) AIEmbeddingRunner.prototype.RunEmbedding = S.OrigRunEmbedding;
     S.Installed = false;
 }
 
@@ -152,21 +160,81 @@ async function ensureBase(ctx: IntegrationCheckContext): Promise<void> {
     S.BaseBuilt = true;
 }
 
-/** Create a content source (+ its content type), optionally with a VectorMetadata Configuration. */
-async function makeSource(ctx: IntegrationCheckContext, label: string, configuration?: Record<string, unknown>): Promise<{ sourceID: string; contentTypeID: string }> {
+/** Create a content type; with `vectorIndexID` it also routes (EmbeddingModelID + VectorIndexID) to that index. */
+async function makeContentType(ctx: IntegrationCheckContext, label: string, vectorIndexID?: string): Promise<string> {
     const ct = await ctx.Provider.GetEntityObject<MJContentTypeEntity>('MJ: Content Types', ctx.User);
     ct.NewRecord(); ct.Name = `${S.Prefix}-ct-${label} ${MARKER}`; ct.AIModelID = S.EmbeddingModelID; ct.MinTags = 1; ct.MaxTags = 5;
+    if (vectorIndexID) { ct.EmbeddingModelID = S.EmbeddingModelID; ct.VectorIndexID = vectorIndexID; }
     Assert(await ct.Save(), `content-type save: ${ct.LatestResult?.CompleteMessage}`);
     S.Created.push({ entity: 'MJ: Content Types', id: ct.ID });
+    return ct.ID;
+}
+
+/** Create a content source (+ its content type), optionally with a VectorMetadata Configuration. */
+async function makeSource(ctx: IntegrationCheckContext, label: string, configuration?: Record<string, unknown>): Promise<{ sourceID: string; contentTypeID: string }> {
+    const contentTypeID = await makeContentType(ctx, label);
 
     const src = await ctx.Provider.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources', ctx.User);
     src.NewRecord(); src.Name = `${S.Prefix}-src-${label} ${MARKER}`;
-    src.ContentTypeID = ct.ID; src.ContentSourceTypeID = S.SourceTypeID; src.ContentFileTypeID = S.FileTypeID;
+    src.ContentTypeID = contentTypeID; src.ContentSourceTypeID = S.SourceTypeID; src.ContentFileTypeID = S.FileTypeID;
     src.URL = 'https://example.com/it-cv'; src.EmbeddingModelID = S.EmbeddingModelID; src.VectorIndexID = S.VectorIndexID;
     if (configuration) src.Configuration = JSON.stringify(configuration);
     Assert(await src.Save(), `content-source save: ${src.LatestResult?.CompleteMessage}`);
     S.Created.push({ entity: 'MJ: Content Sources', id: src.ID });
-    return { sourceID: src.ID, contentTypeID: ct.ID };
+    return { sourceID: src.ID, contentTypeID };
+}
+
+/**
+ * Create a content source the way ANOTHER PROCESS would, as far as this one can tell: a raw INSERT
+ * through the fixture pool, so no BaseEntity save event fires here and KnowledgeHubMetadataEngine
+ * never hears about the row. A BaseEntity save cannot model that. The engine caches
+ * 'MJ: Content Sources' with AutoRefresh on (the BaseEngine default), so an in-process save pushes
+ * the new row straight into its cache, which is why the first version of CV9 passed with or
+ * without the fix it was written for. Direct DML skips the platform's save-side guarantees (audit,
+ * invalidation, validation) and that is precisely the point here; Teardown still deletes the row
+ * through BaseEntity. Callers assert the row is invisible to the engine before relying on it.
+ */
+async function insertSourceBehindEngine(
+    ctx: IntegrationCheckContext,
+    label: string,
+    contentTypeID: string,
+    vectorIndexID: string,
+    configuration?: Record<string, unknown>
+): Promise<{ sourceID: string; sourceName: string }> {
+    const entity = ctx.Provider.EntityByName('MJ: Content Sources');
+    Assert(!!entity && !!ctx.Pool, "insertSourceBehindEngine needs 'MJ: Content Sources' metadata and the server fixture pool");
+    const sourceID = uuidv4().toUpperCase();
+    const sourceName = `${S.Prefix}-src-${label} ${MARKER}`;
+    await ctx.Pool!.request()
+        .input('ID', sourceID)
+        .input('Name', sourceName)
+        .input('ContentTypeID', contentTypeID)
+        .input('ContentSourceTypeID', S.SourceTypeID)
+        .input('ContentFileTypeID', S.FileTypeID)
+        .input('URL', 'https://example.com/it-cv')
+        .input('EmbeddingModelID', S.EmbeddingModelID)
+        .input('VectorIndexID', vectorIndexID)
+        .input('Configuration', configuration ? JSON.stringify(configuration) : null)
+        .query(
+            `INSERT INTO [${entity!.SchemaName}].[${entity!.BaseTable}] ` +
+            `(ID, Name, ContentTypeID, ContentSourceTypeID, ContentFileTypeID, URL, EmbeddingModelID, VectorIndexID, Configuration) ` +
+            `VALUES (@ID, @Name, @ContentTypeID, @ContentSourceTypeID, @ContentFileTypeID, @URL, @EmbeddingModelID, @VectorIndexID, @Configuration)`
+        );
+    S.Created.push({ entity: 'MJ: Content Sources', id: sourceID });
+    return { sourceID, sourceName };
+}
+
+/** CV9/CV10 need the fixture pool (server transport, SQL Server) to create a row behind the engine cache. */
+function guardNoPool(ctx: IntegrationCheckContext, id: string): boolean {
+    if (ctx.Pool) return false;
+    skipNote(id, 'no SQL fixture pool on this context (SQL Server server transport only) — cannot create a row this process never hears about');
+    return true;
+}
+
+/** Anti-vacuity for CV9/CV10: a row this process's KnowledgeHub cache already holds proves nothing. */
+function assertInvisibleToEngine(sourceID: string): void {
+    Assert(KnowledgeHubMetadataEngine.Instance.GetContentSourceByID(sourceID) === undefined,
+        `precondition: content source ${sourceID} must be invisible to this process's KnowledgeHub cache, or the check cannot fail`);
 }
 async function makeItem(ctx: IntegrationCheckContext, sourceID: string, contentTypeID: string, name: string, text: string): Promise<string> {
     const item = await ctx.Provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', ctx.User);
@@ -186,9 +254,15 @@ async function loadChunks(ctx: IntegrationCheckContext, itemID: string): Promise
     const r = await new RunView().RunView<MJContentItemChunkEntity>({ EntityName: 'MJ: Content Item Chunks', ExtraFilter: `ContentItemID='${itemID}'`, OrderBy: 'Sequence ASC', ResultType: 'entity_object' }, ctx.User);
     return r.Results;
 }
-/** Refresh the KH cache so a just-created source (+ the fixture index) is visible to the engine. */
+/**
+ * Refresh the KH cache so a just-created source is visible to the engine, and AIEngineBase so a
+ * just-created fixture index is. AIEngineBase owns the Vector Indexes cache and overrides
+ * AdditionalLoading, so BaseEngine applies a save event to it only as a debounced full refresh,
+ * seconds later — the check would look the index up before it lands.
+ */
 async function refreshEngines(ctx: IntegrationCheckContext): Promise<void> {
     await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+    await AIEngineBase.Instance.Config(true, ctx.User, ctx.Provider);
 }
 function resetCaptures(): void { S.Upserts.length = 0; S.DeletedVectorIds.length = 0; S.EmbedCalls.length = 0; }
 /** The single upserted vector record's metadata for a single-item run. */
@@ -429,6 +503,93 @@ export const ContentVectorizationChecks: NamedCheck[] = [
                 console.log(`      → CV8/${c.label}: Entity kept (${c.why})`);
             }
         }
+    },
+    {
+        Id: 'content-vectorization.CV9',
+        Name: 'CV9: a content source another process created after the engine cache loaded still routes, stores and namespaces by its own configuration',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CV9') || guardNoPool(ctx, 'CV9')) return;
+            await ensureBase(ctx);
+
+            // The production shape: a long-running vectorization worker loaded its KnowledgeHub cache,
+            // then ANOTHER process created a source. That row decides where and how its items are
+            // stored, and this process can see it only through a stale cache, so each assertion below
+            // names a different way that goes wrong.
+            //
+            // The source's own index routes on a DOTTED namespaceField, the single-hop form production
+            // uses to reach a tenant id that lives on the source. CV6 routes on a plain field on the
+            // item, so FieldPathResolver never runs there.
+            const hop = await ctx.Provider.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes', ctx.User);
+            hop.NewRecord(); hop.Name = `${S.Prefix}-index-hop ${MARKER}`;
+            hop.EmbeddingModelID = S.EmbeddingModelID; hop.VectorDatabaseID = S.VectorDatabaseID; hop.Dimensions = 1536;
+            hop.ProviderConfig = JSON.stringify({ namespaceField: 'ContentSourceID.Name' });
+            Assert(await hop.Save(), `vector-index save: ${hop.LatestResult?.CompleteMessage}`);
+            S.Created.push({ entity: 'MJ: Vector Indexes', id: hop.ID });
+
+            // The content type routes somewhere ELSE: the base fixture index, whose namespaceField is
+            // the plain 'ContentSourceID'. That is where the item lands when the source's override is
+            // lost, so the routing assertion can tell the two apart.
+            const contentTypeID = await makeContentType(ctx, 'cv9', S.VectorIndexID);
+
+            // Prime the cache with the index and the type while the source does not exist yet.
+            await refreshEngines(ctx);
+            const { sourceID, sourceName } = await insertSourceBehindEngine(ctx, 'cv9', contentTypeID, hop.ID, { ChunkTextStorage: 'mixed' });
+            assertInvisibleToEngine(sourceID);
+
+            const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv9-item', 'A content item on a source another process created.');
+            resetCaptures();
+
+            await AutotagBaseEngine.Instance.VectorizeContentItems(await loadItems(ctx, [itemID]), ctx.User);
+
+            const up = S.Upserts[S.Upserts.length - 1];
+            Assert(!!up, 'the item was upserted at all (a routing refusal writes nothing)');
+            // 1. Routing: the SOURCE's own index, not the content type's.
+            AssertEqual(up.providerConfig?.['namespaceField'], 'ContentSourceID.Name',
+                "upserted through the source's own vector index, not the content type's");
+            // 2. Namespace: the dotted path resolved off the source row.
+            AssertEqual(up.records[0]?.providerTemporaryDirectives?.['namespace'], sourceName,
+                'the dotted namespaceField resolved off the source row');
+            // 3. Storage: the source's ChunkTextStorage='mixed' keeps a single-chunk item at item level,
+            //    so the item carries the vector id and no chunk row is written. The default
+            //    (alwaysChunk) does the opposite; CV1 pins that.
+            const item = (await loadItems(ctx, [itemID]))[0];
+            const chunks = await loadChunks(ctx, itemID);
+            Assert(item.VectorRecordID != null && chunks.length === 0,
+                `the source's ChunkTextStorage='mixed' applied: item VectorRecordID=${item.VectorRecordID}, chunk rows=${chunks.length}`);
+            console.log("      → CV9: late source routed to its own index, namespace resolved, its storage config applied");
+        }
+    },
+    {
+        Id: 'content-vectorization.CV10',
+        Name: 'CV10: FieldPathResolver queries a related row its engine cache has never seen instead of reporting it absent',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CV10') || guardNoPool(ctx, 'CV10')) return;
+            await ensureBase(ctx);
+
+            // The resolver seam on its own, against the real registry, engine and database. CV9 cannot
+            // show it: the vectorization pass reloads the KnowledgeHub cache when it sees the miss, so
+            // by the time the resolver runs there the row is cached. Other callers, and hops into other
+            // engine-cached entities, get no such reload.
+            const contentTypeID = await makeContentType(ctx, 'cv10');
+            await refreshEngines(ctx);
+            const { sourceID, sourceName } = await insertSourceBehindEngine(ctx, 'cv10', contentTypeID, S.VectorIndexID);
+            assertInvisibleToEngine(sourceID);
+            // The resolver asks the registry first. Without a full-set cache on offer it would query
+            // anyway, and this check would pass on the old code too.
+            Assert(BaseEngineRegistry.Instance.TryGetCachedRecords('MJ: Content Sources', { unfilteredOnly: true }) != null,
+                "precondition: an engine offers a full-set cache of 'MJ: Content Sources'");
+
+            const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv10-item', 'FieldPathResolver seam.');
+            const resolver = new FieldPathResolver(ctx.Provider, ctx.User, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems(await loadItems(ctx, [itemID]), 'ContentSourceID.Name');
+
+            // Before the fix this was undefined: the cache's filtered subset was read as "no such source".
+            AssertEqual(values.get(NormalizeUUID(itemID)), sourceName,
+                'ContentSourceID.Name resolved for a source the engine cache has never seen');
+            console.log('      → CV10: the resolver queried the source its engine cache had never seen');
+        }
     }
 ];
 
@@ -448,7 +609,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('content-vectorization', {
         await AIEngine.Instance.Config(false, ctx.User, ctx.Provider);
         await KnowledgeHubMetadataEngine.Instance.Config(false, ctx.User, ctx.Provider);
         await AutotagBaseEngine.Instance.Config(false, ctx.User, ctx.Provider);
-        const idx = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0];
+        const idx = AIEngine.Instance.VectorIndexes[0];
         if (!idx?.EmbeddingModelID || !idx?.VectorDatabaseID) {
             S.Skip = true;
             S.SkipReason = 'no Vector Index with an embedding model + vector DB to borrow — content vectorization cannot be exercised';

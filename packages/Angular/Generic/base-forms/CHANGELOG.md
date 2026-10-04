@@ -1,5 +1,174 @@
 # @memberjunction/ng-base-forms
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 7e57b48: Introduce `@memberjunction/ng-record-clone`: an embeddable clone wizard (`mj-record-clone-panel`) and a slide-in wrapper (`mj-record-clone-slide-in`) built on the generic `mj-slide-panel`, plus the plan tree, values, review, progress, result and lineage-chip building blocks.
+  The `ng-base-forms` record toolbar gains a built-in Clone action, enabled by `FormToolbarConfig.ShowCloneButton` and shown only for entities whose clone configuration is enabled, with `BeforeClone` and `CloneCompleted` outputs.
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+### Patch Changes
+
+- 5ee02db: Record forms now flag likely duplicates while a person enters a new record, for entities whose entity document has LLM reasoning enabled and uses the `Decision` or `DecisionThenPrompt` reasoning mode. The check only flags: it never blocks a save or merges, and it shows nothing if it misses its time budget. The server bounds each check with its own budget and stops it there, a form keeps at most one check in flight, and an API key needs both the `view:run` and `prompt:execute` scopes to run one. A user who cannot read the entity is never checked.
+- 93f1254: A simpler record toolbar on every form. Edit is an icon button. Each user chooses up to three actions to pin as buttons (`MaxPinnedActions`), saved once per user (setting `mj.form.toolbar.pinnedActions`) and shared by every form; until a user chooses, Favorite and History are pinned (`DefaultPinnedActions`). The other actions are in a More panel, with Delete set apart at the end. Section and layout controls and the form-variant picker move into a View panel; an active section filter stays visible as a clearable chip, and a non-default form variant shows on the View button. The IS-A breadcrumb gets its own row. Custom registered items stay inline unless they set `Pinnable: true`.
+
+  Both panels are disclosure panels (the trigger has `aria-expanded` and `aria-controls`): opening one moves focus into it, Escape closes it and returns focus to its button (in the section search, the first Escape clears the text), and every control in them, including the form-variant rows and the IS-A breadcrumb badges, is a keyboard-reachable button with a visible focus ring.
+
+  What moves for users: Refresh, Clone, Lists, Tags and Attachments take two clicks unless pinned; Delete is always in More; section search is behind View.
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [a3d6182]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+- Updated dependencies [8766e99]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.2
+  - @memberjunction/ng-record-changes@6.2.0-edge.2
+  - @memberjunction/ng-record-clone@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-code-editor@6.2.0-edge.2
+  - @memberjunction/ng-file-storage@6.2.0-edge.2
+  - @memberjunction/ng-list-management@6.2.0-edge.2
+  - @memberjunction/ng-notifications@6.2.0-edge.2
+  - @memberjunction/ng-react@6.2.0-edge.2
+  - @memberjunction/ng-record-tags@6.2.0-edge.2
+  - @memberjunction/ng-shared-generic@6.2.0-edge.2
+  - @memberjunction/interactive-component-types@6.2.0-edge.2
+  - @memberjunction/ng-markdown@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 62e9e2d: Foreign-key picker: a dismissed panel stays dismissed, and a press anywhere off the field closes it.
+
+  Escape and leaving the field closed the panel, but a lookup still in flight reopened it when its rows arrived, and a keystroke's debounced search fired after blur. On a related entity large enough to be looked up from the database — a person picker on an order, say — any lookup slower than the 200 ms blur grace period reopened the list with nothing focused. Nothing could then close it: Escape is heard only by the focused input, blur had already run, and there was no outside-press handling. Picking a row or scrolling the page was the only way out, and clearing the field started the same lookup again.
+  - Every dismiss retires the lookup sequence and cancels the debounce, so nothing started before it can reopen the panel. This also covers a row picked while a lookup was still loading.
+  - While a dropdown is open, a mouse press anywhere outside the field and its body-portaled panel closes it, whether or not the input has focus.
+  - A blur whose grace period is interrupted by a refocus, or by clearing the value, no longer closes the panel that just opened.
+  - Escape that closes the panel is consumed, so it no longer also closes a dialog, slide panel or window hosting the form. With no panel open the key is left alone.
+  - Destroying the field or rebinding it to another record also retires in-flight work: late rows no longer reopen the panel, re-arm document listeners with no owner, or land on the next record. The body portal likewise skips a field that was destroyed or dismissed before it ran, which used to leave an orphaned panel in the page.
+
+- 62f0ebc: Generated forms on entities with many related-entity panels no longer peg the CPU. Resolving form contributions keyed every related panel by scanning every other panel with `UUIDsEqual`, which is O(n²) in the entity's `DisplayInForm` relationships. The resolution runs once per `formContext` binding on every change-detection pass, and the MJ: Users form has 134 of those bindings. `ResolveFormContributions` and `ContributionHiddenSectionKeys` now count each related entity once per resolution, which makes the pass linear. `RelatedEntitySectionKey` keeps its signature and output, and now normalizes its target once and stops at the second match.
+
+  New public export: `CreateRelatedEntitySectionKeyResolver(displayInFormPeers)` returns a function that gives `RelatedEntitySectionKey`'s answer for any relationship against one fixed peer set. Use it to key many relationships against the same peers in linear time.
+
+  `guides/UUID_COMPARISON_GUIDE.md` gains Pattern 8, on nested and per-render comparisons.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- db975fa: Form fields no longer paint an empty string as "required and empty" (#4359).
+
+  `MjFormFieldComponent.IsRequiredEmpty` counted `''` as empty, but `IsRequired` is derived from the column's nullability (`AllowsNull === false`) — and a NOT NULL string column accepts `''` in both SQL Server and `EntityField.Validate()`. So clearing a required text field painted the underline red and raised a section-indicator count for a value the save accepts without complaint: the form and the save disagreed about the same value. The getter now treats only `null` / `undefined` as empty, which is exactly what the save refuses.
+
+  **Behavior change**: a NOT NULL string field cleared to `''` in edit mode no longer shows the red required-empty underline and no longer counts toward a section's invalid-field badge. A field that is genuinely `null` — typically an untouched field on a new record — still does.
+
+  Requiring actual text is a separate, deliberate constraint (an `IsRequired`-style flag of the kind `ActionParam` / `TemplateParam` already carry, or a CHECK constraint), not something to infer from nullability. That flag does not exist for entity fields today and is tracked separately.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [beacbb2]
+- Updated dependencies [2d4bf8d]
+- Updated dependencies [307da67]
+- Updated dependencies [d67c8c0]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [920bef8]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/interactive-component-types@6.2.0-edge.1
+  - @memberjunction/ng-code-editor@6.2.0-edge.1
+  - @memberjunction/ng-file-storage@6.2.0-edge.1
+  - @memberjunction/ng-list-management@6.2.0-edge.1
+  - @memberjunction/ng-markdown@6.2.0-edge.1
+  - @memberjunction/ng-notifications@6.2.0-edge.1
+  - @memberjunction/ng-react@6.2.0-edge.1
+  - @memberjunction/ng-record-changes@6.2.0-edge.1
+  - @memberjunction/ng-shared-generic@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+  - @memberjunction/ng-record-tags@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Minor Changes

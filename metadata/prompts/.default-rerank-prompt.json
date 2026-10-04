@@ -1,0 +1,95 @@
+[
+  {
+    "fields": {
+      "Name": "Default Rerank",
+      "Description": "The rerank prompt used when no other is named, by AIRerankerRunner and so by RerankerService.RerankNotes. It makes no chat call: its bindings choose the reranker model and its failover settings apply across them. Callers pass the query and documents directly, so the template only renders a query passed as template data.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/default-rerank.template.md",
+      "Status": "Active",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "SelectionStrategy": "Specific",
+      "RequireSpecificModels": true,
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "ResponseFormat": "Any",
+      "OutputType": "string",
+      "ValidationBehavior": "None",
+      "MaxRetries": 0,
+      "FailoverStrategy": "NextBestModel",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-v4-fast",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 40
+          },
+          "primaryKey": {
+            "ID": "66952A8C-9A4A-46A1-8139-C2E943767C13"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:14.695Z",
+            "checksum": "20a991131859128a6a5ab5318e01d0dd68dde2f977871a62097a837f61aeafaa"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-v4-pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 30
+          },
+          "primaryKey": {
+            "ID": "6A4BDC64-0D7D-42EF-A6A5-2B33E896741D"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:14.713Z",
+            "checksum": "42c298456f1d87eaba313d0fb095ebec258689f8100ad8a617562401fb16c1b3"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-multilingual-v3.0",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 20
+          },
+          "primaryKey": {
+            "ID": "35A5A67B-7929-4485-AC65-73D067E13D13"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:14.729Z",
+            "checksum": "9b8bbeb44ea1fb301a972cb9a5c071e627a5c7be194422eafab1cda05971c73c"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-v3.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "D86FA0E8-428D-40C5-A77F-C52143145D7E"
+          },
+          "sync": {
+            "lastModified": "2026-10-02T21:42:14.745Z",
+            "checksum": "163a7ad83feec085e1cefee4c0da195eb2cb6a4236ad5db9322e154ea225abde"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "802CD323-C811-4105-8717-0FCAA99301E0"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:14.675Z",
+      "checksum": "09b63ae46437c9853be5f6dc0940045d8ab8a63bafd9682acabf67a5e18f50e3"
+    }
+  }
+]

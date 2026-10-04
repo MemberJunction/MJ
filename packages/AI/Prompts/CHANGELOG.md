@@ -1,5 +1,228 @@
 # @memberjunction/ai-prompts
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 79279f2: Text-to-speech, speech-to-text and video now have runners, like chat, embeddings and images.
+  - **`AITextToSpeechRunner`** (`TTS` models), **`AISpeechToTextRunner`** (`Speech to Text` models) and **`AIVideoRunner`** (`Video` models) select a model from a carrier prompt's bindings, or a pinned `ModelID`, resolve its credential, fail over, and record every call as an AI Prompt Run. The run row never holds audio or video. Text-to-speech records the characters sent in the `Characters` measure unless the driver reports its own quantity; speech-to-text records the audio's seconds when the provider reports them; video records seconds only when a driver reports them, which HeyGen's does not. They share their lifecycle through a new `BaseMediaRunner`.
+  - New metadata: the `Default Text To Speech`, `Default Speech To Text` and `Default Video Generation` prompts, which the runners use when no prompt is named.
+  - **`BaseAudioGenerator` is split** into `BaseTextToSpeech` and `BaseSpeechToText`. `BaseAudioGenerator` is deprecated but keeps working: it implements both, and every driver still extends it and stays registered against it under the same key. `OpenAIAudioGenerator` also registers against both new classes, `ElevenLabsAudioGenerator` against `BaseTextToSpeech`, and `GroqAudioGenerator` against `BaseSpeechToText`. The split-and-join transcription loop is also exported as `TranscribeAudioWithSplitting`.
+  - `VideoResult` gains an optional `usage`, for a driver that reports the video's length.
+  - `SpeechResult` and `VideoResult` gain an optional `errorInfo`. The OpenAI, ElevenLabs, Groq and HeyGen audio and video drivers now fill it from the error their SDK threw, keeping its HTTP status, so a caller can tell a rejected request from an outage. The runners fail over on it: a 400 or 422 no longer fails over to every other candidate.
+  - The media runners take `TimeoutMS` and `CancellationToken`, which bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call.
+  - `BaseModelRunner` gains `ResolveUsageToRecord` and `ApplyUsageToRunRecord`, which the image runner now uses too, so every non-chat runner records units the same way.
+
+  Nothing called the audio or video drivers before, so no existing caller changes behavior.
+
+- 3fbda62: Add `AIDecisionRunner`, which runs typed decisions (Likelihood, Choice, Score) on `Decision`-type models with model selection, failover, model limits and prompt-run telemetry, together with the `LLM Decision` model (under the `MemberJunction` vendor) and the `Default Decision` prompt. A higher-priority model skipped for lack of a credential is logged once per process, naming the `AI_VENDOR_API_KEY__<DRIVERCLASS>` variable that would enable it.
+- ff00d60: Image generation now runs through a new `AIImageGenerationRunner`, which records every call as an AI Prompt Run and fails over between the image models that the new `Default Image Generation` prompt binds. Each run records the images it returned, so the models' existing `Per Image` cost rows price it. Run rows also record the calling agent. The Generate Image action uses the runner. With no Model named, the prompt's bindings choose; their first choice is the model the action picked before, and failover can reach the other vendor with the run's own key. A named Model is pinned, and fails over only between its own vendors. The action's key now ranks as it does for chat prompts: a credential binding, or a default credential of the vendor's credential type, wins over it. A call with no key the action can resolve now reaches the runner, where a binding may still apply. If none does, it fails with `GENERATION_FAILED` instead of `ACTION_FAILED`.
+- 861cbf0: Follow-ups from the image runner review:
+  - **Prompt model pinning**: Set `RequireSpecificModels: true` on the `Default Image Generation` carrier prompt (`metadata/prompts/.default-image-generation-prompt.json`), ensuring `AIImageGenerationRunner` only selects models explicitly bound to the prompt with supported drivers rather than falling back to unbound image models.
+  - **`ResolveImageGenerationAPIKey` JSDoc**: Marked `ResolveImageGenerationAPIKey` in `@memberjunction/core-actions` as `@deprecated` with updated documentation clarifying it is retained for backwards compatibility, pointing callers to `BuildImageGenerationAPIKeys`.
+
+- e51ce8a: Add `LLMDecision`, a `BaseDecision` driver that answers typed decision questions (Likelihood, Choice, Score) with a chat model through an MJ prompt, and the `LLM Decision` prompt it runs, bound to GPT-OSS-120B on Cerebras and Groq with GPT 5.5 Instant as the fallback. Choice and Score replies are normalised into probability distributions before `BaseDecision` validates them. A missing option or level counts as 0, but a value the model wrote that is not a usable number (such as `"80%"`, `null`, a negative, or a Likelihood of `85`) fails the decision instead of being guessed at.
+- 14e2a3a: Retires the AI Prompt "Job Function and Seniority Derivation" (`7C46041F`) from MJ core (#4918). bizapps-common ships the same prompt with the same ID, so installing common on MJ 6.2 failed with a duplicate primary key. The prompt and its template, template content and template parameter are marked `deleteRecord`; the next metadata sync deletes them, and the prompt's two AI Prompt Models go with it through `spDeleteAIPrompt`'s cascade.
+
+  Known gap: a database that already has bizapps-common 5.47 installed cannot upgrade to 6.2, because `V202609221852__v6.2.x__Metadata_Sync.sql` inserts a prompt model that duplicates common's on `UQ_AIPromptModel_Prompt_Model_Vendor_ConfigID` before this delete can run. Don't work around it by deleting common's prompt model, and don't fix it by guarding that migration's inserts alone. Once the migration completes on such a database, it overwrites common's prompt with MJ's version, and the metadata sync's `spDeleteAIPrompt` then deletes it: the prompt, its prompt models, prompt runs and result cache. It also sets `PromptID` to NULL on common's record processes. Tracked in #4939.
+
+### Patch Changes
+
+- eaa9455: Introduce `AIEmbeddingRunner` extending `BaseModelRunner` with `RequiredModelType = 'Embeddings'`.
+  - Implement credential resolution, failover across candidate models/vendors, retry handling, and `MJAIPromptRun` persistence.
+  - Deprecate `AIModelRunner.RunEmbedding` and delegate transparently to `AIEmbeddingRunner`.
+  - Migrate embedding call sites in `@memberjunction/tag-engine`, `@memberjunction/ai-vector-dupe`, `@memberjunction/ai-vector-sync`, `@memberjunction/content-autotagging`, and `@memberjunction/search-engine` to use `AIEmbeddingRunner`.
+  - `AIEmbeddingRunner` runs a driver that needs no API key (`LocalEmbedding`, `OllamaEmbedding`) with no key configured, and follows the prompt's `FailoverStrategy` (`SameModelDifferentVendor` never switches models).
+  - With no Embedding prompt, the runner embeds under an unsaved stand-in and writes no run row. `EmbeddingRunParams.SkipRunRecord` skips the row on demand.
+  - `TagEngine` embeds tags, queries and new tags with one model (the Tag Semantic Matching prompt's, else the smallest) and persists that ID.
+  - Vector search keys its query-embedding cache by model and dimension, not by driver.
+- 660ef45: Add a `RunDecision` GraphQL mutation and `GraphQLAIClient.RunDecision`, so browser code can run a typed decision in one round trip, under the same authorization as `RunAIPrompt`: the API-key `prompt:execute` scope is checked against the ID of the prompt that runs. The mutation refuses scope-limited sessions, and bounds the state and question sizes and the model-call timeout on the server. The `Run Decision` action's question validation moves unchanged to `ParseDecisionQuestions` in `@memberjunction/ai-prompts`, which the action and the mutation now share.
+- 35ffb95: A decision answered by `LLMDecision` now carries its chat model's cost: the chat prompt's run is a child of the decision's run, and its cost is recorded as the decision run's `DescendantCost` and `TotalCost`, so an agent's `MaxCostPerRun` counts it. The cost is booked as a descendant only when the chat run was actually linked as a child; when the decision run's own INSERT failed, it stays the decision run's own `Cost`. When a decision fails over, every linked attempt's cost is kept, not only the answering attempt's. Once the chat run is saved, its saved cost is the one reported, so a runner-reported cost of 0 that the server reprices no longer overwrites the rollup.
+- 5148534: A rerank answered by `LLMReranker` now carries its chat model's cost: the chat prompt's run is a child of the rerank's run, and its cost is recorded as the rerank run's `DescendantCost` and `TotalCost`. `RerankResponse` gains an optional `Usage`, which a reranker driver sets when it knows its call's tokens and cost.
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/templates@6.2.0-edge.2
+  - @memberjunction/credentials@6.2.0-edge.2
+  - @memberjunction/templates-base-types@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- 0eeb89d: **AI usage analytics: a trustworthy cost basis, and the dimensions to slice it by (#4396)**
+
+  Cost reporting was wrong in both directions and could not be sliced by the dimensions anyone
+  actually asks about. This settles the basis, gives runs the keys they were missing, and rebuilds
+  the reporting layer on top.
+  - **Cost doctrine.** `guides/AI_USAGE_AND_COST_ANALYTICS_GUIDE.md` states the rules every consumer
+    now follows: the additive basis is own cost at the prompt-run grain, `Cost IS NULL` means
+    unpriced and is never coalesced to zero, rollups are derived from the hierarchy at query time and
+    never summed from stored inclusive columns, and coverage ships beside every cost figure.
+  - **Attribution.** `AIPromptRun` gains `UserID`, written when the run is created. The agent run a
+    prompt run belongs to is not stored on it: the agent layer owns that link as
+    `AIAgentRunStep.TargetLogID`, now indexed, and the fact view resolves it at query time. Cost
+    precision is aligned on `decimal(19,8)` across both run tables, and six analytics indexes are
+    added. Sub-agent runs now inherit `CompanyID`.
+  - **Parallel execution accounting.** The consolidated parent is created before its arms run, so the
+    arms persist as `ParallelChild` rows with their own cost and the parent carries none — previously
+    the losing arms were never recorded at all.
+  - **Semantic layer.** `vwAIUsageFacts` gives one row per prompt run over the base tables, with
+    time buckets, every dimension, and the flags that carry semantics no column expresses
+    (`IsPriced`, `IsParallelParent`, `IsUnmeasured`, `SourceKind`).
+  - **Aggregates.** Eight saved queries in the `AI` category, every cost figure grouped by currency
+    and carried with its priced/unpriced counts. They run live; materializing the hourly and daily
+    grains is a follow-up.
+  - **Honest dashboards.** The seven analytics surfaces read the aggregates instead of pulling
+    unbounded raw rows, unpriced cost renders as an em dash rather than `$0.00`, and coverage is
+    shown beside every total.
+  - **`mj-query-pivot`.** A generic pivot over any saved Query in `@memberjunction/ng-query-viewer`;
+    the AI Usage Explorer is a thin configuration of it. `ColumnLabels` titles columns, and
+    `HiddenColumns` lets a host group by an ID it does not display (so two records that share a name
+    stay apart while only the name shows).
+
+- 1d43161: Move the Loop agent's volatile runtime state out of the system prompt so provider prompt caches survive across iterations. Until now the Loop agent system prompt rendered the current date/time, Scratchpad State and Payload at its tail, and because those blocks change every iteration the provider's prefix cache broke before it reached the conversation history; measured on Sage the cached share of input was 37% and the entire history was re-read on every step. The template no longer renders those blocks. Instead `BaseAgent.preparePromptParams` builds the same content into a `<mj-runtime-state>` fragment appended as the final `user` message of each request, and the system prompt carries a static pointer telling the model where to find it. At send time the fragment tag literal is escaped in every history message so no tool result or user text can pose as framework state. This is framework behaviour, not a per-agent setting: there is no placement parameter. The fragment is emitted only when the system prompt template carries the `<mj-runtime-state>` pointer. A template that still embeds the state blocks (a database whose template has not yet synced, or the Flow template) gets no fragment, so the transition cannot produce duplicated state; a template with neither (the Harness system prompt, or a custom prompt run without the Loop system prompt) gets none either, so no agent receives an unexplained block. Only a failed template lookup fails open. `specializationPlacement` (`auto`, `systemPrompt`, `trailingMessage`) relocates the agent's own child prompt into the fragment when it contains volatile placeholders, so a per-iteration date in a child prompt cannot silently reintroduce the cache break. `AIPromptRunner` exposes `RenderChildPromptTemplates` publicly for the relocation path, and `AgentChatMessageMetadata` gains a `volatileState` flag so provider adapters can recognise the fragment.
+
+  Two boundaries keep the fragment where it belongs. `prepareSubAgentMessages` drops `volatileState` messages before any message mode slices the parent history, so a sub-agent never sees the parent's payload, scratchpad or specialization and its `MaxMessages` window is spent on real turns. Under append-only retention, context recovery now frees retained fragments first — oldest first, all but the newest — before it touches tool results, and `TrimLastUserMessage` skips them, so a long run cannot overflow on state the next request re-sends anyway; the fragment carries `turnAdded` for the lifecycle. All placeholder names, tag literals and headings live in one `constants.ts`, and the unsync guard's markers are overridable through the protected `volatileTemplateMarkers` getter. The fragment is carried across iterations in a provider-aware way. Providers with block-level or sliding prefix caches (Anthropic, Gemini, Cerebras) get replace-in-place: only the latest fragment is attached, keeping the history compact. OpenAI and xAI (Grok) automatic caches reuse a prior request only when its entire prompt is a byte prefix of the new one, so for OpenAI and xAI prior fragments are retained and the new one appended, making each request an exact prefix extension of the last. The mode is chosen once per run by the new Loop agent prompt param `trailingStateMode` (`auto`, `appendOnly`, `replace`). Which providers need which is metadata, not code: `auto` reads the new `PrefixPromptCache` boolean from the model catalog's `ModelConfiguration` cascade through `BaseAgent.resolvePrefixPromptCache` and `AIEngine.GetEffectiveModelConfiguration`, for the model of the runtime override or of the first iteration's selection, then freezes that answer so a mid-run failover cannot flip the layout; `true` means append-only, anything else replace-in-place. The cascade gains a vendor layer for this: a migration adds a `Configuration` bag to `AIVendor` (JSONType `IAIVendorConfiguration`, a general-purpose vendor bag whose `ModelDefaults` key is a model-configuration bag), and the engine now resolves Model Types < Models < Vendors' `Configuration.ModelDefaults` < Model Vendors: the vendor default is the host-wide default for every model it serves and beats the model's own bag, merged per key, with the model-vendor row as the tie-breaker. `metadata/ai-vendors` sets `PrefixPromptCache: true` under `Configuration.ModelDefaults` on the OpenAI and x.ai vendor rows; every model they serve inherits it, and a model-vendor row can override it for one model on a host that diverges. `@memberjunction/ai` gains `AIVendorConfiguration` and `ParseVendorConfiguration` alongside. There is no vendor-name or driver-class matching. Turn 1, before any selection is known, uses replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is spliced back at the turn-1 boundary, which reproduces the bytes an append-only turn 1 would have sent, so nothing is lost by deferring. The explicit values exist for a serving path whose catalog rows carry no strategy yet. `@memberjunction/ai` gains the framework-generic half of that: the `LLMConfigurationSettings.PrefixPromptCache` field and `IsPrefixPromptCache` in `modelConfiguration.ts`, and on `BaseLLM` the protected `isVolatileStateMessage` (the `volatileState` metadata flag), `trailingVolatileStateIndex` and `splitTrailingVolatileState` seam, with `VolatileStateMessageMetadata` and `TrailingVolatileStateSplit` as the shared shapes. The Anthropic adapter (`@memberjunction/ai-anthropic`) overrides `isVolatileStateMessage` to keep its tag-literal fallback and uses the split to recognise a trailing fragment, whether it is the last message or is followed by an assistant prefill, placing its ephemeral cache breakpoint on the last real history message instead and inserting an `OK` assistant turn when needed to preserve role alternation, so the stable history caches and only the fragment (and any prefill) is re-processed. Measured live on Sage on iterations 3 and later: Claude Sonnet 4.6, Opus 5, and Opus 5.5 from 0% to 78–90% cached, Grok 4.7 from 21% to 91%, GPT 5.6 from 0% to 78%, Gemini 2.5/3.8 Flash from 30–37% to 66–75%, Cerebras GPT-OSS-120B from 65% to 96%; prompt cost per million tokens fell 37–80% depending on provider.
+
+  Action execution gains a run-scoped circuit breaker in `BaseAgent.ExecuteSingleAction`, prompted by a bug this work exposed: `executeActionsStep` reported an action whose `ActionResult.Success` was `false` as successful, so agents retried unconfigured tools indefinitely. The step result now carries the action's real outcome, and the circuit breaker's three rules, checked fatal → identical-arguments → budget, bound retries. A fatal configuration error (API key missing or invalid, "not configured", credentials missing, "authentication failed") disables the action for the rest of the run; HTTP 401/403, "unauthorized" and "forbidden" are deliberately not fatal because they are usually per-resource or transient, and neither is a failure the model can fix itself: a message that names a parameter, or a call whose own arguments carried a credential (password, API key, token), falls through to the attempt budget instead. The identical-arguments rule: two failures with identical arguments (`IDENTICAL_FAILURE_THRESHOLD`) block further calls with those arguments, while different arguments still dispatch; argument identity is `normalizeActionParams`, keys sorted at every depth, in three protected layers a subclass can override. The attempt budget: five consecutive failures across any arguments (`ACTION_FAILURE_BUDGET`) disable the action for the run. A success resets both counters. Blocked calls return a `CircuitBreakerActionResult` in 0ms that names the rule that fired, and a `user`-role guidance message (`[CRITICAL/ACTION_UNAVAILABLE]`, `[CRITICAL/REPEATED_IDENTICAL_CALL]`, `[CRITICAL/ATTEMPTS_EXHAUSTED]` or `[WARNING/ACTION_FAILURE]`) is appended to the history so the model pivots instead of looping; the budget rule is reported ahead of the identical-arguments rule, since once the budget is spent no change of arguments can help. Calls made by the pipeline executor and by ForEach / While iterations bypass the breaker via a new optional `ExecuteSingleActionOptions.skipCircuitBreaker`, since those loops already account for failures per element, expect elements to be independent, and have no model in the loop to act on the guidance. Flow agents are exempt the same way through `BaseAgentType.UsesActionCircuitBreaker` (default true, false on `FlowAgentType`): their action nodes are chosen by the graph, whose failure paths may legitimately re-run a node with the same inputs, and no model reads a directive there, so the main loop passes the exemption and suppresses the directive for such steps. Metadata: the Loop agent type's `PromptParamsSchema` gains `specializationPlacement` and `trailingStateMode` and loses `volatileStatePlacement`; the system prompt template drops its volatile tail.
+
+### Patch Changes
+
+- 5da3ad2: Replace six regular expressions that CodeQL flagged as polynomial (`js/polynomial-redos`) with linear scans that match exactly the same text. Crafted provider error messages or prompt text could make the old expressions take quadratic time.
+  - `ErrorAnalyzer` (`@memberjunction/ai`): the "missing field/property" checks and the JSON extraction from an error message. A third check, `/\w+\s+is\s+required/`, is removed: it only ran when the message didn't contain "required", so it could never match.
+  - `AIPromptRunner` (`@memberjunction/ai-prompts`): trimming spaces and tabs from each stop sequence (still keeping leading and trailing newlines), and reading the MIME type from an artifact-manifest line.
+
+  No behavior change. Each replacement is tested against the expression it replaces on a generated corpus, and against the repeated-input shapes CodeQL reported.
+
+- 7110019: Removes dead failover candidate-building code from `AIPromptRunner`, and pins model type as a hard boundary for failover with a test.
+
+  The typed-decision plan (#4660, Phase 0, Task 0.2) identified a failover type filter that compared model-type **name strings** from a denormalised view column, while the other three candidate filters compare `AIModelTypeID` with `UUIDsEqual`. That filter lived in `buildFailoverCandidates` (and its helper `createCandidatesFromModels`), and **nothing calls either method**. The live failover path, `executeModelWithFailover` → `selectFailoverCandidates`, only reorders and filters the `allCandidates` list produced by model selection, which already filters by type ID. So for a prompt whose `AIModelTypeID` is set, failover never crossed types, and the name-string comparison was unreachable. A prompt whose `AIModelTypeID` is null is treated as "any type" by selection, and so by failover, before and after this change; the runner's `RequiredModelType` floor, later in this series, closes that case.
+  - Removes two unused protected methods, `buildFailoverCandidates` and `createCandidatesFromModels`, and the doc comment that still listed them, so Task 0.3 has less to move into the shared runner base. Nothing in MJ called them, so runtime behaviour is unchanged. A subclass that overrode either method must drop the override (TypeScript reports TS4113), and one that called it through `super` must stop.
+  - Adds `AIPromptRunner.failover.test.ts` › "failover never crosses model types". For a prompt whose `AIModelTypeID` is the LLM type, a credentialed embeddings model out-ranks every LLM in the catalog, every LLM call fails, and the test asserts the runner walks the LLM candidates without ever calling the embeddings model. Removing the ID filter from `getModelPoolForStrategy` makes it fail, with the embeddings model tried first.
+
+- 7110019: Extract `BaseModelRunner` and shared model-run types. A behaviour-neutral move (typed-decision plan, #4660, Phase 0 Task 0.3).
+  - Move shared parameter/result types to `@memberjunction/ai-core-plus`
+  - Introduce `BaseModelRunner` abstract base in `@memberjunction/ai-prompts`. It declares `RequiredModelType`, a model-type name that a later change in this series enforces; nothing reads it yet. Its protected API is still settling across that series.
+  - Reparent `AIPromptRunner` onto `BaseModelRunner` (behavior-neutral). `AIPromptRunner` still logs uncategorized errors under `AIPromptRunner`; a runner that does not override `DefaultLogCategory` logs them under `BaseModelRunner`.
+- f2a4171: A runner's `RequiredModelType` is now a hard floor on model selection. For `AIPromptRunner` that type is `LLM`.
+  - A prompt whose `AIModelTypeID` is empty now draws only models of the runner's required type. Previously it could select a model of any type, such as an embeddings or realtime model with a high `PowerRank`.
+  - A prompt whose `AIModelTypeID` names a different type now fails with an error naming both types, instead of running.
+  - Prompt model bindings (`AIPromptModel`) that point at a model of another type are skipped, and the skip is logged.
+  - An explicit model override (`override.modelId`, a scoped prompt config's `ModelID`, an eval matrix cell) that names a model of another type now fails with an error naming both types, instead of running a different model.
+
+  On a clean install no shipped prompt is affected: every stock prompt leaves `AIModelTypeID` empty, and the only non-LLM bindings are the two embedding prompts, which the embeddings runner runs rather than `AIPromptRunner`.
+
+- e482249: The failover loop moves into `BaseModelRunner` as a generic `ExecuteWithFailover` for prompt-based runners, with no behaviour change. The runner supplies the model call on each candidate and the final error result as callbacks; `AIPromptRunner.executeModelWithFailover` keeps its signature and delegates to it. `processFailoverError`, `updatePromptRunWithFailoverFailure` and `createFailoverErrorResult` are `private` again, as they were before `BaseModelRunner`.
+- 37e2f6b: Refactor the prompt-run persistence lifecycle: the chat-specific request and result fields move from `BaseModelRunner` to `AIPromptRunner`, and `BaseModelRunner` gains `CreateRunRecord` and `FinalizeRunRecord` for prompt-based runners.
+  - `FinalizeRunRecord` takes the call's outcome and writes `Success` and `Status` (`Completed` or `Failed`) itself, before the runner's result callback runs, so no runner can leave a row at `Running`.
+  - Every `MJ: AI Prompt Runs` field the chat runner writes has the same value as before. The one difference is on an error path: if the chat runner's result callback throws, the row now ends `Completed` or `Failed` instead of staying `Running` (the error is still logged under `PromptRunUpdate`).
+  - `createPromptRun` and `updatePromptRun` keep their signatures and are `private` again, as they were before `BaseModelRunner`.
+  - The five members `BaseModelRunner` shares with its subclasses that had `private` camelCase names before it existed are PascalCase, like the rest of its protected API: `BuildModelVendorCandidates`, `HasCredentialsAvailable`, `ResolveCredentialForExecution`, `IsInferenceProvider`, `ApplyRetryDelay`. None has shipped, so there are no deprecated aliases.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/credentials@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/templates-base-types@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes

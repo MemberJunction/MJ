@@ -121,6 +121,12 @@ export interface ComputerUseTestConfig {
     /** Oracles to run for evaluation */
     oracles?: ComputerUseOracleConfig[];
 
+    /**
+     * When true, the inline criteria verdict gates Passed/Failed.
+     * Otherwise that verdict is advisory and only the configured oracles gate.
+     */
+    gateInlineVerdicts?: boolean;
+
     /** Scoring weights by oracle type */
     scoringWeights?: Record<string, number>;
 
