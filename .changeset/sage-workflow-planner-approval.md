@@ -51,3 +51,12 @@ fix(web-search): `IncludeAnswer` is a preference, not a requirement
 The same workflow then failed at its next step for an unrelated reason that the fix above made visible. The Demo Loop Agent set `IncludeAnswer: true` on its Web Search calls, and the engine responded by filtering the provider list down to answer-capable providers — none, on an install with only Google Custom Search and DuckDuckGo — and failing every search with `NO_ELIGIBLE_PROVIDER`. Whether the flag got set depended on which model was driving the agent, so the identical query worked on one model and failed on another.
 
 An agent can read hits; it cannot read an error. `WebSearchEngine.resolveByPriority` now prefers an answer-capable provider when one exists and otherwise serves plain results from the full priority list, with `IncludeAnswer` cleared before the drivers run and a new `WebSearchResult.Notice` saying what was dropped and why. The explicit-provider path is unchanged: naming a provider and demanding an answer it cannot give is a caller mistake and still returns `PROVIDER_LACKS_CAPABILITY`. The Web Search action surfaces `Notice` as an output parameter.
+
+---
+
+fix(server): a task's output carries the agent's answer, not just its payload
+
+`TaskGraphAgentRunner` recorded a task's output as the agent's structured payload when one existed and the run's Message only otherwise. A Loop agent's answer lives in the Message; its payload is usually partial or an echo of the task input. So a completed weather task's output said `{"cities":[…]}` while its message listed every temperature, downstream tasks were handed the input bag, and the workflow's follow-up turn presented JSON instead of the table the user asked for — or a table only when the first task happened to have no payload. A plain-object payload now carries the message under `_message` (additive, so `@taskN.output.field` references and flow conditions keep reading what they read today); arrays and primitives keep their shape; the no-payload and no-message cases are unchanged.
+
+The follow-up turn is also given the conversation it belongs to — the request, the approved plan, the last twenty messages, loaded through the same `ConversationEngine` helpers the run resolver uses — with the outcome appended last, and its instruction names the shape: the columns the user asked for, in that order, one row per item. It had been handed the outcome alone, so "present it in the form they asked for" had nothing to point at and one run answered with a table, the next with bulleted lists.
+

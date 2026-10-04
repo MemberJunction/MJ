@@ -19,6 +19,42 @@ import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunc
 import type { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
 
+/**
+ * The key under which an agent's prose answer rides along in a task's structured output.
+ *
+ * A Loop agent answers in two places: `payload`, the structured state it chose to write, and the
+ * run's `Message`, the prose it composed for whoever asked. For most agents the message IS the
+ * answer and the payload is partial or an echo of the task input. Recording the payload alone —
+ * which this runner did — sent downstream tasks and the workflow's follow-up turn a bag of input
+ * fields and lost the answer: a completed weather task whose output said `{"cities":[…]}` while
+ * its message listed every temperature. The follow-up then presented the bag as JSON.
+ */
+export const TASK_OUTPUT_MESSAGE_KEY = '_message';
+
+/**
+ * What a task records as its output, from an agent run's result.
+ *
+ * - No payload: the message (as before).
+ * - A payload and no message: the payload (as before).
+ * - A plain-object payload and a message: the payload with the message attached under
+ *   {@link TASK_OUTPUT_MESSAGE_KEY}. Additive on purpose: `@taskN.output.field` references and
+ *   flow conditions keep reading the fields they read today, and consumers that want the answer
+ *   in words have it too.
+ * - An array or primitive payload and a message: the payload. Wrapping it would change the shape
+ *   every existing reference to it relies on.
+ */
+export function ExtractTaskOutput(result: unknown): unknown {
+    const r = result as { payload?: unknown; agentRun?: { Message?: string | null } } | null | undefined;
+    const payload = r?.payload;
+    const message = r?.agentRun?.Message?.trim() || null;
+    if (payload == null) return message;
+    if (!message) return payload;
+    if (typeof payload === 'object' && !Array.isArray(payload)) {
+        return { ...(payload as Record<string, unknown>), [TASK_OUTPUT_MESSAGE_KEY]: message };
+    }
+    return payload;
+}
+
 export class TaskGraphAgentRunner implements TaskAgentRunner {
     public async RunAgentForTask(params: TaskAgentRunParams): Promise<TaskAgentRunResult> {
         try {
@@ -44,7 +80,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             const success = result?.success === true;
             return {
                 Success: success,
-                Output: this.extractOutput(result),
+                Output: ExtractTaskOutput(result),
                 ErrorMessage: success ? undefined : (result?.agentRun?.ErrorMessage ?? 'Agent execution failed'),
                 AgentRunID: result?.agentRun?.ID,
             };
@@ -129,10 +165,4 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             : 'Execute this task.';
     }
 
-    /** Prefers a structured payload over prose, so downstream tasks get data rather than text. */
-    private extractOutput(result: unknown): unknown {
-        const r = result as { payload?: unknown; agentRun?: { Message?: string } } | null;
-        if (r?.payload != null) return r.payload;
-        return r?.agentRun?.Message ?? null;
-    }
 }

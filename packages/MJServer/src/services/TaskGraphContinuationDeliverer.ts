@@ -13,7 +13,8 @@
  * @module @memberjunction/server
  */
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, MJAIAgentRunEntity, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import type { ChatMessage } from '@memberjunction/ai';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -28,6 +29,9 @@ const MAX_LISTED_TASKS = 20;
 
 /** How far up `ParentRunID` a reinvoke looks for the conversation's root agent. */
 const MAX_PARENT_HOPS = 20;
+
+/** How many recent conversation messages a follow-up turn is given, on top of the outcome. */
+const FOLLOW_UP_HISTORY_MESSAGES = 20;
 
 /**
  * Delivers a finished graph's outcome — as a conversation message, or by starting the submitting
@@ -207,8 +211,14 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 return;
             }
 
+            // The follow-up is a turn IN the conversation and gets the conversation: the request the
+            // user made, the plan they approved, and everything else a normal turn would see. Without
+            // it the agent was handed the outcome alone, "present it in the form they asked for" had
+            // nothing to point at, and every follow-up chose its own shape — a table one run, a
+            // bulleted list the next.
+            const history = await this.loadHistory(provider, owner, conversationID, reply.ID);
             const outcome = await runner.RunAgentInConversation(
-                { ...turn, conversationDetailId: reply.ID },
+                { ...turn, conversationMessages: [...history, ...turn.conversationMessages], conversationDetailId: reply.ID },
                 { conversationId: conversationID, conversationDetailId: reply.ID, createArtifacts: true },
             );
             this.announce(owner.ID, conversationID, reply.ID, outcome.agentResult.agentRun?.ID ?? null, outcome.agentResult.success);
@@ -269,6 +279,25 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
     }
 
     /**
+     * The conversation's recent messages, shaped the way every other turn sees them, minus the
+     * reply being written. Loaded through the same engine helpers as the run resolver so the two
+     * cannot drift. A failure to load is logged and yields no history: a follow-up that presents
+     * the outcome without context is still far better than one that never arrives.
+     */
+    private async loadHistory(provider: IMetadataProvider, owner: UserInfo, conversationID: string, replyID: string): Promise<ChatMessage[]> {
+        try {
+            const rows = await ConversationEngine.LoadWindowRowsFresh(conversationID, owner, provider);
+            return ConversationEngine.AssembleContextWindow(rows, {
+                excludeDetailIds: [replyID],
+                maxTailMessages: FOLLOW_UP_HISTORY_MESSAGES,
+            }) as ChatMessage[];
+        } catch (e) {
+            LogError(`[TaskGraphContinuationDeliverer] Could not load conversation ${conversationID} for the follow-up — running on the outcome alone`, undefined, e);
+            return [];
+        }
+    }
+
+    /**
      * The user a follow-up runs and writes as: the conversation's owner.
      *
      * `preferredUserID` (the root run's user) is tried first, then `MJ: Conversations.UserID`.
@@ -318,7 +347,9 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         return [
             this.renderMessage(params),
             '',
-            'Present these results to the user now, in full and in the form they asked for. ' +
+            'Present these results to the user now, in full and in the form they asked for in their request above — ' +
+            'if they asked for a table, give exactly the columns they named, in that order, one row per item, with no extra columns; ' +
+            'if a value is missing, say so in the cell rather than dropping the row. ' +
             'Do not ask whether they want to see them, do not summarize them away, and do not start the workflow again.',
         ].join('\n');
     }

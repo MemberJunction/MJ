@@ -16,10 +16,19 @@ vi.mock('@memberjunction/core', () => ({
     LogStatus: vi.fn(),
 }));
 
+const loadWindowRows = vi.fn().mockResolvedValue([{ ID: 'd1' }, { ID: 'd2' }]);
+const assembleWindow = vi.fn().mockReturnValue([
+    { role: 'user', content: 'Find the five largest cities and give me a table' },
+    { role: 'assistant', content: 'Here is the plan…' },
+]);
 vi.mock('@memberjunction/core-entities', () => ({
     MJConversationDetailEntity: class {},
     MJAIAgentRunEntity: class {},
     MJConversationEntity: class {},
+    ConversationEngine: {
+        LoadWindowRowsFresh: (...a: unknown[]) => loadWindowRows(...a),
+        AssembleContextWindow: (...a: unknown[]) => assembleWindow(...a),
+    },
 }));
 
 /** The users the server knows. The conversation's owner is `owner-1`; the dispatcher runs as `user-1`. */
@@ -301,7 +310,7 @@ describe('Reinvoke — restarting the conversation\'s agent', () => {
         expect(runAgentInConversation).toHaveBeenCalledTimes(1);
         const [turn, options] = runAgentInConversation.mock.calls[0];
         expect(turn.agent.ID).toBe('agent-1');
-        expect(turn.conversationMessages[0].content).toContain('Weekly digest');
+        expect(turn.conversationMessages.at(-1).content).toContain('Weekly digest');
         expect(options.conversationId).toBe('conv-1');
         expect(options.conversationDetailId).toBe('detail-new');
         expect(turn.conversationDetailId).toBe('detail-new');
@@ -332,6 +341,30 @@ describe('Reinvoke — restarting the conversation\'s agent', () => {
         expect(runAgentInConversation.mock.calls[0][0].contextUser.ID).toBe('owner-1');
         const [, payload] = publish.mock.calls[0];
         expect(payload.ownerUserId).toBe('owner-1');
+    });
+
+    it('gives the follow-up the conversation it belongs to, with the outcome last', async () => {
+        // Without the request and the approved plan in front of it, "present it in the form they
+        // asked for" had nothing to point at and every follow-up chose its own shape.
+        loadWindowRows.mockClear(); assembleWindow.mockClear();
+        const h = reinvokeHarness();
+        await h.deliverer.Reinvoke(params());
+        const [turn] = runAgentInConversation.mock.calls[0];
+        expect(loadWindowRows).toHaveBeenCalledWith('conv-1', expect.objectContaining({ ID: 'owner-1' }), expect.anything());
+        expect(assembleWindow.mock.calls[0][1]).toMatchObject({ excludeDetailIds: ['detail-new'], maxTailMessages: 20 });
+        expect(turn.conversationMessages).toHaveLength(3);
+        expect(turn.conversationMessages[0].content).toContain('give me a table');
+        expect(turn.conversationMessages[2].content).toContain('Weekly digest');
+        expect(turn.conversationMessages[2].content).toMatch(/exactly the columns they named/);
+    });
+
+    it('still runs on the outcome alone when the history cannot be loaded', async () => {
+        loadWindowRows.mockRejectedValueOnce(new Error('view failed'));
+        const h = reinvokeHarness();
+        await h.deliverer.Reinvoke(params());
+        const [turn] = runAgentInConversation.mock.calls[0];
+        expect(turn.conversationMessages).toHaveLength(1);
+        expect(turn.conversationMessages[0].content).toContain('Weekly digest');
     });
 
     it('reinvokes the ROOT of the submitting run\'s chain, not the sub-agent that submitted', async () => {
@@ -365,7 +398,7 @@ describe('Reinvoke — restarting the conversation\'s agent', () => {
         await h.deliverer.Reinvoke(params({ Tasks: [
             { TaskID: 't1', Name: 'Build table', Status: 'Complete', Output: '| City | Temp |\n| São Paulo | 72°F |' },
         ] }));
-        const content: string = runAgentInConversation.mock.calls[0][0].conversationMessages[0].content;
+        const content: string = runAgentInConversation.mock.calls[0][0].conversationMessages.at(-1).content;
         expect(content).toContain('Output of **Build table**');
         expect(content).toContain('| São Paulo | 72°F |');
         expect(content).toMatch(/Present these results to the user now/);
