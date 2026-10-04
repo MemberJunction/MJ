@@ -351,7 +351,7 @@ Read these before going deep:
 - **[MJCore readme](../packages/MJCore/readme.md)** — The metadata engine, `Metadata`, `BaseEntity`, `RunView`/`RunViews`, providers, `TransactionGroup`, and the core utilities every tier uses.
 - **[MJCoreEntities readme](../packages/MJCoreEntities/readme.md)** — The generated entity subclasses for MJ's own metadata schema, and the pattern your app's entities follow.
 - **[BaseEntity Server-Side Patterns](BASE_ENTITY_SERVER_PATTERNS.md)** — Persisted embeddings, cross-record invariants via `ValidateAsync`, FK cleanup before delete.
-- **[RunQuery Pagination](../packages/MJCore/docs/runquery-pagination.md)** & **[Keyset Pagination Guide](KEYSET_PAGINATION_GUIDE.md)** — Efficient paging for grids and bulk jobs.
+- **[RunQuery Pagination](../packages/MJCore/docs/runquery-pagination.md)** & **[Keyset Pagination Guide](KEYSET_PAGINATION_GUIDE.md)** — Efficient paging for grids and bulk jobs. A query has no default row limit: without `MaxRows` it returns every row it matches, and `MaxRows` limits the rows returned, not the work the database does.
 - **[Caching & Real-Time Sync Guide](CACHING_AND_PUBSUB_GUIDE.md)** — The multi-tier cache, RunView cache behavior, and event-driven invalidation that keeps your UI live.
 
 ### 4. Write once, run on every tier — the isomorphic core in practice
