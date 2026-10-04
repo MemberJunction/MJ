@@ -62,7 +62,7 @@ import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder, AgentMemoryObservability } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
 import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames, MAX_CONVERSATION_TOOL_CALLS_PER_TURN } from './ConversationToolManager';
-import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord } from './tool-result-format';
+import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord, StoppedRunStepRecord } from './tool-result-format';
 import { PriorTurnToolResultCache } from './prior-turn-tool-result-cache';
 import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
@@ -2283,6 +2283,9 @@ export class BaseAgent {
                 // conversationId). Runs here so the results are in the messages before
                 // the pre-turn compaction check and the first prompt.
                 this.injectPriorTurnToolResults(wrappedParams),
+                // If the previous turn was STOPPED by the user, carry its completed action and tool
+                // results forward so this turn continues the work instead of redoing it.
+                this.injectStoppedRunResults(wrappedParams),
                 // Decision discovery (plan Task 3.1), off unless the decisionsEnabled and decisionDiscovery prompt
                 // params are true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
                 this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data)
@@ -7697,6 +7700,168 @@ The context is now within limits. Please retry your request with the recovered c
             // Carry-forward is an optimization — never let it break the run.
             this.logStatus(`[PriorTurnToolResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
         }
+    }
+
+    /**
+     * Carries a STOPPED previous turn's completed results forward into this run's context.
+     *
+     * {@link injectPriorTurnToolResults} covers the normal case: the previous run settled and
+     * its inline tool results ride along one turn. A run the user stopped never settles, so
+     * that path skips it, and the next turn would redo every action the stopped run had already
+     * finished (observed: a stopped Sage run had five weather lookups and fifteen searches done;
+     * "keep going" redid all of them). This path looks at the newest root run for this agent in
+     * the conversation and, when it is one the user stopped, injects the results of its
+     * completed Actions and Tool steps as one transient message that says to continue, not
+     * restart. A settled newest run means the normal path already has the context, so nothing
+     * is added here.
+     *
+     * Same gates as the sibling: root depth, a conversation, no history floor. Fail-soft.
+     * @protected
+     */
+    protected async injectStoppedRunResults(params: ExecuteAgentParams): Promise<void> {
+        if (!params.conversationId || this._depth !== 0 || params.ConversationHistoryFrom) {
+            return;
+        }
+        try {
+            const stoppedRunId = await this.findUserStoppedPredecessorRunId(params);
+            if (!stoppedRunId) {
+                return;
+            }
+            const steps = await this.loadStoppedRunResultSteps(stoppedRunId, params);
+            const body = BaseAgent.BuildStoppedRunResultsMessage(steps, this.maxStandaloneToolResultChars);
+            if (!body) {
+                return;
+            }
+            const message: AgentChatMessage = {
+                role: 'user',
+                content: body,
+                metadata: {
+                    turnAdded: 0,
+                    messageType: BaseAgent.toolResultMessageType,
+                    expirationTurns: 2,
+                    expirationMode: 'Compact',
+                    compactMode: 'First N Chars',
+                    compactLength: 500,
+                    compactPromptId: '',
+                },
+            };
+            params.conversationMessages.push(message);
+            this.logStatus(`[StoppedRunResults] Carried ${steps.length} completed step result(s) forward from stopped run ${stoppedRunId}`, true, params);
+        } catch (error) {
+            this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
+        }
+    }
+
+    /**
+     * The ID of this agent's newest root run in the conversation IF the user stopped it, else
+     * null. One query over the runs that could be the predecessor (settled, or stopped by the
+     * user): the newest decides. A stopped run older than a settled one is history the settled
+     * run already built on, so it is not carried again.
+     * @private
+     */
+    private async findUserStoppedPredecessorRunId(params: ExecuteAgentParams): Promise<string | null> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const statusList = BaseAgent.settledRunStatuses.map(s => `'${s}'`).join(', ');
+        const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ConversationID='${params.conversationId}' AND ParentRunID IS NULL AND AgentID='${params.agent.ID}' ` +
+                `AND (Status IN (${statusList}) OR (Status='Cancelled' AND CancellationReason='User Request'))`,
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 1,
+            Fields: ['ID', 'Status', 'CancellationReason'],
+            ResultType: 'simple',
+        }, params.contextUser);
+        const run = newest.Success ? newest.Results?.[0] : undefined;
+        if (!run || run.Status !== 'Cancelled' || run.CancellationReason !== 'User Request') {
+            return null;
+        }
+        return run.ID;
+    }
+
+    /** The completed, successful Actions and Tool steps of a stopped run, in step order. @private */
+    private async loadStoppedRunResultSteps(runId: string, params: ExecuteAgentParams): Promise<StoppedRunStepRecord[]> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const steps = await rv.RunView<StoppedRunStepRecord>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${runId}' AND StepType IN ('Actions', 'Tool') AND Status='Completed' AND Success=1`,
+            OrderBy: 'StepNumber ASC',
+            Fields: ['StepNumber', 'StepType', 'StepName', 'InputData', 'OutputData'],
+            ResultType: 'simple',
+        }, params.contextUser);
+        return steps.Success ? (steps.Results || []) : [];
+    }
+
+    /**
+     * Renders a stopped run's completed step results into the carried-forward message body.
+     * Pure and static for testability. An Actions step renders as the action call (name and
+     * params) with its output parameters, or its message when it produced none; a Tool step
+     * renders under the same contract as {@link BuildPriorTurnToolResultsMessage}. Failed or
+     * unparseable steps are skipped. Each section is capped at an even share of `maxChars`
+     * (never below a readable floor) and the whole body at `maxChars`, with a note for anything
+     * dropped. Returns null when nothing usable remains.
+     */
+    public static BuildStoppedRunResultsMessage(steps: ReadonlyArray<StoppedRunStepRecord>, maxChars: number): string | null {
+        const sections: string[] = [];
+        const perSectionMax = Math.max(1_500, Math.floor(maxChars / Math.max(steps.length, 1)));
+        let usedChars = 0;
+        let dropped = 0;
+        for (const step of steps) {
+            const section = BaseAgent.renderStoppedRunStep(step);
+            if (!section) {
+                continue;
+            }
+            const capped = section.length > perSectionMax
+                ? `${section.slice(0, perSectionMax)}\n[truncated]`
+                : section;
+            if (usedChars + capped.length > maxChars && sections.length > 0) {
+                dropped++;
+                continue;
+            }
+            usedChars += capped.length;
+            sections.push(capped);
+        }
+        if (sections.length === 0) {
+            return null;
+        }
+        const header = 'Your previous turn was stopped by the user before it finished. It had already completed the calls ' +
+            'below and their results are still valid: reuse them instead of re-calling, and continue from where it ' +
+            'left off rather than starting over.';
+        const droppedNote = dropped > 0 ? `\n\n[${dropped} additional result(s) omitted for size; re-call those if needed]` : '';
+        return `${header}\n${sections.join('\n\n')}${droppedNote}`;
+    }
+
+    /** One stopped-run step as a result section, or null when it carries nothing reusable. @private */
+    private static renderStoppedRunStep(step: StoppedRunStepRecord): string | null {
+        if (step.StepType === 'Tool') {
+            return BaseAgent.BuildPriorTurnToolResultsMessage([{ OutputData: step.OutputData }], Number.MAX_SAFE_INTEGER)
+                ?.split('\n').slice(1).join('\n') || null; // the sibling renderer's body without its header line
+        }
+        if (step.StepType !== 'Actions' || !step.InputData || !step.OutputData) {
+            return null;
+        }
+        let input: { actionName?: string; actionParams?: unknown };
+        let output: { actionResult?: { success?: boolean; message?: string; parameters?: Array<{ Name: string; Value: unknown; Type: string }> } };
+        try {
+            input = JSON.parse(step.InputData);
+            output = JSON.parse(step.OutputData);
+        } catch {
+            return null;
+        }
+        const result = output.actionResult;
+        if (!input.actionName || result?.success !== true) {
+            return null;
+        }
+        const outputs: Record<string, unknown> = {};
+        for (const param of result.parameters ?? []) {
+            if (param.Type === 'Output' && param.Value !== undefined && param.Value !== null) {
+                outputs[param.Name] = param.Value;
+            }
+        }
+        const body = Object.keys(outputs).length > 0 ? RenderToolResultData(outputs) : (result.message ?? '');
+        if (!body) {
+            return null;
+        }
+        return FormatToolResultSection({ tool: input.actionName, input: input.actionParams, ordinal: step.StepNumber }, body);
     }
 
     /**
