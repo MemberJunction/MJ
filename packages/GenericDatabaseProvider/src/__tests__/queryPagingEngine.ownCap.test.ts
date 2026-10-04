@@ -117,3 +117,25 @@ describe('R12 — an ORDER BY directly after a string literal is found', () => {
         expect(paged.CountSQL).not.toMatch(/ORDER\s+BY/i);
     });
 });
+
+describe('R17 / R18 — the default paging order is legal for set operations and DISTINCT on SQL Server', () => {
+    it('UNION with no ORDER BY is ordered by its first column', () => {
+        const paged = QueryPagingEngine.WrapWithPaging('SELECT a FROM t UNION ALL SELECT b FROM u', 0, 10, 'sqlserver');
+        expect(paged.DataSQL).toMatch(/ORDER BY 1\s+OFFSET/);
+    });
+
+    it('SELECT DISTINCT with no ORDER BY is ordered by its first column', () => {
+        const paged = QueryPagingEngine.WrapWithPaging('SELECT DISTINCT a, b FROM t', 0, 10, 'sqlserver');
+        expect(paged.DataSQL).toMatch(/ORDER BY 1\s+OFFSET/);
+    });
+
+    it('a plain SELECT keeps the order-free default', () => {
+        const paged = QueryPagingEngine.WrapWithPaging('SELECT a FROM t', 0, 10, 'sqlserver');
+        expect(paged.DataSQL).toMatch(/ORDER BY \(SELECT NULL\)/);
+    });
+
+    it('a DISTINCT inside a subquery does not count', () => {
+        const paged = QueryPagingEngine.WrapWithPaging('SELECT a FROM (SELECT DISTINCT a FROM t) d', 0, 10, 'sqlserver');
+        expect(paged.DataSQL).toMatch(/ORDER BY \(SELECT NULL\)/);
+    });
+});
