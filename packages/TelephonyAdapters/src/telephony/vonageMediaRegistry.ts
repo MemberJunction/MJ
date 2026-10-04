@@ -14,7 +14,7 @@
  * @module @memberjunction/telephony-adapters
  */
 
-import { LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import type { VonageControlEvent, IVonageMediaPump } from '@memberjunction/ai-bridge-vonage';
 import { ExpectedCallStore } from './mediaSocketAuth.js';
 
@@ -282,8 +282,8 @@ export class VonageCallMediaRegistry implements IVonageMediaPump {
         }
         try {
             channel.socket?.close();
-        } catch {
-            /* best-effort */
+        } catch (err) {
+            LogError(`[VonageMediaRegistry] Error closing socket for call ${key}`, undefined, err);
         }
         this.channels.delete(key);
     }

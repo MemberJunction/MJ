@@ -53,6 +53,7 @@ import {
 import { SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
 import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
 import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
+import { ReadHostTools, ReadTrimmedString } from './realtime/bridge-host-params';
 import { RealtimeRecordingController, RealtimeRecordingMedia } from './realtime/realtime-recording-capture';
 import { ResolveRecordingStorageAccountID, StoreRealtimeRecording } from './realtime/realtime-recording-store';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -2622,9 +2623,14 @@ export class BaseAgent {
         const selfNames = Array.isArray(params.data?.realtimeSelfNames)
             ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
             : undefined;
+        const hostTools = ReadHostTools(params.data?.realtimeHostTools);
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
+            HostTools: hostTools,
+            HostFraming: ReadTrimmedString(params.data?.realtimeHostFraming, 'realtimeHostFraming'),
+            PriorTranscript: ReadTrimmedString(params.data?.realtimePriorTranscript, 'realtimePriorTranscript'),
+            ConversationID: ReadTrimmedString(params.data?.conversationId, 'conversationId'),
             // The run's runtime API keys, so the bridged voice session mints on the caller's key when
             // the run carries one for the realtime driver (the same run-key → platform order as
             // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.

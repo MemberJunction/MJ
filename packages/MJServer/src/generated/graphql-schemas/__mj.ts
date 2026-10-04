@@ -18,7 +18,7 @@ import { mj_core_schema } from '../../config.js';
 
 
 
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRubricEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationScoreEntity, MJRubricEvaluationEntity, MJRubricScaleLevelEntity, MJRubricScaleEntity, MJRubricVersionEntity, MJRubricEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRubricEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJInteractionEventEntity, MJInteractionLinkEntity, MJInteractionOfferEntity, MJInteractionEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMeetingParticipantEntity, MJMeetingEntity, MJNumberPoolEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJPhoneNumberEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationScoreEntity, MJRubricEvaluationEntity, MJRubricScaleLevelEntity, MJRubricScaleEntity, MJRubricVersionEntity, MJRubricEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -7517,6 +7517,10 @@ export class MJAIAgentSessionBridge_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "How the agent decided speech was addressed to it: Auto (the model's own judgement when it is full-duplex, name matching otherwise), ModelSide (the model's own judgement), or Regex (matching the agent's names). NULL when not recorded."}) 
+    @MaxLength(20)
+    TurnAddressing?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Provider?: string;
@@ -7579,6 +7583,9 @@ export class CreateMJAIAgentSessionBridgeInput {
     @Field({ nullable: true })
     Config: string | null;
 
+    @Field({ nullable: true })
+    TurnAddressing: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -7636,6 +7643,9 @@ export class UpdateMJAIAgentSessionBridgeInput {
 
     @Field({ nullable: true })
     Config?: string | null;
+
+    @Field({ nullable: true })
+    TurnAddressing?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -57703,6 +57713,905 @@ export class MJIntegrationResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Interaction Events
+//****************************************************************************
+@ObjectType({ description: "Append-only lifecycle log of an Interaction: each routing decision, hand-off and state change, stamped with when it happened and who or what caused it. Rows are never edited; corrections are new events." })
+export class MJInteractionEvent_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    InteractionID?: string;
+        
+    @Field({nullable: true, description: "What happened: Created, Queued (placed in a queue), Offered (offered to a handler), Accepted or Declined (handler response to an offer), Answered (parties connected), Transferred (moved to another handler), Escalated (raised to a human or higher tier), Held, Resumed, RecordingStarted or RecordingStopped (recording consent was announced to every party), Ended, or Abandoned (remote party left before an answer)."}) 
+    @MaxLength(20)
+    EventType?: string;
+        
+    @Field({nullable: true, description: "When the event occurred. Defaults to the current time; set explicitly when recording an event reported later by a carrier webhook."}) 
+    OccurredAt?: Date;
+        
+    @Field({nullable: true, description: "The human user who caused the event (accepted an offer, transferred, ended the call). NULL when the actor was an agent or the system."}) 
+    @MaxLength(36)
+    ActorUserID?: string;
+        
+    @Field({nullable: true, description: "The AI agent that caused the event (answered, escalated, transferred). NULL when the actor was a human user or the system."}) 
+    @MaxLength(36)
+    ActorAgentID?: string;
+        
+    @Field({nullable: true, description: "Optional event-specific JSON detail (for example the transfer target, escalation reason, or queue name). Shape depends on EventType."}) 
+    Details?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ActorUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ActorAgent?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Interaction Events
+//****************************************************************************
+@InputType()
+export class CreateMJInteractionEventInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    InteractionID?: string;
+
+    @Field({ nullable: true })
+    EventType?: string;
+
+    @Field({ nullable: true })
+    OccurredAt?: Date;
+
+    @Field({ nullable: true })
+    ActorUserID: string | null;
+
+    @Field({ nullable: true })
+    ActorAgentID: string | null;
+
+    @Field({ nullable: true })
+    Details: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Interaction Events
+//****************************************************************************
+@InputType()
+export class UpdateMJInteractionEventInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    InteractionID?: string;
+
+    @Field({ nullable: true })
+    EventType?: string;
+
+    @Field({ nullable: true })
+    OccurredAt?: Date;
+
+    @Field({ nullable: true })
+    ActorUserID?: string | null;
+
+    @Field({ nullable: true })
+    ActorAgentID?: string | null;
+
+    @Field({ nullable: true })
+    Details?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Interaction Events
+//****************************************************************************
+@ObjectType()
+export class RunMJInteractionEventViewResult {
+    @Field(() => [MJInteractionEvent_])
+    Results: MJInteractionEvent_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJInteractionEvent_)
+export class MJInteractionEventResolver extends ResolverBase {
+    @Query(() => RunMJInteractionEventViewResult)
+    async RunMJInteractionEventViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInteractionEventViewResult)
+    async RunMJInteractionEventViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInteractionEventViewResult)
+    async RunMJInteractionEventDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Interaction Events';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJInteractionEvent_, { nullable: true })
+    async MJInteractionEvent(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJInteractionEvent_ | null> {
+        this.CheckUserReadPermissions('MJ: Interaction Events', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwInteractionEvents')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Interaction Events', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Interaction Events', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJInteractionEvent_)
+    async CreateMJInteractionEvent(
+        @Arg('input', () => CreateMJInteractionEventInput) input: CreateMJInteractionEventInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Interaction Events', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJInteractionEvent_)
+    async UpdateMJInteractionEvent(
+        @Arg('input', () => UpdateMJInteractionEventInput) input: UpdateMJInteractionEventInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Interaction Events', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJInteractionEvent_)
+    async DeleteMJInteractionEvent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Interaction Events', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Interaction Links
+//****************************************************************************
+@ObjectType({ description: "Polymorphic link from an Interaction to any record in any entity, with the role that record played. Modelled like TaggedItem: EntityID plus RecordID identify the target without a foreign key to it." })
+export class MJInteractionLink_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    InteractionID?: string;
+        
+    @Field({nullable: true, description: "The entity (table) of the linked record."}) 
+    @MaxLength(36)
+    EntityID?: string;
+        
+    @Field({nullable: true, description: "The primary key of the linked record, as text. For composite keys use the standard MJ concatenated key format. Sized to 450 characters, matching TaggedItem.RecordID."}) 
+    @MaxLength(450)
+    RecordID?: string;
+        
+    @Field({nullable: true, description: "What part the linked record played: Caller (the person or organization on the other end), Regarding (what the conversation was about, such as a case or order), or Created (a record produced during the conversation, such as a ticket or follow-up task)."}) 
+    @MaxLength(20)
+    Role?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Entity?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Interaction Links
+//****************************************************************************
+@InputType()
+export class CreateMJInteractionLinkInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    InteractionID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Interaction Links
+//****************************************************************************
+@InputType()
+export class UpdateMJInteractionLinkInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    InteractionID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    RecordID?: string;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Interaction Links
+//****************************************************************************
+@ObjectType()
+export class RunMJInteractionLinkViewResult {
+    @Field(() => [MJInteractionLink_])
+    Results: MJInteractionLink_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJInteractionLink_)
+export class MJInteractionLinkResolver extends ResolverBase {
+    @Query(() => RunMJInteractionLinkViewResult)
+    async RunMJInteractionLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInteractionLinkViewResult)
+    async RunMJInteractionLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInteractionLinkViewResult)
+    async RunMJInteractionLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Interaction Links';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJInteractionLink_, { nullable: true })
+    async MJInteractionLink(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJInteractionLink_ | null> {
+        this.CheckUserReadPermissions('MJ: Interaction Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwInteractionLinks')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Interaction Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Interaction Links', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJInteractionLink_)
+    async CreateMJInteractionLink(
+        @Arg('input', () => CreateMJInteractionLinkInput) input: CreateMJInteractionLinkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Interaction Links', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJInteractionLink_)
+    async UpdateMJInteractionLink(
+        @Arg('input', () => UpdateMJInteractionLinkInput) input: UpdateMJInteractionLinkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Interaction Links', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJInteractionLink_)
+    async DeleteMJInteractionLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Interaction Links', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Interaction Offers
+//****************************************************************************
+@ObjectType({ description: "An offer to a specific person to take over or join a live Interaction (a warm or blind hand-off from an AI agent). Durable so any server instance can list, accept or decline it and so every response or expiry is auditable. Only the target user may accept or decline." })
+export class MJInteractionOffer_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The Interaction being handed off."}) 
+    @MaxLength(36)
+    InteractionID?: string;
+        
+    @Field({nullable: true, description: "The person the offer is for. Only this user may accept or decline it."}) 
+    @MaxLength(36)
+    TargetUserID?: string;
+        
+    @Field({nullable: true, description: "The AI agent that made the offer, when an agent made it."}) 
+    @MaxLength(36)
+    OfferedByAgentID?: string;
+        
+    @Field({nullable: true, description: "Warm (the agent stays and introduces the person before leaving) or Blind (the agent leaves as soon as the person joins)."}) 
+    @MaxLength(20)
+    Mode?: string;
+        
+    @Field({nullable: true, description: "Pending (awaiting a response), Accepted, Declined, Expired (no response before ExpiresAt), or Cancelled (the conversation ended or the offer was withdrawn first)."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "The LiveKit room the person joins on accepting."}) 
+    @MaxLength(255)
+    RoomName?: string;
+        
+    @Field({nullable: true, description: "A short label for who is on the other end, shown on the offer (for example a masked number or a known name). Never a full phone number."}) 
+    @MaxLength(255)
+    CallerLabel?: string;
+        
+    @Field({nullable: true, description: "The agent's brief for the person: why the conversation is being handed over and what has happened so far."}) 
+    Summary?: string;
+        
+    @Field({nullable: true, description: "When the offer was made."}) 
+    OfferedAt?: Date;
+        
+    @Field({nullable: true, description: "When an unanswered offer lapses. A Pending offer past this time is treated as Expired."}) 
+    ExpiresAt?: Date;
+        
+    @Field({nullable: true, description: "When the offer left Pending (accepted, declined, expired or cancelled)."}) 
+    RespondedAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    TargetUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    OfferedByAgent?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Interaction Offers
+//****************************************************************************
+@InputType()
+export class CreateMJInteractionOfferInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    InteractionID?: string;
+
+    @Field({ nullable: true })
+    TargetUserID?: string;
+
+    @Field({ nullable: true })
+    OfferedByAgentID: string | null;
+
+    @Field({ nullable: true })
+    Mode?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    RoomName?: string;
+
+    @Field({ nullable: true })
+    CallerLabel: string | null;
+
+    @Field({ nullable: true })
+    Summary: string | null;
+
+    @Field({ nullable: true })
+    OfferedAt?: Date;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    RespondedAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Interaction Offers
+//****************************************************************************
+@InputType()
+export class UpdateMJInteractionOfferInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    InteractionID?: string;
+
+    @Field({ nullable: true })
+    TargetUserID?: string;
+
+    @Field({ nullable: true })
+    OfferedByAgentID?: string | null;
+
+    @Field({ nullable: true })
+    Mode?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    RoomName?: string;
+
+    @Field({ nullable: true })
+    CallerLabel?: string | null;
+
+    @Field({ nullable: true })
+    Summary?: string | null;
+
+    @Field({ nullable: true })
+    OfferedAt?: Date;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date;
+
+    @Field({ nullable: true })
+    RespondedAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Interaction Offers
+//****************************************************************************
+@ObjectType()
+export class RunMJInteractionOfferViewResult {
+    @Field(() => [MJInteractionOffer_])
+    Results: MJInteractionOffer_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJInteractionOffer_)
+export class MJInteractionOfferResolver extends ResolverBase {
+    @Query(() => RunMJInteractionOfferViewResult)
+    async RunMJInteractionOfferViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInteractionOfferViewResult)
+    async RunMJInteractionOfferViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInteractionOfferViewResult)
+    async RunMJInteractionOfferDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Interaction Offers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJInteractionOffer_, { nullable: true })
+    async MJInteractionOffer(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJInteractionOffer_ | null> {
+        this.CheckUserReadPermissions('MJ: Interaction Offers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwInteractionOffers')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Interaction Offers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Interaction Offers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJInteractionOffer_)
+    async CreateMJInteractionOffer(
+        @Arg('input', () => CreateMJInteractionOfferInput) input: CreateMJInteractionOfferInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Interaction Offers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJInteractionOffer_)
+    async UpdateMJInteractionOffer(
+        @Arg('input', () => UpdateMJInteractionOfferInput) input: UpdateMJInteractionOfferInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Interaction Offers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJInteractionOffer_)
+    async DeleteMJInteractionOffer(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Interaction Offers', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Interactions
+//****************************************************************************
+@ObjectType({ description: "One live conversation on any channel (phone call, web widget chat/voice, or meeting). The durable business record above the realtime agent session: what queues display, reports count, and CRM records link to. Its lifecycle is logged in InteractionEvent and its subject records are attached through InteractionLink." })
+export class MJInteraction_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The medium the conversation runs over: Phone (a telephone call through a telephony bridge), Web (an embedded web widget session), or Meeting (a multi-party conferencing room)."}) 
+    @MaxLength(20)
+    Channel?: string;
+        
+    @Field({nullable: true, description: "Who initiated the conversation: Inbound (the remote party reached us), Outbound (we reached the remote party), or Internal (between participants inside the organization, such as an agent-to-agent or staff consult)."}) 
+    @MaxLength(20)
+    Direction?: string;
+        
+    @Field({nullable: true, description: "Lifecycle state: Queued (waiting for a handler), Active (a handler is engaged), Ended (completed normally), Abandoned (the remote party left before being answered), or Failed (could not be established or ended in error)."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "The AI agent session driving this conversation, when an agent is handling it. NULL for conversations handled entirely by humans or not yet assigned."}) 
+    @MaxLength(36)
+    AgentSessionID?: string;
+        
+    @Field({nullable: true, description: "Name of the realtime media room (for example the LiveKit room) the conversation runs in, which humans and agents join to participate. NULL when no room is involved."}) 
+    @MaxLength(255)
+    RoomName?: string;
+        
+    @Field({nullable: true, description: "The organization-owned phone number used for a Phone conversation: the dialed number for Inbound, the caller ID for Outbound. NULL for non-phone channels."}) 
+    @MaxLength(36)
+    PhoneNumberID?: string;
+        
+    @Field({nullable: true, description: "The address of the remote party: the caller or callee number for phone, an anonymous session or visitor identifier for web, or the remote party identifier for meetings. Free-form text because the form depends on the channel."}) 
+    @MaxLength(255)
+    RemoteAddress?: string;
+        
+    @Field({nullable: true, description: "When the conversation was created (call placed or received, widget session opened). Defaults to the current time."}) 
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: "When a handler (agent or human) answered and the parties were connected. NULL if never answered. The gap from StartedAt is the wait time."}) 
+    AnsweredAt?: Date;
+        
+    @Field({nullable: true, description: "When the conversation ended. NULL while it is still queued or active. Must not precede StartedAt."}) 
+    EndedAt?: Date;
+        
+    @Field({nullable: true, description: "Short reason the conversation ended (for example CallerHangup, AgentHangup, Transferred, Timeout, ProviderError). Free-form so new reasons need no schema change. NULL while still open."}) 
+    @MaxLength(100)
+    EndReason?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "Whether media from this conversation is being recorded. Set at creation from the applicable policy and consent rules; it is the intent flag, not proof a recording file exists."}) 
+    RecordingEnabled?: boolean;
+        
+    @Field({nullable: true, description: "The carrier or platform identifier for the conversation (for example a Twilio call SID), used to correlate provider webhooks and billing records with this row."}) 
+    @MaxLength(255)
+    ExternalID?: string;
+        
+    @Field(() => Float, {nullable: true, description: "Estimated total cost of the conversation (carrier minutes, speech and model usage) in the organization's reporting currency, accumulated as it runs. NULL when no estimate is available. An estimate, not an invoice."}) 
+    CostEstimate?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    PhoneNumber?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Interactions
+//****************************************************************************
+@InputType()
+export class CreateMJInteractionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Channel?: string;
+
+    @Field({ nullable: true })
+    Direction?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AgentSessionID: string | null;
+
+    @Field({ nullable: true })
+    RoomName: string | null;
+
+    @Field({ nullable: true })
+    PhoneNumberID: string | null;
+
+    @Field({ nullable: true })
+    RemoteAddress: string | null;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    AnsweredAt: Date | null;
+
+    @Field({ nullable: true })
+    EndedAt: Date | null;
+
+    @Field({ nullable: true })
+    EndReason: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    RecordingEnabled?: boolean;
+
+    @Field({ nullable: true })
+    ExternalID: string | null;
+
+    @Field(() => Float, { nullable: true })
+    CostEstimate: number | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Interactions
+//****************************************************************************
+@InputType()
+export class UpdateMJInteractionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Channel?: string;
+
+    @Field({ nullable: true })
+    Direction?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AgentSessionID?: string | null;
+
+    @Field({ nullable: true })
+    RoomName?: string | null;
+
+    @Field({ nullable: true })
+    PhoneNumberID?: string | null;
+
+    @Field({ nullable: true })
+    RemoteAddress?: string | null;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    AnsweredAt?: Date | null;
+
+    @Field({ nullable: true })
+    EndedAt?: Date | null;
+
+    @Field({ nullable: true })
+    EndReason?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    RecordingEnabled?: boolean;
+
+    @Field({ nullable: true })
+    ExternalID?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    CostEstimate?: number | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Interactions
+//****************************************************************************
+@ObjectType()
+export class RunMJInteractionViewResult {
+    @Field(() => [MJInteraction_])
+    Results: MJInteraction_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJInteraction_)
+export class MJInteractionResolver extends ResolverBase {
+    @Query(() => RunMJInteractionViewResult)
+    async RunMJInteractionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInteractionViewResult)
+    async RunMJInteractionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJInteractionViewResult)
+    async RunMJInteractionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Interactions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJInteraction_, { nullable: true })
+    async MJInteraction(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJInteraction_ | null> {
+        this.CheckUserReadPermissions('MJ: Interactions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwInteractions')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Interactions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Interactions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJInteraction_)
+    async CreateMJInteraction(
+        @Arg('input', () => CreateMJInteractionInput) input: CreateMJInteractionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Interactions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJInteraction_)
+    async UpdateMJInteraction(
+        @Arg('input', () => UpdateMJInteractionInput) input: UpdateMJInteractionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Interactions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJInteraction_)
+    async DeleteMJInteraction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Interactions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Knowledge Hub Saved Searches
 //****************************************************************************
 @ObjectType({ description: "User-saved search queries for the Knowledge Hub. Stores query text, active filters (JSON), and score thresholds so searches can be recalled or run on a schedule." })
@@ -64296,6 +65205,702 @@ export class MJMaterializedResultResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Meeting Participants
+//****************************************************************************
+@ObjectType({ description: "A person or AI agent invited to, or present in, a Meeting. Exactly one of: an MJ user (UserID), an AI agent (AgentID, Role Agent), or an external guest (ExternalEmail and/or ExternalPhone)." })
+export class MJMeetingParticipant_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The meeting."}) 
+    @MaxLength(36)
+    MeetingID?: string;
+        
+    @Field({nullable: true, description: "The MJ user, when the participant is a user."}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field({nullable: true, description: "The AI agent, when the participant is an agent. Requires Role Agent."}) 
+    @MaxLength(36)
+    AgentID?: string;
+        
+    @Field({nullable: true, description: "Display name for an external guest."}) 
+    @MaxLength(255)
+    ExternalName?: string;
+        
+    @Field({nullable: true, description: "Email address an external guest is invited at."}) 
+    @MaxLength(255)
+    ExternalEmail?: string;
+        
+    @Field({nullable: true, description: "E.164 phone number an external guest is dialed at or joins from."}) 
+    @MaxLength(20)
+    ExternalPhone?: string;
+        
+    @Field({nullable: true, description: "Host, CoHost (same controls as the host), Attendee, or Agent (an AI agent participant)."}) 
+    @MaxLength(20)
+    Role?: string;
+        
+    @Field({nullable: true, description: "The response to the invitation: Invited (no response yet), Accepted, Declined, or Tentative."}) 
+    @MaxLength(20)
+    InviteStatus?: string;
+        
+    @Field({nullable: true, description: "When the participant most recently joined the meeting room."}) 
+    JoinedAt?: Date;
+        
+    @Field({nullable: true, description: "When the participant most recently left the meeting room."}) 
+    LeftAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Meeting?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Meeting Participants
+//****************************************************************************
+@InputType()
+export class CreateMJMeetingParticipantInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    MeetingID?: string;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field({ nullable: true })
+    AgentID: string | null;
+
+    @Field({ nullable: true })
+    ExternalName: string | null;
+
+    @Field({ nullable: true })
+    ExternalEmail: string | null;
+
+    @Field({ nullable: true })
+    ExternalPhone: string | null;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    InviteStatus?: string;
+
+    @Field({ nullable: true })
+    JoinedAt: Date | null;
+
+    @Field({ nullable: true })
+    LeftAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Meeting Participants
+//****************************************************************************
+@InputType()
+export class UpdateMJMeetingParticipantInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    MeetingID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field({ nullable: true })
+    AgentID?: string | null;
+
+    @Field({ nullable: true })
+    ExternalName?: string | null;
+
+    @Field({ nullable: true })
+    ExternalEmail?: string | null;
+
+    @Field({ nullable: true })
+    ExternalPhone?: string | null;
+
+    @Field({ nullable: true })
+    Role?: string;
+
+    @Field({ nullable: true })
+    InviteStatus?: string;
+
+    @Field({ nullable: true })
+    JoinedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LeftAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Meeting Participants
+//****************************************************************************
+@ObjectType()
+export class RunMJMeetingParticipantViewResult {
+    @Field(() => [MJMeetingParticipant_])
+    Results: MJMeetingParticipant_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMeetingParticipant_)
+export class MJMeetingParticipantResolver extends ResolverBase {
+    @Query(() => RunMJMeetingParticipantViewResult)
+    async RunMJMeetingParticipantViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMeetingParticipantViewResult)
+    async RunMJMeetingParticipantViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMeetingParticipantViewResult)
+    async RunMJMeetingParticipantDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Meeting Participants';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMeetingParticipant_, { nullable: true })
+    async MJMeetingParticipant(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMeetingParticipant_ | null> {
+        this.CheckUserReadPermissions('MJ: Meeting Participants', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMeetingParticipants')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Meeting Participants', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Meeting Participants', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMeetingParticipant_)
+    async CreateMJMeetingParticipant(
+        @Arg('input', () => CreateMJMeetingParticipantInput) input: CreateMJMeetingParticipantInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Meeting Participants', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMeetingParticipant_)
+    async UpdateMJMeetingParticipant(
+        @Arg('input', () => UpdateMJMeetingParticipantInput) input: UpdateMJMeetingParticipantInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Meeting Participants', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMeetingParticipant_)
+    async DeleteMJMeetingParticipant(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Meeting Participants', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Meetings
+//****************************************************************************
+@ObjectType({ description: "A Zoom-style meeting held in a LiveKit room inside MJ Explorer. Ad hoc (no schedule) or scheduled; people join from the browser, by phone when dial-in is enabled, and AI agents can take part. The transcript is kept in the linked Conversation." })
+export class MJMeeting_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The meeting title shown to participants and in invitations."}) 
+    @MaxLength(255)
+    Title?: string;
+        
+    @Field({nullable: true, description: "Optional agenda or description."}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: "The user who owns the meeting. The host can start and end it, admit participants and change its settings."}) 
+    @MaxLength(36)
+    HostUserID?: string;
+        
+    @Field({nullable: true, description: "The LiveKit room the meeting runs in. Unique, and unguessable (generated, never user-chosen), because room names are also join handles."}) 
+    @MaxLength(255)
+    RoomName?: string;
+        
+    @Field({nullable: true, description: "Scheduled (not yet started), Live (in progress), Ended, or Cancelled."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "Planned start time. NULL for an ad hoc meeting."}) 
+    ScheduledStartAt?: Date;
+        
+    @Field({nullable: true, description: "Planned end time. Requires ScheduledStartAt and must be after it."}) 
+    ScheduledEndAt?: Date;
+        
+    @Field({nullable: true, description: "When the meeting actually started (first participant joined)."}) 
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: "When the meeting actually ended."}) 
+    EndedAt?: Date;
+        
+    @Field(() => Boolean, {nullable: true, description: "Whether people may join by phone. When on, DialInPhoneNumberID and DialInCode are required."}) 
+    AllowPhoneDialIn?: boolean;
+        
+    @Field({nullable: true, description: "The phone number callers dial to reach the meeting. Several meetings may share one number; the DialInCode picks the meeting."}) 
+    @MaxLength(36)
+    DialInPhoneNumberID?: string;
+        
+    @Field({nullable: true, description: "Digits a phone caller enters to join this meeting (6 to 20 digits). A meeting join code shown on invitations, not an account credential; generate it randomly and never reuse one across live meetings on the same number."}) 
+    @MaxLength(20)
+    DialInCode?: string;
+        
+    @Field({nullable: true, description: "Off (never recorded), Allowed (the host may start a recording, which is announced to everyone), or Automatic (recording starts with the meeting and is announced to everyone)."}) 
+    @MaxLength(20)
+    RecordingPolicy?: string;
+        
+    @Field({nullable: true, description: "The Conversation (Type 'Meeting Room') that holds the meeting transcript and any recording file."}) 
+    @MaxLength(36)
+    ConversationID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    HostUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(20)
+    DialInPhoneNumber?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Conversation?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Meetings
+//****************************************************************************
+@InputType()
+export class CreateMJMeetingInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Title?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    HostUserID?: string;
+
+    @Field({ nullable: true })
+    RoomName?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ScheduledStartAt: Date | null;
+
+    @Field({ nullable: true })
+    ScheduledEndAt: Date | null;
+
+    @Field({ nullable: true })
+    StartedAt: Date | null;
+
+    @Field({ nullable: true })
+    EndedAt: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowPhoneDialIn?: boolean;
+
+    @Field({ nullable: true })
+    DialInPhoneNumberID: string | null;
+
+    @Field({ nullable: true })
+    DialInCode: string | null;
+
+    @Field({ nullable: true })
+    RecordingPolicy?: string;
+
+    @Field({ nullable: true })
+    ConversationID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Meetings
+//****************************************************************************
+@InputType()
+export class UpdateMJMeetingInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Title?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    HostUserID?: string;
+
+    @Field({ nullable: true })
+    RoomName?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ScheduledStartAt?: Date | null;
+
+    @Field({ nullable: true })
+    ScheduledEndAt?: Date | null;
+
+    @Field({ nullable: true })
+    StartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    EndedAt?: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowPhoneDialIn?: boolean;
+
+    @Field({ nullable: true })
+    DialInPhoneNumberID?: string | null;
+
+    @Field({ nullable: true })
+    DialInCode?: string | null;
+
+    @Field({ nullable: true })
+    RecordingPolicy?: string;
+
+    @Field({ nullable: true })
+    ConversationID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Meetings
+//****************************************************************************
+@ObjectType()
+export class RunMJMeetingViewResult {
+    @Field(() => [MJMeeting_])
+    Results: MJMeeting_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJMeeting_)
+export class MJMeetingResolver extends ResolverBase {
+    @Query(() => RunMJMeetingViewResult)
+    async RunMJMeetingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMeetingViewResult)
+    async RunMJMeetingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJMeetingViewResult)
+    async RunMJMeetingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Meetings';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJMeeting_, { nullable: true })
+    async MJMeeting(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJMeeting_ | null> {
+        this.CheckUserReadPermissions('MJ: Meetings', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwMeetings')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Meetings', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Meetings', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJMeeting_)
+    async CreateMJMeeting(
+        @Arg('input', () => CreateMJMeetingInput) input: CreateMJMeetingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Meetings', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJMeeting_)
+    async UpdateMJMeeting(
+        @Arg('input', () => UpdateMJMeetingInput) input: UpdateMJMeetingInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Meetings', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJMeeting_)
+    async DeleteMJMeeting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Meetings', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Number Pools
+//****************************************************************************
+@ObjectType({ description: "A named group of phone numbers used together for outbound calling, with a rule for which number is chosen as the caller ID on each call. Inbound routing does not use pools." })
+export class MJNumberPool_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Unique, human-readable name of the pool (e.g. Sales Outbound US, Support Callback)."}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: "How an outbound call picks a number from the pool: RoundRobin (rotate evenly through active numbers), LocalPresence (prefer a number whose area code / region matches the callee, falling back to round robin), or Random."}) 
+    @MaxLength(20)
+    SelectionRule?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Optional ceiling on simultaneous active Interactions per number in this pool. A number at the ceiling is skipped during selection. NULL means no ceiling is enforced by MJ (the carrier may still impose one)."}) 
+    MaxConcurrentPerNumber?: number;
+        
+    @Field({nullable: true, description: "Optional description of what the pool is for and any selection policy notes."}) 
+    Description?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Number Pools
+//****************************************************************************
+@InputType()
+export class CreateMJNumberPoolInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    SelectionRule?: string;
+
+    @Field(() => Int, { nullable: true })
+    MaxConcurrentPerNumber: number | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Number Pools
+//****************************************************************************
+@InputType()
+export class UpdateMJNumberPoolInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    SelectionRule?: string;
+
+    @Field(() => Int, { nullable: true })
+    MaxConcurrentPerNumber?: number | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Number Pools
+//****************************************************************************
+@ObjectType()
+export class RunMJNumberPoolViewResult {
+    @Field(() => [MJNumberPool_])
+    Results: MJNumberPool_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJNumberPool_)
+export class MJNumberPoolResolver extends ResolverBase {
+    @Query(() => RunMJNumberPoolViewResult)
+    async RunMJNumberPoolViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJNumberPoolViewResult)
+    async RunMJNumberPoolViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJNumberPoolViewResult)
+    async RunMJNumberPoolDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Number Pools';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJNumberPool_, { nullable: true })
+    async MJNumberPool(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJNumberPool_ | null> {
+        this.CheckUserReadPermissions('MJ: Number Pools', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwNumberPools')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Number Pools', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Number Pools', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJNumberPool_)
+    async CreateMJNumberPool(
+        @Arg('input', () => CreateMJNumberPoolInput) input: CreateMJNumberPoolInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Number Pools', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJNumberPool_)
+    async UpdateMJNumberPool(
+        @Arg('input', () => UpdateMJNumberPoolInput) input: UpdateMJNumberPoolInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Number Pools', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJNumberPool_)
+    async DeleteMJNumberPool(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Number Pools', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: O Auth Auth Server Metadata Caches
 //****************************************************************************
 @ObjectType({ description: "Caches OAuth 2.0 Authorization Server Metadata (RFC 8414) to reduce discovery requests." })
@@ -66702,6 +68307,217 @@ export class MJPermissionDomainResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Permission Domains', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Phone Numbers
+//****************************************************************************
+@ObjectType({ description: "A telephone number owned or leased through a telephony bridge provider. The inventory record the contact center selects from for outbound caller ID and routes inbound calls against." })
+export class MJPhoneNumber_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "The number in E.164 format: a leading plus sign, a country code, and digits only, with no spaces or punctuation (e.g. +14155550123). Globally unique."}) 
+    @MaxLength(20)
+    Number?: string;
+        
+    @Field({nullable: true, description: "The telephony bridge provider (carrier / CPaaS account such as Twilio or Vonage) through which this number is owned and through which its calls are placed and received."}) 
+    @MaxLength(36)
+    ProviderID?: string;
+        
+    @Field({nullable: true, description: "What the number can do: Voice (calls only) or VoiceAndSMS (calls and text messages)."}) 
+    @MaxLength(20)
+    Capabilities?: string;
+        
+    @Field({nullable: true, description: "Lifecycle state of the number: Active (usable), Inactive (retained but not used for new calls), or Porting (being transferred to or from another carrier and not yet usable)."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "Optional number pool this number belongs to for outbound caller-ID selection. NULL when the number is not pooled (for example a dedicated inbound line)."}) 
+    @MaxLength(36)
+    NumberPoolID?: string;
+        
+    @Field({nullable: true, description: "Short human-readable label shown in the UI (e.g. Main Support Line, Sales West)."}) 
+    @MaxLength(255)
+    Label?: string;
+        
+    @Field({nullable: true, description: "Optional longer description of the number and how it is used."}) 
+    Description?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Provider?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    NumberPool?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Phone Numbers
+//****************************************************************************
+@InputType()
+export class CreateMJPhoneNumberInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Number?: string;
+
+    @Field({ nullable: true })
+    ProviderID?: string;
+
+    @Field({ nullable: true })
+    Capabilities?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    NumberPoolID: string | null;
+
+    @Field({ nullable: true })
+    Label: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Phone Numbers
+//****************************************************************************
+@InputType()
+export class UpdateMJPhoneNumberInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Number?: string;
+
+    @Field({ nullable: true })
+    ProviderID?: string;
+
+    @Field({ nullable: true })
+    Capabilities?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    NumberPoolID?: string | null;
+
+    @Field({ nullable: true })
+    Label?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Phone Numbers
+//****************************************************************************
+@ObjectType()
+export class RunMJPhoneNumberViewResult {
+    @Field(() => [MJPhoneNumber_])
+    Results: MJPhoneNumber_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJPhoneNumber_)
+export class MJPhoneNumberResolver extends ResolverBase {
+    @Query(() => RunMJPhoneNumberViewResult)
+    async RunMJPhoneNumberViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJPhoneNumberViewResult)
+    async RunMJPhoneNumberViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJPhoneNumberViewResult)
+    async RunMJPhoneNumberDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Phone Numbers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJPhoneNumber_, { nullable: true })
+    async MJPhoneNumber(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJPhoneNumber_ | null> {
+        this.CheckUserReadPermissions('MJ: Phone Numbers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwPhoneNumbers')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Phone Numbers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Phone Numbers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJPhoneNumber_)
+    async CreateMJPhoneNumber(
+        @Arg('input', () => CreateMJPhoneNumberInput) input: CreateMJPhoneNumberInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Phone Numbers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJPhoneNumber_)
+    async UpdateMJPhoneNumber(
+        @Arg('input', () => UpdateMJPhoneNumberInput) input: UpdateMJPhoneNumberInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Phone Numbers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJPhoneNumber_)
+    async DeleteMJPhoneNumber(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Phone Numbers', key, options, provider, userPayload, pubSub);
     }
     
 }

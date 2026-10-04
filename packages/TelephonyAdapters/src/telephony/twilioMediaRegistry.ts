@@ -26,7 +26,7 @@
  * @module @memberjunction/telephony-adapters
  */
 
-import { LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import type { TwilioMediaFrame } from '@memberjunction/ai-bridge-twilio';
 import type { ITwilioMediaPump } from '@memberjunction/ai-bridge-twilio';
 import { ExpectedCallStore, type SocketAuthResult } from './mediaSocketAuth.js';
@@ -216,8 +216,8 @@ export class TwilioCallMediaRegistry implements ITwilioMediaPump {
         }
         try {
             channel.socket?.close();
-        } catch {
-            /* best-effort */
+        } catch (err) {
+            LogError(`[TwilioMediaRegistry] Error closing socket for call ${callSid}`, undefined, err);
         }
         this.channels.delete(callSid);
     }

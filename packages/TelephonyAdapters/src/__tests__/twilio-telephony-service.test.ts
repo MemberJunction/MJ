@@ -16,6 +16,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
 import { TwilioTelephonyService, type TwilioTelephonyServiceDeps } from '../telephony/TwilioTelephonyService.js';
 import { TwilioCallMediaRegistry } from '../telephony/twilioMediaRegistry.js';
 import { CallEndObserverSdk } from '../telephony/callEndObserver.js';
+import { CallCapacityGate } from '../telephony/telephonyCapacity.js';
 import { OutboundCallRefusedError } from '../telephony/outboundCallPolicy.js';
 import type { TwilioTelephonyConfig } from '../types.js';
 
@@ -71,6 +72,8 @@ function harness(config: TwilioTelephonyConfig = CONFIG, overrides: Partial<Twil
         sessionManager: { CreateSession: vi.fn(async () => ({ ID: 'AS1' })) } as never,
         rest: rest as ITwilioRestLike,
         canRunAgent: async () => true,
+        coAgentResolver: vi.fn(async () => 'co-agent-1'),
+        capacity: new CallCapacityGate(100),
         ...overrides,
     });
     return { service, registry, engine, rest, sessionFactory };
@@ -348,5 +351,76 @@ describe('PlaceOutboundCall — gated', () => {
         await h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider());
         await vi.advanceTimersByTimeAsync(61_000);
         expect(h.engine.StopBridgeSession).toHaveBeenCalledWith('SB1', 'HostEnded', USER, expect.anything());
+    });
+});
+
+describe('call parity and the concurrent-call cap', () => {
+    it('keeps the co-agent and the dialled agent apart, and the agent DID apart from the caller number', async () => {
+        const h = harness();
+        const result = await h.service.HandleInboundCall(INBOUND, USER, dbProvider());
+        await result.Started;
+
+        expect(h.sessionFactory.mock.calls[0][0]).toMatchObject({ AgentID: 'co-agent-1', TargetAgentID: 'agent-1' });
+        const start = h.engine.StartBridgeSession.mock.calls[0][0] as { Address: string; JoinMethod: string; TurnMode: string; AgentID: string; TargetAgentID: string; Configuration: Record<string, unknown> };
+        expect(start.AgentID).toBe('co-agent-1');
+        expect(start.TargetAgentID).toBe('agent-1');
+        expect(start.Address).toBe('+18005550100');
+        expect(start.Configuration['CallerNumber']).toBe('+14155550123');
+        expect(start.JoinMethod).toBe('InboundRoute');
+        expect(start.TurnMode).toBe('Active');
+    });
+
+    it('tells the model it is a phone call and who is calling', async () => {
+        const h = harness();
+        const result = await h.service.HandleInboundCall(INBOUND, USER, dbProvider());
+        await result.Started;
+        const framing = (h.sessionFactory.mock.calls[0][0] as { HostFraming: string }).HostFraming;
+        expect(framing).toContain('+14155550123');
+        expect(framing).toMatch(/UNVERIFIED/);
+    });
+
+    it('answers an inbound call over the cap as Busy (not as a missing agent) and registers nothing', async () => {
+        const full = new CallCapacityGate(1);
+        full.TryAcquire();
+        const h = harness(CONFIG, { capacity: full });
+        const result = await h.service.HandleInboundCall(INBOUND, USER, dbProvider());
+        expect(result).toMatchObject({ accepted: false, Busy: true });
+        expect(h.registry.IsExpected('CA1')).toBe(false);
+        expect(h.engine.StartBridgeSession).not.toHaveBeenCalled();
+    });
+
+    it('frees the slot when the background start fails', async () => {
+        const gate = new CallCapacityGate(1);
+        const h = harness(CONFIG, { capacity: gate });
+        h.engine.StartBridgeSession.mockRejectedValue(new Error('model unavailable'));
+        const result = await h.service.HandleInboundCall(INBOUND, USER, dbProvider());
+        await result.Started;
+        expect(gate.Active).toBe(0);
+    });
+
+    it('refuses an outbound call over the cap with a clear, coded error and never opens a session', async () => {
+        const full = new CallCapacityGate(1);
+        full.TryAcquire();
+        const h = harness(CONFIG, { capacity: full });
+        const error = await h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider()).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(OutboundCallRefusedError);
+        expect((error as OutboundCallRefusedError).Code).toBe('at-capacity');
+        expect(h.sessionFactory).not.toHaveBeenCalled();
+    });
+
+    it('does not spend the hourly outbound budget on a call the cap refused', async () => {
+        const gate = new CallCapacityGate(1);
+        const held = gate.TryAcquire();
+        const h = harness({ ...CONFIG, outbound: { maxCallsPerUserPerHour: 1 } }, { capacity: gate });
+        await expect(h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider())).rejects.toThrow(/busy/i);
+        held?.Release();
+        await expect(h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider())).resolves.toBe('CA1');
+    });
+
+    it('gives the slot back when the outbound gate refuses the call', async () => {
+        const gate = new CallCapacityGate(1);
+        const h = harness(CONFIG, { capacity: gate, canRunAgent: async () => false });
+        await expect(h.service.PlaceOutboundCall('ident-1', '+14155550123', USER, dbProvider())).rejects.toBeInstanceOf(OutboundCallRefusedError);
+        expect(gate.Active).toBe(0);
     });
 });

@@ -5,6 +5,7 @@ export * from './base-realtime-bridge';
 export * from './base-telephony-bridge';
 export * from './base-detached-media-bridge';
 export * from './turn-taking-policy';
+export * from './turn-taking-tools';
 export * from './ai-bridge-engine-base';
 export * from './bridge-native-sdk-registry';
 export * from './audio';
