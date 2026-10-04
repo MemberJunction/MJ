@@ -28,6 +28,12 @@ export interface ExecuteSQLOptions {
    * Should be a sql.Transaction or sql.ConnectionPool instance.
    */
   connectionSource?: sql.ConnectionPool | sql.Transaction;
+  /**
+   * The longest the statement may run, in milliseconds. When it is exceeded the request is
+   * cancelled on the server and the call rejects with `Query timeout exceeded`. Ignored inside a
+   * transaction.
+   */
+  timeoutMs?: number;
 }
 
 /**
@@ -66,6 +72,8 @@ export interface InternalSQLOptions {
   simpleSQLFallback?: string;
   /** User context for logging */
   contextUser?: UserInfo;
+  /** The longest the statement may run, in milliseconds, before it is cancelled on the server */
+  timeoutMs?: number;  // case-violation-ok-legacy-back-compat: matches the lower-case members of this options shape and of ExecuteSQLOptions, which it mirrors
 }
 
 /**

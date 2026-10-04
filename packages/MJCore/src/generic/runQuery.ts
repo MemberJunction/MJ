@@ -26,6 +26,12 @@ export type RunQueryParams = {
      */
     SQL?: string
     /**
+     * For ad-hoc SQL ({@link SQL}) only: the longest the query may run, in seconds. When it is
+     * exceeded the database cancels the query and the run fails with a timeout error. Omitted
+     * means the connection's usual limit applies. Ignored for saved queries.
+     */
+    TimeoutSeconds?: number
+    /**
      * Optional, if provided, the query to be run will be selected to match the specified Category by hierarchical path
      * (e.g., "/MJ/AI/Agents/") or simple category name for backward compatibility
      */

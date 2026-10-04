@@ -372,8 +372,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 const bypassResult = await bypass.query(quotedQuery, processedParams);
                 return bypassResult.rows as T[];
             }
-            if (options?.readOnlyTransaction && !this._transaction) {
-                return await this.executeInRolledBackReadOnlyTransaction<T>(quotedQuery, processedParams);
+            const timeoutMs = options?.timeoutMs && options.timeoutMs > 0 ? Math.floor(options.timeoutMs) : undefined;
+            const readOnly = !!options?.readOnlyTransaction && !this._transaction;
+            const timed = timeoutMs !== undefined && (!this._transaction || !!options?.ignoreAmbientTransaction);
+            if (readOnly || timed) {
+                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs);
             }
             this.AssertAmbientTransactionUsable();
             const source = this._transaction ?? this._connectionManager.Pool;
@@ -387,19 +390,32 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
-     * Runs one statement on its own pooled connection inside `BEGIN READ ONLY … ROLLBACK`. The
-     * rollback undoes any session setting the statement made, so the connection goes back to the
-     * pool unchanged.
+     * Runs one statement on its own pooled connection inside a transaction of its own.
+     *
+     * - `readOnly`: `BEGIN READ ONLY … ROLLBACK`. Writes fail, and the rollback undoes any session
+     *   setting the statement made, so the connection goes back to the pool unchanged.
+     * - `timeoutMs`: `SET LOCAL statement_timeout` for this statement only; PostgreSQL cancels it
+     *   when the limit passes. Without `readOnly` the transaction commits, so writes still land.
      */
-    private async executeInRolledBackReadOnlyTransaction<T>(sql: string, params: unknown[] | undefined): Promise<Array<T>> {
+    private async executeOnOwnConnection<T>(
+        sql: string,
+        params: unknown[] | undefined,
+        readOnly: boolean,
+        timeoutMs: number | undefined,
+    ): Promise<Array<T>> {
         const client = await this._connectionManager.AcquireClient();
         try {
-            await client.query('BEGIN READ ONLY');
+            await client.query(readOnly ? 'BEGIN READ ONLY' : 'BEGIN');
             try {
+                if (timeoutMs !== undefined) {
+                    await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
+                }
                 const result = await client.query(sql, params);
+                await client.query(readOnly ? 'ROLLBACK' : 'COMMIT');
                 return result.rows as T[];
-            } finally {
-                await client.query('ROLLBACK');
+            } catch (err) {
+                await client.query('ROLLBACK').catch(() => undefined);
+                throw err;
             }
         } finally {
             client.release();

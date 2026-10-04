@@ -118,3 +118,47 @@ describe('ad-hoc SQL with MaxRows is paged in the database', () => {
         expect(result.TotalRowCount).toBe(3);
     });
 });
+
+describe('ad-hoc SQL timeout and count', () => {
+    it('gives every statement of the run the caller timeout, with the caller-SQL protections', async () => {
+        const provider = new AdhocTestProvider('postgresql');
+        provider.Answers = [[{ N: 1 }], [{ TotalRowCount: 40 }]];
+        const result = await provider.RunAdhoc({ SQL: 'SELECT N FROM t ORDER BY N', MaxRows: 1, TimeoutSeconds: 7 });
+        expect(result.Success).toBe(true);
+        expect(provider.Options).toHaveLength(2);
+        for (const options of provider.Options) {
+            expect(options).toMatchObject({ readOnlyTransaction: true, timeoutMs: 7000 });
+        }
+    });
+
+    it('sets no timeout when the caller gives none', async () => {
+        const provider = new AdhocTestProvider('sqlserver');
+        provider.Answers = [[{ N: 1 }]];
+        await provider.RunAdhoc({ SQL: 'SELECT N FROM t' });
+        expect(provider.Options[0]?.timeoutMs).toBeUndefined();
+    });
+
+    it('reports a lower-bound total when the count fails, rather than failing the run', async () => {
+        const provider = new AdhocTestProvider('sqlserver');
+        const page = [{ N: 11 }, { N: 12 }];
+        provider.ExecuteSQL = async <T>(sql: string): Promise<Array<T>> => {
+            if (/COUNT\(\*\)/i.test(sql)) throw new Error('count failed');
+            return page as Array<T>;
+        };
+        const result = await provider.RunAdhoc({ SQL: 'SELECT N FROM t ORDER BY N', StartRow: 10, MaxRows: 2 });
+        expect(result.Success).toBe(true);
+        expect(result.Results).toEqual(page);
+        expect(result.TotalRowCount).toBe(12);
+    });
+});
+
+describe('ad-hoc SQL is rendered before it runs', () => {
+    it('removes comments and pages in the database', async () => {
+        const provider = new AdhocTestProvider('postgresql');
+        provider.Answers = [[{ N: 3 }], [{ TotalRowCount: 9 }]];
+        await provider.RunAdhoc({ SQL: 'SELECT N FROM t -- trailing note\nORDER BY N', StartRow: 2, MaxRows: 1 });
+        expect(provider.Executed[0]).not.toContain('trailing note');
+        expect(provider.Executed[0]).toMatch(/LIMIT 1 OFFSET 2/);
+        expect(provider.Executed[1]).toMatch(/COUNT\(\*\)/);
+    });
+});
