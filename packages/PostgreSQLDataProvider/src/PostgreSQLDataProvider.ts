@@ -289,6 +289,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             this._configData = configData;
             this._schemaName = configData.MJCoreSchemaName || '__mj';
             this._connectionManager.InitializeWithExistingPool(existingPool, configData.ConnectionConfig);
+            RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
             return await super.Config(configData);
         } catch (err) {
             LogError(`PostgreSQLDataProvider.ConfigWithSharedPool failed: ${err instanceof Error ? err.message : String(err)}`);
