@@ -7,7 +7,7 @@
  * @module @memberjunction/core/runQuerySQLFilterImplementations
  */
 
-import { BaseSingleton, EscapeSQLString } from '@memberjunction/global';
+import { BaseSingleton } from '@memberjunction/global';
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
 import { DatabasePlatform } from './platformSQL';
 import { GetDialect } from '@memberjunction/sql-dialect';
@@ -249,10 +249,10 @@ function likeLiteral(value: unknown, wildcardSide: 'leading' | 'trailing' | 'bot
     return `${dialect.StringLiteralPrefix(stripped)}'${before}${pattern}${after}'`;
 }
 
-/** A string literal for `value` with the dialect's prefix, quotes escaped. */
+/** A string literal for `value` with the dialect's prefix: quotes doubled, null bytes removed. */
 function textLiteral(value: unknown, dialect: SQLDialect): string {
     const text = String(value);
-    return `${dialect.StringLiteralPrefix(text)}'${EscapeSQLString(text)}'`;
+    return `${dialect.StringLiteralPrefix(text)}'${text.replace(/\0/g, '').replace(/'/g, "''")}'`;
 }
 
 /**

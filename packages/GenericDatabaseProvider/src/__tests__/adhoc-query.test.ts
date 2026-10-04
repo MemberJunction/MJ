@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
+import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 
 vi.mock('sql-formatter', () => ({
     format: (sql: string) => sql,
@@ -8,7 +8,7 @@ vi.mock('sql-formatter', () => ({
 import { DatabasePlatform, DeleteSQLResult, ExecuteSQLOptions, QueryExecutionSpec, RunQueryParams, RunQueryResult, SaveSQLResult } from '@memberjunction/core';
 
 /** A provider that records the SQL it is asked to run and answers from a queue. */
-class AdhocTestProvider extends GenericDatabaseProviderTestBase {
+class AdhocTestProvider extends GenericDatabaseProvider {
     public readonly Executed: string[] = [];
     public readonly Options: Array<ExecuteSQLOptions | undefined> = [];
     public Answers: Array<Array<Record<string, unknown>>> = [];
@@ -106,7 +106,7 @@ describe('ad-hoc SQL with MaxRows is paged in the database', () => {
     it('PostgreSQL gets LIMIT … OFFSET', async () => {
         const provider = new AdhocTestProvider('postgresql');
         provider.Answers = [[{ a: 1 }], [{ TotalRowCount: 5 }]];
-        await provider.RunAdhoc({ SQL: 'SELECT a FROM t ORDER BY a', MaxRows: 1 });
+        await provider.RunAdhoc({ SQL: 'SELECT a FROM t ORDER BY a', StartRow: 0, MaxRows: 1 });
         expect(provider.Executed[0]).toMatch(/LIMIT 1 OFFSET 0/);
     });
 
@@ -123,7 +123,7 @@ describe('ad-hoc SQL timeout and count', () => {
     it('gives every statement of the run the caller timeout, with the caller-SQL protections', async () => {
         const provider = new AdhocTestProvider('postgresql');
         provider.Answers = [[{ N: 1 }], [{ TotalRowCount: 40 }]];
-        const result = await provider.RunAdhoc({ SQL: 'SELECT N FROM t ORDER BY N', MaxRows: 1, TimeoutSeconds: 7 });
+        const result = await provider.RunAdhoc({ SQL: 'SELECT N FROM t ORDER BY N', StartRow: 0, MaxRows: 1, TimeoutSeconds: 7 });
         expect(result.Success).toBe(true);
         expect(provider.Options).toHaveLength(2);
         for (const options of provider.Options) {
