@@ -10,6 +10,8 @@ export { LexSQL, SignificantTokens, IsKeyword } from './sqlLexer.js';
 export type { SQLLexToken, SQLLexTokenKind } from './sqlLexer.js';
 export { SplitLeadingCTEs, IsReadOnlyQuery } from './sqlShape.js';
 export type { LeadingCTEs, LeadingCTEDefinition, ReadOnlyQueryCheck } from './sqlShape.js';
+export { AnalyzePagingShape } from './pagingShape.js';
+export type { PagingShape, OwnRowCap } from './pagingShape.js';
 // Structural parser and composition IR
 export { ParseToIR, RenderIR } from './structuralParser.js';
 export type { QueryIR, CTENode, Fragment, SQLFragment, TemplateExprFragment, BlockFragment, CommentFragment, CompositionRefFragment, CTEOrigin } from './compositionIR.js';
