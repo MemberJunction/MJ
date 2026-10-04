@@ -1,5 +1,5 @@
 import { DatabasePlatform } from '@memberjunction/core';
-import { SQLParser, AnalyzeTopLevelOrderBy, AnalyzePagingShape } from '@memberjunction/sql-parser';
+import { AnalyzeTopLevelOrderBy, AnalyzePagingShape, IsReadOnlyQuery } from '@memberjunction/sql-parser';
 import type { OwnRowCap, PagingShape } from '@memberjunction/sql-parser';
 import { GetDialect, SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 
@@ -77,209 +77,87 @@ export class QueryPagingEngine {
     }
 
     /**
-     * Applies a row cap to the outermost SELECT.
+     * Applies a row cap to the outermost SELECT: the result returns at most `maxRows` rows.
      *
-     * `maxRows` is treated as a hard ceiling: the result is guaranteed to
-     * return at most `maxRows` rows whenever the SQL shape can be capped
-     * without corrupting the query.
+     * The statement is edited in place, from tokens, so the caller's SQL is kept exactly as
+     * written apart from the cap, and SQL the AST parser cannot read is capped the same way:
+     *   - No cap of its own: `TOP n` goes after `SELECT [ALL | DISTINCT]` on SQL Server, and
+     *     `LIMIT n` at the end on PostgreSQL. A SQL Server set operation (which has no single
+     *     SELECT to put TOP on) gets `OFFSET 0 ROWS FETCH NEXT n ROWS ONLY` after its ORDER BY.
+     *   - A numeric cap of its own: the tighter of the two wins.
+     *   - Any other cap of its own (`TOP … PERCENT`, `WITH TIES`, an expression, caps on more than
+     *     one branch): the statement is capped as a derived table.
+     * Clauses that must stay last (`OPTION (…)`, `FOR UPDATE`) stay last.
      *
-     * Strategy:
-     *   1. Parse via AST. If the outermost SELECT has no existing cap,
-     *      inject `TOP N` (SQL Server) or `LIMIT N` (PostgreSQL).
-     *   2. If an existing numeric `TOP`/`LIMIT` is present, reduce it to
-     *      `min(existing, maxRows)`. The tighter cap wins.
-     *   3. If the AST recognizes the shape but can't inject (`TOP PERCENT`,
-     *      non-numeric `TOP`, `UNION`, `WITH TIES`, etc.), wrap with an
-     *      outer `SELECT TOP N * FROM (…) AS _mj_capped` (or LIMIT on PG).
-     *   4. If the parser can't handle the input but the SQL is CTE-headed,
-     *      append `OFFSET 0 ROWS FETCH NEXT N ROWS ONLY` via {@link buildDataSQL}.
-     *   5. Shapes that can't legally appear inside a derived table
-     *      (`FOR JSON`, `FOR XML`, `OPTION (...)`, `SELECT INTO`,
-     *      mutations) are returned unchanged — the cap is moot
-     *      (FOR JSON/XML return one row) or the validator should have
-     *      rejected them earlier (mutations, SELECT INTO).
+     * A statement that ends in `FOR JSON` / `FOR XML` returns one document built from its rows;
+     * it is capped in place (bounding the rows the document is built from) and left unchanged
+     * where only a derived table or a set-operation clause could cap it. Anything that is not a
+     * single read query (a write, `SELECT … INTO`) is left unchanged; the render pipeline refuses
+     * those before this point anyway.
      *
-     * Non-positive, non-finite, or fractional `maxRows` are sanitized
-     * (`<= 0` and non-finite are no-ops; fractional values are floored).
+     * Non-positive, non-finite, or fractional `maxRows` are sanitized (`<= 0` and non-finite are
+     * no-ops; fractional values are floored).
      */
     static WrapWithMaxRows(
         resolvedSQL: string,
         maxRows: number,
         platform: DatabasePlatform,
     ): string {
-        const cleanedSQL = resolvedSQL.trimEnd().replace(/;\s*$/, '');
-
+        const cleanedSQL = QueryPagingEngine.stripTrailingSemicolons(resolvedSQL);
         if (!Number.isFinite(maxRows) || maxRows <= 0) return cleanedSQL;
         if (cleanedSQL.trim().length === 0) return cleanedSQL;
         const cap = Math.floor(maxRows);
-
         const dialect = QueryPagingEngine.getDialect(platform);
+        if (!IsReadOnlyQuery(cleanedSQL, dialect).IsReadOnly) return cleanedSQL;
 
-        const astResult = QueryPagingEngine.applyMaxRowsViaAST(cleanedSQL, cap, dialect);
-        if (astResult.outcome === 'capped') return astResult.sql;
-        if (astResult.outcome === 'pass-through') return cleanedSQL;
-
-        // Both `wrap` and `unparseable` outcomes may try the outer-wrap path.
-        // First, check for clauses that cannot legally appear inside a derived
-        // table — wrapping such queries would produce invalid SQL.
-        const unwrappable = SQLParser.HasUnwrappableTrailingClause(cleanedSQL, dialect);
-
-        if (astResult.outcome === 'wrap') {
-            if (unwrappable) return cleanedSQL;
-            return QueryPagingEngine.outerWrap(cleanedSQL, cap, dialect);
-        }
-
-        // unparseable — try the CTE-fallback path first.
-        const isCTE = SQLParser.ExtractCTEs(cleanedSQL, dialect) !== null;
-        if (isCTE) {
-            try {
-                return QueryPagingEngine.buildDataSQL(AnalyzePagingShape(cleanedSQL, dialect), 0, cap, dialect);
-            } catch {
-                return cleanedSQL;
-            }
-        }
-
-        if (unwrappable) return cleanedSQL;
-
-        return QueryPagingEngine.outerWrap(cleanedSQL, cap, dialect);
+        const shape = AnalyzePagingShape(cleanedSQL, dialect);
+        const caps = shape.OwnCaps;
+        if (caps.length === 0) return QueryPagingEngine.addCap(shape, cap, dialect);
+        if (caps.length === 1 && caps[0].Numeric) return QueryPagingEngine.tightenCap(shape, caps[0], cap, dialect);
+        return QueryPagingEngine.capAsDerivedTable(shape, cap, dialect);
     }
 
-    /**
-     * Wraps `sql` in an outer SELECT that enforces the row cap.
-     * Used when the AST recognises the shape but cannot inject the cap
-     * cleanly, or when the AST can't parse the input but the SQL is known
-     * to be wrap-safe (no FOR JSON/FOR XML/OPTION at top level).
-     *
-     * Strips any top-level ORDER BY before wrapping: ORDER BY is illegal
-     * inside a derived table on SQL Server (unless TOP/OFFSET/FOR XML is
-     * present), and the outer SELECT doesn't preserve inner ordering anyway.
-     * The ORDER BY is moved to the outer SELECT so the final result retains
-     * the intended sort order.
-     */
-    private static outerWrap(sql: string, cap: number, dialect: SQLDialect): string {
-        // Route the cap form through the dialect's LimitClause so there is a
-        // single source of truth for "TOP vs LIMIT" — no PlatformKey probe here.
-        const lc = dialect.LimitClause(cap);
-        const prefix = lc.prefix ? `${lc.prefix} ` : '';   // 'TOP N ' (SQL Server) or ''
-        const suffix = lc.suffix ? ` ${lc.suffix}` : '';   // ' LIMIT N' (PostgreSQL) or ''
-
-        // Strip top-level ORDER BY from the inner SQL to avoid SQL Server error:
-        // "The ORDER BY clause is invalid in views, inline functions, derived tables,
-        //  subqueries, and common table expressions, unless TOP, OFFSET or FOR XML
-        //  is also specified."
-        // Uses the lexer-based Tier 2 scanner which handles unparseable SQL
-        // (TRY_CAST, IIF, STRING_AGG, etc.) that the AST path cannot parse.
-        const orderByAnalysis = AnalyzeTopLevelOrderBy(sql, dialect);
-        const innerSQL = orderByAnalysis.OrderByClause && !orderByAnalysis.IsLegalInCTE
-            ? orderByAnalysis.SqlWithoutOrderBy
-            : sql;
-
-        const outerOrderBy = orderByAnalysis.OrderByClause && !orderByAnalysis.IsLegalInCTE
-            ? `\nORDER BY ${orderByAnalysis.OrderByClause}`
-            : '';
-
-        return `SELECT ${prefix}* FROM (\n${innerSQL}\n) AS _mj_capped${suffix}${outerOrderBy}`;
-    }
-
-    /**
-     * AST-based row-cap injection.
-     *   `capped`       — `sql` contains the input with TOP/LIMIT injected
-     *                    or reduced to `min(existing, cap)`.
-     *   `wrap`         — AST recognized the shape but the cap can't be
-     *                    safely injected inline (`TOP PERCENT`, non-numeric
-     *                    `TOP`/`LIMIT`); caller should outer-wrap.
-     *   `pass-through` — shape can't be capped at all without corrupting
-     *                    the query (SELECT INTO, mutation).
-     *   `unparseable`  — parser could not handle the input; caller may
-     *                    attempt a CTE-fallback or outer wrap.
-     *
-     * All AST shape inspection is delegated to {@link SQLParser} primitives —
-     * this method contains no `node-sql-parser` field knowledge.
-     */
-    private static applyMaxRowsViaAST(
-        sql: string,
-        cap: number,
-        dialect: SQLDialect,
-    ):
-        | { outcome: 'capped'; sql: string }
-        | { outcome: 'wrap' }
-        | { outcome: 'pass-through' }
-        | { outcome: 'unparseable' }
-    {
-        // The instance parser applies preprocessing fallbacks on a direct-parse
-        // failure (bracket-identifier aliasing for Skip-style CTE names, trailing
-        // OPTION splitting); ToSQL restores them. This widens the set of shapes
-        // that reach the precise AST-inject path instead of the outer-wrap path.
-        const parsed = new SQLParser(sql, dialect);
-        if (!parsed.IsValid) return { outcome: 'unparseable' };
-
-        const kind = parsed.StatementKind;
-        if (kind === 'mutation' || kind === 'select-into') return { outcome: 'pass-through' };
-        if (kind === 'set-op') return { outcome: 'unparseable' };
-        if (kind !== 'select') return { outcome: 'pass-through' };
-
-        const existing = parsed.OuterCap;
-
-        // PERCENT and non-numeric (opaque) caps can't be reasoned about as row
-        // counts; let the caller outer-wrap them.
-        if (existing && existing.form !== 'numeric') return { outcome: 'wrap' };
-
-        // Existing numeric cap — only modify when the requested cap is tighter.
-        if (existing && existing.value <= cap) return { outcome: 'capped', sql };
-
-        // No cap at all, on a dialect that caps with a trailing clause — append it as TEXT.
-        //
-        // `SetOuterCap` + `ToSQL()` below re-emits the WHOLE statement from the AST, and
-        // node-sql-parser normalizes as it generates: keywords come back upper-cased and
-        // identifiers re-quoted. Appending one clause should not rewrite the caller's SQL, and
-        // on PostgreSQL that rewrite is not cosmetic — it is a correctness bug, because the
-        // provider's identifier auto-quoter runs afterwards over an upper-cased statement and
-        // quotes any keyword its allowlist is missing. A query written `ORDER BY x ASC nulls
-        // last` came back `ASC NULLS LAST`, was quoted to `ASC "NULLS" "LAST"`, and failed with
-        // `syntax error at or near ""NULLS""` — SQL the caller never wrote.
-        //
-        // The append is only taken where it is provably equivalent to the AST injection; every
-        // other shape falls through to the existing path, so this can narrow the blast radius
-        // but never change a result.
-        if (!existing) {
-            const appended = QueryPagingEngine.appendTrailingCap(sql, cap, dialect);
-            if (appended) return { outcome: 'capped', sql: appended };
-        }
-
-        // No cap (or a looser one) — inject/replace.
-        parsed.SetOuterCap(cap);
-        try {
-            return { outcome: 'capped', sql: parsed.ToSQL() };
-        } catch {
-            return { outcome: 'unparseable' };
-        }
-    }
-
-    /**
-     * Clauses that must come AFTER `LIMIT` in PostgreSQL, so a bare append would be illegal.
-     *
-     * Matched loosely and deliberately: a false positive (the word inside a string literal, a
-     * column alias, or a nested subquery) costs only a fall-through to the AST path, which is
-     * the behaviour that shipped before. A false negative would emit invalid SQL, so the test
-     * errs heavily toward abstaining.
-     */
-    private static readonly CLAUSES_THAT_FOLLOW_LIMIT =
-        /\b(?:OFFSET|FETCH|FOR\s+(?:UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE))\b/i;
-
-    /**
-     * Returns `sql` with the row cap appended as a trailing clause, or `null` when that is not
-     * provably safe and the caller should fall back to AST injection.
-     *
-     * Applies only to dialects whose cap is a suffix (`LIMIT N`). SQL Server caps with a `TOP N`
-     * prefix that has to go between `SELECT` and the select list — a position no append can
-     * reach — so it is left to the AST path, where the round-trip is harmless anyway because
-     * T-SQL is not case-sensitive about the identifiers involved.
-     */
-    private static appendTrailingCap(sql: string, cap: number, dialect: SQLDialect): string | null {
+    /** Caps a statement that has no cap of its own. */
+    private static addCap(shape: PagingShape, cap: number, dialect: SQLDialect): string {
         const limit = dialect.LimitClause(cap);
-        if (!limit.suffix || limit.prefix) return null;
-        if (QueryPagingEngine.CLAUSES_THAT_FOLLOW_LIMIT.test(sql)) return null;
-        return `${sql}\n${limit.suffix}`;
+        if (limit.prefix) {
+            if (shape.IsSetOperation && shape.ReturnsDocument) return shape.Statement;
+            if (shape.IsSetOperation) return QueryPagingEngine.appendPage(shape, QueryPagingEngine.head(shape), 0, cap, dialect);
+            if (shape.SelectListStart === null) return QueryPagingEngine.capAsDerivedTable(shape, cap, dialect);
+            const at = shape.SelectListStart;
+            return `${shape.Statement.substring(0, at)} ${limit.prefix}${shape.Statement.substring(at)}`;
+        }
+        return `${QueryPagingEngine.head(shape)}\n${limit.suffix}${QueryPagingEngine.tail(shape)}`;
+    }
+
+    /** Lowers a numeric cap of the query's own to `cap`, or leaves it when it is already tighter. */
+    private static tightenCap(shape: PagingShape, own: OwnRowCap, cap: number, dialect: SQLDialect): string {
+        if (own.Rows !== null && own.Rows <= cap) return shape.Statement;
+        const statement = shape.Statement;
+        if (own.Form === 'top') {
+            return `${statement.substring(0, own.Start)}${dialect.LimitClause(cap).prefix}${statement.substring(own.End)}`;
+        }
+        const limit = dialect.LimitClause(cap, own.Skip);
+        return `${statement.substring(0, own.Start)}${limit.suffix}${QueryPagingEngine.tail(shape)}`;
+    }
+
+    /**
+     * Caps the statement as a derived table, for shapes that cannot be capped in place. The
+     * query's CTEs stay in front and its trailing clause stays last. Its ORDER BY stays inside,
+     * where SQL Server allows it beside the query's own TOP; a set operation's ORDER BY, which
+     * names output columns, moves outside.
+     */
+    private static capAsDerivedTable(shape: PagingShape, cap: number, dialect: SQLDialect): string {
+        const statement = shape.Statement;
+        if (shape.ReturnsDocument) return statement;
+        const prefix = statement.substring(0, shape.MainStart);
+        const moveOrderBy = shape.IsSetOperation && shape.OrderBy !== null;
+        const inner = statement.substring(shape.MainStart, moveOrderBy ? shape.OrderBy!.Start : shape.TailStart).trim();
+        const orderBy = moveOrderBy ? `\n${statement.substring(shape.OrderBy!.Start, shape.OrderBy!.End).trim()}` : '';
+        const limit = dialect.LimitClause(cap);
+        const top = limit.prefix ? `${limit.prefix} ` : '';
+        const suffix = limit.suffix ? `\n${limit.suffix}` : '';
+        return `${prefix}SELECT ${top}* FROM (\n${inner}\n) AS ${dialect.QuoteIdentifier('_mj_capped')}${orderBy}${suffix}${QueryPagingEngine.tail(shape)}`;
     }
 
     /**

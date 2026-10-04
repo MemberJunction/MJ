@@ -49,6 +49,12 @@ export interface PagingShape {
     IsDistinct: boolean;
     /** A top-level `FOR JSON` or `FOR XML`, which makes the statement return a document, not rows. */
     ReturnsDocument: 'json' | 'xml' | null;
+    /**
+     * Offset just after the main statement's first top-level `SELECT [ALL | DISTINCT]`, where a
+     * `TOP n` would go; `null` when the statement has no top-level SELECT (it is parenthesized,
+     * or a bare `VALUES` list).
+     */
+    SelectListStart: number | null;
 }
 
 /** Reads the shape of a single statement for paging and row caps. */
@@ -70,8 +76,16 @@ export function AnalyzePagingShape(statement: string, dialect: SQLParserDialect)
         OrderBy: orderBy,
         IsSetOperation: body.some(t => IsKeyword(t, 'UNION') || IsKeyword(t, 'INTERSECT') || IsKeyword(t, 'EXCEPT')),
         IsDistinct: body.some((t, i) => IsKeyword(t, 'SELECT') && IsKeyword(body[i + 1], 'DISTINCT')),
-        ReturnsDocument: findDocumentClause(body)
+        ReturnsDocument: findDocumentClause(body),
+        SelectListStart: findSelectListStart(body)
     };
+}
+
+function findSelectListStart(body: SQLLexToken[]): number | null {
+    const select = body.findIndex(t => IsKeyword(t, 'SELECT'));
+    if (select === -1) return null;
+    const modifier = IsKeyword(body[select + 1], 'ALL') || IsKeyword(body[select + 1], 'DISTINCT');
+    return (modifier ? body[select + 1] : body[select]).End;
 }
 
 /** Offset of the first token that is not whitespace, a comment or a leading semicolon. */
