@@ -8,6 +8,7 @@
  * SQL Server and PostgreSQL.
  */
 import { RunQuery, RunView } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Assert } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -34,6 +35,18 @@ const NUMBER_SOURCE = `(${Array.from({ length: NUMBER_COUNT }, (_, i) => `SELECT
  * SQL, or the render pipeline's single-read-query rule behind it.
  */
 const REFUSAL = /Dangerous SQL keyword detected|single read query/i;
+
+/**
+ * Whether the server can run ad-hoc SQL. ExecuteAdhocQuery uses only the read-only login and
+ * never falls back to the read-write pool, so a server with no read-only login refuses every
+ * ad-hoc query. Warns that the check is skipped when it cannot.
+ */
+async function adhocAvailable(checkId: string, user: UserInfo): Promise<boolean> {
+    const probe = await new RunQuery().RunQuery({ SQL: 'SELECT 1 AS N', StartRow: 0, MaxRows: 1 }, user);
+    if (probe.Success || !/No read-only data source available/i.test(probe.ErrorMessage ?? '')) return true;
+    console.warn(`  ⚠ ${checkId} SKIPPED — the server has no read-only connection configured, which ad-hoc SQL requires.`);
+    return false;
+}
 
 function numbers(predicate: (n: number) => boolean): ComparableRow[] {
     return Array.from({ length: NUMBER_COUNT }, (_, i) => i + 1).filter(predicate).map(n => ({ N: n }));
@@ -246,6 +259,7 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
         Name: 'RRC8: ad-hoc SQL over GraphQL returns the right rows and totals under every MaxRows / StartRow combination',
         Fn: async (ctx): Promise<void> => {
             requireWire(ctx);
+            if (!await adhocAvailable('runquery-rendering-client.RRC8', ctx.User)) return;
             const expected: ExpectedResult = { Rows: numbers(n => n % 2 === 0), Ordered: true };
             const sql = `SELECT N FROM ${NUMBER_SOURCE} WHERE N % 2 = 0 ORDER BY N`;
             FailOnMismatches('RRC8', await RunCapAndPagingMatrix('ad-hoc over GraphQL', { SQL: sql }, expected, ['N'], ctx.User), 1);
@@ -256,6 +270,7 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
         Name: 'RRC9: ad-hoc SQL over GraphQL must be a single read query; a write, alone or stacked after a read, is refused and changes nothing',
         Fn: async (ctx): Promise<void> => {
             requireWire(ctx);
+            if (!await adhocAvailable('runquery-rendering-client.RRC9', ctx.User)) return;
             const category = requireFixtures().Category;
             // Double-quoted identifiers are valid on both platforms, so only the read-only guard can stop these.
             const update = `UPDATE __mj."QueryCategory" SET "Description" = 'changed by RRC9' WHERE "ID" = '${category.ID}'`;
@@ -279,8 +294,9 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
         Name: 'RRC10: ad-hoc SQL over GraphQL stops at the caller timeout and reports it',
         Fn: async (ctx): Promise<void> => {
             requireWire(ctx);
+            if (!await adhocAvailable('runquery-rendering-client.RRC10', ctx.User)) return;
             // Seven copies of the 30-row source cross joined: far too many rows to count in a second.
-            const copies = Array.from({ length: 7 }, (_, i) => NUMBER_SOURCE.replace(/ AS v$/, ` AS v${i}`)).join(' CROSS JOIN ');
+            const copies = Array.from({ length: 7 }, (_, i) => NUMBER_SOURCE.replace(/ AS v$/, () => ` AS v${i}`)).join(' CROSS JOIN ');
             const started = Date.now();
             const result = await new RunQuery().RunQuery({ SQL: `SELECT COUNT(*) AS Total FROM ${copies}`, TimeoutSeconds: 1 }, ctx.User);
             const elapsedMs = Date.now() - started;
