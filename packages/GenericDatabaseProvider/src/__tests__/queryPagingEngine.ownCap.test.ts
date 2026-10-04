@@ -139,3 +139,36 @@ describe('R17 / R18 — the default paging order is legal for set operations and
         expect(paged.DataSQL).toMatch(/ORDER BY \(SELECT NULL\)/);
     });
 });
+
+describe('R2 — TOP forms that are not a plain row count are kept, and the query is paged as a derived table', () => {
+    it('TOP n PERCENT', () => {
+        const paged = QueryPagingEngine.WrapWithPaging('SELECT TOP 10 PERCENT a FROM t ORDER BY a', 5, 5, 'sqlserver');
+        expect(paged.DataSQL).toMatch(/SELECT \* FROM \(\nSELECT TOP 10 PERCENT a FROM t ORDER BY a\n\) AS \[__mj_page\]/);
+        expect(paged.DataSQL).toMatch(/OFFSET\s+5\s+ROWS\s+FETCH\s+NEXT\s+5\s+ROWS\s+ONLY$/);
+        expect(paged.CountSQL).toContain('TOP 10 PERCENT');
+    });
+
+    it('TOP n WITH TIES', () => {
+        const paged = QueryPagingEngine.WrapWithPaging('SELECT TOP 10 WITH TIES a FROM t ORDER BY a', 0, 5, 'sqlserver');
+        expect(paged.DataSQL).toContain('SELECT TOP 10 WITH TIES a FROM t ORDER BY a');
+        expect(paged.DataSQL).not.toMatch(/SELECT\s+(PERCENT|WITH\s+TIES)/i);
+    });
+
+    it('TOP (expression)', () => {
+        const paged = QueryPagingEngine.WrapWithPaging('SELECT TOP (@n) a FROM t ORDER BY a', 0, 5, 'sqlserver');
+        expect(paged.DataSQL).toContain('SELECT TOP (@n) a FROM t ORDER BY a');
+        expect(paged.DataSQL).toMatch(/\) AS \[__mj_page\]/);
+    });
+
+    it('SELECT ALL TOP n and leading whitespace are read as a plain cap', () => {
+        const paged = QueryPagingEngine.WrapWithPaging('   \n  SELECT ALL TOP 4 a FROM t ORDER BY a', 0, 10, 'sqlserver');
+        expect(paged.DataSQL).not.toMatch(/\bTOP\b/i);
+        expect(paged.DataSQL).toMatch(/FETCH\s+NEXT\s+4\s+ROWS\s+ONLY/);
+    });
+
+    it('PostgreSQL FETCH FIRST n ROWS WITH TIES', () => {
+        const paged = QueryPagingEngine.WrapWithPaging('SELECT a FROM t ORDER BY a FETCH FIRST 3 ROWS WITH TIES', 0, 5, 'postgresql');
+        expect(paged.DataSQL).toContain('FETCH FIRST 3 ROWS WITH TIES\n) AS "__mj_page"');
+        expect(paged.DataSQL).toMatch(/LIMIT\s+5\s+OFFSET\s+0$/);
+    });
+});
