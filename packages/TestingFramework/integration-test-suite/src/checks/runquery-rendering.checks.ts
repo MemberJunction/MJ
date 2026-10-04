@@ -233,6 +233,27 @@ const OWN_CAP_CASES: RenderCase[] = [
         Expect: items => [...new Set(items.map(i => i.Category))].sort().slice(0, 3).map(c => ({ Category: c }))
     },
     {
+        Name: 'RR Own TOP PERCENT',
+        SQL: `SELECT TOP 5 PERCENT ID FROM ${T} ORDER BY ID`,
+        Platforms: ['sqlserver'],
+        Columns: ['ID'], Ordered: true,
+        Expect: items => firstIds(items, Math.ceil(items.length * 0.05))
+    },
+    {
+        Name: 'RR Own WITH TIES',
+        SQL: `SELECT TOP 3 WITH TIES ID, Category FROM ${T} ORDER BY Category, ID`,
+        Variants: { postgresql: `SELECT ID, Category FROM ${T} ORDER BY Category, ID FETCH FIRST 3 ROWS WITH TIES` },
+        Columns: ['ID'], Ordered: true,
+        Expect: items => ids([...items].sort((a, b) => a.Category.localeCompare(b.Category) || a.ID - b.ID).slice(0, 3))
+    },
+    {
+        Name: 'RR Own SELECT ALL TOP',
+        SQL: `  SELECT ALL TOP 4 ID FROM ${T} ORDER BY ID`,
+        Variants: { postgresql: `  SELECT ALL ID FROM ${T} ORDER BY ID LIMIT 4` },
+        Columns: ['ID'], Ordered: true,
+        Expect: items => firstIds(items, 4)
+    },
+    {
         Name: 'RR Own OFFSET FETCH',
         SQL: `SELECT ID FROM ${T} ORDER BY ID OFFSET 5 ROWS FETCH NEXT 10 ROWS ONLY`,
         Variants: { postgresql: `SELECT ID FROM ${T} ORDER BY ID LIMIT 10 OFFSET 5` },
