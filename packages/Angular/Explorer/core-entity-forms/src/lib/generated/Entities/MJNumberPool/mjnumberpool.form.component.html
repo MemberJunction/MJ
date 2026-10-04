@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Pool Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="poolConfiguration"
+        SectionName="Pool Configuration"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -28,20 +28,37 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
+            FieldName="SelectionRule"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ParentID"
-            Type="textbox"
+            FieldName="MaxConcurrentPerNumber"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -67,50 +84,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Rubric Categories Section -->
+    <!-- Phone Numbers Section -->
     <mj-collapsible-panel
-        SectionKey="mJRubricCategories"
-        SectionName="Rubric Categories"
-        Icon="fa fa-table"
+        SectionKey="mJPhoneNumbers"
+        SectionName="Phone Numbers"
+        Icon="fa fa-phone"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRubricCategories')"
+        [BadgeCount]="GetSectionRowCount('mJPhoneNumbers')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Rubric Categories','ParentID')"
-                [AllowLoad]="IsSectionExpanded('mJRubricCategories')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Phone Numbers','NumberPoolID')"
+                [NewRecordValues]="NewRecordValues('MJ: Phone Numbers','NumberPoolID')"
+                [AllowLoad]="IsSectionExpanded('mJPhoneNumbers')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRubricCategories', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Rubrics Section -->
-    <mj-collapsible-panel
-        SectionKey="mJRubrics"
-        SectionName="Rubrics"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRubrics')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubrics','CategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Rubrics','CategoryID')"
-                [AllowLoad]="IsSectionExpanded('mJRubrics')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRubrics', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJPhoneNumbers', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
