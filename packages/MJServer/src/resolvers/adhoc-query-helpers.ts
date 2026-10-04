@@ -10,8 +10,11 @@
  *
  * - **Not paging** (`maxRows == null`): the query ran uncapped, so every row came
  *   back — the total is just the number returned.
- * - **Short page** (`pageLength < maxRows`): a page shorter than the page size means
- *   there are no rows beyond it, so the total is `startRow + pageLength` exactly.
+ * - **Short page** (`0 < pageLength < maxRows`, or an empty first page): a page shorter
+ *   than the page size means there are no rows beyond it, so the total is
+ *   `startRow + pageLength` exactly.
+ * - **Empty page after the first** (`pageLength === 0`, `startRow > 0`): the result has at
+ *   most `startRow` rows, but how many is unknown — returns `null` so the count runs.
  * - **Full page** (`pageLength >= maxRows`): more rows may exist — returns `null` to
  *   signal that a `COUNT(*)` is required to know the true total.
  */
@@ -23,7 +26,9 @@ export function exactTotalFromPage(
     if (maxRows == null) {
         return pageLength;
     }
-    if (pageLength < maxRows) {
+    // A short page ends the result, so it gives the total. An empty page after the first does
+    // not: it only shows the result has at most `startRow` rows, so the count must run.
+    if (pageLength < maxRows && (pageLength > 0 || startRow === 0)) {
         return startRow + pageLength;
     }
     return null;

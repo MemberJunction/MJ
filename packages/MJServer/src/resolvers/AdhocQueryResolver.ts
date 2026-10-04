@@ -200,6 +200,12 @@ export class AdhocQueryResolver extends ResolverBase {
         const dataResult = await this.runSqlWithDeadline<Record<string, unknown>>(ds, dataSQL, deadline);
         const recordset = (dataResult.recordset ?? []) as Record<string, unknown>[];
 
+        // No page size: the whole result was fetched, and the caller's StartRow still skips rows,
+        // as on the saved-query path. The total is every row.
+        if (maxRows == null) {
+            return { recordset: recordset.slice(startRow), totalRowCount: recordset.length };
+        }
+
         // Total already known from the page alone (unpaged, or a short page)? Skip the count.
         const exact = exactTotalFromPage(startRow, recordset.length, maxRows);
         if (exact != null || !countSQL) {

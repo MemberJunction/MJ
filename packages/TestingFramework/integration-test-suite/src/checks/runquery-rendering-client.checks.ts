@@ -7,7 +7,7 @@
  * include a table; the queries read a literal derived table instead, which is valid unchanged on
  * SQL Server and PostgreSQL.
  */
-import { RunQuery } from '@memberjunction/core';
+import { RunQuery, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Assert } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -28,6 +28,12 @@ const NUMBER_COUNT = 30;
 
 /** A derived table of the numbers 1 to 30, valid unchanged on both platforms. */
 const NUMBER_SOURCE = `(${Array.from({ length: NUMBER_COUNT }, (_, i) => `SELECT ${i + 1} AS N`).join(' UNION ALL ')}) AS v`;
+
+/**
+ * The errors a refused caller-supplied statement reports: the server's keyword screen for ad-hoc
+ * SQL, or the render pipeline's single-read-query rule behind it.
+ */
+const REFUSAL = /Dangerous SQL keyword detected|single read query/i;
 
 function numbers(predicate: (n: number) => boolean): ComparableRow[] {
     return Array.from({ length: NUMBER_COUNT }, (_, i) => i + 1).filter(predicate).map(n => ({ N: n }));
@@ -233,6 +239,39 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
                 if (actual !== value) failures.push(`${name}: expected the number ${value}, got ${JSON.stringify(actual)} (${typeof actual})`);
             }
             FailOnMismatches('RRC7', failures, expected.length);
+        }
+    },
+    {
+        Id: 'runquery-rendering-client.RRC8',
+        Name: 'RRC8: ad-hoc SQL over GraphQL returns the right rows and totals under every MaxRows / StartRow combination',
+        Fn: async (ctx): Promise<void> => {
+            requireWire(ctx);
+            const expected: ExpectedResult = { Rows: numbers(n => n % 2 === 0), Ordered: true };
+            const sql = `SELECT N FROM ${NUMBER_SOURCE} WHERE N % 2 = 0 ORDER BY N`;
+            FailOnMismatches('RRC8', await RunCapAndPagingMatrix('ad-hoc over GraphQL', { SQL: sql }, expected, ['N'], ctx.User), 1);
+        }
+    },
+    {
+        Id: 'runquery-rendering-client.RRC9',
+        Name: 'RRC9: ad-hoc SQL over GraphQL must be a single read query; a write, alone or stacked after a read, is refused and changes nothing',
+        Fn: async (ctx): Promise<void> => {
+            requireWire(ctx);
+            const category = requireFixtures().Category;
+            // Double-quoted identifiers are valid on both platforms, so only the read-only guard can stop these.
+            const update = `UPDATE __mj."QueryCategory" SET "Description" = 'changed by RRC9' WHERE "ID" = '${category.ID}'`;
+            const attempts: Array<[string, string]> = [['a write', update], ['a write stacked after a read', `SELECT 1 AS A; ${update}`]];
+            const failures: string[] = [];
+            for (const [label, sql] of attempts) {
+                const result = await new RunQuery().RunQuery({ SQL: sql }, ctx.User);
+                if (result.Success) failures.push(`${label} was accepted`);
+                else if (!REFUSAL.test(result.ErrorMessage ?? '')) failures.push(`${label} failed for another reason: ${result.ErrorMessage}`);
+            }
+            const reread = await new RunView().RunView<{ Description: string | null }>({
+                EntityName: 'MJ: Query Categories', ExtraFilter: `ID='${category.ID}'`, Fields: ['Description'], ResultType: 'simple', BypassCache: true
+            }, ctx.User);
+            const description = reread.Results?.[0]?.Description ?? null;
+            if (description === 'changed by RRC9') failures.push('the fixture category was changed');
+            FailOnMismatches('RRC9', failures, attempts.length);
         }
     }
 ];
