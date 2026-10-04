@@ -737,6 +737,30 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
             const cases = casesFor(OWN_CAP_CASES, RenderPlatform(ctx));
             FailOnMismatches('RR11', await runCaseMatrix(cases, ctx.User), cases.length);
         }
+    },
+    {
+        Id: 'runquery-rendering.RR12',
+        Name: 'RR12: the row cap (spec path, MaxRows without paging) returns exactly the first rows of every ordered query shape',
+        Fn: async (ctx): Promise<void> => {
+            const platform = RenderPlatform(ctx);
+            const items = BuildRenderItems();
+            const cases = casesFor([...PLAIN_CASES, ...OWN_CAP_CASES], platform).filter(c => c.Ordered);
+            const failures: string[] = [];
+            for (const c of cases) {
+                const expected = c.Expect(items);
+                for (const cap of [1, 4, expected.length + 3]) {
+                    const sql = c.Variants?.[platform] ?? c.SQL;
+                    const result = await new RunQuery().ExecuteFromSpec({ SQL: sql, MaxRows: cap }, ctx.User);
+                    failures.push(...compareRows(`${c.Name} [MaxRows ${cap}]`, result, expected.slice(0, cap), c.Columns, true));
+                }
+            }
+            if (platform === 'sqlserver') {
+                const sql = `SELECT TRY_CAST(t.ID AS INT) AS ID, (SELECT c.Category FROM ${T} c WHERE c.ID = t.ID FOR JSON PATH) AS J FROM ${T} t ORDER BY t.ID`;
+                const result = await new RunQuery().ExecuteFromSpec({ SQL: sql, MaxRows: 5 }, ctx.User);
+                failures.push(...compareRows('FOR JSON in a subquery [MaxRows 5]', result, ids(items.slice(0, 5)), ['ID'], true));
+            }
+            FailOnMismatches('RR12', failures, cases.length + 1);
+        }
     }
 ];
 

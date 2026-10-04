@@ -172,3 +172,49 @@ describe('R2 — TOP forms that are not a plain row count are kept, and the quer
         expect(paged.DataSQL).toMatch(/LIMIT\s+5\s+OFFSET\s+0$/);
     });
 });
+
+describe('D5b — FOR JSON inside a subquery does not disable the row cap', () => {
+    it('an unparseable query with a FOR JSON subquery is still capped', () => {
+        const sql = 'SELECT TRY_CAST(a AS INT) AS a, (SELECT b FROM u WHERE u.k = t.k FOR JSON PATH) AS j FROM t';
+        expect(QueryPagingEngine.WrapWithMaxRows(sql, 10, 'sqlserver')).not.toBe(sql);
+    });
+
+    it('a set operation with a FOR JSON subquery is still capped', () => {
+        const sql = 'SELECT a FROM t UNION ALL SELECT (SELECT b FROM u FOR JSON PATH) FROM v';
+        expect(QueryPagingEngine.WrapWithMaxRows(sql, 10, 'sqlserver')).not.toBe(sql);
+    });
+});
+
+describe('R20 / R15 — the row cap keeps the query as written and its ORDER BY in scope', () => {
+    it('an unparseable query ordered by an aliased column is capped without moving the ORDER BY', () => {
+        const sql = 'SELECT TRY_CAST(t.a AS INT) AS a FROM t ORDER BY t.a';
+        const capped = QueryPagingEngine.WrapWithMaxRows(sql, 5, 'sqlserver');
+        expect(capped).toBe('SELECT TOP 5 TRY_CAST(t.a AS INT) AS a FROM t ORDER BY t.a');
+    });
+
+    it('a set operation ordered by an output column is capped in place', () => {
+        const capped = QueryPagingEngine.WrapWithMaxRows('SELECT a FROM t UNION SELECT a FROM u ORDER BY a', 5, 'sqlserver');
+        expect(capped).toMatch(/^SELECT a FROM t UNION SELECT a FROM u ORDER BY a\s+OFFSET\s+0\s+ROWS\s+FETCH\s+NEXT\s+5\s+ROWS\s+ONLY$/);
+    });
+
+    it('a derived-table column list survives the cap', () => {
+        for (const platform of ['sqlserver', 'postgresql'] as const) {
+            expect(QueryPagingEngine.WrapWithMaxRows('SELECT N FROM (VALUES (1), (2)) AS v(N) ORDER BY N', 1, platform)).toContain('AS v(N)');
+        }
+    });
+
+    it('the caller’s identifiers and keywords are not re-quoted or re-cased', () => {
+        const sql = 'select ID, DisplayName from mjit.Item where Name like \'a%\' order by ID';
+        expect(QueryPagingEngine.WrapWithMaxRows(sql, 10, 'sqlserver')).toBe('select TOP 10 ID, DisplayName from mjit.Item where Name like \'a%\' order by ID');
+    });
+
+    it('a CTE-headed query gets TOP on its main SELECT, with the CTEs untouched', () => {
+        const sql = 'WITH [c] AS (SELECT TOP 3 a FROM t ORDER BY a) SELECT DISTINCT a FROM [c]';
+        expect(QueryPagingEngine.WrapWithMaxRows(sql, 10, 'sqlserver')).toBe('WITH [c] AS (SELECT TOP 3 a FROM t ORDER BY a) SELECT DISTINCT TOP 10 a FROM [c]');
+    });
+
+    it('a trailing OPTION hint stays last', () => {
+        expect(QueryPagingEngine.WrapWithMaxRows('SELECT a FROM t UNION SELECT b FROM u OPTION (RECOMPILE)', 5, 'sqlserver'))
+            .toMatch(/FETCH NEXT 5 ROWS ONLY\nOPTION \(RECOMPILE\)$/);
+    });
+});
