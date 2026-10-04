@@ -212,6 +212,28 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
             }
             FailOnMismatches('RRC6 (a later request must still see 30s)', failures, 20);
         }
+    },
+    {
+        Id: 'runquery-rendering-client.RRC7',
+        Name: 'RRC7: TestQuerySQL on the read-only login returns counts and decimals as numbers, as every other query does',
+        Fn: async (ctx): Promise<void> => {
+            const wire = requireWire(ctx);
+            const result = await runTestQuerySQL(wire, `SELECT COUNT(*) AS RowTotal, SUM(CAST(N AS DECIMAL(10, 2))) AS ValueTotal FROM ${NUMBER_SOURCE}`, 1);
+            if (!result.Success && /Read-only data source is not available/i.test(result.ErrorMessage ?? '')) {
+                console.warn('  ⚠ runquery-rendering-client.RRC7 SKIPPED — the server has no read-only connection configured, which TestQuerySQL requires.');
+                return;
+            }
+            Assert(result.Success, `TestQuerySQL failed: ${result.ErrorMessage}`);
+            const row = (JSON.parse(result.Results ?? '[]') as Record<string, unknown>[])[0] ?? {};
+            const valueOf = (name: string): unknown => Object.entries(row).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+            const failures: string[] = [];
+            const expected: Array<[string, number]> = [['RowTotal', NUMBER_COUNT], ['ValueTotal', (NUMBER_COUNT * (NUMBER_COUNT + 1)) / 2]];
+            for (const [name, value] of expected) {
+                const actual = valueOf(name);
+                if (actual !== value) failures.push(`${name}: expected the number ${value}, got ${JSON.stringify(actual)} (${typeof actual})`);
+            }
+            FailOnMismatches('RRC7', failures, expected.length);
+        }
     }
 ];
 
