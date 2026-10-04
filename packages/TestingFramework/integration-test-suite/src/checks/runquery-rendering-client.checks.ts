@@ -169,6 +169,25 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
         }
     },
     {
+        Id: 'runquery-rendering-client.RRC5',
+        Name: 'RRC5: TestQuerySQL runs as the configured read-only database login',
+        Fn: async (ctx): Promise<void> => {
+            const wire = requireWire(ctx);
+            // The same variable MJAPI reads its read-only login from; the runner needs it to know
+            // which user to expect.
+            const expectedUser = process.env.DB_READ_ONLY_USERNAME;
+            if (!expectedUser) {
+                console.warn('  ⚠ runquery-rendering-client.RRC5 SKIPPED — DB_READ_ONLY_USERNAME is not set for the runner, so there is no read-only login to expect.');
+                return;
+            }
+            const result = await runTestQuerySQL(wire, 'SELECT CURRENT_USER AS UserName', 1);
+            Assert(result.Success, `TestQuerySQL failed: ${result.ErrorMessage}`);
+            const user = String(ProjectRows(JSON.parse(result.Results ?? '[]') as Record<string, unknown>[], ['UserName'])[0]?.UserName);
+            Assert(user.toLowerCase() === expectedUser.toLowerCase(),
+                `TestQuerySQL ran as '${user}', not the read-only login '${expectedUser}' — the read-only provider is using another connection`);
+        }
+    },
+    {
         Id: 'runquery-rendering-client.RRC6',
         Name: 'RRC6: on PostgreSQL, a session setting changed by caller-supplied SQL is not seen by later requests',
         Fn: async (ctx): Promise<void> => {

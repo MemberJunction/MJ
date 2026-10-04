@@ -6,6 +6,7 @@ import {
     BuildPostgreSQLConnectionConfig,
     CODEGEN_STATEMENT_TIMEOUT_MS,
     ResolvePostgreSQLEndpoint,
+    ResolvePostgreSQLReadOnlyCredentials,
     ToPGPoolConfig
 } from '../postgresqlPoolSettings.js';
 import type { DatabaseSettingsInfo } from '../config.js';
@@ -47,6 +48,12 @@ describe('BuildPostgreSQLConnectionConfig', () => {
         expect(config.IdleInTransactionSessionTimeoutMs).toBe(0);
     });
 
+    it('keeps the read-only pool small but gives it the API timeouts', () => {
+        const config = BuildPostgreSQLConnectionConfig(endpoint, defaults, 'read-only');
+        expect(config).toMatchObject({ MaxConnections: 10, MinConnections: 0, StatementTimeoutMs: 30000, IdleInTransactionSessionTimeoutMs: 60000 });
+        expect(BuildPostgreSQLConnectionConfig(endpoint, { ...defaults, connectionPool: { max: 4, min: 1, idleTimeoutMillis: 1, acquireTimeoutMillis: 1 } }, 'read-only').MaxConnections).toBe(4);
+    });
+
     it('gives the CodeGen pool the long timeout the SQL Server CodeGen pool has, and no idle-in-transaction limit', () => {
         const config = BuildPostgreSQLConnectionConfig(endpoint, defaults, 'codegen');
         expect(config.StatementTimeoutMs).toBe(CODEGEN_STATEMENT_TIMEOUT_MS);
@@ -81,5 +88,21 @@ describe('ResolvePostgreSQLEndpoint', () => {
 
     it('falls back to localhost:5432 and the postgres user', () => {
         expect(ResolvePostgreSQLEndpoint({})).toEqual({ Host: 'localhost', Port: 5432, Database: '', User: 'postgres', Password: '' });
+    });
+});
+
+describe('ResolvePostgreSQLReadOnlyCredentials', () => {
+    it('uses the dbReadOnlyUsername / dbReadOnlyPassword settings SQL Server uses', () => {
+        expect(ResolvePostgreSQLReadOnlyCredentials({ dbReadOnlyUsername: 'ro', dbReadOnlyPassword: 'pw' }, {}))
+            .toEqual({ User: 'ro', Password: 'pw' });
+    });
+
+    it('falls back to PG_READ_ONLY_* when the settings are absent', () => {
+        expect(ResolvePostgreSQLReadOnlyCredentials({}, { PG_READ_ONLY_USERNAME: 'pgro', PG_READ_ONLY_PASSWORD: 'x' }))
+            .toEqual({ User: 'pgro', Password: 'x' });
+    });
+
+    it('returns null when no complete pair is configured', () => {
+        expect(ResolvePostgreSQLReadOnlyCredentials({ dbReadOnlyUsername: 'ro' }, { PG_READ_ONLY_USERNAME: 'pgro' })).toBeNull();
     });
 });
