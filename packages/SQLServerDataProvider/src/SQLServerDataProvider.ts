@@ -156,8 +156,8 @@ type SQLCoreResult = Awaited<ReturnType<typeof executeSQLCore>>;
 
 /** A statement request that can be cancelled while it runs; an `mssql` Request has this shape. */
 export interface CancellableRequest<T> {
-  query(sqlText: string): Promise<T>;
-  cancel(): void;
+  query(sqlText: string): Promise<T>;  // case-violation-ok-legacy-back-compat: mirrors the mssql driver's Request, which an mssql Request must satisfy as-is
+  cancel(): void;  // case-violation-ok-legacy-back-compat: mirrors the mssql driver's Request, which an mssql Request must satisfy as-is
 }
 
 /**
