@@ -18,8 +18,8 @@
  * queries create them in the same category, which teardown sweeps. The whole bundle writes, so no
  * check is gated on RequiresMutation.
  */
-import { Metadata, RunQuery, RunView } from '@memberjunction/core';
-import type { DatabasePlatform, QueryDependencySpec, RunQueryResult, UserInfo } from '@memberjunction/core';
+import { RunQuery, RunView } from '@memberjunction/core';
+import type { DatabasePlatform, IMetadataProvider, QueryDependencySpec, RunQueryResult, UserInfo } from '@memberjunction/core';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryPermissionEntity } from '@memberjunction/core-entities';
@@ -388,7 +388,7 @@ const PARAM_CASES: ParamCase[] = [
     { Label: 'sqlString', Parameters: { Category: 'Gamma' }, Matches: i => i.Category === 'Gamma' },
     { Label: 'sqlNumber', Parameters: { MinScore: 80 }, Matches: i => i.Score !== null && i.Score >= 80 },
     { Label: 'sqlNumber from text', Parameters: { MinScore: '95' }, Matches: i => i.Score !== null && i.Score >= 95 },
-    { Label: 'sqlIn numbers', Parameters: { Ids: [3, 5, 7, 240] }, Matches: i => [3, 5, 7, 240].includes(i.ID) },
+    { Label: 'sqlIn numbers', Parameters: { Ids: [3, 5, 7, 240] }, Matches: i => new Set([3, 5, 7, 240]).has(i.ID) },
     { Label: 'sqlDate', Parameters: { Since: '2026-02-15' }, Matches: i => i.CreatedOn >= '2026-02-15' },
     { Label: 'sqlBoolean', Parameters: { OnlyActive: true }, Matches: i => i.IsActive },
     { Label: 'apostrophes', Parameters: { Exact: "O'Brien's note" }, Matches: i => i.Notes === "O'Brien's note" },
@@ -798,7 +798,7 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
             await expectFailure(missing.ID, /not found/i, 'missing dependency', ctx.User);
             await expectFailure(notReusable.ID, /not marked as Reusable/i, 'non-reusable dependency', ctx.User);
             await expectFailure(cycleA.ID, /Circular query dependency/i, 'circular reference', ctx.User);
-            await expectDeniedDependencyFailure(fixtures, path, ctx.User);
+            await expectDeniedDependencyFailure(fixtures, path, ctx.User, ctx.Provider);
         }
     },
     {
@@ -964,12 +964,12 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
  * fail on permissions. The run is refused for the composing query itself, since running it means
  * running its dependencies. The restriction is removed afterwards so teardown can delete the query.
  */
-async function expectDeniedDependencyFailure(fixtures: RenderFixtures, path: string, user: UserInfo): Promise<void> {
+async function expectDeniedDependencyFailure(fixtures: RenderFixtures, path: string, user: UserInfo, provider: IMetadataProvider): Promise<void> {
     const role = await roleNotHeldBy(user);
     if (!role) throw new Error('a role the test user does not hold must exist to restrict a dependency');
     const restricted = await CreateRenderQuery(fixtures, { Name: 'RR Dep Restricted', Reusable: true, SQL: `SELECT ID FROM ${T}` }, user);
     const composed = await CreateRenderQuery(fixtures, { Name: 'RR Comp Restricted', SQL: `SELECT r.ID FROM {{query:"${path}/RR Dep Restricted"}} r` }, user);
-    const permission = await new Metadata().GetEntityObject<MJQueryPermissionEntity>('MJ: Query Permissions', user);
+    const permission = await provider.GetEntityObject<MJQueryPermissionEntity>('MJ: Query Permissions', user);
     permission.QueryID = restricted.ID;
     permission.RoleID = role.ID;
     Assert(await permission.Save(), `restricting the dependency failed: ${permission.LatestResult?.CompleteMessage}`);
