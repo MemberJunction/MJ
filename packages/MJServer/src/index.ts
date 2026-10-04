@@ -31,6 +31,7 @@ import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { TranslateBracketsToPG } from './postgresqlCompat.js';
 import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
@@ -477,7 +478,7 @@ const setupComplete$ = new ReplaySubject(1);
       if (poolAny._pgPool) {
         const thePgPool = poolAny._pgPool as import('pg').Pool;
         // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
-        const pgQuery = translateBracketsToPG(query);
+        const pgQuery = TranslateBracketsToPG(query);
         const result = await thePgPool.query(pgQuery);
         return result.rows;
       }
@@ -2207,11 +2208,3 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
-/**
- * Translates SQL Server bracket-quoted identifiers to PostgreSQL double-quoted identifiers.
- * Converts [schema].[table] to "schema"."table" and handles common T-SQL patterns.
- */
-function translateBracketsToPG(sql: string): string {
-  // Replace [identifier] with "identifier"
-  return sql.replace(/\[([^\]]+)\]/g, '"$1"');
-}
