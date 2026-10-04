@@ -131,3 +131,18 @@ export type {
 } from './graphQLIntegrationClient';
 export { GraphQLConversationClient } from './graphQLConversationClient';
 export type { ConversationRunEvent, ConversationTailResult } from './graphQLConversationClient';
+
+export { GraphQLMeetingClient } from './graphQLMeetingClient';
+export type {
+  MeetingInfo,
+  MeetingParticipantInfo,
+  DialInPhoneNumberInfo,
+  MeetingParticipantInput,
+  CreateMeetingInput,
+  UpdateMeetingInput,
+  RSVPMeetingInput,
+  VerifyDialInCodeInput,
+  MeetingResult,
+  StartMeetingResult,
+  VerifyDialInCodeResult,
+} from './graphQLMeetingClient';
