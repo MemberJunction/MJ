@@ -183,7 +183,12 @@ export class QueryPagingEngine {
             return capped(`${statement.substring(0, own.Start)}${dialect.LimitClause(cap).prefix}${statement.substring(own.End)}`, 'top');
         }
         const limit = dialect.LimitClause(cap, own.Skip);
-        return capped(`${statement.substring(0, own.Start)}${limit.suffix}${QueryPagingEngine.tail(shape)}`, dialect.PlatformKey === 'sqlserver' ? 'fetch' : 'limit');
+        return capped(`${statement.substring(0, own.Start)}${limit.suffix}${QueryPagingEngine.tail(shape)}`, QueryPagingEngine.suffixMethod(limit.suffix));
+    }
+
+    /** How a row-limit suffix from the dialect's `LimitClause` caps rows: `FETCH` or `LIMIT`. */
+    private static suffixMethod(suffix: string): 'fetch' | 'limit' {
+        return /\bFETCH\b/i.test(suffix) ? 'fetch' : 'limit';
     }
 
     /**
@@ -280,12 +285,14 @@ export class QueryPagingEngine {
     }
 
     /**
-     * The ORDER BY to page by when the statement has none. SQL Server needs one for OFFSET and
-     * allows only select-list items with UNION / INTERSECT / EXCEPT and with SELECT DISTINCT, so
-     * those shapes are ordered by their first column; anything else uses the dialect's default.
+     * The ORDER BY to page by when the statement has none: the dialect's
+     * {@link SQLDialect.SelectListPagingOrderBy} for a set operation or SELECT DISTINCT when it
+     * has one (a platform that only accepts select-list items there), otherwise its
+     * {@link SQLDialect.DefaultPagingOrderBy}.
      */
     private static defaultOrderBy(shape: PagingShape, dialect: SQLDialect): string {
-        if (dialect.PlatformKey === 'sqlserver' && (shape.IsSetOperation || shape.IsDistinct)) return '1';
+        const selectListOrderBy = dialect.SelectListPagingOrderBy;
+        if (selectListOrderBy !== null && (shape.IsSetOperation || shape.IsDistinct)) return selectListOrderBy;
         return dialect.DefaultPagingOrderBy;
     }
 
@@ -317,7 +324,7 @@ export class QueryPagingEngine {
         const inner = statement.substring(shape.MainStart, innerEnd).trim();
         const orderBy = moveOrderBy
             ? statement.substring(shape.OrderBy!.Start, shape.OrderBy!.End).trim()
-            : dialect.PlatformKey === 'sqlserver' ? `ORDER BY ${dialect.DefaultPagingOrderBy}` : '';
+            : dialect.PagingRequiresOrderBy ? `ORDER BY ${dialect.DefaultPagingOrderBy}` : '';
         const limit = dialect.LimitClause(maxRows, startRow);
         const page = `SELECT * FROM (\n${inner}\n) AS ${dialect.QuoteIdentifier('__mj_page')}${orderBy ? `\n${orderBy}` : ''}\n${limit.suffix}`;
         return `${prefix}${page}${QueryPagingEngine.tail(shape)}`;
