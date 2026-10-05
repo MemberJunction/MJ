@@ -420,9 +420,13 @@ export class LoopAgentType extends BaseAgentType {
         });
     }
 
-    /** Text that opens like JSON or a fenced block — an attempted structured answer, not prose. */
+    /**
+     * Text that opens a JSON object with a quoted key, bare or in a json fence — an attempted
+     * structured answer, not prose. A code block or a sentence that merely starts with a brace
+     * is prose and still completes the task.
+     */
     private looksLikeEnvelopeAttempt(text: string): boolean {
-        return text.startsWith('{') || text.startsWith('```');
+        return /^(?:```(?:json)?\s*)?\{\s*(?:"|$)/i.test(text);
     }
 
     /**
@@ -431,6 +435,10 @@ export class LoopAgentType extends BaseAgentType {
      */
     private decodePayloadChangeArgument(value: unknown): AgentPayloadChangeRequest | undefined | null {
         if (value === undefined || value === null) {
+            return undefined;
+        }
+        // An empty or "null" string is the argument left out, not a malformed one.
+        if (typeof value === 'string' && (value.trim() === '' || value.trim() === 'null')) {
             return undefined;
         }
         let candidate: unknown = value;

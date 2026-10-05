@@ -160,6 +160,11 @@ describe('LoopAgentType — implicit control flow routing (spec §2.1)', () => {
         const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x', payloadChangeRequest: JSON.stringify(change) } }], 'NativeImplicit'), full);
         expect(step).toMatchObject({ step: 'Success', payloadChangeRequest: change });
     });
+    it.each(['', '   ', 'null'])('complete_task with payloadChangeRequest %j → Success, as if it were omitted', (value) => {
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: value } }], 'NativeImplicit'), full);
+        expect(step).toMatchObject({ step: 'Success', message: 'Done.' });
+        expect(step?.payloadChangeRequest).toBeUndefined();
+    });
     it('complete_task with an unusable payloadChangeRequest → Retry naming the rule', () => {
         const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x', payloadChangeRequest: 'not json' } }], 'NativeImplicit'), full);
         expect(step?.step).toBe('Retry');
@@ -201,6 +206,10 @@ describe('LoopAgentType — plain text completes under implicit control flow', (
         const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', '{ "reasoning": "Tested the query", "payloadChangeRequest": { "updateElements": '));
         expect(step.step).toBe('Retry');
         expect(step.errorMessage).toMatch(/complete_task/);
+    });
+    it.each(['```sql\nSELECT 1\n```', '{curly} braces open this sentence.'])('prose that merely starts with a fence or a brace still completes (%j)', async (text) => {
+        const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', text));
+        expect(step).toMatchObject({ step: 'Success', message: text });
     });
     it('a fenced JSON block that cannot be read under implicit → the same Retry', async () => {
         const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', '```json\n{ "reasoning": "x"'));
