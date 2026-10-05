@@ -771,6 +771,23 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * in-place mutation (`canUseImmediateMutation`); this closes the same gap in the raw
      * provider cache. (B42)
      *
+     * Maintaining the order in place was built and then withdrawn, so the payoff is on record rather
+     * than left to be rediscovered. It is possible for a narrow subset — plain column terms over
+     * numeric/date/boolean fields with no NULLs present, where JavaScript and SQL provably agree —
+     * but the subset is where the value dies, not the implementation. Of 918 RunView param literals
+     * in this repo, 289 carry an ORDER BY, 112 are also unfiltered and uncapped (the only ones a slot
+     * could maintain), and roughly 26 fall in that type subset, several of which order on a
+     * uniqueidentifier and are refused anyway. The survivors are about a dozen configuration and
+     * admin lists — API keys, credentials, view types, schema info — saved rarely, so the saving is a
+     * handful of small indexed reads per day. High-write entities gain nothing: every ordered read of
+     * MJ: AI Agent Runs, MJ: Conversation Details and MJ: AI Prompt Runs is FILTERED, so their slots
+     * land in the invalidate branch regardless. Against that, the cost is a comparator that must keep
+     * agreeing with SQL collation and NULL placement across dialects forever, whose failure mode is a
+     * silently reordered list in a slot other readers treat as authoritative. Widening it to strings —
+     * by far the largest bucket, `Name` — means owning collation per dialect and per column.
+     *
+     * If you are about to attempt this, the measurement above is the argument not to.
+     *
      * @param parts - the fingerprint already split on '|'
      */
     protected hasOrderBy(parts: string[]): boolean {
