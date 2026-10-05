@@ -1,5 +1,6 @@
 import { BaseSingleton, ShutdownRegistry, IShutdownable } from '@memberjunction/global';
 import { DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON, USER_REQUEST_CANCELLATION_REASON } from './agent-run-control';
 
 /** The provider's SQL dialect, referenced via indexed access so we don't take a direct
  *  dependency on `@memberjunction/sql-dialect` just to name the type. */
@@ -31,17 +32,6 @@ const DEFAULT_CONFIG: AgentRunWatchdogConfig = {
     staleThresholdMinutes: 5,
     cancellationPollIntervalMs: 3_000,
 };
-
-/**
- * The abort reason the watchdog raises when a run's row was marked `Cancelled` with
- * `CancellationReason = 'User Request'`. BaseAgent reads it back off the merged signal to record
- * the same reason on the run it finalizes, so the row the UI wrote and the row the agent writes
- * agree.
- */
-export const USER_CANCEL_ABORT_REASON = 'Cancelled by user request';
-
-/** The abort reason raised for an externally cancelled run whose row carries any other reason. */
-export const EXTERNAL_CANCEL_ABORT_REASON = 'Cancelled externally';
 
 /** The row shape the cancellation poll reads back from the AI Agent Runs view. */
 interface CancelledRunRow {
@@ -372,7 +362,7 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /** Maps a run row's `CancellationReason` to the abort reason the owning agent will see. */
     private static abortReasonFor(cancellationReason: string | null): string {
-        return cancellationReason === 'User Request' ? USER_CANCEL_ABORT_REASON : EXTERNAL_CANCEL_ABORT_REASON;
+        return cancellationReason === USER_REQUEST_CANCELLATION_REASON ? USER_CANCEL_ABORT_REASON : EXTERNAL_CANCEL_ABORT_REASON;
     }
 
     /**

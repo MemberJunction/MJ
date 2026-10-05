@@ -37,6 +37,11 @@ vi.mock('@memberjunction/ai-agents', () => ({
         }
     },
     ArtifactToolManager: class {},
+    // The pure helpers the resolver shares with BaseAgent; stubbed to the same contract.
+    BuildStoppedRunPredecessorFilter: (conversationId: string, agentId: string) =>
+        `ConversationID='${conversationId}' AND ParentRunID IS NULL AND AgentID='${agentId}'`,
+    IsUserStoppedRun: (run: { Status: string; CancellationReason: string | null } | null | undefined) =>
+        !!run && run.Status === 'Cancelled' && run.CancellationReason === 'User Request',
 }));
 
 vi.mock('../realtimeWidget/widgetGuestElevation.js', () => ({

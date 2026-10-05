@@ -15,7 +15,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
-import { AgentRunWatchdog, USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON } from '../agent-run-watchdog';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
+import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON, AGENT_TIMEOUT_ABORT_REASON } from '../agent-run-control';
 
 interface FakeStep { StepNumber: number; PayloadAtEnd: string | null }
 
@@ -57,8 +58,10 @@ describe('BaseAgent.CancellationReasonForAbort', () => {
     it('maps the stop relay\'s user-cancel reason to User Request', () => {
         expect(BaseAgent.CancellationReasonForAbort(USER_CANCEL_ABORT_REASON)).toBe('User Request');
     });
-    it('maps the wall-clock guard\'s message to Timeout', () => {
-        expect(BaseAgent.CancellationReasonForAbort("Agent 'X' exceeded maxExecutionTimeMs (7200000ms)")).toBe('Timeout');
+    it('maps the wall-clock guard\'s reason (by its constant prefix, not its wording) to Timeout', () => {
+        expect(BaseAgent.CancellationReasonForAbort(`${AGENT_TIMEOUT_ABORT_REASON}: agent 'X' ran past 7200000ms`)).toBe('Timeout');
+        // The old free-text match is gone on purpose: a message that merely mentions the setting is not the guard.
+        expect(BaseAgent.CancellationReasonForAbort("some caller mentioned maxExecutionTimeMs")).toBe('System');
     });
     it('maps anything else (upstream token, shutdown, external cancel) to System', () => {
         expect(BaseAgent.CancellationReasonForAbort(EXTERNAL_CANCEL_ABORT_REASON)).toBe('System');
@@ -134,7 +137,7 @@ describe('BaseAgent.createCancelledResult', () => {
 
     it('records Timeout for the wall-clock guard and leaves FinalPayload null when no step recorded one', async () => {
         const run: FakeRun = { ID: RUN_ID, FinalPayload: null, Steps: [], Save: vi.fn(async () => true) };
-        await cancel(agentWithRun(run), "Agent 'X' exceeded maxExecutionTimeMs (10ms)");
+        await cancel(agentWithRun(run), `${AGENT_TIMEOUT_ABORT_REASON}: agent 'X' ran past 10ms`);
         expect(run.CancellationReason).toBe('Timeout');
         expect(run.FinalPayload).toBeNull();
     });

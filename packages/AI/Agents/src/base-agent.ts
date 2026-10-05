@@ -18,7 +18,8 @@ import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultConte
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
-import { AgentRunWatchdog, USER_CANCEL_ABORT_REASON } from './agent-run-watchdog';
+import { AgentRunWatchdog } from './agent-run-watchdog';
+import { USER_CANCEL_ABORT_REASON, AGENT_TIMEOUT_ABORT_REASON, SETTLED_AGENT_RUN_STATUSES, BuildStoppedRunPredecessorFilter, IsUserStoppedRun } from './agent-run-control';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -2032,7 +2033,7 @@ export class BaseAgent {
         const timeoutId = setTimeout(() => {
             if (!timeoutController.signal.aborted) {
                 timeoutController.abort(
-                    `Agent '${params.agent.Name}' exceeded maxExecutionTimeMs (${agentTimeoutMS}ms)`
+                    `${AGENT_TIMEOUT_ABORT_REASON}: agent '${params.agent.Name}' ran past ${agentTimeoutMS}ms`
                 );
             }
         }, agentTimeoutMS);
@@ -7681,20 +7682,7 @@ The context is now within limits. Please retry your request with the recovered c
             if (!body) {
                 return;
             }
-            const message: AgentChatMessage = {
-                role: 'user',
-                content: body,
-                metadata: {
-                    turnAdded: 0,
-                    messageType: BaseAgent.toolResultMessageType,
-                    expirationTurns: 2,
-                    expirationMode: 'Compact',
-                    compactMode: 'First N Chars',
-                    compactLength: 500,
-                    compactPromptId: '',
-                },
-            };
-            params.conversationMessages.push(message);
+            params.conversationMessages.push(this.buildCarryForwardMessage(body));
             this.logStatus(`[PriorTurnToolResults] Carried ${steps.length} tool result(s) forward from the previous run`, true, params);
         } catch (error) {
             // Carry-forward is an optimization — never let it break the run.
@@ -7732,24 +7720,33 @@ The context is now within limits. Please retry your request with the recovered c
             if (!body) {
                 return;
             }
-            const message: AgentChatMessage = {
-                role: 'user',
-                content: body,
-                metadata: {
-                    turnAdded: 0,
-                    messageType: BaseAgent.toolResultMessageType,
-                    expirationTurns: 2,
-                    expirationMode: 'Compact',
-                    compactMode: 'First N Chars',
-                    compactLength: 500,
-                    compactPromptId: '',
-                },
-            };
-            params.conversationMessages.push(message);
+            params.conversationMessages.push(this.buildCarryForwardMessage(body));
             this.logStatus(`[StoppedRunResults] Carried ${steps.length} completed step result(s) forward from stopped run ${stoppedRunId}`, true, params);
         } catch (error) {
             this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
         }
+    }
+
+    /**
+     * A carried-forward results message: a user-role message that expires after two turns and
+     * compacts to its head, so results reused once never compound across the conversation. Shared
+     * by the settled-run and stopped-run carry-forwards so the two cannot age differently.
+     * @private
+     */
+    private buildCarryForwardMessage(content: string): AgentChatMessage {
+        return {
+            role: 'user',
+            content,
+            metadata: {
+                turnAdded: 0,
+                messageType: BaseAgent.toolResultMessageType,
+                expirationTurns: 2,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            },
+        };
     }
 
     /**
@@ -7761,21 +7758,16 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async findUserStoppedPredecessorRunId(params: ExecuteAgentParams): Promise<string | null> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const statusList = BaseAgent.settledRunStatuses.map(s => `'${s}'`).join(', ');
         const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationID='${params.conversationId}' AND ParentRunID IS NULL AND AgentID='${params.agent.ID}' ` +
-                `AND (Status IN (${statusList}) OR (Status='Cancelled' AND CancellationReason='User Request'))`,
+            ExtraFilter: BuildStoppedRunPredecessorFilter(params.conversationId!, params.agent.ID),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
             Fields: ['ID', 'Status', 'CancellationReason'],
             ResultType: 'simple',
         }, params.contextUser);
         const run = newest.Success ? newest.Results?.[0] : undefined;
-        if (!run || run.Status !== 'Cancelled' || run.CancellationReason !== 'User Request') {
-            return null;
-        }
-        return run.ID;
+        return IsUserStoppedRun(run) ? run!.ID : null;
     }
 
     /** The completed, successful Actions and Tool steps of a stopped run, in step order. @private */
@@ -7783,7 +7775,8 @@ The context is now within limits. Please retry your request with the recovered c
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const steps = await rv.RunView<StoppedRunStepRecord>({
             EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${runId}' AND StepType IN ('Actions', 'Tool') AND Status='Completed' AND Success=1`,
+            ExtraFilter: `AgentRunID='${runId}' AND StepType IN (${BaseAgent.stoppedRunCarryForwardPredicate.stepTypes.map(t => `'${t}'`).join(', ')}) ` +
+                `AND Status='${BaseAgent.stoppedRunCarryForwardPredicate.stepStatus}' AND Success=1`,
             OrderBy: 'StepNumber ASC',
             Fields: ['StepNumber', 'StepType', 'StepName', 'InputData', 'OutputData'],
             ResultType: 'simple',
@@ -7809,7 +7802,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     public static BuildStoppedRunResultsMessage(steps: ReadonlyArray<StoppedRunStepRecord>, maxChars: number): string | null {
         const sections: string[] = [];
-        const perSectionMax = Math.max(1_500, Math.floor(maxChars / Math.max(steps.length, 1)));
+        const perSectionMax = Math.max(BaseAgent.minStoppedRunSectionChars, Math.floor(maxChars / Math.max(steps.length, 1)));
         let usedChars = 0;
         let dropped = 0;
         for (const step of steps) {
@@ -7861,7 +7854,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const outputs: Record<string, unknown> = {};
         for (const param of result.parameters ?? []) {
-            if (param.Type === 'Output' && param.Value !== undefined && param.Value !== null) {
+            if (param.Type === BaseAgent.actionOutputParamType && param.Value !== undefined && param.Value !== null) {
                 outputs[param.Name] = param.Value;
             }
         }
@@ -7977,7 +7970,7 @@ The context is now within limits. Please retry your request with the recovered c
      * post-turn compaction gate ({@link startPostTurnCompaction}).
      */
     private static readonly settledRunStatuses: ReadonlyArray<MJAIAgentRunEntityExtended['Status']> =
-        ['Completed', 'AwaitingFeedback'];
+        SETTLED_AGENT_RUN_STATUSES;
 
     /**
      * The carry-forward row predicate — the SINGLE source shared by the two places that
@@ -8000,6 +7993,25 @@ The context is now within limits. Please retry your request with the recovered c
         stepStatus: MJAIAgentRunStepEntityExtended['Status'];
         runStatuses: ReadonlyArray<MJAIAgentRunEntityExtended['Status']>;
     };
+
+    /**
+     * The row predicate for the stopped-run carry-forward's step query: the completed, successful
+     * Actions and Tool steps of the run the user stopped. Declared beside
+     * {@link carryForwardPredicate} for the same reason it is: one place to change what counts.
+     */
+    private static readonly stoppedRunCarryForwardPredicate = {
+        stepTypes: ['Actions', 'Tool'],
+        stepStatus: 'Completed',
+    } as const satisfies {
+        stepTypes: ReadonlyArray<MJAIAgentRunStepEntityExtended['StepType']>;
+        stepStatus: MJAIAgentRunStepEntityExtended['Status'];
+    };
+
+    /** An action parameter's direction, as the action executor stamps it. */
+    private static readonly actionOutputParamType: ActionParam['Type'] = 'Output';
+
+    /** A stopped-run result section is never cut below this many characters, whatever the budget. */
+    private static readonly minStoppedRunSectionChars = 1_500;
 
     /**
      * Display name of the seeded system prompt behind summarizeRange's recursive
@@ -17516,14 +17528,14 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Maps the reason an abort signal carried to the run's `CancellationReason` value: the
      * watchdog's stop relay raises {@link USER_CANCEL_ABORT_REASON} for a row marked
-     * `User Request`; the wall-clock guard's message names `maxExecutionTimeMs`; anything else
-     * (an upstream caller's token, a shutdown) is `System`.
+     * `User Request`; the wall-clock guard's reason starts with {@link AGENT_TIMEOUT_ABORT_REASON};
+     * anything else (an upstream caller's token, a shutdown) is `System`.
      */
-    public static CancellationReasonForAbort(reason: string | null | undefined): 'User Request' | 'Timeout' | 'System' {
+    public static CancellationReasonForAbort(reason: string | null | undefined): NonNullable<MJAIAgentRunEntityExtended['CancellationReason']> {
         if (reason === USER_CANCEL_ABORT_REASON) {
             return 'User Request';
         }
-        if (reason && reason.includes('maxExecutionTimeMs')) {
+        if (reason && reason.startsWith(AGENT_TIMEOUT_ABORT_REASON)) {
             return 'Timeout';
         }
         return 'System';

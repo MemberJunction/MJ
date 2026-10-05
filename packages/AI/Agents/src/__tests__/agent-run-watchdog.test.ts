@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GetGlobalObjectStore, ShutdownRegistry } from '@memberjunction/global';
 import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
-import { AgentRunWatchdog, USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON } from '../agent-run-watchdog';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
+import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON } from '../agent-run-control';
 
 /** Predictable T-SQL-flavored dialect so we can assert on the generated SQL. The watchdog now
  *  reaches the DB only through stored procs (writes) + the base view (reads), so the proc-call

@@ -3,7 +3,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
-import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
+import { AgentRunner, ArtifactToolManager, BuildStoppedRunPredecessorFilter, IsUserStoppedRun } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
@@ -756,8 +756,9 @@ export class RunAIAgentResolver extends ResolverBase {
      * The ID of this agent's newest root run in the conversation IF the user stopped it, else
      * null. The query spans the runs that could be the predecessor (settled, or stopped by the
      * user) and the newest decides, so a stopped run that a later settled run already followed
-     * is not chained to again. Mirrors `BaseAgent.findUserStoppedPredecessorRunId`, which uses the
-     * same answer to carry the stopped run's completed results into the new run's context.
+     * is not chained to again. Uses the same filter and recognizer as `BaseAgent.findUserStoppedPredecessorRunId`
+     * (`BuildStoppedRunPredecessorFilter` / `IsUserStoppedRun`), which carries the stopped run's
+     * completed results into the new run's context, so the two cannot pick different runs.
      * Fail-soft: a lookup failure means no chaining, never a failed turn.
      */
     private async findUserStoppedPredecessorRunId(
@@ -770,18 +771,14 @@ export class RunAIAgentResolver extends ResolverBase {
             const rv = RunView.FromMetadataProvider(provider);
             const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
                 EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `ConversationID='${conversationId}' AND ParentRunID IS NULL AND AgentID='${agentId}' ` +
-                    `AND (Status IN ('Completed', 'AwaitingFeedback') OR (Status='Cancelled' AND CancellationReason='User Request'))`,
+                ExtraFilter: BuildStoppedRunPredecessorFilter(conversationId, agentId),
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
                 Fields: ['ID', 'Status', 'CancellationReason'],
                 ResultType: 'simple',
             }, contextUser);
             const run = newest.Success ? newest.Results?.[0] : undefined;
-            if (!run || run.Status !== 'Cancelled' || run.CancellationReason !== 'User Request') {
-                return null;
-            }
-            return run.ID;
+            return IsUserStoppedRun(run) ? run!.ID : null;
         } catch (error) {
             LogError(`findUserStoppedPredecessorRunId failed; the turn runs unchained: ${error instanceof Error ? error.message : String(error)}`);
             return null;
