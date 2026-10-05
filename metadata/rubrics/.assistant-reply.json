@@ -1,0 +1,239 @@
+{
+  "fields": {
+    "Name": "Assistant reply",
+    "Status": "Active",
+    "Description": "Judges a turn by an ambient assistant such as Sage: it answers or routes correctly, is accurate about MemberJunction, says what it did, and leaves a clear next step."
+  },
+  "primaryKey": {
+    "ID": "7E74AEE6-4A79-47FE-9689-208CD29F0BB8"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Score each criterion Meets, Partial, or Miss. The route and accuracy criteria are gates: Partial on either fails the turn. Not applicable is not allowed. Use the guidance and the anchors."
+        },
+        "primaryKey": {
+          "ID": "0EDF8C3F-5FAC-4E6D-968D-48047D7FD295"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "takes-the-right-route",
+                "Name": "Takes the right route",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "A question about MemberJunction that Sage can answer (where something is, what a feature does) is answered directly. Work that needs a specialist (research, queries, building actions, designing tables) goes to that agent."
+              },
+              "primaryKey": {
+                "ID": "C37BCBEC-2664-4064-BC65-F0E3396AFC03"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Answers directly what it can, and hands specialist work to the right agent."
+                    },
+                    "primaryKey": {
+                      "ID": "0BF0B307-CC29-4E76-9C8C-3B1284F09B81"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Gets the route mostly right, but improvises a part a specialist should have done, or delegates something it could have answered."
+                    },
+                    "primaryKey": {
+                      "ID": "729E6F69-BD2A-434A-BF11-966CF145C927"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Takes the wrong route: improvises specialist work, or sends a simple question to an agent that does not handle it."
+                    },
+                    "primaryKey": {
+                      "ID": "EF05E51F-74DA-4171-90F1-8F3A0B6A89C1"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "accurate-about-memberjunction",
+                "Name": "Accurate about MemberJunction",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Apps, screens, settings, features, and agents the reply names exist and work the way the reply says. An invented menu, setting, or capability is a miss."
+              },
+              "primaryKey": {
+                "ID": "F3823CFD-BF0C-42FC-9AFA-53B1256855C1"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Everything the reply says about MemberJunction is real and accurate."
+                    },
+                    "primaryKey": {
+                      "ID": "126EC2DC-4B06-4009-AA47-0C171322FAFB"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Mostly accurate, with a detail that is wrong or out of date."
+                    },
+                    "primaryKey": {
+                      "ID": "C7798AA2-3808-4824-A143-6BD425386A79"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Names a feature, screen, setting, or agent that does not exist, or describes one wrongly."
+                    },
+                    "primaryKey": {
+                      "ID": "DD55BE0B-CB8D-440C-979A-622690F53361"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "says-what-happened",
+                "Name": "Says what happened",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "When Sage delegated or ran something, the reply says what it did and what came back, including a failure. A turn that only talked needs no report."
+              },
+              "primaryKey": {
+                "ID": "6405F345-130E-443A-9BDA-3D7E9542D91F"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Says what it ran or delegated and what came back, failures included."
+                    },
+                    "primaryKey": {
+                      "ID": "FD672A00-AB14-4415-8F9F-BD37C925D7DB"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Mentions what it ran but not the outcome, or hides part of a failure."
+                    },
+                    "primaryKey": {
+                      "ID": "F7678538-F479-49D0-947E-2F88F2441A43"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Ran or delegated something and does not say so, or reports success that did not happen."
+                    },
+                    "primaryKey": {
+                      "ID": "2DAA5A28-D50D-4E6C-A317-BC369A4BB1D6"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "leaves-a-clear-next-step",
+                "Name": "Leaves a clear next step",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 3,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The person knows what to do next: the answer, the place to go, or the question Sage needs answered. A long reply that never gets there is a miss."
+              },
+              "primaryKey": {
+                "ID": "2E410B1C-598E-4D94-86EE-3B954674D09C"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The person can act on the reply right away."
+                    },
+                    "primaryKey": {
+                      "ID": "823714C9-2785-4CFB-9CBE-4F2DB10EC985"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The next step is there but buried or vague."
+                    },
+                    "primaryKey": {
+                      "ID": "72BCFDB0-1769-419E-96AE-37CDF3D99A01"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The person cannot tell what to do next."
+                    },
+                    "primaryKey": {
+                      "ID": "93BDD143-62E3-4B78-A9A2-F4B97B04C5CB"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

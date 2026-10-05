@@ -166,7 +166,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         // move of this count has been deliberate, which is what the guard is for.
         ['task-graph-execution', TaskGraphExecutionChecks, 27],
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
-        ['fls-enforcement', FlsEnforcementChecks, 23], // FLS1-FLS23 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS21 measures metadata-refresh cost
+        ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
@@ -265,7 +265,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'entity-server-invariants': 9,
         'entity-writes': 9,
         'field-rules-bulk-update': 3,
-        'fls-enforcement': 23,
+        'fls-enforcement': 24,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
         'layered-base-views': 6,
@@ -281,7 +281,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'predictive-studio': 5,
         'prompt-runner': 1,
         'queue': 7,
-        'realtime-deterministic': 9,
+        'realtime-deterministic': 12,
         'record-cloning': 13,
         'record-process': 12,
         'record-process-facade': 2,
@@ -296,7 +296,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runquery-params': 10,
         'runview-features': 6,
         'role-elevation': 6,
-        'rubrics': 11,
+        'rubrics': 15,
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
@@ -486,6 +486,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'record-cloning.RC8',
         'record-cloning.RC9',
         'role-elevation.RE6',
+        'rubrics.R13',
+        'rubrics.R14',
         'rubrics.R7',
         'rubrics.R8',
         'rubrics.R9',

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-vectors-memory-server",
   "type": "module",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.2",
   "description": "MemberJunction: server-side acceleration for in-memory vector search and clustering — a worker-thread pool over shared memory and an optional native (usearch) backend",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,9 +16,9 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/ai-vectors-memory": "6.2.0-edge.1",
-    "@memberjunction/core": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1"
+    "@memberjunction/ai-vectors-memory": "6.2.0-edge.2",
+    "@memberjunction/core": "6.2.0-edge.2",
+    "@memberjunction/global": "6.2.0-edge.2"
   },
   "optionalDependencies": {
     "usearch": "2.26.2"

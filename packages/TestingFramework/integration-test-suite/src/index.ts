@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 /**
  * @memberjunction/integration-test-suite — MemberJunction's OWN integration-test content.
  *

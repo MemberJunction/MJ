@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Core agent rubrics - Sage",
+    "Description": "A question Sage answers itself. Scored by the Assistant reply Evaluation rubric with the Sage judge, not an inline judge.",
+    "InputDefinition": {
+      "userMessage": "Where do I see the rubrics my agents are scored by?"
+    },
+    "ExpectedOutcomes": {},
+    "Configuration": {
+      "agentId": "@lookup:MJ: AI Agents.Name=Sage",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C27C4B49-0365-4341-A5D9-A76D20565F03"
+  }
+}
