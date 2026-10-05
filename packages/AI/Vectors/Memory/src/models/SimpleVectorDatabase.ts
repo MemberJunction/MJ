@@ -174,11 +174,17 @@ export class SimpleVectorDatabase extends VectorDBBase {
     }
 
     /**
-     * Identifies the rows a cached index was built from: each row's primary
-     * key, `__mj_UpdatedAt` and whether it has a vector, in the order read.
-     * Far cheaper than re-parsing every vector, and it differs whenever the
-     * rows a query sees differ — another user's row-level security, an
-     * insert-plus-delete that keeps the count, or a vector added or edited.
+     * Identifies the rows a cached index was built from: the set of columns
+     * that came back, then each row's primary key, `__mj_UpdatedAt` and
+     * whether it has a vector, in the order read. Far cheaper than re-parsing
+     * every vector, and it differs whenever the rows a query sees differ —
+     * another user's row-level security, an insert-plus-delete that keeps the
+     * count, or a vector added or edited.
+     *
+     * The column set matters because the cache is shared across users and the
+     * provider drops each user's field-level-security-denied columns from the
+     * SELECT. Without it, a user who may not read `Title` or `Body` would be
+     * served the title and snippet another user's rows carried.
      */
     private rowsFingerprint(rows: Array<Record<string, unknown>>, config: SimpleVectorProviderConfig, entity: EntityInfo): string {
         const parts: string[] = new Array(rows.length);
@@ -190,7 +196,9 @@ export class SimpleVectorDatabase extends VectorDBBase {
             const hasBinary = config.binaryVectorField && row[config.binaryVectorField] ? 1 : 0;
             parts[i] = `${key.ToURLSegment()}\u0001${stamp}\u0001${row[config.vectorField] ? 1 : 0}${hasBinary}`;
         }
-        return parts.join('\u0002');
+        // An index with no rows has no first row to read columns from.
+        const columns = rows.length > 0 ? Object.keys(rows[0]).sort().join(',') : '';
+        return columns + '\u0003' + parts.join('\u0002');
     }
 
     /** Run RunView for the configured entity; returns null if the entity is

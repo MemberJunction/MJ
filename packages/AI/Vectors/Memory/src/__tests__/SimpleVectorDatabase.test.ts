@@ -796,6 +796,37 @@ describe('SimpleVectorDatabase', () => {
             expect(matches[0].score).toBeCloseTo(1, 10);
         });
 
+        it('does not serve one user the title and snippet of columns field-level security hides from another', async () => {
+            // The cache is shared by every user, and the provider drops each user's denied
+            // columns from the SELECT. User A reads full rows; user B sees the same rows
+            // without Title and Body. B's results must not carry A's values.
+            defineIndex('titled-index', { ...NOTES_CONFIG, titleField: 'Title', snippetField: 'Body' });
+            const userB = new UserInfo(undefined, { ID: 'user-2', Email: 'restricted@example.com' });
+            const full = [note('a', [1, 0, 0], { Body: 'Secret body' })];
+            const denied = full.map(({ Title: _title, Body: _body, ...rest }) => rest);
+
+            setRows(NOTES.Name, full);
+            const forA = matchesOf(await query('titled-index', [1, 0, 0], 10, USER));
+            expect(forA[0].metadata['Title']).toBe('Note a');
+            expect(forA[0].metadata['Snippet']).toBe('Secret body');
+
+            setRows(NOTES.Name, denied);
+            const forB = matchesOf(await query('titled-index', [1, 0, 0], 10, userB));
+
+            expect(forB).toHaveLength(1);
+            expect(forB[0].id).toBe('ID|a');
+            expect(forB[0].metadata).not.toHaveProperty('Title');
+            expect(forB[0].metadata).not.toHaveProperty('Snippet');
+        });
+
+        it('serves an index with no rows without throwing, and keeps serving it', async () => {
+            setRows(NOTES.Name, []);
+
+            expect(matchesOf(await query('notes-index', [1, 0, 0]))).toEqual([]);
+            expect(matchesOf(await query('notes-index', [1, 0, 0]))).toEqual([]);
+            expect(loggedErrors()).toEqual([]);
+        });
+
         it('rebuilds the index when the row count changes', async () => {
             setRows(NOTES.Name, [note('a', [0, 1, 0])]);
             await query('notes-index', [1, 0, 0]);
