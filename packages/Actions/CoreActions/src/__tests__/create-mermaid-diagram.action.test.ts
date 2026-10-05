@@ -79,6 +79,14 @@ describe('CreateMermaidDiagramAction', () => {
         expect(renderMock).toHaveBeenCalledWith('pie\n"A": 1', 'forest', { fontSize: 14 });
     });
 
+    it('renders plain labels that look like "on...=" outside a tag', async () => {
+        renderMock.mockResolvedValue({ Success: true, Svg: '<svg xmlns="http://www.w3.org/2000/svg"/>' });
+
+        const result = await run({ Code: 'flowchart TD\nA{condition = true}-->B[onboarding = complete]-->C{online = true}' });
+
+        expect(result.ResultCode).toBe('SUCCESS');
+    });
+
     it.each([
         ['RENDER_FAILED', 'DIAGRAM_GENERATION_FAILED'],
         ['BROWSER_UNAVAILABLE', 'BROWSER_UNAVAILABLE'],
@@ -93,11 +101,20 @@ describe('CreateMermaidDiagramAction', () => {
         expect(result.Message).toContain('details');
     });
 
+    it('tells the caller to fall back to Create SVG Diagram when no browser can render', async () => {
+        renderMock.mockResolvedValue({ Success: false, ErrorCode: 'BROWSER_UNAVAILABLE', Message: 'details' });
+
+        const result = await run({ Code: 'flowchart TD\nA-->B' });
+
+        expect(result.Message).toContain('Create SVG Diagram');
+    });
+
     it.each([
         [{}, 'MISSING_PARAMETERS'],
         [{ Code: 'flowchart TD\nA-->B', Theme: 'neon' }, 'INVALID_THEME'],
         [{ Code: 'x'.repeat(100_001) }, 'CODE_TOO_LARGE'],
         [{ Code: 'flowchart TD\nA["<script>"]-->B' }, 'INVALID_CODE'],
+        [{ Code: 'flowchart TD\nA["<img src=x onerror=alert(1)>"]-->B' }, 'INVALID_CODE'],
     ])('rejects bad input %# without rendering', async (inputs, resultCode) => {
         const result = await run(inputs);
 

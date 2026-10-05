@@ -17,8 +17,8 @@ import { MermaidRenderer } from './shared/mermaid-renderer';
  *
  * Rendering runs in headless Chromium via {@link MermaidRenderer}, because Mermaid
  * measures rendered text to lay diagrams out and cannot run in plain Node. Hosts
- * that use this action need the optional `playwright` peer dependency and a
- * Chromium build; without one the action fails with `BROWSER_UNAVAILABLE` rather
+ * that use this action need a Chromium build for the `playwright` dependency
+ * (`npx playwright install chromium`); without one the action fails with `BROWSER_UNAVAILABLE` rather
  * than producing a broken diagram.
  *
  * @example
@@ -122,7 +122,7 @@ export class CreateMermaidDiagramAction extends BaseAction {
             const suspiciousPatterns = [
                 /<script/i,
                 /javascript:/i,
-                /on\w+\s*=/i  // Event handlers
+                /<[^>]*\bon\w+\s*=/i  // Event handlers inside a tag; plain labels like `online = true` pass
             ];
 
             for (const pattern of suspiciousPatterns) {
@@ -137,10 +137,14 @@ export class CreateMermaidDiagramAction extends BaseAction {
 
             const rendered = await MermaidRenderer.Instance.Render(code, theme, config);
             if (rendered.Success === false) {
+                // Every agent that holds this action needs the fallback, not just the ones whose prompt spells it out.
+                const fallback = rendered.ErrorCode === 'BROWSER_UNAVAILABLE'
+                    ? ' Retrying will not help; build the diagram with Create SVG Diagram instead.'
+                    : '';
                 return {
                     Success: false,
                     ResultCode: rendered.ErrorCode === 'RENDER_FAILED' ? 'DIAGRAM_GENERATION_FAILED' : rendered.ErrorCode,
-                    Message: `Failed to generate Mermaid diagram: ${rendered.Message}`
+                    Message: `Failed to generate Mermaid diagram: ${rendered.Message}${fallback}`
                 };
             }
 
@@ -148,7 +152,7 @@ export class CreateMermaidDiagramAction extends BaseAction {
             return {
                 Success: true,
                 ResultCode: "SUCCESS",
-                Message: SVGUtils.sanitizeSVG(rendered.Svg)
+                Message: SVGUtils.SanitizeSVG(rendered.Svg)
             };
 
         } catch (error) {
