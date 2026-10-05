@@ -6236,6 +6236,9 @@
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null,
             "Comments": "Mistral Large on Mistral's own platform, priced 2026-10-05 from Mistral's model catalogue. The route's id is the floating alias `mistral-large-latest`, which now resolves to Mistral Large 3 (`mistral-large-2512`, GA, 256K context) at $0.50/$1.50 per 1M. MJ previously recorded $4/$12, which matches no current Mistral model - Mistral Large 2.1 (`mistral-large-2411`) carried $2/$6 and was retired 2026-05-31. Note this alias now resolves to the same model as MJ's separate \"Mistral Large 3\" record. Source: https://github.com/mistralai/platform-docs-public/blob/main/src/schema/models/models/mistral-large-3-25-12.ts"
+          },
+          "primaryKey": {
+            "ID": "D9647EC6-403F-4A99-AA1E-9B2BF642C7F4"
           }
         }
       ]
@@ -6642,6 +6645,9 @@
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null,
             "Comments": "Mistral Medium on Mistral's own platform, priced 2026-10-05 from Mistral's model catalogue. The route's id is the floating alias `mistral-medium-latest`, which now resolves to Mistral Medium 3.5 (`mistral-medium-3-5`, GA, 256K context) at $1.50/$7.50 per 1M. MJ previously recorded $2.75/$8.10. This alias now resolves to the same model as MJ's separate \"Mistral Medium 3.5\" record. Source: https://github.com/mistralai/platform-docs-public/blob/main/src/schema/models/models/mistral-medium-3-5-26-04.ts"
+          },
+          "primaryKey": {
+            "ID": "352CF0E5-B93D-41A1-8E92-C3273B6A257F"
           }
         }
       ]
@@ -9063,6 +9069,9 @@
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null,
             "Comments": "GPT-OSS-20B on Amazon Bedrock. Input $0.07/1M, output $0.30/1M, read 2026-10-05 from the AWS Bedrock price list (us-east-1, publication 2026-10-03), which prices it at $0.00007 and $0.0003 per 1K tokens under both the plain and the \"mantle\" usagetype families. MJ previously recorded $0.20 output. Flex and batch tiers are half rate ($0.035/$0.15) and are not modelled. Source: https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrock/current/us-east-1/index.json"
+          },
+          "primaryKey": {
+            "ID": "77D9EA03-64BA-459C-AAE6-6C25CD202C26"
           }
         }
       ]
