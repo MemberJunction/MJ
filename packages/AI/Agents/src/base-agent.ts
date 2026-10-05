@@ -119,7 +119,8 @@ import {
     AgentDecisionAnswerSummary,
     AgentFinishIf,
     SummarizeDecisionAnswers,
-    SystemPlaceholderManager
+    SystemPlaceholderManager,
+    type AIPromptExecutionScope
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams } from '@memberjunction/actions-base';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -7939,10 +7940,10 @@ The context is now within limits. Please retry your request with the recovered c
                     throw new Error(`The '${BaseAgent.SummarizeRangePromptName}' system prompt is not present in this environment`);
                 }
                 const promptParams = new AIPromptParams();
+                Object.assign(promptParams, this.runPromptExecutionScope(params));
                 promptParams.prompt = prompt;
                 // Keys are the summarize-range.template.md contract ({{ lens }}, {{ messages }})
                 promptParams.data = { lens, messages: rangeText };
-                promptParams.contextUser = params.contextUser;
                 promptParams.agentId = params.agent.ID;
                 promptParams.UserID = ResolvePromptRunUserID({
                     UserID: params.userId,
@@ -10218,6 +10219,22 @@ The context is now within limits. Please retry your request with the recovered c
             },
         };
         params.conversationMessages.push(message);
+    }
+
+    /**
+     * The {@link AIPromptExecutionScope} of a prompt this run starts outside the agent's own turn —
+     * summarizing a range, compacting a message, compacting the conversation. Each built its params
+     * with only `contextUser`, so it ran on the platform's keys and default configuration inside a
+     * run on a customer's keys, and under a `'RuntimeOnly'` scope would have bypassed it.
+     */
+    private runPromptExecutionScope(params: ExecuteAgentParams): AIPromptExecutionScope {
+        return {
+            contextUser: params.contextUser,
+            provider: params.provider || this._activeProvider,
+            configurationId: params.configurationId,
+            apiKeys: params.apiKeys,
+            CredentialScope: params.CredentialScope,
+        };
     }
 
     /**
@@ -17952,6 +17969,7 @@ The context is now within limits. Please retry your request with the recovered c
             Budget: budget,
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse,
+            ExecutionScope: this.runPromptExecutionScope(params),
             EstimateTokens: (messages) => this.estimateConversationTokens(messages),
             Verbose: params.verbose,
             // The in-flight agent-response placeholder row: a post-turn pass runs while
@@ -18222,6 +18240,7 @@ The context is now within limits. Please retry your request with the recovered c
 
                     // Execute summarization prompt
                     const promptParams = new AIPromptParams();
+                    Object.assign(promptParams, this.runPromptExecutionScope(params));
                     promptParams.prompt = prompt;
                     promptParams.data = {
                         originalContent,
@@ -18230,7 +18249,6 @@ The context is now within limits. Please retry your request with the recovered c
                         messageType: message.metadata?.messageType || 'unknown',
                         turnAdded: message.metadata?.turnAdded || 0
                     };
-                    promptParams.contextUser = params.contextUser;
                     promptParams.agentId = params.agent.ID;
                     promptParams.UserID = ResolvePromptRunUserID({
                         UserID: params.userId,
