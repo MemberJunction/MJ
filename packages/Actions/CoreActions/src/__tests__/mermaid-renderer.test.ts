@@ -6,7 +6,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 interface FakePage {
-    setDefaultTimeout: ReturnType<typeof vi.fn>;
     route: ReturnType<typeof vi.fn>;
     setContent: ReturnType<typeof vi.fn>;
     addScriptTag: ReturnType<typeof vi.fn>;
@@ -30,11 +29,11 @@ vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
 }));
 
+import { ShutdownRegistry } from '@memberjunction/global';
 import { MermaidRenderer } from '../custom/visualization/shared/mermaid-renderer';
 
 function makePage(evaluateResult: unknown | (() => Promise<unknown>)): FakePage {
     return {
-        setDefaultTimeout: vi.fn(),
         route: vi.fn().mockResolvedValue(undefined),
         setContent: vi.fn().mockResolvedValue(undefined),
         addScriptTag: vi.fn().mockResolvedValue(undefined),
@@ -143,15 +142,31 @@ describe('MermaidRenderer', () => {
 
         await MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {});
         dead.isConnected.mockReturnValue(false);
-        const result = await MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {});
+        // Two renders racing on the dead browser must share one relaunch, not start a Chromium each.
+        const results = await Promise.all([
+            MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {}),
+            MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {}),
+        ]);
 
-        expect(result).toEqual({ Success: true, Svg: '<svg>fresh</svg>' });
+        expect(results).toEqual([{ Success: true, Svg: '<svg>fresh</svg>' }, { Success: true, Svg: '<svg>fresh</svg>' }]);
         expect(launchMock).toHaveBeenCalledTimes(2);
     });
 
-    it('gives up on a render that never finishes and reports TIMEOUT', async () => {
+    it('reports a browser crash as BROWSER_UNAVAILABLE, not as a Mermaid error', async () => {
+        const page = makePage(() => Promise.reject(new Error('Target closed')));
+        launchMock.mockResolvedValue(makeBrowser(page));
+
+        const result = await MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {});
+
+        expect(result.Success === false && result.ErrorCode).toBe('BROWSER_UNAVAILABLE');
+        expect(result.Success === false && result.Message).toContain('Target closed');
+        expect(page.close).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['addScriptTag', 'evaluate'] as const)('reports TIMEOUT when the render stalls in %s, and closes the page', async (step) => {
         vi.useFakeTimers();
-        const page = makePage(() => new Promise(() => undefined));
+        const page = makePage({ ok: true, svg: '<svg/>' });
+        page[step].mockImplementation(() => new Promise(() => undefined));
         launchMock.mockResolvedValue(makeBrowser(page));
 
         const pending = MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {});
@@ -171,5 +186,17 @@ describe('MermaidRenderer', () => {
         await MermaidRenderer.Instance.Shutdown();
 
         expect(browser.close).toHaveBeenCalledTimes(1);
+    });
+
+    it('will not launch a browser once the host is shutting down', async () => {
+        await ShutdownRegistry.Instance.ShutdownAll();
+        try {
+            const result = await MermaidRenderer.Instance.Render('flowchart TD\nA-->B', 'default', {});
+
+            expect(result.Success === false && result.ErrorCode).toBe('BROWSER_UNAVAILABLE');
+            expect(launchMock).not.toHaveBeenCalled();
+        } finally {
+            ShutdownRegistry.Instance.ResetForTests();
+        }
     });
 });
