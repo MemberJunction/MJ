@@ -18,7 +18,8 @@ const mysqlLike: SQLParserDialect = {
     DefaultPagingOrderBy: '1',
     SupportsEscapeStringLiterals: false,
     SupportsDollarQuotedStrings: false,
-    QueryHintKeyword: null
+    QueryHintKeyword: null,
+    CallerSQLForbiddenFunctions: []
 };
 
 function kinds(sql: string, dialect: SQLParserDialect): string[] {

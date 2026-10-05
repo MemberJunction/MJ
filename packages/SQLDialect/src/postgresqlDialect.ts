@@ -149,6 +149,21 @@ function formatTypeString(mapped: MappedType, length?: number, precision?: numbe
  * PostgreSQL dialect implementation.
  * Uses "double-quote" identifiers, LIMIT/OFFSET pagination, native BOOLEAN, PL/pgSQL functions.
  */
+/**
+ * PostgreSQL functions caller-supplied SQL may not call: the XML exporters that run SQL given as a
+ * string (`query_to_xml`, `cursor_to_xml`, `table_to_xml`, `schema_to_xml`, `database_to_xml` and
+ * their schema variants), `dblink`, the server-file readers, large objects, and the administrative
+ * functions a read-only transaction does not stop.
+ */
+const POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
+    'query_to_xml*', 'cursor_to_xml*', 'table_to_xml*', 'schema_to_xml*', 'database_to_xml*',
+    'dblink*',
+    'pg_read_file', 'pg_read_binary_file', 'pg_ls_*', 'pg_stat_file', 'pg_file_*',
+    'lo_*',
+    'pg_terminate_backend', 'pg_cancel_backend', 'pg_reload_conf', 'pg_rotate_logfile', 'pg_promote',
+    'pg_switch_wal', 'pg_create_restore_point', 'pg_log_backend_memory_contexts'
+];
+
 export class PostgreSQLDialect extends SQLDialect {
     get PlatformKey(): DatabasePlatform {
         return 'postgresql';
@@ -533,6 +548,10 @@ export class PostgreSQLDialect extends SQLDialect {
 
     get QueryHintKeyword(): string | null {
         return null;
+    }
+
+    get CallerSQLForbiddenFunctions(): readonly string[] {
+        return POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS;
     }
 
     StringLiteralPrefix(_text: string): string {

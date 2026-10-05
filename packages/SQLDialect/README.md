@@ -373,6 +373,7 @@ export class MySQLDialect extends SQLDialect {
     get SupportsEscapeStringLiterals(): boolean { return false; }
     get SupportsDollarQuotedStrings(): boolean { return false; }
     get QueryHintKeyword(): string | null { return null; }
+    get CallerSQLForbiddenFunctions(): readonly string[] { return ['load_file']; }
     StringLiteralPrefix(_text: string): string { return ''; }
     EscapeLikePattern(text: string): string {
         return text.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
@@ -443,6 +444,7 @@ name, so a new dialect gets correct rendering by declaring them:
 | `AllowsOrderByInCTE` | `false` | `true` | Stripping a composed dependency's ORDER BY |
 | `RecursiveCTESyntax()` | `WITH` | `WITH RECURSIVE` | Composing into a recursive WITH clause |
 | `QueryHintKeyword` | `OPTION` | `null` | Keeping a trailing hint clause last; lifting a dependency's hints |
+| `CallerSQLForbiddenFunctions` | `openrowset`, `openquery`, … | `query_to_xml*`, `pg_read_file`, `dblink*`, … | Refusing calls in caller-supplied SQL that read what a check of its tables cannot see |
 | `SupportsEscapeStringLiterals` | `false` | `true` | Lexing `E'…'` strings |
 | `SupportsDollarQuotedStrings` | `false` | `true` | Lexing `$$…$$` strings |
 | `QuoteIdentifier(name)` | `[name]` | `"name"` | Lexing quoted identifiers; `sqlIdentifier` |
