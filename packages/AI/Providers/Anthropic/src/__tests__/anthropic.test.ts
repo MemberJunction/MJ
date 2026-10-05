@@ -752,6 +752,28 @@ describe('AnthropicLLM — native tool calling', () => {
 
             expect(mockStream.mock.calls[0][0].tool_choice).toEqual({ type: 'none' });
         });
+
+        it('downgrades a named choice to auto when the request uses budget thinking, which rejects forced tool use', async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], toolChoice: { name: 'get_weather' }, model: 'claude-haiku-4-5-20251001', effortLevel: '50' });
+
+            const request = mockStream.mock.calls[0][0];
+            expect(request.thinking?.type).toBe('enabled');
+            expect(request.tool_choice).toEqual({ type: 'auto' });
+        });
+
+        it("downgrades 'required' to auto under budget thinking too", async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], toolChoice: 'required', model: 'claude-haiku-4-5-20251001', effortLevel: '50' });
+
+            expect(mockStream.mock.calls[0][0].tool_choice).toEqual({ type: 'auto' });
+        });
+
+        it('keeps a named choice forced under adaptive thinking, which accepts it', async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], toolChoice: { name: 'get_weather' }, model: 'claude-sonnet-4-6', effortLevel: '50' });
+
+            const request = mockStream.mock.calls[0][0];
+            expect(request.thinking?.type).toBe('adaptive');
+            expect(request.tool_choice).toEqual({ type: 'tool', name: 'get_weather' });
+        });
     });
 
     describe('conversation round-tripping (§5.3)', () => {

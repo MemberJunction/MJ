@@ -1,5 +1,5 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, ChatTool, ChatToolChoice } from '@memberjunction/ai';
-import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling } from './nativeToolCallingGate';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration } from '@memberjunction/ai';
+import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
@@ -3546,17 +3546,7 @@ export class AIPromptRunner {
   ): NativeToolCallingDecision {
     try {
       return ResolveNativeToolCalling({
-        catalogConfiguration: AIEngine.Instance.GetEffectiveModelConfiguration(
-          model.ID,
-          vendorId
-            // Must be the INFERENCE PROVIDER row, not the Model Developer row: most models carry
-            // two AIModelVendor rows for the same VendorID, and ModelVendors has no guaranteed
-            // order. Picking the developer row merges an empty config layer and silently drops any
-            // per-serving-path LLM.* knob (notably the SupportsNativeToolCalling kill switch).
-            ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
-                && mv.Status === 'Active' && this.isInferenceProvider(mv))?.ID
-            : undefined
-        ),
+        catalogConfiguration: this.catalogConfigurationFor(model, vendorId),
         promptConfiguration: prompt.PromptConfigurationObject,
         promptModelConfiguration,
         // Action tools and control-flow tools are counted separately: under the hybrid the control
@@ -3575,18 +3565,21 @@ export class AIPromptRunner {
   }
 
   /**
-   * The caller's tool choice, made valid for the tools actually going out.
+   * The merged catalog configuration for the selected model on the selected vendor.
    *
-   * A choice that names a tool must name one on the request — every provider rejects a forced call
-   * to an undeclared tool. The agent forces `complete_task` on its final turn without knowing the
-   * selected model's control flow; under the hybrid that control tool was stripped above, and the
-   * terminal answer the hybrid owes is the envelope, which `'none'` asks for.
+   * Must resolve the INFERENCE PROVIDER row, not the Model Developer row: most models carry two
+   * AIModelVendor rows for the same VendorID, and ModelVendors has no guaranteed order. Picking the
+   * developer row merges an empty config layer and silently drops any per-serving-path LLM.* knob
+   * (notably the SupportsNativeToolCalling kill switch).
    */
-  private toolChoiceForSentTools(choice: ChatToolChoice | undefined, sentTools: ChatTool[] | undefined): ChatToolChoice | undefined {
-    if (choice === undefined || typeof choice === 'string') {
-      return choice;
-    }
-    return (sentTools ?? []).some((t) => t.name === choice.name) ? choice : 'none';
+  private catalogConfigurationFor(model: MJAIModelEntityExtended, vendorId: string | null): AIModelConfiguration | null {
+    return AIEngine.Instance.GetEffectiveModelConfiguration(
+      model.ID,
+      vendorId
+        ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
+            && mv.Status === 'Active' && this.isInferenceProvider(mv))?.ID
+        : undefined
+    );
   }
 
   private applyNativeToolCalling(
@@ -3614,7 +3607,7 @@ export class AIPromptRunner {
       chatParams.tools = decision.controlFlow === 'implicit'
         ? params.tools
         : params.tools?.filter((t) => !control.has(t.name));
-      chatParams.toolChoice = this.toolChoiceForSentTools(params.toolChoice, chatParams.tools);
+      chatParams.toolChoice = ResolveToolChoiceForRequest(params.toolChoice, chatParams.tools, this.catalogConfigurationFor(model, vendorId));
       chatParams.parallelToolCalls = params.parallelToolCalls;
     }
 
