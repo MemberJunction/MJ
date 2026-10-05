@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, ChatTool, ChatToolChoice } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -1958,6 +1958,21 @@ export class AIPromptRunner extends BaseModelRunner {
     return this.ResolveNativeToolCallingDecision(prompt, params, model, vendorId, promptModelConfiguration);
   }
 
+  /**
+   * The caller's tool choice, made valid for the tools actually going out.
+   *
+   * A choice that names a tool must name one on the request — every provider rejects a forced call
+   * to an undeclared tool. The agent forces `complete_task` on its final turn without knowing the
+   * selected model's control flow; under the hybrid that control tool was stripped above, and the
+   * terminal answer the hybrid owes is the envelope, which `'none'` asks for.
+   */
+  private toolChoiceForSentTools(choice: ChatToolChoice | undefined, sentTools: ChatTool[] | undefined): ChatToolChoice | undefined {
+    if (choice === undefined || typeof choice === 'string') {
+      return choice;
+    }
+    return (sentTools ?? []).some((t) => t.name === choice.name) ? choice : 'none';
+  }
+
   private applyNativeToolCalling(
     chatParams: ChatParams,
     prompt: MJAIPromptEntityExtended,
@@ -1983,7 +1998,7 @@ export class AIPromptRunner extends BaseModelRunner {
       chatParams.tools = decision.controlFlow === 'implicit'
         ? params.tools
         : params.tools?.filter((t) => !control.has(t.name));
-      chatParams.toolChoice = params.toolChoice;
+      chatParams.toolChoice = this.toolChoiceForSentTools(params.toolChoice, chatParams.tools);
       chatParams.parallelToolCalls = params.parallelToolCalls;
     }
 

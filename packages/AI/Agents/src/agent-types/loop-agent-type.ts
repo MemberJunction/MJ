@@ -351,6 +351,10 @@ export class LoopAgentType extends BaseAgentType {
         if (askUser.length > 0) {
             return this.askUserStep(askUser[0], resolved.length);
         }
+        const completes = ofKind('complete');
+        if (completes.length > 0) {
+            return this.completeTaskStep(completes[0], resolved.length);
+        }
         if (payloads.length > 1) {
             return this.createRetryStep('Call payload_change_request at most once per turn; combine your changes into one call.');
         }
@@ -390,6 +394,51 @@ export class LoopAgentType extends BaseAgentType {
             return this.createNextStep('Chat', { message, terminate: true, responseForm: candidate as AgentResponseForm });
         }
         return this.createNextStep('Chat', { message, terminate: true });
+    }
+
+    /**
+     * `complete_task` → Success, carrying its payload change — the native twin of the envelope's
+     * `taskComplete: true` + `payloadChangeRequest`, so finishing costs one turn, not two.
+     *
+     * The call id rides on `payloadToolCallId`: if Success validation turns the step into a Retry,
+     * the loop answers this call with the validation feedback, exactly as it answers a
+     * payload-only turn.
+     */
+    private completeTaskStep(complete: ResolvedNativeCall<Extract<NativeToolBinding, { kind: 'complete' }>>, totalCalls: number): BaseAgentNextStep {
+        if (totalCalls > 1) {
+            return this.createRetryStep('complete_task must be the only call on its turn. Finish any other tool calls first, then call complete_task on its own.');
+        }
+        const message = typeof complete.call.arguments?.message === 'string' ? complete.call.arguments.message.trim() : '';
+        const payloadChangeRequest = this.decodePayloadChangeArgument(complete.call.arguments?.payloadChangeRequest);
+        if (payloadChangeRequest === null) {
+            return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.');
+        }
+        return this.createSuccessStep({
+            ...(message ? { message } : {}),
+            payloadChangeRequest,
+            payloadToolCallId: complete.call.id
+        });
+    }
+
+    /**
+     * Reads `complete_task.payloadChangeRequest`: undefined when absent, null when unusable. Models
+     * occasionally JSON-encode a nested object argument, so a string that parses to one is accepted.
+     */
+    private decodePayloadChangeArgument(value: unknown): AgentPayloadChangeRequest | undefined | null {
+        if (value === undefined || value === null) {
+            return undefined;
+        }
+        let candidate: unknown = value;
+        if (typeof value === 'string') {
+            try {
+                candidate = JSON.parse(value);
+            } catch {
+                return null;
+            }
+        }
+        return candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)
+            ? candidate as AgentPayloadChangeRequest
+            : null;
     }
 
     /** One sub-agent tool → `subAgent`; several → the parallel `subAgents[]` form. */
@@ -445,7 +494,7 @@ export class LoopAgentType extends BaseAgentType {
             payloadChangeRequest,
             payloadToolCallId,
             retryReason: 'Payload change applied',
-            retryInstructions: 'Your payload change was applied. Continue: call another tool if there is more to do, or reply in plain text when the task is complete.'
+            retryInstructions: 'Your payload change was applied. Continue: call another tool if there is more to do, or call complete_task when the task is complete.'
         });
     }
 
