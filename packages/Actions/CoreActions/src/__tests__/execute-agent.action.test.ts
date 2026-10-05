@@ -67,6 +67,38 @@ describe('ExecuteAgentAction output params', () => {
         });
     });
 
+    it('emits an AgentResult that survives JSON serialization when the agent injected memory', async () => {
+        // InjectNotes / InjectExamples hand back the engine's note and example entities — bound to the
+        // configured provider, so just as circular as agentRun.
+        const liveEntity = (fields: Record<string, unknown>) => {
+            const subscriber: Record<string, unknown> = { kind: 'OperatorSubscriber' };
+            subscriber._parentage = { _finalizers: [subscriber] };
+            return { ...fields, _provider: subscriber, GetAll: () => ({ ...fields }) };
+        };
+        runAgentMock.mockResolvedValue({
+            success: true,
+            payload: { done: true },
+            agentRun: circularAgentRun(),
+            memoryContext: {
+                notes: [liveEntity({ ID: 'NOTE-1', Note: 'Prefers email' })],
+                examples: [liveEntity({ ID: 'EX-1', ExampleInput: 'hi' })],
+            },
+        });
+        const params = { Params: [{ Name: 'AgentName', Type: 'Input', Value: 'Person Lifecycle Changed' }] as Param[], ContextUser: { ID: 'u-1' } };
+
+        const r = await run(new ExecuteAgentAction(), params);
+
+        expect(r, JSON.stringify(r)).toMatchObject({ Success: true });
+        const agentResult = params.Params.find((p) => p.Name === 'AgentResult')?.Value;
+        expect(() => JSON.stringify(agentResult)).not.toThrow();
+        expect(JSON.parse(JSON.stringify(agentResult))).toMatchObject({
+            memoryContext: {
+                notes: [{ ID: 'NOTE-1', Note: 'Prefers email' }],
+                examples: [{ ID: 'EX-1', ExampleInput: 'hi' }],
+            },
+        });
+    });
+
     it('keeps AgentRunID and Payload as before', async () => {
         runAgentMock.mockResolvedValue({ success: true, payload: { done: true }, agentRun: circularAgentRun() });
         const params = { Params: [{ Name: 'AgentName', Type: 'Input', Value: 'Person Lifecycle Changed' }] as Param[], ContextUser: { ID: 'u-1' } };
