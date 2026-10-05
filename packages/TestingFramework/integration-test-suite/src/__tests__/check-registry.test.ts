@@ -52,6 +52,7 @@ import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.check
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
+import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
@@ -158,6 +159,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
+        ['jsontype-live-sync', JSONTypeLiveSyncChecks, 9], // JL1-JL9 live JSONType accessor round trip, server tier (IT95)
+        ['jsontype-live-sync-client', JSONTypeLiveSyncClientChecks, 9], // JL1-JL9 same, GraphQL wire (IT100)
         ['task-graph-orchestration', TaskGraphOrchestrationChecks, 18], // TG1-TG18 submission, validation and trigger bindings (IT71)
         // TX1-TX27, the dispatcher actually running graphs (IT74). TX8-TX11 landed with Round 1
         // (#3745), TX12-TX17 with Round 2, TX18-TX26 with Round 3, and TX27 with the two-instance exercise. TX14 arrived in a substituted
@@ -171,7 +174,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
-        ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT99)
+        ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -262,6 +265,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'entity-embedded': 6,
         'entity-graph': 11,
         'entity-graph-client': 9,
+        'jsontype-live-sync': 9,
+        'jsontype-live-sync-client': 9,
         'entity-server-invariants': 9,
         'entity-writes': 9,
         'field-rules-bulk-update': 3,
@@ -341,7 +346,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(99);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(101);
     });
 });
 
@@ -453,6 +458,24 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fls-lifecycle.LC7',
         'fls-lifecycle.LC8',
         'fls-lifecycle.LC9',
+        'jsontype-live-sync-client.JL1',
+        'jsontype-live-sync-client.JL2',
+        'jsontype-live-sync-client.JL3',
+        'jsontype-live-sync-client.JL4',
+        'jsontype-live-sync-client.JL5',
+        'jsontype-live-sync-client.JL6',
+        'jsontype-live-sync-client.JL7',
+        'jsontype-live-sync-client.JL8',
+        'jsontype-live-sync-client.JL9',
+        'jsontype-live-sync.JL1',
+        'jsontype-live-sync.JL2',
+        'jsontype-live-sync.JL3',
+        'jsontype-live-sync.JL4',
+        'jsontype-live-sync.JL5',
+        'jsontype-live-sync.JL6',
+        'jsontype-live-sync.JL7',
+        'jsontype-live-sync.JL8',
+        'jsontype-live-sync.JL9',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP2',

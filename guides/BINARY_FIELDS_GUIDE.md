@@ -218,7 +218,7 @@ These readers use it:
   - `MJServer` and `GraphQLDataProvider` — forwarding and wire shape
   - `CodeGenLib` — getter docs, form skipping
   - `ai-vectors-memory` and every vector reader and writer
-- **Integration:** IT99, the `binary-fields` bundle (BF1–BF6), run client-first over GraphQL:
+- **Integration:** IT101, the `binary-fields` bundle (BF1–BF6), run client-first over GraphQL:
   - BF1 metadata
   - BF2 selection and cache isolation
   - BF3 stored vectors agree with their JSON copy
@@ -227,5 +227,5 @@ These readers use it:
   - BF6 a 1,536-d vector round-trips bit-identical
 
   ```bash
-  pnpm mj test run "IT99 - Binary Fields and Vector Columns"
+  pnpm mj test run "IT101 - Binary Fields and Vector Columns"
   ```

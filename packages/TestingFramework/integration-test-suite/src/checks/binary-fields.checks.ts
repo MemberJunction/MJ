@@ -1,5 +1,5 @@
 /**
- * binary-fields.checks.ts — the 'binary-fields' bundle (BF1–BF6, IT99): binary (varbinary / bytea)
+ * binary-fields.checks.ts — the 'binary-fields' bundle (BF1–BF6, IT101): binary (varbinary / bytea)
  * fields end to end, and the binary vector columns that ride on them.
  *
  * THE CONTRACT UNDER TEST. A binary field's value is a **base64 string** everywhere above the
@@ -116,7 +116,7 @@ async function newErdRow(
     row.EntityID = refs.EntityID;
     row.EntityDocumentID = refs.EntityDocumentID;
     row.VectorIndexID = refs.VectorIndexID;
-    row.RecordID = `mj-it99-${Date.now()}-${label}`;
+    row.RecordID = `mj-it101-${Date.now()}-${label}`;
     row.DocumentText = `binary-fields fixture ${FIXTURE_TAG}`;
     row.EntityRecordUpdatedAt = new Date();
     row.VectorBinary = vectorBinary;

@@ -494,6 +494,25 @@ rejected, which fails the whole save.
 See [docs/isa-relationships.md](docs/isa-relationships.md) for the full model — discovery, disjoint
 vs overlapping subtypes, delete orchestration, and CodeGen integration.
 
+### JSONType Fields: Live Typed Objects (`JSONFieldBinding`)
+
+A field with `EntityField.JSONType` gets a generated typed `<Field>Object` accessor that delegates to
+two protected `BaseEntity` helpers, `GetJSONFieldObject<T>(field)` / `SetJSONFieldObject<T>(field, value)`,
+backed by `JSONFieldBinding` (`src/generic/jsonFieldBinding.ts`). The accessor is a **live view** of the
+raw text: an in-place edit at any depth (`rec.ConfigObject.Items.push(x)`, `rec.ConfigObject.A.B = 1`,
+`delete rec.ConfigObject.K`) updates the raw field through `Set()`, so the record is dirty and `Save()`
+persists it. Only plain objects and arrays are wrapped, a write that changes nothing does not dirty the
+record, and when the raw text is replaced by another route (`Load`, `LoadFromData`, `Set`, `Revert`,
+`NewRecord`) the next read re-parses and earlier references are detached (writes through them throw).
+`FlushJSONFieldObjects()` runs before `Validate()` and at the start of `Save()` so edits made through the
+caller's own un-proxied reference after assignment are still captured.
+
+`structuredClone`, `postMessage` and IndexedDB reject a live value; use the typed
+`ToPlainJSON<T>(value)` export to obtain a plain deep copy. Generated `Validate()` overrides for opted-in
+types call the protected `ValidateJSONField(field, schema, rules, severity, result)`, which runs only when the
+field is dirty or the record is new and reports errors with path sources such as `Config.Items[2].EndHour`.
+See the [JSONType Guide](../../guides/JSONTYPE_GUIDE.md).
+
 ### CompositeKey
 
 The `CompositeKey` class provides flexible primary key representation supporting both single and multi-field primary keys.

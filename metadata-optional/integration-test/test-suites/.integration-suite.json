@@ -1135,6 +1135,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT99 - JSONType Live Sync",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "08315A24-260C-4D22-BC99-7621B41181C8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT100 - JSONType Live Sync (client transport)",
+            "Sequence": 71,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C71E99EA-27E1-4AC8-A156-34C47256365E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT94 - MetadataSync Push Atomicity",
             "Sequence": 49,
             "Status": "Active"
@@ -1243,7 +1265,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT99 - Binary Fields and Vector Columns",
+            "TestID": "@lookup:MJ: Tests.Name=IT101 - Binary Fields and Vector Columns",
             "Sequence": 72,
             "Status": "Active"
           },

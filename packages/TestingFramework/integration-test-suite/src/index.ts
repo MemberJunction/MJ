@@ -66,6 +66,7 @@ export * from './checks/entity-server-invariants.checks';
 export * from './checks/entity-graph.checks';
 export * from './checks/entity-embedded.checks';
 export * from './checks/entity-graph-client.checks';
+export * from './checks/jsontype-live-sync.checks';
 export * from './checks/record-cloning.checks';
 export * from './checks/binary-fields.checks';
 export * from './checks/scheduling-concurrency.checks';

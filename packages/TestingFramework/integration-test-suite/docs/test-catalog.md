@@ -170,7 +170,7 @@ Read-only SELECTs vs `__mj` views + `sys.*`/`information_schema`. Zero fixtures/
 | AI14 | EntityVectorSyncer batch integrity: every source row → persisted embedding, no dropped rows | MUT | P2 | entityVectorSync.ts:78 |
 | AI15 | DefaultAgentResolver 4-step precedence over real Application AgentSettings + legacy Setting → Sage | DET | P2 | DefaultAgentResolver.ts:8-19 |
 
-**Shipped alongside this domain:** `binary-fields` (IT99, BF1–BF6, client) covers the binary vector companion columns that AI6/AI14's writers now fill next to the JSON vectors (agreement with the JSON copy, a bit-identical 1,536-d round trip) plus the general binary-field contract. See [ai-suite.md §12](ai-suite.md#12-binary-fields-bf1bf6--binary-fields-end-to-end-and-the-binary-vector-columns).
+**Shipped alongside this domain:** `binary-fields` (IT101, BF1–BF6, client) covers the binary vector companion columns that AI6/AI14's writers now fill next to the JSON vectors (agreement with the JSON copy, a bit-identical 1,536-d round trip) plus the general binary-field contract. See [ai-suite.md §12](ai-suite.md#12-binary-fields-bf1bf6--binary-fields-end-to-end-and-the-binary-vector-columns).
 
 ## Domain 5 — Actions & Background Processing  *(new bundles: `rsp-lifecycle`, `actions-pipeline`, `entity-actions`, `scheduling-concurrency`)*
 Deterministic via `ArraySource` + `FunctionRecordProcessor`.

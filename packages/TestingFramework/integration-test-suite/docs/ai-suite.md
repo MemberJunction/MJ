@@ -28,7 +28,7 @@ All seven deterministic bundles honor the family's **anti-vacuity / loud-skip di
 | `agent-loop-standin` | 6 | ALS1–ALS6 | deterministic | server | IT46 | Deterministic |
 | `conversation-compaction` | 12 | CC1–CC12 | deterministic | server | IT30 | Deterministic |
 | `agent-decisions-switch` | 9 | DS1–DS9 | deterministic | server | IT97 | Deterministic |
-| `binary-fields` | 6 | BF1–BF6 | deterministic (BF4, BF6 mutation-gated) | client | IT99 | Deterministic |
+| `binary-fields` | 6 | BF1–BF6 | deterministic (BF4, BF6 mutation-gated) | client | IT101 | Deterministic |
 | `prompt-runner` | 1 | PR1 | live-model | server | IT16 | Live Model |
 | `agent-runner` | 1 | AR1 | live-model | server | IT17 | Live Model |
 | `concurrent` | 2 | CC1–CC2 (bundle-prefixed `concurrent.CC*`) | live-model | server | IT18 | Live Model |
@@ -295,7 +295,7 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 
 **Machinery under test.** The binary-field contract in [`guides/BINARY_FIELDS_GUIDE.md`](../../../../guides/BINARY_FIELDS_GUIDE.md): a `varbinary` / `bytea` value is a **base64 string** everywhere above the database (BaseEntity, caches, RunView rows, the GraphQL wire); providers convert at the DB boundary; `RunView` omits binary fields unless `IncludeBinaryFields` is set or one is named in `Fields`, while `Load()` always includes them. Also the seven binary vector companion columns (`MJ: Entity Record Documents.VectorBinary`, `EmbeddingVectorBinary` on AI Agent Notes / AI Agent Examples / Queries / Tags, and the two `MJ: Components` companions) that the vector writers fill and the readers prefer over JSON.
 
-**Transport.** **Client-first** (IT99 declares `transport: client`): every check crosses client BaseEntity → base64 mutation → resolver → provider hex / bytea binding → SQL → base64 → JSON → client, which is where a `{type:'Buffer',data:[…]}` serialization, a `varbinary(1)` truncation or a silently dropped field would surface.
+**Transport.** **Client-first** (IT101 declares `transport: client`): every check crosses client BaseEntity → base64 mutation → resolver → provider hex / bytea binding → SQL → base64 → JSON → client, which is where a `{type:'Buffer',data:[…]}` serialization, a `varbinary(1)` truncation or a silently dropped field would surface.
 
 **Fixtures / lifecycle.** BF4–BF6 write throwaway `MJ: Entity Record Documents` rows under an existing Entity Document and Vector Index (skipping loudly when the install has neither); RecordID is prefixed `mj-it99-<timestamp>`, DocumentText is tagged `(mj-integration-test — safe to delete)`, and each check deletes its rows in a `finally` block. No pre-existing record is modified.
 
@@ -311,7 +311,7 @@ Counts are pinned by `src/__tests__/check-registry.test.ts` (the per-bundle coun
 | `binary-fields.BF6` | Vector round trip (mutation) | a 1,536-d float32 vector saved as binary reads back bit-identical through a RunView that only names the field | precision loss or byte-order bugs in the vector codec |
 
 ```bash
-pnpm mj test run "IT99 - Binary Fields and Vector Columns"
+pnpm mj test run "IT101 - Binary Fields and Vector Columns"
 ```
 
 ---
