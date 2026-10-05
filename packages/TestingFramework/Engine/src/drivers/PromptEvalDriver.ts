@@ -4,6 +4,7 @@
  */
 
 import type { ControlToolRole } from '../eval/decision';
+import { ControlToolMapFor } from './control-tool-map';
 import { EncodeHistoryForArm } from '../eval/history';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
@@ -295,16 +296,7 @@ export class PromptEvalDriver extends BaseTestDriver {
             toolNameMap: Object.fromEntries(
                 [...(composer.NativeToolBindings ?? [])].flatMap(([toolName, binding]) =>
                     binding.kind === 'action' ? [[toolName, binding.action.Name] as const] : [])),
-            controlToolMap: Object.fromEntries(
-                [...(composer.NativeToolBindings ?? [])].flatMap(([toolName, binding]): Array<readonly [string, ControlToolRole]> => {
-                    switch (binding.kind) {
-                        case 'subAgent': return [[toolName, { kind: 'subAgent', name: binding.agent.Name ?? toolName }] as const];
-                        case 'payloadChange': return [[toolName, { kind: 'payloadChange' }] as const];
-                        case 'askUser': return [[toolName, { kind: 'chat' }] as const];
-                        case 'complete': return [[toolName, { kind: 'taskComplete' }] as const];
-                        default: return [];
-                    }
-                }))
+            controlToolMap: ControlToolMapFor(composer.NativeToolBindings ?? [])
         };
     }
 

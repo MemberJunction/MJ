@@ -46,6 +46,17 @@ describe('LoopAgentType — native tool calls as an Actions step (plan §8.1)', 
         expect(step?.actions?.map((a) => a.name)).toEqual(['Run Ad-hoc Query', 'Get Weather']);
     });
 
+    it('decodes a Simple Object argument the model sent as a JSON string before the Action sees it', () => {
+        const withObjectParam = new Map([['test_sql_statement', {
+            kind: 'action', toolName: 'test_sql_statement', action: { Name: 'Test SQL Statement' },
+            tool: { name: 'test_sql_statement', inputSchema: {} },
+            params: [{ Name: 'Parameters', ValueType: 'Simple Object', IsArray: false }]
+        } as unknown as ActionToolBinding]]);
+        const step = new Probe().Call(
+            resultWithCalls([{ name: 'test_sql_statement', arguments: { SQL: 'SELECT 1', Parameters: '{"TopCount": 10}' } }]), withObjectParam);
+        expect(step?.actions?.[0].params).toEqual({ SQL: 'SELECT 1', Parameters: { TopCount: 10 } });
+    });
+
     it('defaults missing arguments to an empty params object', () => {
         const step = new Probe().Call(resultWithCalls([{ name: 'run_ad_hoc_query' }]), bindings);
         expect(step?.actions?.[0].params).toEqual({});
