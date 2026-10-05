@@ -172,6 +172,19 @@ describe('caller-supplied SQL may not call functions that read around the checks
         expect(provider.Executed).toEqual([]);
     });
 
+    it('refuses ts_stat and ts_rewrite on the ad-hoc path without running anything', async () => {
+        for (const [name, sql] of [
+            ['ts_stat', `SELECT word FROM ts_stat('SELECT to_tsvector(''simple'', api_key) FROM secrets')`],
+            ['ts_rewrite', `SELECT CAST(ts_rewrite('x'::tsquery, 'SELECT to_tsquery(''simple'', ''x''), plainto_tsquery(''simple'', api_key) FROM secrets') AS text) AS Q`],
+        ]) {
+            const provider = new AdhocTestProvider('postgresql');
+            const result = await provider.RunAdhoc({ SQL: sql, MaxRows: 1 });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toMatch(new RegExp(`may not call ${name}`));
+            expect(provider.Executed).toEqual([]);
+        }
+    });
+
     it('refuses OPENROWSET on the spec path', async () => {
         const provider = new AdhocTestProvider('sqlserver');
         const result = await provider.RunSpec({ SQL: `SELECT * FROM OPENROWSET(BULK 'c:\\secret.txt', SINGLE_CLOB) AS f`, MaxRows: 10 });

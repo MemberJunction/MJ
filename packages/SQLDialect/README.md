@@ -424,7 +424,7 @@ name, so a new dialect gets correct rendering by declaring them:
 | `AllowsOrderByInCTE` | `false` | `true` | Stripping a composed dependency's ORDER BY |
 | `RecursiveCTESyntax()` | `WITH` | `WITH RECURSIVE` | Composing into a recursive WITH clause |
 | `QueryHintKeyword` | `OPTION` | `null` | Keeping a trailing hint clause last; lifting a dependency's hints |
-| `CallerSQLForbiddenFunctions` | `openrowset`, `openquery`, … | `query_to_xml*`, `pg_read_file`, `dblink*`, … | Refusing calls in caller-supplied SQL that read what a check of its tables cannot see |
+| `CallerSQLForbiddenFunctions` | `openrowset`, `openquery`, … | `query_to_xml*`, `ts_stat`, `pg_read_file`, `dblink*`, … | Refusing calls in caller-supplied SQL that read what a check of its tables cannot see |
 | `SupportsEscapeStringLiterals` | `false` | `true` | Lexing `E'…'` strings |
 | `SupportsDollarQuotedStrings` | `false` | `true` | Lexing `$$…$$` strings |
 | `QuoteIdentifier(name)` | `[name]` | `"name"` | Lexing quoted identifiers; `sqlIdentifier` |
