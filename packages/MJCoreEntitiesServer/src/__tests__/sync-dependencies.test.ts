@@ -33,7 +33,7 @@ function stubQuery(id: string): MJQueryEntityExtended {
 }
 
 function reference(depQuery: MJQueryEntityExtended, path: string, alias: string): ResolvedCompositionReference {
-    return { DepQuery: depQuery, ReferencePath: path, Alias: alias, ParameterMapping: null, PassthroughMappings: [] };
+    return { depQuery, referencePath: path, alias, parameterMapping: null, passthroughMappings: [] };
 }
 
 const USER = {} as UserInfo;

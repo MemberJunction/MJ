@@ -60,15 +60,13 @@ function stubMetadata(): void {
 
 describe('AdhocQueryResolver source-shape contract', () => {
 
-    it('Bug #2: AdhocQueryResolver must hand the SQL to the provider ad-hoc path, authorizing the rendered SQL first', () => {
+    it('Bug #2: AdhocQueryResolver must hand the SQL to the provider ad-hoc path, which renders it', () => {
         const src = readResolverSource();
         // Composition, comment removal, the single-read rule and the row cap all happen in the
         // provider's ad-hoc path (RenderPipeline), shared with in-process callers. The resolver must
         // delegate there rather than re-implement a partial subset.
         expect(/\.RunQuery\(\{[\s\S]*SQL: input\.SQL/.test(src)).toBe(true);
-        // It renders only to authorize what will be read, never to run it.
-        expect(/RenderPipeline\.Run\(/.test(src)).toBe(true);
-        expect(/assertFullQueryUsesReadableEntityViews\(rendered\.Trace\.AfterTemplates/.test(src)).toBe(true);
+        expect(/\bRenderPipeline\b/.test(src)).toBe(false);
     });
 
     it('Bug #3: AdhocQueryResolver must NOT contain the manual `SELECT TOP N * FROM (...)` wrap', () => {

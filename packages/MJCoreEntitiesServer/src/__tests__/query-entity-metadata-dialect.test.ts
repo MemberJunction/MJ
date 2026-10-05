@@ -27,12 +27,12 @@ describe('ExtractEntityMetadataFromSQL dialect', () => {
         const sql = 'SELECT m."Name", m."Email"::text AS email FROM "CRM"."vwMembers" m ORDER BY m."Name" LIMIT 5';
         const result = ExtractEntityMetadataFromSQL(sql, tableRefs, md, 'postgresql');
         expect(result).toHaveLength(1);
-        expect(result[0].Fields.map(f => f.name).sort()).toEqual(['Email', 'ID', 'Name']);
+        expect(result[0].fields.map(f => f.name).sort()).toEqual(['Email', 'ID', 'Name']);
     });
 
     it('still reads SQL Server syntax by default', () => {
         const sql = 'SELECT TOP 5 m.[Name], m.Email FROM CRM.vwMembers m';
         const result = ExtractEntityMetadataFromSQL(sql, tableRefs, md);
-        expect(result[0].Fields.map(f => f.name).sort()).toEqual(['Email', 'ID', 'Name']);
+        expect(result[0].fields.map(f => f.name).sort()).toEqual(['Email', 'ID', 'Name']);
     });
 });

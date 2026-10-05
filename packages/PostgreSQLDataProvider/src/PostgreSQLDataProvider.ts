@@ -374,7 +374,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             }
             const timeoutMs = this.effectiveTimeoutMs(options?.timeoutMs);
             const readOnly = !!options?.readOnlyTransaction && !this._transaction;
-            const timed = timeoutMs !== undefined && (!this._transaction || !!options?.ignoreAmbientTransaction);
+            const timed = timeoutMs !== undefined && !this._transaction;
             if (readOnly || timed) {
                 return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs);
             }
