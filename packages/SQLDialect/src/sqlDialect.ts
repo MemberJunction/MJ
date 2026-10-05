@@ -164,6 +164,13 @@ export interface SQLParserDialect {
     /** The keyword that opens a statement's trailing query-hint clause, such as `OPTION (…)`;
      *  `null` when the platform has none. SQL Server: 'OPTION', PostgreSQL: null */
     QueryHintKeyword: string | null;
+    /**
+     * Functions SQL a caller supplied (ad-hoc SQL, `TestQuerySQL`, query specs) may not call,
+     * lower case; a trailing `*` matches every name with that prefix. They run SQL passed as a
+     * string, read files or other databases, or act on the server, so neither the check of which
+     * tables the SQL reads nor a read-only transaction stops them.
+     */
+    CallerSQLForbiddenFunctions: readonly string[];
 }
 
 /**
@@ -638,6 +645,9 @@ export abstract class SQLDialect implements SQLParserDialect {
 
     /** {@inheritDoc SQLParserDialect.QueryHintKeyword} */
     abstract get QueryHintKeyword(): string | null;
+
+    /** {@inheritDoc SQLParserDialect.CallerSQLForbiddenFunctions} */
+    abstract get CallerSQLForbiddenFunctions(): readonly string[];
 
     // ─── Data Types ──────────────────────────────────────────────────
 

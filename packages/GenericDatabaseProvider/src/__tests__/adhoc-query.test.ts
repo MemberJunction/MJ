@@ -162,3 +162,21 @@ describe('ad-hoc SQL is rendered before it runs', () => {
         expect(provider.Executed[1]).toMatch(/COUNT\(\*\)/);
     });
 });
+
+describe('caller-supplied SQL may not call functions that read around the checks', () => {
+    it('refuses query_to_xml on the ad-hoc path without running anything', async () => {
+        const provider = new AdhocTestProvider('postgresql');
+        const result = await provider.RunAdhoc({ SQL: `SELECT CAST(query_to_xml('SELECT salary FROM secret', true, false, '') AS text) AS X`, MaxRows: 1 });
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/may not call query_to_xml/);
+        expect(provider.Executed).toEqual([]);
+    });
+
+    it('refuses OPENROWSET on the spec path', async () => {
+        const provider = new AdhocTestProvider('sqlserver');
+        const result = await provider.RunSpec({ SQL: `SELECT * FROM OPENROWSET(BULK 'c:\\secret.txt', SINGLE_CLOB) AS f`, MaxRows: 10 });
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/may not call openrowset/);
+        expect(provider.Executed).toEqual([]);
+    });
+});
