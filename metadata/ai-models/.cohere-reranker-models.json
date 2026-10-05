@@ -23,7 +23,8 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "MaxInputTokens": 4096
           },
           "primaryKey": {
             "ID": "E0BEEDA5-7189-4E6A-9B60-BA65FA41B85F"
@@ -67,7 +68,8 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "MaxInputTokens": 4096
           },
           "primaryKey": {
             "ID": "A7F3B2C1-8D4E-4F5A-9C6B-1E2F3A4B5C6D"
@@ -90,7 +92,7 @@
   {
     "fields": {
       "Name": "rerank-v4-pro",
-      "Description": "Cohere Rerank 4 Pro - Flagship semantic reranking model released December 16, 2025. 32K tokens per document, 100+ language support, and self-learning capabilities. Designed for maximum retrieval quality in demanding RAG workloads. Cohere standard pricing applies: $2.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types).",
+      "Description": "Cohere Rerank 4 Pro - Flagship semantic reranking model released December 16, 2025. 32K tokens per document, 100+ language support, and self-learning capabilities. Designed for maximum retrieval quality in demanding RAG workloads. Cohere standard pricing applies: $2.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types). API id corrected 2026-10-05: the callable id is `rerank-v4.0-pro`, not `rerank-v4-pro` - Cohere spells it with the \".0\" in its own docs source (fern/pages/models/rerank-2.mdx, models.mdx and the 2025-12-11 rerank-v4 changelog). The record Name stays `rerank-v4-pro` because metadata/prompts/.default-rerank-prompt.json resolves it by name. Source: https://github.com/cohere-ai/cohere-developer-experience/blob/main/fern/pages/models/rerank-2.mdx",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
       "PowerRank": 110,
       "IsActive": true,
@@ -107,7 +109,7 @@
             "Priority": 1,
             "Status": "Active",
             "DriverClass": "CohereReranker",
-            "APIName": "rerank-v4-pro",
+            "APIName": "rerank-v4.0-pro",
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
@@ -134,7 +136,7 @@
   {
     "fields": {
       "Name": "rerank-v4-fast",
-      "Description": "Cohere Rerank 4 Fast - Distilled, cost-efficient reranking model released December 16, 2025. 16K tokens per document, 100+ language support. Optimized for lower latency and higher throughput RAG pipelines where Rerank 4 Pro quality is not required. Cohere standard pricing applies: $1.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types).",
+      "Description": "Cohere Rerank 4 Fast - Distilled, cost-efficient reranking model released December 16, 2025. 16K tokens per document, 100+ language support. Optimized for lower latency and higher throughput RAG pipelines where Rerank 4 Pro quality is not required. Cohere standard pricing applies: $1.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types). API id corrected 2026-10-05: the callable id is `rerank-v4.0-fast`, not `rerank-v4-fast` - Cohere spells it with the \".0\" in its own docs source (fern/pages/models/rerank-2.mdx, models.mdx and the 2025-12-11 rerank-v4 changelog). The record Name stays `rerank-v4-fast` because metadata/prompts/.default-rerank-prompt.json resolves it by name. Source: https://github.com/cohere-ai/cohere-developer-experience/blob/main/fern/pages/models/rerank-2.mdx",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
       "PowerRank": 90,
       "IsActive": true,
@@ -151,7 +153,7 @@
             "Priority": 1,
             "Status": "Active",
             "DriverClass": "CohereReranker",
-            "APIName": "rerank-v4-fast",
+            "APIName": "rerank-v4.0-fast",
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,

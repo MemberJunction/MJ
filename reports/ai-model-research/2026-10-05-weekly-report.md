@@ -17,31 +17,57 @@
 
 ## Executive Summary
 
-**This session's egress policy blocks almost every AI vendor's documentation and pricing host.**
-Anthropic was the only vendor that could be researched to the routine's primary-source standard, and
-it shipped nothing in the 2026-10-02 → 2026-10-05 window. So this run applies **25 edits** that are
-either first-party-verified Anthropic facts or internal-consistency repairs needing no vendor data —
-including a Claude Sonnet 4.5 output cap that was wrong by nearly 8× — and applies **no new model and
-no re-rated price**.
+**This session's egress policy blocks almost every AI vendor's rendered documentation site**, so
+most of this week's research could not meet the routine's primary-source bar. But two first-party
+routes *are* reachable and turned out to carry a great deal: **AWS's machine-readable Price List API**
+and **the vendors' own documentation repositories on GitHub** (Mistral, Cohere and Black Forest Labs
+all publish their docs sites from public repos). Between those and `platform.claude.com`, four
+vendors could be verified properly.
 
-Everything else is a change candidate with its evidence grade attached. Three of those candidates are
-live mispricings (Gemini 3.6 Flash at 2× the real rate, `grok-code-fast-1` at a fifth of real cost,
-Kimi K2.6 understated), four MJ routes retire within 15 days — the first on **2026-10-09** — and a
-new model category appeared that MJ has no type for. Three research claims were checked and rejected
-before they could produce bad edits.
+This run applies **39 edits**: first-party-verified facts for Anthropic, Amazon Bedrock, Mistral and
+Cohere, plus internal-consistency repairs needing no vendor data. The three sharpest are a **Claude
+Sonnet 4.5 output cap wrong by nearly 8×**, two **Cohere reranker API ids that would 404 on every
+call**, and **Mistral's `mistral-large-latest` priced at 8× its real rate**. Nine never-closed
+duplicate cost rows were expired and two retired Mistral routes closed.
+
+**No new model and no new vendor** was added — no candidate for one cleared the bar. What remains
+flagged is graded by evidence. Three candidates are live mispricings on hosts I could not reach
+(Gemini 3.6 Flash at 2×, `grok-code-fast-1` at 5×, Kimi K2.6), four MJ routes retire within 15 days —
+the first on **2026-10-09** — and a new model category appeared that MJ has no type for. Five
+research claims were checked and rejected before they could produce bad edits.
 
 ---
 
-## 🚨 Blocker: this session's egress policy blocks almost every vendor's documentation
+## 🚨 Blocker: this session's egress policy blocks most vendor documentation sites
 
-The routine's first rule is "only add models/pricing you can verify from official sources". This
-session cannot reach those sources. Verified directly with `WebFetch` and corroborated by
+The routine's first rule is "only add models/pricing you can verify from official sources". Most of
+those sources are unreachable here. Verified directly with `WebFetch` and corroborated by
 `$HTTPS_PROXY/__agentproxy/status`, which records each attempt as
-`connect_rejected — "gateway answered 403 to CONNECT (policy denial)"`:
+`connect_rejected — "gateway answered 403 to CONNECT (policy denial)"`.
+
+**Correction to this run's own first conclusion.** The initial sweep found only Anthropic reachable
+and concluded the week was a near-total loss. That was wrong, and two routes found later carried
+most of this PR's value:
+
+- **`pricing.us-east-1.amazonaws.com`** — AWS's machine-readable Price List bulk API. Fully
+  first-party, versioned (so publications can be diffed), needs no credentials, and prices every
+  Bedrock model including per-tier cache rates. This is strictly better than the Bedrock pricing
+  *page* that the routine's source list points at, and it should become this routine's standing
+  source for Bedrock.
+- **`raw.githubusercontent.com` / `github.com`** — several vendors publish their documentation site
+  *from a public repo*: `mistralai/platform-docs-public` (which contains a machine-readable model
+  catalogue with prices, statuses and retirement dates), `cohere-ai/cohere-developer-experience`,
+  and `black-forest-labs/skills`. These are vendor-authored and as primary as the rendered page.
+  Worth adding to the routine's source list for any vendor whose docs site is blocked.
+
+Both were initially reported as blocked by research passes that had tried them in other forms. I
+re-tested each myself before using it.
 
 | | Hosts |
 |---|---|
 | **Reachable** | `platform.claude.com`, `anthropic.com`, `www.anthropic.com` |
+| | **`pricing.us-east-1.amazonaws.com`** (AWS Price List API) |
+| | **`raw.githubusercontent.com`** / `github.com` (vendors' own docs repos) |
 | **Blocked** | `developers.openai.com`, `platform.openai.com`, `openai.com`, `api.openai.com` |
 | | `learn.microsoft.com`, `prices.azure.com`, `azure.microsoft.com`, `docs.microsoft.com` |
 | | `ai.google.dev`, `cloud.google.com`, `docs.cloud.google.com`, `blog.google`, `deepmind.google`, `generativelanguage.googleapis.com`, `aiplatform.googleapis.com` |
@@ -61,13 +87,16 @@ GitHub access is scoped to `memberjunction/mj`, so the first-party documentation
 search engine's *summary* of the vendor's own pages. That is good enough to **flag** a change and
 not good enough to **write a price row** — which is exactly the standard the routine sets. So:
 
-- **Anthropic was researched properly** and its findings are applied.
+- **Anthropic, Amazon Bedrock, Mistral and Cohere were researched properly** — via
+  `platform.claude.com`, the AWS Price List API and the vendors' own docs repos — and their findings
+  are applied.
 - **Every other vendor is reported as a change candidate**, with the evidence grade attached, and
   **nothing is written to the JSON from search-derived figures.**
 - A set of **internal-consistency defects** that need no vendor access at all were found and fixed.
 
-This is a small, green PR by design (Guideline 11). The candidate list below is the real output for
-a human with unrestricted egress — several entries are live mispricings.
+This is a deliberately bounded PR (Guideline 11): everything applied is traceable to a first-party
+source or is a self-contained consistency repair. The candidate list below is the real output for a
+human with unrestricted egress — several entries are live mispricings.
 
 **Action for whoever owns the egress allowlist:** this routine cannot do its job under the current
 policy. The highest-value additions, in order: `developers.openai.com`, `ai.google.dev`,
@@ -179,7 +208,7 @@ Ranked by how much money is at stake. **Every one needs one page-load to confirm
 | 14 | Long-context tiers absent from the schema | OpenAI, Google, x.ai | one price pair per route | `gpt-6.1-sol` >272K rebills the whole request at $4/$15; `gemini-3.1-pro-preview` >200K $4/$18; `gemini-2.5-pro` >200K $2.50/$15; **every Grok 4.x** doubles at ≥200K | Structural — see Recommended Action 7. |
 | 15 | Gemini Embedding 2 | Google | **no cost row** | text in $0.20/1M | Snippet. |
 | 16 | Eleven v4 / v4 Turbo | Eleven Labs | **no cost row** | $0.022 and $0.011 per 1,000 chars | Snippet. |
-| 17 | Cohere rerankers (all 4) | Cohere | **no cost rows** | per *search*: rerank-4-pro $0.0025, rerank-4-fast $0.002, rerank-v3.5 $0.001 | Carried item 14. Snippet. |
+| 17 | Cohere rerankers (all 4) | Cohere | **no cost rows** | per *search*, not per token — confirmed first-party (`meta.billed_units.search_units`). The per-search **rate** is only on the blocked `cohere.com/pricing`; aggregators say $0.0025 / $0.002 / $0.001. AWS prices the Bedrock edition of rerank-v3.5 at **$0.002 per search unit** (first-party). Billing *unit* resolved; rate still open. |
 
 ### A claim I checked and rejected
 
@@ -267,6 +296,68 @@ added 2026-10-02, carries identical limits on its Anthropic, Bedrock and OpenRou
   `gemini-3-pro-image-preview` in=12,000. The real 2.5-family limits are 1,048,576 / 65,536.
 
 ---
+## Applied from the AWS Price List API and the vendors' own docs repos
+
+Everything in this section I verified myself, by fetching the source and parsing it locally.
+
+### Cohere reranker API ids — MJ's ids would 404 on every call
+
+Cohere spells its v4 rerankers **with a `.0`**, in three places in its own docs source
+(`fern/pages/models/rerank-2.mdx`, `fern/pages/models/models.mdx`, and the 2025-12-11 rerank-v4
+changelog). MJ had the `.0` missing, so both routes were uncallable:
+
+| MJ record | `APIName` was | now |
+|---|---|---|
+| `rerank-v4-pro` | `rerank-v4-pro` | **`rerank-v4.0-pro`** |
+| `rerank-v4-fast` | `rerank-v4-fast` | **`rerank-v4.0-fast`** |
+
+This closes half of the long-carried "Cohere reranker API ids — one of the two will fail at call
+time" item. It was both of them.
+
+**The record `Name`s were deliberately left alone.** `metadata/prompts/.default-rerank-prompt.json`
+resolves these models by name (`@lookup:MJ: AI Models.Name=rerank-v4-pro` and `=rerank-v4-fast`), so
+renaming the records would have broken `mj sync push` — the exact failure mode §0.3 and §0.4 exist to
+catch. The record name and the API id now differ on purpose; the description on each record says so.
+A later pass can rename both sides together.
+
+Also applied: `rerank-v3.5` and `rerank-multilingual-v3.0` `MaxInputTokens` set to **4,096**, stated
+verbatim on the same Cohere page ("This model has a context length of 4096 tokens"). Both were null.
+
+### Amazon Bedrock prompt-cache rates, from AWS's own rate card
+
+The AWS Price List API publishes per-tier cache pricing. On all four models below MJ's base
+input/output already matched AWS's **global cross-region** tier exactly, which confirms that is the
+tier MJ tracks — so the cache rates are a gap to fill, not a price change:
+
+| Model | Cache read | 5m cache write | 1h cache write (not modelled) |
+|---|---|---|---|
+| Claude Opus 4.8 | **$0.50** | **$6.25** | $10.00 |
+| Claude Sonnet 5 | **$0.20** | **$2.50** | $4.00 |
+| Claude Fable 5 | **$1.00** | **$12.50** | $20.00 |
+| Claude Fable 5.1 | **$0.25** | **$12.50** | $20.00 |
+
+Regional (in-region) inference is priced 10% higher across the board and is not modelled, matching
+the catalogue's existing convention.
+
+### Price corrections, each with the superseded row expired
+
+| Model | Vendor | Was | Now | Source |
+|---|---|---|---|---|
+| **GPT-OSS-20B** | Amazon Bedrock | $0.07 / **$0.20** | $0.07 / **$0.30** | AWS prices it at $0.00007 / $0.0003 per 1K tokens under both the plain and the `mantle` usagetype families, publication 2026-10-03. Flex and batch are half rate and not modelled. |
+| **Mistral Large** | Mistral AI | **$4.00 / $12.00** | **$0.50 / $1.50** | The route's id is the floating alias `mistral-large-latest`, which now resolves to **Mistral Large 3** (`mistral-large-2512`, GA, 256K). MJ's $4/$12 matched no current Mistral model — Large 2.1 carried $2/$6 and retired 2026-05-31. An **8× overstatement on input.** |
+| **Mistral Medium** | Mistral AI | **$2.75 / $8.10** | **$1.50 / $7.50** | `mistral-medium-latest` now resolves to **Mistral Medium 3.5**. |
+
+Both Mistral rows are floating-alias routes whose target moved underneath them. Each now resolves to
+the same model as a separate, correctly-priced MJ record (`Mistral Large 3`, `Mistral Medium 3.5`),
+so the catalogue has two records per model — flagged below rather than merged here.
+
+### API id correction
+
+**Mistral Medium 3.5** on Mistral AI: `mistral-medium-3.5` → **`mistral-medium-3-5`**. The dotted
+form is not an `apiName` in Mistral's catalogue; the aliases are `mistral-medium-3-5`,
+`mistral-medium-3` and `mistral-medium-latest`. The OpenRouter route on the same model was left alone
+— that is OpenRouter's own slug namespace, and its rename was only snippet-grade.
+
 
 ## Deprecated / Sunset Models
 
@@ -276,6 +367,15 @@ added 2026-10-02, carries identical limits on its Anthropic, Bedrock and OpenRou
 |---|---|---|---|
 | **Claude 4.5 Sonnet** | Anthropic inference row `Active` → **`Deprecated`**; description records the retirement | deprecated **2026-09-30**, retires **2026-11-30** | `/docs/en/about-claude/model-deprecations` and the model page, which agree exactly |
 | | Cost row stays `Active` and the model stays `IsActive` — it serves until 2026-11-30. Replacement: Claude Sonnet 5.5 (already in MJ). | | |
+
+**Magistral Medium 1.2 and Magistral Small 1.2 — retired on Mistral's own platform 2026-07-31.**
+Mistral's catalogue entries carry `status: 'Deprecated'`, `legacy: true` and
+`retirementDate: '2026-07-31'`, naming Mistral Medium 3.5 and Mistral Small 4 as replacements. That
+date passed nine weeks ago while MJ still had both routes `Active` with live cost rows. Applied per
+§0.2: the **Mistral AI inference row → `Inactive`** and its **cost row → `Expired` with
+`EndedAt: 2026-07-31`**. The Model Developer row stays `Active` (attribution), the model stays
+`IsActive` and the **Amazon Bedrock and OpenRouter rows are untouched** — AWS still sells the Bedrock
+edition of Magistral Small, so one provider retiring says nothing about the others.
 
 Five models were set **`IsActive: false`** because *every* inference route on them was already
 `Inactive` or `Deprecated` — the §0.2 condition for flipping the model-level flag. They were
@@ -446,72 +546,83 @@ warrants a new model type rather than a judgement call per model. AWS Strands La
 5. **[Applied]** **`IsActive: false` on five models** whose every inference route was already
    dropped (table above).
 
+6. **[Applied]** **Cohere reranker API ids corrected** — `rerank-v4-pro` → `rerank-v4.0-pro` and
+   `rerank-v4-fast` → `rerank-v4.0-fast`. Both were uncallable. Record names left intact because the
+   default rerank prompt resolves them by name. Plus `MaxInputTokens` 4,096 on the two v3 rerankers.
+7. **[Applied]** **Amazon Bedrock cache rates** on Claude Opus 4.8, Sonnet 5, Fable 5 and Fable 5.1,
+   from AWS's own rate card's global tier, which the existing base prices already matched.
+8. **[Applied]** **Three price corrections**, each expiring the superseded row: Bedrock GPT-OSS-20B
+   output $0.20 → $0.30; `mistral-large-latest` $4/$12 → $0.50/$1.50 (an 8× overstatement);
+   `mistral-medium-latest` $2.75/$8.10 → $1.50/$7.50. Plus the `mistral-medium-3-5` id fix.
+9. **[Applied]** **Magistral Medium 1.2 and Magistral Small 1.2** retired on the Mistral-direct route
+   per §0.2 — shut down 2026-07-31, nine weeks before this run.
+
 ### Open — needs someone with unrestricted egress
 
-6. **[Flagged — new, deadline in 4 days]** **Two MJ OpenRouter routes retire 2026-10-09** —
+10. **[Flagged — new, deadline in 4 days]** **Two MJ OpenRouter routes retire 2026-10-09** —
    `qwen/qwen3.6-max-preview` and `qwen/qwen3-235b-a22b-thinking-2507` — and two more on 2026-10-20
    (`google/gemini-2.5-flash`, `google/gemini-2.5-pro`). All four are `Active` today. Separately, five
    MJ OpenRouter ids are already dead or renamed, and 10 of 15 Fireworks routes are not
    serverless-callable. See the route-validation section. This is the item most likely to cause a
    production failure, and it is the one the blocked `openrouter.ai/api/v1/models` would settle
    outright.
-7. **[Flagged — now one decision from closing]** **Claude Mythos 5.1 / Mythos 5.** Pricing is fully
+11. **[Flagged — now one decision from closing]** **Claude Mythos 5.1 / Mythos 5.** Pricing is fully
    verified first-party ($10/$50, cache read $0.25 and $1.00, batch $5/$25, 1M/128K, platform ids on
    Bedrock, Google Cloud and Foundry). The *only* open question is MJ's convention for an
    invitation-only model. Open since 2026-08-31 (carried item 15); the data half is done.
-8. **[Flagged — the highest-value structural item, third week]** **Request-level tiers and
+12. **[Flagged — the highest-value structural item, third week]** **Request-level tiers and
    long-context tiers.** Now confirmed across four vendors, not one: Anthropic fast mode
    ($8/$40 and $10/$50 on the same model id); OpenAI's Ultrafast tier ($60/$300 vs Standard $10/$50
    on `gpt-6-astra`); `gpt-6.1-sol` rebilling the whole request at $4/$15 above 272K; every Grok 4.x
    doubling at ≥200K; Gemini Pro and MiniMax M3 tiering by input size. MJ stores one price pair per
    route, so **all of these are silently wrong on part of their traffic today.** This is driver and
    schema work, not metadata work, and it supersedes carried item 3's narrower framing.
-9. **[Flagged — new, and the cheapest high-value fix]** **Gemini 3.6 Flash is costed at 2× the live
+13. **[Flagged — new, and the cheapest high-value fix]** **Gemini 3.6 Flash is costed at 2× the live
    rate** on both the Google and Vertex rows. One page-load on `ai.google.dev/gemini-api/docs/pricing`
    confirms or refutes it.
-10. **[Flagged — new]** **`grok-code-fast-1` bills at 5× MJ's recorded input price**, having
+14. **[Flagged — new]** **`grok-code-fast-1` bills at 5× MJ's recorded input price**, having
    auto-routed to `grok-build-0.1` since 2026-05-15. One page-load on `docs.x.ai/developers/pricing`.
-11. **[Flagged — carried, now diagnosed]** **DeepSeek V4 Pro / V4 Flash**: five concurrent Active
+15. **[Flagged — carried, now diagnosed]** **DeepSeek V4 Pro / V4 Flash**: five concurrent Active
     rows across two models. The structure is two tiers (peak, and off-peak at exactly 50%, peak being
     01:00–04:00 and 06:00–10:00 UTC Mon–Fri ex-holidays). MJ's $0.66/$1.98 is off-peak exactly; the
     $1.74/$3.48 and $0.435/$0.87 rows match no tier. Note DeepSeek **reversed** the announced
     2026-09-14 V4 Pro retirement, so the model stands. Carried items 13 and 17 converge here.
-12. **[Flagged — new, non-negotiable deadline]** **Confirm the OpenAI 2026-10-23 tranche**, which is
+16. **[Flagged — new, non-negotiable deadline]** **Confirm the OpenAI 2026-10-23 tranche**, which is
     **18 days out** and whose membership two sources contradict (see the warning above). MJ has a live
     `gpt-4o` route exposed to the `gpt-4o`-alias scope question, open for a fourth week.
-13. **[Flagged — new]** **Vertex `gemini-2.0-flash-001` and `gemini-2.0-flash-lite-001` are `Active`
+17. **[Flagged — new]** **Vertex `gemini-2.0-flash-001` and `gemini-2.0-flash-lite-001` are `Active`
     with live prices on routes discontinued 2026-06-01.** The 10-02 run retired the Google rows and
     explicitly left Vertex unverified; this run reports Vertex carries the same date. One page-load
     closes it.
-14. **[Flagged — new, local, needs a human decision not research]** **Claude 3.5 Sonnet's Anthropic
+18. **[Flagged — new, local, needs a human decision not research]** **Claude 3.5 Sonnet's Anthropic
     cost row cannot be expired** because its seed-import `StartedAt` (2026-01-08) postdates the
     model's 2025-10-28 retirement. Someone must decide the real start date. See the "Reverted"
     section.
-15. **[Flagged — new, local]** **Three cost rows have no `StartedAt` at all**: Whisper Large v3 /
+19. **[Flagged — new, local]** **Three cost rows have no `StartedAt` at all**: Whisper Large v3 /
     Groq, Whisper Large v3 Turbo / Groq, Whisper 1 / OpenAI. All three also store a per-hour or
     per-minute rate in a per-1M-token field — part of the unit problem in item 15.
-16. **[Flagged — carried, widened]** **Non-token billing units.** Already blocking the image/video/
+20. **[Flagged — carried, widened]** **Non-token billing units.** Already blocking the image/video/
     audio schema decision (carried item 14); this run adds Cloudflare **neurons** ($0.011/1K with a
     published token→neuron conversion), Cohere rerank **per search**, TTS **per character** in both
     $/1M and $/1K conventions, STT **per hour of audio**, and video **per second by resolution**.
     A catalogue keyed on $/1M tokens needs an explicit unit field. The good news from this run:
     Google's new audio/TTS/omni models are **token-priced**, with per-second figures published as
     derived equivalents, so they fit the existing schema.
-17. **[Flagged — new]** **Create a `Decision` model type** and then add Cloudflare Clef / Clef-flash
+21. **[Flagged — new]** **Create a `Decision` model type** and then add Cloudflare Clef / Clef-flash
     and TypeSafe `jev-1.13`. This replaces carried item 16's per-model framing — it is a category now.
-18. **[Flagged — carried, unchanged]** **CostRank/SpeedRank scale overflow**: 13 active models exceed
+22. **[Flagged — carried, unchanged]** **CostRank/SpeedRank scale overflow**: 13 active models exceed
     the documented 1–10 range (SpeedRank 12 on Claude Haiku 4.5, Gemini 3.1 Flash-Lite, Gemini 3.5
     Flash-Lite; SpeedRank 11 on GPT 5.4-nano, Qwen 3.6 35B A3B, Mercury 2, Mercury Edit 2,
     GPT 5.6-luna, Gemini 3.6/3.7/3.8 Flash, GPT-6 Luna; CostRank 11 on Claude Opus 5 Fast).
     Carried item 8 — one recalibration pass with the band boundaries written down.
-19. **[Flagged — carried, unchanged]** **115 Active inference routes have no Active cost row**,
+23. **[Flagged — carried, unchanged]** **115 Active inference routes have no Active cost row**,
     almost all OpenRouter. The underlying question is still open: should OpenRouter rows track
     OpenRouter's moving lowest-provider price at all?
-20. **[Resolved — remove from the carry list]** **Carried item 12 is done.** A full scan finds
+24. **[Resolved — remove from the carry list]** **Carried item 12 is done.** A full scan finds
     **zero** duplicate primary keys across every model, vendor and cost row. The "no Realtime row on
     Claude 4 Opus / 4 Sonnet" half is moot: both are `IsActive: false` and retired on the Claude API,
     so adding a Realtime row would be wrong. Their duplicate Batch rows were de-duplicated above.
-21. **[Resolved]** **Carried item 6** — "should the Claude family carry Vertex AI and Azure/Foundry
+25. **[Resolved]** **Carried item 6** — "should the Claude family carry Vertex AI and Azure/Foundry
     routes?" — is answered as a *fact*: yes, Anthropic documents every current Claude model on
     Bedrock, Google Cloud and Microsoft Foundry, with platform-specific ids. Format rules that matter
     if MJ adds them: Bedrock's Messages endpoint (Opus 4.7+ and Haiku 4.5) uses bare
@@ -520,10 +631,35 @@ warrants a new model type rather than a judgement call per model. AWS Strands La
     Claude API exactly, with `@YYYYMMDD` for dated ids; Foundry uses the Claude API id as the default
     *deployment name*, and the deployment name — not the model id — goes in the `model` field.
     Whether to add them remains a scope decision.
-22. **[Flagged — carried]** `ROUTINE_PROMPT.md:210` still defines `Priority` backwards, and this run
+26. **[Flagged — carried]** `ROUTINE_PROMPT.md:210` still defines `Priority` backwards, and this run
     found the inconsistency is worse than recorded. Details below.
-23. **[Flagged — carried, unchanged]** Items 3, 10, 14 and 16 from the 2026-09-28 report not
+27. **[Flagged — carried, unchanged]** Items 3, 10, 14 and 16 from the 2026-09-28 report not
     otherwise listed above. Not touched this run.
+
+28. **[Flagged — new, from this run's own edits]** **Two Mistral alias records now duplicate their
+    pinned counterparts.** `Mistral Large` (`mistral-large-latest`) and `Mistral Medium`
+    (`mistral-medium-latest`) resolve to the same models as MJ's separate `Mistral Large 3` and
+    `Mistral Medium 3.5` records. Re-rating the aliases fixed the mispricing but left the catalogue
+    with two records per model, which will drift apart again at the next Mistral release. Decide
+    whether MJ pins versions or floats aliases, then merge or retire one side. The same question
+    applies to every `-latest` route in the catalogue.
+29. **[Flagged — new, process]** **Add the two routes this run discovered to the routine's source
+    list.** `ROUTINE_PROMPT.md` Step 2 points at vendors' rendered pricing pages, several of which are
+    unreachable from a sandboxed session. Two better sources exist and should be named in the prompt:
+    the **AWS Price List API** (`pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrock…`,
+    versioned and diffable, no credentials) and the **vendors' own docs repositories** on GitHub
+    (`mistralai/platform-docs-public` carries a machine-readable model catalogue with prices,
+    statuses and retirement dates; `cohere-ai/cohere-developer-experience` and
+    `black-forest-labs/skills` likewise). A future run should check these *first* for Bedrock,
+    Mistral, Cohere and BFL rather than falling back to them.
+30. **[Flagged — new, verify]** **Items this run found but did not verify itself**, each needing one
+    page read: Mistral Codestral 2508 context (Mistral publishes 128K; MJ records 256,000 in *and*
+    256,000 out); Mistral `Mixtral 8x7B`'s id (MJ has `open-mistral-8x7b`, Mistral's is
+    `open-mixtral-8x7b`) and its still-`Active` cost row on a model retired 2025-03-30; the
+    `mistral-embed` route with `APIName: undefined` and no cost row, which Mistral prices at
+    $0.10/1M; BFL `flux-1.1-pro` → `flux-pro-1.1` and FLUX.2 Pro's **per-megapixel** rather than
+    per-image unit; and roughly 30 Bedrock models MJ carries no route for, now all priced in AWS's
+    rate card.
 
 ### Note on the routine prompt itself (§0 asks for this)
 
@@ -630,9 +766,10 @@ parameter-count tiers (<4B $0.10; 4–16B $0.20; >16B $0.90; MoE ≤56B $0.50; M
 - In-window, non-model: **OpenRouter announced on 2026-10-02 that it is joining Stripe.** Vendor-risk
   note only.
 
-### Three research claims this run checked and corrected
+### Five research claims this run checked and corrected
 
-Worth recording, because each would have produced a wrong edit:
+Worth recording, because each would have produced a wrong edit — or, in two cases, would have thrown
+away the best sources available:
 
 1. **"MJ's DeepSeek rows are contaminated with Xiaomi MiMo prices."** Rejected — the DeepSeek rows
    predate MiMo V2.6 by four to five months and the cache rates differ. Detail in the pricing section.
@@ -643,6 +780,16 @@ Worth recording, because each would have produced a wrong edit:
 3. **"`gpt-6.1-sol`'s `MaxInputTokens` of 922,000 is a transcription error."** Wrong — it is
    1,050,000 context minus 128,000 max output, and the record's own description says so. Two separate
    passes flagged it. Do not "fix" it; decide the convention instead.
+4. **"`raw.githubusercontent.com` and the AWS pricing host are blocked."** Both were reported blocked
+   by earlier passes, and **both are reachable.** Re-testing them is what produced most of this PR:
+   the Cohere id fix, the Bedrock cache rates, the Bedrock output-price correction and both Mistral
+   re-rates all come from those two routes. A "blocked" verdict on a host is worth re-testing rather
+   than inheriting.
+5. **The Claude Bedrock cache rates were cited to the wrong AWS offer file.** The claim pointed at
+   `AmazonBedrock`, which contains only Claude 3 Haiku and Claude 3 Sonnet. Every modern Claude model
+   is in the separate `AmazonBedrockFoundationModels` (Marketplace) offer, under a `servicename`
+   attribute rather than `model`. The figures turned out correct, but they were confirmed in the right
+   file before being applied.
 
 
 ## Research Sources
@@ -664,6 +811,21 @@ Worth recording, because each would have produced a wrong edit:
 - https://platform.claude.com/docs/en/models/opus-4-5/overview
 - https://platform.claude.com/docs/en/release-notes/api
 - https://www.anthropic.com/news · https://anthropic.com/glasswing
+
+### Fetched directly — AWS's Price List API (first-party, machine-readable)
+
+- https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrock/current/us-east-1/index.json
+  (publication 2026-10-03) — the `gpt-oss-20b` / `-120b` on-demand rates
+- https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/current/us-east-1/index.json
+  (publication 2026-09-30) — the Claude family's per-tier input/output/cache rates
+
+### Fetched directly — vendors' own documentation repositories
+
+- https://raw.githubusercontent.com/cohere-ai/cohere-developer-experience/main/fern/pages/models/rerank-2.mdx
+- https://raw.githubusercontent.com/mistralai/platform-docs-public/main/src/schema/models/models/mistral-large-3-25-12.ts
+- https://raw.githubusercontent.com/mistralai/platform-docs-public/main/src/schema/models/models/mistral-medium-3-5-26-04.ts
+- https://raw.githubusercontent.com/mistralai/platform-docs-public/main/src/schema/models/models/magistral-medium-1-2-25-09.ts
+- https://raw.githubusercontent.com/mistralai/platform-docs-public/main/src/schema/models/models/magistral-small-1-2-25-09.ts
 
 ### Verified locally, no network needed
 
