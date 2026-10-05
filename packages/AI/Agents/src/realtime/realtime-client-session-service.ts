@@ -30,7 +30,7 @@
  * @author MemberJunction.com
  */
 
-import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -53,6 +53,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 import { AgentRunner } from '../AgentRunner';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
 import { DelegationNarrator } from './realtime-delegation-narrator';
 import { FilterAllowedAgentsByCanRun } from './realtime-coagent-resolution';
 import {
@@ -1120,10 +1121,30 @@ export class RealtimeClientSessionService {
             run.UserID = userID;
         }
         if (await run.Save()) {
+            this.KeepCoAgentRunAlive(run.ID, provider, contextUser);
             return run.ID;
         }
         LogError(`RealtimeClientSessionService.createCoAgentRun save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         return null;
+    }
+
+    /**
+     * Keeps a voice session's co-agent run alive as far as the {@link AgentRunWatchdog} is concerned. The
+     * run spans the whole call, but no agent loop owns it, so nothing stamped its heartbeat: the watchdog
+     * force-failed every call that ran past ~5 minutes ("no liveness heartbeat … owning process presumed
+     * dead") while the call carried on. Called when the run is created and again on each persisted
+     * session heartbeat (`SessionManager`), so whichever server instance the session is talking to keeps
+     * it fresh; the watchdog drops it once it is finalized. Only a database provider can stamp heartbeats —
+     * any other provider is a no-op, as for every agent run.
+     *
+     * @param coAgentRunID The session's co-agent run id (from its `Config`), or nothing.
+     * @param provider The request-scoped metadata provider.
+     * @param contextUser The user the heartbeat writes run as.
+     */
+    public KeepCoAgentRunAlive(coAgentRunID: string | null | undefined, provider: IMetadataProvider, contextUser: UserInfo): void {
+        if (coAgentRunID && provider instanceof DatabaseProviderBase) {
+            AgentRunWatchdog.Instance.Track(coAgentRunID, provider, contextUser);
+        }
     }
 
     /**
@@ -1230,6 +1251,50 @@ export class RealtimeClientSessionService {
         await this.finalizeAgentRun(coAgentRunID, contextUser, provider, success);
         await this.finalizePromptRun(promptRunID, contextUser, provider, success);
         await this.finalizeRunStep(coAgentRunStepID, contextUser, provider, success);
+        await this.rollUpCoAgentRunUsage(coAgentRunID, promptRunID, contextUser, provider);
+        if (coAgentRunID) {
+            AgentRunWatchdog.Instance.Untrack(coAgentRunID);
+        }
+    }
+
+    /**
+     * Copies the co-agent prompt run's tokens and cost onto the co-agent run. The realtime model's usage
+     * accumulates on the prompt run ({@link AccumulatePromptRunUsage}), which prices itself; the run's
+     * own `TotalCost` / `Total*TokensUsed` stayed 0, so everything that sums agent runs — the realtime
+     * analytics dashboard's per-session cost among them — left out the voice model entirely and showed
+     * only the delegated runs. Mirrors how an agent loop derives its run totals from its prompt runs.
+     *
+     * Applied whatever the run's status: a run the watchdog already failed, or one a shutdown cancelled,
+     * still owes its cost. Runs after {@link finalizePromptRun}, which waits for in-flight usage writes,
+     * so the copy sees the final counts. Tolerant: logs, never throws.
+     */
+    private async rollUpCoAgentRunUsage(
+        coAgentRunID: string | null,
+        promptRunID: string | null,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<void> {
+        if (!coAgentRunID || !promptRunID) {
+            return;
+        }
+        try {
+            const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
+            const run = await provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
+            if (!(await promptRun.Load(promptRunID)) || !(await run.Load(coAgentRunID))) {
+                return;
+            }
+            const promptTokens = promptRun.TokensPrompt ?? 0;
+            const completionTokens = promptRun.TokensCompletion ?? 0;
+            run.TotalPromptTokensUsed = promptTokens;
+            run.TotalCompletionTokensUsed = completionTokens;
+            run.TotalTokensUsed = promptRun.TokensUsed ?? promptTokens + completionTokens;
+            run.TotalCost = promptRun.TotalCost ?? promptRun.Cost ?? 0;
+            if (run.Dirty && !(await run.Save())) {
+                LogError(`RealtimeClientSessionService.rollUpCoAgentRunUsage save failed: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.rollUpCoAgentRunUsage failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /**
