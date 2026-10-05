@@ -3,7 +3,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
-import { AgentRunner, ArtifactToolManager, BuildStoppedRunPredecessorFilter, IsUserStoppedRun } from '@memberjunction/ai-agents';
+import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
@@ -757,7 +757,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * null. The query spans the runs that could be the predecessor (settled, or stopped by the
      * user) and the newest decides, so a stopped run that a later settled run already followed
      * is not chained to again. Uses the same filter and recognizer as `BaseAgent.findUserStoppedPredecessorRunId`
-     * (`BuildStoppedRunPredecessorFilter` / `IsUserStoppedRun`), which carries the stopped run's
+     * (`MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter` / `IsUserStopped`), which carries the stopped run's
      * completed results into the new run's context, so the two cannot pick different runs.
      * Fail-soft: a lookup failure means no chaining, never a failed turn.
      */
@@ -771,14 +771,16 @@ export class RunAIAgentResolver extends ResolverBase {
             const rv = RunView.FromMetadataProvider(provider);
             const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
                 EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: BuildStoppedRunPredecessorFilter(conversationId, agentId),
+                ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(conversationId, agentId),
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
                 Fields: ['ID', 'Status', 'CancellationReason'],
                 ResultType: 'simple',
+                // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
+                BypassCache: true,
             }, contextUser);
             const run = newest.Success ? newest.Results?.[0] : undefined;
-            return IsUserStoppedRun(run) ? run!.ID : null;
+            return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
         } catch (error) {
             LogError(`findUserStoppedPredecessorRunId failed; the turn runs unchained: ${error instanceof Error ? error.message : String(error)}`);
             return null;

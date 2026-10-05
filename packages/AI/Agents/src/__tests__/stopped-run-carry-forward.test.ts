@@ -128,6 +128,8 @@ describe('BaseAgent.injectStoppedRunResults', () => {
         expect(messages[0].content).toContain('Get Weather');
         expect(messages[0].content).toContain('57.7°F');
 
+        // The row it looks for was written by the Stop button moments ago, so the lookup reads the database.
+        expect((runViewFn.mock.calls[0][0] as { BypassCache?: boolean }).BypassCache).toBe(true);
         const runFilter = (runViewFn.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter;
         expect(runFilter).toContain(`ConversationID='${CONV_ID}'`);
         expect(runFilter).toContain(`AgentID='${AGENT_A}'`);

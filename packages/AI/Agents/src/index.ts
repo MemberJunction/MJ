@@ -23,7 +23,7 @@ export * from './tool-result-format';
 export * from './prompt-component-resolver';
 export * from './scoped-prompt-config-resolver';
 export * from './agent-run-watchdog';
-export * from './agent-run-control';
+export * from './agent-run-abort-reasons';
 export * from './agent-types';
 export * from './AgentRunner';
 export * from './artifact-target-plan';

@@ -1,6 +1,7 @@
 import { BaseSingleton, ShutdownRegistry, IShutdownable } from '@memberjunction/global';
 import { DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON, USER_REQUEST_CANCELLATION_REASON } from './agent-run-control';
+import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON } from './agent-run-abort-reasons';
 
 /** The provider's SQL dialect, referenced via indexed access so we don't take a direct
  *  dependency on `@memberjunction/sql-dialect` just to name the type. */
@@ -362,7 +363,7 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /** Maps a run row's `CancellationReason` to the abort reason the owning agent will see. */
     private static abortReasonFor(cancellationReason: string | null): string {
-        return cancellationReason === USER_REQUEST_CANCELLATION_REASON ? USER_CANCEL_ABORT_REASON : EXTERNAL_CANCEL_ABORT_REASON;
+        return cancellationReason === MJAIAgentRunEntityExtended.UserRequestCancellationReason ? USER_CANCEL_ABORT_REASON : EXTERNAL_CANCEL_ABORT_REASON;
     }
 
     /**

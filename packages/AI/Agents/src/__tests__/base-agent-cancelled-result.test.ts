@@ -16,7 +16,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
-import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON, AGENT_TIMEOUT_ABORT_REASON } from '../agent-run-control';
+import { USER_CANCEL_ABORT_REASON, EXTERNAL_CANCEL_ABORT_REASON, AGENT_TIMEOUT_ABORT_REASON } from '../agent-run-abort-reasons';
 
 interface FakeStep { StepNumber: number; PayloadAtEnd: string | null }
 

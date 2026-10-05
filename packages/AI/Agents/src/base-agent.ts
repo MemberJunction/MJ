@@ -19,7 +19,7 @@ import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
-import { USER_CANCEL_ABORT_REASON, AGENT_TIMEOUT_ABORT_REASON, SETTLED_AGENT_RUN_STATUSES, BuildStoppedRunPredecessorFilter, IsUserStoppedRun } from './agent-run-control';
+import { USER_CANCEL_ABORT_REASON, AGENT_TIMEOUT_ABORT_REASON } from './agent-run-abort-reasons';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -7760,14 +7760,16 @@ The context is now within limits. Please retry your request with the recovered c
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: BuildStoppedRunPredecessorFilter(params.conversationId!, params.agent.ID),
+            ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(params.conversationId!, params.agent.ID),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
             Fields: ['ID', 'Status', 'CancellationReason'],
             ResultType: 'simple',
+            // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
+            BypassCache: true,
         }, params.contextUser);
         const run = newest.Success ? newest.Results?.[0] : undefined;
-        return IsUserStoppedRun(run) ? run!.ID : null;
+        return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
     }
 
     /** The completed, successful Actions and Tool steps of a stopped run, in step order. @private */
@@ -7970,7 +7972,7 @@ The context is now within limits. Please retry your request with the recovered c
      * post-turn compaction gate ({@link startPostTurnCompaction}).
      */
     private static readonly settledRunStatuses: ReadonlyArray<MJAIAgentRunEntityExtended['Status']> =
-        SETTLED_AGENT_RUN_STATUSES;
+        MJAIAgentRunEntityExtended.SettledStatuses;
 
     /**
      * The carry-forward row predicate — the SINGLE source shared by the two places that
@@ -11526,7 +11528,9 @@ The context is now within limits. Please retry your request with the recovered c
             const lastRunResult = await rv.RunView({
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `ID='${params.lastRunId}'`,
-                ResultType: 'simple' // Avoid recursive loading
+                ResultType: 'simple', // Avoid recursive loading
+                // A stopped predecessor wrote its FinalPayload moments ago; read the database, not a cache.
+                BypassCache: true
             }, params.contextUser);
             
             if (lastRunResult.Success && lastRunResult.Results.length > 0) {
