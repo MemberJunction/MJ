@@ -17,7 +17,7 @@ import { BuildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } fro
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
@@ -13453,8 +13453,10 @@ The context is now within limits. Please retry your request with the recovered c
      * by one in-flight sub-agent would race the others' reads.
      *
      * Uses `structuredClone` (Node 17+) where available; falls back to a JSON
-     * round-trip for environments without it. Returns the original value on
-     * non-cloneable inputs.
+     * round-trip (`ToPlainJSON`) for environments without it AND when
+     * `structuredClone` throws (a Proxy such as a live JSONType `<Field>Object`
+     * view, or functions). Returns the original value — with an error logged —
+     * only when even the JSON clone fails.
      *
      * **JSON fallback caveats** — the round-trip is *not* shape-preserving:
      *   - `Date` → ISO string
@@ -13474,12 +13476,20 @@ The context is now within limits. Please retry your request with the recovered c
     protected cloneSubAgentPayload<T>(payload: T): T {
         if (payload === null || payload === undefined) return payload;
         if (typeof payload !== 'object') return payload;
-        try {
-            if (typeof globalThis.structuredClone === 'function') {
+        if (typeof globalThis.structuredClone === 'function') {
+            try {
                 return globalThis.structuredClone(payload);
+            } catch {
+                // DataCloneError — typically a Proxy (a live JSONType `<Field>Object` view) or an
+                // object holding functions. Fall through to the JSON clone below; returning the
+                // original here would silently give the sub-agent the caller's LIVE object and lose
+                // payload isolation.
             }
-            return JSON.parse(JSON.stringify(payload)) as T;
-        } catch {
+        }
+        try {
+            return ToPlainJSON(payload);
+        } catch (error) {
+            LogError(`BaseAgent.cloneSubAgentPayload: payload could not be cloned (${error instanceof Error ? error.message : String(error)}); sub-agent will share the caller's object`);
             return payload;
         }
     }
