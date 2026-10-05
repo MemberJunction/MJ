@@ -14,6 +14,7 @@ import { CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from '@memberjunction/ai';
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import type { NativeToolBinding } from '../native-tools/control-tools';
+import { coerceActionArguments } from '../native-tools/action-tool-builder';
 import type { ChatToolCall } from '@memberjunction/ai';
 import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
@@ -422,7 +423,9 @@ export class LoopAgentType extends BaseAgentType {
                 // Downstream dispatch resolves Actions by NAME, so hand back the Action's real
                 // name rather than the sanitized tool name the model used.
                 name: binding.action.Name,
-                params: call.arguments ?? {},
+                // Object params the model sent JSON-encoded are decoded here, so the Action sees
+                // the same shape the envelope path would have given it.
+                params: coerceActionArguments(binding.params, call.arguments),
                 toolCallId: call.id
             })),
             payloadChangeRequest,
