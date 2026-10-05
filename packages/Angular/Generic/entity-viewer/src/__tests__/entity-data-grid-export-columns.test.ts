@@ -3,6 +3,8 @@ import type { ChangeDetectorRef, ElementRef, NgZone } from '@angular/core';
 import { EntityInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { ColDef } from 'ag-grid-community';
+import type { ExportColumn } from '@memberjunction/export-engine';
+import { ExportService } from '@memberjunction/ng-export-service';
 
 const commMetadata = vi.hoisted(() => ({
     EntityCommunicationMessageTypes: [] as { EntityID: string; IsActive: boolean }[],
@@ -148,6 +150,13 @@ describe('EntityDataGridComponent.GetExportColumns', () => {
 
         expect(grid.GetExportColumns()[0].name).toBe('OrderNumber');
     });
+
+    it('types a date-only column as dateonly, so it exports as its stored day', () => {
+        const grid = makeGrid(makeOrdersEntity());
+        withRenderedColumns(grid, [{ field: 'OrderDate', headerName: 'Date' }]);
+
+        expect(grid.GetExportColumns()[0].dataType).toBe('dateonly');
+    });
 });
 
 describe('EntityDataGridComponent — Send Message is offered only when the entity supports communication', () => {
@@ -204,8 +213,8 @@ describe('ViewWorkspaceComponent export columns when no renderer supplies them (
         return workspace;
     }
 
-    function exportColumns(workspace: ViewWorkspaceComponent): { name: string; displayName?: string }[] {
-        return (workspace as unknown as { buildExportColumns(): { name: string; displayName?: string }[] }).buildExportColumns();
+    function exportColumns(workspace: ViewWorkspaceComponent): ExportColumn[] {
+        return (workspace as unknown as { buildExportColumns(): ExportColumn[] }).buildExportColumns();
     }
 
     it('drops saved settings whose field no longer exists, as the grid does', () => {
@@ -218,9 +227,41 @@ describe('ViewWorkspaceComponent export columns when no renderer supplies them (
         });
 
         expect(exportColumns(workspace)).toEqual([
-            { name: 'OrderNumber', displayName: 'Order Number' },
-            { name: 'Status', displayName: 'State' },
+            { name: 'OrderNumber', displayName: 'Order Number', dataType: 'string' },
+            { name: 'Status', displayName: 'State', dataType: 'string' },
         ]);
+    });
+
+    it('types each column as the grid does, so a date-only field exports as its day', () => {
+        const fromSettings = makeWorkspace(makeOrdersEntity(), {
+            columnSettings: [
+                { ID: 'F3', Name: 'OrderDate', orderIndex: 0 },
+                { ID: 'F5', Name: 'TotalAmount', orderIndex: 1 },
+            ],
+        });
+        expect(exportColumns(fromSettings).map(c => c.dataType)).toEqual(['dateonly', 'number']);
+
+        const fromFields = makeWorkspace(makeOrdersEntity(), null);
+        const orderDate = exportColumns(fromFields).find(c => c.name === 'OrderDate');
+        expect(orderDate?.dataType).toBe('dateonly');
+    });
+
+    it('exports a date-only field as YYYY-MM-DD through the real export service', async () => {
+        const originalTZ = process.env.TZ;
+        process.env.TZ = 'America/Chicago';
+        try {
+            const workspace = makeWorkspace(makeOrdersEntity(), {
+                columnSettings: [{ ID: 'F3', Name: 'OrderDate', orderIndex: 0 }],
+            });
+            const result = await new ExportService().toCSV(
+                [{ OrderDate: '2026-10-01T00:00:00.000Z' }, { OrderDate: new Date('2026-10-01T00:00:00.000Z') }],
+                { columns: exportColumns(workspace) },
+            );
+            const lines = new TextDecoder().decode(result.data as Uint8Array).replace(/^\uFEFF/, '').split('\r\n');
+            expect(lines.slice(1)).toEqual(['2026-10-01', '2026-10-01']);
+        } finally {
+            process.env.TZ = originalTZ;
+        }
     });
 
     it('leaves out fields the user is denied read access to', () => {

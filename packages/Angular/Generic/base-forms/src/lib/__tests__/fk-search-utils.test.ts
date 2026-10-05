@@ -21,6 +21,36 @@ describe('FormatFKCell', () => {
     expect(FormatFKCell(d)).toBe(d.toLocaleDateString());
   });
 
+  describe('a date-only column is a calendar day, not an instant (MJ#4210)', () => {
+    // Pinned to New York: a `date` column arrives as UTC midnight, and a local-zone formatter
+    // lands on the previous day for every reader west of Greenwich. At Greenwich this is invisible.
+    const AT = (tz: string, fn: () => void) => {
+      const original = process.env.TZ;
+      process.env.TZ = tz;
+      try {
+        fn();
+      } finally {
+        process.env.TZ = original;
+      }
+    };
+
+    it('renders a date column as its stored day when given its SQL type', () => {
+      AT('America/New_York', () => {
+        const shown = FormatFKCell(new Date('2026-11-20T00:00:00.000Z'), 'date');
+        expect(shown, `got ${shown}`).toContain('20');
+        expect(shown).not.toContain('19');
+      });
+    });
+
+    it('keeps a timestamp column, or a cell of unknown type, in local time', () => {
+      AT('America/New_York', () => {
+        const instant = new Date('2026-11-20T02:00:00.000Z');
+        expect(FormatFKCell(instant, 'datetimeoffset')).toContain('19');
+        expect(FormatFKCell(instant)).toContain('19');
+      });
+    });
+  });
+
   it('stringifies numbers and strings', () => {
     expect(FormatFKCell(42)).toBe('42');
     expect(FormatFKCell('Acme')).toBe('Acme');
