@@ -17,7 +17,7 @@ const resultWithCalls = (calls: Array<{ name: string; arguments?: Record<string,
     ({ success: true, chatResult: { data: { choices: [{ message: { toolCalls: calls } }] } } } as unknown as AIPromptRunResult);
 
 const binding = (toolName: string, actionName: string): ActionToolBinding =>
-    ({ kind: 'action', toolName, action: { Name: actionName }, tool: { name: toolName, inputSchema: {} } } as unknown as ActionToolBinding);
+    ({ kind: 'action', toolName, action: { Name: actionName }, tool: { name: toolName, inputSchema: {} }, params: [] } as unknown as ActionToolBinding);
 
 const bindings = new Map([['run_ad_hoc_query', binding('run_ad_hoc_query', 'Run Ad-hoc Query')]]);
 
@@ -77,7 +77,7 @@ const resultWith = (calls: Array<{ name: string; arguments?: Record<string, unkn
     return { success: true, result: text, rawResult: text, promptRun: { ToolCallingMode: mode }, chatResult } as unknown as AIPromptRunResult;
 };
 const actionBinding = (toolName: string, actionName: string): NativeToolBinding =>
-    ({ kind: 'action', toolName, action: { Name: actionName }, tool: { name: toolName, inputSchema: {} } } as unknown as NativeToolBinding);
+    ({ kind: 'action', toolName, action: { Name: actionName }, tool: { name: toolName, inputSchema: {} }, params: [] } as unknown as NativeToolBinding);
 const subAgentBinding = (toolName: string, agentName: string): NativeToolBinding =>
     ({ kind: 'subAgent', toolName, agent: { Name: agentName }, tool: { name: toolName, inputSchema: {} } } as unknown as NativeToolBinding);
 const full = new Map<string, NativeToolBinding>([
