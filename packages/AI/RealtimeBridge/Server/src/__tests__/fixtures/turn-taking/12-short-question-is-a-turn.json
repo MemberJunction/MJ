@@ -1,0 +1,27 @@
+{
+  "Name": "short-question-is-a-turn",
+  "Description": "A one-word question is brief but asks for a reply, so it is a turn, not a backchannel: it takes the floor when free and is denied as an overlay when someone else holds it. A genuine one-word acknowledgement in the middle is still a backchannel.",
+  "Agents": [
+    { "Id": "sage", "Names": ["Sage"] },
+    { "Id": "demo", "Names": ["Demo Loop"] },
+    { "Id": "scout", "Names": ["Scout"] }
+  ],
+  "Events": [
+    { "Type": "AgentSpeech", "AtMs": 0, "Agent": "sage", "DurationMs": 600, "Text": "Right?" },
+    { "Type": "AgentSpeech", "AtMs": 200, "Agent": "demo", "DurationMs": 400, "Text": "mm-hm" },
+    { "Type": "AgentSpeech", "AtMs": 1000, "Agent": "demo", "DurationMs": 600, "Text": "Right?" },
+    { "Type": "AgentSpeech", "AtMs": 1200, "Agent": "scout", "DurationMs": 600, "Text": "Right?" }
+  ],
+  "Expect": {
+    "Speeches": [
+      { "Agent": "sage", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "demo", "Kind": "Backchannel", "Granted": true, "Reason": "Backchannel" },
+      { "Agent": "demo", "Kind": "Turn", "Granted": true, "Reason": "FloorFree" },
+      { "Agent": "scout", "Kind": "Turn", "Granted": false, "Reason": "HeldByOtherAgent" }
+    ],
+    "Preempted": [],
+    "BackchannelCount": 1,
+    "LoopCapReached": false,
+    "FinalFloorHolder": null
+  }
+}

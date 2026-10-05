@@ -78,3 +78,4 @@ export * from './custom/MJRubricScaleLevelEntityServer.server';
 export * from './custom/rubrics/versionPublish';
 export * from './custom/rubrics/evaluationSubmit';
 export * from './custom/rubrics/scaleFreeze';
+export * from './custom/MJInteractionEventEntityServer.server';

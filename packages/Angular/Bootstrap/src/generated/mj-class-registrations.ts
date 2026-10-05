@@ -33,7 +33,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (433 classes)
+// @memberjunction/core-entities (441 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -295,6 +295,10 @@ import {
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
+    MJInteractionEntity,
+    MJInteractionEventEntity,
+    MJInteractionLinkEntity,
+    MJInteractionOfferEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -327,6 +331,9 @@ import {
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
     MJMaterializedResultQueryEntity,
+    MJMeetingEntity,
+    MJMeetingParticipantEntity,
+    MJNumberPoolEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -337,6 +344,7 @@ import {
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
+    MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -686,7 +694,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (106 classes)
+// @memberjunction/ng-dashboards (107 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -774,6 +782,7 @@ import {
     SystemDiagnosticsComponent,
     TabStripLabComponent,
     TagsResourceComponent,
+    TelephonyOperationsDashboardComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
     TestingDashboardTabResourceComponent,
@@ -796,7 +805,7 @@ import {
     WorkflowsResourceComponent,
 } from '@memberjunction/ng-dashboards';
 
-// @memberjunction/ng-explorer-core (13 classes)
+// @memberjunction/ng-explorer-core (14 classes)
 import {
     ArtifactResource,
     ChatConversationsResource,
@@ -804,6 +813,7 @@ import {
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
+    MeetingsResource,
     OmnibarAgentProvider,
     OmnibarCommandProvider,
     OmnibarRecordProvider,
@@ -1096,6 +1106,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
+    MJInteractionEntity,
+    MJInteractionEventEntity,
+    MJInteractionLinkEntity,
+    MJInteractionOfferEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -1128,6 +1142,9 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
     MJMaterializedResultQueryEntity,
+    MJMeetingEntity,
+    MJMeetingParticipantEntity,
+    MJNumberPoolEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1138,6 +1155,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
+    MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1218,6 +1236,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTagScopeEntity,
     MJTagSuggestionEntity,
     MJTagSynonymEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
@@ -1226,10 +1248,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTemplateContentEntity,
     MJTemplateContentTypeEntity,
     MJTemplateEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJTemplateEntityExtended,
     MJTemplateParamEntity,
     MJTestEntity,
@@ -1422,6 +1440,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     APIKeysResourceComponent,
     ActionExecutionMonitoringComponent,
     ActionExplorerComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     ActionsOverviewComponent,
     ActivityComponent,
     AdminDataSchemaComponent,
@@ -1430,10 +1452,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     AnalyticsResourceComponent,
     AppStateInspectorComponent,
     ApplicationRolesResourceComponent,
@@ -1507,6 +1525,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SystemDiagnosticsComponent,
     TabStripLabComponent,
     TagsResourceComponent,
+    TelephonyOperationsDashboardComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
     TestingDashboardTabResourceComponent,
@@ -1533,6 +1552,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
+    MeetingsResource,
     OmnibarAgentProvider,
     OmnibarCommandProvider,
     OmnibarRecordProvider,
@@ -1554,7 +1574,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 706;
+export const CLASS_REGISTRATIONS_COUNT = 716;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

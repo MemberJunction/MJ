@@ -2838,6 +2838,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Interaction Links Section -->
+    <mj-collapsible-panel
+        SectionKey="mJInteractionLinks"
+        SectionName="Interaction Links"
+        Icon="fa fa-link"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJInteractionLinks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Interaction Links','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Interaction Links','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJInteractionLinks')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJInteractionLinks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Feature Values Section -->
     <mj-collapsible-panel
         SectionKey="mJFeatureValues"
