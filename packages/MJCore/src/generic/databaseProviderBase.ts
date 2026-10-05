@@ -10,7 +10,7 @@ import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
+import { EscapeSQLString, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -1440,28 +1440,31 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const e = this.EntityByName(entityName);
         if (!e) throw new Error('Entity ' + entityName + ' not found');
 
-        // Collect ALL IsNameField fields in Sequence order for multi-field name support
-        // (e.g., FirstName + LastName → "Elizabeth Rodriguez")
-        const nameFields = e.Fields
-            .filter(f => f.IsNameField)
-            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
-
-        // Fall back to the single NameField if no IsNameField flags are set
+        const nameFields = this.RecordNameFieldsOf(e);
         if (nameFields.length === 0) {
-            const f = e.NameField;
-            if (!f) {
-                LogError('Entity ' + entityName + ' does not have a NameField, returning null');
-                return null;
-            }
-            nameFields.push(f);
+            LogError('Entity ' + entityName + ' does not have a NameField, returning null');
+            return null;
         }
 
         let where = '';
         for (const pkv of compositeKey.KeyValuePairs) {
             const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
-            const quotes = pk && pk.NeedsQuotes ? "'" : '';
             if (where.length > 0) where += ' AND ';
-            where += this.QuoteIdentifier(pkv.FieldName) + '=' + quotes + pkv.Value + quotes;
+            if (pk && pk.NeedsQuotes) {
+                // Key values arrive from remote callers — escape so a quote in the value cannot
+                // break out of the literal (same discipline as CompositeKey.ToWhereClause).
+                where += this.QuoteIdentifier(pkv.FieldName) + "='" + EscapeSQLString(String(pkv.Value)) + "'";
+            }
+            else {
+                // Unquoted (numeric) key column: the value is spliced in bare, so refuse anything
+                // that is not a plain number rather than letting it reach the SQL text.
+                const raw = String(pkv.Value);
+                if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+                    LogError(`BuildEntityRecordNameSQL: non-numeric value provided for numeric key field ${pkv.FieldName} on entity ${entityName}`);
+                    return null;
+                }
+                where += this.QuoteIdentifier(pkv.FieldName) + '=' + raw;
+            }
         }
 
         // SELECT all name fields so InternalGetEntityRecordName can concatenate them
@@ -1470,8 +1473,43 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * The fields a record's display name is built from, in order: every `IsNameField` field by
+     * `Sequence` (so FirstName + LastName gives "Elizabeth Rodriguez"), else the entity's single
+     * `NameField`. Empty when the entity has neither.
+     */
+    protected RecordNameFieldsOf(entity: EntityInfo): EntityFieldInfo[] {
+        const nameFields = entity.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+        if (nameFields.length === 0 && entity.NameField) {
+            nameFields.push(entity.NameField);
+        }
+        return nameFields;
+    }
+
+    /**
+     * Whether a user may see this entity's record names: every field the name is built from must
+     * be readable to them. On an entity with field-level security on, a missing user may not,
+     * because there is nobody to check against.
+     */
+    protected CanUserReadRecordName(entity: EntityInfo, contextUser?: UserInfo): boolean {
+        if (!entity.EnableFieldLevelSecurity) {
+            return true;
+        }
+        if (!contextUser) {
+            return false;
+        }
+        const denied = entity.GetDeniedReadFields(contextUser);
+        return this.RecordNameFieldsOf(entity).every(f => !denied.has(f.Name.trim().toLowerCase()));
+    }
+
+    /**
      * Retrieves the display name for a single entity record.
      * Uses BuildEntityRecordNameSQL for dialect-neutral SQL generation.
+     *
+     * Answers with an empty string, without querying, when field-level security withholds any of
+     * the name fields from the acting user — the same answer as a record that does not exist, so
+     * the lookup cannot be used to tell the two apart.
      */
     protected async InternalGetEntityRecordName(
         entityName: string,
@@ -1479,6 +1517,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         contextUser?: UserInfo,
     ): Promise<string> {
         try {
+            const entity = this.EntityByName(entityName);
+            if (entity && !this.CanUserReadRecordName(entity, contextUser)) {
+                return '';
+            }
             const sql = this.BuildEntityRecordNameSQL(entityName, compositeKey);
             if (sql) {
                 const data = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);

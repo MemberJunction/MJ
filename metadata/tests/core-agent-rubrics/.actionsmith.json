@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Core agent rubrics - ActionSmith",
+    "Description": "Answers from the run itself. Scored by the ActionSmith Evaluation rubric, not an inline judge.",
+    "InputDefinition": {
+      "userMessage": "Name an action that lists a folder, and say what that action will not do."
+    },
+    "ExpectedOutcomes": {},
+    "Configuration": {
+      "agentId": "@lookup:MJ: AI Agents.Name=ActionSmith",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "3D49D398-77AE-48F4-BE9F-CF5CD7F7D079"
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:41.589Z",
+    "checksum": "df81d9a4085df3f69a01e00d4462680cb5bf7079038d0f61809d8e699a7bd88d"
+  }
+}

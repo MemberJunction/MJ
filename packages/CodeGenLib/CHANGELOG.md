@@ -1,5 +1,112 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 8fd1c46: Moves the seven CodeGen AI prompts to current models, and makes AI model catalog ranks consistent within each model's version lineage. Metadata only, plus a new CI guard. (#4912)
+  - **CodeGen prompts** (Check Constraint Parser, Entity Description Generation, Entity Name Generation, Transitive Join Intelligence, Virtual Entity Field Decoration, Form Layout Generation, Smart Field Identification):
+    - Gemini 3.5 Flash → **Gemini 3.8 Flash**, on the same Google and Vertex AI routes.
+    - Gemini 3.1 Flash-Lite → **Gemini 3.5 Flash-Lite** (Form Layout Generation, Smart Field Identification). Google now comes before Vertex AI, matching Flash.
+    - GPT 5.5 Instant → **GPT-6 Luna** on OpenAI. GPT 5.5 Instant only ever called `gpt-5.5`.
+    - Claude Haiku 4.5 and GPT-OSS-120B are unchanged; they are still the newest in their families. The failover order is unchanged.
+  - **Review regenerated output.** CodeGen commits its AI output into each app: `Validate*()` methods parsed from CHECK constraints, entity and field descriptions, display names and form layouts. Apps that regenerate after upgrading may see different AI-written output and should review it before committing.
+  - **Catalog PowerRank fixes.** Within a lineage, a newer model no longer ranks below the model it replaces, and ranks above it where it is the more capable one (rank-based selection does not break ties):
+    - The GPT-5 generation (GPT 5, 5-mini, 5-nano) was ranked above its successors and now ranks 10, 9 and 8.
+    - GPT 5.5 → 15, GPT 5.5 Instant → 15 (the same `gpt-5.5` API model), GPT 5.5 Pro → 16, GPT 5.6 → 16, o3-mini → 9, o4-mini → 10, Claude Sonnet 5 → 21, MiniMax-M3 → 21 (ties M2.7, which it complements rather than replaces), Grok 4.3 → 23, Qwen3.8-Flash → 16.
+    - Prompts and agents that choose models by rank can pick a different model as a result.
+  - **`PriorVersionID` lineage.** Two links that pointed across tiers are corrected (Gemini 3.1 Flash-Lite, Qwen3.8-Flash). Three variants with no earlier version in the catalog are cleared (GLM-5.3-Flash, GLM 5V Turbo, Mercury Edit 2). Missing links are added for the GPT 5, GPT mini/nano, o-series mini and Gemini Flash lines.
+  - **New guard:** `.github/scripts/check-ai-model-ranks.mjs` (`pnpm run check:ai-model-ranks`, run in the Source guards CI job) fails when a model ranks below the prior version it names, or names a prior version that doesn't exist.
+
+### Patch Changes
+
+- 1580f34: CodeGen applies the `PrimaryKey` and `ForeignKeys` declared on `VirtualEntities` entries in `additionalSchemaInfo`, and finishes a config-declared virtual entity in one run.
+
+  Before, only `PrimaryKey[0]` was used (composite keys collapsed to one column), `ForeignKeys` were parsed and dropped, and the entity never joined `NewEntityList`, so its keys, relationships, entity class and GraphQL type appeared only on a second run. Users worked around it with a duplicate schema-key table entry naming the view.
+  - New `applyVirtualEntitySoftKeys` applies `VirtualEntities` keys on every run, right after the view-column sync (view name as `TableName`, string `PrimaryKey` normalized). Relationships are rebuilt in the same run when a key changed. `applySoftPKFKConfig` keeps handling table entries only.
+  - `processVirtualEntityConfig` creates the entity with logged INSERT statements (fixed CodeGen-generated ID, `Description` kept) instead of the unlogged `spCreateVirtualEntity` call, so the CodeGen_Run capture replays on other databases; it registers the entity in `NewEntityList`; `SchemaName` defaults to `dbo` as documented (was the core schema).
+  - An `EntityName` already in use (compared without case) skips the entry with an error before anything is captured; a name derived from the view gets the `__<schema>` suffix, like table-backed entities.
+  - The soft key writer skips a configured column that does not exist instead of writing an UPDATE that matches no row, and clears `IsUnique` on the columns of a composite `VirtualEntities` key.
+  - `manageSingleVirtualEntity` no longer counts fields it just removed when it checks for a primary key, so a view without an `ID` column and without a configured key no longer aborts SQL generation. It matches view columns without case and sets the field name to the view's casing, so a key named in different case is not deleted and re-added.
+  - Docs: Method 2 SQL includes the required `@PrimaryKeyFieldName`; the config template names the schema explicitly.
+
+- d4e30c3: PostgreSQL migration conversion fixes found while converting the v6.2.0-edge.2 migrations.
+  - sql-converter: BIT literals in `INSERT INTO t (...) SELECT ...` (CodeGen's EntityPermission grants) and in `COALESCE(<boolean column>, 0|1) = 0|1` (CodeGen's search-flag hygiene) are rewritten to TRUE/FALSE.
+  - cli: `migrate convert --bake-codegen` and `migrate rebake` disable SQLOutput while baking, so CodeGen's no-artifact guard no longer silently refuses the capture's metadata SQL; forward baking now applies the captured CodeGen to the working database (the generator never executed it), so later migrations bake against the objects earlier ones created.
+  - codegen-lib: a layered entity's base-view GRANTs are guarded once, not twice (the nested `DO $if_view_exists$` did not parse on PostgreSQL); the PostgreSQL view-regeneration fallback now restores dependents of dependents and their functions after DROP ... CASCADE.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [2ceedb4]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [7e57b48]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/core-entities-server@6.2.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.2
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.2
+  - @memberjunction/actions@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/external-data-sources@6.2.0-edge.2
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.2
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.2
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.2
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.2
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.2
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.2
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.2
+  - @memberjunction/query-processor@6.2.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.2
+  - @memberjunction/cli-core@6.2.0-edge.2
+  - @memberjunction/config@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+  - @memberjunction/sql-parser@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

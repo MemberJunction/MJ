@@ -114,6 +114,68 @@ and logs — the stop-recording mutation still succeeds. See
 [REALTIME_SESSION_CAPTURE_GUIDE.md](../../guides/REALTIME_SESSION_CAPTURE_GUIDE.md#meeting-room-recording-livekit-egress--mjstorage)
 for the full loop incl. Meet-app playback.
 
+## Room audio player (hold music)
+
+`RoomAudioPlayer` joins a room as a small **publish-only** bot and plays audio into it: contact-center hold
+music, with spoken announcements ducked over the top. It reuses the agent bridge's plumbing: bot tokens from
+`LiveKitTokenService` (the `LIVEKIT_*` env vars), the native room client at the same specifier the agent
+coordinator uses (`LIVEKIT_NATIVE_MODULE`, default `@memberjunction/ai-bridge-livekit-native`), and the PCM16
+resampler from `@memberjunction/ai-bridge-base`.
+
+```typescript
+import { RoomAudioPlayer } from '@memberjunction/livekit-room-server';
+
+const hold = await RoomAudioPlayer.Instance.Start({
+  RoomName: callRoom,
+  Source: { Kind: 'File', FileID: queue.HoldMusicFileID },   // or { Kind: 'Url', Url }, { Kind: 'Pcm', Pcm, SampleRate }, { Kind: 'ComfortTone' }
+  ContextUser: contextUser,
+  // Loop: true (default), DisplayName: 'On hold' (default), Identity: 'hold-<playback id>' (default)
+});
+
+await hold.Announce({ Text: 'You are caller number three.' }); // music ducks, clip plays, music returns
+hold.Pause(); hold.Resume();
+await hold.Stop();                                              // idempotent; always disconnects the bot
+
+RoomAudioPlayer.Instance.GetActive(callRoom);                   // live playbacks in a room
+await RoomAudioPlayer.Instance.StopAllInRoom(callRoom);         // e.g. when an agent picks up
+```
+
+**Sources.** An `MJ: Files` row (loaded as `ContextUser`, bytes read through `@memberjunction/storage`), an
+**https** URL (plain http is refused; fetched with `SafeFetch`, so every redirect hop is checked against
+private/reserved addresses; 20 s timeout; 25 MB cap), caller-supplied mono PCM16, or the built-in
+**comfort tone** — a procedurally generated 10 s loop of soft chord pads (no asset, nothing to license).
+
+**Formats.** WAV (integer PCM 8/16/24/32-bit, IEEE float 32/64-bit, `WAVE_FORMAT_EXTENSIBLE`, any channel count —
+downmixed to mono) and MP3 (decoded by `mpg123-decoder`, a WebAssembly build of libmpg123: no native build step).
+Anything else (Ogg, FLAC, AAC/M4A, …) is refused with an error naming the format. Audio is limited to
+**15 minutes**; hold music loops, so a few minutes is plenty.
+
+**Playback.** Audio is resampled to 48 kHz and paced into the room in 20 ms frames against a monotonic clock,
+about 150 ms ahead of real time — the native client's own outbound queue never holds more than that. A blocked
+event loop drops the missed audio instead of bursting it. Decodes are cached by source (8 entries, 256 MB of PCM),
+and concurrent starts of the same file share one download, so a busy queue reads its hold file once. The cache is
+keyed by source, not by user: only the first load checks the reading user's access to the file.
+
+**Lifecycle.** A playback whose bot is disconnected by the server stops and deregisters itself, and a verified
+`room_finished` webhook (`LiveKitWebhookParser.Parse`) stops every playback in that room. A non-looping playback
+leaves the room when its audio ends.
+
+**Announcements and text-to-speech.** `Announce({ Pcm, SampleRate })` plays ready-made audio. `Announce({ Text })`
+goes through the `IRoomSpeechSynthesizer` port, and **none is installed by default** — a voice is vendor-specific,
+so the host chooses it. Without one, a text announcement returns `false` and the player logs the omission once.
+To enable it, install the MJ-backed synthesizer (`AITextToSpeechRunner`: model selection, credentials, failover,
+an `MJ: AI Prompt Runs` row) once at startup:
+
+```typescript
+import { MJRoomSpeechSynthesizer, RoomAudioPlayer } from '@memberjunction/livekit-room-server';
+
+RoomAudioPlayer.Instance.SetSpeechSynthesizer(new MJRoomSpeechSynthesizer({ Voice: 'alloy', ModelID: ttsModelID }));
+```
+
+The host needs an active TTS model whose vendor offers that voice (pin `ModelID` — voices belong to a vendor)
+and the carrier prompt `Default Text To Speech` (or pass `PromptID`). Any other implementation of
+`IRoomSpeechSynthesizer` works too.
+
 ## GraphQL surface
 
 These are exposed to the browser via MJServer's `RealtimeBridgeResolver`:
