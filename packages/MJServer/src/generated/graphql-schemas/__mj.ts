@@ -49240,17 +49240,17 @@ export class MJEntityFieldResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Entity Form Contributions
 //****************************************************************************
-@ObjectType({ description: `Metadata-registered form contribution: mounts a form-panel Component on a parent entity\'s form at a slot or inside a section, optionally standing in for baked sections, a rail tab, a set of fields or a related grid. Peer of compiled BaseFormPanel registrations.` })
+@ObjectType({ description: "Metadata-registered form contribution: mounts a form-panel Component on a parent entity's form at a slot or inside a section, optionally standing in for baked sections, a rail tab, a set of fields or a related grid. Peer of compiled BaseFormPanel registrations." })
 export class MJEntityFormContribution_ {
     @Field() 
     @MaxLength(36)
     ID: string;
         
-    @Field({nullable: true, description: `Parent form entity the panel mounts on.`}) 
+    @Field({nullable: true, description: "Parent form entity the panel mounts on."}) 
     @MaxLength(36)
     EntityID?: string;
         
-    @Field({nullable: true, description: `MJ: Components row (Type=Widget) whose Specification declares componentRole=form-panel.`}) 
+    @Field({nullable: true, description: "MJ: Components row (Type=Widget) whose Specification declares componentRole=form-panel."}) 
     @MaxLength(36)
     ComponentID?: string;
         
@@ -49261,64 +49261,64 @@ export class MJEntityFormContribution_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true, description: `Slot inside the generated form: top-area, before-fields, after-fields, after-related, after-everything.`}) 
+    @Field({nullable: true, description: "Slot inside the generated form: top-area, before-fields, after-fields, after-related, after-everything."}) 
     @MaxLength(30)
     Slot?: string;
         
-    @Field(() => Int, {nullable: true, description: `Order among panels drawn in the same place; higher renders earlier.`}) 
+    @Field(() => Int, {nullable: true, description: "Order among panels drawn in the same place; higher renders earlier."}) 
     SortKey?: number;
         
-    @Field({nullable: true, description: `Last-wins identity shared with compiled registrations and MJ: Form Chrome Rules. Null derives related:<entity>:<join> for related claims, otherwise the row never collapses.`}) 
+    @Field({nullable: true, description: "Last-wins identity shared with compiled registrations and MJ: Form Chrome Rules. Null derives related:<entity>:<join> for related claims, otherwise the row never collapses."}) 
     @MaxLength(256)
     ContributionKey?: string;
         
-    @Field({nullable: true, description: `When set, this panel replaces the related-entity grid for that relationship on the parent form.`}) 
+    @Field({nullable: true, description: "When set, this panel replaces the related-entity grid for that relationship on the parent form."}) 
     @MaxLength(36)
     RelatedEntityID?: string;
         
-    @Field({nullable: true, description: `Disambiguates two FKs to the same related entity (BillToPersonID vs ShipToPersonID).`}) 
+    @Field({nullable: true, description: "Disambiguates two FKs to the same related entity (BillToPersonID vs ShipToPersonID)."}) 
     @MaxLength(255)
     RelatedJoinField?: string;
         
-    @Field({nullable: true, description: `Section key of one baked block, or rail key of one tab, this contribution stands in for. The panel draws in its place. Mutually exclusive with every other claim.`}) 
+    @Field({nullable: true, description: "Section key of one baked block, or rail key of one tab, this contribution stands in for. The panel draws in its place. Mutually exclusive with every other claim."}) 
     @MaxLength(255)
     ReplacesSectionKey?: string;
         
-    @Field({nullable: true, description: `JSON array of section keys this contribution stands in for, all within one tab. The panel draws in the place of the first of them and the others are not drawn. Mutually exclusive with every other claim.`}) 
+    @Field({nullable: true, description: "JSON array of section keys this contribution stands in for, all within one tab. The panel draws in the place of the first of them and the others are not drawn. Mutually exclusive with every other claim."}) 
     ReplacesSectionKeys?: string;
         
-    @Field({nullable: true, description: `JSON array of field names this contribution stands in for, all within one section. The panel draws inside that section, at SectionPosition, and the named fields are not drawn. Mutually exclusive with every other claim.`}) 
+    @Field({nullable: true, description: "JSON array of field names this contribution stands in for, all within one section. The panel draws inside that section, at SectionPosition, and the named fields are not drawn. Mutually exclusive with every other claim."}) 
     ReplacesFieldNames?: string;
         
-    @Field({nullable: true, description: `Section key of a section this contribution draws inside, replacing nothing. SectionPosition says whether it draws at the start or the end. Mutually exclusive with every other claim.`}) 
+    @Field({nullable: true, description: "Section key of a section this contribution draws inside, replacing nothing. SectionPosition says whether it draws at the start or the end. Mutually exclusive with every other claim."}) 
     @MaxLength(255)
     InSectionKey?: string;
         
-    @Field({nullable: true, description: `Where inside its section the panel draws: start or end. Applies to InSectionKey and to a ReplacesFieldNames claim; null means start.`}) 
+    @Field({nullable: true, description: "Where inside its section the panel draws: start or end. Applies to InSectionKey and to a ReplacesFieldNames claim; null means start."}) 
     @MaxLength(10)
     SectionPosition?: string;
         
-    @Field({nullable: true, description: `L1 chrome inclusion: Primary (own rail item), More (folder), None (hidden). Null = default rail behavior.`}) 
+    @Field({nullable: true, description: "L1 chrome inclusion: Primary (own rail item), More (folder), None (hidden). Null = default rail behavior."}) 
     @MaxLength(10)
     Inclusion?: string;
         
-    @Field({nullable: true, description: `Pin to the details or more chrome bucket instead of an own rail item.`}) 
+    @Field({nullable: true, description: "Pin to the details or more chrome bucket instead of an own rail item."}) 
     @MaxLength(10)
     ChromeGroup?: string;
         
-    @Field({nullable: true, description: `panel = wrapped in a collapsible section with header; bare = hero strip with no chrome and no rail item.`}) 
+    @Field({nullable: true, description: "panel = wrapped in a collapsible section with header; bare = hero strip with no chrome and no rail item."}) 
     @MaxLength(10)
     Presentation?: string;
         
-    @Field({nullable: true, description: `Section header and rail label. Null falls back to Name.`}) 
+    @Field({nullable: true, description: "Section header and rail label. Null falls back to Name."}) 
     @MaxLength(255)
     Title?: string;
         
-    @Field({nullable: true, description: `Font Awesome class for the section header and rail item.`}) 
+    @Field({nullable: true, description: "Font Awesome class for the section header and rail item."}) 
     @MaxLength(100)
     Icon?: string;
         
-    @Field({nullable: true, description: `Who sees the contribution: User (UserID), Role (RoleID) or Global.`}) 
+    @Field({nullable: true, description: "Who sees the contribution: User (UserID), Role (RoleID) or Global."}) 
     @MaxLength(20)
     Scope?: string;
         
@@ -49330,17 +49330,17 @@ export class MJEntityFormContribution_ {
     @MaxLength(36)
     RoleID?: string;
         
-    @Field(() => Int, {nullable: true, description: `Last-wins precedence against compiled registrations sharing ContributionKey. Ties go to the compiled registration; a row wins only when strictly higher.`}) 
+    @Field(() => Int, {nullable: true, description: "Last-wins precedence against compiled registrations sharing ContributionKey. Ties go to the compiled registration; a row wins only when strictly higher."}) 
     Precedence?: number;
         
-    @Field({nullable: true, description: `Active rows render. Pending rows are drafts awaiting activation. Inactive rows are history.`}) 
+    @Field({nullable: true, description: "Active rows render. Pending rows are drafts awaiting activation. Inactive rows are history."}) 
     @MaxLength(20)
     Status?: string;
         
-    @Field({nullable: true, description: `JSON passed to the component as contribution.configuration so one component can serve several rows.`}) 
+    @Field({nullable: true, description: "JSON passed to the component as contribution.configuration so one component can serve several rows."}) 
     Configuration?: string;
         
-    @Field({nullable: true, description: `Free-form authoring notes; agents append an iteration log here.`}) 
+    @Field({nullable: true, description: "Free-form authoring notes; agents append an iteration log here."}) 
     Notes?: string;
         
     @Field() 
