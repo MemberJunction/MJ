@@ -17,7 +17,7 @@ import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
-import { AIAPIKey } from '@memberjunction/ai';
+import { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -1247,6 +1247,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * and the corresponding apiKey value.
      */
     apiKeys?: AIAPIKey[];
+    /**
+     * Which credentials the run may spend; omitted means `'Any'`. `'RuntimeOnly'` restricts every
+     * prompt, sub-agent, action and realtime session in the run to {@link apiKeys}: a vendor the run
+     * carries no key for is not used, rather than falling back to the platform's credentials. See
+     * `AICredentialScope` in `@memberjunction/ai`.
+     */
+    CredentialScope?: AICredentialScope;
     /**
      * Optional ID of the last run in a run chain.
      * When provided, this links the new run to a previous run, allowing
