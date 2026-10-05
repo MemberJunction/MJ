@@ -65,6 +65,14 @@ Each item lands with its unit tests and, where it touches the database or GraphQ
 
 **Accept:** a run with `boundActionParams` for an action's `ChapterID` shows the model no `ChapterID`; a `ChapterID` the model writes is ignored and logged; the action gets the bound value; and a sub-agent's call gets the same binding.
 
+**Built (2026-10-05), with these decisions beyond the text above:**
+- A binding that names no input parameter of the action refuses the call, like a required parameter bound to nothing, so a misspelled name fails loudly instead of leaving the real parameter open to the model. A binding keyed by anything but a known Action ID fails the run at its start, for the same reason.
+- A refused call is a fatal circuit-breaker block: the model is told only that the action is unavailable (naming the parameter would reveal what is hidden), the reason is logged with the run and step IDs, and the action is locked out for the rest of the run.
+- A bound parameter is also left out of a narrowed catalog, of the result echoed to the model, of the model-facing invocation record, and of what Find Candidate Actions and Find Best Action report (they read the bindings from the action `Context` as `BoundActionParams`).
+- A run with bindings is not offered task graphs and refuses one the model emits anyway: a graph's action nodes are dispatched outside the agent's binding gate.
+- The optional `BoundParameters` column on `MJ: AI Agent Actions` is not built. Runtime bindings are not persisted, so a run resumed from a stored request ([§ 9](#9-design-points-to-settle-first), new point 8) starts without them.
+- Known limits, documented on the field: the realtime client-direct action path and the workflow meta-actions (Loop, Conditional, Retry, Parallel Execute, Execute Agent) dispatch actions themselves and do not apply bindings; an action's own message text may mention a bound value.
+
 ## 3. A14. Properties on user views
 
 **Today:**
@@ -342,3 +350,4 @@ MemberJunction's own `CLAUDE.md` governs, and these points matter most here:
    - **The time zone** a date token is worked out in. MemberJunction keeps no time zone per user today; its only time zone column is a record process's schedule. The browser has the viewer's zone, and the server must come out the same, or a part's range moves by a day near midnight. The choices: the browser's zone sent with each request, a user setting, or UTC.
    - **The first day of a week,** for `Context.StartOfWeek`: Monday, Sunday, or a setting.
 7. **How the chat gets its reply's row** (A19). The runner creates the row on the server. Say whether its ID reaches the browser on the run's progress channel before the run starts, or through a separate server call that creates the row first, and how the chat keeps its duration timer, which starts from the row's `__mj_CreatedAt` today.
+8. **Where bindings persist** (A16). Runtime `boundActionParams` are not stored, so a run resumed after an `ask_user` pause (`MJ: AI Agent Requests`) starts without them and the hidden parameter is open to the model again; `actionChanges` have the same limit. Either a `BoundActionParams` JSON column on `MJ: AI Agent Runs`, written at run start and read back on resume (covers per-run bindings such as a space's chapter), or the per-agent `BoundParameters` column the text above calls optional (covers a value fixed for every run of one agent), or both. Either is a `minor` migration.
