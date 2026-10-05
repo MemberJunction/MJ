@@ -871,10 +871,12 @@ export interface IMetadataProvider {
     /**
      * Returns the Name of the specific recordId for a given entityName. This is done by
      * looking for the IsNameField within the EntityFields collection for a given entity.
-     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned
+     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned.
+     * When field-level security withholds a name field from the user, the answer is the same as for a
+     * record that does not exist.
      * @param entityName
      * @param CompositeKey
-     * @param contextUser - optional user context for permissions
+     * @param contextUser - the acting user; field- and row-level security are applied for them
      * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns the name of the record
      */
@@ -892,6 +894,10 @@ export interface IMetadataProvider {
     /**
      * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
      * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     *
+     * Only a provider that serves a single user keeps record names (the browser's `GraphQLDataProvider`).
+     * A provider shared by several users, such as a server's database provider, keeps none, so its
+     * synchronous record-name methods always answer "not cached".
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param loadIfNeeded - If set to true, will load from database if not already cached
@@ -900,7 +906,7 @@ export interface IMetadataProvider {
     GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
 
     /**
-     * Checks whether an entity record name is currently available in the in-memory LRU cache.
+     * Checks whether an entity record name is currently cached. See {@link GetCachedRecordName} for which providers cache.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @returns True if the record name is cached in memory, false otherwise
@@ -908,7 +914,7 @@ export interface IMetadataProvider {
     HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean;
 
     /**
-     * Retrieves an entity record name from the in-memory LRU cache if already cached.
+     * Retrieves an entity record name if already cached. See {@link GetCachedRecordName} for which providers cache.
      * Returns undefined immediately when not cached and will NEVER initiate a database lookup.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
@@ -917,8 +923,9 @@ export interface IMetadataProvider {
     GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined;
 
     /**
-     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
-     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName(), on a
+     * provider that caches; ignored otherwise. Called automatically by BaseEntity after Load(),
+     * LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param recordName - The display name to cache
