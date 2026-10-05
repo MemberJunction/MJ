@@ -8,7 +8,7 @@ import {
 } from './BaseModelRunner';
 import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
-import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
+import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo, PickPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import { LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
@@ -790,6 +790,7 @@ export class AIPromptRunner extends BaseModelRunner {
         consolidatedPromptRun.ID,
         params.cancellationToken,
         params.contextUser,
+        PickPromptExecutionScope(params),
       );
       if (aiSelectedResult) {
         selectedResult = aiSelectedResult;
@@ -3635,9 +3636,11 @@ export class AIPromptRunner extends BaseModelRunner {
         }
         
         // Run the repair prompt
+        // The repair runs inside the caller's run, so it runs on the caller's user, configuration and
+        // credentials — under RuntimeOnly it must not reach a key the caller's prompt could not.
         const repairResult = await this.ExecutePrompt({
+          ...PickPromptExecutionScope(params),
           parentPromptRunId: currentPromptRun.ID,
-          contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {
             ERROR_MESSAGE: trueError,

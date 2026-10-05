@@ -79,6 +79,7 @@ import { TestLLM, makeModelUsage, makeSuccessChatResult } from '@memberjunction/
 import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 import type { ExecutionTaskResult, ResultSelectionConfig } from '../ParallelExecution';
 import type { UserInfo } from '@memberjunction/core';
+import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 
 const testLLM = new TestLLM();
 
@@ -224,6 +225,7 @@ describe('Spec §5 — Parallel-execution accounting', () => {
     let passedParentIdToTasks: string | undefined;
     let passedParentIdToSelector: string | undefined;
     let passedUserToSelector: UserInfo | undefined;
+    let passedScopeToSelector: AIPromptExecutionScope | undefined;
 
     // Deterministic execution planner returning 3 tasks
     (runner as unknown as { _executionPlanner: { createExecutionPlan: () => unknown[] } })._executionPlanner = {
@@ -254,18 +256,22 @@ describe('Spec §5 — Parallel-execution accounting', () => {
           endTime: new Date(),
         };
       },
-      selectBestResult: async (_results, _config, parentPromptRunId, _cancellationToken, contextUser) => {
+      selectBestResult: async (_results, _config, parentPromptRunId, _cancellationToken, contextUser, executionScope) => {
         passedParentIdToSelector = parentPromptRunId as string;
         passedUserToSelector = contextUser as UserInfo;
+        passedScopeToSelector = executionScope as AIPromptExecutionScope;
         // Winner is arm 2
         return armResults[1];
       },
     };
 
+    const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
     const execParams = {
       prompt,
       contextUser: testUser,
       provider: fakeProvider,
+      apiKeys,
+      CredentialScope: 'RuntimeOnly',
       conversationMessages: [{ role: 'user', content: 'test question' }],
       templateMessageRole: 'none',
       verbose: false,
@@ -286,8 +292,10 @@ describe('Spec §5 — Parallel-execution accounting', () => {
     expect(passedParentIdToTasks).toBe(parentRun.ID);
     expect(passedParentIdToSelector).toBe(parentRun.ID);
 
-    // 3. Coordinator selectBestResult receives contextUser
+    // 3. Coordinator selectBestResult receives contextUser, and the scope its judge runs under
     expect(passedUserToSelector).toEqual(testUser);
+    expect(passedScopeToSelector?.apiKeys).toBe(apiKeys);
+    expect(passedScopeToSelector?.CredentialScope).toBe('RuntimeOnly');
 
     // 4. Children have ParentID = parent.ID
     expect(arm1Run.ParentID).toBe(parentRun.ID);
@@ -474,5 +482,31 @@ describe('Prompt-run nesting depth (vwAIUsageFacts resolves self, parent, grandp
     // ...and a leaf: a repair is only ever started when attemptJSONRepair is set, and the repair's
     // own run does not set it, so its output can never trigger a second, deeper repair.
     expect(repairParams.attemptJSONRepair).toBeFalsy();
+  });
+
+  it("runs a JSON repair under the repaired prompt's configuration and credentials", async () => {
+    // It forwarded contextUser alone, so inside a customer's run the repair spent the platform's keys.
+    h.state.prompts = [{ ID: 'repair-json', Name: 'Repair JSON', Category: 'MJ: System', Status: 'Active', OutputType: 'object' }];
+    const runner = new AIPromptRunner();
+    const execute = vi.spyOn(runner, 'ExecutePrompt').mockResolvedValue({ success: true, result: '{"total": 1}' } as Awaited<ReturnType<AIPromptRunner['ExecutePrompt']>>);
+    const attemptJSONRepair = (runner as unknown as {
+      attemptJSONRepair(rawOutput: string, originalError: Error, params: Record<string, unknown>, currentPromptRun: { ID: string }): Promise<unknown>;
+    }).attemptJSONRepair.bind(runner);
+    const apiKeys = [{ driverClass: 'GeminiLLM', apiKey: 'customer-key' }];
+
+    await attemptJSONRepair(
+      '{"total": }',
+      new Error('Unexpected token }'),
+      { contextUser: testUser, provider: fakeProvider, configurationId: 'config-1', apiKeys, credentialId: 'credential-1', CredentialScope: 'RuntimeOnly' },
+      { ID: 'run-being-repaired' },
+    );
+
+    const repairParams = execute.mock.calls[0][0];
+    expect(repairParams.contextUser).toBe(testUser);
+    expect(repairParams.provider).toBe(fakeProvider);
+    expect(repairParams.configurationId).toBe('config-1');
+    expect(repairParams.apiKeys).toBe(apiKeys);
+    expect(repairParams.credentialId).toBe('credential-1');
+    expect(repairParams.CredentialScope).toBe('RuntimeOnly');
   });
 });
