@@ -171,6 +171,26 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(locked.contextWindowCompression).toBeUndefined();
     });
 
+    it('requests session resumption and locks it into the token, as in Google\'s ephemeral-token example', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams());
+
+        const sc = cfg.SessionConfig as { config: LiveConnectConfig };
+        expect(sc.config.sessionResumption).toEqual({});
+        const locked = driver.MintParams!.config!.liveConnectConstraints!.config as LiveConnectConfig;
+        expect(locked.sessionResumption).toEqual({});
+    });
+
+    it('leaves session resumption out of both the config and the token for a zero-data-retention session', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ ZeroDataRetention: true }));
+
+        const sc = cfg.SessionConfig as { config: LiveConnectConfig };
+        expect(sc.config.sessionResumption).toBeUndefined();
+        const locked = driver.MintParams!.config!.liveConnectConstraints!.config as LiveConnectConfig;
+        expect(locked.sessionResumption).toBeUndefined();
+    });
+
     it('throws when the mint returns no token name', async () => {
         class NoNameMint extends GeminiRealtime {
             protected override async mintAuthToken(): Promise<AuthToken> {
@@ -231,6 +251,27 @@ describe('GeminiRealtime', () => {
         it('enables sliding-window context compression by default, so a session with video is not cut off at 2 minutes', async () => {
             await driver.StartSession(makeParams());
             expect(driver.LastConnectArgs!.Config.contextWindowCompression).toEqual({ slidingWindow: {} });
+        });
+
+        it('requests session resumption by default, so a session can outlive one ~10-minute connection', async () => {
+            await driver.StartSession(makeParams());
+            expect(driver.LastConnectArgs!.Config.sessionResumption).toEqual({});
+        });
+
+        it('leaves session resumption off a zero-data-retention session', async () => {
+            await driver.StartSession(makeParams({ ZeroDataRetention: true }));
+            expect(driver.LastConnectArgs!.Config.sessionResumption).toBeUndefined();
+        });
+
+        it('drops a config-bag sessionResumption on a zero-data-retention session and says why', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            try {
+                await driver.StartSession(makeParams({ ZeroDataRetention: true, Config: { sessionResumption: { transparent: true } } }));
+                expect(driver.LastConnectArgs!.Config.sessionResumption).toBeUndefined();
+                expect(warn).toHaveBeenCalledWith(expect.stringContaining('zero data retention'));
+            } finally {
+                warn.mockRestore();
+            }
         });
 
         it('gives each session its own compression object', async () => {

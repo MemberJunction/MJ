@@ -369,6 +369,9 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * `contextWindowCompression` is left out on purpose. No test or doc shows the mask accepts
      * it, and a rejected mask would fail every client-direct session. The browser applies it from
      * `SessionConfig`, like the other server-built keys the token cannot lock.
+     *
+     * `sessionResumption: {}` is locked as in Google's ephemeral-token example. The browser adds
+     * the handle when it resumes, and Google accepts the same token for that until `expireTime`.
      */
     public static BuildConstraintConfig(config: LiveConnectConfig): LiveConnectConfig {
         const constraint: LiveConnectConfig = {};
@@ -489,9 +492,10 @@ export class GeminiRealtime extends BaseRealtimeModel {
     /**
      * Builds the {@link LiveConnectConfig} from the Core session params: audio response modality,
      * input/output transcription, system instruction, sliding-window context compression
-     * ({@link GeminiRealtime.DefaultContextWindowCompression}), mapped tools, the neutral `voice`
-     * key mapped via {@link GeminiRealtime.buildSpeechConfig}, plus any provider-specific overrides
-     * from the open config bag.
+     * ({@link GeminiRealtime.DefaultContextWindowCompression}), session resumption (unless the
+     * session is zero-data-retention), mapped tools, the neutral `voice` key mapped via
+     * {@link GeminiRealtime.buildSpeechConfig}, plus any provider-specific overrides from the open
+     * config bag.
      */
     private buildConnectConfig(params: RealtimeSessionParams): LiveConnectConfig {
         const config: LiveConnectConfig = {
@@ -501,6 +505,11 @@ export class GeminiRealtime extends BaseRealtimeModel {
             systemInstruction: params.SystemPrompt,
             contextWindowCompression: GeminiRealtime.DefaultContextWindowCompression(),
         };
+        // Resumption handles let a session continue across Gemini's ~10-minute connection limit.
+        // Zero-data-retention sessions never get them; see applyZeroDataRetention.
+        if (!params.ZeroDataRetention) {
+            config.sessionResumption = {};
+        }
         if (params.Tools && params.Tools.length > 0) {
             const bag: Record<string, unknown> = (params.Config as Record<string, unknown> | undefined) ?? {};
             const tooling = GeminiRealtime.readObject(bag['tooling']);
@@ -603,7 +612,21 @@ export class GeminiRealtime extends BaseRealtimeModel {
         // config bag must not be able to reintroduce a key the target model has retired. Anything the
         // merge above put back is removed here.
         this.applyModelLegality(config, params);
+        GeminiRealtime.applyZeroDataRetention(config, params);
         return config;
+    }
+
+    /**
+     * Keeps session resumption off a zero-data-retention session, even when the config bag asks
+     * for it: Google stores resumable session state, which such a model promises not to do.
+     * Applied after the bag merge, like the legality rules, so the bag cannot turn it back on.
+     */
+    private static applyZeroDataRetention(config: LiveConnectConfig, params: RealtimeSessionParams): void {
+        if (!params.ZeroDataRetention || config.sessionResumption === undefined) {
+            return;
+        }
+        delete config.sessionResumption;
+        console.warn(`[GeminiRealtime] Dropped \`sessionResumption\` for ${params.Model}: the model is served under zero data retention, and resumption stores session data on Google's side.`);
     }
 
     /**

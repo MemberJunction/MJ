@@ -232,6 +232,24 @@ describe('PrepareClientSession — exposure policy (agent cap and zero data rete
     });
 });
 
+describe('PrepareClientSession — zero data retention reaches the driver', () => {
+    async function mintWith(model: { Privacy?: { ZeroDataRetention?: boolean } } | null): Promise<RealtimeSessionParams | null> {
+        const svc = new ScopingService();
+        svc.Tiers = {};
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue(model);
+        await svc.PrepareClientSession(input(), user, provider);
+        return svc.Model.LastParams;
+    }
+
+    it('passes ZeroDataRetention: true when the model declares it', async () => {
+        expect((await mintWith({ Privacy: { ZeroDataRetention: true } }))?.ZeroDataRetention).toBe(true);
+    });
+
+    it('passes ZeroDataRetention: false when the model does not declare it', async () => {
+        expect((await mintWith(null))?.ZeroDataRetention).toBe(false);
+    });
+});
+
 describe('PrepareClientSession — the app client-tool tier', () => {
     it('layers the app\'s tools beneath the surface manifest, through the unified resolver, in the prompt', async () => {
         const svc = new ScopingService();

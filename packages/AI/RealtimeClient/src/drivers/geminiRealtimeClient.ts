@@ -5,9 +5,11 @@ import {
     JSONValue,
     RealtimeDiagLog,
     RealtimeIdleSignal,
+    RealtimeSessionResumption,
     RealtimeToolBatchBarrier,
     RealtimeTrackDescriptor,
     ExtractToolSchedulingHint,
+    type RealtimeResumeAttempt,
 } from '@memberjunction/ai';
 import {
     GoogleGenAI,
@@ -95,6 +97,15 @@ export interface GeminiClientConnectArgs {
     OnError: (event: ErrorEvent) => void;
     /** Invoked when the websocket closes. */
     OnClose: (event: CloseEvent) => void;
+}
+
+/** What a connection is opened against; a resume reuses it with the new handle in `Config`. */
+type GeminiConnectTarget = Pick<GeminiClientConnectArgs, 'Model' | 'Config' | 'EphemeralToken'>;
+
+/** A connection {@link GeminiRealtimeClient} opened, with the number that marks it as current. */
+interface GeminiOpenedConnection {
+    Session: GeminiLiveClientSession;
+    ConnectionNumber: number;
 }
 
 /**
@@ -197,12 +208,26 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private firstVideoSendTimestamp = 0;
     private lastVideoSendTimestamp = 0;
     protected videoFramesSent = 0;
-    protected resumptionHandle: string | null = null;
-    private lastConnectArgs: GeminiClientConnectArgs | null = null;
+    /**
+     * Moves the session to a new connection with Google's resumption handle: when Google
+     * announces the connection is ending (`goAway`, about 60 s before the ~10-minute connection
+     * limit) and after an unexpected drop. Created per {@link Connect}.
+     */
+    private resumption: RealtimeSessionResumption | null = null;
+    /** Model, config and token of the current connection; a resume reuses them with the new handle. */
+    private connectTarget: GeminiConnectTarget | null = null;
+    /** Last connection number handed out by {@link openConnection}. */
+    private issuedConnections = 0;
+    /**
+     * Number of the connection in use. Callbacks from any other connection (one that was
+     * replaced, closed, or is still opening) are ignored, so a replaced socket's close can't end
+     * the session that replaced it. `0` while no connection is in use.
+     */
+    private currentConnection = 0;
 
     /** Returns the latest session resumption handle reported by the server, if any. */
     public get ResumptionHandle(): string | null {
-        return this.resumptionHandle;
+        return this.resumption?.Handle ?? null;
     }
 
     /** Returns the count of video frames successfully sent over the established video track. */
@@ -335,16 +360,10 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.negotiateTracks(requestedTracks, supportedTracks, isVideoModel ? (maxInboundVideoStreams ?? 1) : 0);
 
         this.playback = this.createPlayback();
-        const connectArgs: GeminiClientConnectArgs = {
-            Model: model,
-            Config: liveConfig,
-            EphemeralToken: config.EphemeralToken,
-            OnMessage: (message) => this.handleServerMessage(message),
-            OnError: (event) => this.handleTransportError(event),
-            OnClose: (event) => this.handleTransportClose(event),
-        };
-        this.lastConnectArgs = connectArgs;
-        this.session = await this.connectLiveSession(connectArgs);
+        this.resumption?.Dispose();
+        this.resumption = this.createResumption();
+        this.connectTarget = { Model: model, Config: liveConfig, EphemeralToken: config.EphemeralToken };
+        this.useConnection(await this.openConnection(this.connectTarget));
         this.setState('connected');
         this.micCapture = await this.createMicCapture(micStream, (base64Pcm16) => this.sendMicChunk(base64Pcm16));
 
@@ -383,7 +402,11 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
-        this.resumptionHandle = null;
+        // Stop resuming before the socket closes, and drop events still in flight from it.
+        this.resumption?.Dispose();
+        this.resumption = null;
+        this.connectTarget = null;
+        this.currentConnection = 0;
         this.firstVideoSendTimestamp = 0;
         this.lastVideoSendTimestamp = 0;
         this.videoFramesSent = 0;
@@ -715,22 +738,39 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
     }
 
-    /** Surfaces a fatal websocket error and marks the session unusable. */
+    /**
+     * Surfaces a fatal websocket error and marks the session unusable. When the session can be
+     * resumed, the error is only logged: a websocket `error` is always followed by a `close`,
+     * and {@link handleTransportClose} resumes from there.
+     */
     private handleTransportError(event: ErrorEvent): void {
         const detail = event.message || (event.error instanceof Error ? event.error.message : String(event.error ?? 'unknown'));
         RealtimeDiagLog(`[GeminiRealtimeClient] Transport error: ${detail}`);
+        if (this.resumption?.Handle) {
+            return;
+        }
         this.emitError({ Message: `Gemini Live transport error: ${detail}`, Fatal: true });
         this.setState('error');
     }
 
-    /** Reflects a provider-side close (unless the session already ended in error). */
+    /**
+     * Handles a close of the current connection that the consumer did not ask for. When Google
+     * issued a resumption handle, the session reconnects with it; otherwise the close ends the
+     * session, as an error when it was abnormal.
+     */
     private handleTransportClose(event?: CloseEvent): void {
         const code = event?.code;
         const reason = event?.reason;
         const wasClean = event?.wasClean;
         RealtimeDiagLog(`[GeminiRealtimeClient] Transport closed: code=${code} reason=${reason} wasClean=${wasClean}`);
+        if (this.currentState === 'error' || this.currentState === 'closed') {
+            return;
+        }
+        if (this.resumption?.ConnectionLost()) {
+            return;
+        }
         const isAbnormal = (code !== undefined && code !== 0 && code !== 1000 && code !== 1005) || (wasClean === false && code !== 1000 && code !== 0 && code !== 1005 && code !== undefined);
-        if (isAbnormal && this.currentState !== 'error') {
+        if (isAbnormal) {
             this.emitError({
                 Message: `Gemini Live connection closed (${code}): ${reason || 'unexpected disconnect'}`,
                 Fatal: true,
@@ -738,9 +778,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             this.setState('error');
             return;
         }
-        if (this.currentState !== 'error' && this.currentState !== 'closed') {
-            this.setState('closed');
-        }
+        this.setState('closed');
     }
 
     // ── Inbound message translation ────────────────────────────────────────────
@@ -752,20 +790,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     private handleServerMessage(message: LiveServerMessage): void {
         this.checkInteractionStatus(message);
 
-        // Session continuity: track resumption token updates (F7)
+        // Session continuity (F7). `resumable: false` (mid-turn, mid-tool-call) arrives with no
+        // handle; an update without the flag is treated as resumable.
         if (message.sessionResumptionUpdate) {
-            if (message.sessionResumptionUpdate.resumable === false) {
-                this.resumptionHandle = null;
-            } else if (message.sessionResumptionUpdate.newHandle) {
-                this.resumptionHandle = message.sessionResumptionUpdate.newHandle;
-            }
+            const update = message.sessionResumptionUpdate;
+            this.resumption?.RecordHandle(update.newHandle, update.resumable !== false);
         }
-
-        // Server approaching timeout / abort: reconnect seamlessly using resumption handle (F7)
         if (message.goAway) {
-            if (this.resumptionHandle) {
-                void this.resumeSession(this.resumptionHandle);
-            }
+            this.resumption?.ConnectionEnding(GeminiRealtimeClient.parseDurationMs(message.goAway.timeLeft));
         }
 
         if (message.serverContent) {
@@ -780,34 +812,128 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Resumes the live session using a previously captured session resumption handle (F7).
+     * Opens a replacement connection that resumes the session from `handle`, switches to it and
+     * closes the old one. Mic capture and playout carry over untouched. Rejects when the
+     * connection can't be opened, so {@link RealtimeSessionResumption} can retry.
+     *
+     * The resume reuses the session's ephemeral token, which Google accepts until the token's
+     * `expireTime` (the server driver mints 30 minutes). After that every attempt fails and the
+     * session ends with a fatal error.
+     *
+     * @param handle The resumption handle Google issued.
+     * @param attempt Marks the attempt abandoned after a timeout or a consumer close; a
+     *                connection that opens after that is closed instead of used.
      */
-    protected async resumeSession(handle: string): Promise<void> {
-        if (!this.lastConnectArgs) {
+    protected async resumeSession(handle: string, attempt: RealtimeResumeAttempt): Promise<void> {
+        const target = this.connectTarget;
+        if (!target) {
+            throw new Error('there is no Gemini Live session to resume');
+        }
+        const resumeTarget: GeminiConnectTarget = {
+            ...target,
+            Config: { ...target.Config, sessionResumption: { ...target.Config.sessionResumption, handle } },
+        };
+        const opened = await this.openConnection(resumeTarget);
+        if (attempt.Abandoned || this.connectTarget !== target) {
+            GeminiRealtimeClient.closeQuietly(opened.Session);
             return;
         }
-        try {
-            const reconnectArgs: GeminiClientConnectArgs = {
-                ...this.lastConnectArgs,
-                Config: {
-                    ...this.lastConnectArgs.Config,
-                    sessionResumption: { handle },
-                },
-            };
-            const oldSession = this.session;
-            const newSession = await this.connectLiveSession(reconnectArgs);
-            this.session = newSession;
-            this.lastConnectArgs = reconnectArgs;
-            try {
-                oldSession?.close();
-            } catch {
-                // The old socket has already been replaced by newSession, so a close failure on it cannot affect the new session
-            }
-        } catch (err) {
-            RealtimeDiagLog(
-                `[GeminiRealtimeClient] Session resumption failed: ${err instanceof Error ? err.message : String(err)}`
-            );
+        const previous = this.session;
+        this.useConnection(opened);
+        this.connectTarget = resumeTarget;
+        if (previous) {
+            GeminiRealtimeClient.closeQuietly(previous);
         }
+    }
+
+    /**
+     * Opens a connection through {@link connectLiveSession}. Its callbacks act only while it is the
+     * connection in use, so events from one that was replaced, closed, or is still opening are
+     * dropped. It becomes the connection in use through {@link useConnection}, which lets the old
+     * connection keep delivering events while a planned move is in progress.
+     */
+    private async openConnection(target: GeminiConnectTarget): Promise<GeminiOpenedConnection> {
+        const number = ++this.issuedConnections;
+        const isCurrent = (): boolean => number === this.currentConnection;
+        const session = await this.connectLiveSession({
+            ...target,
+            OnMessage: (message) => {
+                if (isCurrent()) {
+                    this.handleServerMessage(message);
+                }
+            },
+            OnError: (event) => {
+                if (isCurrent()) {
+                    this.handleTransportError(event);
+                }
+            },
+            OnClose: (event) => {
+                if (isCurrent()) {
+                    this.handleTransportClose(event);
+                }
+            },
+        });
+        return { Session: session, ConnectionNumber: number };
+    }
+
+    /** Makes an opened connection the one in use. */
+    private useConnection(opened: GeminiOpenedConnection): void {
+        this.session = opened.Session;
+        this.currentConnection = opened.ConnectionNumber;
+    }
+
+    /** Builds the resumption helper for a newly connected session; see {@link resumption}. */
+    private createResumption(): RealtimeSessionResumption {
+        return new RealtimeSessionResumption({
+            Reconnect: (handle, attempt) => this.resumeSession(handle, attempt),
+            OnReconnecting: (reason) => {
+                RealtimeDiagLog(`[GeminiRealtimeClient] Resuming the session on a new connection (${reason})`);
+                this.setState('connecting');
+            },
+            OnReconnected: () => this.handleResumed(),
+            OnReconnectFailed: (error) => this.handleResumeFailed(error),
+            Log: (message) => RealtimeDiagLog(message),
+        });
+    }
+
+    /**
+     * The session continues on a new connection. A turn cut off by a drop never completes
+     * there, so the turn state is reset (its partial transcripts are emitted as final) and sends
+     * queued behind it go out on the new connection.
+     */
+    private handleResumed(): void {
+        this.finalizeUserTranscript();
+        this.finalizeAssistantTranscript();
+        this.responseActive = false;
+        this.interactionInProgress = false;
+        this.activeResponseKind = 'normal';
+        this.clearSafetyBackstop();
+        this.setState('listening');
+        this.flushQueuedSends();
+    }
+
+    /** Every resume attempt failed: the session ends with a fatal error. */
+    private handleResumeFailed(error: Error): void {
+        if (this.currentState === 'closed' || this.currentState === 'error') {
+            return;
+        }
+        this.emitError({ Message: `Gemini Live connection was lost and could not be resumed: ${error.message}`, Fatal: true });
+        this.setState('error');
+    }
+
+    /** Closes a socket the session no longer uses; it may already be closed. */
+    private static closeQuietly(session: GeminiLiveClientSession): void {
+        try {
+            session.close();
+        } catch (err) {
+            RealtimeDiagLog(`[GeminiRealtimeClient] Closing a replaced connection failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** Reads a protobuf Duration such as `"59.5s"` as milliseconds; `undefined` when absent or unparseable. */
+    private static parseDurationMs(duration: string | undefined): number | undefined {
+        const match = duration ? /^(\d+(?:\.\d+)?)s$/.exec(duration.trim()) : null;
+        return match ? Math.round(Number(match[1]) * 1000) : undefined;
     }
 
     /**

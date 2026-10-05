@@ -890,11 +890,17 @@ export class RealtimeClientSessionService {
         // Channel scoping + client-tool tiers: narrows the declared tools to the scope's decision and
         // folds the app tier into the capability manifest the prompt renders. The scoped input is what
         // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
-        const scoped = await this.scopeSessionInput(input, effectiveConfig, contextUser, provider, this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID));
-        const sessionParams = await this.buildSessionParams(
-            scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
-            resolution.ModelID, resolution.ModelVendorID,
-        );
+        // One answer for the whole session: it lowers channel exposure here and keeps the driver from
+        // turning on provider features that store session data (Gemini session resumption).
+        const zeroDataRetention = this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID);
+        const scoped = await this.scopeSessionInput(input, effectiveConfig, contextUser, provider, zeroDataRetention);
+        const sessionParams: RealtimeSessionParams = {
+            ...(await this.buildSessionParams(
+                scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+                resolution.ModelID, resolution.ModelVendorID,
+            )),
+            ZeroDataRetention: zeroDataRetention,
+        };
 
         return {
             Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams,

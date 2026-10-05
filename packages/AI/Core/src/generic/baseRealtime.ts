@@ -784,6 +784,15 @@ export interface RealtimeSessionParams {
      * to heuristic substring sniffing or default policy compilation.
      */
     HasToolFraming?: boolean;
+
+    /**
+     * Whether the session model is served under zero data retention: its effective catalog
+     * configuration declares `Privacy.ZeroDataRetention: true`. Drivers must not turn on provider
+     * features that store session content when this is `true`. Gemini Live session resumption keeps
+     * resumable session state on Google's side, so the Gemini driver leaves it off and such a
+     * session ends at the provider's connection limit instead. Absent or `false` means "not declared".
+     */
+    ZeroDataRetention?: boolean;
 }
 
 /**
