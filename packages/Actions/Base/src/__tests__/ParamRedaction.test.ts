@@ -358,3 +358,26 @@ describe('IsRedactedParam', () => {
         expect(IsRedactedParam(actionParam('Flag', false))).toBe(false);
     });
 });
+
+describe('the Bound marker (ExecuteAgentParams.boundActionParams)', () => {
+    it('survives on a logged parameter, and is absent from one that was never bound', () => {
+        const bound: ActionParam = { ...actionParam('ChapterID', 'chapter-7'), Bound: true };
+        const json = RedactParamsToJSON([bound, actionParam('Status', 'Active')], [definition('p1', 'ChapterID')]);
+        const logged = JSON.parse(json) as Array<Record<string, unknown>>;
+        expect(logged[0]).toEqual({ Name: 'ChapterID', Value: 'chapter-7', Type: 'Input', Bound: true });
+        expect('Bound' in logged[1]).toBe(false);
+    });
+
+    it('is kept on a redaction record, so the audit outlives the value', () => {
+        const bound: ActionParam = { ...actionParam('Body', 'a private message'), Bound: true };
+        const result = RedactParams([bound], [definition('p1', 'Body', false)]);
+        const redacted = asRedacted(result[0]);
+        expect(redacted.Bound).toBe(true);
+        expect(JSON.stringify(result)).not.toContain('private message');
+    });
+
+    it('does not appear on a redaction record for an unbound parameter', () => {
+        const result = RedactParams([actionParam('Body', 'x')], [definition('p1', 'Body', false)]);
+        expect('Bound' in asRedacted(result[0])).toBe(false);
+    });
+});

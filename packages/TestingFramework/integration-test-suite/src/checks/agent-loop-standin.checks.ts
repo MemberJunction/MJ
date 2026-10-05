@@ -600,6 +600,44 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             AssertEqual(blockedReason(guarded.result), 'fatal', 'the next guarded call is still blocked: the exempt calls changed nothing');
             console.log('      → exempt calls dispatch through a lockout and leave the breaker state exactly as they found it');
         }
+    },
+    {
+        Id: 'agent-loop-standin.ALS12',
+        Name: 'ALS12: a bound parameter (boundActionParams) replaces the model\'s value at dispatch and is marked Bound in the execution log',
+        Fn: async (ctx): Promise<void> => {
+            const h = await makeBreakerHarness(ctx, 'ALS12');
+            if (!h) { return; }
+            // The model asks for the expression the action refuses; the binding fixes it to one that works.
+            h.params.boundActionParams = { [h.calc.ID]: { Expression: '(2 * 3) + 4' } };
+            const { result } = await h.call(BAD_EXPRESSION);
+            AssertEqual(result.Success, true, 'the bound expression ran, not the model\'s');
+            Assert(!!result.LogEntry?.ID, 'the dispatched call wrote an Action Execution Log row');
+            const logged = JSON.parse(result.LogEntry?.Params ?? '[]') as Array<{ Name: string; Value: unknown; Bound?: boolean }>;
+            const expression = logged.find(p => p.Name === 'Expression');
+            AssertEqual(expression?.Value, '(2 * 3) + 4', 'the log holds the bound value');
+            AssertEqual(expression?.Bound, true, 'the log marks the parameter Bound');
+            Assert(!(result.LogEntry?.Params ?? '').includes(BAD_EXPRESSION), 'the model\'s discarded value is not in the log');
+            console.log('      → bound value dispatched and marked Bound in the execution log');
+        }
+    },
+    {
+        Id: 'agent-loop-standin.ALS13',
+        Name: 'ALS13: a binding that names no input of the action refuses the call before the engine, tells the model only that the action is unavailable, and locks it out for the run',
+        Fn: async (ctx): Promise<void> => {
+            const h = await makeBreakerHarness(ctx, 'ALS13');
+            if (!h) { return; }
+            h.params.boundActionParams = { [h.calc.ID]: { NotAParameter: 'x' } };
+            const refused = await h.call('1 + 1');
+            AssertEqual(blockedReason(refused.result), 'fatal', 'the refusal is a fatal block');
+            Assert(!refused.result.LogEntry, 'a refused call never reached the engine: no log row');
+            Assert(!(refused.result.Message ?? '').includes('NotAParameter'), 'the model is not told which parameter is bound');
+            Assert(h.internals._fatalActionFailures.has(BREAKER_ACTION), 'the action is locked out for the run');
+            delete h.params.boundActionParams;
+            const after = await h.call('1 + 1');
+            AssertEqual(blockedReason(after.result), 'fatal', 'the lockout holds for later calls, like any fatal failure');
+            Assert(!after.result.LogEntry, 'the locked-out call wrote no log row');
+            console.log('      → refused before the engine, generic message, locked out for the run');
+        }
     }
 ];
 
