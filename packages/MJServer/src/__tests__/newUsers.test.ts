@@ -30,6 +30,8 @@ const {
     mockBeginTransaction,
     mockCommitTransaction,
     mockRollbackTransaction,
+    mockGlobalProviderCalls,
+    mockCreateIsolatedProvider,
     mockGetDefaultApplicationsForNewUser,
     mockRolesArray,
     mockApplicationsArray,
@@ -69,6 +71,10 @@ const {
         mockBeginTransaction: vi.fn(),
         mockCommitTransaction: vi.fn(),
         mockRollbackTransaction: vi.fn(),
+        // Every call new-user creation makes on the SHARED Metadata.Provider. Must stay empty: a
+        // transaction there nests into every concurrent request's (see CreateIsolatedProvider).
+        mockGlobalProviderCalls: [] as string[],
+        mockCreateIsolatedProvider: vi.fn(),
         mockGetDefaultApplicationsForNewUser: vi.fn(),
         mockRolesArray: [] as Array<{ ID: string; Name: string }>,
         mockApplicationsArray: [] as Array<{ ID: string; Name: string }>,
@@ -78,6 +84,9 @@ const {
 // ─── Module mocks ───────────────────────────────────────────────────────────
 
 vi.mock('../config.js', () => ({ configInfo: mockConfig }));
+
+// The provider new-user creation must use: its own instance, so its transaction is its own.
+vi.mock('../isolatedProvider.js', () => ({ CreateIsolatedProvider: mockCreateIsolatedProvider }));
 
 vi.mock('@memberjunction/generic-database-provider', () => {
     const instance = {
@@ -104,10 +113,11 @@ vi.mock('@memberjunction/generic-database-provider', () => {
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
-    const provider = {
-        BeginTransaction: mockBeginTransaction,
-        CommitTransaction: mockCommitTransaction,
-        RollbackTransaction: mockRollbackTransaction,
+    // The shared global provider: records any use instead of doing anything.
+    const globalProvider = {
+        BeginTransaction: async () => { mockGlobalProviderCalls.push('BeginTransaction'); },
+        CommitTransaction: async () => { mockGlobalProviderCalls.push('CommitTransaction'); },
+        RollbackTransaction: async () => { mockGlobalProviderCalls.push('RollbackTransaction'); },
         Dialect: { BooleanLiteral: (value: boolean) => (value ? '1' : '0') },
     };
     class MockMetadata {
@@ -118,9 +128,10 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
             return mockApplicationsArray;
         }
         public GetEntityObject(entityName: string, contextUser?: UserInfo): Promise<unknown> {
+            mockGlobalProviderCalls.push(`GetEntityObject:${entityName}`);
             return mockGetEntityObject(entityName, contextUser);
         }
-        static Provider = provider;
+        static Provider = globalProvider;
     }
     class MockUserInfo {
         constructor(_provider: unknown, initData: Record<string, unknown>) {
@@ -128,6 +139,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         }
     }
     class MockRunView {
+        public static FromMetadataProvider(_provider: unknown): MockRunView {
+            return new MockRunView();
+        }
         public RunView(params: unknown, contextUser?: UserInfo): Promise<unknown> {
             return mockRunViewFn(params, contextUser);
         }
@@ -295,6 +309,21 @@ beforeEach(() => {
     });
     mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
     mockGetDefaultApplicationsForNewUser.mockReturnValue([]);
+
+    mockGlobalProviderCalls.length = 0;
+    mockCreateIsolatedProvider.mockImplementation(async () => ({
+        BeginTransaction: mockBeginTransaction,
+        CommitTransaction: mockCommitTransaction,
+        RollbackTransaction: mockRollbackTransaction,
+        Dialect: { BooleanLiteral: (value: boolean) => (value ? '1' : '0') },
+        get Roles() {
+            return mockRolesArray;
+        },
+        get Applications() {
+            return mockApplicationsArray;
+        },
+        GetEntityObject: (entityName: string, contextUser?: UserInfo) => mockGetEntityObject(entityName, contextUser),
+    }));
 });
 
 // ─── NewUserBase.createNewUser ──────────────────────────────────────────────
@@ -302,6 +331,34 @@ beforeEach(() => {
 describe('NewUserBase.createNewUser', () => {
     const create = (first = 'Ada', last = 'Lovelace', email = 'ada@example.com') =>
         new NewUserBase().createNewUser(first, last, email);
+
+    describe('provider isolation', () => {
+        it('runs the whole provisioning on its own provider, never the shared Metadata.Provider', async () => {
+            mockConfig.userHandling.CreateUserApplicationRecords = true;
+            mockConfig.userHandling.UserApplications = ['CRM'];
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ EntityID: 'ent-1', Entity: 'Accounts' }] });
+
+            const user = await create();
+
+            expect(user).toBeTruthy();
+            expect(mockCreateIsolatedProvider).toHaveBeenCalledTimes(1);
+            expect(mockBeginTransaction).toHaveBeenCalledTimes(1);
+            expect(mockCommitTransaction).toHaveBeenCalledTimes(1);
+            // User, role, application and application-entity records all came from the isolated one.
+            expect(getEntityObjectCalls.map((c) => c.entityName)).toEqual([
+                'MJ: Users', 'MJ: User Roles', 'MJ: User Applications', 'MJ: User Application Entities',
+            ]);
+            expect(mockGlobalProviderCalls).toEqual([]);
+        });
+
+        it('rolls back on the isolated provider too, never the shared one', async () => {
+            saveBehavior['MJ: Users'] = () => false;
+
+            expect(await create()).toBeNull();
+            expect(mockRollbackTransaction).toHaveBeenCalledTimes(1);
+            expect(mockGlobalProviderCalls).toEqual([]);
+        });
+    });
 
     describe('context-user resolution', () => {
         it('uses the configured contextUserForNewUserCreation for every entity it creates', async () => {
