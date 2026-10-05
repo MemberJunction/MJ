@@ -464,7 +464,7 @@ User-facing language is "transferred"; the step type is `Handoff`.
    - a target may not hand back to its source within the same turn
    - a hop cap of 3, shared with the messaging adapter's existing constant
    - every hop audited as a run step
-7. **UI:** Sage's detail shows a "Sage transferred you to **X**" chip linking to the target's reply. The target's detail renders normally, attributed to X, with its preset badge. Retire the dead `invokeAgent` / `taskGraph` client branches once the server path ships.
+7. **UI:** the hand-off must be **visible and beautiful**: the user watches Sage step aside and the new agent take over in the same thread. Full spec in §6A.4, with the interactive mockup. Retire the dead `invokeAgent` / `taskGraph` client branches once the server path ships.
 8. **Prompts:**
    - Rewrite `sage.template.md` §4: `Handoff` for "another agent should own this"; Tasks (v2 shape, validated) only for multi-step / durable work.
    - Update the `<suggested_agent>` guidance to emit `Handoff`.
@@ -474,7 +474,54 @@ User-facing language is "transferred"; the step type is `Handoff`.
    - `TaskGraphService.resolveAgents` (`TaskGraphService.ts:1339`, name-only) gains the same permission check.
    - `BaseMessagingAdapter` consumes the `Handoff` result (keeping the regex fallback) and gains a permission check.
 
-### 6A.4 Video Studio and the other studios
+### 6A.4 The hand-off experience (UX) **[D]**
+
+**Mockup:** [`plans/mockups/sage-handoff.html`](./mockups/sage-handoff.html). Open it in a browser; the published copy is at https://claude.ai/artifact/5P1mj5KW5HR4CMmUyBhpCk. It has four switchable states (Transferring, Working, Delivered, Can't transfer) and a "Replay transfer" animation. It is built from MJ's semantic tokens and the existing `message-item` anatomy, so it is the **visual acceptance target** for VS-SAGE-5.
+
+**Sequence the user sees:**
+1. **Sage steps aside.** Sage's message is one or two plain sentences ("Video Studio produces data-bound videos in your brand. I'm passing your request and a brief to it now."), then shifts to secondary text color once the turn has moved on.
+2. **The hand-off card** renders directly under Sage's message. It is the centerpiece and stays in the thread permanently as the record of the transfer:
+   - **Baton row:** source avatar + name → gradient track (source color → target color) with an arrowhead → target name + avatar.
+   - **Transferring:** a glowing spark travels the track (≈1.25 s, ease) and the target avatar pulses on arrival.
+   - **Title** by state: "Transferring to **Video Studio**…" / "Transferred to **Video Studio**" / "Couldn't transfer to **Video Studio**", plus a one-line subtitle.
+   - **Chips:** the target's power level ("Power level · High"), "Brief handed over", "Next messages go to Video Studio".
+   - **Brief from Sage:** collapsed by default. It shows goal, archetype, brand kit, data, and Sage's reason, exactly what was passed to the target.
+   - **Border:** a 1.5 px gradient border (source → target) with a faint tinted wash (`color-mix()` on both agent colors).
+3. **The new agent joins.** Below the card, a short vertical **rail** in the target's color connects the card to the target's avatar.
+   - While the run starts: a "Joining the conversation…" skeleton.
+   - Then the target's message streams normally, attributed to the target. Its header carries **"via Sage"** (tiny source avatar), the target's **own** preset pill ("High · Claude Opus 5.5"), and its **own** run clock.
+   - For Video Studio, the body shows the gate stepper (Brief → Style → Storyboard → Pre-production → Render → Review → Deliver) with a live status line, then the Video Production artifact card when delivered.
+4. **Ownership is visible everywhere.**
+   - The chat header chip switches to the target ("Video Studio"), animating its color.
+   - The composer shows **"Replying to Video Studio"** with a **Return to Sage** link, and its placeholder invites follow-ups ("make the opening faster").
+   - This surfaces the continuity routing that §6A.3 #5 already relies on.
+
+**States:**
+
+| State | Card | Target message | Composer |
+|---|---|---|---|
+| Transferring | Animated spark, "Transferring…" | "Joining…" skeleton | Replying to target (pending) |
+| Transferred | Static track, "Transferred", chips | Normal streaming reply, "via Sage" | Replying to target, Return to Sage |
+| Failed | Danger border replaces the gradient; target avatar greyed; the **reason** is stated (no permission / not discoverable / not allowed in this app / hop limit) with a next step ("Ask an admin for access") | none; Sage continues in the same turn with what it can do | Replying to Sage |
+| Multi-hop | Chain "Sage → Research Agent → Video Studio", collapsed to the last two hops with "+1" | "via Research Agent" | Replying to last target |
+
+**Components (VS-SAGE-5):**
+- **`mj-agent-handoff-card`:** new, standalone, in `Generic/conversations` (L2: no Router, `[Provider]` threaded).
+  - Inputs: `SourceAgent`, `TargetAgent`, `PresetName`, `Brief`, `Reason`, `Status` (`'Transferring' | 'Transferred' | 'Failed'`), `FailureReason`, `HopChain`.
+  - Data comes from the source run's `Handoff` step output and the child detail (`ParentID` = source detail).
+- **`message-item`:** gains `HandedOffFrom` (renders "via X" + the rail) and the secondary-text treatment for a handed-off source message.
+- **Composer routing chip + chat header chip:** read the conversation's current owner from the same continuity logic; "Return to Sage" sets the next message's agent explicitly.
+- **Agent colors:** source and target accents come from the agent's configured color where one exists, otherwise a stable hue derived from the agent ID, falling back to `--mj-brand-primary`. **Never hardcoded:** all colors through `--mj-*` tokens + `color-mix()`, verified in dark mode.
+
+**Motion & accessibility:**
+- One orchestrated moment (the spark), nothing else animates except the existing live indicators.
+- `prefers-reduced-motion` gets a static spark mid-track.
+- The card is `role="status"` / `aria-live="polite"`, so a screen reader hears "Transferred to Video Studio".
+- Every control is keyboard reachable with a visible focus ring.
+
+**Non-UI hosts (Slack/Teams/MCP):** the same event renders as text, "Sage transferred you to **Video Studio** (High)", followed by the target's reply.
+
+### 6A.5 Video Studio and the other studios
 When a user asks Sage for a video, Sage hands off to **Video Studio**. Video Studio runs top-level with the user's preset (e.g. High), owns the conversation through iterations, and returns its Video Production artifact on its own detail. Predictive Studio's Model Development Agent, the Research Agent and others benefit equally.
 
 ---
@@ -740,7 +787,13 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 - **VS-SAGE-2 — Target resolution + permissions.** _deps: VS-SAGE-1._ Active + directly discoverable + run permission + host `AllowedAgentIDs` + not self; Retry lists valid candidates. **AC:** `base-agent-handoff.test.ts`: permission denied, not discoverable, not allowed, self-handoff, unknown name.
 - **VS-SAGE-3 — Server-side execution.** _deps: VS-SAGE-2._ `RunAIAgentResolver` + `ConversationAgentRunner` follow-through: new detail (ParentID = source), `RunAgentInConversation` with full context, preset precedence (§6A.3 #4, `FindConfigurationPresetForAgent` moved server-side), hop cap + no ping-pong, audit. **AC:** resolver test (pattern: `RunAIAgentResolver.historyFrom.test.ts`) proves a top-level target run, `AgentID` attribution, target's preset, and the hop cap.
 - **VS-SAGE-4 — Sage prompt + task-graph fixes.** _deps: VS-SAGE-1._ Rewrite `sage.template.md` §4 (Handoff vs Tasks v2), `<suggested_agent>` guidance, `enableHandoff:true` on Sage; `describeFold` only folds resolvable targets; `TaskGraphService.resolveAgents` permission check. **AC:** template-examples-validate regression test; `loop-agent-type-task-graphs.test.ts` gains an unrelated-agent case.
-- **VS-SAGE-5 — Client + messaging adapters.** _deps: VS-SAGE-3._ Transfer chip on the source detail; continuity routing verified; remove dead `invokeAgent` / `taskGraph` client branches; `BaseMessagingAdapter` consumes Handoff + permission check. **AC:** `BaseMessagingAdapter.test.ts` + `agent-turn-host-rules.test.ts` updated; Playwright: "Sage, have the Research Agent look into X" → a Research Agent reply attributed to it, and the follow-up message stays with Research Agent.
+- **VS-SAGE-5 — Hand-off UX + messaging adapters (§6A.4).** _deps: VS-SAGE-3._ `mj-agent-handoff-card` (all four states incl. multi-hop), `message-item` "via X" + rail + handed-off treatment, chat header chip + composer routing chip with Return to Sage; remove dead `invokeAgent` / `taskGraph` client branches; `BaseMessagingAdapter` consumes Handoff (text rendering) + permission check. **AC:**
+  - Matches `plans/mockups/sage-handoff.html` in light and dark.
+  - `prefers-reduced-motion` respected; screen reader announces the transfer.
+  - `check:ui` clean.
+  - DOM tests for each card state.
+  - `BaseMessagingAdapter.test.ts` + `agent-turn-host-rules.test.ts` updated.
+  - Playwright: "Sage, have the Research Agent look into X" shows the transfer card animating, then a Research Agent reply attributed to it, and the follow-up message stays with Research Agent until "Return to Sage".
 - **VS-SAGE-6 — Integration check + docs.** _deps: VS-SAGE-3, VS-SAGE-4._ Deterministic-tier bundle: Sage hands off to Research Agent (stubbed model); assert top-level run, attribution, preset, continuity. Update or remove `packages/MJServer/src/services/TaskOrchestration-Integration.md`; document Handoff vs Consult vs Sub-Agent vs Tasks in `guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md` (or a new conversation-routing guide). **AC:** `pnpm run test:integration` passes with the new check.
 
 ### VS2 — The spec
