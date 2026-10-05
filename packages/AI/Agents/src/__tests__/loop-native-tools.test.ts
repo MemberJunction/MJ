@@ -196,6 +196,16 @@ describe('LoopAgentType — plain text completes under implicit control flow', (
         const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', '{"taskComplete":false,"nextStep":{"type":"Retry","reason":"x"}}'));
         expect(step.step).toBe('Retry');
     });
+    it('unreadable JSON under implicit → Retry pointing at complete_task, never a completion that drops its payload', async () => {
+        // Text that fails the envelope parse must not be accepted as the final answer, or its payload is lost.
+        const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', '{ "reasoning": "Tested the query", "payloadChangeRequest": { "updateElements": '));
+        expect(step.step).toBe('Retry');
+        expect(step.errorMessage).toMatch(/complete_task/);
+    });
+    it('a fenced JSON block that cannot be read under implicit → the same Retry', async () => {
+        const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', '```json\n{ "reasoning": "x"'));
+        expect(step.step).toBe('Retry');
+    });
     it('empty text and no call → the pre-existing Failed step ("Prompt execution failed"), even under implicit', async () => {
         const step = await probe.Decide(resultWith(undefined, 'NativeImplicit', ''));
         expect(step.step).toBe('Failed');

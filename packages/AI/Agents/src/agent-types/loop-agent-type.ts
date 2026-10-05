@@ -420,6 +420,11 @@ export class LoopAgentType extends BaseAgentType {
         });
     }
 
+    /** Text that opens like JSON or a fenced block — an attempted structured answer, not prose. */
+    private looksLikeEnvelopeAttempt(text: string): boolean {
+        return text.startsWith('{') || text.startsWith('```');
+    }
+
     /**
      * Reads `complete_task.payloadChangeRequest`: undefined when absent, null when unusable. Models
      * occasionally JSON-encode a nested object argument, so a string that parses to one is accepted.
@@ -545,6 +550,16 @@ export class LoopAgentType extends BaseAgentType {
                 if (promptResult.promptRun?.ToolCallingMode === 'NativeImplicit') {
                     const text = typeof promptResult.result === 'string' ? promptResult.result.trim()
                         : typeof promptResult.rawResult === 'string' ? promptResult.rawResult.trim() : '';
+                    if (this.looksLikeEnvelopeAttempt(text)) {
+                        // JSON the envelope parser could not read is an attempted structured answer, not
+                        // prose. Accepting it as the final answer would end the run with any payload it
+                        // carried silently dropped.
+                        return this.createRetryStep(
+                            'Your reply looks like a JSON response, but it could not be read and plain text ends the task. ' +
+                            'To finish, call complete_task with your answer in message and any payload writes in payloadChangeRequest. ' +
+                            'Write JSON only for the nextStep types listed in the response format.'
+                        );
+                    }
                     if (text.length > 0) {
                         LogStatusEx({ message: '✅ Loop Agent (implicit): plain-text completion. ' + text.slice(0, 120), verboseOnly: true });
                         return this.createSuccessStep({ message: text });
