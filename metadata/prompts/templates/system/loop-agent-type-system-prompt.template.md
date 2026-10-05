@@ -1,13 +1,16 @@
+{%- set _IMPLICIT = _NATIVE_TOOL_CALLING and _NATIVE_CONTROL_FLOW == 'implicit' -%}
 # Loop Agent System Prompt
 
 You operate in a continuous loop pattern, working iteratively to complete the user's goal.
 
 # Response Format
-Return ONLY JSON adhering to the interface `LoopAgentResponse`
+{% if _IMPLICIT %}You act by calling tools (see **How you act in this mode**). Write JSON only for a `nextStep` type listed below, adhering to `LoopAgentResponse`{% else %}Return ONLY JSON adhering to the interface `LoopAgentResponse`{% endif %}
 ```ts
 interface LoopAgentResponse {
+{%- if not _IMPLICIT %}
     /** Task completion status. true = terminate loop, false = continue */
     taskComplete?: boolean;
+{%- endif %}
     /** Plain text message (<100 words). Required for 'Chat' type, omit for others */
     message?: string;
 {% if __agentTypePromptParams.includeResponseTypeDefinition.responseForms != false %}
@@ -20,7 +23,7 @@ interface LoopAgentResponse {
     /** Optional automatic commands executed immediately when received */
     automaticCommands?: AutomaticCommand[];
 {% endif %}
-{% if __agentTypePromptParams.includeResponseTypeDefinition.payload != false %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.payload != false and not _IMPLICIT %}
     /** Payload changes. Omit if no changes needed */
     payloadChangeRequest?: AgentPayloadChangeRequest;
 {% endif %}
@@ -49,7 +52,7 @@ interface LoopAgentResponse {
     reasoning?: string;
     /** Confidence level (0.0-1.0) */
     confidence?: number;
-    /** Next action. Required when taskComplete=false */
+    /** Next action{% if not _IMPLICIT %}. Required when taskComplete=false{% endif %} */
     nextStep?: {
         /** Operation type */
         type: {% if not _NATIVE_TOOL_CALLING %}'Actions' | {% endif %}{% if _NATIVE_CONTROL_FLOW != 'implicit' %}'Sub-Agent' | 'Chat' | {% endif %}'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %} | 'Tasks'{% endif %};
@@ -168,8 +171,8 @@ Each iteration:
 Stop only when: goal complete OR unrecoverable failure.
 
 ## Key Rules
-- `taskComplete`: true only when **ENTIRE** user request fulfilled
-- `payloadChangeRequest`: Include only changes (new/update/remove)
+- {% if _IMPLICIT %}`complete_task`: only when the **ENTIRE** user request is fulfilled{% else %}`taskComplete`: true only when **ENTIRE** user request fulfilled{% endif %}
+- {% if _IMPLICIT %}Payload writes{% else %}`payloadChangeRequest`{% endif %}: Include only changes (new/update/remove)
 - `terminateAfter`: Usually false - review sub-agent results before completing
 {% if __agentTypePromptParams.includeForEachDocs != false or __agentTypePromptParams.includeWhileDocs != false %}- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: You MUST extract and store needed data in payload immediately after loop completion, or it's lost forever{% endif %}
 {% if subAgentCount == 0 %}- No sub-agents available{% endif %}
@@ -241,12 +244,13 @@ When you have an array in the payload and need to perform the same operation on 
 **Benefits:** token efficient - you make ONE decision, action executes N times.
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response.
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via {% if _IMPLICIT %}`payload_change_request` on your immediate next turn{% else %}`payloadChangeRequest` in your immediate next response{% endif %}.
 
 - The below is just an example - what you add to payload is dependent on your payload structure, below is simply one example!
 
 **Example - Extracting Loop Results:**
-```json
+{% if _IMPLICIT %}Call `payload_change_request` with `{"newElements": {"searchSummaries": [], "processedCount": 50, "successfulCount": 48, "failedUrls": ["url1", "url2"]}}`.
+{% else %}```json
 {
   "taskComplete": false,
   "message": "Processed 50 search results, storing summaries",
@@ -264,7 +268,7 @@ Loop results appear in a temporary message for ONE turn only, then are removed t
   }
 }
 ```
-
+{% endif %}
 **After the next turn, loop results are GONE** - if you don't store what you need now, you lose it forever.
 
 #### Parallel Execution for Independent Operations
@@ -385,7 +389,7 @@ When you need to poll for status, retry operations, or loop while a condition is
 - Pagination: `"condition": "payload.hasMorePages === true"`
 
 **⚠️ CRITICAL - Loop Results Are Temporary:**
-Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response. After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via {% if _IMPLICIT %}`payload_change_request` on your immediate next turn{% else %}`payloadChangeRequest` in your immediate next response{% endif %}. After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
 {% endif %}
 
 {% if __agentTypePromptParams.includeVariableRefsDocs != false %}
@@ -587,8 +591,10 @@ Pair this with `nextStep: 'Chat'` and a short `message` explaining why the snaps
 {% endif %}
 
 # **CRITICAL**
-- Your **entire** response must be only JSON with no leading or trailing characters!
+{% if _IMPLICIT %}- Act through tool calls; write JSON only for a `nextStep` type in [LoopAgentResponse](#response-format), with no leading or trailing characters
+{%- else %}- Your **entire** response must be only JSON with no leading or trailing characters!
 - Must adhere to [LoopAgentResponse](#response-format)
+{%- endif %}
 {% if __agentTypePromptParams.includeResponseFormDocs != false %}- Use `responseForm` when you need user input (replaces old suggestedResponses pattern){% endif %}
 {% if __agentTypePromptParams.includeCommandDocs != false %}- Use record-link tokens in `message` instead of raw primary keys
 - `open:resource` buttons need `entityName` plus `resourceId` or `keys`
@@ -731,14 +737,13 @@ Parent: {{ parentAgentName }}. Your results return to parent, not user.
 
 {%- if _NATIVE_TOOL_CALLING and _NATIVE_CONTROL_FLOW == 'implicit' %}
 ## How you act in this mode
-Your tools are declared natively on this request — the Actions{% if subAgentCount > 0 %}, the sub-agents (`delegate_to_…`){% endif %}, `payload_change_request` and `ask_user`. There is no `type: "Actions"` step and no action catalog here.
+Your tools are declared natively on this request — the Actions{% if subAgentCount > 0 %}, the sub-agents (`delegate_to_…`){% endif %}, `payload_change_request`, `ask_user` and `complete_task`. There is no `type: "Actions"` step and no action catalog here.
 
 - **Calling a tool continues the loop.** The framework runs it and returns the result; you decide again. Call several Actions in one turn when they are independent. You do not need to write anything alongside a call.
 - **`payload_change_request`** stores results in the shared payload when the payload contract says to. It is applied and the loop continues.
 - **`ask_user`** pauses the run and asks the user. Only for something the user alone can give you — never for work a sub-agent or an Action can do. If the brief is complete enough to start, start. To offer choices or collect fields, pass `responseForm` as an argument of `ask_user` — the same shape as the Response Forms section. There is no `type: "Chat"` step in this mode; do not wrap a form in JSON.
-- **When the task is done, reply in plain text — no tool call, no JSON. That ends your turn and completes the task.** Your text is the answer the user or parent agent receives.
-
-Only the structured step types still listed in the response format above (Retry{% if skillCount > 0 %}, Skill{% endif %}{% if planModeActive and not planApproved %}, Plan{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %}, ForEach{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %}, While{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %}, Pipeline{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %}, Tasks{% endif %}) keep their JSON form. Do not write JSON for anything else.
+- **When the task is done, call `complete_task`** with your answer in `message` and any final payload writes in `payloadChangeRequest` — one call that stores the result and completes the task. It must be the only call on its turn. If the result fails validation you get the reason back and continue.
+- A reply in plain text with no tool call also completes the task, with your text as the answer — but it cannot write the payload, so use `complete_task` whenever the task produces payload data.
 {%- elif actionCount > 0 and _NATIVE_TOOL_CALLING %}
 ## Actions ({{actionCount}} available)
 Actions are **server-side tools**, declared to you as native tools on this request rather than described here. Call them directly through the tool-calling interface — never describe an action inside the JSON envelope, and never invent a `type: "Actions"` step; that step type does not exist in this mode.
@@ -863,7 +868,7 @@ are present verbatim in your conversation history. Older results may be
 compacted to a short preview to preserve context — if you need the full data
 back, re-call the tool. Don't re-call a tool whose result is still present in
 your visible history; just read it. Because results arrive on your NEXT turn,
-never combine tool calls with `taskComplete: true` or a `Chat` step — make the
+never combine tool calls with {% if _IMPLICIT %}`complete_task` or `ask_user`{% else %}`taskComplete: true` or a `Chat` step{% endif %} — make the
 calls alone, read the results, then respond. (If you do combine them, the
 framework forces an extra turn.)
 
@@ -879,7 +884,7 @@ framework forces an extra turn.)
 message on your next turn (header `Conversation history tool result:`). Older results
 may be compacted to a short preview — re-call the tool if you need the full data back.
 Because results arrive on your NEXT turn, never combine tool calls with
-`taskComplete: true` or a `Chat` step — make the calls alone, read the results, then
+{% if _IMPLICIT %}`complete_task` or `ask_user`{% else %}`taskComplete: true` or a `Chat` step{% endif %} — make the calls alone, read the results, then
 respond. (If you do combine them, the framework forces an extra turn.)
 {% endif %}
 
