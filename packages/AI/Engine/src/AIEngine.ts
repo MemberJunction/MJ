@@ -1063,6 +1063,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      *                            an equivalent inference is already in flight)
      *
      * Empty/whitespace `text` short-circuits to `null` without invoking the embedding provider.
+     *
+     * @param apiKey optional API key override; when omitted, the key for `model.DriverClass` is
+     *               resolved with `GetAIAPIKey` (local drivers ignore it)
      */
     public async EmbedText(
         model: MJAIModelEntityExtended,
@@ -1097,7 +1100,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
                 BaseEmbeddings,
                 model.DriverClass,
-                apiKey
+                apiKey || GetAIAPIKey(model.DriverClass)
             );
 
             if (!embedding) {
@@ -1143,7 +1146,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      *
      * @param model   the embedding model to use (provides DriverClass + APIName)
      * @param content text, or interleaved text+media blocks, to embed into one fused vector
-     * @param apiKey  optional API key override
+     * @param apiKey  optional API key override; when omitted, the key for `model.DriverClass` is
+     *                resolved with `GetAIAPIKey`
      * @returns the embedding result, or null if the provider instance couldn't be created
      */
     public async EmbedContent(
@@ -1160,7 +1164,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings,
             model.DriverClass,
-            apiKey
+            apiKey || GetAIAPIKey(model.DriverClass)
         );
 
         if (!embedding) {
