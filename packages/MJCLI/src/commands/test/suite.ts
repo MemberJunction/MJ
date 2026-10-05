@@ -47,6 +47,9 @@ export default class TestSuite extends Command {
       description: 'Maximum number of parallel workers (default 4)',
       default: 4,
     }),
+    rubric: Flags.string({
+      description: 'Rubric override for every test: name or id, optionally @version',
+    }),
     'flaky-check': Flags.integer({
       description: 'Run each test N times to detect flakiness (variance > 0.3 or mixed pass/fail = flaky). Recommended: 3 or 5',
     }),
@@ -87,6 +90,7 @@ export default class TestSuite extends Command {
         parallel: flags.parallel,
         maxParallel: flags['max-parallel'],
         flakyCheck: flags['flaky-check'],
+        rubric: flags.rubric,
         oraclesModule: flags['oracles-module'],
         checksModule: flags['checks-module'],
       });

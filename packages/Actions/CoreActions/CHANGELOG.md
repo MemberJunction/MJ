@@ -1,5 +1,130 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- ff00d60: Image generation now runs through a new `AIImageGenerationRunner`, which records every call as an AI Prompt Run and fails over between the image models that the new `Default Image Generation` prompt binds. Each run records the images it returned, so the models' existing `Per Image` cost rows price it. Run rows also record the calling agent. The Generate Image action uses the runner. With no Model named, the prompt's bindings choose; their first choice is the model the action picked before, and failover can reach the other vendor with the run's own key. A named Model is pinned, and fails over only between its own vendors. The action's key now ranks as it does for chat prompts: a credential binding, or a default credential of the vendor's credential type, wins over it. A call with no key the action can resolve now reaches the runner, where a binding may still apply. If none does, it fails with `GENERATION_FAILED` instead of `ACTION_FAILED`.
+- 861cbf0: Follow-ups from the image runner review:
+  - **Prompt model pinning**: Set `RequireSpecificModels: true` on the `Default Image Generation` carrier prompt (`metadata/prompts/.default-image-generation-prompt.json`), ensuring `AIImageGenerationRunner` only selects models explicitly bound to the prompt with supported drivers rather than falling back to unbound image models.
+  - **`ResolveImageGenerationAPIKey` JSDoc**: Marked `ResolveImageGenerationAPIKey` in `@memberjunction/core-actions` as `@deprecated` with updated documentation clarifying it is retained for backwards compatibility, pointing callers to `BuildImageGenerationAPIKeys`.
+
+- e78341e: Add the `Clone Record` and `Clone Records` actions, thin wrappers over the record-cloning engine. `Clone Records` requires the `Clone Records: Batch` authorization, clones each root in its own transaction, and reports per-record results (`PARTIAL` when only some succeed). Both honor `DryRun`.
+- 808c8c8: Add the `Run Decision` action, which lets agents and flows answer typed decision questions (Likelihood, Choice, Score) about a state as a step, through `AIDecisionRunner` and the `Default Decision` prompt. It returns the answers, the model, the resolved model version and the prompt-run ID as output params.
+- bb33c77: Loop agents can now suggest the agent to delegate to before their first prompt: with the new `decisionDiscovery` prompt param on (off by default), one decision over the agents the user may run and the host allows adds a `<suggested_agent>` message when it is confident, and Sage's prompt delegates to that agent directly instead of calling Find Candidate Agents first. It asks only about a conversation's opening request, and only when at least three agents are left to choose from. The agent run-permission filter the Find Candidate Agents actions use now lives on `AIAgentPermissionHelper` (`FilterRunnableAgents`, `IsDirectlyDiscoverable`), so both offer the same agents.
+
+### Patch Changes
+
+- 660ef45: Add a `RunDecision` GraphQL mutation and `GraphQLAIClient.RunDecision`, so browser code can run a typed decision in one round trip, under the same authorization as `RunAIPrompt`: the API-key `prompt:execute` scope is checked against the ID of the prompt that runs. The mutation refuses scope-limited sessions, and bounds the state and question sizes and the model-call timeout on the server. The `Run Decision` action's question validation moves unchanged to `ParseDecisionQuestions` in `@memberjunction/ai-prompts`, which the action and the mutation now share.
+- 0d61b53: Fix vectorization into a colocated vector database (SQL Server 2025 `VECTOR`, pgvector colocated) when the syncer is built without a provider (#4910).
+
+  `VectorBase.Provider` fell back to the `Metadata` wrapper instead of a real `IMetadataProvider`. The wrapper fails `IsColocatedVectorHost`, so `TryWireColocatedHost` never wired a host and every upsert failed with "requires a host connection". The fallback is now `Metadata.Provider`, and the `as unknown as` casts are gone.
+
+  The callers that build an `EntityVectorSyncer` now pass the provider they already hold: `VectorizeEntityResolver` (the request's provider), `KnowledgeAgent` (the tool call's provider, also for `DuplicateRecordDetector`), the `Vectorize Entity` and `Autotag and Vectorize Content` actions (`params.Provider`), and `KnowledgePipeline`, which gains an optional constructor provider.
+
+- Updated dependencies [ca853fc]
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [a3d6182]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [664baea]
+- Updated dependencies [672b4c6]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0e5ad68]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [50ba290]
+- Updated dependencies [ffb3c0f]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [1d38a22]
+- Updated dependencies [b03a928]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [9096523]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [f3fa01e]
+- Updated dependencies [3276daa]
+- Updated dependencies [d0cea53]
+- Updated dependencies [e9ab27b]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [7e57b48]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [fb267da]
+- Updated dependencies [2854a2e]
+- Updated dependencies [74b3e69]
+  - @memberjunction/ai-agents@6.2.0-edge.2
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/ai-agent-manager@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/ai-vector-sync@6.2.0-edge.2
+  - @memberjunction/content-autotagging@6.2.0-edge.2
+  - @memberjunction/search-engine@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/export-engine@6.2.0-edge.2
+  - @memberjunction/record-set-processor-base@6.2.0-edge.2
+  - @memberjunction/record-set-processor@6.2.0-edge.2
+  - @memberjunction/core-entities-server@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.2
+  - @memberjunction/record-cloning-base@6.2.0-edge.2
+  - @memberjunction/record-cloning@6.2.0-edge.2
+  - @memberjunction/actions@6.2.0-edge.2
+  - @memberjunction/code-execution@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/clustering-engine@6.2.0-edge.2
+  - @memberjunction/ai-mcp-client@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/communication-types@6.2.0-edge.2
+  - @memberjunction/communication-engine@6.2.0-edge.2
+  - @memberjunction/external-change-detection@6.2.0-edge.2
+  - @memberjunction/integration-engine@6.2.0-edge.2
+  - @memberjunction/interactive-component-types@6.2.0-edge.2
+  - @memberjunction/lists@6.2.0-edge.2
+  - @memberjunction/storage@6.2.0-edge.2
+  - @memberjunction/react-linter@6.2.0-edge.2
+  - @memberjunction/web-search-engine@6.2.0-edge.2
+  - @memberjunction/esignature@6.2.0-edge.2
+  - @memberjunction/geo-core@6.2.0-edge.2
+  - @memberjunction/ai-betty-bot@6.2.0-edge.2
+  - @memberjunction/lists-base@6.2.0-edge.2
+  - @memberjunction/network-utils@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

@@ -304,6 +304,47 @@ describe('convertMigration — BIT literals in surviving entity-registration INS
     expect(r.pgSQL).toContain('Apply-time sequence, not the literal CodeGen emitted');
   });
 
+  it('rewrites BIT literals in an INSERT ... SELECT select list, as CodeGen writes EntityPermission grants', async () => {
+    // CodeGen grants a new entity's permissions with INSERT ... SELECT ... WHERE NOT EXISTS, not
+    // INSERT ... VALUES. Only the VALUES form was rewritten, so every migration registering a new
+    // entity failed on apply with `column "CanRead" is of type boolean but expression is of type
+    // integer` — and because --bake-codegen halts on that error, it also shipped without its views.
+    const grant = [
+      'INSERT INTO ${flyway:defaultSchema}."EntityPermission" (',
+      '  "EntityID", "RoleID", "Type", "CanRead", "CanCreate", "CanUpdate", "CanDelete"',
+      ')',
+      'SELECT',
+      "  CAST('5c937c69-cd63-456f-9cc8-d860bb8f6b16' AS UUID), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS UUID),",
+      "  'Allow', 1, 0, 0, 0",
+      'WHERE NOT EXISTS (SELECT 1 FROM __mj."EntityPermission" WHERE "Type" = \'Allow\');',
+    ].join('\n');
+    const r = await convert(grant);
+    expect(r.pgSQL).toMatch(/'Allow',\s*TRUE,\s*FALSE,\s*FALSE,\s*FALSE/);
+    expect(r.pgSQL).not.toMatch(/'Allow',\s*1,/);
+  });
+
+  it('leaves the FROM / WHERE tail of an INSERT ... SELECT and its non-boolean columns alone', async () => {
+    // The rewrite is bounded to the select list. `SELECT 1` inside the NOT EXISTS subquery and the
+    // integer UserViewMaxRows value at a non-boolean position must survive unchanged.
+    const select = [
+      'INSERT INTO ${flyway:defaultSchema}."Entity" ("ID", "IncludeInAPI", "UserViewMaxRows")',
+      "SELECT 'abc', 1, 1",
+      'WHERE NOT EXISTS (SELECT 1 FROM __mj."Entity" WHERE "ID" = \'abc\');',
+    ].join('\n');
+    const r = await convert(select);
+    expect(r.pgSQL).toMatch(/SELECT 'abc', TRUE, 1\s*\n?WHERE NOT EXISTS \(SELECT 1 FROM/);
+  });
+
+  it('rewrites a boolean column wrapped in COALESCE(col, 0) = 0, as CodeGen search-flag hygiene writes it', async () => {
+    // ISNULL(f.IsPrimaryKey, 0) = 0 transpiles to COALESCE("f"."IsPrimaryKey", 0) = 0, which PG rejects
+    // with `COALESCE types boolean and integer cannot be matched` at apply time.
+    const hygiene = 'UPDATE ${flyway:defaultSchema}."Entity" SET "AllowUserSearchAPI" = 0 WHERE EXISTS (SELECT 1 FROM __mj."EntityField" AS "f" WHERE COALESCE("f"."IsPrimaryKey", 0) = 0 AND COALESCE("f"."Sequence", 0) = 1);';
+    const r = await convert(hygiene);
+    expect(r.pgSQL).toContain('COALESCE("f"."IsPrimaryKey", FALSE) = FALSE');
+    // Sequence is an integer column — its COALESCE comparison must be left alone.
+    expect(r.pgSQL).toContain('COALESCE("f"."Sequence", 0) = 1');
+  });
+
   it('does not touch a table outside the core-metadata catalog', async () => {
     // The catalog is an allow-list of tables whose column types are known. An app table with a
     // column that merely SHARES a name must not be rewritten on that basis.

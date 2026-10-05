@@ -1,0 +1,25 @@
+[
+  {
+    "fields": {
+      "Name": "RubricDriftPeriodMeans",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Agents",
+      "UserQuestion": "How did each agent's rubric criterion mean change between the last two periods?",
+      "Description": "Mean normalized score per agent, rubric, and criterion for two time windows. Counts only Submitted evaluations that are not self-checks, and only the evaluator's own scores.",
+      "SQL": "@file:SQL/rubric-drift-period-means.sql",
+      "TechnicalDescription": "Groups RubricEvaluationScore by AI Agent name, Rubric name, and criterion Key. previousStart, currentStart, and periodEnd ({{ previousStart | sqlDate }}, {{ currentStart | sqlDate }}, {{ periodEnd | sqlDate }}) bound the two windows [previousStart, currentStart) and [currentStart, periodEnd). Status is Submitted and EvaluatorType is not Self.",
+      "Status": "Approved",
+      "QualityRank": 8,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4513AE64-76A5-432C-BA67-360C8A97753F"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:35.022Z",
+      "checksum": "1d6b4620299a3e3f154719032b8b55ce1dceb6dff396bcf40b1bf12c98870c26"
+    }
+  }
+]

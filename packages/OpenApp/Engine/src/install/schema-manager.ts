@@ -310,12 +310,10 @@ export async function CreateAppSchema(
       return { Success: true, Warning: BuildOwnerFallbackWarning(schemaName, coreSchema, owner) };
     }
 
-    // The owner name comes from the catalog, not from us, so it may contain `]`. The SQL Server
-    // dialect's QuoteIdentifier wraps in brackets WITHOUT doubling an embedded `]` (unlike the PG
-    // dialect, which doubles `"`), so double it here, on the SQL-Server-only path, before quoting.
-    const escapedOwner = owner.OwnerName.replace(/]/g, ']]');
+    // The owner name comes from the catalog, not from us, so it may contain `]` — the SQL Server
+    // dialect's QuoteIdentifier doubles an embedded `]`, so pass the raw name.
     await provider.ExecuteSQL(
-      `CREATE SCHEMA ${quotedSchema} AUTHORIZATION ${provider.Dialect.QuoteIdentifier(escapedOwner)}`
+      `CREATE SCHEMA ${quotedSchema} AUTHORIZATION ${provider.Dialect.QuoteIdentifier(owner.OwnerName)}`
     );
     return { Success: true };
   }

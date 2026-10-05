@@ -39,6 +39,7 @@ import { MJAIAgentPromptFormComponent } from "./Entities/MJAIAgentPrompt/mjaiage
 import { MJAIAgentRelationshipFormComponent } from "./Entities/MJAIAgentRelationship/mjaiagentrelationship.form.component";
 import { MJAIAgentRequestFormComponent } from "./Entities/MJAIAgentRequest/mjaiagentrequest.form.component";
 import { MJAIAgentRequestTypeFormComponent } from "./Entities/MJAIAgentRequestType/mjaiagentrequesttype.form.component";
+import { MJAIAgentRubricFormComponent } from "./Entities/MJAIAgentRubric/mjaiagentrubric.form.component";
 import { MJAIAgentRunFormComponent } from "./Entities/MJAIAgentRun/mjaiagentrun.form.component";
 import { MJAIAgentRunMediaFormComponent } from "./Entities/MJAIAgentRunMedia/mjaiagentrunmedia.form.component";
 import { MJAIAgentRunStepFormComponent } from "./Entities/MJAIAgentRunStep/mjaiagentrunstep.form.component";
@@ -254,6 +255,10 @@ import { MJIntegrationObjectFieldFormComponent } from "./Entities/MJIntegrationO
 import { MJIntegrationObjectFormComponent } from "./Entities/MJIntegrationObject/mjintegrationobject.form.component";
 import { MJIntegrationSourceTypeFormComponent } from "./Entities/MJIntegrationSourceType/mjintegrationsourcetype.form.component";
 import { MJIntegrationURLFormatFormComponent } from "./Entities/MJIntegrationURLFormat/mjintegrationurlformat.form.component";
+import { MJInteractionEventFormComponent } from "./Entities/MJInteractionEvent/mjinteractionevent.form.component";
+import { MJInteractionFormComponent } from "./Entities/MJInteraction/mjinteraction.form.component";
+import { MJInteractionLinkFormComponent } from "./Entities/MJInteractionLink/mjinteractionlink.form.component";
+import { MJInteractionOfferFormComponent } from "./Entities/MJInteractionOffer/mjinteractionoffer.form.component";
 import { MJKnowledgeHubSavedSearchFormComponent } from "./Entities/MJKnowledgeHubSavedSearch/mjknowledgehubsavedsearch.form.component";
 import { MJLibraryFormComponent } from "./Entities/MJLibrary/mjlibrary.form.component";
 import { MJLibraryItemFormComponent } from "./Entities/MJLibraryItem/mjlibraryitem.form.component";
@@ -284,6 +289,9 @@ import { MJMagicLinkInviteRoleFormComponent } from "./Entities/MJMagicLinkInvite
 import { MJMagicLinkRedemptionFormComponent } from "./Entities/MJMagicLinkRedemption/mjmagiclinkredemption.form.component";
 import { MJMaterializedResultFormComponent } from "./Entities/MJMaterializedResult/mjmaterializedresult.form.component";
 import { MJMaterializedResultQueryFormComponent } from "./Entities/MJMaterializedResultQuery/mjmaterializedresultquery.form.component";
+import { MJMeetingFormComponent } from "./Entities/MJMeeting/mjmeeting.form.component";
+import { MJMeetingParticipantFormComponent } from "./Entities/MJMeetingParticipant/mjmeetingparticipant.form.component";
+import { MJNumberPoolFormComponent } from "./Entities/MJNumberPool/mjnumberpool.form.component";
 import { MJOAuthAuthServerMetadataCacheFormComponent } from "./Entities/MJOAuthAuthServerMetadataCache/mjoauthauthservermetadatacache.form.component";
 import { MJOAuthAuthorizationStateFormComponent } from "./Entities/MJOAuthAuthorizationState/mjoauthauthorizationstate.form.component";
 import { MJOAuthClientRegistrationFormComponent } from "./Entities/MJOAuthClientRegistration/mjoauthclientregistration.form.component";
@@ -294,6 +302,7 @@ import { MJOpenAppInstallHistoryFormComponent } from "./Entities/MJOpenAppInstal
 import { MJOutputDeliveryTypeFormComponent } from "./Entities/MJOutputDeliveryType/mjoutputdeliverytype.form.component";
 import { MJOutputFormatTypeFormComponent } from "./Entities/MJOutputFormatType/mjoutputformattype.form.component";
 import { MJPermissionDomainFormComponent } from "./Entities/MJPermissionDomain/mjpermissiondomain.form.component";
+import { MJPhoneNumberFormComponent } from "./Entities/MJPhoneNumber/mjphonenumber.form.component";
 import { MJProcessRunDetailFormComponent } from "./Entities/MJProcessRunDetail/mjprocessrundetail.form.component";
 import { MJProcessRunFormComponent } from "./Entities/MJProcessRun/mjprocessrun.form.component";
 import { MJProjectFormComponent } from "./Entities/MJProject/mjproject.form.component";
@@ -332,6 +341,16 @@ import { MJResourcePermissionFormComponent } from "./Entities/MJResourcePermissi
 import { MJResourceTypeFormComponent } from "./Entities/MJResourceType/mjresourcetype.form.component";
 import { MJRoleFormComponent } from "./Entities/MJRole/mjrole.form.component";
 import { MJRowLevelSecurityFilterFormComponent } from "./Entities/MJRowLevelSecurityFilter/mjrowlevelsecurityfilter.form.component";
+import { MJRubricBandFormComponent } from "./Entities/MJRubricBand/mjrubricband.form.component";
+import { MJRubricCategoryFormComponent } from "./Entities/MJRubricCategory/mjrubriccategory.form.component";
+import { MJRubricCriterionFormComponent } from "./Entities/MJRubricCriterion/mjrubriccriterion.form.component";
+import { MJRubricCriterionLevelFormComponent } from "./Entities/MJRubricCriterionLevel/mjrubriccriterionlevel.form.component";
+import { MJRubricEvaluationFormComponent } from "./Entities/MJRubricEvaluation/mjrubricevaluation.form.component";
+import { MJRubricEvaluationScoreFormComponent } from "./Entities/MJRubricEvaluationScore/mjrubricevaluationscore.form.component";
+import { MJRubricFormComponent } from "./Entities/MJRubric/mjrubric.form.component";
+import { MJRubricScaleFormComponent } from "./Entities/MJRubricScale/mjrubricscale.form.component";
+import { MJRubricScaleLevelFormComponent } from "./Entities/MJRubricScaleLevel/mjrubricscalelevel.form.component";
+import { MJRubricVersionFormComponent } from "./Entities/MJRubricVersion/mjrubricversion.form.component";
 import { MJSQLDialectFormComponent } from "./Entities/MJSQLDialect/mjsqldialect.form.component";
 import { MJScheduledJobFormComponent } from "./Entities/MJScheduledJob/mjscheduledjob.form.component";
 import { MJScheduledJobRunFormComponent } from "./Entities/MJScheduledJobRun/mjscheduledjobrun.form.component";
@@ -420,6 +439,9 @@ declarations: [
     MJEncryptionKeySourceFormComponent,
     MJEntityActionFormComponent,
     MJQueryDependencyFormComponent,
+    MJRubricFormComponent,
+    MJRubricScaleFormComponent,
+    MJRubricScaleLevelFormComponent,
     MJStateProvinceFormComponent,
     MJViewTypeFormComponent
 ],
@@ -445,7 +467,8 @@ declarations: [
     MJCountryFormComponent,
     MJKnowledgeHubSavedSearchFormComponent,
     MJMagicLinkInviteFormComponent,
-    MJMaterializedResultFormComponent
+    MJMaterializedResultFormComponent,
+    MJMeetingParticipantFormComponent
 ],
 imports: [
     CommonModule,
@@ -506,6 +529,7 @@ declarations: [
     MJQueryCategoryFormComponent,
     MJRecommendationItemFormComponent,
     MJRecordProcessWatermarkFormComponent,
+    MJRubricCriterionFormComponent,
     MJSearchScopeFormComponent,
     MJSearchScopeStorageAccountFormComponent,
     MJUserNotificationTypeFormComponent
@@ -569,6 +593,7 @@ declarations: [
     MJIdentityClaimTypeFormComponent,
     MJMCPToolExecutionLogFormComponent,
     MJOpenAppInstallHistoryFormComponent,
+    MJRubricBandFormComponent,
     MJUserRoutineRunFormComponent,
     MJVectorDatabaseFormComponent,
     MJWorkspaceItemFormComponent
@@ -596,7 +621,8 @@ declarations: [
     MJContentProcessRunFormComponent,
     MJDataContextFormComponent,
     MJOAuthAuthServerMetadataCacheFormComponent,
-    MJResourcePermissionFormComponent
+    MJResourcePermissionFormComponent,
+    MJRubricVersionFormComponent
 ],
 imports: [
     CommonModule,
@@ -705,6 +731,7 @@ declarations: [
     MJDatasetItemFormComponent,
     MJInstanceConfigurationFormComponent,
     MJQueryParameterFormComponent,
+    MJRubricEvaluationScoreFormComponent,
     MJTagCoOccurrenceFormComponent,
     MJTemplateContentFormComponent
 ],
@@ -796,6 +823,7 @@ declarations: [
     MJFileStorageProviderFormComponent,
     MJIdentityClaimFormComponent,
     MJIntegrationFormComponent,
+    MJInteractionOfferFormComponent,
     MJMagicLinkInviteAllowedDomainFormComponent,
     MJRowLevelSecurityFilterFormComponent,
     MJSignatureRequestRecipientFormComponent
@@ -859,6 +887,7 @@ declarations: [
     MJDashboardCategoryLinkFormComponent,
     MJFeaturePipelineTypeFormComponent,
     MJGeneratedCodeFormComponent,
+    MJInteractionLinkFormComponent,
     MJMLTrainingRunFormComponent,
     MJUserApplicationEntityFormComponent
 ],
@@ -1039,6 +1068,7 @@ declarations: [
     MJQueueTaskFormComponent,
     MJRecommendationProviderFormComponent,
     MJRecordProcessCategoryFormComponent,
+    MJRubricCriterionLevelFormComponent,
     MJTemplateCategoryFormComponent,
     MJUserViewRunDetailFormComponent,
     MJVersionLabelFormComponent
@@ -1068,6 +1098,7 @@ declarations: [
     MJEntityDocumentRunFormComponent,
     MJIntegrationObjectFieldFormComponent,
     MJListInvitationFormComponent,
+    MJNumberPoolFormComponent,
     MJQueueFormComponent,
     MJRecordCloneLogItemFormComponent,
     MJSearchScopeEntityFormComponent,
@@ -1097,6 +1128,7 @@ declarations: [
     MJActionFilterFormComponent,
     MJConversationSkillFormComponent,
     MJDashboardCategoryFormComponent,
+    MJInteractionFormComponent,
     MJMLModelScoringBindingFormComponent,
     MJRoleFormComponent,
     MJScopedPromptConfigFormComponent,
@@ -1158,6 +1190,7 @@ export class GeneratedForms_SubModule_24 { }
 @NgModule({
 declarations: [
     MJAIAgentChannelFormComponent,
+    MJAIAgentRubricFormComponent,
     MJActionFormComponent,
     MJCommunicationLogFormComponent,
     MJConversationArtifactPermissionFormComponent,
@@ -1195,6 +1228,7 @@ declarations: [
     MJQueryPermissionFormComponent,
     MJRecordMergeLogFormComponent,
     MJRemoteOperationFormComponent,
+    MJRubricEvaluationFormComponent,
     MJTagAuditLogFormComponent
 ],
 imports: [
@@ -1218,6 +1252,7 @@ declarations: [
     MJConversationWidgetInstanceFormComponent,
     MJDuplicateRunDetailMatchFormComponent,
     MJEntityCommunicationMessageTypeFormComponent,
+    MJInteractionEventFormComponent,
     MJMagicLinkInviteApplicationFormComponent,
     MJTagSuggestionFormComponent,
     MJTestSuiteFormComponent,
@@ -1249,8 +1284,11 @@ declarations: [
     MJEmployeeSkillFormComponent,
     MJEnvironmentFormComponent,
     MJListDetailFormComponent,
+    MJMeetingFormComponent,
+    MJPhoneNumberFormComponent,
     MJPublicLinkFormComponent,
     MJRecordMergeDeletionLogFormComponent,
+    MJRubricCategoryFormComponent,
     MJSearchProviderFormComponent,
     MJSignatureAccountFormComponent,
     MJTaskTypeFormComponent
