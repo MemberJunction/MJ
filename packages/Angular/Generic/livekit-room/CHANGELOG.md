@@ -1,5 +1,14 @@
 # @memberjunction/ng-livekit-room
 
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [369e229]
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-whiteboard@6.2.0-edge.2
+  - @memberjunction/livekit-room-core@6.2.0-edge.2
+
 ## 6.2.0-edge.1
 
 ### Patch Changes

@@ -48,5 +48,46 @@
       "lastModified": "2026-08-05T18:34:42.027Z",
       "checksum": "48ed7e28083b07e028b0417bf44d9cf9a6bfb27975bd35e11096c93cc0894fb2"
     }
+  },
+  {
+    "_comments": [
+      "Rubric Evaluations. CodeGen owns the inner view; the public view is the consensus",
+      "wrapper in V202609302344. BaseViewGenerated must be false in the same record as",
+      "GeneratedBaseViewName — the column check rejects an inner name while CodeGen still",
+      "owns the public view. New entities come out of CodeGen with BaseViewGenerated = 1,",
+      "unlike the two adopters above, which were already fully custom."
+    ],
+    "fields": {
+      "Name": "MJ: Rubric Evaluations",
+      "BaseViewGenerated": false,
+      "GeneratedBaseViewName": "vwRubricEvaluationsGenerated",
+      "AllowCaching": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluations"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:45.262Z",
+      "checksum": "19bd1eb45fab26b659bc4880e0bcb0137a1a58e21cd4fd0115fc8fcaf0b8d6c3"
+    }
+  },
+  {
+    "_comments": [
+      "Rubric Evaluation Scores. Same layering as Rubric Evaluations: the public view adds",
+      "per-criterion cohort columns that CodeGen cannot produce."
+    ],
+    "fields": {
+      "Name": "MJ: Rubric Evaluation Scores",
+      "BaseViewGenerated": false,
+      "GeneratedBaseViewName": "vwRubricEvaluationScoresGenerated",
+      "AllowCaching": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:45.298Z",
+      "checksum": "f0e81335c2d15f27ad4575ca10a5e87b977af5c7fd2470b5e8e1837da4c625ec"
+    }
   }
 ]

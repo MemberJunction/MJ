@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/react-runtime",
-  "version": "6.2.0-edge.1",
+  "version": "6.2.0-edge.2",
   "description": "Platform-agnostic React component runtime for MemberJunction. Provides core compilation, registry, and execution capabilities for React components in any JavaScript environment.",
   "type": "module",
   "main": "dist/index.js",
@@ -30,12 +30,12 @@
   "homepage": "https://github.com/MemberJunction/MJ#readme",
   "dependencies": {
     "@babel/standalone": "^7.29.1",
-    "@memberjunction/ai-vectors-memory": "6.2.0-edge.1",
-    "@memberjunction/core": "6.2.0-edge.1",
-    "@memberjunction/core-entities": "6.2.0-edge.1",
-    "@memberjunction/global": "6.2.0-edge.1",
-    "@memberjunction/graphql-dataprovider": "6.2.0-edge.1",
-    "@memberjunction/interactive-component-types": "6.2.0-edge.1",
+    "@memberjunction/ai-vectors-memory": "6.2.0-edge.2",
+    "@memberjunction/core": "6.2.0-edge.2",
+    "@memberjunction/core-entities": "6.2.0-edge.2",
+    "@memberjunction/global": "6.2.0-edge.2",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.2",
+    "@memberjunction/interactive-component-types": "6.2.0-edge.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

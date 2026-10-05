@@ -1,0 +1,77 @@
+{
+  "fields": {
+    "Name": "Peer review",
+    "Status": "Active",
+    "Description": "Argument and evidence, equal weight. No pass threshold, so a submitted score is Scored. See guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "ID": "5D8B0A83-2771-496E-8DE1-E0BD049FE2CC"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Draft",
+          "NotApplicablePolicy": "ExcludeAndRedistribute",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Worked example from guides/RUBRICS_GUIDE.md. Draft because publish stamps are not set here."
+        },
+        "primaryKey": {
+          "ID": "E65F1CBC-C2E0-4183-A930-C9CB40206E80"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "argument",
+                "Name": "Argument",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "1960A0E6-316C-4B86-80FA-4B35D2759F30"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:23.338Z",
+                "checksum": "e2b992bcc3c09af6946e0f0839c73be94154f3ff168367d4f74a05cb7dfcff29"
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "evidence",
+                "Name": "Evidence",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "EA6330FA-44A2-4BC1-8954-2F55C230A16E"
+              },
+              "sync": {
+                "lastModified": "2026-10-02T21:42:23.353Z",
+                "checksum": "0c65df956b860b051fb02e31737b0d1647a2e78b991df2e0fe4b388b44dfb4cc"
+              }
+            }
+          ]
+        },
+        "sync": {
+          "lastModified": "2026-10-02T21:42:23.318Z",
+          "checksum": "cd86b41e7b398f2c297d060995a4e90031836ecca3424192d493e6fa7ee2a4b8"
+        }
+      }
+    ]
+  },
+  "sync": {
+    "lastModified": "2026-10-02T21:42:23.303Z",
+    "checksum": "16e5fc71ce45520e901afbde7a6b9d8a81aae5cbfb2472e497600393eab9939f"
+  }
+}

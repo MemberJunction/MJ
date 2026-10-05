@@ -35,6 +35,7 @@ import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
 import { DecisionJudgeOracle } from '../oracles/DecisionJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
+import { RubricOracle } from '../oracles/RubricOracle';
 import {
     TestRunOptions,
     SuiteRunOptions,
@@ -52,6 +53,7 @@ import {
     GetMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
+import { MeanExecutedScore } from '../utils/result-formatter';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -391,9 +393,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             const passedTests = testResults.filter(r => r.status === 'Passed').length;
             const failedTests = testResults.filter(r => r.status === 'Failed' || r.status === 'Error' || r.status === 'Timeout').length;
             const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
-            const executed = testResults.filter(r => r.status !== 'Skipped');
-            const totalScore = executed.reduce((sum, r) => sum + r.score, 0);
-            const avgScore = executed.length > 0 ? totalScore / executed.length : 0;
+            const avgScore = MeanExecutedScore(testResults);
 
             const result: TestSuiteRunResult = {
                 suiteRunId: suiteRun.ID,
@@ -665,6 +665,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         this.RegisterOracle(new DecisionJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
+        this.RegisterOracle(new RubricOracle());
     }
 
     /**
@@ -1081,6 +1082,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         suiteRun.TotalCostUSD = testResults.reduce((sum, r) => sum + r.totalCost, 0);
         suiteRun.TotalDurationSeconds = (Date.now() - startTime) / 1000;
         suiteRun.CompletedAt = new Date();
+        suiteRun.Score = MeanExecutedScore(testResults);
 
         const saved = await suiteRun.Save();
         if (!saved) {
@@ -1109,6 +1111,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         this.log(`Running test ${repeatCount} times for statistical analysis`, options.verbose);
 
+        // Each iteration creates its own test run, so a rubric oracle records a separate evaluation.
         for (let iteration = 1; iteration <= repeatCount; iteration++) {
             this.log(`Running iteration ${iteration} of ${repeatCount}`, options.verbose);
 

@@ -28,6 +28,10 @@ on:
 
   workflow_dispatch:
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   channel:
     name: Decide whether this version gets an image
