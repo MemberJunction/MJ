@@ -5,6 +5,7 @@ import {
     JSONValue,
     RealtimeDiagLog,
     RealtimeIdleSignal,
+    ParseDurationToMs,
     RealtimeSessionResumption,
     RealtimeToolBatchBarrier,
     RealtimeTrackDescriptor,
@@ -797,7 +798,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             this.resumption?.RecordHandle(update.newHandle, update.resumable !== false);
         }
         if (message.goAway) {
-            this.resumption?.ConnectionEnding(GeminiRealtimeClient.parseDurationMs(message.goAway.timeLeft));
+            this.resumption?.ConnectionEnding(ParseDurationToMs(message.goAway.timeLeft));
         }
 
         if (message.serverContent) {
@@ -930,11 +931,6 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         }
     }
 
-    /** Reads a protobuf Duration such as `"59.5s"` as milliseconds; `undefined` when absent or unparseable. */
-    private static parseDurationMs(duration: string | undefined): number | undefined {
-        const match = duration ? /^(\d+(?:\.\d+)?)s$/.exec(duration.trim()) : null;
-        return match ? Math.round(Number(match[1]) * 1000) : undefined;
-    }
 
     /**
      * Inspects inbound frames for the untyped `interaction_status` / `interactionStatus` wire field

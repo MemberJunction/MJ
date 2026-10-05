@@ -42,6 +42,9 @@ import {
     type RealtimeUsageModalityDetail,
     REALTIME_SHARED_CONFIG_KEYS,
     ExtractToolSchedulingHint,
+    ParseDurationToMs,
+    RealtimeSessionResumption,
+    type RealtimeResumeAttempt,
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
@@ -123,6 +126,21 @@ export interface GeminiConnectArgs {
     OnClose?: (event: CloseEvent) => void;
 }
 
+/** The callbacks a {@link GeminiRealtimeSession} hands its connector for one connection. */
+type GeminiConnectionCallbacks = Pick<GeminiConnectArgs, 'OnMessage' | 'OnError' | 'OnClose'>;
+
+/**
+ * Opens one Live connection for a session, resuming an earlier one when `handle` is given. Built by
+ * {@link GeminiRealtime.StartSession} around {@link GeminiRealtime.connectLiveSession}.
+ */
+type GeminiSessionConnector = (handle: string | undefined, callbacks: GeminiConnectionCallbacks) => Promise<GeminiLiveSession>;
+
+/** A connection a {@link GeminiRealtimeSession} opened, with the number that marks it as current. */
+interface GeminiOpenedConnection {
+    Live: GeminiLiveSession;
+    ConnectionNumber: number;
+}
+
 /**
  * Real-time, full-duplex driver for Google's **Gemini Live API**, implementing the Core
  * {@link BaseRealtimeModel} primitive.
@@ -198,14 +216,16 @@ export class GeminiRealtime extends BaseRealtimeModel {
         const config = this.buildConnectConfig(params);
         // Meeting mode (auto activity detection disabled) → the session must drive turns manually.
         session.SetMeetingMode(config.realtimeInputConfig?.automaticActivityDetection?.disabled === true);
-        const live = await this.connectLiveSession({
-            Model: params.Model,
-            Config: config,
-            OnMessage: (message) => session.HandleServerMessage(message),
-            OnError: (event) => session.HandleTransportError(event?.message ?? 'Gemini Live websocket error'),
-            OnClose: (event) => session.HandleTransportClose(event?.code, event?.reason),
-        });
-        session.AttachLiveSession(live);
+        // The session opens its own connections through this seam, so it can resume on a new one
+        // with Google's handle when a connection ends (goAway) or drops.
+        session.SetConnector((handle, callbacks) =>
+            this.connectLiveSession({
+                Model: params.Model,
+                Config: handle ? { ...config, sessionResumption: { ...config.sessionResumption, handle } } : config,
+                ...callbacks,
+            })
+        );
+        await session.Open();
         // If the caller provided initial context, seed it as client content (without completing the
         // turn) so the model starts with the same history a loop agent would assemble.
         if (params.InitialContext && params.InitialContext.trim().length > 0) {
@@ -963,11 +983,41 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** Meeting-mode watchdog: clears a latched {@link responseActive} if an `activityEnd` elicits no turn. */
     private meetingResponseWatchdog?: ReturnType<typeof setTimeout>;
 
+    /** Opens this session's Live connections; set by the driver before {@link Open}. */
+    private connector: GeminiSessionConnector | null = null;
+
     /**
-     * Binds the underlying live session. Called by the driver once `connect` resolves.
+     * Moves the session to a new connection with Google's resumption handle: when Google announces
+     * the connection is ending (`goAway`, about 60 s before the ~10-minute connection limit) and
+     * after an unexpected drop. Created by {@link Open}.
      */
-    public AttachLiveSession(live: GeminiLiveSession): void {
-        this.live = live;
+    private resumption: RealtimeSessionResumption | null = null;
+
+    /** Last connection number handed out by {@link openConnection}. */
+    private issuedConnections = 0;
+
+    /**
+     * Number of the connection in use. Callbacks from any other connection (one that was replaced,
+     * closed, or is still opening) are ignored, so a replaced socket's close can't end the session
+     * that replaced it. `0` while no connection is in use.
+     */
+    private currentConnection = 0;
+
+    /** Sets how this session opens its Live connections. Called by the driver before {@link Open}. */
+    public SetConnector(connector: GeminiSessionConnector): void {
+        this.connector = connector;
+    }
+
+    /** Opens the first connection. Called by the driver once the session is configured. */
+    public async Open(): Promise<void> {
+        this.resumption = new RealtimeSessionResumption({
+            Reconnect: (handle, attempt) => this.resume(handle, attempt),
+            OnReconnecting: (reason) => RealtimeDiagLog(`[GeminiRealtime] Resuming the session on a new connection (${reason})`),
+            OnReconnected: () => this.handleResumed(),
+            OnReconnectFailed: (error) => this.handleResumeFailed(error),
+            Log: (message) => RealtimeDiagLog(message),
+        });
+        this.useConnection(await this.openConnection(undefined));
     }
 
     /** Sets MEETING mode (manual turn-taking). Called by the driver from the connect config at start. */
@@ -1104,22 +1154,115 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /**
      * Surfaces a websocket-level failure as a FATAL session error — the transport is gone,
      * so the consumer (e.g. the session runner) should finalize cleanly instead of idling.
+     * When the session can be resumed, the error is only logged: a websocket `error` is always
+     * followed by a `close`, and {@link HandleTransportClose} resumes from there.
      */
     public HandleTransportError(message: string): void {
+        if (this.resumption?.Handle) {
+            RealtimeDiagLog(`[GeminiRealtime] Transport error, resuming on close: ${message}`);
+            return;
+        }
         this.errorHandler?.({ Message: message, Fatal: true });
     }
 
     /**
-     * Surfaces an UNEXPECTED socket close as a fatal error (expected closes — the consumer
-     * called {@link Close} — are silent). Gemini hard-closes at token expiry, so this is
-     * also how credential death reaches the consumer.
+     * Handles a close of the current connection that the consumer did not ask for. When Google
+     * issued a resumption handle, the session reconnects with it; otherwise the close surfaces as a
+     * fatal error, as before (expected closes, after {@link Close}, stay silent).
      */
     public HandleTransportClose(code?: number, reason?: string): void {
         if (this.closedByConsumer) {
             return;
         }
+        if (this.resumption?.ConnectionLost()) {
+            return;
+        }
         const detail = [code != null ? `code ${code}` : null, reason || null].filter(Boolean).join(' — ');
         this.errorHandler?.({ Message: `Gemini Live session closed unexpectedly${detail ? ` (${detail})` : ''}`, Fatal: true });
+    }
+
+    /**
+     * Opens a connection through the driver's connector. Its callbacks act only while it is the
+     * connection in use, so events from one that was replaced, closed, or is still opening are
+     * dropped. It becomes the connection in use through {@link useConnection}, which lets the old
+     * connection keep delivering events while a planned move is in progress.
+     */
+    private async openConnection(handle: string | undefined): Promise<GeminiOpenedConnection> {
+        if (!this.connector) {
+            throw new Error('Gemini realtime session has no connector; the driver must call SetConnector before Open.');
+        }
+        const number = ++this.issuedConnections;
+        const isCurrent = (): boolean => number === this.currentConnection;
+        const live = await this.connector(handle, {
+            OnMessage: (message) => {
+                if (isCurrent()) {
+                    this.HandleServerMessage(message);
+                }
+            },
+            OnError: (event) => {
+                if (isCurrent()) {
+                    this.HandleTransportError(event?.message ?? 'Gemini Live websocket error');
+                }
+            },
+            OnClose: (event) => {
+                if (isCurrent()) {
+                    this.HandleTransportClose(event?.code, event?.reason);
+                }
+            },
+        });
+        return { Live: live, ConnectionNumber: number };
+    }
+
+    /** Makes an opened connection the one in use. */
+    private useConnection(opened: GeminiOpenedConnection): void {
+        this.live = opened.Live;
+        this.currentConnection = opened.ConnectionNumber;
+    }
+
+    /**
+     * Opens a replacement connection that resumes the session from `handle`, switches to it and
+     * closes the old one. Rejects when the connection can't be opened, so
+     * {@link RealtimeSessionResumption} can retry. A connection that opens after the attempt was
+     * abandoned (timeout, or {@link Close}) is closed instead of used.
+     */
+    private async resume(handle: string, attempt: RealtimeResumeAttempt): Promise<void> {
+        const opened = await this.openConnection(handle);
+        if (attempt.Abandoned || this.closedByConsumer) {
+            GeminiRealtimeSession.closeQuietly(opened.Live);
+            return;
+        }
+        const previous = this.live;
+        this.useConnection(opened);
+        if (previous) {
+            GeminiRealtimeSession.closeQuietly(previous);
+        }
+    }
+
+    /**
+     * The session continues on a new connection. It has no open meeting-mode activity window, and
+     * a turn cut off by a drop never completes there, so the turn is ended the way `turnComplete`
+     * ends one: thought text emitted, the busy flag cleared, queued sends drained onto the new connection.
+     */
+    private handleResumed(): void {
+        this.manualActivityOpen = false;
+        this.completeTurn();
+    }
+
+    /** Every resume attempt failed: the session ends with a fatal error. */
+    private handleResumeFailed(error: Error): void {
+        if (this.closedByConsumer) {
+            return;
+        }
+        this.errorHandler?.({ Message: `Gemini Live connection was lost and could not be resumed: ${error.message}`, Fatal: true });
+    }
+
+    /** Closes a connection the session no longer uses; it may already be closed. */
+    private static closeQuietly(live: GeminiLiveSession): void {
+        try {
+            live.close();
+        } catch (err) {
+            RealtimeDiagLog(`[GeminiRealtime] Closing a replaced connection failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**
@@ -1316,6 +1459,9 @@ class GeminiRealtimeSession implements IRealtimeSession {
     /** @inheritdoc */
     public async Close(): Promise<void> {
         this.closedByConsumer = true;
+        // Stop resuming before the socket closes, and drop events still in flight from it.
+        this.resumption?.Dispose();
+        this.currentConnection = 0;
         this.live?.close();
         this.live = null;
         this.clearHandlers();
@@ -1326,6 +1472,15 @@ class GeminiRealtimeSession implements IRealtimeSession {
      * per-concern handlers so each translation unit stays small and testable.
      */
     public HandleServerMessage(message: LiveServerMessage): void {
+        // Session continuity. `resumable: false` (mid-turn, mid-tool-call) arrives with no handle;
+        // an update without the flag is treated as resumable.
+        if (message.sessionResumptionUpdate) {
+            const update = message.sessionResumptionUpdate;
+            this.resumption?.RecordHandle(update.newHandle, update.resumable !== false);
+        }
+        if (message.goAway) {
+            this.resumption?.ConnectionEnding(ParseDurationToMs(message.goAway.timeLeft));
+        }
         if (message.serverContent) {
             this.handleServerContent(message.serverContent);
         }

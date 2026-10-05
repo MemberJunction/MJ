@@ -63,6 +63,17 @@ export const REALTIME_RESUMPTION_DEADLINE_MARGIN_MS = 10000;
 const UNKNOWN_TIME_LEFT_DELAY_MS = 30000;
 
 /**
+ * Reads a protobuf JSON `Duration` string, such as Gemini Live's `goAway.timeLeft` (`"59.5s"`), as
+ * milliseconds for {@link RealtimeSessionResumption.ConnectionEnding}.
+ *
+ * @returns The duration in milliseconds, or `undefined` when absent or not in that form.
+ */
+export function ParseDurationToMs(duration: string | undefined): number | undefined {
+    const match = duration ? /^(\d+(?:\.\d+)?)s$/.exec(duration.trim()) : null;
+    return match ? Math.round(Number(match[1]) * 1000) : undefined;
+}
+
+/**
  * Decides **when** a realtime session with provider-side resumption moves to a new connection,
  * and drives the move. It holds no transport: the driver reports what the provider says and
  * supplies the call that opens the replacement connection.

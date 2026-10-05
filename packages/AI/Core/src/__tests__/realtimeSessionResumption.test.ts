@@ -1,10 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+    ParseDurationToMs,
     RealtimeSessionResumption,
     REALTIME_RESUMPTION_DEADLINE_MARGIN_MS,
     type RealtimeReconnectReason,
     type RealtimeResumeAttempt,
 } from '../generic/realtimeSessionResumption';
+
+describe('ParseDurationToMs', () => {
+    it.each([
+        ['60s', 60000],
+        ['59.5s', 59500],
+        [' 3s ', 3000],
+    ])('reads %s as %d ms', (value, ms) => {
+        expect(ParseDurationToMs(value)).toBe(ms);
+    });
+
+    it.each([[undefined], [''], ['60'], ['1m'], ['abc']])('returns undefined for %s', (value) => {
+        expect(ParseDurationToMs(value)).toBeUndefined();
+    });
+});
 
 /** Records every callback the helper makes; `Reconnect` succeeds unless told to fail. */
 class Harness {
