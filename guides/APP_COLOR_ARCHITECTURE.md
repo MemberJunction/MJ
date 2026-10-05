@@ -379,14 +379,14 @@ This file already defines token-based styling for **60+ class name variants** ac
 | **Cards** | `.mj-card`, `.dashboard-card`, `.stat-card`, `.kpi-card`, `.metric-card`, `.action-card`, `.prompt-card`, `.agent-card`, `.model-card`, + 30 more | Background, border, shadow, padding, hover transitions |
 | **Card Sub-elements** | `.mj-card-header`, `.card-header`, `.mj-card-body`, `.card-body`, `.mj-card-footer`, `.card-footer` | Consistent padding, borders, typography |
 | **Stat Elements** | `.stat-icon`, `.stat-value`, `.stat-label`, `.stat-content` | Icon sizing, value typography, label muting |
-| **Buttons** | `.mj-btn`, `.mj-btn-primary`, `.mj-btn-secondary`, `.mj-btn-ghost`, `.mj-btn-danger`, `.mj-btn-sm` | All states (hover/active/focus/disabled) using tokens |
+| **Buttons** | `.action-btn`, `.control-btn` (+ `.primary`, `.danger`, `.small`) — legacy only. New buttons use the `mjButton` directive (`.mj-btn--*`), styled solely by `ui-components/button.scss` | All states (hover/active/focus/disabled) using tokens |
 | **Badges** | `.mj-badge`, `.status-badge`, `.mj-badge-success`, `.mj-badge-warning`, `.mj-badge-error`, `.mj-badge-info`, `.mj-badge-neutral` | Status-colored badges using token families |
 | **Inputs** | `.mj-input`, `.mj-search-input`, `.search-input`, `.filter-input` | Border, focus ring, placeholder styling |
 | **Panels** | `.mj-panel`, `.filter-panel`, `.detail-panel` | Surface background, header/body structure |
 | **Tables** | `.mj-table`, `.data-table`, `.entity-table` | Header/row styling, hover, borders |
 | **Headers** | `.dashboard-header`, `.mj-dashboard-header` | Layout with `.header-info` and `.header-controls` regions |
 | **Empty/Loading** | `.mj-empty-state`, `.empty-state`, `.mj-loading`, `.loading-state` | Centered content with muted styling |
-| **Overlays** | `.mj-loading-overlay`, `.loading-overlay`, `.mj-modal-overlay` | Semi-transparent overlay backgrounds |
+| **Overlays** | `.mj-loading-overlay`, `.loading-overlay`, `.modal-overlay`, `.detail-panel-overlay` | Semi-transparent overlay backgrounds |
 | **Utilities** | `.text-muted`, `.text-secondary`, `.text-primary`, `.text-link`, `.bg-surface`, `.border-default`, `.shadow-md` | Quick token-backed utility classes |
 
 **How to use:** Apply these class names to your component HTML. The shared patterns file is globally included, so no additional imports are needed. Components keep their semantic class names (like `.kpi-card` or `.action-card`) and get consistent token-based styling automatically.

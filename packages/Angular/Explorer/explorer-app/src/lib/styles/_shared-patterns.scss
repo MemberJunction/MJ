@@ -186,10 +186,10 @@ a.model-card:hover,
 
 /* -------------------------------------------
    BUTTONS
-   All button-like elements share these base styles
+   Legacy .action-btn / .control-btn share these base styles.
+   mjButton (.mj-btn) is styled only by ui-components/button.scss.
    ------------------------------------------- */
 
-.mj-btn,
 .action-btn,
 .control-btn {
   display: inline-flex;
@@ -209,14 +209,12 @@ a.model-card:hover,
   white-space: nowrap;
 }
 
-.mj-btn:focus-visible,
 .action-btn:focus-visible,
 .control-btn:focus-visible {
   outline: none;
   box-shadow: var(--mj-focus-ring);
 }
 
-.mj-btn:disabled,
 .action-btn:disabled,
 .control-btn:disabled {
   opacity: 0.5;
@@ -224,7 +222,6 @@ a.model-card:hover,
 }
 
 /* Primary button variant */
-.mj-btn-primary,
 .action-btn.primary,
 .control-btn.primary {
   background: var(--mj-brand-primary);
@@ -232,7 +229,6 @@ a.model-card:hover,
   border-color: var(--mj-brand-primary);
 }
 
-.mj-btn-primary:hover:not(:disabled),
 .action-btn.primary:hover:not(:disabled),
 .control-btn.primary:hover:not(:disabled) {
   background: var(--mj-brand-primary-hover);
@@ -240,7 +236,6 @@ a.model-card:hover,
 }
 
 /* Secondary button variant */
-.mj-btn-secondary,
 .action-btn:not(.primary):not(.danger),
 .control-btn:not(.primary):not(.danger) {
   background: var(--mj-bg-surface);
@@ -248,42 +243,27 @@ a.model-card:hover,
   border-color: var(--mj-border-default);
 }
 
-.mj-btn-secondary:hover:not(:disabled),
 .action-btn:not(.primary):not(.danger):hover:not(:disabled),
 .control-btn:not(.primary):not(.danger):hover:not(:disabled) {
   background: var(--mj-bg-surface-hover);
   border-color: var(--mj-border-strong);
 }
 
-/* Ghost button variant */
-.mj-btn-ghost {
-  background: transparent;
-  color: var(--mj-text-primary);
-  border-color: transparent;
-}
-
-.mj-btn-ghost:hover:not(:disabled) {
-  background: var(--mj-bg-surface-hover);
-}
-
 /* Danger button variant */
 .action-btn.danger,
-.control-btn.danger,
-.mj-btn-danger {
+.control-btn.danger {
   background: var(--mj-status-error);
   color: var(--mj-brand-on-primary);
   border-color: var(--mj-status-error);
 }
 
 .action-btn.danger:hover:not(:disabled),
-.control-btn.danger:hover:not(:disabled),
-.mj-btn-danger:hover:not(:disabled) {
+.control-btn.danger:hover:not(:disabled) {
   background: var(--mj-color-error-600);
   border-color: var(--mj-color-error-600);
 }
 
 /* Small button variant */
-.mj-btn-sm,
 .action-btn-small,
 .action-btn.small,
 .control-btn.small {
@@ -682,8 +662,7 @@ a.model-card:hover,
    ------------------------------------------- */
 
 .detail-panel-overlay,
-.modal-overlay,
-.mj-modal-overlay {
+.modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
