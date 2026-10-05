@@ -1,5 +1,5 @@
 ---
-'@memberjunction/ai-agents': minor
+'@memberjunction/ai-agents': patch
 '@memberjunction/ai-prompts': patch
 '@memberjunction/ai-gemini': patch
 '@memberjunction/ai-vertex': patch
