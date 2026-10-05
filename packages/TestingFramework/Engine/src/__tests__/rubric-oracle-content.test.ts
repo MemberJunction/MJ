@@ -37,4 +37,17 @@ describe('RubricOracle content', () => {
         expect(shape('MJConversationDetailSchema')).toContain('ConversationID:');
         expect(shape('MJAIPromptRunSchema')).toContain('Messages:');
     });
+
+    it('extracts text from string actualOutput or object keys message, response, text', () => {
+        expect(RubricOracleContent({ actualOutput: 'plain text' }).text).toBe('plain text');
+        expect(RubricOracleContent({ actualOutput: { message: 'from message' } }).text).toBe('from message');
+        expect(RubricOracleContent({ actualOutput: { response: 'from response' } }).text).toBe('from response');
+        expect(RubricOracleContent({ actualOutput: { text: 'from text' } }).text).toBe('from text');
+        expect(RubricOracleContent({ actualOutput: { message: 'first', response: 'second' } }).text).toBe('first');
+        expect(RubricOracleContent({ actualOutput: { response: 'first', text: 'second' } }).text).toBe('first');
+        expect(RubricOracleContent({ actualOutput: { unhandledKey: 'value' } }).text).toBeUndefined();
+        expect(RubricOracleContent({ actualOutput: {} }).text).toBeUndefined();
+        expect(RubricOracleContent({ actualOutput: null }).text).toBeUndefined();
+        expect(RubricOracleContent({ actualOutput: undefined }).text).toBeUndefined();
+    });
 });

@@ -5423,7 +5423,8 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Caches the entity record name in the provider's EntityRecordNameCache for faster lookups.
+     * Offers the record's name to the provider for later synchronous lookups. Only a provider that
+     * serves a single user keeps it; see {@link IMetadataProvider.GetCachedRecordName}.
      * Called automatically after successful Load(), LoadFromData(), and Save() operations.
      */
     private cacheRecordName(): void {
@@ -6824,9 +6825,7 @@ export abstract class BaseEntity<T = unknown> {
         // field that reads like the record itself is broken.
         //
         // Returning null is the same answer callers already handle for "this entity has no name
-        // field", and every one of them degrades to the primary key. It also keeps a denied name
-        // OUT of the provider's record-name cache, which is keyed by entity + primary key and NOT
-        // by user — caching it would leak it to the next caller.
+        // field", and every one of them degrades to the primary key.
         if (!this.EntityInfo.IsFieldReadableByUser(f.Name, this.ActiveUser)) {
             return null;
         }
