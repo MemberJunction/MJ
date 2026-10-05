@@ -609,17 +609,6 @@ export class GeminiLLM extends BaseLLM {
     }
 
     /**
-     * Pulls `functionCall` parts out of a Gemini candidate and normalizes them.
-     *
-     * Gemini does not always populate a call `id`, so one is synthesized from the tool name and the
-     * call's position in the turn. It must be stable, because it is what the matching
-     * `functionResponse` echoes back.
-     *
-     * @param parts The candidate's content parts
-     * @param signatureOrigin Where this response's thought signatures validate (see {@link thoughtSignatureOrigin})
-     * @returns The normalized calls, or undefined when the model called nothing
-     */
-    /**
      * The serving endpoint a thought signature from this driver is valid on. Vertex overrides it.
      */
     protected get ThoughtSignatureEndpoint(): string {
@@ -631,6 +620,17 @@ export class GeminiLLM extends BaseLLM {
         return `${this.ThoughtSignatureEndpoint}:${modelName}`;
     }
 
+    /**
+     * Pulls `functionCall` parts out of a Gemini candidate and normalizes them.
+     *
+     * Gemini does not always populate a call `id`, so one is synthesized from the tool name and the
+     * call's position in the turn. It must be stable, because it is what the matching
+     * `functionResponse` echoes back.
+     *
+     * @param parts The candidate's content parts
+     * @param signatureOrigin Where this response's thought signatures validate (see {@link thoughtSignatureOrigin})
+     * @returns The normalized calls, or undefined when the model called nothing
+     */
     private extractToolCalls(parts: Part[] | undefined, signatureOrigin: string): ChatToolCall[] | undefined {
         const calls: ChatToolCall[] = [];
         for (const part of parts ?? []) {

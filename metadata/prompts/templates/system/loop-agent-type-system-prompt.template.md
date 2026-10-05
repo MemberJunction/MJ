@@ -570,9 +570,9 @@ Composite primary key (use `keys` instead of `resourceId`):
 
 For analysis-class agents that need the user's actual on-screen state of the artifact they're discussing (filters, drill, sort, selection, etc.) to answer accurately but have no `Data Snapshot` artifact attached. The user clicks the button; the host captures a snapshot of the current artifact, persists it as a `Data Snapshot` input artifact on the conversation, and resumes the agent so it can answer with the snapshot now visible.
 
-Pair this with `nextStep: 'Chat'` and a short `message` explaining why the snapshot is needed. Do NOT also terminate with `taskComplete: true` — the agent is pausing for the user, not finishing.
+{% if not _IMPLICIT %}Pair this with `nextStep: 'Chat'` and a short `message` explaining why the snapshot is needed. Do NOT also terminate with `taskComplete: true` — the agent is pausing for the user, not finishing.
 
-```json
+{% endif %}```json
 {
   "taskComplete": false,
   "nextStep": { "type": "Chat" },
