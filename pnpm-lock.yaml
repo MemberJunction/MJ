@@ -11636,7 +11636,7 @@ importers:
         specifier: 6.2.0-edge.3
         version: link:../QueryGen
       '@memberjunction/redis-provider':
-        specifier: 6.2.0-edge.1
+        specifier: 6.2.0-edge.2
         version: link:../RedisProvider
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0-edge.3
@@ -15655,7 +15655,7 @@ importers:
         specifier: 6.2.0-edge.3
         version: link:../../OpenApp/Engine
       '@memberjunction/postgresql-dataprovider':
-        specifier: 6.2.0-edge.1
+        specifier: 6.2.0-edge.2
         version: link:../../PostgreSQLDataProvider
       '@memberjunction/predictive-studio':
         specifier: 6.2.0-edge.3
