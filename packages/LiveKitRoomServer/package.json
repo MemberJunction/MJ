@@ -23,6 +23,7 @@
     "@memberjunction/ai-bridge-base": "6.2.0-edge.2",
     "@memberjunction/ai-bridge-server": "6.2.0-edge.2",
     "@memberjunction/ai-bridge-livekit": "6.2.0-edge.2",
+    "@memberjunction/ai-bridge-livekit-native": "6.2.0-edge.2",
     "livekit-server-sdk": "^2.9.7",
     "@memberjunction/storage": "6.2.0-edge.2",
     "@memberjunction/ai-prompts": "6.2.0-edge.2",
