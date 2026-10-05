@@ -147,6 +147,9 @@ export class FormattingService {
 
     /**
      * Format push/pull summary report
+     *
+     * @param dryRun When true, the box is titled "Dry Run Summary", since its counts are
+     *   what the operation would do rather than what it did.
      */
     public FormatSyncSummary(
         operation: 'push' | 'pull',
@@ -159,7 +162,8 @@ export class FormattingService {
             duration: number;
             unchanged?: number;
             deferred?: number;
-        }
+        },
+        dryRun = false
     ): string {
         const innerWidth = 54;
         const total = stats.created + stats.updated + stats.deleted + stats.skipped + (stats.unchanged || 0);
@@ -168,7 +172,8 @@ export class FormattingService {
         const lines: string[] = [];
 
         // Title bar with rounded corners.
-        const title = ` ${operation.charAt(0).toUpperCase() + operation.slice(1)} Summary `;
+        const name = dryRun ? 'Dry Run' : operation.charAt(0).toUpperCase() + operation.slice(1);
+        const title = ` ${name} Summary `;
         const fill = Math.max(0, innerWidth - title.length);
         const leftFill = Math.floor(fill / 2);
         lines.push(chalk.cyan('╭' + '─'.repeat(leftFill)) + chalk.cyan(chalk.bold(title)) + chalk.cyan('─'.repeat(fill - leftFill) + '╮'));
@@ -236,7 +241,9 @@ export class FormattingService {
      * Returns '' when there were no changes (caller should skip printing).
      *
      * For full per-record detail use `--verbose` (streams diffs inline during the push) or
-     * `--change-detail` (writes the report from `formatChangesReport()` to a file).
+     * `--change-detail` (writes the report from {@link FormatChangesReport} to a file).
+     *
+     * @param dryRun When true, the header reads "DRY RUN · Changes a push would make".
      */
     public FormatChangesRecap(changes: RecordChangeDetail[], dryRun = false): string {
         if (!changes || changes.length === 0) {
@@ -288,6 +295,8 @@ export class FormattingService {
      * Render the FULL per-record change report as plain text (no ANSI), suitable for writing
      * to a file via `--change-detail`. Lists every record's operation, entity, primary key,
      * and — for updates — the field-level diffs.
+     *
+     * @param dryRun When true, a line under the title says the report is a dry run and nothing was written.
      */
     public FormatChangesReport(changes: RecordChangeDetail[], generatedAt: string, dryRun = false): string {
         const lines: string[] = [];

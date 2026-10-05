@@ -344,7 +344,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     if (changed || this.Host.Verbose) {
       this.Host.Log(
         '\n' +
-          formatter.formatSyncSummary('push', {
+          formatter.FormatSyncSummary('push', {
             created: result.created,
             updated: result.updated,
             unchanged: result.unchanged,
@@ -353,7 +353,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
             deferred: result.deferred || 0,
             errors: result.errors,
             duration: endTime - startTime,
-          }),
+          }, dryRun),
       );
     }
 

@@ -1845,11 +1845,12 @@ export class PushService {
       } else {
         callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
         // A real push records the create after Save; a dry run records it here so the
-        // recap counts it. Keys the database would generate are not known yet.
+        // recap counts it. Only a key the record declares is shown: NewRecord() assigns
+        // a throwaway UUID that changes every run and is never the one a push writes.
         const entityInfo = this.syncEngine.getEntityInfo(entityName);
         const primaryKeyDisplay = (entityInfo?.PrimaryKeys ?? [])
-          .filter((pk) => entity.Get(pk.Name) != null)
-          .map((pk) => `${pk.Name}: ${entity.Get(pk.Name)}`);
+          .filter((pk) => resolvedPrimaryKey?.[pk.Name] != null || record.fields?.[pk.Name] != null)
+          .map((pk) => `${pk.Name}: ${resolvedPrimaryKey?.[pk.Name] ?? entity.Get(pk.Name)}`);
         this.changeDetails.push({
           entityName,
           primaryKey: primaryKeyDisplay.length > 0 ? primaryKeyDisplay.join(', ') : 'new',

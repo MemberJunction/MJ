@@ -40,8 +40,9 @@ class MockBaseEntity {
     return changes;
   }
 
+  /** Like BaseEntity, assigns a fresh UUID to a single uniqueidentifier key. */
   NewRecord(): void {
-    this.data = {};
+    this.data = { ID: crypto.randomUUID() };
     this.original = {};
   }
 
@@ -196,5 +197,18 @@ describe('push --dry-run reports what a real push would do (#4529)', () => {
       { entityName: 'TestEntity', primaryKey: 'new', Operation: 'created', fields: [] },
     ]);
     expect(mockEntityInstance.saveCalls).toBe(0);
+  });
+
+  it('shows a create key the record declares', async () => {
+    mockEntityInstance = new MockBaseEntity({});
+    vi.mocked(syncEngine.loadEntity).mockResolvedValue(null);
+    (service as unknown as { syncConfig: unknown }).syncConfig = { push: { autoCreateMissingRecords: true } };
+    const record: RecordData = { primaryKey: { ID: 'declared-id' }, fields: { Name: 'Brand New' } };
+
+    await service.process(flatten(record), { dryRun: true }, []);
+
+    expect(service.Changes).toEqual([
+      { entityName: 'TestEntity', primaryKey: 'ID: declared-id', Operation: 'created', fields: [] },
+    ]);
   });
 });

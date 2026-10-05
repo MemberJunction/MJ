@@ -339,6 +339,13 @@ describe('FormattingService', () => {
       expect(typeof output).toBe('string');
       expect(output).toContain('3');
     });
+
+    it('titles the box "Dry Run Summary" on a dry run', () => {
+      const stats = { created: 1, updated: 1, deleted: 0, skipped: 0, errors: 0, duration: 100 };
+      expect(formatter.FormatSyncSummary('push', stats, true)).toContain(' Dry Run Summary ');
+      expect(formatter.FormatSyncSummary('push', stats, true)).not.toContain('Push Summary');
+      expect(formatter.FormatSyncSummary('push', stats)).toContain(' Push Summary ');
+    });
   });
 
   describe('FormatChangesRecap and FormatChangesReport', () => {
