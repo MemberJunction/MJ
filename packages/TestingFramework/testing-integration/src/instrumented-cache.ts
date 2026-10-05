@@ -14,6 +14,21 @@ import type { ILocalStorageProvider } from '@memberjunction/core';
  * (e.g. a dedup/linger hit) as no counter movement at all.
  */
 export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
+    /**
+     * Delegated: this wrapper only counts calls and stores nothing of its own, so the persistence
+     * semantics are entirely the inner provider's.
+     *
+     * It matters that this passes through. The integration bootstrap wraps an in-process provider,
+     * and a wrapper that reported itself persistent would make `ProviderBase` serialize the whole
+     * metadata graph on every refresh in the test tier — exactly the cost the flag exists to avoid.
+     * `undefined` passes through deliberately too: if the inner provider does not declare its
+     * semantics, this wrapper must not invent them either.
+     * See {@link ILocalStorageProvider.SupportsCrossProcessPersistence}.
+     */
+    public get SupportsCrossProcessPersistence(): boolean | undefined {
+        return this.inner.SupportsCrossProcessPersistence;
+    }
+
     public GetItemCount = 0;
     public GetItemsCount = 0;
     public SetItemCount = 0;

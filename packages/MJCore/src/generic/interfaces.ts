@@ -429,6 +429,27 @@ export class EntityRecordNameResult  {
  */
 export interface ILocalStorageProvider {
     /**
+     * Whether a value written here can be read back by another process, or by this one after a
+     * restart.
+     *
+     * - `true` — the store outlives the process that wrote to it (Redis, or a browser's
+     *   localStorage / IndexedDB surviving a reload).
+     * - `false` — an in-process store whose contents die with the process.
+     *
+     * `ProviderBase` reads this before saving its metadata snapshot. That save serializes, gzips and
+     * base64-encodes the whole metadata graph, which on a large tenant is expensive enough to
+     * exhaust the heap, and an in-process store can only ever hand the result back to the heap that
+     * already holds those objects — so it is skipped. Declaring `false` therefore removes real work;
+     * declaring it wrongly on a persistent store would leave the cold-start cache unpopulated.
+     *
+     * Optional, but every in-repo provider declares it. `undefined` is treated as persistent, which
+     * is the safer default of the two: a pointless save wastes work, while a skipped necessary one
+     * breaks the cache. It is optional only so that adding this contract did not break external
+     * implementations at compile time.
+     */
+    readonly SupportsCrossProcessPersistence?: boolean;
+
+    /**
      * Retrieves a value from storage. The implementation is responsible for any
      * deserialization required by the underlying medium:
      *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)

@@ -284,7 +284,9 @@ export class PostgreSQLDialect extends SQLDialect {
     // the metadata source.
 
     private static readonly _BooleanTypeNames = ['bool', 'boolean'] as const;
-    private static readonly _StringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name'] as const;
+    // `tsvector` / `tsquery` (full-text search, e.g. CodeGen's `__mj_fts_vector`) serialize as
+    // text. Without them here they fall through to Int and break GraphQL serialization.
+    private static readonly _StringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name', 'tsvector', 'tsquery'] as const;
     /**
      * PG fixed-width / space-padded char types. `character` (without `varying`)
      * and `bpchar` are the formal/internal names; `char` is the short alias.
