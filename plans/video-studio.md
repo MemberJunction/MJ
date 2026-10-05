@@ -1,6 +1,6 @@
 # MemberJunction — Video Studio
 ### A core capability for code-rendered, agent-directed video: explainers, product films, and data stories on any topic, including an organization's own data
-**Status:** Planning / Implementation Spec (RFC v1)
+**Status:** Implementation Spec — ready for build (RFC v1, decisions through 2026-10-05)
 **Audience:** MJ engineering team + the implementing agent
 **Date:** 2026-10-05
 **Inspired by:** "Motion Engineering: Build a Video Studio Around Opus 5.5" (rari, X, Oct 2026) — the five-layer studio model (Director → Reference → Timeline → Renderer → Critic), seekable frame functions, contact-sheet review, and gated long runs. Grounded in a codebase study of the agent framework, AgentSpec/ComponentSpec, artifacts, MJStorage, Plan Mode / HITL, Rubrics, and Predictive Studio.
@@ -61,7 +61,7 @@ The **orchestrator** (`Video Studio`, root Loop agent, custom driver `VideoStudi
   Conversation (Sage / direct @mention) · Query Builder · Research Agent · Skip (via action/MCP)
   Video Studio dashboard copilot · Scheduled Job (monthly KPI film) · ExposeAsAction
                        └──────────────────┬───────────────────────┘
-                                          │  ChatHandlingOption = 'Consult' (§6)
+                                          │  Sage: Handoff (§6A) · other agents: sub-agent + 'Consult' (§6)
                                           ▼
                      ┌──────── Video Studio (root, Loop, VideoStudioAgent) ────────┐
                      │ payload = VideoGenerationSpec + production state            │
@@ -90,6 +90,7 @@ The **orchestrator** (`Video Studio`, root Loop agent, custom driver `VideoStudi
 | Power levels | `MJ: AI Agent Configurations` presets → `MJ: AI Configurations` (Fast / Standard / High Power), `ParentID` inheritance, `MJ: AI Configuration Params`; Research Agent presets (`.research-agent.json:954-1011`); UI mode picker (`conversation-mode-picker.component.ts`) | Works today with no new UI. Sub-agents inherit the parent run's `configurationId` (`base-agent.ts:10581`). |
 | Sub-agent "from anywhere" | `resolveSubAgentByName` (children → relationships → runtime grants), `InvocationMode`, `ExposeAsAction`, Find Candidate Agents | A root agent with `InvocationMode: Any` + relationship rows from callers. |
 | Child asks parent a question | `ChatHandlingOption` on `MJ: AI Agents` (`Success / Failed / Retry`) | **Gap:** a child's Chat ends the parent run, and the parent's LLM never sees the question. `Retry` remap appears broken. §6. |
+| Sage hands a request to another agent | Historically `payload.invokeAgent` → top-level run (client); today `nextStep.type='Tasks'` + one-node fold → Sub-Agent | **Broken** for unrelated root agents: fold rejected by sub-agent validation, retries, then fail or a durable detour; when it works it runs as Sage's child under Sage's config. §6A adds a first-class `Handoff`. |
 | Plan approval with the human | Plan Mode (`RequirePlanMode` / `SupportsPlanMode`, `executePlanStep`, `MJ: AI Agent Requests` + auto-resume in `MJAIAgentRequestEntityServer`) | Root-only (`_depth === 0`). Reused as-is for direct use; §6 covers the sub-agent case. |
 | Returning a video | `FileOutputRef` (`agent-types.ts:227`) + `AgentRunner.ProcessFileArtifacts` (links an existing `fileId`, no re-upload); Video artifact type + `VideoArtifactViewerPlugin` + `mj-media-player`; `/media/:fileId` Range streaming | Video type has **no `DriverClass`** (full viewer falls back to JSON). `SaveAgentRunMedia` duplicates every media byte into `InlineData` and never sets `FileID`. §11. |
 | Storage | `FileStorageEngine.UploadFile`; storage-account resolution chain runtime override → Agent → Category tree → Type → single active account (`base-agent.ts` `getStorageAccountID`) | Upload is Buffer-only (fine for MP4 sizes we target; pre-auth upload URL exists for larger). |
@@ -334,8 +335,8 @@ Presets on the root (`MJ: AI Agent Configurations`), exactly like Research Agent
 `validateSuccessNextStep` returns `Retry` with `retryInstructions` naming the missing gate. "Done" means the evidence says the film works, not that the last command exited.
 
 ### 5.5 Invocation surfaces
-1. **Conversation:** discoverable by Sage (root, `InvocationMode: Any`, rich Description) and by direct @mention with the preset picker. **[O-3]** The study could not confirm how Sage's single-node delegation resolves a non-related root agent. VS-INV-1 verifies this and adds a Sage → Video Studio relationship if needed.
-2. **Sub-agent of other agents:** relationship rows from **Query Builder**, **Research Agent** (Report Writer), and **Sage**, with `ChatHandlingOption: 'Consult'`, `SubAgentInputMapping` from the caller's data or findings into `DataBindings` / `Film`, and `SubAgentOutputMapping` → `video.*`.
+1. **Conversation:** Sage **transfers** video requests to Video Studio with the new `Handoff` step (§6A). Video Studio runs top-level with the user's preset and keeps the conversation. Users can also @mention it directly with the preset picker. Video Studio is root, `InvocationMode: Any`, with a rich Description for Find Candidate Agents.
+2. **Sub-agent of other agents:** relationship rows from **Query Builder** and the **Research Agent** (Report Writer), with `ChatHandlingOption: 'Consult'`, an optional `ConfigurationPresetID` (§6.5), `SubAgentInputMapping` from the caller's data or findings into `DataBindings` / `Film`, and `SubAgentOutputMapping` → `video.*`.
 3. **Action:** `ExposeAsAction` gives a "Video Studio" action for low-code, MCP, and external callers (Skip, via MJ's action/MCP surface).
 4. **Scheduled job:** §10.5.
 5. **Video Studio dashboard copilot:** §12.
@@ -400,9 +401,81 @@ Today `ExecuteSubAgent` always passes `configurationId: params.configurationId` 
 - The target agent takes the turn as a **top-level run**, with its own presets and configuration and its own response in the conversation.
 - It does **not** run as a sub-agent under Sage.
 
-This used to work and appears broken. It is how users will most often reach Video Studio from a conversation.
+This used to work and is broken today. It is how users will most often reach Video Studio from a conversation.
 
-> **Root-cause analysis and fix design in progress.** It traces the git history of Sage's delegation, today's task-graph fold, and sub-agent resolution. It lands in the next commit on this PR, together with WBS tasks `VS-SAGE-*`.
+### 6A.1 How it used to work (git history)
+The local clone is shallow before 2026-07-22; earlier commits were read through the GitHub API.
+
+| When | Commit | Mechanism |
+|---|---|---|
+| 2025-10-01 | `ce51dafd3`, `e47ee1166` | Sage set `payload.invokeAgent` and the client's `handleSubAgentInvocation` started the target as **its own top-level run**, with its own ConversationDetail, `AgentID`, and the user's saved preset. The prompt said: *"This is **not** the same as a sub-agent… I will bring them into the conversation."* |
+| 2025-10-09 | `9fcaf80ca` | Moved to `payload.taskGraph`. For a one-task graph the client's `handleSingleTaskExecution` still started a top-level run attributed to the target ("👉 Delegating to **X**"). **This is the transfer people remember.** |
+| 2026-08-07 | `e9bb6237d` (#3574) | Removed the client's one-task special case. All graphs went to the durable server-side dispatcher. |
+| 2026-08-07 | `4d89edd54` (#3588) | Sage emits `nextStep.type='Tasks'`. **Constant folding** (D9) added: a one-node graph becomes an in-run **Sub-Agent** step. The payload sniff was removed. |
+| 2026-08-09 | `f360972c5` | Task spec v2 (`kind` + `configuration`, no compatibility shim). **`sage.template.md` was never updated**: it still teaches the flat `agentName` shape (`sage.template.md:50-63`). |
+| 2026-09-30 | `bb33c773c` (#4873) | `<suggested_agent>` shortcut added on top of the same Tasks path. |
+
+### 6A.2 What happens today (Sage → Research Agent, an unrelated root agent)
+1. **Two contradictory schemas.** `sage.template.md` teaches the v1 flat task shape, while the loop system prompt (`enableTaskGraphs`) documents v2 `kind`/`configuration`.
+2. **Retry #1.** If Sage follows its own template, `ValidateTaskGraphSpec` fails with `NoAssignment` (`task-graph-validator.ts:710-716`) and `applyTasksStep` returns Retry (`loop-agent-type.ts:195-203`).
+3. **Fold.** With v2 shape, `describeFold` folds the one-node graph into a `Sub-Agent` step with `terminateAfter:false` (`loop-agent-type.ts:211-228`). The fold doesn't check whether the target is resolvable.
+4. **Fatal break.** `validateSubAgentNextStep` accepts only `getEffectiveSubAgentsForValidation` (`base-agent.ts:5890-5896`): ParentID children + AgentRelationships (for Sage: Workflow Planner, Form Builder). The result is "Sub-agent 'Research Agent' not found or not active" → Retry → after 10 general validation retries the run fails (`base-agent.ts:551`, `6634`).
+5. **What the user sees:** latency, then one of:
+   - Sage answers itself.
+   - The graph escapes to the durable path (2+ nodes or `durable:true`) and runs via `TaskGraphAgentRunner` (`RunAgent`, not `RunAgentInConversation`): no preset, no conversation turn, results delivered later.
+   - The run fails.
+6. **Even when the fold succeeds** (target is a child or related agent), the target runs as a **child under Sage**:
+   - It uses **Sage's** AI Configuration (`base-agent.ts:10581`), not its own preset.
+   - Sage paraphrases the answer onto **Sage's** ConversationDetail.
+   - Continuity routing (`findLastNonSageAgentId`, `message-input.component.ts:2204,2405`) never sticks to the target.
+7. **Dead legacy paths:**
+   - The client's `payload.invokeAgent` / `payload.taskGraph` branches (`message-input.component.ts:2777-2785, 3086-3200`) are dead for shipped agents: nothing in `metadata/` emits them anymore.
+   - `BaseMessagingAdapter` (`:733, 905-930`) still auto-delegates on `invokeAgent`, plus a text-regex fallback, with **no permission check**.
+
+### 6A.3 Design: a first-class `Handoff` step **[D]**
+**Why a distinct step rather than fixing Tasks:**
+- Folding exists to keep work *inside* the run; a transfer must *leave* it.
+- `Consult` (§6) is agent ↔ agent inside a run; `Handoff` is **ownership of the conversation turn moving to another agent**.
+
+User-facing language is "transferred"; the step type is `Handoff`.
+
+1. **Step:** Loop next-step `type: 'Handoff'`, `{ agentName, brief, reason }`.
+   - It is terminal for the source agent and never folded.
+   - It is gated by a new `AgentTypePromptParams.enableHandoff`, aligned like `tasks` (`base-agent.ts:9771`). It is on for Sage and off by default for other agents.
+   - The source run ends `Success` with a short "Transferring you to **X**…" message, records a `Handoff` run step, and stores `HandoffToAgentID` in the run's step output.
+2. **Target resolution (server-side).** By name over `AIEngine.Agents`. The target must:
+   - be `Status='Active'`
+   - be directly discoverable (`AIAgentPermissionHelper.IsDirectlyDiscoverable`: no ParentID, `InvocationMode ≠ 'Sub-Agent'`)
+   - be runnable by the user (`GetAccessibleAgents(user, 'run')`)
+   - be in the host's `AllowedAgentIDs` when supplied (enforced server-side, not only in the client)
+   - not be the source agent
+
+   On failure, return a Retry to the source listing valid candidates, the same set Find Candidate Agents returns.
+3. **Execution (server-side, so every host gets it: Explorer, Slack/Teams, MCP, scheduling).** In the turn host (`RunAIAgentResolver` and `ConversationAgentRunner`), after the source run completes with a handoff:
+   - Create a new ConversationDetail (`ParentID` = source detail, `AgentID` = target).
+   - Call `AgentRunner.RunAgentInConversation` (as `MJAIAgentRequestEntityServer` already does) with the context listed below.
+   - The client receives both details over the existing PubSub stream.
+
+   Context passed to the target: original user message, conversation history (per the target's message settings), the source's `brief` as a context note, attachments / `inputArtifacts`, the previous payload for that agent, `appContext`, plan-mode flag, requested skills.
+4. **Preset the target runs with:** conversation `@mention` pin (move `FindConfigurationPresetForAgent` server-side) → user's saved preset for that agent (`mj.agentMode.<agentId>` user setting) → target's `IsDefault` preset. **Never Sage's configuration.**
+5. **Stickiness (a transferred call stays transferred):** the target's detail is attributed to the target, so existing continuity routing sends the next user message to it. The user returns to Sage with `@Sage`; the target can `Handoff` back to Sage (Sage is a valid target for non-Sage agents).
+6. **Loop prevention:**
+   - at most one handoff per user turn per source
+   - a target may not hand back to its source within the same turn
+   - a hop cap of 3, shared with the messaging adapter's existing constant
+   - every hop audited as a run step
+7. **UI:** Sage's detail shows a "Sage transferred you to **X**" chip linking to the target's reply. The target's detail renders normally, attributed to X, with its preset badge. Retire the dead `invokeAgent` / `taskGraph` client branches once the server path ships.
+8. **Prompts:**
+   - Rewrite `sage.template.md` §4: `Handoff` for "another agent should own this"; Tasks (v2 shape, validated) only for multi-step / durable work.
+   - Update the `<suggested_agent>` guidance to emit `Handoff`.
+   - Add a regression test that every task-graph example in shipped templates passes `ValidateTaskGraphSpec`.
+9. **Related fixes:**
+   - `describeFold` folds only when `resolveSubAgentByName` would succeed; otherwise the graph goes to durable submission instead of burning retries.
+   - `TaskGraphService.resolveAgents` (`TaskGraphService.ts:1339`, name-only) gains the same permission check.
+   - `BaseMessagingAdapter` consumes the `Handoff` result (keeping the regex fallback) and gains a permission check.
+
+### 6A.4 Video Studio and the other studios
+When a user asks Sage for a video, Sage hands off to **Video Studio**. Video Studio runs top-level with the user's preset (e.g. High), owns the conversation through iterations, and returns its Video Production artifact on its own detail. Predictive Studio's Model Development Agent, the Research Agent and others benefit equally.
 
 ---
 
@@ -644,7 +717,7 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 
 ## 15. Work Breakdown Structure (the task list)
 
-**One phase, sub-phases VS0–VS11.** Each task: **ID — title** · _deps_ · **AC** · packages. Treat this list as the backlog and check items off here.
+**One phase, sub-phases VS0–VS11 (plus VS1A, Sage transfers).** VS1 (Consult + presets) and VS1A (Handoff) are framework work that can start immediately and in parallel with VS0/VS2/VS3; they have value independent of Video Studio and could ship in their own PR if the assigned developer prefers. Each task: **ID — title** · _deps_ · **AC** · packages. Treat this list as the backlog and check items off here.
 
 ### VS0 — Foundations
 - **VS-FND-1 — Scaffold packages.** _deps: none._ `packages/AI/VideoStudio/{Core,Engine,RenderWorker}` with package.json (peer/dep rules per workspace), tsconfig, vitest (`scripts/scaffold-tests.mjs`), README per package. **AC:** all build; tests run; `npm run check:esm` / `check:standards` clean.
@@ -661,6 +734,14 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 - **VS-CON-5 — Fix `Retry` remap.** _deps: VS-CON-2._ No terminate; question surfaced to parent. Replace `chat-handling-option.test.ts`'s copied logic with tests against real `BaseAgent`. **AC:** tests fail before / pass after.
 - **VS-CON-7 — Caller-selected presets (§6.5).** _deps: VS-CON-1._ Migration adds `AIAgentRelationship.ConfigurationPresetID` (same migration as VS-CON-1); `AgentSubAgentRequest.presetName`; resolution in `ExecuteSubAgent`; presets listed in the sub-agent catalog; task-graph node `PresetName` + `TaskGraphAgentRunner` passes `configurationId`; `AgentSpec`/`AgentSpecSync` support. **AC:** tests prove per-call > relationship > inherit; an invalid preset name returns a validation error to the parent; the child run records the resolved configuration.
 - **VS-CON-6 — Prompt + spec plumbing + docs.** _deps: VS-CON-2._ System-prompt section + snapshot update; `AgentSpec`, `AgentSpecSync`, MCP validators accept `Consult`; docs (`sub-agents-guide.md`, `HUMAN_IN_THE_LOOP.md`, `AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md`). **AC:** snapshot test updated; AgentSpecSync round-trips the field on relationships.
+
+### VS1A — Sage transfers (`Handoff`, §6A)
+- **VS-SAGE-1 — `Handoff` step type.** _deps: none._ Types in CorePlus (`agent-types.ts`), loop response type + parsing (`loop-agent-type.ts`, `loop-agent-response-type.ts`), `enableHandoff` gate + alignment, system-prompt section, `Handoff` run step. **AC:** `loop-agent-type-handoff.test.ts` covers gate off/on, terminal behavior, never folded.
+- **VS-SAGE-2 — Target resolution + permissions.** _deps: VS-SAGE-1._ Active + directly discoverable + run permission + host `AllowedAgentIDs` + not self; Retry lists valid candidates. **AC:** `base-agent-handoff.test.ts`: permission denied, not discoverable, not allowed, self-handoff, unknown name.
+- **VS-SAGE-3 — Server-side execution.** _deps: VS-SAGE-2._ `RunAIAgentResolver` + `ConversationAgentRunner` follow-through: new detail (ParentID = source), `RunAgentInConversation` with full context, preset precedence (§6A.3 #4, `FindConfigurationPresetForAgent` moved server-side), hop cap + no ping-pong, audit. **AC:** resolver test (pattern: `RunAIAgentResolver.historyFrom.test.ts`) proves a top-level target run, `AgentID` attribution, target's preset, and the hop cap.
+- **VS-SAGE-4 — Sage prompt + task-graph fixes.** _deps: VS-SAGE-1._ Rewrite `sage.template.md` §4 (Handoff vs Tasks v2), `<suggested_agent>` guidance, `enableHandoff:true` on Sage; `describeFold` only folds resolvable targets; `TaskGraphService.resolveAgents` permission check. **AC:** template-examples-validate regression test; `loop-agent-type-task-graphs.test.ts` gains an unrelated-agent case.
+- **VS-SAGE-5 — Client + messaging adapters.** _deps: VS-SAGE-3._ Transfer chip on the source detail; continuity routing verified; remove dead `invokeAgent` / `taskGraph` client branches; `BaseMessagingAdapter` consumes Handoff + permission check. **AC:** `BaseMessagingAdapter.test.ts` + `agent-turn-host-rules.test.ts` updated; Playwright: "Sage, have the Research Agent look into X" → a Research Agent reply attributed to it, and the follow-up message stays with Research Agent.
+- **VS-SAGE-6 — Integration check + docs.** _deps: VS-SAGE-3, VS-SAGE-4._ Deterministic-tier bundle: Sage hands off to Research Agent (stubbed model); assert top-level run, attribution, preset, continuity. Update or remove `packages/MJServer/src/services/TaskOrchestration-Integration.md`; document Handoff vs Consult vs Sub-Agent vs Tasks in `guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md` (or a new conversation-routing guide). **AC:** `pnpm run test:integration` passes with the new check.
 
 ### VS2 — The spec
 - **VS-SPEC-1 — Types.** _deps: VS-FND-1._ `VideoGenerationSpec` + sub-types + manifest + render wire contract in `video-studio-core`. **AC:** browser-safe (no server imports); exported; TSDoc on every field.
@@ -704,8 +785,8 @@ Rows must match driver `GetFileCapabilities` (Anthropic: jpeg/png/gif/webp/pdf, 
 - **VS-RUB-1 — Video Production Quality rubric.** _deps: none._ Rubric metadata (criteria, levels), `MJ: AI Agent Rubrics` link (Evaluation). **AC:** published rubric; critic prompt pulls criteria from it.
 
 ### VS10 — Invocation surfaces (§5.5, §10.5)
-- **VS-INV-1 — Sage discovery.** _deps: VS-AGT-1._ Verify Sage's delegation path to Video Studio; add relationship if needed. **AC:** conversation request "make a 60-second explainer about X" reaches Video Studio.
-- **VS-INV-2 — Caller relationships.** _deps: VS-CON-2, VS-AGT-1._ Query Builder / Research Agent / Sage → Video Studio with `Consult` + mappings. **AC:** integration test: Query Builder output → KPI Briefing film.
+- **VS-INV-1 — Sage → Video Studio transfer.** _deps: VS-AGT-1, VS-SAGE-3._ Description and metadata tuned so Sage (Find Candidate Agents) picks Video Studio for video requests. **AC:** "make a 60-second explainer about X" in a Sage conversation produces a top-level Video Studio run with the user's preset, and the follow-up "make the intro faster" stays with Video Studio.
+- **VS-INV-2 — Caller relationships.** _deps: VS-CON-2, VS-AGT-1._ Query Builder / Research Agent → Video Studio with `Consult` + mappings + optional preset (Sage reaches Video Studio by Handoff, not as a sub-agent). **AC:** integration test: Query Builder output → KPI Briefing film.
 - **VS-INV-3 — Action exposure.** _deps: VS-AGT-1._ `ExposeAsAction` param mapping (topic, archetype, brand kit, formats, power level, data refs). **AC:** action run returns artifact + file IDs.
 - **VS-INV-4 — Scheduled-job driver fixes.** _deps: none._ Pass `ConfigurationID`, `CompanyID`, `ConversationID` through `AgentScheduledJobDriver`. **AC:** unit tests; monthly KPI recipe documented.
 
