@@ -24509,7 +24509,12 @@
       "SpeedRank": 6,
       "CostRank": 10,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Fable 5"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Fable 5",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsForcedToolChoice": false
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -26050,7 +26055,8 @@
           "SupportsNativeToolCalling": true,
           "DefaultToNativeToolCalling": false,
           "NativeControlFlow": "implicit",
-          "NativeToolResults": true
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
         }
       }
     },
@@ -27270,7 +27276,8 @@
           "SupportsNativeToolCalling": true,
           "DefaultToNativeToolCalling": false,
           "NativeControlFlow": "implicit",
-          "NativeToolResults": true
+          "NativeToolResults": true,
+          "SupportsForcedToolChoice": false
         }
       }
     },
