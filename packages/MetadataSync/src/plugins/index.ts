@@ -277,7 +277,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     const success = result.errors === 0 && errors.length === 0;
 
     if (isText) {
-      this.renderPushTextSummary(formatter, result, flags['change-detail'], startTime, endTime);
+      this.renderPushTextSummary(formatter, result, flags['change-detail'], !!flags['dry-run'], startTime, endTime);
     }
 
     return {
@@ -321,10 +321,11 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     formatter: InstanceType<(typeof import('../services/FormattingService'))['FormattingService']>,
     result: PushResult,
     changeDetail: boolean,
+    dryRun: boolean,
     startTime: number,
     endTime: number,
   ): void {
-    const recap = formatter.formatChangesRecap(result.changeLog);
+    const recap = formatter.FormatChangesRecap(result.changeLog, dryRun);
     if (recap) this.Host.Log('\n' + recap);
 
     if (changeDetail && result.changeLog.length > 0) {
@@ -332,7 +333,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       const reportDir = result.sqlLogPath ? path.dirname(result.sqlLogPath) : process.cwd();
       const reportPath = path.join(reportDir, `MetadataSync_Changes_${stamp}.log`);
       try {
-        writeFileSync(reportPath, formatter.formatChangesReport(result.changeLog, new Date(endTime).toISOString()));
+        writeFileSync(reportPath, formatter.FormatChangesReport(result.changeLog, new Date(endTime).toISOString(), dryRun));
         this.Host.Log(`\n📄 Detailed change report: ${path.relative(process.cwd(), reportPath)}`);
       } catch (writeErr) {
         this.Host.Log(`\n⚠️  Could not write change report: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`, 'warn');
@@ -362,10 +363,11 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     }
 
     const extras = changed || this.Host.Verbose ? '' : ` · no changes · ${formatter.formatDuration(endTime - startTime)}`;
+    const label = dryRun ? 'Dry run' : 'Push';
     if (result.errors === 0) {
-      this.Host.Log(`\n✓ Push completed successfully${extras}`);
+      this.Host.Log(`\n✓ ${label} completed successfully${dryRun ? ' · nothing written' : ''}${extras}`);
     } else {
-      this.Host.Log('\n⚠️  Push completed with errors', 'warn');
+      this.Host.Log(`\n⚠️  ${label} completed with errors`, 'warn');
     }
     if (result.sqlLogPath) this.Host.Log(`\n📄 SQL log saved to: ${path.relative(process.cwd(), result.sqlLogPath)}`);
   }

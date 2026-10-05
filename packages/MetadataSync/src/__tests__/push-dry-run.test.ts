@@ -192,6 +192,9 @@ describe('push --dry-run reports what a real push would do (#4529)', () => {
 
     expect(dry.status).toBe('created');
     expect(logs).toContain('[DRY RUN] Would create TestEntity record');
+    expect(service.Changes).toEqual([
+      { entityName: 'TestEntity', primaryKey: 'new', Operation: 'created', fields: [] },
+    ]);
     expect(mockEntityInstance.saveCalls).toBe(0);
   });
 });

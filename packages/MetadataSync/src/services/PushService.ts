@@ -1844,6 +1844,18 @@ export class PushService {
         return { status: 'updated', batchContextEntry };
       } else {
         callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
+        // A real push records the create after Save; a dry run records it here so the
+        // recap counts it. Keys the database would generate are not known yet.
+        const entityInfo = this.syncEngine.getEntityInfo(entityName);
+        const primaryKeyDisplay = (entityInfo?.PrimaryKeys ?? [])
+          .filter((pk) => entity.Get(pk.Name) != null)
+          .map((pk) => `${pk.Name}: ${entity.Get(pk.Name)}`);
+        this.changeDetails.push({
+          entityName,
+          primaryKey: primaryKeyDisplay.length > 0 ? primaryKeyDisplay.join(', ') : 'new',
+          Operation: 'created',
+          fields: [],
+        });
         return { status: 'created', batchContextEntry };
       }
     }

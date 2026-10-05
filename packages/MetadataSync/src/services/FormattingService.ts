@@ -238,7 +238,7 @@ export class FormattingService {
      * For full per-record detail use `--verbose` (streams diffs inline during the push) or
      * `--change-detail` (writes the report from `formatChangesReport()` to a file).
      */
-    public FormatChangesRecap(changes: RecordChangeDetail[]): string {
+    public FormatChangesRecap(changes: RecordChangeDetail[], dryRun = false): string {
         if (!changes || changes.length === 0) {
             return '';
         }
@@ -262,7 +262,9 @@ export class FormattingService {
 
         const width = 60;
         const lines: string[] = [];
-        const header = `── Changes (${changes.length}) `;
+        const header = dryRun
+            ? `── DRY RUN · Changes a push would make (${changes.length}) `
+            : `── Changes (${changes.length}) `;
         lines.push(chalk.cyan(chalk.bold(header + '─'.repeat(Math.max(4, width - header.length)))));
 
         for (const g of sorted) {
@@ -287,9 +289,12 @@ export class FormattingService {
      * to a file via `--change-detail`. Lists every record's operation, entity, primary key,
      * and — for updates — the field-level diffs.
      */
-    public FormatChangesReport(changes: RecordChangeDetail[], generatedAt: string): string {
+    public FormatChangesReport(changes: RecordChangeDetail[], generatedAt: string, dryRun = false): string {
         const lines: string[] = [];
         lines.push('MemberJunction Metadata Sync — Detailed Change Report');
+        if (dryRun) {
+            lines.push('DRY RUN — the changes a push would make. Nothing was written.');
+        }
         lines.push(`Generated: ${generatedAt}`);
         lines.push(`Total changes: ${changes.length}`);
         lines.push('');
