@@ -10,6 +10,8 @@ import {
     ToPGPoolConfig
 } from '../postgresqlPoolSettings.js';
 import type { DatabaseSettingsInfo } from '../config.js';
+import { DescribeReadOnlyLoginOverreach } from '../postgresqlPoolSettings.js';
+import type { ReadOnlyLoginCheckClient, ReadOnlyLoginGrants } from '../postgresqlPoolSettings.js';
 
 const defaults: DatabaseSettingsInfo = {
     connectionTimeout: 45000,
@@ -104,5 +106,26 @@ describe('ResolvePostgreSQLReadOnlyCredentials', () => {
 
     it('returns null when no complete pair is configured', () => {
         expect(ResolvePostgreSQLReadOnlyCredentials({ dbReadOnlyUsername: 'ro' }, { PG_READ_ONLY_USERNAME: 'pgro' })).toBeNull();
+    });
+});
+
+describe('DescribeReadOnlyLoginOverreach', () => {
+    const clientAnswering = (row: ReadOnlyLoginGrants): ReadOnlyLoginCheckClient => ({
+        query: async () => ({ rows: [row] }),
+    });
+
+    it('says nothing for a login that reads only views', async () => {
+        expect(await DescribeReadOnlyLoginOverreach(clientAnswering({ ReadsServerFiles: false, ReadableBaseTables: 0 }), '__mj')).toEqual([]);
+    });
+
+    it('warns when the login can read base tables', async () => {
+        const warnings = await DescribeReadOnlyLoginOverreach(clientAnswering({ ReadsServerFiles: false, ReadableBaseTables: 412 }), '__mj');
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0]).toMatch(/can read 412 base table\(s\) in schema "__mj"/);
+    });
+
+    it('warns when the login can read server files', async () => {
+        const warnings = await DescribeReadOnlyLoginOverreach(clientAnswering({ ReadsServerFiles: true, ReadableBaseTables: 0 }), '__mj');
+        expect(warnings[0]).toMatch(/pg_read_server_files/);
     });
 });

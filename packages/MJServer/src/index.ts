@@ -32,7 +32,7 @@ import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
 import { TranslateBracketsToPG } from './postgresqlCompat.js';
-import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
+import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials, ToPGPoolConfig } from './postgresqlPoolSettings.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
@@ -479,8 +479,13 @@ const setupComplete$ = new ReplaySubject(1);
         types: MJPostgresTypes,
       });
       const readOnlyTestClient = await readOnlyPgPool.connect();
-      await readOnlyTestClient.query('SELECT 1');
-      readOnlyTestClient.release();
+      try {
+        for (const warning of await DescribeReadOnlyLoginOverreach(readOnlyTestClient, mj_core_schema)) {
+          LogStatus(`WARNING: ${warning}`);
+        }
+      } finally {
+        readOnlyTestClient.release();
+      }
       PostgreSQLReadOnlyPool.Instance.Pool = readOnlyPgPool;
       startupLog.LogIf('verbose', 'Read-only PostgreSQL pool has been initialized.');
     }
