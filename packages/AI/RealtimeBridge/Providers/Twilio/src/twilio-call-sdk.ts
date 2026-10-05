@@ -128,6 +128,16 @@ export interface ITwilioClientBindings {
      * @param callSid The Call SID whose playback buffer to clear.
      */
     flushOutbound(callSid: string): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+    /**
+     * **Optional.** Speaks `message` to the caller and then hangs up, in one carrier-side step (REST
+     * `calls(sid).update({ twiml: '<Say>…</Say><Hangup/>' })`). The call is ending anyway, so replacing its TwiML
+     * (which ends the media stream) is what we want here. When absent the SDK just completes the call.
+     *
+     * @param callSid The Call SID.
+     * @param message The text to speak.
+     */
+    sayAndHangup?(callSid: string, message: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** The default bindings used when none are supplied — every operation throws the bind-me error. */
@@ -244,6 +254,20 @@ export class TwilioCallSdk implements ITelephonyCallSdk {
     public flushOutbound(): void {
         if (this.activeCallSid) {
             this.bindings.flushOutbound(this.activeCallSid);
+        }
+    }
+
+    /** @inheritdoc — after a transfer / goodbye Twilio owns the call; just forget it locally, never hang it up. */
+    public async detach(_callId: string): Promise<void> {
+        this.activeCallSid = null;
+    }
+
+    /** @inheritdoc — speaks the message and hangs up at Twilio; completes the call when the bindings cannot speak. */
+    public async playMessageAndHangup(callId: string, message: string): Promise<void> {
+        if (this.bindings.sayAndHangup) {
+            await this.bindings.sayAndHangup(callId, message);
+        } else {
+            await this.bindings.completeCall(callId);
         }
     }
 
