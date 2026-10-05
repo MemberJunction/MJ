@@ -14,6 +14,13 @@ describe('FindForbiddenFunctionCalls on PostgreSQL', () => {
         expect(FindForbiddenFunctionCalls(`SELECT query_to_xml('SELECT salary FROM secret', true, false, '')`, pg)).toEqual(['query_to_xml']);
     });
 
+    it('finds the text-search functions that run SQL from a string', () => {
+        const stat = `SELECT word FROM ts_stat('SELECT to_tsvector(''simple'', api_key) FROM secrets')`;
+        expect(FindForbiddenFunctionCalls(stat, pg)).toEqual(['ts_stat']);
+        const rewrite = `SELECT pg_catalog.TS_REWRITE('x'::tsquery, 'SELECT to_tsquery(''simple'', ''x''), plainto_tsquery(''simple'', api_key) FROM secrets')`;
+        expect(FindForbiddenFunctionCalls(rewrite, pg)).toEqual(['ts_rewrite']);
+    });
+
     it('finds quoted, schema-qualified, spaced and differently-cased calls, and each name once', () => {
         const sql = `SELECT pg_catalog.Query_To_Xml_And_XmlSchema ('x', true, false, ''), "pg_read_file"('/etc/hostname'), DBLINK('c', 'q'), lo_get(1), lo_get(2)`;
         expect(FindForbiddenFunctionCalls(sql, pg)).toEqual(['query_to_xml_and_xmlschema', 'pg_read_file', 'dblink', 'lo_get']);
