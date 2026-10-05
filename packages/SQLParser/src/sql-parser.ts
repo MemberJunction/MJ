@@ -62,13 +62,13 @@ export interface MJAstifyResult {
     dialect: string;
 }
 
-/** A table/view reference extracted from SQL */
 /** Lexing rules for FOR XML, which only SQL Server has. */
 const SQL_SERVER_LEXING: SQLParserDialect = new SQLServerDialect();
 
 /** The FOR XML modes node-sql-parser knows. */
 const FOR_XML_DIRECTIVES = ['PATH', 'RAW', 'AUTO', 'EXPLICIT'];
 
+/** A table/view reference extracted from SQL */
 export interface SQLTableReference {
     /** The table or view name as it appears in SQL */
     TableName: string;

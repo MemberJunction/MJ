@@ -190,7 +190,7 @@ export const RUN_QUERY_SQL_FILTERS_WITH_IMPLEMENTATIONS: RunQuerySQLFilter[] =
  * literals, booleans, identifiers and the three LIKE filters. Every platform difference comes
  * from the dialect, so a new platform needs no change here.
  */
-function dialectFilterImplementations(dialect: SQLDialect): Record<string, (value: any) => any> {
+function dialectFilterImplementations(dialect: SQLDialect): Record<string, (value: unknown) => unknown> {
     return {
         sqlString: (value: unknown) => (value === null || value === undefined ? 'NULL' : textLiteral(value, dialect)),
         sqlIn: (values: unknown) => {
@@ -209,9 +209,9 @@ function dialectFilterImplementations(dialect: SQLDialect): Record<string, (valu
             }
             return dialect.QuoteIdentifier(identifier);
         },
-        sqlLikeContains: (value: any) => likeLiteral(value, 'both', dialect),
-        sqlLikeBegins: (value: any) => likeLiteral(value, 'trailing', dialect),
-        sqlLikeEnds: (value: any) => likeLiteral(value, 'leading', dialect),
+        sqlLikeContains: (value: unknown) => likeLiteral(value, 'both', dialect),
+        sqlLikeBegins: (value: unknown) => likeLiteral(value, 'trailing', dialect),
+        sqlLikeEnds: (value: unknown) => likeLiteral(value, 'leading', dialect),
     };
 }
 
