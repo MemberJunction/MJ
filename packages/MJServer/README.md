@@ -879,7 +879,7 @@ PostgreSQL reads the same `databaseSettings` as SQL Server, with the same defaul
 
 | Setting (default) | SQL Server | PostgreSQL |
 |---|---|---|
-| `requestTimeout` (30,000) | Driver request timeout; cancels the request on the server | `statement_timeout` on every pooled connection |
+| `requestTimeout` (30,000) | Driver request timeout: a client-side timer over the whole request | `statement_timeout` on every pooled connection |
 | `connectionPool.max` / `min` (50 / 5) | Pool size | Pool size. The read-only pool is capped at 10 and keeps no idle minimum |
 | `connectionPool.idleTimeoutMillis` (30,000) | Idle connection eviction | Idle connection eviction |
 | `connectionPool.acquireTimeoutMillis` (30,000) | Wait for a pooled connection | `connectionTimeoutMillis` (see below) |
