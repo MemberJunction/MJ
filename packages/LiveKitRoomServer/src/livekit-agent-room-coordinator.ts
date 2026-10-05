@@ -31,6 +31,7 @@ import {
   type RoomTurnSnapshot,
 } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
+import { ResolveLiveKitNativeModuleSpecifier } from './livekit-native-module';
 
 /** The subset of {@link AIBridgeEngine} the coordinator drives — an injectable seam for unit testing. */
 export type BridgeOps = Pick<AIBridgeEngine, 'Config' | 'ProviderByDriverClass' | 'StartBridgeSession' | 'StopBridgeSession' | 'ReconfigureSessionToMeeting'>;
@@ -463,20 +464,13 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     }
   }
 
-  /** The default native room-client wrapper specifier — the @livekit/rtc-node package this repo ships. */
-  private static readonly DEFAULT_NATIVE_MODULE = '@memberjunction/ai-bridge-livekit-native';
-
   /**
-   * Resolves the native LiveKit room-client module specifier for the bridge session. Prefers the
-   * `LIVEKIT_NATIVE_MODULE` env override (e.g. a deployment's custom-sample-rate wrapper), else the default
-   * {@link DEFAULT_NATIVE_MODULE}. Overridable in tests via {@link SetNativeModuleSpecifier}.
+   * Resolves the native LiveKit room-client module specifier for the bridge session (see
+   * {@link ResolveLiveKitNativeModuleSpecifier}: the test override, else `LIVEKIT_NATIVE_MODULE`, else the default
+   * `@memberjunction/ai-bridge-livekit-native`). Overridable in tests via {@link SetNativeModuleSpecifier}.
    */
   private resolveNativeModuleSpecifier(): string {
-    return (
-      this.nativeModuleSpecifierOverride ??
-      process.env.LIVEKIT_NATIVE_MODULE ??
-      LiveKitAgentRoomCoordinator.DEFAULT_NATIVE_MODULE
-    );
+    return ResolveLiveKitNativeModuleSpecifier(this.nativeModuleSpecifierOverride);
   }
 
   /**

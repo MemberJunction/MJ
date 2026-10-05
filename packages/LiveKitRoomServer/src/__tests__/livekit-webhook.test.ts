@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LiveKitWebhookParser, type WebhookReceiverLike } from '../livekit-webhook';
 import { LIVEKIT_PARTICIPANT_KIND_SIP, LIVEKIT_SIP_ATTRIBUTES } from '../livekit-sip-service';
+import { RoomAudioPlayer } from '../room-audio/room-audio-player';
 
 function receiver(event: Awaited<ReturnType<WebhookReceiverLike['receive']>>): WebhookReceiverLike {
   return { receive: vi.fn(async () => event) };
@@ -57,5 +58,17 @@ describe('LiveKitWebhookParser', () => {
 
   it('refuses to build an unverifiable parser when credentials are missing', () => {
     expect(() => new LiveKitWebhookParser({ ServerUrl: '', ApiKey: '', ApiSecret: '' })).toThrow(/cannot be verified/);
+  });
+
+  it('stops the room audio playing in a room when that room finishes', async () => {
+    const stopAll = vi.spyOn(RoomAudioPlayer.Instance, 'StopAllInRoom').mockResolvedValue(1);
+    try {
+      await new LiveKitWebhookParser(undefined, receiver({ event: 'room_finished', room: { name: 'call-1' } })).Parse('{}');
+      await new LiveKitWebhookParser(undefined, receiver({ event: 'room_started', room: { name: 'call-2' } })).Parse('{}');
+      expect(stopAll).toHaveBeenCalledTimes(1);
+      expect(stopAll).toHaveBeenCalledWith('call-1');
+    } finally {
+      stopAll.mockRestore();
+    }
   });
 });
