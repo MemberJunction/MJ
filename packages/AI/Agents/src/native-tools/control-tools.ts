@@ -1,6 +1,6 @@
 /**
  * @fileoverview Control-flow tools for the implicit protocol (spec §2.2, §4): one tool per
- * sub-agent, `payload_change_request`, `ask_user`. Built beside the Action tools so the reverse map
+ * sub-agent, `payload_change_request`, `ask_user`, `complete_task`. Built beside the Action tools so the reverse map
  * resolves every call the model can make.
  *
  * The agent declares these without knowing which model will answer. The prompt runner keeps them
@@ -14,9 +14,10 @@ import { sanitizeToolName, MAX_TOOL_DESCRIPTION_LENGTH, type ActionToolBinding, 
 
 export const PAYLOAD_CHANGE_TOOL = 'payload_change_request';
 export const ASK_USER_TOOL = 'ask_user';
+export const COMPLETE_TASK_TOOL = 'complete_task';
 export const SUB_AGENT_TOOL_PREFIX = 'delegate_to_';
 /** The fixed control tools. Sub-agent tools are recognised by {@link SUB_AGENT_TOOL_PREFIX}. */
-export const NATIVE_CONTROL_TOOL_NAMES: readonly string[] = [PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL];
+export const NATIVE_CONTROL_TOOL_NAMES: readonly string[] = [PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL, COMPLETE_TASK_TOOL];
 /** Providers cap tool names at 64 characters. */
 const MAX_TOOL_NAME_LENGTH = 64;
 
@@ -25,7 +26,8 @@ export type NativeToolBinding =
     | ActionToolBinding
     | { kind: 'subAgent'; toolName: string; agent: MJAIAgentEntityExtended; tool: ChatTool }
     | { kind: 'payloadChange'; toolName: string; tool: ChatTool }
-    | { kind: 'askUser'; toolName: string; tool: ChatTool };
+    | { kind: 'askUser'; toolName: string; tool: ChatTool }
+    | { kind: 'complete'; toolName: string; tool: ChatTool };
 
 export interface NativeToolSet {
     tools: ChatTool[];
@@ -95,6 +97,44 @@ export function buildAskUserTool(): ChatTool {
     };
 }
 
+/**
+ * `complete_task` — the terminal tool: apply the final payload write and finish, in ONE turn.
+ *
+ * Without it, implicit control flow finishes in two turns — `payload_change_request`, then a
+ * plain-text reply — where the envelope finishes in one (`taskComplete` + `payloadChangeRequest`).
+ * That costs an iteration on every run, and on the last permitted iteration there is no second
+ * turn at all. Agent frameworks that need a structured result end on a designated tool for the
+ * same reason (OpenAI Agents SDK `StopAtTools`, SWE-agent's `submit`). Plain text still ends the
+ * turn, for agents whose answer is prose.
+ */
+export function buildCompleteTaskTool(): ChatTool {
+    return {
+        name: COMPLETE_TASK_TOOL,
+        description: clip(
+            'Finish the task. Call this when your work is done and verified: put any final writes to the shared payload ' +
+            'in payloadChangeRequest and your answer for the user or calling agent in message. The change is applied ' +
+            'and the run ends — unless the result fails validation, in which case you receive the reason and continue. ' +
+            'Must be the only call on its turn.', MAX_TOOL_DESCRIPTION_LENGTH),
+        inputSchema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', description: 'Your final answer or a brief summary of what you did.' },
+                // A JSON STRING, not an object. complete_task is the call the framework forces on the
+                // final turn, and a forced call is schema-constrained: an object whose sections declare
+                // no properties can only decode as `{}`. Replaying 5 real final turns 10 times each on
+                // Gemini 3 Flash: object schema 0/50 kept the payload (every call `{"updateElements":{}}`),
+                // open objects 2/50, JSON string 50/50. The loop decodes the string.
+                payloadChangeRequest: {
+                    type: 'string',
+                    description: 'Optional. Final payload changes as a JSON object string, applied before the task completes: '
+                        + '{"newElements"?: {...}, "updateElements"?: {...}, "replaceElements"?: {...}, "removeElements"?: {...}} — same shape as payload_change_request.'
+                }
+            },
+            required: ['message']
+        }
+    };
+}
+
 /** One tool per sub-agent: `delegate_to_<sanitized name>`, described by the agent's own description. */
 export function buildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
     const name = `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(agent.Name)}`.slice(0, MAX_TOOL_NAME_LENGTH);
@@ -140,9 +180,11 @@ export function buildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly
     }
     const payload = buildPayloadChangeTool();
     const ask = buildAskUserTool();
+    const complete = buildCompleteTaskTool();
     byToolName.set(payload.name, { kind: 'payloadChange', toolName: payload.name, tool: payload });
     byToolName.set(ask.name, { kind: 'askUser', toolName: ask.name, tool: ask });
-    tools.push(payload, ask);
-    controlToolNames.push(payload.name, ask.name);
+    byToolName.set(complete.name, { kind: 'complete', toolName: complete.name, tool: complete });
+    tools.push(payload, ask, complete);
+    controlToolNames.push(payload.name, ask.name, complete.name);
     return { tools, byToolName, controlToolNames };
 }

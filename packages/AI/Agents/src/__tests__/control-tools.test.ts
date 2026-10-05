@@ -1,12 +1,12 @@
 /**
  * Control-flow tools for the implicit protocol (spec §2.2, §4): one tool per sub-agent,
- * payload_change_request, ask_user — built beside the Action tools into ONE reverse map.
+ * payload_change_request, ask_user, complete_task — built beside the Action tools into ONE reverse map.
  */
 import { describe, it, expect } from 'vitest';
 import { buildActionToolSet } from '../native-tools/action-tool-builder';
 import {
-    ASK_USER_TOOL, PAYLOAD_CHANGE_TOOL, SUB_AGENT_TOOL_PREFIX, NATIVE_CONTROL_TOOL_NAMES,
-    buildAskUserTool, buildPayloadChangeTool, buildSubAgentTool, buildNativeToolSet
+    ASK_USER_TOOL, COMPLETE_TASK_TOOL, PAYLOAD_CHANGE_TOOL, SUB_AGENT_TOOL_PREFIX, NATIVE_CONTROL_TOOL_NAMES,
+    buildAskUserTool, buildCompleteTaskTool, buildPayloadChangeTool, buildSubAgentTool, buildNativeToolSet
 } from '../native-tools/control-tools';
 import type { MJAIAgentEntityExtended } from '@memberjunction/core-entities';
 import type { MJActionEntityExtended } from '@memberjunction/actions-base';
@@ -40,8 +40,20 @@ describe('fixed control tools', () => {
     it('ask_user tells the model to delegate or act before asking (Plan B, Task 2)', () => {
         expect(buildAskUserTool().description).toMatch(/sub-agent or an Action can/i);
     });
-    it('exports exactly the two fixed names', () => {
-        expect([...NATIVE_CONTROL_TOOL_NAMES].sort()).toEqual([ASK_USER_TOOL, PAYLOAD_CHANGE_TOOL].sort());
+    it('complete_task requires a message and carries an optional payloadChangeRequest as a JSON string', () => {
+        // A forced call is schema-constrained: an open object decodes as {} (0/50 on Gemini 3 Flash); a string does not.
+        const t = buildCompleteTaskTool();
+        expect(t.name).toBe(COMPLETE_TASK_TOOL);
+        expect(t.inputSchema.required).toEqual(['message']);
+        const props = t.inputSchema.properties as Record<string, { type: string; description?: string }>;
+        expect(Object.keys(props).sort()).toEqual(['message', 'payloadChangeRequest']);
+        expect(props.payloadChangeRequest.type).toBe('string');
+        expect(props.payloadChangeRequest.description).toMatch(/updateElements/);
+        expect(t.description).toMatch(/only call on its turn/i);
+        expect(t.description.length).toBeLessThanOrEqual(1024);
+    });
+    it('exports exactly the three fixed names', () => {
+        expect([...NATIVE_CONTROL_TOOL_NAMES].sort()).toEqual([ASK_USER_TOOL, COMPLETE_TASK_TOOL, PAYLOAD_CHANGE_TOOL].sort());
     });
 });
 
@@ -63,12 +75,13 @@ describe('sub-agent tools', () => {
 describe('buildNativeToolSet', () => {
     it('lists actions first, then sub-agents, then the fixed control tools, and names the control ones', () => {
         const set = buildNativeToolSet(actionSet('Run Ad-hoc Query'), [agent('Copywriter Agent')]);
-        expect(set.tools.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'delegate_to_copywriter_agent', PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL]);
-        expect(set.controlToolNames).toEqual(['delegate_to_copywriter_agent', PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL]);
+        expect(set.tools.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'delegate_to_copywriter_agent', PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL, COMPLETE_TASK_TOOL]);
+        expect(set.controlToolNames).toEqual(['delegate_to_copywriter_agent', PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL, COMPLETE_TASK_TOOL]);
         expect(set.byToolName.get('run_ad_hoc_query')?.kind).toBe('action');
         expect(set.byToolName.get('delegate_to_copywriter_agent')?.kind).toBe('subAgent');
         expect(set.byToolName.get(PAYLOAD_CHANGE_TOOL)?.kind).toBe('payloadChange');
         expect(set.byToolName.get(ASK_USER_TOOL)?.kind).toBe('askUser');
+        expect(set.byToolName.get(COMPLETE_TASK_TOOL)?.kind).toBe('complete');
     });
     it('rejects an Action that collides with a reserved name', () => {
         expect(() => buildNativeToolSet(actionSet('Ask User'), [])).toThrow(/reserved/i);
@@ -78,6 +91,6 @@ describe('buildNativeToolSet', () => {
     });
     it('works with no actions at all (a pure orchestrator)', () => {
         const set = buildNativeToolSet(actionSet(), [agent('Copywriter Agent'), agent('Editor Agent')]);
-        expect(set.tools.map((t) => t.name)).toEqual(['delegate_to_copywriter_agent', 'delegate_to_editor_agent', PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL]);
+        expect(set.tools.map((t) => t.name)).toEqual(['delegate_to_copywriter_agent', 'delegate_to_editor_agent', PAYLOAD_CHANGE_TOOL, ASK_USER_TOOL, COMPLETE_TASK_TOOL]);
     });
 });

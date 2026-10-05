@@ -85,7 +85,8 @@ const full = new Map<string, NativeToolBinding>([
     ['delegate_to_query_strategist', subAgentBinding('delegate_to_query_strategist', 'Query Strategist')],
     ['delegate_to_editor_agent', subAgentBinding('delegate_to_editor_agent', 'Editor Agent')],
     ['payload_change_request', { kind: 'payloadChange', toolName: 'payload_change_request', tool: { name: 'payload_change_request', inputSchema: {} } } as NativeToolBinding],
-    ['ask_user', { kind: 'askUser', toolName: 'ask_user', tool: { name: 'ask_user', inputSchema: {} } } as NativeToolBinding]
+    ['ask_user', { kind: 'askUser', toolName: 'ask_user', tool: { name: 'ask_user', inputSchema: {} } } as NativeToolBinding],
+    ['complete_task', { kind: 'complete', toolName: 'complete_task', tool: { name: 'complete_task', inputSchema: {} } } as NativeToolBinding]
 ]);
 
 describe('LoopAgentType — implicit control flow routing (spec §2.1)', () => {
@@ -143,6 +144,34 @@ describe('LoopAgentType — implicit control flow routing (spec §2.1)', () => {
     it('two payload_change_request calls in one turn → Retry', () => {
         const step = P().Call(resultWith([{ name: 'payload_change_request', arguments: {} }, { name: 'payload_change_request', arguments: {} }], 'NativeImplicit'), full);
         expect(step?.step).toBe('Retry');
+    });
+    it('complete_task → terminal Success carrying its payload change, message and call id (one turn, not two)', () => {
+        const change = { updateElements: { query: { sql: 'SELECT 1' } } };
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: change } }], 'NativeImplicit'), full);
+        expect(step).toMatchObject({ step: 'Success', terminate: true, message: 'Done.', payloadChangeRequest: change, payloadToolCallId: 'call_0' });
+    });
+    it('complete_task without a payload change → Success with no payloadChangeRequest', () => {
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'Answered.' } }], 'NativeImplicit'), full);
+        expect(step).toMatchObject({ step: 'Success', message: 'Answered.' });
+        expect(step?.payloadChangeRequest).toBeUndefined();
+    });
+    it('complete_task accepts a payloadChangeRequest the model JSON-encoded', () => {
+        const change = { newElements: { a: 1 } };
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x', payloadChangeRequest: JSON.stringify(change) } }], 'NativeImplicit'), full);
+        expect(step).toMatchObject({ step: 'Success', payloadChangeRequest: change });
+    });
+    it('complete_task with an unusable payloadChangeRequest → Retry naming the rule', () => {
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x', payloadChangeRequest: 'not json' } }], 'NativeImplicit'), full);
+        expect(step?.step).toBe('Retry');
+        expect(step?.errorMessage).toMatch(/payloadChangeRequest must be an object/);
+    });
+    it('complete_task with any other call → Retry naming the rule', () => {
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x' } }, { name: 'run_ad_hoc_query', arguments: {} }], 'NativeImplicit'), full);
+        expect(step?.step).toBe('Retry');
+        expect(step?.errorMessage).toMatch(/complete_task must be the only call/);
+    });
+    it('under the HYBRID mode complete_task is an undeclared tool → Retry', () => {
+        expect(P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x' } }], 'Native'), full)?.step).toBe('Retry');
     });
     it('under the HYBRID mode a control-tool call is an undeclared tool → Retry (it was stripped from the request)', () => {
         const step = P().Call(resultWith([{ name: 'ask_user', arguments: { message: 'x' } }], 'Native'), full);
