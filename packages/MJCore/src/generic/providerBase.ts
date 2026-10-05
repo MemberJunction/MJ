@@ -5882,6 +5882,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const ls = this.LocalStorageProvider;
             if (!ls) return;
 
+            // Symmetrical with the save: an in-process store can only hand back a copy of the
+            // metadata this heap already holds, at the cost of rebuilding every metadata object.
+            if (!this.MetadataSnapshotPersistenceEnabled) {
+                this.logMetadataSnapshotDisabledOnce();
+                return;
+            }
+
             const overallStart = Date.now();
 
             // The metadata snapshot uses three keys (timestamps, format, AllMetadata).
@@ -5980,6 +5987,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Used for compressed metadata storage/retrieval.
      */
     protected static base64ToArrayBuffer(base64: string): ArrayBuffer {
+        // Node decodes natively; the atob path below allocates an intermediate string and fills the
+        // array a byte at a time.
+        if (typeof Buffer !== 'undefined') {
+            const buf = Buffer.from(base64, 'base64');
+            // Copy into an exact-size buffer: `buf.buffer` is a view into a shared pool, usually
+            // larger than the payload, so returning it directly would carry unrelated bytes and a
+            // wrong byteLength. It is also typed ArrayBufferLike and will not assign to the
+            // declared return type.
+            const exact = new ArrayBuffer(buf.byteLength);
+            new Uint8Array(exact).set(buf);
+            return exact;
+        }
         const binaryString = atob(base64);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -5993,6 +6012,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Used for compressed metadata storage/retrieval.
      */
     protected static arrayBufferToBase64(buffer: ArrayBuffer): string {
+        // Node encodes natively. The loop below concatenates one character per byte, building a rope
+        // the size of the payload that then has to be flattened.
+        if (typeof Buffer !== 'undefined') {
+            return Buffer.from(buffer).toString('base64');
+        }
         const bytes = new Uint8Array(buffer);
         let binary = '';
         for (let i = 0; i < bytes.byteLength; i++) {
@@ -6011,6 +6035,47 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Whether anything could read the metadata snapshot back, and therefore whether saving it is
+     * worth the cost.
+     *
+     * The snapshot lets a cold process start from a cached copy of the metadata instead of querying
+     * for it, which only works if the store outlives the writer. Where it does not, both halves of
+     * the round trip are pure cost: the save serializes, gzips and base64-encodes the entire
+     * metadata graph, and the load parses it and rebuilds every `EntityInfo` and `EntityFieldInfo`
+     * from a copy of objects the heap already holds. On a large tenant that is expensive enough to
+     * exhaust the heap.
+     *
+     * A provider that does not declare {@link ILocalStorageProvider.SupportsCrossProcessPersistence}
+     * is treated as persistent, which fails in the safer direction.
+     */
+    public get MetadataSnapshotPersistenceEnabled(): boolean {
+        const ls = this.LocalStorageProvider;
+        if (!ls) {
+            return false;
+        }
+        return ls.SupportsCrossProcessPersistence !== false;
+    }
+
+    /**
+     * Explains the skip once per process. The refresh path runs every 30 seconds on a busy server,
+     * so logging per call would bury the one line that matters.
+     */
+    private logMetadataSnapshotDisabledOnce(): void {
+        if (this._metadataSnapshotSkipLogged) {
+            return;
+        }
+        this._metadataSnapshotSkipLogged = true;
+        const name = this.LocalStorageProvider?.constructor?.name ?? 'the local storage provider';
+        LogStatusEx({
+            message: `[Metadata Cache] Snapshot persistence disabled: ${name} is in-process only, so a saved snapshot could never be read back. Skipping the metadata snapshot save and load.`,
+            verboseOnly: false
+        });
+    }
+
+    /** Guard for {@link logMetadataSnapshotDisabledOnce}. */
+    private _metadataSnapshotSkipLogged = false;
+
+    /**
      * Saves current metadata to local storage for caching.
      * Serializes both timestamps and full metadata collections.
      */
@@ -6018,6 +6083,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         try {
             const ls = this.LocalStorageProvider;
             if (!ls) return;
+
+            // Nothing could ever read this snapshot back, so the entire serialize/compress/encode
+            // pass buys nothing. See MetadataSnapshotPersistenceEnabled.
+            if (!this.MetadataSnapshotPersistenceEnabled) {
+                this.logMetadataSnapshotDisabledOnce();
+                return;
+            }
 
             const start = Date.now();
 
