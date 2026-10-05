@@ -227,6 +227,13 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     /** Guards against two overlapping reconciliations (client and subscriber both recover). */
     private _reconciling: boolean = false;
 
+    /**
+     * Whether the loss of this connection has already been reported to consumers. Reports the loss
+     * once per outage — `close` fires on every failed reconnection attempt — and tells the `ready`
+     * handler that a recovery, rather than a first connection, is what it is seeing.
+     */
+    private _connectionLostEmitted: boolean = false;
+
     /** As {@link _hasEverConnected}, for the subscriber connection. */
     private _subscriberHasEverConnected: boolean = false;
 
@@ -325,7 +332,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 `Redis: max retries (${maxRetries}) exceeded after ${times} attempts — giving up permanently. ` +
                 `This process is now cache-blind until it restarts. Omit maxRetries to retry forever with a capped delay.`
             );
-            this.emitConnectionLost('retries exhausted');
+            this.noteConnectionLost('retries exhausted');
             return null;
         }
 
@@ -343,37 +350,58 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * lifecycle events (connect, ready, close, error, reconnecting).
      * @internal
      */
+    private handleClientConnect(): void {
+        this._connected = true;
+        if (this._enableLogging) {
+            LogStatus('Redis: connected');
+        }
+    }
+
+    /**
+     * On `ready` the client can serve commands again. A recovery is identified by
+     * {@link _connectionLostEmitted} rather than by inspecting `_connected`: ioredis emits `connect`
+     * before `ready`, so by this point `_connected` has already been set back to true and cannot
+     * distinguish a reconnect from a first connection.
+     *
+     * @internal
+     */
+    private handleClientReady(): void {
+        this._connected = true;
+        this._hasEverConnected = true;
+        if (this._enableLogging) {
+            LogStatus('Redis: ready to accept commands');
+        }
+        if (this._connectionLostEmitted) {
+            this._connectionLostEmitted = false;
+            this.emitConnectionRestored();
+        }
+    }
+
+    /**
+     * `close` fires once per failed reconnection attempt, not only on the first drop, so the loss is
+     * announced through {@link noteConnectionLost} and reported once per outage.
+     *
+     * @internal
+     */
+    private handleClientClose(): void {
+        this._connected = false;
+        if (this._enableLogging) {
+            LogStatus('Redis: connection closed');
+        }
+        if (this._hasEverConnected) {
+            this.noteConnectionLost('connection closed');
+        }
+    }
+
+    /**
+     * Registers event handlers on the ioredis client for logging connection
+     * lifecycle events (connect, ready, close, error, reconnecting).
+     * @internal
+     */
     private setupEventHandlers(): void {
-        this._client.on('connect', () => {
-            this._connected = true;
-            if (this._enableLogging) {
-                LogStatus('Redis: connected');
-            }
-        });
-
-        this._client.on('ready', () => {
-            const wasDown = this._hasEverConnected && !this._connected;
-            this._connected = true;
-            this._hasEverConnected = true;
-            if (this._enableLogging) {
-                LogStatus('Redis: ready to accept commands');
-            }
-            // The first ready is startup, not a recovery.
-            if (wasDown) {
-                this.emitConnectionRestored();
-            }
-        });
-
-        this._client.on('close', () => {
-            const wasUp = this._connected;
-            this._connected = false;
-            if (this._enableLogging) {
-                LogStatus('Redis: connection closed');
-            }
-            if (wasUp) {
-                this.emitConnectionLost('connection closed');
-            }
-        });
+        this._client.on('connect', () => this.handleClientConnect());
+        this._client.on('ready', () => this.handleClientReady());
+        this._client.on('close', () => this.handleClientClose());
 
         this._client.on('error', (err: Error) => {
             if (this._enableLogging) {
@@ -468,17 +496,25 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 }
             }
 
-            const advanced = dirty || current > this._lastSeenEpoch;
-            if (!advanced) {
-                LogError(
-                    `[Redis] reconciled after reconnect: epoch unchanged at ${current} — nothing was ` +
-                    `invalidated while this process was away, so the local cache is kept`
-                );
+            // Any DIFFERENCE means flush, not only an advance. A lower value is not "no change": the
+            // counter is gone — cleared, evicted under maxmemory, or a different instance — and what
+            // happened before that is unknowable. Inequality also bounds the damage a peer can do by
+            // publishing an absurd epoch, since a later real value differs from it and flushes.
+            const suspect = dirty || current !== this._lastSeenEpoch;
+            if (!suspect) {
+                if (this._enableLogging) {
+                    // Status, not the error channel: this is the routine outcome and says nothing
+                    // happened. Only the decisions that DROP a cache are worth an operator's log.
+                    LogStatus(
+                        `[Redis] reconciled after reconnect: epoch unchanged at ${current} — nothing was ` +
+                        `invalidated while this process was away, so the local cache is kept`
+                    );
+                }
                 return;
             }
 
             LogError(
-                `[Redis] reconciled after reconnect: epoch moved ${this._lastSeenEpoch} → ${current}` +
+                `[Redis] reconciled after reconnect: epoch ${this._lastSeenEpoch} → ${current}` +
                 `${dirty ? ' (this process also mutated while disconnected, so siblings were told to flush)' : ''}` +
                 ` — dropping local cache`
             );
@@ -1440,6 +1476,23 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
+     * Reports a lost connection once per outage.
+     *
+     * Both routes into this are repeatable: `close` fires on every failed reconnection attempt, and an
+     * exhausted retry ceiling arrives separately after one. Consumers get a single notification, and
+     * the next `ready` clears the latch so the following outage reports again.
+     *
+     * @internal
+     */
+    private noteConnectionLost(reason: string): void {
+        if (this._connectionLostEmitted) {
+            return;
+        }
+        this._connectionLostEmitted = true;
+        this.emitConnectionLost(reason);
+    }
+
+    /**
      * Raises the public lost-connection event and logs it.
      *
      * Uses the error channel, and is not gated behind `enableLogging`: status-level output is
@@ -1465,16 +1518,22 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Emits to consumer callbacks, containing any listener error so it cannot break the connection
-     * handling that triggered the event.
+     * Emits to consumer callbacks, containing each listener's errors so that neither the connection
+     * handling that triggered the event nor the other listeners are affected.
+     *
+     * Invokes listeners individually rather than through `EventEmitter.emit`, which calls them
+     * synchronously in turn: one throwing there would stop every listener after it from running at
+     * all.
      *
      * @internal
      */
     private safeEmit(event: string, ...args: unknown[]): void {
-        try {
-            this._eventEmitter.emit(event, ...args);
-        } catch (err) {
-            LogError(`[Redis] a ${event} listener threw: ${(err as Error).message}`);
+        for (const listener of this._eventEmitter.rawListeners(event)) {
+            try {
+                (listener as (...listenerArgs: unknown[]) => void)(...args);
+            } catch (err) {
+                LogError(`[Redis] a ${event} listener threw: ${(err as Error).message}`);
+            }
         }
     }
 }

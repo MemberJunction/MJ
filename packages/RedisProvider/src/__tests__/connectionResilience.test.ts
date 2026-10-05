@@ -145,6 +145,24 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
         client._fire('ready');
     }
 
+    /**
+     * An outage and recovery in the order ioredis really emits them.
+     *
+     * Verified against a Redis server restart: `close`, then `reconnecting` and `close` once per
+     * failed attempt, then `connect`, then `ready`. The `connect` before `ready` is the part that
+     * matters — a case that goes straight from `close` to `ready` is testing a sequence that cannot
+     * occur, and will pass while recovery is broken in production.
+     */
+    function outageAndRecovery(client: MockRedis, failedAttempts = 2): void {
+        client._fire('close');
+        for (let i = 0; i < failedAttempts; i++) {
+            client._fire('reconnecting');
+            client._fire('close');
+        }
+        client._fire('connect');
+        client._fire('ready');
+    }
+
     // ── 1. reconnection ───────────────────────────────────────────────────────
     describe('the retry strategy', () => {
         /** `null` would stop ioredis reconnecting permanently, so it must never be returned here. */
@@ -235,11 +253,75 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
             bringUp(client);
             expect(restored).not.toHaveBeenCalled(); // the FIRST ready is startup, not recovery
 
-            client._fire('close');
-            client._fire('ready');
+            outageAndRecovery(client);
 
             expect(restored).toHaveBeenCalledTimes(1);
             expect(provider.IsConnected).toBe(true);
+        });
+
+        /**
+         * `connect` arrives before `ready` on every reconnect, so recovery cannot be detected by
+         * checking whether the connection is currently down — by `ready` it is already back up.
+         */
+        it('fires OnConnectionRestored even though connect precedes ready', () => {
+            const provider = newProvider();
+            const restored = vi.fn();
+            provider.OnConnectionRestored(restored);
+            const client = constructed[0];
+            bringUp(client);
+
+            client._fire('close');
+            client._fire('connect');     // ioredis is back on the socket, _connected is true again
+            client._fire('ready');
+
+            expect(restored).toHaveBeenCalledTimes(1);
+        });
+
+        /** `close` fires once per failed reconnection attempt; the consumer hears about it once. */
+        it('reports a loss once per outage, not once per failed attempt', () => {
+            const provider = newProvider();
+            const lost = vi.fn();
+            provider.OnConnectionLost(lost);
+            const client = constructed[0];
+            bringUp(client);
+
+            outageAndRecovery(client, 4);
+
+            expect(lost).toHaveBeenCalledTimes(1);
+        });
+
+        /** The latch resets, so a second outage is reported too. */
+        it('reports each successive outage', () => {
+            const provider = newProvider();
+            const lost = vi.fn();
+            const restored = vi.fn();
+            provider.OnConnectionLost(lost);
+            provider.OnConnectionRestored(restored);
+            const client = constructed[0];
+            bringUp(client);
+
+            outageAndRecovery(client);
+            outageAndRecovery(client);
+
+            expect(lost).toHaveBeenCalledTimes(2);
+            expect(restored).toHaveBeenCalledTimes(2);
+        });
+
+        /**
+         * An exhausted retry ceiling arrives after `close` has already reported the loss. One outage
+         * is one notification; the permanence is in the log, which says the process is cache-blind.
+         */
+        it('does not report a second loss when the retry ceiling is then exhausted', () => {
+            const provider = newProvider({ maxRetries: 2 });
+            const lost = vi.fn();
+            provider.OnConnectionLost(lost);
+            const client = constructed[0];
+            bringUp(client);
+
+            client._fire('close');
+            retryDelayWithCeiling(provider, 3, 2);   // past the ceiling: gives up
+
+            expect(lost).toHaveBeenCalledTimes(1);
         });
 
         it('stops notifying once unsubscribed', () => {
@@ -253,6 +335,20 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
             client._fire('close');
 
             expect(lost).not.toHaveBeenCalled();
+        });
+
+        /** A throwing listener must not prevent the others on the same event from running. */
+        it('runs every listener even when an earlier one throws', () => {
+            const provider = newProvider();
+            const second = vi.fn();
+            provider.OnConnectionLost(() => { throw new Error('first listener blew up'); });
+            provider.OnConnectionLost(second);
+            const client = constructed[0];
+            bringUp(client);
+
+            client._fire('close');
+
+            expect(second).toHaveBeenCalledTimes(1);
         });
 
         /** One bad listener must not break the lifecycle handling that triggered it. */
@@ -421,6 +517,49 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
             // 7 → 8 via INCR, performed by THIS process on recovery
             expect(client.incr).toHaveBeenCalledWith(EPOCH_KEY);
             expect(provider.LastSeenEpoch).toBe(8);
+        });
+
+        /**
+         * A counter that reads LOWER than what this process last saw is not "no change" — the key is
+         * gone (cleared, evicted under maxmemory, or a different instance), so what happened while
+         * away is unknowable and the cache cannot be trusted.
+         */
+        it('flushes when the epoch key has been reset or evicted', async () => {
+            const { provider, sub, client } = await withSubscriber();
+            const flushed = vi.fn();
+            await provider.SetItem('k', 'v', 'RunViewCache');
+            await settle();
+            expect(provider.LastSeenEpoch).toBeGreaterThan(0);
+            provider.OnReconciliationRequired(flushed);
+            client._store.delete(EPOCH_KEY);      // a full clear or an eviction took it
+
+            sub._fire('close');
+            sub._fire('connect');
+            await settle();
+
+            expect(flushed).toHaveBeenCalledTimes(1);
+        });
+
+        /**
+         * A peer publishing an absurd epoch cannot suppress flushing forever: the next real value
+         * differs from it, and any difference flushes.
+         */
+        it('still flushes after ingesting an implausibly high epoch from a peer', async () => {
+            const { provider, sub, client } = await withSubscriber();
+            const flushed = vi.fn();
+            provider.OnReconciliationRequired(flushed);
+            sub._fire('message', 'mj:__pubsub__', JSON.stringify({
+                CacheKey: 'x', Category: 'RunViewCache', Action: 'removed',
+                Timestamp: Date.now(), SourceServerId: 'another-server',
+                Epoch: Number.MAX_SAFE_INTEGER,
+            }));
+            client._setEpoch(200);                // the real counter
+
+            sub._fire('close');
+            sub._fire('connect');
+            await settle();
+
+            expect(flushed).toHaveBeenCalledTimes(1);
         });
 
         /** If correctness cannot be established, the safe answer is the expensive one. */

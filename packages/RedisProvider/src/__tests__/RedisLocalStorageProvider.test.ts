@@ -107,8 +107,10 @@ function createMockRedisInstance() {
         // A real counter, not a stub: the provider INCRs the shared epoch before publishing, and
         // tests assert on the value the event carries.
         incr: vi.fn((key: string) => {
-            const next = ((store.get(key) as unknown as number) ?? 0) + 1;
-            store.set(key, String(next) as unknown as string);
+            // Number(), not a cast: the store holds strings, so `'1' + 1` would concatenate and the
+            // mock would report 11, 111, … while the provider ignored it as a non-number.
+            const next = Number(store.get(key) ?? '0') + 1;
+            store.set(key, String(next));
             return Promise.resolve(next);
         }),
         publish: vi.fn().mockResolvedValue(1),
