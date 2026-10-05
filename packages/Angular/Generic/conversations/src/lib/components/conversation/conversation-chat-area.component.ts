@@ -1635,6 +1635,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * decides as it always has), null before the turn's first delta. Reset where the turn opens.
    */
   private streamAnchor: number | 'declined' | null = null;
+  /**
+   * The turn's first message as rendered, and the clearance above it, resolved once per turn for
+   * the stream pin: both are stable across frames and finding them is a timeline walk plus a
+   * computed style, which is not work for a 60fps path. Re-resolved only if the node leaves the DOM.
+   */
+  private streamPin: { target: HTMLElement; clearance: number } | null = null;
   private readonly ngZone = InjectFrameZone();
   private turnStartRetryHandle: ReturnType<typeof setTimeout> | null = null;
   /** Gap kept between the pane's top edge and the turn's first message. */
@@ -6505,9 +6511,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (message?.Role === 'User' && message.ID && message.ID !== this.currentTurnStartMessageId) {
         this.currentTurnStartMessageId = message.ID;
         this.streamAnchor = null;
+        this.streamPin = null;
       } else if (this.currentTurnStartMessageId && message?.Role === 'AI' && this.isSettled(message)) {
-        if (typeof this.streamAnchor === 'number') {
-          // The stream pinned the turn's top already; keep the post-landing hold a normal landing gets.
+        if (this.streamAnchor !== null) {
+          // The stream either pinned the turn's top or the reader took the viewport for this turn by
+          // scrolling during it. Either way completion must not land it again; keep the post-landing
+          // hold a normal landing gets so a status row right behind cannot yank the reader either.
           this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
           return;
         }
@@ -6553,8 +6562,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const container = this.scrollContainer?.nativeElement as HTMLElement | undefined;
-    const target = this.messageListComponent?.FindTimelineElement(turnId) ?? null;
-    if (!container || !target) {
+    if (!container) {
+      return;
+    }
+    const pin = this.resolveStreamPin(turnId, container);
+    if (!pin) {
       return;
     }
     if (this.streamAnchor === null) {
@@ -6567,12 +6579,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.streamAnchor = 'declined';
       return;
     }
-    const turnTop = this.offsetWithinScroller(target) - this.turnTopClearance(container);
-    const pinned = Math.max(0, Math.min(turnTop, container.scrollHeight - container.clientHeight));
-    container.scrollTop = pinned;
-    this.streamAnchor = pinned;
+    const turnTop = this.offsetWithinScroller(pin.target) - pin.clearance;
+    container.scrollTop = Math.max(0, Math.min(turnTop, container.scrollHeight - container.clientHeight));
+    // Read the position back: the browser clamps and rounds, and the next frame compares against
+    // what it will actually read, not what was asked for.
+    this.streamAnchor = container.scrollTop;
     this.scrollToBottom = false;
     this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
+    // The pin moves the viewport without a scroll event once the turn's top is reached, so the
+    // at-bottom state and the jump-to-bottom affordance would otherwise go stale for the stream.
+    this.CheckScroll();
+  }
+
+  /** The stream pin's target and clearance for this turn, resolved once and kept while the node is in the DOM. */
+  private resolveStreamPin(turnId: string, container: HTMLElement): { target: HTMLElement; clearance: number } | null {
+    if (this.streamPin && this.streamPin.target.isConnected) {
+      return this.streamPin;
+    }
+    const target = this.messageListComponent?.FindTimelineElement(turnId) ?? null;
+    this.streamPin = target ? { target, clearance: this.turnTopClearance(container) } : null;
+    return this.streamPin;
   }
 
   /**
@@ -6633,6 +6659,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private clearTurnTracking(): void {
     this.currentTurnStartMessageId = null;
     this.streamAnchor = null;
+    this.streamPin = null;
     this.bottomFollowSuppressedUntil = 0;
     this.cancelPendingLanding();
   }
